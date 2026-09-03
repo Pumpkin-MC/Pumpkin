@@ -6,6 +6,7 @@ use crate::lighting::decayed;
 use crate::lighting::sky_light_height::{SkyLightHeight, SkyLightHeightMigration, SkyLightTier};
 use crate::lighting::stats::{Counter, LightCounters, LightPassStats, LocalCounters};
 use crossbeam::queue::SegQueue;
+use rustc_hash::FxHashSet;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::BlockDirection;
 use pumpkin_util::math::position::BlockPos;
@@ -25,6 +26,8 @@ pub struct DynamicLightEngine {
     block_increase: SegQueue<(BlockPos, u8)>,
     sky_decrease: SegQueue<(BlockPos, u8)>,
     sky_increase: SegQueue<(BlockPos, u8)>,
+    /// Positions whose light has to be re-derived. Vanilla `LightEngine.blockNodesToCheck`
+    nodes_to_check: SegQueue<BlockPos>,
     /// Serialises the flood, and only the flood: two concurrent [`Self::drain_queued`]
     /// would ping-pong between the decrease and the increase loop and never settle.
     propagate_lock: Mutex<()>,
@@ -39,6 +42,7 @@ impl DynamicLightEngine {
             block_increase: SegQueue::new(),
             sky_decrease: SegQueue::new(),
             sky_increase: SegQueue::new(),
+            nodes_to_check: SegQueue::new(),
             propagate_lock: Mutex::new(()),
             counters: LightCounters::new(),
         }
@@ -226,7 +230,8 @@ impl DynamicLightEngine {
     }
 
     fn queues_empty(&self) -> bool {
-        self.block_decrease.is_empty()
+        self.nodes_to_check.is_empty()
+            && self.block_decrease.is_empty()
             && self.block_increase.is_empty()
             && self.sky_decrease.is_empty()
             && self.sky_increase.is_empty()
@@ -245,22 +250,28 @@ impl DynamicLightEngine {
 
     /// Vanilla `Level.setBlock` -> `LightEngine.checkBlock`: enqueue only, lock-free
     /// (see [`Self::propagate_lock`]). Flood is [`Self::drain_queued`].
-    pub fn update_lighting_at(&self, level: &Arc<Level>, pos: BlockPos) {
-        // All three steps work on the same chunk; one cursor saves their lookups, and one
-        // tally keeps their counting off the shared atomics until the end.
-        let tally = LocalCounters::new(&self.counters);
-        let mut cursor = ChunkCursor::new(level, &tally);
-        // block light needs its luminance, sky light
-        // its opacity, and nothing in between changes the block. Fullbright and dark never
-        // look at it -> return before they would.
-        let state = match cursor.level.lighting_config {
-            LightingEngineConfig::Default => cursor.block_state(&pos),
-            _ => pumpkin_data::Block::VOID_AIR.default_state,
-        };
-        self.check_block_light_updates_with_cursor(&mut cursor, pos, state);
-        // Must run before the sky pass: the pass reads the cut height this may invalidate.
-        Self::refresh_sky_cut_after_change(&mut cursor, &pos);
-        self.check_sky_light_updates_with_cursor(&mut cursor, pos, state);
+    pub fn update_lighting_at(&self, _level: &Arc<Level>, pos: BlockPos) {
+        self.nodes_to_check.push(pos);
+    }
+
+    /// Re-derives the light at every position queued since the last drain, each one once.
+    fn check_pending_nodes(&self, cursor: &mut ChunkCursor) {
+        let mut seen = FxHashSet::default();
+        while let Some(pos) = self.nodes_to_check.pop() {
+            if !seen.insert(pos) {
+                continue;
+            }
+            // Block light needs its luminance, sky light its opacity, and nothing in between
+            // changes the block. Fullbright and dark never look at it -> skip the fetch.
+            let state = match cursor.level.lighting_config {
+                LightingEngineConfig::Default => cursor.block_state(&pos),
+                _ => pumpkin_data::Block::VOID_AIR.default_state,
+            };
+            self.check_block_light_updates_with_cursor(cursor, pos, state);
+            // Must run before the sky pass: the pass reads the cut height this may invalidate.
+            Self::refresh_sky_cut_after_change(cursor, &pos);
+            self.check_sky_light_updates_with_cursor(cursor, pos, state);
+        }
     }
 
     /// Vanilla `LightEngine.runLightUpdates`. One budgeted slice per tick so a sky
@@ -281,6 +292,7 @@ impl DynamicLightEngine {
             // shared counters before they are snapshotted below.
             let tally = LocalCounters::new(&self.counters);
             let mut cursor = ChunkCursor::new(level, &tally);
+            self.check_pending_nodes(&mut cursor);
             updates += self.perform_block_light_updates(&mut cursor, &mut budget);
             updates += self.perform_sky_light_updates(&mut cursor, &mut budget);
         }
@@ -1044,5 +1056,65 @@ mod tests {
             "the neighbour in the unloaded chunk is never read"
         );
         assert_eq!(edge.count(Counter::BlockState), 5);
+    }
+    /// Vanilla `blockNodesToCheck` collapses repeats: a position touched many times before a
+    /// drain is checked once, against the state it ended on. Only the end state can be
+    /// observed, because nothing drained in between.
+    #[tokio::test]
+    async fn repeated_touches_settle_on_the_state_the_position_ended_on() {
+        let (level, _dir) = level_with(&[(0, 0)]);
+        let pos = BlockPos::new(8, SURFACE + 3, 8);
+        let chunk = level
+            .loaded_chunks
+            .get(&Vector2::new(0, 0))
+            .expect("loaded")
+            .clone();
+
+        let settle = |engine: &DynamicLightEngine| {
+            assert!(
+                (0..64).any(|_| !engine.drain_queued(&level).leftover),
+                "light updates did not converge"
+            );
+        };
+
+        let set = |id| {
+            chunk.set_block_absolute_y(8, pos.0.y, 8, id);
+        };
+
+        // Toggled several times, ending lit.
+        let many = DynamicLightEngine::new();
+        for i in 0..8 {
+            set(if i % 2 == 0 {
+                Block::GLOWSTONE.default_state.id
+            } else {
+                Block::AIR.default_state.id
+            });
+            many.update_lighting_at(&level, pos);
+        }
+        set(Block::GLOWSTONE.default_state.id);
+        many.update_lighting_at(&level, pos);
+        settle(&many);
+        let after_many = many.get_block_light_level(&level, &pos);
+
+        assert_eq!(
+            after_many,
+            Some(Block::GLOWSTONE.default_state.luminance),
+            "the surviving glowstone must light its own cell"
+        );
+
+        // The same end state reached in one touch has to agree.
+        let once = DynamicLightEngine::new();
+        set(Block::AIR.default_state.id);
+        once.update_lighting_at(&level, pos);
+        settle(&once);
+        set(Block::GLOWSTONE.default_state.id);
+        once.update_lighting_at(&level, pos);
+        settle(&once);
+
+        assert_eq!(
+            once.get_block_light_level(&level, &pos),
+            after_many,
+            "collapsing the repeats changed the result"
+        );
     }
 }
