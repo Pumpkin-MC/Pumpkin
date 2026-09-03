@@ -6,7 +6,7 @@ use pumpkin_data::registry::RegistryEntryData;
 use pumpkin_nbt::{Nbt, NbtCompound, tag::NbtTag};
 use serde_json::Value;
 
-pub use pumpkin_gametest::model::{TestDefinition as TestInstance, TestRotation, TestType};
+pub use pumpkin_gametest::model::{GameTestDefinition as TestInstance, GameTestRotation, TestType};
 use tracing::warn;
 
 pub type TestInstanceRegistry = HashMap<String, TestInstance>;
@@ -196,7 +196,7 @@ mod tests {
         assert_eq!(instance.max_ticks, 200);
         assert_eq!(instance.setup_ticks, 0);
         assert!(instance.required);
-        assert_eq!(instance.rotation, TestRotation::None);
+        assert_eq!(instance.rotation, GameTestRotation::None);
         assert!(!instance.manual_only);
         assert_eq!(instance.max_attempts, 1);
         assert_eq!(instance.required_successes, 1);

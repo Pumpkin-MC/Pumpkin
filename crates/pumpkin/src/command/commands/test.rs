@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
 use futures::executor::block_on;
+use pumpkin_data::translation::java;
+use pumpkin_gametest::{GameTestBatchReport, GameTestReporter, GameTestRetryOptions};
 use pumpkin_protocol::java::client::play::{ArgumentType, CommandSuggestion, SuggestionProviders};
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::identifier::Identifier;
@@ -19,9 +21,7 @@ use crate::command::tree::builder::{argument, literal};
 use crate::command::tree::{CommandTree, RawArgs};
 use crate::command::{CommandError, CommandExecutor, CommandResult, CommandSender};
 use crate::server::Server;
-use crate::server::ticker::{
-    GameTestBatchReport, GameTestRequest, GameTestRetryOptions, enqueue_game_test, stop_game_tests,
-};
+use crate::server::server_test_manager::{GameTestQueueEntry, enqueue_game_test, stop_game_tests};
 
 const NAMES: [&str; 1] = ["test"];
 const DESCRIPTION: &str = "Runs a GameTest test instance.";
@@ -35,6 +35,16 @@ const TEST_POS_Z_OFFSET_FROM_PLAYER: i32 = 3;
 const TEST_GRID_SPACING: i32 = 64;
 const DEFAULT_TESTS_PER_ROW: i32 = 8;
 const TEST_INSTANCE_REGISTRY: Identifier = Identifier::parse_static("minecraft:test_instance");
+
+struct CommandTestReporter {
+    sender: CommandSender,
+}
+
+impl GameTestReporter for CommandTestReporter {
+    fn send_message(&self, message: TextComponent) {
+        self.sender.send_message(message);
+    }
+}
 
 struct TestInstanceArgumentConsumer;
 
@@ -107,14 +117,14 @@ impl CommandExecutor for RunExecutor {
             .filter(|name| resource_selector_matches(selector, name))
             .collect();
         if selected.is_empty() {
-            return Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                "argument.resource_selector.not_found",
-                "argument.resource_selector.not_found",
-                [
+            return Err(CommandError::CommandFailed(
+                pumpkin_macros::translate_cross!(
+                    java::ARGUMENT_RESOURCE_SELECTOR_NOT_FOUND,
+                    java::ARGUMENT_RESOURCE_SELECTOR_NOT_FOUND,
                     TextComponent::text(selector.to_string()),
                     TextComponent::text(TEST_INSTANCE_REGISTRY.to_string()),
-                ],
-            )));
+                ),
+            ));
         }
 
         // Vanilla TestCommand::run always clears the current GameTestTicker first.
@@ -166,13 +176,18 @@ impl CommandExecutor for RunExecutor {
             },
         );
 
-        sender.send_message(TextComponent::translate_cross(
-            "commands.test.run.running",
-            "commands.test.run.running",
-            [TextComponent::text(selected.len().to_string())],
+        sender.send_message(pumpkin_macros::translate_cross!(
+            java::COMMANDS_TEST_RUN_RUNNING,
+            java::COMMANDS_TEST_RUN_RUNNING,
+            TextComponent::text(selected.len().to_string()),
         ));
 
-        let report = Arc::new(GameTestBatchReport::new(sender.clone(), selected.len()));
+        let report = Arc::new(GameTestBatchReport::new(
+            Arc::new(CommandTestReporter {
+                sender: sender.clone(),
+            }),
+            selected.len(),
+        ));
         let retry_options = GameTestRetryOptions::new(number_of_times, until_failed);
         for (index, test_id) in selected.into_iter().enumerate() {
             let index = index as i32;
@@ -180,7 +195,7 @@ impl CommandExecutor for RunExecutor {
             let row = index / tests_per_row;
             let test_x = base_x + column * TEST_GRID_SPACING;
             let test_z = base_z + row * TEST_GRID_SPACING;
-            block_on(enqueue_game_test(GameTestRequest::new(
+            block_on(enqueue_game_test(GameTestQueueEntry::new(
                 test_id.clone(),
                 world.clone(),
                 test_x,
