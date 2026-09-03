@@ -183,7 +183,10 @@ impl BedrockClient {
                         } else {
                             BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL
                         };
-                        if world.break_block(&location, Some(player.clone()), flags).is_some() {
+                        if world
+                            .break_block(&location, Some(player.clone()), flags)
+                            .is_some()
+                        {
                             server
                                 .block_registry
                                 .broken(&world, block, player, &location, server, state);

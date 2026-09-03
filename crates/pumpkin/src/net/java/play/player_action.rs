@@ -103,7 +103,8 @@ impl JavaClient {
                             } else {
                                 BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL
                             };
-                            let new_state = world.break_block(&position, Some(player.clone()), flags);
+                            let new_state =
+                                world.break_block(&position, Some(player.clone()), flags);
                             if new_state.is_some() {
                                 server.block_registry.broken(
                                     &world,
