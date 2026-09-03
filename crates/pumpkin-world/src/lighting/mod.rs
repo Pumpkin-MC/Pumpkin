@@ -55,5 +55,6 @@ pub use runtime::DynamicLightEngine;
 pub use stats::LightPassStats;
 
 mod section_flags;
+mod sky_fill;
 pub mod sky_light_height;
 pub use sky_light_height::{SkyLightHeight, SkyLightHeightMigration};

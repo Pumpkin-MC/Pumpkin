@@ -538,3 +538,64 @@ fn pumpkin_reproduces_the_light_vanilla_stored() {
         println!("{message}");
     }
 }
+
+/// TEMPORARY -- census: how many light sections carry a full nibble array that holds
+/// only one repeated value.
+#[test]
+fn uniform_sections_do_not_hold_a_nibble_array() {
+    let Some(region_dir) = save_dir() else {
+        eprintln!("{SAVE_ENV} not set or has no overworld region directory, skipping");
+        return;
+    };
+
+    let loaded = load_chunks(&region_dir);
+    let chunks: HashMap<_, _> = loaded.iter().map(|(p, (c, _))| (*p, c.clone())).collect();
+
+    let centers: Vec<_> = chunks
+        .keys()
+        .copied()
+        .filter(|pos| {
+            (-1..=1).all(|dx| (-1..=1).all(|dz| chunks.contains_key(&Vector2::new(pos.x + dx, pos.y + dz))))
+        })
+        .take(
+            std::env::var(CENTERS_ENV)
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(MAX_CENTERS),
+        )
+        .collect();
+
+    let mut counts = [[0u64; 3]; 2];
+    for center in &centers {
+        let (proto, _) = relight(&chunks, *center);
+        for (layer, containers) in [proto.light.sky_light, proto.light.block_light]
+            .into_iter()
+            .enumerate()
+        {
+            for container in containers {
+                let slot = match &container {
+                    LightContainer::Empty(_) => 0,
+                    LightContainer::Full(data) => {
+                        if data.iter().all(|&b| b == data[0] && b >> 4 == b & 0x0F) {
+                            1
+                        } else {
+                            2
+                        }
+                    }
+                };
+                counts[layer][slot] += 1;
+            }
+        }
+    }
+
+    let n = centers.len() as f64;
+    for (layer, name) in [(0, "sky"), (1, "block")] {
+        println!(
+            "{name}: {:.1} uniform-empty, {:.1} uniform-Full ({:.1} KiB wasted), {:.1} varied  per chunk",
+            counts[layer][0] as f64 / n,
+            counts[layer][1] as f64 / n,
+            counts[layer][1] as f64 / n * 2.0,
+            counts[layer][2] as f64 / n,
+        );
+    }
+}

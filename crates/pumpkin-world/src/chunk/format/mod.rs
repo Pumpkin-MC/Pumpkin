@@ -162,6 +162,30 @@ where
     })
 }
 
+/// Restores the sky sections a writer left out because they are uniformly lit. Everything above
+/// the highest stored array is open sky; absent sections below it stay dark.
+///
+/// Mirrors vanilla `SkyLightSectionStorage::getLightValue`, which answers 15 above the top
+/// section it holds data for. Nothing is stored below the world, so a chunk without any sky
+/// array at all (the nether) is left untouched.
+///
+// TODO: vanilla also reconstructs an absent section *inside* the band, by repeating the bottom
+// row of the nearest stored section above it (`SkyLightSectionStorage::createDataLayer` ->
+// `repeatFirstLayer`). Pumpkin never writes that shape, so this only matters for imported
+// vanilla saves whose band has a gap.
+fn restore_open_sky(sky_lights: &mut [LightContainer]) {
+    let Some(top) = sky_lights
+        .iter()
+        .rposition(|container| matches!(container, LightContainer::Full(_)))
+    else {
+        return;
+    };
+
+    for container in &mut sky_lights[top + 1..] {
+        *container = LightContainer::Empty(15);
+    }
+}
+
 impl ChunkData {
     #[allow(clippy::too_many_lines)]
     pub fn internal_from_bytes(
@@ -292,6 +316,8 @@ impl ChunkData {
                 }
             }
         }
+
+        restore_open_sky(&mut sky_lights);
 
         // Assemble the LightEngine
         let light_engine = ChunkLight {
@@ -1014,6 +1040,57 @@ mod tests {
             pumpkin_data::biome::Biome::from_name("the_void")
                 .unwrap()
                 .id
+        );
+    }
+
+    /// A chunk whose open-sky sections are uniform, the shape the light pass produces.
+    fn chunk_with_uniform_sky(top_lit_section: usize) -> ChunkData {
+        let chunk = ChunkData::empty(0, 0);
+        let count = chunk.section.count;
+        chunk
+            .light_populated
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        {
+            let mut light = chunk
+                .light_engine
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            light.sky_light = (0..count)
+                .map(|index| match index {
+                    i if i < top_lit_section => LightContainer::Empty(0),
+                    i if i == top_lit_section => LightContainer::new_filled(7),
+                    _ => LightContainer::Empty(15),
+                })
+                .collect();
+            light.block_light = (0..count).map(|_| LightContainer::Empty(0)).collect();
+        };
+        chunk
+    }
+
+    fn sky_levels(chunk: &ChunkData) -> Vec<u8> {
+        chunk
+            .light_engine
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .sky_light
+            .iter()
+            .map(|container| container.get(0, 0, 0))
+            .collect()
+    }
+
+    #[test]
+    fn uniform_open_sky_sections_survive_the_disk_round_trip() {
+        let top_lit_section = 5;
+        let chunk = chunk_with_uniform_sky(top_lit_section);
+        let before = sky_levels(&chunk);
+
+        let bytes = chunk.to_bytes().expect("serializes");
+        let reloaded = ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).expect("deserializes");
+
+        assert_eq!(
+            sky_levels(&reloaded),
+            before,
+            "sections above {top_lit_section} are omitted from disk and must reload as open sky"
         );
     }
 }

@@ -5,6 +5,7 @@ use crate::chunk_system::generation_cache::Cache;
 use crate::generation::height_limit::HeightLimitView;
 use crate::generation::proto_chunk::GenerationCache;
 use crate::lighting::section_flags::{self, SectionMask};
+use crate::lighting::sky_fill::SkyFill;
 use crate::lighting::storage::{get_block_light, get_sky_light, set_block_light, set_sky_light};
 use crate::lighting::{decayed, luminance_of, opacity_of, sky_descended};
 use pumpkin_config::lighting::LightingEngineConfig;
@@ -705,6 +706,37 @@ impl SkyLightPropagator {
         let mut surface_heights = [0i32; 18 * 18];
 
         for z in start_z..end_z {
+            let lz = (z - start_z) as usize;
+            for x in start_x..end_x {
+                let lx = (x - start_x) as usize;
+                surface_heights[lx * 18 + lz] = cache.get_top_y(&HeightMap::WorldSurface, x, z);
+            }
+        }
+
+        // The centre chunk sits at rim offsets 1..17, so its own columns are already in the table.
+        let center_idx = ((cache.size / 2) * cache.size + (cache.size / 2)) as usize;
+        let center_tops = || {
+            (1..17).flat_map(|lx: usize| (1..17).map(move |lz: usize| surface_heights[lx * 18 + lz]))
+        };
+        let sky_fill = match &mut cache.chunks[center_idx] {
+            Chunk::Proto(c) => {
+                let fill =
+                    SkyFill::from_surface(center_tops(), bottom_y, c.light.sky_light.len());
+                fill.mark(&mut c.light.sky_light);
+                fill
+            }
+            Chunk::Level(c) => {
+                let mut light = c
+                    .light_engine
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let fill = SkyFill::from_surface(center_tops(), bottom_y, light.sky_light.len());
+                fill.mark(&mut light.sky_light);
+                fill
+            }
+        };
+
+        for z in start_z..end_z {
             let chunk_z = z >> 4;
             let local_z = (z & 15) as usize;
             let lz = (z - start_z) as usize;
@@ -714,8 +746,7 @@ impl SkyLightPropagator {
                 let local_x = (x & 15) as usize;
                 let lx = (x - start_x) as usize;
 
-                let top_y = cache.get_top_y(&HeightMap::WorldSurface, x, z);
-                surface_heights[lx * 18 + lz] = top_y;
+                let top_y = surface_heights[lx * 18 + lz];
 
                 let rel_x = chunk_x - cache.x;
                 let rel_z = chunk_z - cache.z;
@@ -725,16 +756,24 @@ impl SkyLightPropagator {
                 }
 
                 let chunk_idx = (rel_x * cache.size + rel_z) as usize;
+                // Sections the centre already holds as one uniform 15 need no column fill.
+                let is_center = chunk_idx == center_idx;
 
                 match &mut cache.chunks[chunk_idx] {
                     Chunk::Proto(c) => {
+                        let sections = c.light.sky_light.len();
+                        let fill_end = if is_center {
+                            sky_fill.fill_end()
+                        } else {
+                            sections
+                        };
                         let top_local_y = (top_y + 1 - bottom_y).max(0) as usize;
                         let top_sec = top_local_y >> 4;
                         let top_rem = top_local_y & 15;
-                        if top_sec < c.light.sky_light.len() {
+                        if top_sec < sections {
                             c.light.sky_light[top_sec]
                                 .set_column_y_range(local_x, local_z, top_rem, 16, 15);
-                            for sec in (top_sec + 1)..c.light.sky_light.len() {
+                            for sec in (top_sec + 1)..fill_end {
                                 c.light.sky_light[sec]
                                     .set_column_y_range(local_x, local_z, 0, 16, 15);
                             }
@@ -769,7 +808,12 @@ impl SkyLightPropagator {
                             .lock()
                             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-                        for y in (top_y + 1)..max_y {
+                        let fill_top = if is_center {
+                            sky_fill.open_sky_y(bottom_y).min(max_y)
+                        } else {
+                            max_y
+                        };
+                        for y in (top_y + 1)..fill_top {
                             let section_idx = ((y - bottom_y) >> 4) as usize;
                             let local_y = (y & 15) as usize;
                             if section_idx < light_engine.sky_light.len() {
