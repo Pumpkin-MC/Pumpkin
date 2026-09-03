@@ -6,6 +6,9 @@
 /// and panics when running as a standalone binary (e.g. in Termux), this configures the builder
 /// with Mozilla root certificates from `webpki-root-certs`.
 pub fn client_builder() -> reqwest::ClientBuilder {
+    // reqwest is built with `rustls-no-provider`; install the ring provider (the
+    // one the rest of the workspace uses) before any client is constructed.
+    let _ = rustls::crypto::ring::default_provider().install_default();
     let builder = reqwest::Client::builder();
     #[cfg(target_os = "android")]
     let builder = {
