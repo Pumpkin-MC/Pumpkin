@@ -54,7 +54,6 @@ use tokio_util::task::TaskTracker;
 use tracing::{debug, error, warn};
 
 pub mod chunk_data;
-pub mod config;
 pub mod handshake;
 pub mod login;
 pub mod pending;
@@ -69,8 +68,8 @@ use pending::PendingConnection;
 
 use crate::entity::player::Player;
 use crate::net::{
-    ClientPlatform, GameProfile, MAX_PENDING_BYTES, PacketHandlerResult, PacketRateLimiter,
-    PlayerConfig, decrement_pending_bytes,
+    ClientPlatform, GameProfile, MAX_PENDING_BYTES, PacketRateLimiter, PlayerConfig,
+    decrement_pending_bytes,
 };
 use crate::plugin::api::events::world::chunk_send::ChunkSend;
 use crate::plugin::player::player_custom_payload::PlayerCustomPayloadEvent;
