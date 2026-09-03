@@ -257,7 +257,11 @@ impl ServerGameTestWorld {
         let max_chunk_x = (max.0.x - 1) >> 4;
         let min_chunk_z = min.0.z >> 4;
         let max_chunk_z = (max.0.z - 1) >> 4;
-        let active_chunks = self.world.active_chunks.load();
+        let active_chunks = self
+            .world
+            .active_chunks
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         for chunk_x in min_chunk_x..=max_chunk_x {
             for chunk_z in min_chunk_z..=max_chunk_z {
