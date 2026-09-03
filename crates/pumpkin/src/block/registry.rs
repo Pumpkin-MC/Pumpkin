@@ -353,6 +353,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(WeatheringCopperStairBlock);
     manager.register(WeatheringCopperTrapDoorBlock);
     manager.register(CommandBlock);
+    manager.register(TestBlock);
     manager.register(JigsawBlock);
     manager.register(ComposterBlock);
     manager.register(CauldronBlock);
@@ -468,9 +469,9 @@ pub enum BlockActionResult {
     SuccessServer,
     /// Block other actions from being executed | Same as CONSUME in vanilla
     Consume,
-    /// Allow other actions to be executed, but indicate it failed | Same as FAIL in vanilla
+    /// Allow other actions from being executed, but indicate it failed | Same as FAIL in vanilla
     Fail,
-    /// Allow other actions to be executed | Same as PASS in vanilla
+    /// Allow other actions from being executed | Same as PASS in vanilla
     Pass,
     /// Use default action for the block: `normal_use` | Same as `PASS_TO_DEFAULT_BLOCK_ACTION` in vanilla
     PassToDefaultBlockAction,
@@ -526,6 +527,19 @@ impl BlockRegistry {
             return false;
         }
         if behaviour.is_bonemeal_success(args) {
+            if let Some(server) = world.server.upgrade() {
+                let mut event =
+                    crate::plugin::api::events::block::block_fertilize::BlockFertilizeEvent::new(
+                        *position,
+                        world.clone(),
+                        None,
+                        vec![],
+                    );
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return false;
+                }
+            }
             behaviour.perform_bonemeal(args);
         }
         true

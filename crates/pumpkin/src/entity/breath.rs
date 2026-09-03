@@ -58,14 +58,11 @@ impl BreathManager {
         }
 
         let in_water = Self::is_eye_in_water(player);
+        let prev = self.air_supply.load(Ordering::Relaxed);
 
         if in_water {
-            let prev = self
-                .air_supply
-                .fetch_sub(AIR_DEPLETION_RATE, Ordering::Relaxed);
-            let new_air = (prev - AIR_DEPLETION_RATE).max(0);
+            let mut new_air = (prev - AIR_DEPLETION_RATE).max(0);
             if new_air != prev {
-                self.air_supply.store(new_air, Ordering::Relaxed);
                 let server = player.world().server.upgrade();
                 if let Some(server) = server {
                     let mut event = crate::plugin::api::events::entity::entity_air_change::EntityAirChangeEvent::new(
@@ -73,7 +70,12 @@ impl BreathManager {
                         new_air,
                     );
                     server.plugin_manager.fire_blocking(&server, &mut event);
+                    if event.cancelled {
+                        return;
+                    }
+                    new_air = event.amount.clamp(0, MAX_AIR);
                 }
+                self.air_supply.store(new_air, Ordering::Relaxed);
                 self.send_air_supply(player);
             }
 
@@ -88,9 +90,20 @@ impl BreathManager {
                 }
             }
         } else {
-            let prev = self.air_supply.load(Ordering::Relaxed);
-            let new_air = (prev + AIR_RECOVERY_RATE).min(MAX_AIR);
+            let mut new_air = (prev + AIR_RECOVERY_RATE).min(MAX_AIR);
             if new_air != prev {
+                let server = player.world().server.upgrade();
+                if let Some(server) = server {
+                    let mut event = crate::plugin::api::events::entity::entity_air_change::EntityAirChangeEvent::new(
+                        player.entity_id(),
+                        new_air,
+                    );
+                    server.plugin_manager.fire_blocking(&server, &mut event);
+                    if event.cancelled {
+                        return;
+                    }
+                    new_air = event.amount.clamp(0, MAX_AIR);
+                }
                 self.air_supply.store(new_air, Ordering::Relaxed);
                 self.send_air_supply(player);
             }

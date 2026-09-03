@@ -160,7 +160,8 @@ impl ChunkSender {
         epoch: u32,
         version: JavaMinecraftVersion,
     ) -> Option<PreparedBatch> {
-        if self.in_flight_batches >= self.max_in_flight {
+        if version >= JavaMinecraftVersion::V_1_20_2 && self.in_flight_batches >= self.max_in_flight
+        {
             return None;
         }
 
@@ -294,9 +295,9 @@ impl ChunkSender {
                 && let ClientPlatform::Java(java_client) = client
             {
                 java_client.try_send_packet(&CChunkBatchEnd::new(sent_count as u16));
+                self.in_flight_batches = self.in_flight_batches.saturating_add(1);
             }
 
-            self.in_flight_batches = self.in_flight_batches.saturating_add(1);
             self.send_quota -= sent_count as f32;
         }
 

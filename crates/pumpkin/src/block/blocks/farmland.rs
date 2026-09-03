@@ -57,7 +57,21 @@ impl BlockBehaviour for FarmlandBlock {
         // TODO: add rain check. Remember to check which one is most optimized.
         if is_water_nearby(args.world, args.position) {
             let mut props = FarmlandProperties::default(args.block);
-            props.moisture = 7;
+            let mut new_moisture = 7;
+            if let Some(server) = args.world.server.upgrade() {
+                let mut event =
+                    crate::plugin::api::events::block::moisture_change::MoistureChangeEvent::new(
+                        *args.position,
+                        args.world.clone(),
+                        new_moisture,
+                    );
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return;
+                }
+                new_moisture = event.new_moisture;
+            }
+            props.moisture = new_moisture.clamp(0, 7) as u8;
             args.world.set_block_state(
                 args.position,
                 props.to_state_id(args.block),
@@ -80,7 +94,20 @@ impl BlockBehaviour for FarmlandBlock {
                     );
                 }
             } else {
-                props.moisture = (props.moisture as i32 - 1).clamp(0, 7) as u8;
+                let mut new_moisture = (props.moisture as i32 - 1).clamp(0, 7);
+                if let Some(server) = args.world.server.upgrade() {
+                    let mut event = crate::plugin::api::events::block::moisture_change::MoistureChangeEvent::new(
+                        *args.position,
+                        args.world.clone(),
+                        new_moisture,
+                    );
+                    server.plugin_manager.fire_blocking(&server, &mut event);
+                    if event.cancelled {
+                        return;
+                    }
+                    new_moisture = event.new_moisture;
+                }
+                props.moisture = new_moisture.clamp(0, 7) as u8;
                 args.world.set_block_state(
                     args.position,
                     props.to_state_id(args.block),

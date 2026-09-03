@@ -15,6 +15,7 @@ pub mod inventory;
 pub mod level;
 pub mod lighting;
 pub mod poi;
+pub mod test_instance;
 pub mod tick;
 pub mod world;
 pub mod world_info;
