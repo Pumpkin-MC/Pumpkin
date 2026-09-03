@@ -877,7 +877,11 @@ pub fn is_right_distance_to_player_and_spawn_point(
     let chunk_z = get_section_cord(pos.0.z);
     let target_chunk = Vector2::new(chunk_x, chunk_z);
     target_chunk == *chunk_pos
-        || (world.active_chunks.load().contains(&target_chunk)
+        || (world
+            .active_chunks
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .contains(&target_chunk)
             && world
                 .worldborder
                 .lock()
