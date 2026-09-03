@@ -244,19 +244,21 @@ impl<E: Payload + ToFromWasmEvent + Clone + 'static> EventHandler<E> for WasmPlu
                 .store
                 .call_guest(move |mut guest| {
                     Box::pin(async move {
-                        let (wasm_event, server_res, server_rep) = guest.with(|mut store| {
-                            let wasm_event = event.to_wasm_event(store.data_mut());
-                            match store.data_mut().add_server(server) {
-                                Ok(resource) => {
-                                    let rep = resource.rep();
-                                    Ok((wasm_event, resource, rep))
+                        let (wasm_event, event_cleanup, server_res, server_rep) =
+                            guest.with(|mut store| {
+                                let wasm_event = event.to_wasm_event(store.data_mut());
+                                let event_cleanup = EventResourceCleanup::capture(&wasm_event);
+                                match store.data_mut().add_server(server) {
+                                    Ok(resource) => {
+                                        let rep = resource.rep();
+                                        Ok((wasm_event, event_cleanup, resource, rep))
+                                    }
+                                    Err(error) => {
+                                        event_cleanup.cleanup(store.data_mut());
+                                        Err(error)
+                                    }
                                 }
-                                Err(error) => {
-                                    cleanup_event(&wasm_event, store.data_mut());
-                                    Err(error)
-                                }
-                            }
-                        })?;
+                            })?;
                         let result = guest
                             .call(function, (handler_id, server_res, wasm_event))
                             .await
@@ -265,6 +267,7 @@ impl<E: Payload + ToFromWasmEvent + Clone + 'static> EventHandler<E> for WasmPlu
                             if let Ok(returned_event) = &result {
                                 cleanup_event(returned_event, store.data_mut());
                             }
+                            event_cleanup.cleanup(store.data_mut());
                             let _ = store.data_mut().resource_table.delete::<
                                 crate::plugin::loader::wasm::wasm_host::state::ServerResource,
                             >(wasmtime::component::Resource::new_own(server_rep));
@@ -296,19 +299,21 @@ impl<E: Payload + ToFromWasmEvent + Clone + 'static> EventHandler<E> for WasmPlu
                 .store
                 .call_guest(move |mut guest| {
                     Box::pin(async move {
-                        let (wasm_event, server_res, server_rep) = guest.with(|mut store| {
-                            let wasm_event = owned_event.to_wasm_event(store.data_mut());
-                            match store.data_mut().add_server(server) {
-                                Ok(resource) => {
-                                    let rep = resource.rep();
-                                    Ok((wasm_event, resource, rep))
+                        let (wasm_event, event_cleanup, server_res, server_rep) =
+                            guest.with(|mut store| {
+                                let wasm_event = owned_event.to_wasm_event(store.data_mut());
+                                let event_cleanup = EventResourceCleanup::capture(&wasm_event);
+                                match store.data_mut().add_server(server) {
+                                    Ok(resource) => {
+                                        let rep = resource.rep();
+                                        Ok((wasm_event, event_cleanup, resource, rep))
+                                    }
+                                    Err(error) => {
+                                        event_cleanup.cleanup(store.data_mut());
+                                        Err(error)
+                                    }
                                 }
-                                Err(error) => {
-                                    cleanup_event(&wasm_event, store.data_mut());
-                                    Err(error)
-                                }
-                            }
-                        })?;
+                            })?;
                         let result = guest
                             .call(function, (handler_id, server_res, wasm_event))
                             .await
@@ -317,6 +322,7 @@ impl<E: Payload + ToFromWasmEvent + Clone + 'static> EventHandler<E> for WasmPlu
                             let result = result.map(|returned_event| {
                                 E::from_wasm_event(returned_event, store.data_mut())
                             });
+                            event_cleanup.cleanup(store.data_mut());
                             let _ = store.data_mut().resource_table.delete::<
                                 crate::plugin::loader::wasm::wasm_host::state::ServerResource,
                             >(wasmtime::component::Resource::new_own(server_rep));

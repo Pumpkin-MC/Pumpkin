@@ -71,7 +71,6 @@ bindgen!({
     world: "plugin",
     imports: {
         "pumpkin:plugin/command@0.1.0.[method]command-sender.has-permission": async | store | trappable,
-        "pumpkin:plugin/context@0.1.0.[method]context.register-command": async | store | trappable,
         "pumpkin:plugin/datapack@0.1.0.[method]datapack-manager.disable-pack": async | store | trappable,
         "pumpkin:plugin/datapack@0.1.0.[method]datapack-manager.enable-pack": async | store | trappable,
         "pumpkin:plugin/datapack@0.1.0.[method]datapack-manager.execute-function": async | store | trappable,

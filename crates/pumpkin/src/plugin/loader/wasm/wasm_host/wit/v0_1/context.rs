@@ -1,5 +1,5 @@
 use std::{collections::HashMap, sync::Arc};
-use wasmtime::component::{Access, HasSelf, Resource};
+use wasmtime::component::Resource;
 
 use crate::plugin::loader::wasm::wasm_host::{
     DowncastResourceExt,
@@ -1505,6 +1505,27 @@ impl DowncastResourceExt<ContextResource> for Resource<Context> {
 impl pumpkin::plugin::context::Host for PluginHostState {}
 
 impl pumpkin::plugin::context::HostContext for PluginHostState {
+    async fn register_command(
+        &mut self,
+        context: Resource<Context>,
+        command: Resource<Command>,
+        permission: String,
+    ) -> wasmtime::Result<()> {
+        use crate::command::argument_builder::ArgumentBuilder;
+
+        let command = self.take_command(&command)?.provider;
+        let context = self.get_context(&context)?.provider.clone();
+        let aliases = if command.names.len() > 1 {
+            command.names[1..].to_vec()
+        } else {
+            Vec::new()
+        };
+        let node = command.builder.build();
+        context.register_command_with_aliases(node, &aliases, permission);
+
+        Ok(())
+    }
+
     #[allow(clippy::too_many_lines)]
     async fn register_event(
         &mut self,
@@ -1818,41 +1839,5 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             .resource_table
             .delete::<ContextResource>(Resource::new_own(rep.rep()));
         Ok(())
-    }
-}
-
-impl pumpkin::plugin::context::HostContextWithStore<PluginHostState> for HasSelf<PluginHostState> {
-    async fn register_command(
-        mut host: Access<'_, PluginHostState, Self>,
-        context: Resource<Context>,
-        command: Resource<Command>,
-        permission: String,
-    ) -> wasmtime::Result<()> {
-        let (context, command, plugin) = {
-            let state = host.get();
-            let command = state.take_command(&command)?.provider;
-            let context = state.get_context(&context)?.provider.clone();
-            let plugin = state
-                .plugin
-                .as_ref()
-                .and_then(std::sync::Weak::upgrade)
-                .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))?;
-            (context, command, plugin)
-        };
-
-        plugin
-            .store
-            .pump_blocking(&mut host, move || {
-                use crate::command::argument_builder::ArgumentBuilder;
-
-                let aliases = if command.names.len() > 1 {
-                    command.names[1..].to_vec()
-                } else {
-                    Vec::new()
-                };
-                let node = command.builder.build();
-                context.register_command_with_aliases(node, &aliases, permission);
-            })
-            .await
     }
 }

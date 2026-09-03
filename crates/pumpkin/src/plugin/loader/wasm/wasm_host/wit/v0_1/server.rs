@@ -639,12 +639,9 @@ impl pumpkin::plugin::server::HostServerWithStore<PluginHostState> for HasSelf<P
             (server, plugin)
         };
 
-        let runtime = tokio::runtime::Handle::current();
         plugin
             .store
-            .pump_blocking(&mut host, move || {
-                runtime.block_on(server.unload_world(&name))
-            })
+            .pump_reentry(&mut host, server.unload_world(&name))
             .await
     }
 
@@ -666,10 +663,9 @@ impl pumpkin::plugin::server::HostServerWithStore<PluginHostState> for HasSelf<P
             (server, plugin)
         };
 
-        let runtime = tokio::runtime::Handle::current();
         plugin
             .store
-            .pump_blocking(&mut host, move || runtime.block_on(server.save_all()))
+            .pump_reentry(&mut host, server.save_all())
             .await
     }
 

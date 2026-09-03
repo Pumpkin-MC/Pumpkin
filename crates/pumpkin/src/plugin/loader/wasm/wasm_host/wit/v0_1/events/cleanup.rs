@@ -10,31 +10,87 @@ use crate::plugin::loader::wasm::wasm_host::{
 };
 use wasmtime::component::Resource;
 
-pub fn cleanup_player(state: &mut PluginHostState, player: &Resource<Player>) {
-    let _ = state
-        .resource_table
-        .delete::<PlayerResource>(Resource::new_own(player.rep()));
+enum EventResource {
+    Player(u32),
+    World(u32),
+    TextComponent(u32),
+    ItemStack(u32),
 }
 
-pub fn cleanup_world(state: &mut PluginHostState, world: &Resource<World>) {
-    let _ = state
-        .resource_table
-        .delete::<WorldResource>(Resource::new_own(world.rep()));
+trait EventResourceSink {
+    fn add(&mut self, resource: EventResource);
 }
 
-pub fn cleanup_text_component(
-    state: &mut PluginHostState,
+impl EventResourceSink for PluginHostState {
+    fn add(&mut self, resource: EventResource) {
+        match resource {
+            EventResource::Player(rep) => {
+                let _ = self
+                    .resource_table
+                    .delete::<PlayerResource>(Resource::new_own(rep));
+            }
+            EventResource::World(rep) => {
+                let _ = self
+                    .resource_table
+                    .delete::<WorldResource>(Resource::new_own(rep));
+            }
+            EventResource::TextComponent(rep) => {
+                let _ = self
+                    .resource_table
+                    .delete::<TextComponentResource>(Resource::new_own(rep));
+            }
+            EventResource::ItemStack(rep) => {
+                let _ = self
+                    .resource_table
+                    .delete::<ItemStackResource>(Resource::new_own(rep));
+            }
+        }
+    }
+}
+
+pub(super) struct EventResourceCleanup {
+    resources: Vec<EventResource>,
+}
+
+impl EventResourceCleanup {
+    pub(super) fn capture(event: &Event) -> Self {
+        let mut cleanup = Self {
+            resources: Vec::new(),
+        };
+        visit_event_resources(event, &mut cleanup);
+        cleanup
+    }
+
+    pub(super) fn cleanup(self, state: &mut PluginHostState) {
+        for resource in self.resources {
+            state.add(resource);
+        }
+    }
+}
+
+impl EventResourceSink for EventResourceCleanup {
+    fn add(&mut self, resource: EventResource) {
+        self.resources.push(resource);
+    }
+}
+
+fn cleanup_player(state: &mut impl EventResourceSink, player: &Resource<Player>) {
+    state.add(EventResource::Player(player.rep()));
+}
+
+fn cleanup_world(state: &mut impl EventResourceSink, world: &Resource<World>) {
+    state.add(EventResource::World(world.rep()));
+}
+
+fn cleanup_text_component(
+    state: &mut impl EventResourceSink,
     text_component: &Resource<TextComponent>,
 ) {
-    let _ = state
-        .resource_table
-        .delete::<TextComponentResource>(Resource::new_own(text_component.rep()));
+    state.add(EventResource::TextComponent(text_component.rep()));
 }
 
-pub fn cleanup_item_stack(state: &mut PluginHostState, item: &Resource<ItemStack>) {
-    let _ = state
-        .resource_table
-        .delete::<ItemStackResource>(Resource::new_own(item.rep()));
+fn cleanup_item_stack(state: &mut impl EventResourceSink, item: &Resource<ItemStack>) {
+    state.add(EventResource::ItemStack(item.rep()));
 }
 
 pub fn cleanup_entity(state: &mut PluginHostState, entity: &Resource<Entity>) {
@@ -51,6 +107,11 @@ pub fn cleanup_server(state: &mut PluginHostState, server: &Resource<Server>) {
 
 #[allow(clippy::too_many_lines, clippy::match_same_arms)]
 pub fn cleanup_event(event: &Event, state: &mut PluginHostState) {
+    visit_event_resources(event, state);
+}
+
+#[allow(clippy::too_many_lines, clippy::match_same_arms)]
+fn visit_event_resources(event: &Event, state: &mut impl EventResourceSink) {
     match event {
         Event::PlayerJoinEvent(data) => {
             cleanup_player(state, &data.player);
@@ -718,5 +779,51 @@ pub fn cleanup_event(event: &Event, state: &mut PluginHostState) {
         Event::RaidStopEvent(_) => {}
         Event::RaidTriggerEvent(_) => {}
         Event::LightningStrikeEvent(_) => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::event::{
+        ServerListPingAddress, ServerListPingEventData,
+    };
+    use pumpkin_util::text::TextComponent as InternalTextComponent;
+
+    #[test]
+    fn captured_event_resources_are_released() {
+        let mut state = PluginHostState::new();
+        let motd: Resource<TextComponent> = state
+            .add_text_component(InternalTextComponent::text("Pumpkin"))
+            .expect("text component resource should be inserted");
+        let motd_rep = motd.rep();
+        let event = Event::ServerListPingEvent(ServerListPingEventData {
+            hostname: "localhost".to_string(),
+            address: ServerListPingAddress {
+                host: "127.0.0.1".to_string(),
+                port: 25_565,
+            },
+            motd,
+            max_players: 20,
+            num_players: 0,
+            favicon: None,
+        });
+
+        let cleanup = EventResourceCleanup::capture(&event);
+        assert!(
+            state
+                .resource_table
+                .get::<TextComponentResource>(&Resource::new_own(motd_rep))
+                .is_ok()
+        );
+
+        cleanup.cleanup(&mut state);
+
+        assert!(
+            state
+                .resource_table
+                .get::<TextComponentResource>(&Resource::new_own(motd_rep))
+                .is_err()
+        );
     }
 }
