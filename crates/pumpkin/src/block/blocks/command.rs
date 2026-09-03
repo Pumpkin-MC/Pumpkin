@@ -44,7 +44,7 @@ impl CommandBlock {
         Some((target_pos, props))
     }
 
-    /// Equivalent to vanilla CommandBlockEntity.markConditionMet(). Conditional
+    /// Equivalent to vanilla `CommandBlockEntity.markConditionMet()`. Conditional
     /// command blocks inspect the command block behind their own facing direction.
     fn conditions_met(world: &World, pos: &BlockPos) -> bool {
         let (_block, state_id) = world.get_block_and_state_id(pos);

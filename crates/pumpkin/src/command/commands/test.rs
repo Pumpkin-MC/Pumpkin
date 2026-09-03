@@ -54,8 +54,8 @@ impl GameTestReporter for CommandTestReporter {
     }
 }
 
-/// GameTest selectors are resource-location-like, but may also contain `*` and `?`.
-/// Keep the Java client parser as ResourceLocation and ask the server for completions,
+/// `GameTest` selectors are resource-location-like, but may also contain `*` and `?`.
+/// Keep the Java client parser as `ResourceLocation` and ask the server for completions,
 /// matching the behavior of the old command implementation.
 struct TestInstanceArgumentType;
 

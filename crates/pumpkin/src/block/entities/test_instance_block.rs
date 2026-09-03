@@ -5,7 +5,6 @@ use std::sync::Mutex;
 
 use super::BlockEntity;
 
-const STRUCTURE_OFFSET: [i32; 3] = [0, 1, 1];
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum TestInstanceRotation {
@@ -241,11 +240,4 @@ impl TestInstanceBlockBlockEntity {
         *errors = None;
     }
 
-    fn get_int_array(nbt: &NbtCompound, name: &str) -> Option<[i32; 3]> {
-        let values = nbt.get_list(name)?;
-        let [x, y, z] = values else {
-            return None;
-        };
-        Some([x.extract_int()?, y.extract_int()?, z.extract_int()?])
-    }
 }
