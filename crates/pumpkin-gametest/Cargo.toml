@@ -9,6 +9,7 @@ license.workspace = true
 [dependencies]
 async-trait.workspace = true
 pumpkin-data = { workspace = true, features = ["block"] }
+pumpkin-macros.workspace = true
 pumpkin-nbt.workspace = true
 pumpkin-util.workspace = true
 pumpkin-world.workspace = true

@@ -1,14 +1,14 @@
-use crate::model::{TestDefinition, TestRotation};
+use crate::model::{GameTestDefinition, GameTestRotation};
 
 #[derive(Clone, Debug)]
 pub struct BlockBasedTest {
     id: String,
-    definition: TestDefinition,
+    definition: GameTestDefinition,
 }
 
 impl BlockBasedTest {
     #[must_use]
-    pub fn new(id: impl Into<String>, definition: TestDefinition) -> Self {
+    pub fn new(id: impl Into<String>, definition: GameTestDefinition) -> Self {
         Self {
             id: id.into(),
             definition,
@@ -21,7 +21,7 @@ impl BlockBasedTest {
     }
 
     #[must_use]
-    pub const fn definition(&self) -> &TestDefinition {
+    pub const fn definition(&self) -> &GameTestDefinition {
         &self.definition
     }
 
@@ -51,7 +51,7 @@ impl BlockBasedTest {
     }
 
     #[must_use]
-    pub const fn rotation(&self) -> TestRotation {
+    pub const fn rotation(&self) -> GameTestRotation {
         self.definition.rotation
     }
 }

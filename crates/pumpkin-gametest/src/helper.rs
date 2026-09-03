@@ -3,12 +3,12 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 
 use crate::error::{GameTestError, GameTestResult};
-use crate::structure::PlacedStructure;
+use crate::structure::TestStructureInstance;
 use crate::world::GameTestWorld;
 
 pub struct GameTestHelper<'a> {
     world: &'a dyn GameTestWorld,
-    placement: &'a PlacedStructure,
+    placement: &'a TestStructureInstance,
     tick: u32,
 }
 
@@ -16,7 +16,7 @@ impl<'a> GameTestHelper<'a> {
     #[must_use]
     pub const fn new(
         world: &'a dyn GameTestWorld,
-        placement: &'a PlacedStructure,
+        placement: &'a TestStructureInstance,
         tick: u32,
     ) -> Self {
         Self {

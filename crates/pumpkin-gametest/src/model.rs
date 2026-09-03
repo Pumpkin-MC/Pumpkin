@@ -9,7 +9,7 @@ pub enum TestType {
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
-pub enum TestRotation {
+pub enum GameTestRotation {
     #[default]
     #[serde(rename = "none")]
     None,
@@ -21,7 +21,7 @@ pub enum TestRotation {
     Counterclockwise90,
 }
 
-impl TestRotation {
+impl GameTestRotation {
     #[must_use]
     pub const fn serialized_name(self) -> &'static str {
         match self {
@@ -66,7 +66,7 @@ impl TestRotation {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
-pub struct TestDefinition {
+pub struct GameTestDefinition {
     #[serde(rename = "type")]
     pub instance_type: TestType,
     pub environment: Value,
@@ -77,7 +77,7 @@ pub struct TestDefinition {
     #[serde(default = "default_true")]
     pub required: bool,
     #[serde(default)]
-    pub rotation: TestRotation,
+    pub rotation: GameTestRotation,
     #[serde(default)]
     pub manual_only: bool,
     #[serde(default = "default_one")]
@@ -90,7 +90,7 @@ pub struct TestDefinition {
     pub padding: i32,
 }
 
-impl TestDefinition {
+impl GameTestDefinition {
     #[must_use]
     pub fn is_valid(&self) -> bool {
         self.max_ticks > 0

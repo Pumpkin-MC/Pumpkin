@@ -5,7 +5,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 
 use crate::error::GameTestResult;
-use crate::model::TestRotation;
+use crate::model::GameTestRotation;
 
 #[async_trait]
 pub trait GameTestWorld: Send + Sync {
@@ -21,7 +21,7 @@ pub trait GameTestWorld: Send + Sync {
     async fn rotate_block_state(
         &self,
         block_state_id: BlockStateId,
-        rotation: TestRotation,
+        rotation: GameTestRotation,
     ) -> GameTestResult<BlockStateId>;
 
     async fn set_block_entity_nbt(
@@ -47,6 +47,16 @@ pub trait GameTestWorld: Send + Sync {
 
     /// Removes queued block events inside `[min, max)` after structure replacement.
     async fn clear_block_events(&self, min: &BlockPos, max: &BlockPos) -> GameTestResult<()>;
+
+    /// Returns whether every chunk intersecting the half-open structure box
+    /// `[min, max)` is loaded and currently ticking.
+    ///
+    /// Vanilla `GameTestInfo` waits on this condition once after structure placement
+    /// before advancing the setup/test clock. Non-server adapters can use the default
+    /// because they do not have a separate chunk-ticking lifecycle.
+    async fn test_area_loaded_and_ticking(&self, _min: &BlockPos, _max: &BlockPos) -> bool {
+        true
+    }
 
     async fn set_test_instance_running(&self, position: &BlockPos) -> GameTestResult<()>;
 

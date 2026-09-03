@@ -35,7 +35,7 @@ impl TestBlockMode {
 }
 
 #[derive(Clone, Debug)]
-pub struct StructureBlock {
+pub struct GameTestStructureBlock {
     pub position: [i32; 3],
     pub state: BlockStateId,
     pub nbt: Option<NbtCompound>,
@@ -43,9 +43,9 @@ pub struct StructureBlock {
 }
 
 #[derive(Clone, Debug)]
-pub struct StructureTemplate {
+pub struct GameTestStructureTemplate {
     size: [i32; 3],
-    blocks: Vec<StructureBlock>,
+    blocks: Vec<GameTestStructureBlock>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -54,7 +54,7 @@ struct PaletteEntry {
     test_mode: Option<TestBlockMode>,
 }
 
-impl StructureTemplate {
+impl GameTestStructureTemplate {
     pub fn from_nbt(structure: &NbtCompound) -> GameTestResult<Self> {
         let size = read_vec3(structure, "size")?;
         if size.iter().any(|axis| *axis <= 0) {
@@ -102,7 +102,7 @@ impl StructureTemplate {
                 ))
             })?;
 
-            parsed_blocks.push(StructureBlock {
+            parsed_blocks.push(GameTestStructureBlock {
                 position,
                 state: palette_entry.state,
                 nbt: block.get_compound("nbt").cloned(),
@@ -122,7 +122,7 @@ impl StructureTemplate {
     }
 
     #[must_use]
-    pub fn blocks(&self) -> &[StructureBlock] {
+    pub fn blocks(&self) -> &[GameTestStructureBlock] {
         &self.blocks
     }
 

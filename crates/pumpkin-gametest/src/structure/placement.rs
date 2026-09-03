@@ -4,20 +4,20 @@ use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::world::BlockFlags;
 
 use crate::error::GameTestResult;
-use crate::model::TestRotation;
-use crate::structure::template::StructureTemplate;
+use crate::model::GameTestRotation;
+use crate::structure::template::GameTestStructureTemplate;
 use crate::world::GameTestWorld;
 
 const STRUCTURE_OFFSET: [i32; 3] = [0, 1, 1];
 
 #[derive(Clone, Copy, Debug)]
-pub struct TestPosition {
+pub struct GameTestPosition {
     x: i32,
     y: Option<i32>,
     z: i32,
 }
 
-impl TestPosition {
+impl GameTestPosition {
     #[must_use]
     pub const fn new(x: i32, y: Option<i32>, z: i32) -> Self {
         Self { x, y, z }
@@ -25,22 +25,22 @@ impl TestPosition {
 }
 
 #[derive(Clone, Debug)]
-pub struct PlacedStructure {
+pub struct TestStructureInstance {
     test_instance_pos: BlockPos,
     origin: BlockPos,
     source_size: [i32; 3],
     size: [i32; 3],
-    rotation: TestRotation,
+    rotation: GameTestRotation,
 }
 
-impl PlacedStructure {
+impl TestStructureInstance {
     #[must_use]
     pub const fn new(
         test_instance_pos: BlockPos,
         origin: BlockPos,
         source_size: [i32; 3],
         size: [i32; 3],
-        rotation: TestRotation,
+        rotation: GameTestRotation,
     ) -> Self {
         Self {
             test_instance_pos,
@@ -67,7 +67,7 @@ impl PlacedStructure {
     }
 
     #[must_use]
-    pub const fn rotation(&self) -> TestRotation {
+    pub const fn rotation(&self) -> GameTestRotation {
         self.rotation
     }
 
@@ -91,18 +91,18 @@ impl PlacedStructure {
 
 pub async fn place_structure(
     world: &dyn GameTestWorld,
-    template: &StructureTemplate,
+    template: &GameTestStructureTemplate,
     test_id: &str,
-    rotation: TestRotation,
-    position: TestPosition,
+    rotation: GameTestRotation,
+    position: GameTestPosition,
     padding: i32,
-) -> GameTestResult<PlacedStructure> {
+) -> GameTestResult<TestStructureInstance> {
     place_structure_with_controller_rotation(
         world,
         template,
         test_id,
         rotation,
-        TestRotation::None,
+        GameTestRotation::None,
         position,
         padding,
     )
@@ -115,13 +115,13 @@ pub async fn place_structure(
 /// vanilla does for `/test run ... rotationSteps`.
 pub async fn place_structure_with_controller_rotation(
     world: &dyn GameTestWorld,
-    template: &StructureTemplate,
+    template: &GameTestStructureTemplate,
     test_id: &str,
-    rotation: TestRotation,
-    controller_rotation: TestRotation,
-    position: TestPosition,
+    rotation: GameTestRotation,
+    controller_rotation: GameTestRotation,
+    position: GameTestPosition,
     padding: i32,
-) -> GameTestResult<PlacedStructure> {
+) -> GameTestResult<TestStructureInstance> {
     // TestInstanceBlockEntity.getStructurePos offsets the controller by padding and
     // then by STRUCTURE_OFFSET. The controller itself is outside the structure box.
     // Reruns retain the original controller Y instead of querying a heightmap again.
@@ -225,7 +225,7 @@ pub async fn place_structure_with_controller_rotation(
         .await?;
     world.clear_block_events(&test_min, &test_max).await?;
 
-    Ok(PlacedStructure::new(
+    Ok(TestStructureInstance::new(
         test_instance_pos,
         origin,
         source_size,
@@ -240,7 +240,7 @@ pub async fn place_structure_with_controller_rotation(
 /// present; the ceiling is omitted when the test requests sky access.
 pub async fn encase_structure(
     world: &dyn GameTestWorld,
-    placement: &PlacedStructure,
+    placement: &TestStructureInstance,
     sky_access: bool,
 ) -> GameTestResult<()> {
     process_structure_boundary(placement, sky_access, |position| async move {
@@ -265,7 +265,7 @@ pub async fn encase_structure(
 /// vanilla. Only barrier blocks are removed so test blocks on the boundary are preserved.
 pub async fn remove_barriers(
     world: &dyn GameTestWorld,
-    placement: &PlacedStructure,
+    placement: &TestStructureInstance,
     sky_access: bool,
 ) -> GameTestResult<()> {
     process_structure_boundary(placement, sky_access, |position| async move {
@@ -287,7 +287,7 @@ pub async fn remove_barriers(
 /// structure bounds inflated by one block before listeners schedule any reruns.
 pub async fn clear_success_entities(
     world: &dyn GameTestWorld,
-    placement: &PlacedStructure,
+    placement: &TestStructureInstance,
 ) -> GameTestResult<()> {
     let origin = placement.origin();
     let size = placement.size();
@@ -301,7 +301,7 @@ pub async fn clear_success_entities(
 }
 
 async fn process_structure_boundary<F, Fut>(
-    placement: &PlacedStructure,
+    placement: &TestStructureInstance,
     sky_access: bool,
     mut action: F,
 ) -> GameTestResult<()>
