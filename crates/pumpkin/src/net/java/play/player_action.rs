@@ -76,7 +76,7 @@ impl JavaClient {
                         // Block break & play sound
                         let new_state = world.break_block(
                             &position,
-                            Some(player),
+                            Some(player.clone()),
                             BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_DROPS,
                         );
                         if new_state.is_some() {
@@ -103,7 +103,7 @@ impl JavaClient {
                             } else {
                                 BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL
                             };
-                            let new_state = world.break_block(&position, Some(player), flags);
+                            let new_state = world.break_block(&position, Some(player.clone()), flags);
                             if new_state.is_some() {
                                 server.block_registry.broken(
                                     &world,
@@ -194,7 +194,7 @@ impl JavaClient {
 
                     let new_state = world.break_block(
                         &location,
-                        Some(player),
+                        Some(player.clone()),
                         if block_drop {
                             BlockFlags::NOTIFY_ALL
                         } else {

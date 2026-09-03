@@ -45,7 +45,7 @@ impl BedrockClient {
                 if player.gamemode.load() == GameMode::Creative {
                     let new_state = world.break_block(
                         &location,
-                        Some(player),
+                        Some(player.clone()),
                         BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_DROPS,
                     );
                     if new_state.is_some() {
@@ -64,7 +64,7 @@ impl BedrockClient {
                         } else {
                             BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL
                         };
-                        let new_state = world.break_block(&location, Some(player), flags);
+                        let new_state = world.break_block(&location, Some(player.clone()), flags);
                         if new_state.is_some() {
                             server.block_registry.broken(
                                 &world,
@@ -183,7 +183,7 @@ impl BedrockClient {
                         } else {
                             BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL
                         };
-                        if world.break_block(&location, Some(player), flags).is_some() {
+                        if world.break_block(&location, Some(player.clone()), flags).is_some() {
                             server
                                 .block_registry
                                 .broken(&world, block, player, &location, server, state);
