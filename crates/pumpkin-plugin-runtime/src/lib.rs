@@ -401,26 +401,28 @@ mod tests {
         assert_eq!(store.state(), DriverState::Stopped);
     }
 
-    async fn shutdown_waits_for_store_background_tasks() {
+    async fn shutdown_waits_for_joined_store_background_tasks() {
         let store = ConcurrentStore::new(test_store()).await;
         let started = Arc::new(Notify::new());
         let release = Arc::new(Notify::new());
         let task_started = Arc::clone(&started);
         let task_release = Arc::clone(&release);
 
-        store
-            .call(move |accessor| {
-                let spawned = accessor.spawn(BackgroundTask {
-                    started: task_started,
-                    release: task_release,
-                });
-                Box::pin(async move {
-                    spawned?;
-                    Ok(())
+        let call_store = store.clone();
+        let active_call = tokio::spawn(async move {
+            call_store
+                .call(move |accessor| {
+                    let spawned = accessor.spawn(BackgroundTask {
+                        started: task_started,
+                        release: task_release,
+                    });
+                    Box::pin(async move {
+                        spawned?.await;
+                        Ok(())
+                    })
                 })
-            })
-            .await
-            .expect("spawn background store task");
+                .await
+        });
         started.notified().await;
 
         let shutdown_store = store.clone();
@@ -435,6 +437,10 @@ mod tests {
         assert!(!shutdown.is_finished());
 
         release.notify_one();
+        active_call
+            .await
+            .expect("active call task")
+            .expect("active call result");
         shutdown
             .await
             .expect("shutdown task")
@@ -483,7 +489,10 @@ mod tests {
             .wait()
             .await
             .expect_err("owner drop should fail the driver explicitly");
-        assert!(error.to_string().contains("control was dropped"));
+        assert!(
+            error.to_string().contains("control was dropped"),
+            "unexpected driver error: {error}"
+        );
 
         let executor = LegacyStore::start(
             test_store(),
@@ -500,7 +509,10 @@ mod tests {
             .wait()
             .await
             .expect_err("dropping the sole owner should fail the driver explicitly");
-        assert!(error.to_string().contains("control was dropped"));
+        assert!(
+            error.to_string().contains("control was dropped"),
+            "unexpected driver error: {error}"
+        );
     }
 
     /// Acceptance test for plain synchronous WIT recursion through the
@@ -1128,7 +1140,7 @@ mod tests {
     async fn shutdown_drains_accepted_work() {
         timeout(Duration::from_secs(10), async {
             shutdown_drains_accepted_calls_and_rejects_new_work().await;
-            shutdown_waits_for_store_background_tasks().await;
+            shutdown_waits_for_joined_store_background_tasks().await;
             owner_drop_drains_accepted_work().await;
             shutdown_reentry_scenario().await;
         })
