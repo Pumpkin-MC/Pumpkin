@@ -1,8 +1,6 @@
 use pumpkin_data::item::Item;
 use pumpkin_data::{
-    BlockDirection, BlockStateId,
-    block_properties::{BlockProperties, CandleLikeProperties},
-    entity::EntityPose,
+    BlockDirection, BlockStateId, block_properties::CandleLikeProperties, entity::EntityPose,
 };
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
@@ -31,7 +29,7 @@ impl BlockBehaviour for CandleBlock {
         if args.player.get_entity().pose.load() != EntityPose::Crouching
             && let BlockIsReplacing::Itself(state_id) = args.replacing
         {
-            let mut properties = CandleLikeProperties::from_state_id(state_id, args.block);
+            let mut properties = CandleLikeProperties::from_state_id(state_id);
             if properties.candles < 4 {
                 properties.candles += 1;
             }
@@ -46,7 +44,7 @@ impl BlockBehaviour for CandleBlock {
     fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         {
             let state = args.world.get_block_state(args.position);
-            let mut properties = CandleLikeProperties::from_state_id(state.id, args.block);
+            let mut properties = CandleLikeProperties::from_state_id(state.id);
 
             let item = args.item_stack.item;
 
@@ -92,7 +90,7 @@ impl BlockBehaviour for CandleBlock {
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         {
             let state_id = args.world.get_block_state_id(args.position);
-            let mut properties = CandleLikeProperties::from_state_id(state_id, args.block);
+            let mut properties = CandleLikeProperties::from_state_id(state_id);
 
             if properties.lit {
                 properties.lit = false;
@@ -115,7 +113,7 @@ impl BlockBehaviour for CandleBlock {
     fn can_update_at(&self, args: CanUpdateAtArgs<'_>) -> bool {
         let b = BlockAccessor::get_block(args.world, args.position);
         args.player.get_entity().pose.load() != EntityPose::Crouching
-            && CandleLikeProperties::from_state_id(args.state_id, args.block).candles != 4
+            && CandleLikeProperties::from_state_id(args.state_id).candles != 4
             && args.block.id == b.id
     }
 

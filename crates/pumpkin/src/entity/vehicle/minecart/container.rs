@@ -16,7 +16,7 @@ use pumpkin_world::inventory::{Clearable, Inventory};
 
 use crate::entity::{Entity, player::Player};
 use crate::world::loot::fill_chest_inventory;
-use pumpkin_data::chest_loot_table::get_chest_loot_table;
+use pumpkin_data::loot_table::get_loot_table;
 
 pub(super) struct MinecartInventory {
     items: RwLock<Vec<ItemStack>>,
@@ -98,7 +98,7 @@ impl MinecartInventory {
         let Some((loot_table, seed)) = loot_table else {
             return;
         };
-        let Some(table) = get_chest_loot_table(&loot_table) else {
+        let Some(table) = get_loot_table(&loot_table) else {
             *self
                 .loot_table
                 .lock()
@@ -182,13 +182,13 @@ impl ScreenHandlerFactory for MinecartScreenFactory {
         &self,
         sync_id: u8,
         player_inventory: &Arc<PlayerInventory>,
-        _player: &dyn InventoryPlayer,
+        player: &dyn InventoryPlayer,
     ) -> Option<SharedScreenHandler> {
         let inventory: Arc<dyn Inventory> = self.inventory.clone();
         let handler = if self.hopper {
-            create_hopper(sync_id, player_inventory, inventory)
+            create_hopper(sync_id, player_inventory, inventory, player)
         } else {
-            create_generic_9x3(sync_id, player_inventory, inventory)
+            create_generic_9x3(sync_id, player_inventory, inventory, player)
         };
         Some(Arc::new(Mutex::new(handler)) as SharedScreenHandler)
     }

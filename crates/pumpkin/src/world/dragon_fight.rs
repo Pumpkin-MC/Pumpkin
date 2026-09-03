@@ -20,7 +20,6 @@ use super::{
     bossbar::{Bossbar, BossbarColor, BossbarDivisions, BossbarFlags},
 };
 use crate::entity::{Entity, EntityBase, decoration::end_crystal::EndCrystalEntity};
-use pumpkin_data::block_properties::BlockProperties;
 
 // ── Constants (match vanilla exactly) ────────────────────────────────────────
 

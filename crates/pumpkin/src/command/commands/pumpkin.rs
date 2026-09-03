@@ -8,12 +8,17 @@ use std::borrow::Cow;
 use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant};
 
-use crate::command::CommandResult;
-use crate::command::{CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree};
+use pumpkin_util::PermissionLvl;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
+
+use crate::command::argument_builder::{ArgumentBuilder, command};
+use crate::command::context::command_context::CommandContext;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
 
 const NAMES: [&str; 3] = ["pumpkin", "version", "ver"];
-
 const DESCRIPTION: &str = "Display information about Pumpkin.";
+const PERMISSION: &str = "pumpkin:command.pumpkin";
 
 const CACHE_DURATION: Duration = Duration::from_hours(24);
 
@@ -76,7 +81,7 @@ fn fetch_all_contributors_cached() -> Vec<Contributor> {
 }
 
 async fn fetch_all_contributors() -> Vec<Contributor> {
-    let client = reqwest::Client::builder()
+    let client = pumpkin_util::client_builder()
         .user_agent("Pumpkin-MC")
         .build()
         .unwrap_or_default();
@@ -191,7 +196,7 @@ fn tier_color(tier_slug: &str, tier_name: &str) -> NamedColor {
 
 async fn fetch_donators_hover() -> TextComponent {
     let url = "https://market.pumpkinmc.org/api/v1/rest/donators";
-    let client = reqwest::Client::builder()
+    let client = pumpkin_util::client_builder()
         .user_agent("Pumpkin-MC")
         .build()
         .unwrap_or_default();
@@ -268,19 +273,14 @@ fn fetch_donators_hover_cached() -> TextComponent {
 
 #[expect(clippy::too_many_lines)]
 impl CommandExecutor for Executor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        _server: &crate::server::Server,
-        _args: &ConsumedArgs,
-    ) -> CommandResult {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let contributors = fetch_all_contributors_cached();
         let contributor_names = contributors
             .iter()
             .map(|c| c.login.as_str())
             .collect::<Vec<_>>()
             .join(", ");
-        let locale = sender.get_locale();
+        let locale = context.source.output.get_locale();
         let profile = if cfg!(debug_assertions) {
             "debug"
         } else {
@@ -405,7 +405,7 @@ impl CommandExecutor for Executor {
                 .underlined(),
         );
 
-        sender.send_message(msg);
+        context.source.send_message(msg);
 
         // It makes total sense to return the number of
         // contributors as the i32 result for this command.
@@ -413,8 +413,20 @@ impl CommandExecutor for Executor {
     }
 }
 
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).execute(Executor)
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Zero),
+    ));
+
+    for name in NAMES {
+        dispatcher.register(
+            command(name, DESCRIPTION)
+                .requires(PERMISSION)
+                .executes(Executor),
+        );
+    }
 }
 
 #[cfg(test)]

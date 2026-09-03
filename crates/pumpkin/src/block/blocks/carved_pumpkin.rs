@@ -1,8 +1,6 @@
 use pumpkin_data::{
-    Block, BlockDirection, BlockId, BlockStateId,
-    block_properties::{BlockProperties, WallTorchLikeProperties},
-    entity::EntityType,
-    world::WorldEvent,
+    Block, BlockDirection, BlockId, BlockStateId, block_properties::WallTorchLikeProperties,
+    entity::EntityType, world::WorldEvent,
 };
 use pumpkin_world::world::BlockFlags;
 

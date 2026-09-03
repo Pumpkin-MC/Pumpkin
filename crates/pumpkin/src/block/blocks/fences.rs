@@ -1,21 +1,15 @@
-use crate::block::GetStateForNeighborUpdateArgs;
-use crate::block::OnPlaceArgs;
-use pumpkin_data::BlockDirection;
-use pumpkin_data::BlockState;
-use pumpkin_data::BlockStateId;
-use pumpkin_data::HorizontalFacingExt;
-use pumpkin_data::block_properties::BlockProperties;
+use crate::block::{
+    BlockBehaviour, GetStateForNeighborUpdateArgs, OnPlaceArgs, PathComputationType,
+};
+use crate::world::World;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, tag};
+use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId, HorizontalFacingExt, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 
 type FenceGateProperties = pumpkin_data::block_properties::OakFenceGateLikeProperties;
 type FenceProperties = pumpkin_data::block_properties::OakFenceLikeProperties;
-
-use crate::block::BlockBehaviour;
-use crate::world::World;
 
 #[pumpkin_block_from_tag("minecraft:fences")]
 pub struct FenceBlock;
@@ -32,8 +26,12 @@ impl BlockBehaviour for FenceBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        let fence_props = FenceProperties::from_state_id(args.state_id, args.block);
+        let fence_props = FenceProperties::from_state_id(args.state_id);
         compute_fence_state(fence_props, args.world, args.block, args.position)
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
 
@@ -74,7 +72,7 @@ fn connects_to(from: &Block, to: &Block, to_state: &BlockState, direction: Block
     }
 
     if to.has_tag(&tag::Block::C_FENCE_GATES) {
-        let fence_gate_props = FenceGateProperties::from_state_id(to_state.id, to);
+        let fence_gate_props = FenceGateProperties::from_state_id(to_state.id);
         if BlockDirection::from_cardinal_direction(fence_gate_props.facing).to_axis()
             == direction.rotate_clockwise().to_axis()
         {

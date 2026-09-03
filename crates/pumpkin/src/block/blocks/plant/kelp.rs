@@ -4,7 +4,7 @@ use crate::block::{
     PlacedArgs,
 };
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{BlockProperties, WaterLikeProperties};
+use pumpkin_data::block_properties::WaterLikeProperties;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockId, tag};
 use pumpkin_util::math::position::BlockPos;
@@ -77,8 +77,7 @@ impl PlantBlockBase for KelpBlock {
             block_accessor.get_block_and_state(&pos.up());
         let (support_block, support_block_state) = block_accessor.get_block_and_state(support_pos);
         if replacing_block == &Block::WATER {
-            let water_props =
-                WaterLikeProperties::from_state_id(replacing_block_state.id, replacing_block);
+            let water_props = WaterLikeProperties::from_state_id(replacing_block_state.id);
 
             //Only allow placing kelp on either full water or downward flowing water
             if water_props.level != 0 && water_props.level != 8 {

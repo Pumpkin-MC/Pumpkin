@@ -23,6 +23,8 @@ pub mod loot;
 pub mod map;
 pub mod portal;
 pub mod raid;
+pub mod random_sequences;
+pub mod stopwatches;
 pub mod time;
 pub mod villager_poi;
 
@@ -55,12 +57,12 @@ pub use explosion::{
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::block_properties::{blocks_movement, is_air};
 use pumpkin_data::block_rotation::{Mirror, Rotation};
-use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::MobCategory;
 use pumpkin_data::fluid::FluidState;
 use pumpkin_data::game_rules::{GameRule, GameRuleValue};
+use pumpkin_data::noise_settings::NoiseSettings;
 use pumpkin_data::{
     Block, BlockStateId,
     entity::{EntityStatus, EntityType},
@@ -73,7 +75,7 @@ use pumpkin_data::{
 };
 use pumpkin_data::{
     BlockDirection, BlockState, HorizontalFacingExt,
-    block_properties::{BlockProperties, ChestLikeProperties, ChestType},
+    block_properties::{ChestLikeProperties, ChestType},
     tag::Taggable,
     translation,
 };
@@ -117,9 +119,8 @@ use pumpkin_protocol::{
         self,
         client::play::{
             CBlockEntityData, CDamageEvent, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate,
-            CPlayerChatMessage, CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo,
-            CSetSelectedSlot, CSoundEffect, CSpawnEntity, FilterType, GameEvent, InitChat,
-            PlayerAction, PlayerInfoFlags,
+            CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo, CSetSelectedSlot, CSoundEffect,
+            CSpawnEntity, GameEvent, InitChat, PlayerAction, PlayerInfoFlags,
         },
         server::play::SChatMessage,
     },
@@ -193,7 +194,7 @@ fn bedrock_chest_block_actor(state_id: BlockStateId, position: BlockPos) -> Opti
     nbt.put_int("z", position.0.z);
     nbt.put_bool("isMovable", true);
 
-    let properties = ChestLikeProperties::from_state_id(state_id, block);
+    let properties = ChestLikeProperties::from_state_id(state_id);
     if properties.r#type != ChestType::Single {
         let direction = if properties.r#type == ChestType::Left {
             properties.facing.rotate_clockwise()
@@ -351,7 +352,7 @@ impl World {
         server: Weak<Server>,
     ) -> Self {
         // TODO
-        let generation_settings = GenerationSettings::from_dimension(&dimension);
+        let generation_settings = NoiseSettings::from_dimension(&dimension);
 
         // Load portal POI from disk (PoiStorage::new automatically loads from disk if files exist)
         let portal_poi = portal::PortalPoiStorage::new(level.level_folder.poi_folder.clone());
@@ -418,6 +419,9 @@ impl World {
             s.advanced_config.networking.java.simulation_distance.get()
         }) as i32;
         for player in self.players.load().iter() {
+            if player.is_spectator() {
+                continue;
+            }
             let center = player.get_entity().chunk_pos.load();
             for dx in -sim_dist..=sim_dist {
                 for dy in -sim_dist..=sim_dist {
@@ -968,7 +972,35 @@ impl World {
         );
     }
 
-    pub async fn broadcast_secure_player_chat(
+    pub fn broadcast_chat_message(
+        &self,
+        message: &crate::net::chat::PlayerChatMessage,
+        is_filtered: impl Fn(&Player) -> bool,
+        sender_player: Option<&Arc<Player>>,
+        chat_type: VarInt,
+        sender_name: &TextComponent,
+        target_name: Option<&TextComponent>,
+    ) {
+        let tracked = crate::net::chat::OutgoingChatMessage::create(message.clone());
+        let mut was_fully_filtered = false;
+
+        let players = self.players.load();
+        for player in players.iter() {
+            let filtered = is_filtered(player);
+            tracked.send_to_player(player, filtered, chat_type, sender_name, target_name);
+            was_fully_filtered |= filtered && message.is_fully_filtered();
+        }
+
+        if was_fully_filtered && let Some(sender) = sender_player {
+            let filter_notice =
+                TextComponent::translate(pumpkin_data::translation::java::CHAT_FILTERED_FULL, [])
+                    .color_named(pumpkin_util::text::color::NamedColor::Red)
+                    .italic();
+            sender.send_system_message(&filter_notice);
+        }
+    }
+
+    pub fn broadcast_secure_player_chat(
         &self,
         sender: &Arc<Player>,
         chat_message: &SChatMessage<'_>,
@@ -984,79 +1016,36 @@ impl World {
                 .signature_cache
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            cache.last_seen.clone()
+            cache.last_seen.as_ref().to_vec()
         };
 
-        for recipient in self.players.load().iter() {
-            let messages_received: i32 = recipient
-                .chat_session
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .messages_received;
-            let packet = &CPlayerChatMessage::new(
-                VarInt(messages_received),
-                sender.gameprofile.id,
-                VarInt(messages_sent),
-                chat_message.signature.map(std::convert::Into::into),
-                chat_message.message.into(),
-                chat_message.timestamp,
-                chat_message.salt,
-                sender_last_seen.indexed_for(recipient),
-                Some(decorated_message.clone()),
-                FilterType::PassThrough,
-                (RAW + 1).into(), // Custom registry chat_type with no sender name
-                TextComponent::empty(), // Not needed since we're injecting the name in the message for custom formatting
-                None,
-            );
-            let packet_data = recipient.client.java().map_or_else(
-                || {
-                    JavaClient::serialize_packet_for_version(
-                        packet,
-                        recipient.client.java_version(),
-                    )
-                },
-                |j| j.serialize_packet(packet),
-            );
-            if let Ok(data) = packet_data {
-                recipient.client.enqueue_packet(data).await;
-            }
+        let link = crate::net::chat::SignedMessageLink::new(
+            messages_sent,
+            sender.gameprofile.id,
+            Uuid::nil(),
+        );
+        let signed_body = crate::net::chat::SignedMessageBody::new(
+            chat_message.message.to_string(),
+            chat_message.timestamp,
+            chat_message.salt,
+            sender_last_seen,
+        );
+        let player_chat_msg = crate::net::chat::PlayerChatMessage::new(
+            link,
+            chat_message.signature.map(std::convert::Into::into),
+            signed_body,
+            Some(decorated_message.clone()),
+            crate::net::chat::FilterMask::PassThrough,
+        );
 
-            if let Some(signature) = chat_message.signature {
-                let mut cache = recipient
-                    .signature_cache
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                cache.add_seen_signature(signature);
-                cache.last_seen_validator.add_pending(signature);
-                let tracked_count = cache.last_seen_validator.tracked_messages_count();
-                drop(cache);
-
-                if tracked_count > 4096 {
-                    recipient.kick(
-                        crate::net::DisconnectReason::Kicked,
-                        &TextComponent::translate_cross(
-                            pumpkin_data::translation::java::MULTIPLAYER_DISCONNECT_TOO_MANY_PENDING_CHATS,
-                            pumpkin_data::translation::java::MULTIPLAYER_DISCONNECT_TOO_MANY_PENDING_CHATS,
-                            [],
-                        ),
-                    );
-                }
-            }
-
-            if recipient.gameprofile.id != sender.gameprofile.id {
-                // Sender may update recipient on signatures recipient hasn't seen
-                recipient
-                    .signature_cache
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .cache_signatures(sender_last_seen.as_ref());
-            }
-            recipient
-                .chat_session
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .messages_received += 1;
-        }
+        self.broadcast_chat_message(
+            &player_chat_msg,
+            Player::is_text_filtering_enabled,
+            Some(sender),
+            (RAW + 1).into(),
+            &TextComponent::empty(),
+            None,
+        );
 
         sender
             .chat_session
@@ -1196,6 +1185,27 @@ impl World {
             seed,
         );
         self.broadcast_packet_all(&packet);
+    }
+
+    pub fn play_sound_event_expect(
+        &self,
+        player: &Player,
+        sound: &pumpkin_data::data_component_impl::IdOr<
+            pumpkin_data::data_component_impl::SoundEvent,
+        >,
+        category: SoundCategory,
+        position: &Vector3<f64>,
+    ) {
+        let seed = rng().random::<f64>();
+        let packet = CSoundEffect::new(
+            data_to_proto_sound(sound),
+            category,
+            position,
+            1.0,
+            1.0,
+            seed,
+        );
+        self.broadcast_packet_except(&[player.gameprofile.id], &packet);
     }
 
     pub fn play_sound_fine(
@@ -1969,6 +1979,28 @@ impl World {
                         if height >= bounding_box.min.y {
                             return true;
                         }
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
+    pub fn contains_any_liquid(&self, bounding_box: BoundingBox) -> bool {
+        let min_x = bounding_box.min.x.floor() as i32;
+        let max_x = bounding_box.max.x.ceil() as i32;
+        let min_y = bounding_box.min.y.floor() as i32;
+        let max_y = bounding_box.max.y.ceil() as i32;
+        let min_z = bounding_box.min.z.floor() as i32;
+        let max_z = bounding_box.max.z.ceil() as i32;
+
+        for x in min_x..max_x {
+            for y in min_y..max_y {
+                for z in min_z..max_z {
+                    let pos = BlockPos::new(x, y, z);
+                    if self.get_fluid_and_fluid_state(&pos).0.id != Fluid::EMPTY.id {
+                        return true;
                     }
                 }
             }
@@ -5316,20 +5348,10 @@ impl World {
                 killed_by_player: Some(cause.is_some()),
                 ..Default::default()
             };
-            crate::block::drop_loot(self, broken_block, position, true, params);
+            crate::block::drop_loot(self, broken_block, position, true, &params);
         }
 
-        let new_state_id = if broken_block
-            .properties(broken_block_state.id)
-            .and_then(|properties| {
-                properties
-                    .to_props()
-                    .into_iter()
-                    .find(|p| p.0 == "waterlogged")
-                    .map(|(_, value)| value == "true")
-            })
-            .unwrap_or(false)
-        {
+        let new_state_id = if broken_block.is_waterlogged(broken_block_state.id) {
             Block::WATER.default_state.id
         } else {
             Block::AIR.default_state.id
@@ -5435,12 +5457,16 @@ impl World {
     }
 
     pub fn drop_stack(self: &Arc<Self>, pos: &BlockPos, stack: ItemStack) {
-        let height = EntityType::ITEM.dimension[1] / 2.0;
+        if stack.is_empty() {
+            return;
+        }
+
+        let half_height = f64::from(EntityType::ITEM.dimension[1]) / 2.0;
         let spawn_pos = {
             let mut r = rand::rng();
             Vector3::new(
                 f64::from(pos.0.x) + 0.5 + r.random_range(-0.25..0.25),
-                f64::from(pos.0.y) + 0.5 + r.random_range(-0.25..0.25) - f64::from(height),
+                f64::from(pos.0.y) + 0.5 + r.random_range(-0.25..0.25) - half_height,
                 f64::from(pos.0.z) + 0.5 + r.random_range(-0.25..0.25),
             )
         };
@@ -5461,6 +5487,90 @@ impl World {
         }
 
         let item_entity = Arc::new(ItemEntity::new(entity, stack));
+        self.spawn_entity(item_entity);
+    }
+
+    pub fn drop_stack_from_face(
+        self: &Arc<Self>,
+        pos: &BlockPos,
+        face: BlockDirection,
+        stack: ItemStack,
+    ) {
+        if stack.is_empty() {
+            return;
+        }
+
+        let offset = face.to_offset();
+        let step_x = offset.x;
+        let step_y = offset.y;
+        let step_z = offset.z;
+
+        let half_width = f64::from(EntityType::ITEM.dimension[0]) / 2.0;
+        let half_height = f64::from(EntityType::ITEM.dimension[1]) / 2.0;
+
+        let (spawn_pos, velocity) = {
+            let mut r = rand::rng();
+            let x = f64::from(pos.0.x)
+                + 0.5
+                + if step_x == 0 {
+                    r.random_range(-0.25..0.25)
+                } else {
+                    f64::from(step_x) * (0.5 + half_width)
+                };
+            let y = f64::from(pos.0.y)
+                + 0.5
+                + if step_y == 0 {
+                    r.random_range(-0.25..0.25)
+                } else {
+                    f64::from(step_y) * (0.5 + half_height)
+                }
+                - half_height;
+            let z = f64::from(pos.0.z)
+                + 0.5
+                + if step_z == 0 {
+                    r.random_range(-0.25..0.25)
+                } else {
+                    f64::from(step_z) * (0.5 + half_width)
+                };
+
+            let delta_x = if step_x == 0 {
+                r.random_range(-0.1..0.1)
+            } else {
+                f64::from(step_x) * 0.1
+            };
+            let delta_y = if step_y == 0 {
+                r.random_range(0.0..0.1)
+            } else {
+                f64::from(step_y) * 0.1 + 0.1
+            };
+            let delta_z = if step_z == 0 {
+                r.random_range(-0.1..0.1)
+            } else {
+                f64::from(step_z) * 0.1
+            };
+
+            (
+                Vector3::new(x, y, z),
+                Vector3::new(delta_x, delta_y, delta_z),
+            )
+        };
+
+        let entity = Entity::new(self.clone(), spawn_pos, &EntityType::ITEM);
+        let mut item_event = crate::plugin::api::events::entity::item_spawn::ItemSpawnEvent::new(
+            entity.entity_id,
+            spawn_pos,
+            stack.item.registry_key.to_string(),
+        );
+        if let Some(server) = self.server.upgrade() {
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut item_event);
+        }
+        if item_event.cancelled {
+            return;
+        }
+
+        let item_entity = Arc::new(ItemEntity::new_with_velocity(entity, stack, velocity, 10));
         self.spawn_entity(item_entity);
     }
 
@@ -5619,29 +5729,20 @@ impl World {
         self.get_block_state_id_if_loaded(position).is_some()
     }
 
-    pub fn get_fluid(&self, position: &BlockPos) -> &'static pumpkin_data::fluid::Fluid {
-        let id = self.get_block_state_id(position);
-        let fluid = Fluid::from_state_id(id).ok_or(&Fluid::EMPTY);
-        if let Ok(fluid) = fluid {
+    fn get_fluid_from_state_id(id: BlockStateId) -> &'static pumpkin_data::fluid::Fluid {
+        if let Some(fluid) = Fluid::from_state_id(id) {
             return fluid.to_flowing();
         }
-        let block = Block::from_state_id(id);
-        block
-            .properties(id)
-            .and_then(|props| {
-                props
-                    .to_props()
-                    .into_iter()
-                    .find(|p| p.0 == "waterlogged")
-                    .map(|(_, value)| {
-                        if value == "true" {
-                            &Fluid::FLOWING_WATER
-                        } else {
-                            &Fluid::EMPTY
-                        }
-                    })
-            })
-            .unwrap_or(&Fluid::EMPTY)
+        if id.is_waterlogged() {
+            &Fluid::FLOWING_WATER
+        } else {
+            &Fluid::EMPTY
+        }
+    }
+
+    pub fn get_fluid(&self, position: &BlockPos) -> &'static pumpkin_data::fluid::Fluid {
+        let id = self.get_block_state_id(position);
+        Self::get_fluid_from_state_id(id)
     }
 
     pub fn get_block_and_fluid(
@@ -5652,30 +5753,7 @@ impl World {
         &'static pumpkin_data::fluid::Fluid,
     ) {
         let id = self.get_block_state_id(position);
-        let block = Block::from_state_id(id);
-
-        let fluid = Fluid::from_state_id(id)
-            .map(Fluid::to_flowing)
-            .ok_or(&Fluid::EMPTY)
-            .unwrap_or_else(|_| {
-                block
-                    .properties(id)
-                    .and_then(|props| {
-                        props
-                            .to_props()
-                            .into_iter()
-                            .find(|p| p.0 == "waterlogged")
-                            .map(|(_, value)| {
-                                if value == "true" {
-                                    &Fluid::FLOWING_WATER
-                                } else {
-                                    &Fluid::EMPTY
-                                }
-                            })
-                    })
-                    .unwrap_or(&Fluid::EMPTY)
-            });
-        (block, fluid)
+        (id.to_block(), Self::get_fluid_from_state_id(id))
     }
 
     pub fn get_fluid_and_fluid_state(
@@ -5683,30 +5761,8 @@ impl World {
         position: &BlockPos,
     ) -> (&'static Fluid, &'static FluidState) {
         let id = self.get_block_state_id(position);
-
-        let Some(raw_fluid) = Fluid::from_state_id(id) else {
-            let block = Block::from_state_id(id);
-            if let Some(properties) = block.properties(id) {
-                for (name, value) in properties.to_props() {
-                    if name == "waterlogged" {
-                        if value == "true" {
-                            let state = &Fluid::FLOWING_WATER.states[0];
-                            return (&Fluid::FLOWING_WATER, state);
-                        }
-
-                        break;
-                    }
-                }
-            }
-
-            let state = &Fluid::EMPTY.states[0];
-            return (&Fluid::EMPTY, state);
-        };
-
-        let fluid = raw_fluid.to_flowing();
-        let state = &fluid.states[0];
-
-        (fluid, state)
+        let fluid = Self::get_fluid_from_state_id(id);
+        (fluid, &fluid.states[0])
     }
 
     pub fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
@@ -7063,7 +7119,7 @@ impl WorldPortalExt for WorldPortal {
 mod tests {
     use pumpkin_data::{
         Block,
-        block_properties::{BlockProperties, ChestLikeProperties, ChestType, HorizontalFacing},
+        block_properties::{ChestLikeProperties, ChestType, HorizontalFacing},
     };
     use pumpkin_util::math::position::BlockPos;
 

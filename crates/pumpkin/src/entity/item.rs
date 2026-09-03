@@ -465,17 +465,14 @@ impl EntityBase for ItemEntity {
     }
 
     fn init_data_tracker(&self) {
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::item::ITEM,
-                &ItemStackSerializer::from(
-                    self.item_stack
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .clone(),
-                ),
-            )],
-            None,
+        self.entity.set_synced_data(
+            pumpkin_data::tracked_data::item::ITEM,
+            ItemStackSerializer::from(
+                self.item_stack
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone(),
+            ),
         );
     }
 

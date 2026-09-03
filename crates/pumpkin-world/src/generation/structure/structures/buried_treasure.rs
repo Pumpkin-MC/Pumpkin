@@ -1,23 +1,20 @@
 use std::sync::Arc;
 
-use pumpkin_data::{Block, BlockDirection, BlockId};
+use pumpkin_data::Block;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::{
-    HeightMap,
-    math::{block_box::BlockBox, position::BlockPos},
+    BlockDirection, HeightMap,
+    math::{block_box::BlockBox, position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl, hash_block_pos, legacy_rand::LegacyRand},
 };
 
 use crate::{
     ProtoChunk,
-    generation::{
-        positions::chunk_pos::{get_center_x, get_center_z},
-        structure::{
-            piece::StructurePieceType,
-            structures::{
-                StructureGenerator, StructureGeneratorContext, StructurePiece, StructurePieceBase,
-                StructurePiecesCollector, StructurePosition, WorldPortalExt,
-            },
+    generation::structure::{
+        piece::StructurePieceType,
+        structures::{
+            StructureGenerator, StructureGeneratorContext, StructurePiece, StructurePieceBase,
+            StructurePiecesCollector, StructurePosition, WorldPortalExt,
         },
     },
 };
@@ -29,13 +26,12 @@ impl StructureGenerator for BuriedTreasureGenerator {
         &self,
         context: StructureGeneratorContext<'_>,
     ) -> Option<StructurePosition> {
-        let x = get_center_x(context.chunk_x);
-        let z = get_center_z(context.chunk_z);
+        let x = (context.chunk_x << 4) + 9;
+        let z = (context.chunk_z << 4) + 9;
 
-        let bounding_box = BlockBox::new(x, -64, z, x, 320, z);
+        let bounding_box = BlockBox::new(x, 90, z, x, 90, z);
 
         let mut collector = StructurePiecesCollector::default();
-
         collector.add_piece(Box::new(BuriedTreasurePiece {
             piece: StructurePiece::new(StructurePieceType::BuriedTreasure, bounding_box, 0),
         }));
@@ -55,88 +51,6 @@ impl StructurePieceBase for BuriedTreasurePiece {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
-    fn place(
-        &mut self,
-        chunk: &mut ProtoChunk,
-        _block_registry: &dyn WorldPortalExt,
-        _random: &mut RandomGenerator,
-        _seed: i64,
-        _chunk_box: &BlockBox,
-    ) {
-        let boundingbox = self.bounding_box();
-        let y = chunk.get_top_y(
-            &HeightMap::OceanFloorWg,
-            boundingbox.min.x,
-            boundingbox.min.z,
-        );
-
-        let mut pos = BlockPos::new(boundingbox.min.x, y, boundingbox.min.z);
-        let bottom_y = chunk.bottom_y() as i32;
-
-        for _ in (bottom_y..=y).rev() {
-            let state = chunk.get_block_state(&pos.0);
-            let down_pos = pos.down();
-            let down_raw_state = chunk.get_block_state(&down_pos.0);
-            let down_block = down_raw_state.to_block_id();
-
-            if down_block == Block::SANDSTONE
-                || down_block == Block::STONE
-                || down_block == Block::ANDESITE
-                || down_block == Block::GRANITE
-                || down_block == Block::DIORITE
-            {
-                for dir in BlockDirection::all() {
-                    let offset_pos = pos.offset(dir.to_offset());
-                    let dir_state = chunk.get_block_state(&offset_pos.0);
-
-                    if !dir_state.to_state().is_air() && !Self::is_liquid(dir_state.to_block_id()) {
-                        continue;
-                    }
-
-                    let down_offset_pos = offset_pos.down();
-                    let down_offset_state = chunk.get_block_state(&down_offset_pos.0);
-
-                    if (down_offset_state.to_state().is_air()
-                        || Self::is_liquid(down_offset_state.to_block_id()))
-                        && dir != BlockDirection::Up
-                    {
-                        chunk.set_block_state(
-                            offset_pos.0.x,
-                            offset_pos.0.y,
-                            offset_pos.0.z,
-                            down_raw_state.to_state(),
-                        );
-                        continue;
-                    }
-
-                    let state1 =
-                        if state.to_state().is_air() || Self::is_liquid(state.to_block_id()) {
-                            Block::SAND.default_state
-                        } else {
-                            state.to_state()
-                        };
-                    chunk.set_block_state(offset_pos.0.x, offset_pos.0.y, offset_pos.0.z, state1);
-                }
-
-                chunk.set_block_state(pos.0.x, pos.0.y, pos.0.z, Block::CHEST.default_state);
-
-                let mut chest_nbt = NbtCompound::new();
-                chest_nbt.put_string("id", "minecraft:chest".to_string());
-                chest_nbt.put_int("x", pos.0.x);
-                chest_nbt.put_int("y", pos.0.y);
-                chest_nbt.put_int("z", pos.0.z);
-                chest_nbt.put_string("LootTable", "minecraft:chests/buried_treasure".to_string());
-
-                let mut random =
-                    LegacyRand::from_seed(hash_block_pos(pos.0.x, pos.0.y, pos.0.z) as u64);
-                chest_nbt.put_long("LootTableSeed", random.next_i64());
-
-                chunk.add_block_entity(chest_nbt);
-                return;
-            }
-            pos = pos.down();
-        }
-    }
 
     fn get_structure_piece(&self) -> &StructurePiece {
         &self.piece
@@ -145,10 +59,88 @@ impl StructurePieceBase for BuriedTreasurePiece {
     fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
         &mut self.piece
     }
-}
 
-impl BuriedTreasurePiece {
-    fn is_liquid(id: BlockId) -> bool {
-        id == BlockId::WATER || id == BlockId::LAVA
+    fn place(
+        &mut self,
+        chunk: &mut ProtoChunk,
+        _block_registry: &dyn WorldPortalExt,
+        _random: &mut RandomGenerator,
+        _seed: i64,
+        chunk_box: &BlockBox,
+    ) {
+        let bb = self.bounding_box();
+        let y = chunk.get_top_y(&HeightMap::OceanFloorWg, bb.min.x, bb.min.z);
+        let min_y = chunk.bottom_y() as i32;
+        let mut cur_y = y;
+
+        while cur_y > min_y {
+            let pos = Vector3::new(bb.min.x, cur_y, bb.min.z);
+            let below_pos = Vector3::new(bb.min.x, cur_y - 1, bb.min.z);
+
+            let current_state = chunk.get_block_state(&pos).to_state();
+            let below_state = chunk.get_block_state(&below_pos).to_state();
+            let below_block = Block::from_state_id(below_state.id);
+
+            if *below_block == Block::SANDSTONE
+                || *below_block == Block::STONE
+                || *below_block == Block::ANDESITE
+                || *below_block == Block::GRANITE
+                || *below_block == Block::DIORITE
+            {
+                let soft_state = if !current_state.is_air() && !current_state.is_liquid() {
+                    current_state
+                } else {
+                    Block::SAND.default_state
+                };
+
+                for dir in [
+                    BlockDirection::Down,
+                    BlockDirection::Up,
+                    BlockDirection::North,
+                    BlockDirection::South,
+                    BlockDirection::West,
+                    BlockDirection::East,
+                ] {
+                    let offset = dir.to_vector();
+                    let rel_pos = pos + offset;
+                    let rel_state = chunk.get_block_state(&rel_pos).to_state();
+
+                    if rel_state.is_air() || rel_state.is_liquid() {
+                        let below_rel_pos = rel_pos - Vector3::new(0, 1, 0);
+                        let below_rel_state = chunk.get_block_state(&below_rel_pos).to_state();
+
+                        if (below_rel_state.is_air() || below_rel_state.is_liquid())
+                            && dir != BlockDirection::Up
+                        {
+                            chunk.set_block_state(rel_pos.x, rel_pos.y, rel_pos.z, below_state);
+                        } else {
+                            chunk.set_block_state(rel_pos.x, rel_pos.y, rel_pos.z, soft_state);
+                        }
+                    }
+                }
+
+                self.piece.bounding_box = BlockBox::new(pos.x, pos.y, pos.z, pos.x, pos.y, pos.z);
+
+                if chunk_box.contains_pos(&pos) {
+                    chunk.set_block_state(pos.x, pos.y, pos.z, Block::CHEST.default_state);
+
+                    let mut nbt = NbtCompound::new();
+                    nbt.put_string("id", "minecraft:chest".to_string());
+                    nbt.put_int("x", pos.x);
+                    nbt.put_int("y", pos.y);
+                    nbt.put_int("z", pos.z);
+                    nbt.put_string("LootTable", "minecraft:chests/buried_treasure".to_string());
+
+                    let mut random =
+                        LegacyRand::from_seed(hash_block_pos(pos.x, pos.y, pos.z) as u64);
+                    nbt.put_long("LootTableSeed", random.next_i64());
+
+                    chunk.add_block_entity(nbt);
+                }
+                return;
+            }
+
+            cur_y -= 1;
+        }
     }
 }

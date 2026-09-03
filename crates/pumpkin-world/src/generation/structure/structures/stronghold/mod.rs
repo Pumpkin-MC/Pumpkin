@@ -3,8 +3,8 @@ use std::sync::{Arc, Mutex};
 use pumpkin_data::{
     Block, BlockState,
     block_properties::{
-        BlockProperties, DoubleBlockHalf, HorizontalFacing, LeverLikeProperties,
-        OakDoorLikeProperties, OakFenceLikeProperties,
+        DoubleBlockHalf, HorizontalFacing, LeverLikeProperties, OakDoorLikeProperties,
+        OakFenceLikeProperties,
     },
 };
 use pumpkin_util::{
@@ -63,10 +63,16 @@ impl StructureGenerator for StrongholdGenerator {
         context: StructureGeneratorContext<'_>,
     ) -> Option<StructurePosition> {
         let mut collector = StructurePiecesCollector::default();
-        let mut random = context.random;
+        let mut tries: i64 = 0;
 
         loop {
             collector.clear();
+            let mut random = crate::generation::structure::structures::create_chunk_random(
+                context.seed.wrapping_add(tries),
+                context.chunk_x,
+                context.chunk_z,
+            );
+            tries += 1;
             let mut weights = get_initial_weights();
             let mut last_piece_type: Option<StrongholdPieceType> = None;
             let mut has_portal_room = false;

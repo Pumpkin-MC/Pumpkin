@@ -1,6 +1,6 @@
 use pumpkin_data::{
     Block, BlockState,
-    block_properties::{BlockProperties, HorizontalFacing, OakStairsLikeProperties},
+    block_properties::{HorizontalFacing, OakStairsLikeProperties},
 };
 use pumpkin_util::{
     BlockDirection,

@@ -232,7 +232,7 @@ impl PosRuleTest {
                 let dist = dx + dy + dz;
                 let chance =
                     calculate_linear_chance(dist, *min_dist, *max_dist, *min_chance, *max_chance);
-                rng.next_f32() < chance
+                rng.next_f32() <= chance
             }
             Self::AxisAlignedLinearPos {
                 axis,
@@ -248,7 +248,7 @@ impl PosRuleTest {
                 };
                 let chance =
                     calculate_linear_chance(dist, *min_dist, *max_dist, *min_chance, *max_chance);
-                rng.next_f32() < chance
+                rng.next_f32() <= chance
             }
         }
     }
@@ -526,6 +526,19 @@ fn replace_preserving_properties(
         })
 }
 
+fn get_random_facing_stairs(
+    rng: &mut impl RandomImpl,
+    stair_block: &'static Block,
+) -> &'static BlockState {
+    let facings = ["north", "south", "east", "west"];
+    let halves = ["bottom", "top"];
+    let facing = facings[rng.next_bounded_i32(4) as usize];
+    let half = halves[rng.next_bounded_i32(2) as usize];
+    let props = [("facing", facing), ("half", half)];
+    let state_id = stair_block.from_properties(&props).to_state_id(stair_block);
+    BlockState::from_id(state_id)
+}
+
 fn process_block_age(
     state: &'static BlockState,
     mossiness: f32,
@@ -537,44 +550,49 @@ fn process_block_age(
         block_id,
         BlockId::STONE_BRICKS
             | BlockId::STONE
-            | BlockId::CRACKED_STONE_BRICKS
             | BlockId::CHISELED_STONE_BRICKS
             | BlockId::INFESTED_STONE
             | BlockId::INFESTED_STONE_BRICKS
-            | BlockId::INFESTED_CRACKED_STONE_BRICKS
             | BlockId::INFESTED_CHISELED_STONE_BRICKS
     ) {
         if rng.next_f32() < 0.5 {
+            let non_mossy = [
+                Block::CRACKED_STONE_BRICKS.default_state,
+                get_random_facing_stairs(rng, &Block::STONE_BRICK_STAIRS),
+            ];
+            let mossy = [
+                Block::MOSSY_STONE_BRICKS.default_state,
+                get_random_facing_stairs(rng, &Block::MOSSY_STONE_BRICK_STAIRS),
+            ];
+            let idx = rng.next_bounded_i32(2) as usize;
             if rng.next_f32() < mossiness {
-                return Block::MOSSY_STONE_BRICKS.default_state;
+                return mossy[idx];
             }
-            return Block::CRACKED_STONE_BRICKS.default_state;
+            return non_mossy[idx];
         }
-    } else if block_id == BlockId::STONE_BRICK_STAIRS
-        || block_id == BlockId::INFESTED_MOSSY_STONE_BRICKS
-    {
-        if rng.next_f32() < 0.5 && rng.next_f32() < mossiness {
-            return replace_preserving_properties(state, &Block::MOSSY_STONE_BRICK_STAIRS);
+    } else if check_block_has_tag(block_id, "stairs") {
+        if rng.next_f32() < 0.5 {
+            let non_mossy = [
+                Block::STONE_SLAB.default_state,
+                Block::STONE_BRICK_SLAB.default_state,
+            ];
+            let mossy = [
+                replace_preserving_properties(state, &Block::MOSSY_STONE_BRICK_STAIRS),
+                Block::MOSSY_STONE_BRICK_SLAB.default_state,
+            ];
+            let idx = rng.next_bounded_i32(2) as usize;
+            if rng.next_f32() < mossiness {
+                return mossy[idx];
+            }
+            return non_mossy[idx];
         }
-    } else if block_id == BlockId::STONE_BRICK_SLAB {
-        if rng.next_f32() < 0.5 && rng.next_f32() < mossiness {
+    } else if check_block_has_tag(block_id, "slabs") {
+        if rng.next_f32() < mossiness {
             return replace_preserving_properties(state, &Block::MOSSY_STONE_BRICK_SLAB);
         }
-    } else if block_id == BlockId::STONE_BRICK_WALL {
-        if rng.next_f32() < 0.5 && rng.next_f32() < mossiness {
+    } else if check_block_has_tag(block_id, "walls") {
+        if rng.next_f32() < mossiness {
             return replace_preserving_properties(state, &Block::MOSSY_STONE_BRICK_WALL);
-        }
-    } else if block_id == BlockId::COBBLESTONE_STAIRS {
-        if rng.next_f32() < 0.5 && rng.next_f32() < mossiness {
-            return replace_preserving_properties(state, &Block::MOSSY_COBBLESTONE_STAIRS);
-        }
-    } else if block_id == BlockId::COBBLESTONE_SLAB {
-        if rng.next_f32() < 0.5 && rng.next_f32() < mossiness {
-            return replace_preserving_properties(state, &Block::MOSSY_COBBLESTONE_SLAB);
-        }
-    } else if block_id == BlockId::COBBLESTONE_WALL {
-        if rng.next_f32() < 0.5 && rng.next_f32() < mossiness {
-            return replace_preserving_properties(state, &Block::MOSSY_COBBLESTONE_WALL);
         }
     } else if block_id == BlockId::OBSIDIAN && rng.next_f32() < 0.15 {
         return Block::CRYING_OBSIDIAN.default_state;
