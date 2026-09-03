@@ -7,7 +7,6 @@ use pumpkin_util::{
     math::floor_div,
     random::{
         RandomGenerator, RandomImpl, get_carver_seed, get_region_seed, legacy_rand::LegacyRand,
-        xoroshiro128::Xoroshiro,
     },
 };
 use std::f64::consts::PI;
@@ -250,8 +249,8 @@ fn should_generate_frequency(
 ) -> bool {
     match method {
         FrequencyReductionMethod::Default => {
-            let region_seed = get_region_seed(seed as u64, chunk_x, chunk_z, salt);
-            let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(region_seed));
+            let region_seed = get_region_seed(seed as u64, salt as i32, chunk_x, chunk_z as u32);
+            let mut random = LegacyRand::from_seed(region_seed);
             random.next_f32() < frequency
         }
         FrequencyReductionMethod::LegacyType1 => {
@@ -263,12 +262,12 @@ fn should_generate_frequency(
         }
         FrequencyReductionMethod::LegacyType2 => {
             let region_seed = get_region_seed(seed as u64, chunk_x, chunk_z, 10387320);
-            let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(region_seed));
+            let mut random = LegacyRand::from_seed(region_seed);
             random.next_f32() < frequency
         }
         FrequencyReductionMethod::LegacyType3 => {
             let carver_seed = get_carver_seed(seed as u64, chunk_x, chunk_z);
-            let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(carver_seed));
+            let mut random = LegacyRand::from_seed(carver_seed);
             random.next_f64() < f64::from(frequency)
         }
     }

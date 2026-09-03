@@ -269,8 +269,8 @@ use pumpkin_protocol::java::client::play::{
     CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem, CSetExperience,
     CSetHealth, CSetPlayerInventory, CSetSelectedSlot, CSoundEffect, CStopSound, CSubtitle,
     CSystemChatMessage, CTabList, CTitleAnimation, CTitleText, CUnloadChunk, CUpdateMobEffect,
-    CUpdateTime, GameEvent, MapIcon, MapPatch, Metadata, PlayerAction, PlayerInfoFlags,
-    PlayerSpawnData, PreviousMessage, Statistic,
+    CUpdateTime, GameEvent, MapIcon, MapPatch, PlayerAction, PlayerInfoFlags, PlayerSpawnData,
+    PreviousMessage, Statistic,
 };
 use pumpkin_protocol::java::server::play::{
     SClickSlot, SContainerButtonClick, SRenameItem, SlotActionType,
@@ -487,7 +487,7 @@ pub struct Player {
     pub experience_pick_up_delay: Mutex<u32>,
     pub chunk_sender: Mutex<crate::net::ChunkSender>,
     pub chunk_listener: Mutex<Receiver<(Vector2<i32>, Weak<ChunkData>)>>,
-    pub held_chunk_tickets: Mutex<Option<(i8, i8)>>,
+    pub held_chunk_tickets: Mutex<Option<(Option<i8>, Option<i8>)>>,
     pub chunk_send_epoch: AtomicU32,
     pub has_played_before: AtomicBool,
     root_vehicle_uuid: AtomicCell<Option<Uuid>>,
@@ -1107,12 +1107,20 @@ impl Player {
             .take();
         if let Some((view_level, sim_level)) = held {
             let center = self.get_entity().chunk_pos.load();
-            lock.remove_ticket(center, view_level);
-            lock.remove_ticket(center, sim_level);
+            if let Some(view) = view_level {
+                lock.remove_ticket(center, view);
+            }
+            if let Some(sim) = sim_level {
+                lock.remove_ticket(center, sim);
+            }
         }
         lock.send_change();
         level.should_unload.store(true, Ordering::Relaxed);
         level.level_channel.notify();
+    }
+
+    pub fn update_chunk_tickets_for_gamemode(self: &Arc<Self>) {
+        crate::world::chunker::update_position(self);
     }
 
     pub fn change_world_chunks(
@@ -1142,6 +1150,13 @@ impl Player {
 
         let inventory = self.inventory();
         let item_stack = inventory.held_item();
+        if !item_stack.is_empty() {
+            self.increment_stat(
+                statistics::StatisticCategory::Used,
+                item_stack.item.id as i32,
+                1,
+            );
+        }
 
         let base_damage = self
             .living_entity
@@ -1473,6 +1488,7 @@ impl Player {
         };
 
         let mut stack = self.inventory.get_slot(slot_index);
+        let original_item = stack.item;
         let result = stack.damage_item(amount);
         let updated = (result != pumpkin_data::item_stack::DamageResult::Untouched)
             .then_some((result, stack.clone()));
@@ -1484,26 +1500,24 @@ impl Player {
             {
                 let mut event = crate::plugin::api::events::player::player_item_damage::PlayerItemDamageEvent::new(
                     player_arc,
-                    updated_stack.item.registry_key.to_string(),
+                    original_item.registry_key.to_string(),
                     amount,
                 );
                 server.plugin_manager.fire_blocking(&server, &mut event);
             }
-            // Send the break status before clearing the slot so the client can
-            // use the item texture for break particles.
             if result == pumpkin_data::item_stack::DamageResult::Broken {
                 if let Some(server) = self.world().server.upgrade()
                     && let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
                 {
                     let mut event = crate::plugin::api::events::player::player_item_break::PlayerItemBreakEvent::new(
                         player_arc,
-                        updated_stack.item.registry_key.to_string(),
+                        original_item.registry_key.to_string(),
                     );
                     server.plugin_manager.fire_blocking(&server, &mut event);
                 }
                 self.increment_stat(
                     statistics::StatisticCategory::Broken,
-                    updated_stack.item.id as i32,
+                    original_item.id as i32,
                     1,
                 );
                 self.world().send_entity_status(
@@ -1913,16 +1927,18 @@ impl Player {
         self.living_entity
             .entity
             .set_pos(bed_head_pos.to_f64().add_raw(0.5, 0.6875, 0.5));
-        self.get_entity().send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::player::SLEEPING_POS_ID,
-                Some(bed_head_pos),
-            )],
-            None,
+        self.get_entity().set_synced_data(
+            pumpkin_data::tracked_data::player::SLEEPING_POS_ID,
+            Some(bed_head_pos),
         );
         self.get_entity().set_velocity(Vector3::default());
 
         self.sleeping_since.store(Some(0));
+        self.set_stat(
+            statistics::StatisticCategory::Custom,
+            statistics::CustomStatistic::TimeSinceRest as i32,
+            0,
+        );
     }
 
     pub fn get_off_ground_speed(&self) -> f64 {
@@ -2072,12 +2088,9 @@ impl Player {
 
         self.living_entity.entity.set_pose(EntityPose::Standing);
         self.living_entity.entity.set_pos(self.position());
-        self.living_entity.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::player::SLEEPING_POS_ID,
-                None::<BlockPos>,
-            )],
-            None,
+        self.living_entity.entity.set_synced_data(
+            pumpkin_data::tracked_data::player::SLEEPING_POS_ID,
+            None::<BlockPos>,
         );
 
         self.set_stat(
@@ -2458,8 +2471,14 @@ impl Player {
         if let Ok(mut stats) = self.stats.try_lock() {
             stats.increment_custom(statistics::CustomStatistic::PlayTime, 1);
             stats.increment_custom(statistics::CustomStatistic::TotalWorldTime, 1);
-            stats.increment_custom(statistics::CustomStatistic::TimeSinceDeath, 1);
-            stats.increment_custom(statistics::CustomStatistic::TimeSinceRest, 1);
+            if !self.living_entity.dead.load(Ordering::Relaxed)
+                && self.living_entity.health.load() > 0.0
+            {
+                stats.increment_custom(statistics::CustomStatistic::TimeSinceDeath, 1);
+            }
+            if !self.is_sleeping() {
+                stats.increment_custom(statistics::CustomStatistic::TimeSinceRest, 1);
+            }
             if self.living_entity.entity.sneaking.load(Ordering::Relaxed) {
                 stats.increment_custom(statistics::CustomStatistic::SneakTime, 1);
             }
@@ -2591,6 +2610,9 @@ impl Player {
                         if can_harvest {
                             p.add_exhaustion(MINE_BLOCK_EXHAUSTION);
                         }
+                        let item_id = p.inventory().held_item().item.id;
+                        p.increment_stat(StatisticCategory::Used, item_id as i32, 1);
+                        p.increment_stat(StatisticCategory::Mined, state.id.as_u16() as i32, 1);
                     }
 
                     // Java clients decide completion on their own local timer, if the block is
@@ -3037,6 +3059,8 @@ impl Player {
         self.increment_stat(statistics::StatisticCategory::Custom, stat as i32, amount);
     }
 
+    #[must_use]
+    #[allow(clippy::too_many_lines)]
     pub fn get_movement_statistic(&self) -> statistics::CustomStatistic {
         let entity = self.get_entity();
         if entity.has_vehicle() {
@@ -3046,7 +3070,9 @@ impl Player {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             if let Some(vehicle) = vehicle.as_ref() {
                 let entity_type = vehicle.get_entity().entity_type;
-                if entity_type == &EntityType::OAK_BOAT
+                if entity_type.has_tag(&pumpkin_data::tag::EntityType::MINECRAFT_BOAT)
+                    || entity_type.has_tag(&pumpkin_data::tag::EntityType::C_BOATS)
+                    || entity_type == &EntityType::OAK_BOAT
                     || entity_type == &EntityType::SPRUCE_BOAT
                     || entity_type == &EntityType::BIRCH_BOAT
                     || entity_type == &EntityType::JUNGLE_BOAT
@@ -3054,11 +3080,23 @@ impl Player {
                     || entity_type == &EntityType::DARK_OAK_BOAT
                     || entity_type == &EntityType::MANGROVE_BOAT
                     || entity_type == &EntityType::CHERRY_BOAT
+                    || entity_type == &EntityType::PALE_OAK_BOAT
                     || entity_type == &EntityType::BAMBOO_RAFT
+                    || entity_type == &EntityType::OAK_CHEST_BOAT
+                    || entity_type == &EntityType::SPRUCE_CHEST_BOAT
+                    || entity_type == &EntityType::BIRCH_CHEST_BOAT
+                    || entity_type == &EntityType::JUNGLE_CHEST_BOAT
+                    || entity_type == &EntityType::ACACIA_CHEST_BOAT
+                    || entity_type == &EntityType::DARK_OAK_CHEST_BOAT
+                    || entity_type == &EntityType::MANGROVE_CHEST_BOAT
+                    || entity_type == &EntityType::CHERRY_CHEST_BOAT
+                    || entity_type == &EntityType::PALE_OAK_CHEST_BOAT
+                    || entity_type == &EntityType::BAMBOO_CHEST_RAFT
                 {
                     return statistics::CustomStatistic::BoatOneCm;
                 }
-                if entity_type == &EntityType::MINECART
+                if entity_type.has_tag(&pumpkin_data::tag::EntityType::C_MINECARTS)
+                    || entity_type == &EntityType::MINECART
                     || entity_type == &EntityType::CHEST_MINECART
                     || entity_type == &EntityType::FURNACE_MINECART
                     || entity_type == &EntityType::TNT_MINECART
@@ -3073,6 +3111,9 @@ impl Player {
                     || entity_type == &EntityType::MULE
                     || entity_type == &EntityType::SKELETON_HORSE
                     || entity_type == &EntityType::ZOMBIE_HORSE
+                    || entity_type == &EntityType::CAMEL
+                    || entity_type == &EntityType::LLAMA
+                    || entity_type == &EntityType::TRADER_LLAMA
                 {
                     return statistics::CustomStatistic::HorseOneCm;
                 }
@@ -3081,6 +3122,14 @@ impl Player {
                 }
                 if entity_type == &EntityType::STRIDER {
                     return statistics::CustomStatistic::StriderOneCm;
+                }
+                if entity_type == &EntityType::HAPPY_GHAST {
+                    return statistics::CustomStatistic::HappyGhastOneCm;
+                }
+                if entity_type == &EntityType::NAUTILUS
+                    || entity_type == &EntityType::ZOMBIE_NAUTILUS
+                {
+                    return statistics::CustomStatistic::NautilusOneCm;
                 }
             }
         }
@@ -3105,7 +3154,10 @@ impl Player {
         }
 
         if entity.touching_water.load(Ordering::Relaxed) {
-            return statistics::CustomStatistic::WalkUnderWaterOneCm;
+            if entity.is_submerged_in_water() {
+                return statistics::CustomStatistic::WalkUnderWaterOneCm;
+            }
+            return statistics::CustomStatistic::WalkOnWaterOneCm;
         }
 
         if entity.sneaking.load(Ordering::Relaxed) {
@@ -3163,6 +3215,11 @@ impl Player {
         } else {
             client_suggestions::send_c_commands_packet(self, server, command_dispatcher);
         }
+    }
+
+    pub fn can_use_game_master_blocks(&self) -> bool {
+        self.gamemode.load() == GameMode::Creative
+            && self.permission_lvl.load() >= PermissionLvl::Two
     }
 
     /// Sends the world time to only this player.
@@ -4325,6 +4382,15 @@ impl Player {
             for item in main_inv.iter_mut() {
                 if !item.is_empty() {
                     let stack = std::mem::replace(item, ItemStack::EMPTY.clone());
+                    self.increment_stat(
+                        statistics::StatisticCategory::Dropped,
+                        stack.item.id as i32,
+                        stack.item_count as i32,
+                    );
+                    self.increment_custom_stat(
+                        statistics::CustomStatistic::Drop,
+                        stack.item_count as i32,
+                    );
                     self.world().drop_stack(&block_pos, stack);
                 }
             }
@@ -4448,28 +4514,21 @@ impl Player {
     /// Send the player's skin layers and used hand to all players.
     pub fn send_client_information(&self) {
         let config = self.config.load();
-        self.living_entity.entity.send_meta_data(
-            &[
-                // v26.x
-                Metadata::new(
-                    pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMISATION,
-                    config.skin_parts,
-                ),
-                Metadata::new(
-                    pumpkin_data::tracked_data::player::PLAYER_MAIN_HAND,
-                    config.main_hand as u8,
-                ),
-                // v1.21.x
-                Metadata::new(
-                    pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMIZATION_ID,
-                    config.skin_parts,
-                ),
-                Metadata::new(
-                    pumpkin_data::tracked_data::player::MAIN_ARM_ID,
-                    config.main_hand as u8,
-                ),
-            ],
-            None,
+        self.living_entity.entity.set_synced_data(
+            pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMISATION,
+            config.skin_parts,
+        );
+        self.living_entity.entity.set_synced_data(
+            pumpkin_data::tracked_data::player::PLAYER_MAIN_HAND,
+            config.main_hand as u8,
+        );
+        self.living_entity.entity.set_synced_data(
+            pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMIZATION_ID,
+            config.skin_parts,
+        );
+        self.living_entity.entity.set_synced_data(
+            pumpkin_data::tracked_data::player::MAIN_ARM_ID,
+            config.main_hand as u8,
         );
     }
 
@@ -4577,10 +4636,9 @@ impl Player {
             item_stack.item.id as i32,
             item_stack.item_count as i32,
         );
-        self.increment_stat(
-            statistics::StatisticCategory::Custom,
-            statistics::CustomStatistic::Drop as i32,
-            1,
+        self.increment_custom_stat(
+            statistics::CustomStatistic::Drop,
+            item_stack.item_count as i32,
         );
         let item_pos = self.living_entity.entity.pos.load()
             + Vector3::new(0.0, self.living_entity.entity.get_eye_height() - 0.3, 0.0);
@@ -7070,6 +7128,10 @@ impl InventoryPlayer for Player {
 
     fn is_creative(&self) -> bool {
         self.gamemode.load() == GameMode::Creative
+    }
+
+    fn is_spectator(&self) -> bool {
+        self.gamemode.load() == GameMode::Spectator
     }
 
     fn experience_level(&self) -> i32 {

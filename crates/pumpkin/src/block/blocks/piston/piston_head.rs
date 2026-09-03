@@ -1,11 +1,10 @@
 use pumpkin_data::block_properties::Facing;
-use pumpkin_data::{Block, FacingExt};
+use pumpkin_data::{Block, BlockState, FacingExt};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::world::BlockFlags;
 
-use crate::block::BlockBehaviour;
 use crate::block::blocks::piston::piston::try_move;
-use crate::block::{BrokenArgs, OnNeighborUpdateArgs};
+use crate::block::{BlockBehaviour, BrokenArgs, OnNeighborUpdateArgs, PathComputationType};
 
 use super::piston::PistonProps;
 
@@ -53,5 +52,9 @@ impl BlockBehaviour for PistonHeadBlock {
                 try_move(args.world, piston_block, &piston_pos);
             }
         }
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }

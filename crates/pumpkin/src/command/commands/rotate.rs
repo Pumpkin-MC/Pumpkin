@@ -78,10 +78,10 @@ impl CommandExecutor for RotateFacingLocationExecutor {
         let facing_pos =
             Vec3ArgumentType::get_coordinates(context, "facingLocation")?.resolve(&context.source);
 
-        let entity = target.get_entity();
-        let eye_height = entity.get_eye_height();
-        let pos = entity.pos.load();
-        let looking_from = Vector3::new(pos.x, pos.y + eye_height, pos.z);
+        let looking_from = context
+            .source
+            .entity_anchor
+            .position_at_entity(target.get_entity());
 
         let (yaw, pitch) = yaw_pitch_facing_position(&looking_from, &facing_pos);
 
@@ -106,10 +106,10 @@ impl CommandExecutor for RotateFacingEntityExecutor {
             EntityAnchor::Feet
         };
 
-        let target_entity = target.get_entity();
-        let eye_height = target_entity.get_eye_height();
-        let pos = target_entity.pos.load();
-        let looking_from = Vector3::new(pos.x, pos.y + eye_height, pos.z);
+        let looking_from = context
+            .source
+            .entity_anchor
+            .position_at_entity(target.get_entity());
 
         let looking_towards = anchor.position_at_entity(facing_entity.get_entity());
 

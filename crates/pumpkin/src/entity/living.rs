@@ -59,7 +59,7 @@ use pumpkin_protocol::java::client::play::{
 };
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
-    java::client::play::{CSetEquipment, Metadata, MetadataSerializer},
+    java::client::play::{CSetEquipment, MetadataSerializer},
     ser::{NetworkWriteExt, WritingError},
 };
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -129,11 +129,13 @@ pub struct LivingEntity {
     pub attributes: RwLock<FxHashMap<u8, AttributeInstance>>,
 }
 
+#[derive(Clone)]
 struct EffectParticle {
     particle_id: VarInt,
     color: i32,
 }
 
+#[derive(Clone)]
 struct EffectParticles(Vec<EffectParticle>);
 
 impl MetadataSerializer for EffectParticles {
@@ -475,13 +477,11 @@ impl LivingEntity {
             meta
         });
 
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::living_entity::DATA_LIVING_ENTITY_FLAGS,
-                b,
-            )],
-            bedrock_meta.as_ref(),
-        );
+        self.entity
+            .set_synced_data(tracked_data::living_entity::DATA_LIVING_ENTITY_FLAGS, b);
+        if let Some(bedrock_meta) = &bedrock_meta {
+            self.entity.send_bedrock_actor_data(bedrock_meta);
+        }
     }
 
     pub fn clear_active_hand(&self) {
@@ -569,13 +569,8 @@ impl LivingEntity {
         let clamped = health.max(0.0).min(max_health);
         self.health.store(clamped);
         // tell everyone entities health changed
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::living_entity::DATA_HEALTH_ID,
-                clamped,
-            )],
-            None,
-        );
+        self.entity
+            .set_synced_data(tracked_data::living_entity::DATA_HEALTH_ID, clamped);
     }
 
     /// Returns the current maximum health for this entity
@@ -623,13 +618,8 @@ impl LivingEntity {
 
         // Send absorption metadata for players (visual yellow hearts)
         if self.entity.entity_type == &EntityType::PLAYER {
-            self.entity.send_meta_data(
-                &[Metadata::new(
-                    tracked_data::player::DATA_PLAYER_ABSORPTION_ID,
-                    new_abs,
-                )],
-                None,
-            );
+            self.entity
+                .set_synced_data(tracked_data::player::DATA_PLAYER_ABSORPTION_ID, new_abs);
         }
     }
 
@@ -900,21 +890,11 @@ impl LivingEntity {
             .all(|effect| effect.ambient);
         drop(effects);
 
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::living_entity::EFFECT_PARTICLES,
-                particles,
-            )],
-            None,
-        );
+        self.entity
+            .set_synced_data(tracked_data::living_entity::EFFECT_PARTICLES, particles);
         if has_effects {
-            self.entity.send_meta_data(
-                &[Metadata::new(
-                    tracked_data::living_entity::EFFECT_AMBIENCE_ID,
-                    ambient,
-                )],
-                None,
-            );
+            self.entity
+                .set_synced_data(tracked_data::living_entity::EFFECT_AMBIENCE_ID, ambient);
         }
     }
 
@@ -1596,7 +1576,16 @@ impl LivingEntity {
             return;
         }
 
-        // Fetches the safe fall distance attribute
+        if fall_distance >= 2.0
+            && let Some(player) = caller.get_player()
+        {
+            player.increment_stat(
+                StatisticCategory::Custom,
+                CustomStatistic::FallOneCm as i32,
+                (fall_distance * 100.0).round() as i32,
+            );
+        }
+
         let safe_fall_distance = self.get_attribute_value(&Attributes::SAFE_FALL_DISTANCE) as f32;
         let unsafe_fall_distance = fall_distance + 1.0E-6 - safe_fall_distance;
 
@@ -1667,8 +1656,7 @@ impl LivingEntity {
             self.movement_input.store(Vector3::default());
             self.jumping.store(false, Relaxed);
 
-            // Statistics updates
-            self.update_death_stats(&*dyn_self, cause);
+            self.update_death_stats(&*dyn_self, cause.or(source));
 
             // Plays the death sound
             world.send_entity_status(&self.entity, EntityStatus::Death, Some(ActorEventID::Death));
@@ -1838,14 +1826,15 @@ impl LivingEntity {
 
     fn update_death_stats(&self, dyn_self: &dyn EntityBase, cause: Option<&dyn EntityBase>) {
         if let Some(victim_player) = dyn_self.get_player() {
-            victim_player.increment_stat(
-                StatisticCategory::Custom,
-                CustomStatistic::Deaths as i32,
-                1,
-            );
+            victim_player.increment_custom_stat(CustomStatistic::Deaths, 1);
             victim_player.set_stat(
                 StatisticCategory::Custom,
                 CustomStatistic::TimeSinceDeath as i32,
+                0,
+            );
+            victim_player.set_stat(
+                StatisticCategory::Custom,
+                CustomStatistic::TimeSinceRest as i32,
                 0,
             );
             if let Some(killer_entity) = cause.map(EntityBase::get_entity) {
@@ -1858,6 +1847,11 @@ impl LivingEntity {
         }
 
         if let Some(killer_player) = cause.and_then(|c| c.get_player()) {
+            killer_player.increment_stat(
+                StatisticCategory::Killed,
+                self.entity.entity_type.id as i32,
+                1,
+            );
             if dyn_self.get_player().is_some() {
                 killer_player.increment_stat(
                     StatisticCategory::Custom,
@@ -2085,9 +2079,17 @@ impl LivingEntity {
                 .is_none_or(|equippable| equippable.damage_on_hurt);
 
             if takes_damage {
+                let item_id = stack.item.id;
                 let slot_result = stack.damage_item(armor_damage);
                 if slot_result != pumpkin_data::item_stack::DamageResult::Untouched {
                     if slot_result == pumpkin_data::item_stack::DamageResult::Broken {
+                        if let Some(player) = caller.get_player() {
+                            player.increment_stat(
+                                pumpkin_data::statistic::StatisticCategory::Broken,
+                                item_id as i32,
+                                1,
+                            );
+                        }
                         let world = self.entity.world.load();
                         world.send_entity_status(
                             &self.entity,
@@ -2169,13 +2171,8 @@ impl LivingEntity {
         // Clear any absorption
         self.absorption.store(0.0);
         // Send health metadata
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::living_entity::DATA_HEALTH_ID,
-                max_health,
-            )],
-            None,
-        );
+        self.entity
+            .set_synced_data(tracked_data::living_entity::DATA_HEALTH_ID, max_health);
 
         self.reset_effects_and_attributes();
 
@@ -2591,14 +2588,11 @@ impl LivingEntity {
                         .lock()
                         .unwrap_or_else(std::sync::PoisonError::into_inner);
                     if let Some(stack) = equipment_guard.equipment.get_mut(&slot) {
+                        let item_id = stack.item.id;
                         let durability_damage = (amount / 1.0).floor().max(1.0) as i32;
                         if stack.damage_item(durability_damage) == DamageResult::Broken {
                             if let Some(player) = caller.get_player() {
-                                player.increment_stat(
-                                    StatisticCategory::Broken,
-                                    stack.item.id as i32,
-                                    1,
-                                );
+                                player.increment_stat(StatisticCategory::Broken, item_id as i32, 1);
                             }
                             world.send_entity_status(
                                 &self.entity,
@@ -2623,9 +2617,12 @@ impl LivingEntity {
         let damage_after_armor =
             self.get_damage_after_armor_absorb(amount, &damage_type, cause.or(source));
 
-        // Vanilla parity: 2. Magic absorb (Resistance effect first, then Enchantments)
-        let effective_amount =
-            self.get_damage_after_magic_absorb(damage_after_armor, &damage_type, caller, cause);
+        let effective_amount = self.get_damage_after_magic_absorb(
+            damage_after_armor,
+            &damage_type,
+            caller,
+            cause.or(source),
+        );
 
         // These damage types bypass the hurt cooldown and death protection
         let bypasses_cooldown_protection =
@@ -2719,7 +2716,7 @@ impl LivingEntity {
                 );
             }
 
-            if let Some(attacker_player) = cause.and_then(|c| c.get_player()) {
+            if let Some(attacker_player) = cause.or(source).and_then(|c| c.get_player()) {
                 attacker_player.increment_stat(
                     StatisticCategory::Custom,
                     CustomStatistic::DamageDealtAbsorbed as i32,
@@ -2752,7 +2749,7 @@ impl LivingEntity {
 
             self.set_health(new_health);
 
-            if let Some(attacker_player) = cause.and_then(|c| c.get_player()) {
+            if let Some(attacker_player) = cause.or(source).and_then(|c| c.get_player()) {
                 attacker_player.increment_stat(
                     StatisticCategory::Custom,
                     CustomStatistic::DamageDealt as i32,
@@ -3467,7 +3464,7 @@ mod tests {
             show_icon: true,
             blend: false,
         };
-        let metadata = Metadata::new(
+        let metadata = pumpkin_protocol::java::client::play::Metadata::new(
             tracked_data::living_entity::EFFECT_PARTICLES,
             EffectParticles(vec![EffectParticle::from_effect(&effect)]),
         );

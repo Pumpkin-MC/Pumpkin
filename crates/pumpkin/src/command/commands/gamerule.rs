@@ -88,6 +88,17 @@ impl CommandExecutor for SetBoolExecutor {
 
         context.server().level_info.store(Arc::new(new_info));
 
+        if self.0 == GameRule::SpectatorsGenerateChunks {
+            let server = context.server();
+            for world in server.worlds.load().iter() {
+                for player in world.players.load().iter() {
+                    if player.is_spectator() {
+                        player.update_chunk_tickets_for_gamemode();
+                    }
+                }
+            }
+        }
+
         let value_component = TextComponent::text(arg_value.to_string());
         context.source.send_feedback(
             TextComponent::translate_cross(

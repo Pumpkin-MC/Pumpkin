@@ -48,6 +48,13 @@ impl Hash for Modifier {
 pub struct AttributeModifiersImpl {
     pub attribute_modifiers: Cow<'static, [Modifier]>,
 }
+impl AttributeModifiersImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self {
+            attribute_modifiers: Cow::Borrowed(&[]),
+        })
+    }
+}
 impl DataComponentImpl for AttributeModifiersImpl {
     default_impl!(AttributeModifiers);
 }
@@ -742,12 +749,22 @@ impl DataComponentImpl for GliderImpl {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct DeathProtectionImpl;
+impl DeathProtectionImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for DeathProtectionImpl {
     default_impl!(DeathProtection);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BlocksAttacksImpl;
+impl BlocksAttacksImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for BlocksAttacksImpl {
     default_impl!(BlocksAttacks);
 }
@@ -1037,6 +1054,11 @@ impl DataComponentImpl for SwingAnimationImpl {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct AdditionalTradeCostImpl;
+impl AdditionalTradeCostImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for AdditionalTradeCostImpl {
     default_impl!(AdditionalTradeCost);
 }

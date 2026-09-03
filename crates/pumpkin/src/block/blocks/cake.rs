@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::{
     block::{
         BlockBehaviour, CanPlaceAtArgs, GetComparatorOutputArgs, GetStateForNeighborUpdateArgs,
-        NormalUseArgs, OnPlaceArgs, OnScheduledTickArgs, UseWithItemArgs,
+        NormalUseArgs, OnPlaceArgs, OnScheduledTickArgs, PathComputationType, UseWithItemArgs,
         blocks::candle_cakes::cake_from_candle, registry::BlockActionResult,
     },
     entity::player::Player,
@@ -11,7 +11,7 @@ use crate::{
 };
 use pumpkin_data::item::Item;
 use pumpkin_data::{
-    Block, BlockStateId,
+    Block, BlockState, BlockStateId,
     block_properties::CakeLikeProperties,
     sound::{Sound, SoundCategory},
 };
@@ -168,6 +168,10 @@ impl BlockBehaviour for CakeBlock {
                 Some(0)
             }
         }
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
 

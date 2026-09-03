@@ -78,46 +78,38 @@ impl CommandExecutor for SpectateTargetExecutor {
         let target_entity = target.get_entity();
         let target_world = target_entity.world.load_full();
 
-        let players = if self.is_self {
-            let player = context
+        let player = if self.is_self {
+            context
                 .source
                 .output
                 .as_player()
-                .ok_or_else(|| ERROR_NOT_PLAYER.create_without_context())?;
-            vec![player]
+                .ok_or_else(|| ERROR_NOT_PLAYER.create_without_context())?
         } else {
-            EntityArgumentType::get_players(context, "player")?
+            EntityArgumentType::get_player(context, "player")?
         };
 
-        for player in &players {
-            if player.gamemode.load() != GameMode::Spectator {
-                let display_name = player.get_display_name();
-                return Err(ERROR_NOT_SPECTATOR.create_without_context(display_name));
-            }
-
-            if target_entity.entity_id == player.entity_id() {
-                return Err(ERROR_SELF.create_without_context());
-            }
-
-            let player_world = player.world();
-            if !Arc::ptr_eq(&target_world, &player_world) {
-                let target_name = target.get_display_name();
-                return Err(ERROR_CANNOT_SPECTATE.create_without_context(target_name));
-            }
+        if player.gamemode.load() != GameMode::Spectator {
+            let display_name = player.get_display_name();
+            return Err(ERROR_NOT_SPECTATOR.create_without_context(display_name));
         }
 
-        let mut succeeded = 0;
-        for player in &players {
-            let target_id = target_entity.entity_id;
-            player.camera_target_id.store(Some(target_id));
-            let pos = target_entity.pos.load();
-            let yaw = target_entity.yaw.load();
-            let pitch = target_entity.pitch.load();
-            let player_world = player.world();
-            player.try_send_client_packet(&CSetCamera::new(target_id.into()));
-            player.teleport(pos, Some(yaw), Some(pitch), player_world);
-            succeeded += 1;
+        if target_entity.entity_id == player.entity_id() {
+            return Err(ERROR_SELF.create_without_context());
         }
+
+        let player_world = player.world();
+        if !Arc::ptr_eq(&target_world, &player_world) {
+            let target_name = target.get_display_name();
+            return Err(ERROR_CANNOT_SPECTATE.create_without_context(target_name));
+        }
+
+        let target_id = target_entity.entity_id;
+        player.camera_target_id.store(Some(target_id));
+        let pos = target_entity.pos.load();
+        let yaw = target_entity.yaw.load();
+        let pitch = target_entity.pitch.load();
+        player.try_send_client_packet(&CSetCamera::new(target_id.into()));
+        player.teleport(pos, Some(yaw), Some(pitch), player_world);
 
         let target_name = target.get_display_name();
         context.source.send_feedback(
@@ -129,7 +121,7 @@ impl CommandExecutor for SpectateTargetExecutor {
             false,
         );
 
-        Ok(succeeded)
+        Ok(1)
     }
 }
 
@@ -148,7 +140,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                 argument("target", EntityArgumentType::Entity)
                     .executes(SpectateTargetExecutor { is_self: true })
                     .then(
-                        argument("player", EntityArgumentType::Players)
+                        argument("player", EntityArgumentType::Player)
                             .executes(SpectateTargetExecutor { is_self: false }),
                     ),
             ),

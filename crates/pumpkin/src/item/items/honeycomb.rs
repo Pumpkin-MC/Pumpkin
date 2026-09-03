@@ -29,7 +29,7 @@ impl ItemMetadata for HoneyCombItem {
 impl ItemBehaviour for HoneyCombItem {
     fn use_on_block(
         &self,
-        _item: &mut ItemStack,
+        item: &mut ItemStack,
         player: &Player,
         location: BlockPos,
         _face: BlockDirection,
@@ -38,7 +38,9 @@ impl ItemBehaviour for HoneyCombItem {
         _server: &Server,
     ) {
         let world = player.world();
-        try_wax_block(&world, location, block);
+        if try_wax_block(&world, location, block) {
+            item.decrement_unless_creative(player.gamemode.load(), 1);
+        }
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

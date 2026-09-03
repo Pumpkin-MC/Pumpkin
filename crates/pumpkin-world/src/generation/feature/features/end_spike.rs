@@ -182,7 +182,6 @@ impl EndSpikeFeature {
             chunk.set_block_state(&pos.0, Block::AIR.default_state);
         }
 
-        // Bedrock cap serves as the crystal base, fire sits on top of it
         chunk.set_block_state(
             &pumpkin_util::math::vector3::Vector3::new(
                 spike.center_x,
@@ -200,12 +199,10 @@ impl EndSpikeFeature {
             Block::FIRE.default_state,
         );
 
-        // Iron-bar cage for guarded spikes: 5x5 walls + open top frame at dy=3.
         if spike.guarded {
             for dy in 0i32..=3 {
                 for dx in -2i32..=2 {
                     for dz in -2i32..=2 {
-                        // Only place on perimeter walls and the top frame
                         let x_wall_present = dx.abs() == 2;
                         let z_wall_present = dz.abs() == 2;
                         let on_top = dy == 3;
@@ -213,15 +210,14 @@ impl EndSpikeFeature {
                             continue;
                         }
 
-                        // Connectivity rules
                         let x_edge = x_wall_present || on_top;
                         let z_edge = z_wall_present || on_top;
 
                         let mut props = OakFenceLikeProperties::default(&Block::IRON_BARS);
-                        props.north = x_edge && dz != 2;
-                        props.south = x_edge && dz != -2;
-                        props.west = z_edge && dx != 2;
-                        props.east = z_edge && dx != -2;
+                        props.north = x_edge && dz != -2;
+                        props.south = x_edge && dz != 2;
+                        props.west = z_edge && dx != -2;
+                        props.east = z_edge && dx != 2;
 
                         let bar_state = BlockState::from_id(props.to_state_id(&Block::IRON_BARS));
                         chunk.set_block_state(

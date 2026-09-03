@@ -96,6 +96,9 @@ pub trait GenerationCache: HeightLimitView + BlockAccessor {
         chunk_x: i32,
         chunk_z: i32,
     ) -> Option<&crate::generation::blender::blending_data::BlendingData>;
+    fn get_sea_level(&self) -> i32 {
+        63
+    }
 }
 
 const AIR_BLOCK: Block = Block::AIR;
@@ -184,6 +187,11 @@ impl TerrainCache {
 }
 
 impl ProtoChunk {
+    #[must_use]
+    pub const fn get_sea_level(&self) -> i32 {
+        63
+    }
+
     #[cfg(test)]
     pub(crate) fn has_structure(&self, key: StructureKeys) -> bool {
         self.structure_starts.contains_key(&key)
@@ -1716,5 +1724,8 @@ impl GenerationCache for ProtoChunk {
         _cz: i32,
     ) -> Option<&crate::generation::blender::blending_data::BlendingData> {
         None
+    }
+    fn get_sea_level(&self) -> i32 {
+        Self::get_sea_level(self)
     }
 }

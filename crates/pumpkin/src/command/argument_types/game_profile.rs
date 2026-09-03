@@ -49,8 +49,17 @@ impl GameProfileResult {
     ///
     /// Instead, call this method *before* using `write()`/`read()` on a lock.
     pub fn resolve(&self, source: &CommandSource) -> Result<Vec<GameProfile>, CommandSyntaxError> {
-        let players = match self {
-            Self::Selector(selector) => selector.find_players(source),
+        match self {
+            Self::Selector(selector) => {
+                let players = selector.find_players(source)?;
+                if players.is_empty() {
+                    return Err(
+                        crate::command::argument_types::entity::NO_PLAYERS_ERROR_TYPE
+                            .create_without_context(),
+                    );
+                }
+                Ok(players.iter().map(|p| p.gameprofile.clone()).collect())
+            }
             Self::Name(name) => {
                 let server = source.server();
                 if let Some(player) = server.get_player_by_name(name) {
@@ -72,7 +81,7 @@ impl GameProfileResult {
                 }
 
                 if server.advanced_config.networking.java.online_mode {
-                    return match lookup_profile_by_name_blocking(
+                    match lookup_profile_by_name_blocking(
                         name,
                         &server.advanced_config.networking.java.authentication,
                     ) {
@@ -86,7 +95,7 @@ impl GameProfileResult {
                             Ok(vec![Self::profile_from_uuid_name(uuid, resolved_name)])
                         }
                         _ => Err(Self::unknown_player_syntax_error()),
-                    };
+                    }
                 } else if let Ok(uuid) = offline_uuid(name) {
                     let profile = Self::profile_from_uuid_name(uuid, name.clone());
                     server
@@ -95,10 +104,10 @@ impl GameProfileResult {
                         .write()
                         .unwrap_or_else(std::sync::PoisonError::into_inner)
                         .upsert(profile.id, profile.name.clone());
-                    return Ok(vec![profile]);
+                    Ok(vec![profile])
+                } else {
+                    Err(Self::unknown_player_syntax_error())
                 }
-
-                return Err(Self::unknown_player_syntax_error());
             }
             Self::Uuid(uuid) => {
                 let server = source.server();
@@ -121,11 +130,9 @@ impl GameProfileResult {
                     return Ok(vec![profile]);
                 }
 
-                return Err(Self::unknown_player_syntax_error());
+                Err(Self::unknown_player_syntax_error())
             }
-        }?;
-
-        Ok(players.iter().map(|p| &p.gameprofile).cloned().collect())
+        }
     }
 
     fn resolve_known_profile_by_name(server: &Server, name: &str) -> Option<GameProfile> {

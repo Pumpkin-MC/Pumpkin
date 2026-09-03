@@ -112,7 +112,7 @@ impl CommandExecutor for QueryExecutor {
             ),
             true,
         );
-        Ok((elapsed_seconds * scale).floor() as i32)
+        Ok((elapsed_seconds * scale) as i32)
     }
 }
 

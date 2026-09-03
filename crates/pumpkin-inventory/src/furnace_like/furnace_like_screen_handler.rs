@@ -224,7 +224,9 @@ impl ScreenHandler for FurnaceLikeScreenHandler {
                 return ItemStack::EMPTY.clone();
             }
 
-            slot.on_take_item(player, &stack);
+            let mut taken_stack = clicked.clone();
+            taken_stack.set_count(clicked.item_count - stack.item_count);
+            slot.on_take_item(player, &taken_stack);
         }
 
         clicked

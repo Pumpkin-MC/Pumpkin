@@ -1,6 +1,11 @@
 use pumpkin_data::{
-    Block, BlockDirection, BlockStateId, Enchantment, block_properties::CampfireLikeProperties,
-    damage::DamageType, data_component_impl::EquipmentSlot, effect::StatusEffect, fluid::Fluid,
+    Block, BlockDirection, BlockState, BlockStateId, Enchantment,
+    block_properties::CampfireLikeProperties,
+    damage::DamageType,
+    data_component_impl::EquipmentSlot,
+    effect::StatusEffect,
+    fluid::Fluid,
+    recipes::{CookingRecipeKind, get_cooking_recipe_with_ingredient},
 };
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_world::tick::TickPriority;
@@ -9,7 +14,7 @@ use crate::block::entities::campfire::CampfireBlockEntity;
 use crate::{
     block::{
         BlockBehaviour, BlockIsReplacing, GetStateForNeighborUpdateArgs, OnEntityCollisionArgs,
-        OnPlaceArgs, PlacedArgs,
+        OnPlaceArgs, PathComputationType, PlacedArgs, UseWithItemArgs, registry::BlockActionResult,
     },
     entity::EntityBase,
 };
@@ -20,45 +25,91 @@ pub struct CampfireBlock;
 
 impl BlockBehaviour for CampfireBlock {
     fn placed(&self, args: PlacedArgs<'_>) {
-        {
-            let entity = CampfireBlockEntity::new(*args.position);
-            args.world.add_block_entity(Arc::new(entity));
-        }
+        let entity = CampfireBlockEntity::new(*args.position);
+        args.world.add_block_entity(Arc::new(entity));
     }
 
-    // TODO: cooking food on campfire (CampfireBlockEntity)
-    fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
-        {
-            if CampfireLikeProperties::from_state_id(args.state.id).lit
-                && let Some(living_entity) = args.entity.get_living_entity()
-            {
-                let has_frost_walker_enchantment = {
-                    let equipment = living_entity
-                        .entity_equipment
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    equipment
-                        .equipment
-                        .get(&EquipmentSlot::FEET)
-                        .is_some_and(|boots| {
-                            boots.get_enchantment_level(&Enchantment::FROST_WALKER) != 0
-                        })
-                };
-                let has_fire_res = living_entity
-                    .get_effect(&StatusEffect::FIRE_RESISTANCE)
-                    .is_some();
-                if has_frost_walker_enchantment || has_fire_res {
-                    //campfire burning doesn't work if entity's boots has frost walker enchantment or entity has fire resistance. source: https://minecraft.wiki/w/Campfire#Damage
-                    return;
-                }
-                let damage_amount = if args.block == &Block::SOUL_CAMPFIRE {
-                    2.0
-                } else {
-                    1.0
-                };
-                args.entity
-                    .damage(args.entity, damage_amount, DamageType::CAMPFIRE);
+    fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
+        let state = args.world.get_block_state(args.position);
+        if !CampfireLikeProperties::from_state_id(state.id).lit {
+            return BlockActionResult::PassToDefaultBlockAction;
+        }
+
+        let Some(recipe) = get_cooking_recipe_with_ingredient(
+            args.item_stack.item,
+            CookingRecipeKind::CampfireCooking,
+        ) else {
+            return BlockActionResult::PassToDefaultBlockAction;
+        };
+
+        let Some(block_entity) = args.world.get_block_entity(args.position) else {
+            return BlockActionResult::PassToDefaultBlockAction;
+        };
+        let Some(campfire) = block_entity.as_any().downcast_ref::<CampfireBlockEntity>() else {
+            return BlockActionResult::PassToDefaultBlockAction;
+        };
+
+        for slot in 0..CampfireBlockEntity::SLOT_COUNT {
+            let mut stored = campfire.items[slot]
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if !stored.is_empty() {
+                continue;
             }
+
+            *stored = args
+                .item_stack
+                .split_unless_creative(args.player.gamemode.load(), 1);
+            *campfire.cooking_times[slot]
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = 0;
+            *campfire.cooking_total_times[slot]
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = recipe.cookingtime;
+            drop(stored);
+
+            args.player.increment_stat(
+                pumpkin_data::statistic::StatisticCategory::Custom,
+                pumpkin_data::statistic::CustomStatistic::InteractWithCampfire as i32,
+                1,
+            );
+            args.world.update_block_entity(&block_entity);
+            return BlockActionResult::Success;
+        }
+
+        BlockActionResult::PassToDefaultBlockAction
+    }
+
+    fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
+        if CampfireLikeProperties::from_state_id(args.state.id).lit
+            && let Some(living_entity) = args.entity.get_living_entity()
+        {
+            let has_frost_walker_enchantment = {
+                let equipment = living_entity
+                    .entity_equipment
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                equipment
+                    .equipment
+                    .get(&EquipmentSlot::FEET)
+                    .is_some_and(|boots| {
+                        boots.get_enchantment_level(&Enchantment::FROST_WALKER) != 0
+                    })
+            };
+            let has_fire_res = living_entity
+                .get_effect(&StatusEffect::FIRE_RESISTANCE)
+                .is_some();
+            if has_frost_walker_enchantment || has_fire_res {
+                // Campfire damage is prevented by Frost Walker boots or fire resistance.
+                return;
+            }
+            let damage_amount = if args.block == &Block::SOUL_CAMPFIRE {
+                2.0
+            } else {
+                1.0
+            };
+            args.entity
+                .damage(args.entity, damage_amount, DamageType::CAMPFIRE);
         }
     }
 
@@ -93,6 +144,10 @@ impl BlockBehaviour for CampfireBlock {
         }
 
         props.to_state_id(args.block)
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 
     // TODO: onProjectileHit

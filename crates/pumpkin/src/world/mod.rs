@@ -23,6 +23,7 @@ pub mod loot;
 pub mod map;
 pub mod portal;
 pub mod raid;
+pub mod random_sequences;
 pub mod stopwatches;
 pub mod time;
 pub mod villager_poi;
@@ -418,6 +419,9 @@ impl World {
             s.advanced_config.networking.java.simulation_distance.get()
         }) as i32;
         for player in self.players.load().iter() {
+            if player.is_spectator() {
+                continue;
+            }
             let center = player.get_entity().chunk_pos.load();
             for dx in -sim_dist..=sim_dist {
                 for dy in -sim_dist..=sim_dist {

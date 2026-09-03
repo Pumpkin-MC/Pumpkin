@@ -11,6 +11,7 @@ use crate::command::argument_builder::{ArgumentBuilder, argument, command, liter
 use crate::command::argument_types::coordinates::rotation::RotationArgumentType;
 use crate::command::argument_types::coordinates::vec3::Vec3ArgumentType;
 use crate::command::argument_types::entity::EntityArgumentType;
+use crate::command::argument_types::entity_anchor::{EntityAnchor, EntityAnchorArgumentType};
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
@@ -20,11 +21,6 @@ use crate::world::World;
 
 const DESCRIPTION: &str = "Teleports entities, including players.";
 const PERMISSION: &str = "minecraft:command.teleport";
-
-const ERROR_NOT_PLAYER: CommandErrorType<0> = CommandErrorType::new(
-    translation::java::PERMISSIONS_REQUIRES_PLAYER,
-    translation::java::PERMISSIONS_REQUIRES_PLAYER,
-);
 
 const ERROR_INVALID_POSITION: CommandErrorType<0> = CommandErrorType::new(
     translation::java::COMMANDS_TELEPORT_INVALIDPOSITION,
@@ -62,28 +58,24 @@ struct SelfToPosExecutor;
 
 impl CommandExecutor for SelfToPosExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
-        let player = context
-            .source
-            .output
-            .as_player()
-            .ok_or_else(|| ERROR_NOT_PLAYER.create_without_context())?;
+        let entity = context.source.entity_or_err()?;
 
         let pos = Vec3ArgumentType::get_coordinates(context, "location")?.resolve(&context.source);
         if !World::is_valid(BlockPos(pos.floor_to_i32())) {
             return Err(ERROR_INVALID_POSITION.create_without_context());
         }
 
-        let yaw = player.get_entity().yaw.load();
-        let pitch = player.get_entity().pitch.load();
-        let player_world = player.world();
-        player.teleport(pos, Some(yaw), Some(pitch), player_world);
+        let yaw = entity.get_entity().yaw.load();
+        let pitch = entity.get_entity().pitch.load();
+        let world = context.source.world();
+        entity.teleport(pos, Some(yaw), Some(pitch), world.clone());
 
         context.source.send_feedback(
             TextComponent::translate_cross(
                 translation::java::COMMANDS_TELEPORT_SUCCESS_LOCATION_SINGLE,
                 translation::bedrock::COMMANDS_TP_SUCCESS_COORDINATES,
                 [
-                    player.get_display_name(),
+                    entity.get_display_name(),
                     TextComponent::text(pos.x.to_string()),
                     TextComponent::text(pos.y.to_string()),
                     TextComponent::text(pos.z.to_string()),
@@ -100,11 +92,7 @@ struct SelfToEntityExecutor;
 
 impl CommandExecutor for SelfToEntityExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
-        let player = context
-            .source
-            .output
-            .as_player()
-            .ok_or_else(|| ERROR_NOT_PLAYER.create_without_context())?;
+        let entity = context.source.entity_or_err()?;
 
         let destination = EntityArgumentType::get_entity(context, "destination")?;
         let destination_entity = destination.get_entity();
@@ -117,14 +105,14 @@ impl CommandExecutor for SelfToEntityExecutor {
             return Err(ERROR_INVALID_POSITION.create_without_context());
         }
 
-        player.teleport(pos, Some(yaw), Some(pitch), world);
+        entity.teleport(pos, Some(yaw), Some(pitch), world);
 
         context.source.send_feedback(
             TextComponent::translate_cross(
                 translation::java::COMMANDS_TELEPORT_SUCCESS_ENTITY_SINGLE,
                 translation::bedrock::COMMANDS_TP_SUCCESSVICTIM,
                 [
-                    player.get_display_name(),
+                    entity.get_display_name(),
                     destination_entity.get_display_name(),
                 ],
             ),
@@ -270,10 +258,15 @@ impl CommandExecutor for EntitiesToPosFacingPosExecutor {
 
         let facing_pos =
             Vec3ArgumentType::get_coordinates(context, "facingLocation")?.resolve(&context.source);
-        let (yaw, pitch) = yaw_pitch_facing_position(&pos, &facing_pos);
         let world = context.source.world();
 
         for target in &targets {
+            let eye_offset = match context.source.entity_anchor {
+                EntityAnchor::Feet => 0.0,
+                EntityAnchor::Eyes => target.get_entity().get_eye_height(),
+            };
+            let looking_from = Vector3::new(pos.x, pos.y + eye_offset, pos.z);
+            let (yaw, pitch) = yaw_pitch_facing_position(&looking_from, &facing_pos);
             target.teleport(pos, Some(yaw), Some(pitch), world.clone());
         }
 
@@ -300,7 +293,9 @@ impl CommandExecutor for EntitiesToPosFacingPosExecutor {
     }
 }
 
-struct EntitiesToPosFacingEntityExecutor;
+struct EntitiesToPosFacingEntityExecutor {
+    has_anchor: bool,
+}
 
 impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
@@ -312,10 +307,22 @@ impl CommandExecutor for EntitiesToPosFacingEntityExecutor {
         }
 
         let facing_entity = EntityArgumentType::get_entity(context, "facingEntity")?;
-        let (yaw, pitch) = yaw_pitch_facing_position(&pos, &facing_entity.get_entity().pos.load());
+        let anchor = if self.has_anchor {
+            EntityAnchorArgumentType::get(context, "facingAnchor")?
+        } else {
+            EntityAnchor::Feet
+        };
+
+        let facing_pos = anchor.position_at_entity(facing_entity.get_entity());
         let world = context.source.world();
 
         for target in &targets {
+            let eye_offset = match context.source.entity_anchor {
+                EntityAnchor::Feet => 0.0,
+                EntityAnchor::Eyes => target.get_entity().get_eye_height(),
+            };
+            let looking_from = Vector3::new(pos.x, pos.y + eye_offset, pos.z);
+            let (yaw, pitch) = yaw_pitch_facing_position(&looking_from, &facing_pos);
             target.teleport(pos, Some(yaw), Some(pitch), world.clone());
         }
 
@@ -367,7 +374,15 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 .then(
                                     literal("entity").then(
                                         argument("facingEntity", EntityArgumentType::Entity)
-                                            .executes(EntitiesToPosFacingEntityExecutor),
+                                            .executes(EntitiesToPosFacingEntityExecutor {
+                                                has_anchor: false,
+                                            })
+                                            .then(
+                                                argument("facingAnchor", EntityAnchorArgumentType)
+                                                    .executes(EntitiesToPosFacingEntityExecutor {
+                                                        has_anchor: true,
+                                                    }),
+                                            ),
                                     ),
                                 )
                                 .then(

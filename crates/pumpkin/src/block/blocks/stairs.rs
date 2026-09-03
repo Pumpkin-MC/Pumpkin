@@ -8,9 +8,7 @@ use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 
-use crate::block::BlockBehaviour;
-use crate::block::OnNeighborUpdateArgs;
-use crate::block::OnPlaceArgs;
+use crate::block::{BlockBehaviour, OnNeighborUpdateArgs, OnPlaceArgs, PathComputationType};
 use crate::world::World;
 
 type StairsProperties = pumpkin_data::block_properties::OakStairsLikeProperties;
@@ -116,6 +114,10 @@ impl BlockBehaviour for StairBlock {
         }
 
         BlockState::from_id(state_id)
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
 
