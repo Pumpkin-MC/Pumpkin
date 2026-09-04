@@ -901,10 +901,10 @@ impl GenerationSchedule {
                             chunks.push((pos, Chunk::Level(chunk)));
                         }
                     }
-                    Chunk::Proto(_) => {
-                        // ProtoChunks are in-memory intermediate generation stages
-                        // (e.g. temporary border dependencies). Do not convert and save
-                        // incomplete chunks to disk during runtime unloads.
+                    Chunk::Proto(proto) => {
+                        if !matches!(proto.stage, StagedChunkEnum::Empty | StagedChunkEnum::None) {
+                            chunks.push((pos, Chunk::Proto(proto)));
+                        }
                     }
                 }
             }
