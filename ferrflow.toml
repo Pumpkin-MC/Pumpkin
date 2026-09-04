@@ -7,6 +7,9 @@ releaseCommitMode = "commit"
 releaseCommitBody = "summary"
 updateLockfiles = true
 updateDependents = true
+# Appends the supported protocol versions to the version as build metadata, so
+# `0.1.0` is written as `0.1.0+26.2-26.45`. The tag stays `pumpkin@v0.1.0`.
+buildMetadata = "sh scripts/game-versions.sh"
 
 [workspace.changelog]
 groupByScope = true
@@ -23,15 +26,12 @@ docs = "Documentation"
 
 [workspace.hooks]
 preBump = "cargo fmt --all -- --check"
-# Stamps the supported protocol versions onto the workspace version as build
-# metadata. The hook receives FERRFLOW_NEW_VERSION, along with ten other
-# FERRFLOW_* variables, in its environment.
-postBump = "sh scripts/stamp-game-versions.sh"
 onFailure = "abort"
 
 # The 13 crates that inherit workspace.package.version release together as
 # `pumpkin`. The two plugin crates carry their own version because plugin
-# authors depend on them directly.
+# authors depend on them directly, and they opt out of the suffix: the protocol
+# range describes the server, not the plugin API.
 [[package]]
 name = "pumpkin"
 path = "."
@@ -41,6 +41,7 @@ versionedFiles = [{ path = "Cargo.toml", format = "toml" }]
 [[package]]
 name = "pumpkin-plugin-api"
 path = "crates/pumpkin-plugin-api"
+buildMetadata = false
 changelog = "crates/pumpkin-plugin-api/CHANGELOG.md"
 versionedFiles = [
   { path = "crates/pumpkin-plugin-api/Cargo.toml", format = "toml" },
@@ -49,6 +50,7 @@ versionedFiles = [
 [[package]]
 name = "pumpkin-plugin-utils"
 path = "crates/pumpkin-plugin-utils"
+buildMetadata = false
 changelog = "crates/pumpkin-plugin-utils/CHANGELOG.md"
 versionedFiles = [
   { path = "crates/pumpkin-plugin-utils/Cargo.toml", format = "toml" },
