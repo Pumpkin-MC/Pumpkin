@@ -61,7 +61,7 @@ pub mod play;
 pub mod recipe_helper;
 pub mod status;
 
-use outgoing::{OutgoingPacket, run_outgoing_packet_writer};
+use outgoing::{OutgoingPacket, TickFlush, run_outgoing_packet_writer};
 
 use arc_swap::ArcSwap;
 use pending::PendingConnection;
@@ -121,6 +121,8 @@ pub struct JavaClient {
     pub packet_limiter: PacketRateLimiter,
     /// Vanilla `suspendFlushingOnServerThread`.
     suspend_flushing: Arc<AtomicBool>,
+    /// Tick-end `flushChannel` if `try_send(Flush)` hits a full FIFO.
+    tick_flush: TickFlush,
 }
 
 pub enum OutgoingPacketType {
@@ -162,6 +164,7 @@ impl JavaClient {
             packet_sequence: AtomicI32::new(-1),
             packet_limiter: pending.packet_limiter,
             suspend_flushing: Arc::new(AtomicBool::new(false)),
+            tick_flush: TickFlush::new(),
         }
     }
 
@@ -172,9 +175,24 @@ impl JavaClient {
 
     /// Vanilla `resumeFlushing`: queue `flushChannel` then lift the hold.
     pub fn resume_flushing(&self) {
-        let _ = self
+        match self
             .outgoing_packet_queue_send
-            .try_send(OutgoingPacket::Flush);
+            .try_send(OutgoingPacket::Flush)
+        {
+            Ok(()) => {}
+            Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                self.tick_flush.request();
+            }
+            Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                if !self.close_token.is_cancelled() {
+                    warn!(
+                        "Failed to queue tick flush for client {}: channel closed",
+                        self.id
+                    );
+                    self.close();
+                }
+            }
+        }
         self.suspend_flushing.store(false, Ordering::Release);
     }
 
@@ -637,9 +655,17 @@ impl JavaClient {
         };
         let id = self.id;
         let suspend_flushing = self.suspend_flushing.clone();
+        let tick_flush = self.tick_flush.clone();
         self.spawn_task(async move {
-            run_outgoing_packet_writer(packet_receiver, writer, close_token, suspend_flushing, id)
-                .await;
+            run_outgoing_packet_writer(
+                packet_receiver,
+                writer,
+                close_token,
+                suspend_flushing,
+                tick_flush,
+                id,
+            )
+            .await;
         });
     }
 

@@ -7,7 +7,7 @@ use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
 };
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use bytes::Bytes;
 use pumpkin_protocol::{
@@ -15,12 +15,45 @@ use pumpkin_protocol::{
 };
 use tokio::io::AsyncWrite;
 use tokio::sync::{
+    Notify,
     mpsc::{Receiver, error::TryRecvError},
     oneshot,
 };
 use tokio::time::MissedTickBehavior;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
+
+/// `resumeFlushing` when the FIFO is full: cannot drop the tick barrier.
+#[derive(Clone)]
+pub struct TickFlush {
+    pending: Arc<AtomicBool>,
+    notify: Arc<Notify>,
+}
+
+impl TickFlush {
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            pending: Arc::new(AtomicBool::new(false)),
+            notify: Arc::new(Notify::new()),
+        }
+    }
+
+    pub fn request(&self) {
+        self.pending.store(true, Ordering::Release);
+        self.notify.notify_one();
+    }
+
+    fn take(&self) -> bool {
+        self.pending.swap(false, Ordering::AcqRel)
+    }
+}
+
+impl Default for TickFlush {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 /// Off-tick fallback. Play ticks flush from `OutgoingPacket::Flush`.
 const TICK_FLUSH_INTERVAL: Duration = Duration::from_millis(50);
@@ -234,6 +267,7 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
     mut writer: TCPNetworkEncoder<W>,
     close_token: CancellationToken,
     suspend_flushing: Arc<AtomicBool>,
+    tick_flush: TickFlush,
     id: u64,
 ) {
     let mut flush_interval = tokio::time::interval(TICK_FLUSH_INTERVAL);
@@ -243,15 +277,36 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
 
     let mut unflushed = false;
     let mut pending_completions = Vec::new();
+    let mut last_tcp_flush = Instant::now();
 
     loop {
         if close_token.is_cancelled() {
             break;
         }
 
+        if tick_flush.take() {
+            if !flush_writer(
+                &mut writer,
+                &mut unflushed,
+                &mut pending_completions,
+                &close_token,
+                id,
+            )
+            .await
+            {
+                close_token.cancel();
+                break;
+            }
+            last_tcp_flush = Instant::now();
+            continue;
+        }
+
         let recv_result = tokio::select! {
             biased;
             () = close_token.cancelled() => None,
+            () = tick_flush.notify.notified() => {
+                continue;
+            }
             res = packet_receiver.recv() => res,
             _ = flush_interval.tick(), if unflushed
                 && !suspend_flushing.load(Ordering::Acquire) =>
@@ -268,6 +323,7 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
                     close_token.cancel();
                     break;
                 }
+                last_tcp_flush = Instant::now();
                 continue;
             }
         };
@@ -286,13 +342,22 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
             data @ OutgoingPacket::Data { .. } => {
                 data.ingest(&mut flush_request, &mut packets_to_frame);
                 loop {
+                    if tick_flush.take() {
+                        flush_request = flush_request.merge(FlushRequest::Always);
+                        break;
+                    }
                     match packet_receiver.try_recv() {
                         Ok(OutgoingPacket::Flush) => {
                             flush_request = flush_request.merge(FlushRequest::Always);
                             break;
                         }
                         Ok(packet) => packet.ingest(&mut flush_request, &mut packets_to_frame),
-                        Err(TryRecvError::Empty) => break,
+                        Err(TryRecvError::Empty) => {
+                            if tick_flush.take() {
+                                flush_request = flush_request.merge(FlushRequest::Always);
+                            }
+                            break;
+                        }
                         Err(TryRecvError::Disconnected) => {
                             disconnected = true;
                             break;
@@ -324,7 +389,9 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
         }
 
         let suspended = suspend_flushing.load(Ordering::Acquire);
-        if flush_request.should_flush(suspended) || disconnected {
+        let fallback_due =
+            unflushed && !suspended && last_tcp_flush.elapsed() >= TICK_FLUSH_INTERVAL;
+        if flush_request.should_flush(suspended) || disconnected || fallback_due {
             if !flush_writer(
                 &mut writer,
                 &mut unflushed,
@@ -337,6 +404,7 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
                 close_token.cancel();
                 break;
             }
+            last_tcp_flush = Instant::now();
         } else {
             complete_pending(&mut pending_completions);
         }
@@ -401,6 +469,26 @@ mod tests {
             TCPNetworkEncoder::new(RecordingWriter { writes, flushes }),
             close,
             suspend,
+            TickFlush::new(),
+            0,
+        )
+        .await;
+    }
+
+    async fn run_writer_with_tick_flush(
+        rx: Receiver<OutgoingPacket>,
+        writes: Arc<std::sync::Mutex<Vec<u8>>>,
+        flushes: Arc<AtomicUsize>,
+        suspend: Arc<AtomicBool>,
+        tick_flush: TickFlush,
+        close: CancellationToken,
+    ) {
+        run_outgoing_packet_writer(
+            rx,
+            TCPNetworkEncoder::new(RecordingWriter { writes, flushes }),
+            close,
+            suspend,
+            tick_flush,
             0,
         )
         .await;
@@ -643,6 +731,65 @@ mod tests {
         assert!(
             start.elapsed() < Duration::from_millis(100),
             "try_send must not wait on socket write/flush"
+        );
+
+        drop(tx);
+        close.cancel();
+        writer.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn pending_tick_flush_flushes_when_fifo_has_no_room_for_barrier() {
+        let (tx, rx) = tokio::sync::mpsc::channel(4096);
+        let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let flushes = Arc::new(AtomicUsize::new(0));
+        let suspend = Arc::new(AtomicBool::new(true));
+        let tick_flush = TickFlush::new();
+        let close = CancellationToken::new();
+
+        let writer = tokio::spawn(run_writer_with_tick_flush(
+            rx,
+            writes,
+            flushes.clone(),
+            suspend,
+            tick_flush.clone(),
+            close.clone(),
+        ));
+
+        tx.try_send(packet(1)).unwrap();
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        assert_eq!(flushes.load(Ordering::SeqCst), 0);
+
+        tick_flush.request();
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        assert_eq!(
+            flushes.load(Ordering::SeqCst),
+            1,
+            "resumeFlushing must flush even when try_send(Flush) cannot enqueue"
+        );
+
+        drop(tx);
+        close.cancel();
+        writer.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn fifty_ms_flushes_while_packets_keep_arriving() {
+        let (tx, rx) = tokio::sync::mpsc::channel(4096);
+        let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let flushes = Arc::new(AtomicUsize::new(0));
+        let suspend = Arc::new(AtomicBool::new(false));
+        let close = CancellationToken::new();
+
+        let writer = spawn_writer(rx, writes, flushes.clone(), suspend, close.clone());
+
+        for i in 0..16u8 {
+            tx.try_send(packet(i)).unwrap();
+            tokio::time::sleep(Duration::from_millis(8)).await;
+        }
+        assert!(
+            flushes.load(Ordering::SeqCst) >= 1,
+            "busy recv must not starve the 50ms fallback flush"
         );
 
         drop(tx);
