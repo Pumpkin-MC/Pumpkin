@@ -6,7 +6,7 @@ use pumpkin_data::{Block, BlockDirection, BlockId, BlockState, BlockStateId, tag
 use std::sync::LazyLock;
 
 /// Vanilla classes with no covering tag.
-const SINGLETONS: [BlockId; 11] = [
+const SINGLETONS: [BlockId; 12] = [
     Block::FARMLAND.id,
     Block::DIRT_PATH.id,
     Block::SNOW.id,
@@ -16,6 +16,7 @@ const SINGLETONS: [BlockId; 11] = [
     Block::ENCHANTING_TABLE.id,
     Block::END_PORTAL_FRAME.id,
     Block::SCULK_SENSOR.id,
+    Block::CALIBRATED_SCULK_SENSOR.id,
     Block::SCULK_SHRIEKER.id,
     Block::PISTON_HEAD.id,
 ];
@@ -75,6 +76,84 @@ pub fn shape_occludes(from: BlockStateId, to: BlockStateId, dir: BlockDirection)
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeSet;
+
+    fn vanilla_shape_class(block: &Block) -> bool {
+        block.id.has_tag(tag::Block::MINECRAFT_STAIRS)
+            || block.id.has_tag(tag::Block::MINECRAFT_SLABS)
+            || block.id.has_tag(tag::Block::MINECRAFT_WOODEN_SHELVES)
+            || SINGLETONS.contains(&block.id)
+    }
+
+    fn each_state(mut f: impl FnMut(&'static Block, &'static BlockState)) {
+        for raw in 0..BlockStateId::COUNT {
+            let Some(id) = BlockStateId::new(raw) else {
+                continue;
+            };
+            let state = BlockState::from_id(id);
+            f(Block::from_state_id(id), state);
+        }
+    }
+
+    #[test]
+    fn uses_shape_matches_vanilla_class_list() {
+        let mut mismatches = Vec::new();
+        each_state(|block, state| {
+            let expected = state.can_occlude() && vanilla_shape_class(block);
+            if uses_shape_for_light_occlusion(state) != expected {
+                mismatches.push(block.name);
+            }
+        });
+        mismatches.sort_unstable();
+        mismatches.dedup();
+        assert!(
+            mismatches.is_empty(),
+            "uses_shape_for_light_occlusion drifted from tags+singletons: {mismatches:?}"
+        );
+    }
+
+    #[test]
+    fn occluding_faces_match_is_side_solid() {
+        each_state(|_block, state| {
+            let shaped = uses_shape_for_light_occlusion(state);
+            for dir in BlockDirection::all() {
+                assert_eq!(
+                    face_occludes(state.id, dir),
+                    shaped && state.is_side_solid(dir),
+                    "{} {dir:?}",
+                    state.id.to_block().name
+                );
+            }
+        });
+    }
+
+    /// `can_occlude && sided_transparency` is not vanilla `useShapeForLightOcclusion`.
+    #[test]
+    fn sided_transparency_is_not_the_shape_list() {
+        let mut extra = BTreeSet::new();
+        let mut missing = BTreeSet::new();
+        each_state(|block, state| {
+            let flags = state.can_occlude() && state.sided_transparency();
+            let shaped = uses_shape_for_light_occlusion(state);
+            if flags && !shaped {
+                extra.insert(block.name);
+            }
+            if shaped && !flags {
+                missing.insert(block.name);
+            }
+        });
+        assert!(
+            missing.contains("oak_stairs")
+                && missing.contains("oak_slab")
+                && missing.contains("oak_shelf")
+                && missing.contains("snow"),
+            "shape-list blocks that lack sided_transparency: {missing:?}"
+        );
+        assert!(
+            extra.contains("oak_fence") && extra.contains("white_carpet"),
+            "sided_transparency extras: {extra:?}"
+        );
+    }
 
     #[test]
     fn shape_list_matches_vanilla_classes() {
