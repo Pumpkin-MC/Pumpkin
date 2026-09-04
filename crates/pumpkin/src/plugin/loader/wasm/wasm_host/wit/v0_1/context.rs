@@ -1505,27 +1505,6 @@ impl DowncastResourceExt<ContextResource> for Resource<Context> {
 impl pumpkin::plugin::context::Host for PluginHostState {}
 
 impl pumpkin::plugin::context::HostContext for PluginHostState {
-    async fn register_command(
-        &mut self,
-        context: Resource<Context>,
-        command: Resource<Command>,
-        permission: String,
-    ) -> wasmtime::Result<()> {
-        use crate::command::argument_builder::ArgumentBuilder;
-
-        let command = self.take_command(&command)?.provider;
-        let context = self.get_context(&context)?.provider.clone();
-        let aliases = if command.names.len() > 1 {
-            command.names[1..].to_vec()
-        } else {
-            Vec::new()
-        };
-        let node = command.builder.build();
-        context.register_command_with_aliases(node, &aliases, permission);
-
-        Ok(())
-    }
-
     #[allow(clippy::too_many_lines)]
     async fn register_event(
         &mut self,
@@ -1775,6 +1754,27 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
                 register_player_event(resource, &handler, priority, blocking, event_type);
             }
         }
+
+        Ok(())
+    }
+
+    async fn register_command(
+        &mut self,
+        context: Resource<Context>,
+        command: Resource<Command>,
+        permission: String,
+    ) -> wasmtime::Result<()> {
+        use crate::command::argument_builder::ArgumentBuilder;
+
+        let command = self.take_command(&command)?.provider;
+        let context = self.get_context(&context)?.provider.clone();
+        let aliases = if command.names.len() > 1 {
+            command.names[1..].to_vec()
+        } else {
+            Vec::new()
+        };
+        let node = command.builder.build();
+        context.register_command_with_aliases(node, &aliases, permission);
 
         Ok(())
     }
