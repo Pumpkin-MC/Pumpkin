@@ -115,8 +115,7 @@ jobs:
       - uses: nttld/setup-ndk@v1
         with:
           ndk-version: r27c
-      - run: cargo install cargo-ndk
-      - uses: taiki-e/install-action@nextest
+      - run: cargo install --git https://github.com/W9pi3cZ1/cargo-ndk-workdir cargo-ndk
       - uses: Swatinem/rust-cache@v2
       - name: Enable KVM
         run: |
@@ -134,7 +133,7 @@ jobs:
           profile: pixel_5
           force-avd-creation: false
           emulator-options: -no-snapshot-load -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
-          script: cargo ndk-test -t arm64-v8a
+          script: adb push assets /data/local/tmp/ && cargo ndk-test -t arm64-v8a
   build_release:
     name: Build project in release
     runs-on: ${{ matrix.os }}
@@ -215,7 +214,7 @@ jobs:
         with:
           ndk-version: r27c
       - name: Install cargo-ndk
-        run: cargo install cargo-ndk
+        run: cargo install cargo-ndk 
       - uses: Swatinem/rust-cache@v2
       - name: Build Release with cargo ndk
         env:
