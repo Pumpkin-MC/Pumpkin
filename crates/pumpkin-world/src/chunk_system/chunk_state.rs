@@ -198,6 +198,18 @@ impl Chunk {
             Self::Level(_) => StagedChunkEnum::Full as u8,
         }
     }
+    /// Whether this chunk already holds light. Such light is authoritative and must not be
+    /// recomputed from a bare descent, which cannot see what reached it horizontally.
+    #[must_use]
+    pub fn is_lit(&self) -> bool {
+        match self {
+            Self::Proto(chunk) => chunk.stage >= StagedChunkEnum::Lighting,
+            Self::Level(chunk) => chunk
+                .light_populated
+                .load(std::sync::atomic::Ordering::Relaxed),
+        }
+    }
+
     pub fn get_proto_chunk_mut(&mut self) -> &mut ProtoChunk {
         match self {
             Self::Level(_) => panic!("chunk isn't a ProtoChunk"),

@@ -750,6 +750,12 @@ impl SkyLightPropagator {
                 let is_center = chunk_idx == center_idx;
                 let from_rel_y = (top_y + 1 - bottom_y).max(0) as usize;
 
+                // A lit rim chunk already holds what reached it horizontally; the descent
+                // only knows this column and would overwrite that with a darker value.
+                if !is_center && cache.chunks[chunk_idx].is_lit() {
+                    continue;
+                }
+
                 match &mut cache.chunks[chunk_idx] {
                     Chunk::Proto(c) => {
                         let fill_end = if is_center {
@@ -1053,6 +1059,65 @@ mod tests {
             block_light(lit, 0, 30, 6),
             Block::GLOWSTONE.default_state.luminance - 1,
             "the light source did not propagate into the pocket beside it"
+        );
+    }
+
+    /// A lit neighbour's sky light already accounts for what reached it horizontally, which a
+    /// descent down one column cannot see. Re-descending it overwrites that with a darker
+    /// value, and the centre's edge then receives light from the darkened cell.
+    #[test]
+    fn a_lit_neighbour_keeps_the_light_the_descent_cannot_reproduce() {
+        // Leaves let the descent through while dimming it, so it reaches the cell and lands
+        // below the stored value. Under solid stone it would stop and overwrite nothing.
+        const DEPTH: i32 = 4;
+        const BURIED: i32 = SURFACE - DEPTH;
+        const DESCENT_REACHES: u8 = 15 - (DEPTH as u8 + 1);
+        const STORED: u8 = DESCENT_REACHES + 2;
+
+        let mut cache = Cache::new(-1, -1, 3);
+        for dx in 0..3 {
+            for dz in 0..3 {
+                let (x, z) = (-1 + dx, -1 + dz);
+                cache.chunks.push(if (x, z) == (0, 0) {
+                    let mut proto = proto_chunk(x, z);
+                    // Seal the face the shaft shares with the centre, so only the descent
+                    // can reach the buried cell.
+                    for y in BURIED..=SURFACE {
+                        proto.set_block_state(15, y, 5, Block::STONE.default_state);
+                    }
+                    Chunk::Proto(Box::new(proto))
+                } else if (x, z) == (1, 0) {
+                    let chunk = level_chunk(x, z, |updates| {
+                        for y in BURIED..=SURFACE {
+                            updates.push((0, y, 5, Block::OAK_LEAVES.default_state.id));
+                        }
+                    });
+                    chunk
+                        .light_populated
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                    let mut light = chunk
+                        .light_engine
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    let relative = (BURIED - MIN_Y) as usize;
+                    light.sky_light[relative / 16].set(0, relative % 16, 5, STORED);
+                    drop(light);
+                    Chunk::Level(chunk)
+                } else {
+                    Chunk::Level(level_chunk(x, z, |_| {}))
+                });
+            }
+        }
+
+        LightEngine::new().initialize_light(&mut cache, &LightingEngineConfig::Default);
+
+        let Chunk::Level(neighbour) = &cache.chunks[(2 * 3 + 1) as usize] else {
+            panic!("the neighbour at (1, 0) is not a level chunk");
+        };
+        assert_eq!(
+            sky_light(neighbour, 0, BURIED, 5),
+            STORED,
+            "the pass re-descended a lit neighbour and overwrote its stored light"
         );
     }
 

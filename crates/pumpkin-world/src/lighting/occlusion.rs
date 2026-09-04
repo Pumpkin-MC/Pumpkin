@@ -21,7 +21,7 @@ const SINGLETONS: [BlockId; 11] = [
 ];
 
 /// `canOcclude` + `useShapeForLightOcclusion`.
-pub(crate) fn uses_shape_for_light_occlusion(state: &BlockState) -> bool {
+pub fn uses_shape_for_light_occlusion(state: &BlockState) -> bool {
     if !state.can_occlude() {
         return false;
     }

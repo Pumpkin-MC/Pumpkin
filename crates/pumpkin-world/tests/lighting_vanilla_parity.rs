@@ -647,7 +647,7 @@ fn dump_a_column() {
 
     println!("column x={bx} z={bz} in chunk {center:?}  (local {lx},{lz})");
     println!("   y | block                         op | vanilla | pumpkin");
-    for y in (30..=75).rev() {
+    for y in (30..=100).rev() {
         let section = (y >> 4) - min_y_section;
         let Ok(section) = usize::try_from(section) else {
             continue;
