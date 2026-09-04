@@ -6,6 +6,16 @@ use std::collections::BinaryHeap;
 use std::collections::HashMap;
 
 #[test]
+fn ungenerated_proto_chunks_are_not_saved() {
+    use crate::chunk_system::schedule::should_save_proto_chunk;
+
+    assert!(!should_save_proto_chunk(StagedChunkEnum::None));
+    assert!(!should_save_proto_chunk(StagedChunkEnum::Empty));
+    assert!(should_save_proto_chunk(StagedChunkEnum::Biomes));
+    assert!(should_save_proto_chunk(StagedChunkEnum::Full));
+}
+
+#[test]
 fn ensure_dependency_chain_builds_multistage_chain() {
     let mut graph = DAG::default();
     let mut queue = BinaryHeap::new();

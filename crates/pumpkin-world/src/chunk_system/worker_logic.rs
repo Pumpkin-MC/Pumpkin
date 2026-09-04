@@ -88,6 +88,16 @@ fn process_loaded_chunk(chunk: Arc<crate::chunk::ChunkData>, level: &Level) -> C
     }
 }
 
+fn chunk_load_failure(pos: ChunkPos, error: impl std::fmt::Display) -> RecvChunk {
+    let error = format!("Failed to read chunk from disk: {error}");
+    error!("Chunk {pos:?} was not loaded: {error}");
+    RecvChunk::GenerationFailure {
+        pos,
+        stage: StagedChunkEnum::Empty,
+        error,
+    }
+}
+
 pub async fn io_read_work(
     recv: Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Vec<ChunkPos>>>>,
     send: crossbeam::channel::Sender<(ChunkPos, RecvChunk)>,
@@ -155,7 +165,7 @@ pub async fn io_read_work(
                         break;
                     }
                 }
-                LoadedData::Missing(pos) | LoadedData::Error((pos, _)) => {
+                LoadedData::Missing(pos) => {
                     if send
                         .send((
                             pos,
@@ -167,6 +177,11 @@ pub async fn io_read_work(
                         ))
                         .is_err()
                     {
+                        break;
+                    }
+                }
+                LoadedData::Error((pos, error)) => {
+                    if send.send((pos, chunk_load_failure(pos, error))).is_err() {
                         break;
                     }
                 }

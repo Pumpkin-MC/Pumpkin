@@ -1,11 +1,11 @@
 use crate::block::entities::BlockEntity;
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::world::World;
-use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{FacingHopper, HopperLikeProperties};
+use pumpkin_data::block_properties::{BlockProperties, FacingHopper, HopperLikeProperties};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, BlockStateId};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::position::BlockPos;
@@ -77,9 +77,9 @@ impl BlockEntity for HopperBlockEntity {
             .store(world.get_world_age(), Ordering::Relaxed);
         if self.cooldown_time.fetch_sub(1, Ordering::Relaxed) <= 0 {
             self.cooldown_time.store(0, Ordering::Relaxed);
-            let state =
-                HopperLikeProperties::from_state_id(world.get_block_state(&self.position).id);
-            if state.enabled
+            if let Some(state_id) = world.get_block_state_id_if_loaded(&self.position)
+                && let Some(state) = hopper_properties(state_id)
+                && state.enabled
                 && let Some(entity) = world.get_block_entity(&self.position)
                 && let Some(hopper) = entity.as_any().downcast_ref::<Self>()
             {
@@ -101,8 +101,9 @@ impl BlockEntity for HopperBlockEntity {
     }
 
     fn set_block_state(&mut self, block_state: BlockStateId) {
-        // TODO !!!IMPORTANT!!! set block state when loading the chunk
-        self.facing = HopperLikeProperties::from_state_id(block_state).facing;
+        if let Some(properties) = hopper_properties(block_state) {
+            self.facing = properties.facing;
+        }
     }
 
     fn is_dirty(&self) -> bool {
@@ -377,6 +378,12 @@ impl HopperBlockEntity {
     }
 }
 
+fn hopper_properties(state_id: BlockStateId) -> Option<HopperLikeProperties> {
+    let block = Block::from_state_id(state_id);
+    HopperLikeProperties::handles_block_id(block.id)
+        .then(|| HopperLikeProperties::from_state_id(state_id))
+}
+
 impl Inventory for HopperBlockEntity {
     fn size(&self) -> usize {
         Self::INVENTORY_SIZE
@@ -448,5 +455,41 @@ impl Clearable for HopperBlockEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         items.fill_with(|| ItemStack::EMPTY.clone());
         self.mark_dirty();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_data::{
+        Block, BlockStateId,
+        block_properties::{FacingHopper, HopperLikeProperties},
+    };
+    use pumpkin_nbt::compound::NbtCompound;
+    use pumpkin_util::math::position::BlockPos;
+
+    use super::{BlockEntity, HopperBlockEntity};
+
+    #[test]
+    fn loaded_hopper_restores_facing_from_block_state() {
+        let mut hopper = HopperBlockEntity::from_nbt(&NbtCompound::new(), BlockPos::new(0, 64, 0));
+        assert_eq!(hopper.facing, FacingHopper::Down);
+
+        let state = HopperLikeProperties {
+            enabled: true,
+            facing: FacingHopper::East,
+        }
+        .to_state_id(&Block::HOPPER);
+        hopper.set_block_state(state);
+
+        assert_eq!(hopper.facing, FacingHopper::East);
+    }
+
+    #[test]
+    fn missing_chunk_state_does_not_reset_or_panic() {
+        let mut hopper = HopperBlockEntity::new(BlockPos::new(0, 64, 0), FacingHopper::East);
+
+        hopper.set_block_state(BlockStateId::AIR);
+
+        assert_eq!(hopper.facing, FacingHopper::East);
     }
 }

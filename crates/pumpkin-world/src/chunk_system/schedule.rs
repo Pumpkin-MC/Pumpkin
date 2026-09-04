@@ -23,6 +23,10 @@ use std::thread;
 use std::time::Duration;
 use tracing::{debug, error, info, trace, warn};
 
+pub(super) const fn should_save_proto_chunk(stage: StagedChunkEnum) -> bool {
+    !matches!(stage, StagedChunkEnum::None | StagedChunkEnum::Empty)
+}
+
 pub(crate) struct TaskHeapNode(i8, NodeKey);
 impl PartialEq for TaskHeapNode {
     fn eq(&self, other: &Self) -> bool {
@@ -929,14 +933,7 @@ impl GenerationSchedule {
             if let Some(chunk) = &holder.chunk {
                 let should_save = match chunk {
                     Chunk::Level(sync_chunk) => sync_chunk.is_dirty(),
-                    Chunk::Proto(proto) => {
-                        save_proto_chunk
-                            && !matches!(
-                                proto.stage,
-                                crate::chunk_system::chunk_state::StagedChunkEnum::Empty
-                                    | crate::chunk_system::chunk_state::StagedChunkEnum::None
-                            )
-                    }
+                    Chunk::Proto(proto) => save_proto_chunk && should_save_proto_chunk(proto.stage),
                 };
 
                 if should_save {
