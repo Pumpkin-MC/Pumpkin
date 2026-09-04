@@ -9,6 +9,18 @@ use pumpkin_util::text::{TextComponent, color::NamedColor};
 use crate::entity::player::Player;
 use crate::server::Server;
 const NANOSECONDS_PER_SECOND: i64 = 1_000_000_000;
+/// Vanilla `TickRateManager.MIN_TICKRATE`.
+const MIN_TICKRATE: f32 = 1.0;
+/// Vanilla `TickCommand.MAX_TICKRATE`. Without this, `nanoseconds_per_tick` could truncates to 0.
+const MAX_TICKRATE: f32 = 10000.0;
+
+const fn clamp_tickrate(rate: f32) -> f32 {
+    rate.clamp(MIN_TICKRATE, MAX_TICKRATE)
+}
+
+fn nanoseconds_for_rate(rate: f32) -> i64 {
+    (NANOSECONDS_PER_SECOND as f64 / f64::from(rate)) as i64
+}
 
 pub struct ServerTickRateManager {
     tickrate: AtomicCell<f32>,
@@ -28,9 +40,10 @@ pub struct ServerTickRateManager {
 impl ServerTickRateManager {
     #[must_use]
     pub fn new(tickrate: f32) -> Self {
+        let tickrate = clamp_tickrate(tickrate);
         Self {
             tickrate: AtomicCell::new(tickrate),
-            nanoseconds_per_tick: AtomicI64::new(NANOSECONDS_PER_SECOND / tickrate as i64),
+            nanoseconds_per_tick: AtomicI64::new(nanoseconds_for_rate(tickrate)),
             frozen_ticks_to_run: AtomicI32::new(0),
             run_game_elements: AtomicBool::new(true),
             is_frozen: AtomicBool::new(false),
@@ -80,11 +93,10 @@ impl ServerTickRateManager {
     }
 
     pub fn set_tick_rate(&self, server: &Server, rate: f32) {
-        self.tickrate.store(rate.max(1.0));
-        self.nanoseconds_per_tick.store(
-            (NANOSECONDS_PER_SECOND as f64 / f64::from(self.tickrate.load())) as i64,
-            Ordering::Relaxed,
-        );
+        let rate = clamp_tickrate(rate);
+        self.tickrate.store(rate);
+        self.nanoseconds_per_tick
+            .store(nanoseconds_for_rate(rate), Ordering::Relaxed);
         // server.on_tick_rate_changed(); // Might need this hook if autosave interval depends on it
         self.update_state_to_clients(server);
     }

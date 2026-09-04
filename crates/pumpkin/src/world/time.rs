@@ -106,6 +106,8 @@ impl LevelTime {
         self.world_age = world_age;
     }
 
+    /// Vanilla `ServerLevel.tickTime`. Callers that emit periodic `CUpdateTime`
+    /// (`forceGameTimeSynchronization`) must do so before this increment.
     pub fn tick(&mut self, advance_time: bool) {
         self.world_age += 1;
         if advance_time && !self.paused {
@@ -128,6 +130,24 @@ impl LevelTime {
             &CUpdateTime::new_clock(self.world_age, 0, total_ticks, partial_tick, rate),
             &CSetTime::new(self.time_of_day as _), // TODO do we need to tell bedrock that time is frozen?
         );
+    }
+
+    /// Vanilla `ClientboundSetTimePacket(overworld.getGameTime(), Map.of())`.
+    /// Clock entries would rewind `clockManager` and can freeze client
+    /// `getGameTime()` across two piston animation ticks.
+    ///
+    /// Vanilla `PlayerList.broadcastAll`: every player, not only this world's.
+    /// Per-player serialize is intentional; version grouping is world-scoped
+    /// `broadcast_editioned`.
+    pub fn send_game_time_sync(&self, server: &crate::server::Server) {
+        let java = CUpdateTime {
+            game_time: self.world_age,
+            clock_updates: Vec::new(),
+        };
+        let bedrock = CSetTime::new(self.time_of_day as _);
+        server.for_each_player(|player| {
+            player.client.try_enqueue_packet_editioned(&java, &bedrock);
+        });
     }
 
     pub fn add_time(&mut self, time: i64) {
@@ -178,6 +198,7 @@ impl LevelTime {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::world::time::ClockInstance;
 
     #[test]
     fn clock_instance_ticking() {

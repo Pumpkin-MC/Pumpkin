@@ -1064,14 +1064,42 @@ impl Server {
         )
     }
 
+    /// Vanilla `ServerCommonPacketListenerImpl.suspendFlushing`.
+    fn suspend_player_flushes(&self) {
+        self.for_each_player(|player| {
+            if let Some(java) = player.client.java() {
+                java.suspend_flushing();
+            }
+        });
+    }
+
+    /// Vanilla `resumeFlushing` / `Connection.flushChannel` at tick end (~50ms).
+    fn resume_player_flushes(&self) {
+        self.for_each_player(|player| {
+            if let Some(java) = player.client.java() {
+                java.resume_flushing();
+            }
+        });
+    }
+
     /// Main server tick method. This now handles both player/network ticking (which always runs)
     /// and world/game logic ticking (which is affected by freeze state).
     pub fn tick(self: &Arc<Self>) {
+        // Do not flush mid-tick; `Flush` is `flushChannel`.
+        self.suspend_player_flushes();
         if self.tick_rate_manager.runs_normally() || self.tick_rate_manager.is_sprinting() {
             self.tick_worlds();
             // Always run player and network ticking, even when game is frozen
         } else {
             self.tick_players_and_network();
+        }
+        self.flush_pending_block_updates();
+        self.resume_player_flushes();
+    }
+
+    fn flush_pending_block_updates(&self) {
+        for world in self.worlds.load().iter() {
+            world.flush_block_updates();
         }
     }
 
@@ -1104,6 +1132,15 @@ impl Server {
 
         let worlds = self.worlds.load();
         let handle = self.runtime.clone();
+
+        // Sync before `tickTime()`. `tick_count + 1` is this vanilla tick.
+        if self.tick_count.load(Ordering::Relaxed).wrapping_add(1) % 20 == 0
+            && let Some(overworld) = worlds
+                .iter()
+                .find(|world| world.dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name)
+        {
+            overworld.force_game_time_synchronization(self);
+        }
 
         worlds.par_iter().for_each(|world| {
             let _guard = handle.enter();
