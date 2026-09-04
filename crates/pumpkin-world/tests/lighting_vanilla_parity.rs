@@ -416,6 +416,9 @@ fn compare(
 /// A stored 15 at or under such a block is light vanilla wrote before the blocks above it were
 /// placed -- a tree grown over an already lit column -- which no correct relight reproduces.
 ///
+/// The leftover 15 also spreads 14 into neighbouring columns, so the whole chunk is dropped,
+/// not just the occluded column.
+///
 /// Only `dampening != 0` is tested, not the shape occlusion `isEdgeOccluded` also applies, so
 /// the check errs towards keeping a chunk.
 fn sky_contradicts_vanillas_own_rule(chunk: &ChunkData, vanilla: &VanillaLight) -> bool {
