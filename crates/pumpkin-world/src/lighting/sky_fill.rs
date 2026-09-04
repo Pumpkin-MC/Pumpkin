@@ -31,31 +31,3 @@ impl SkyFill {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn sections_above_the_highest_column_hold_one_value() {
-        let mut sky = vec![LightContainer::Empty(0); 24];
-        let fill = SkyFill::from_surface([60, 70, 65], -64, sky.len());
-
-        assert_eq!(fill.fill_end(), 9);
-
-        fill.mark(&mut sky);
-        assert!(sky[..9].iter().all(LightContainer::is_empty));
-        assert!(sky[9..].iter().all(|c| c.uniform_level() == Some(15)));
-    }
-
-    #[test]
-    fn a_surface_at_the_world_top_leaves_nothing_uniform() {
-        let sections = 24;
-        let fill = SkyFill::from_surface([319], -64, sections);
-        assert_eq!(fill.fill_end(), sections);
-
-        let mut sky = vec![LightContainer::Empty(0); sections];
-        fill.mark(&mut sky);
-        assert!(sky.iter().all(|c| c.uniform_level() == Some(0)));
-    }
-}

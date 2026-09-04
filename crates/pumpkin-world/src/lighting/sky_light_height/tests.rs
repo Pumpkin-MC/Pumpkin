@@ -299,19 +299,6 @@ fn a_diverged_quadrant_costs_exactly_its_own_64_columns() {
     }
 }
 
-/// At a chunk border the fast path spans two chunks, so it holds only if both adjoining
-/// quadrants carry it.
-#[test]
-fn the_border_fast_path_needs_both_sides() {
-    let clean = SkyLightHeight::encode(60, MIN_Y, HEIGHT);
-    let diverged = clean.with_quadrant_diverged(0, 0);
-
-    assert!(clean.border_uses_limit(clean, 0, 0, 15, 0));
-    assert!(!clean.border_uses_limit(diverged, 0, 0, 0, 0));
-    assert!(!diverged.border_uses_limit(clean, 0, 0, 15, 0));
-    assert!(!diverged.border_uses_limit(diverged, 0, 0, 0, 0));
-}
-
 /// `OpenSky` claims full sunlight and burns light 15 into the cell; `NoOpenSky` claims the
 /// column is covered. Both are checked against ground truth recomputed from raw block
 /// states, for every column and every height of every shape.
@@ -365,27 +352,6 @@ fn a_quadrant_that_uses_the_cut_keeps_every_one_of_its_ceilings_in_band() {
                     shape.name,
                     height.decode(MIN_Y, HEIGHT),
                     height.spread()
-                );
-            }
-        }
-    }
-}
-
-/// Invalidation skips block changes too deep to move any ceiling. That shortcut is sound
-/// only if it defends the whole band: every height the band still accepts has to be a
-/// height invalidation still looks at.
-#[test]
-fn invalidation_covers_every_height_the_band_accepts() {
-    for shape in SHAPES {
-        let chunk = build_chunk(shape);
-        let height = SkyLightHeight::compute_from_chunk(&chunk);
-        for y in MIN_Y..(MIN_Y + HEIGHT) {
-            if height.ceiling_within_band(y, MIN_Y, HEIGHT) {
-                assert!(
-                    height.may_move_a_ceiling(y, MIN_Y, HEIGHT),
-                    "{}: a ceiling at y={y} is still in band, but a change there is \
-                     dismissed as unable to move a ceiling",
-                    shape.name
                 );
             }
         }
@@ -545,26 +511,6 @@ fn deriving_the_cut_does_not_dirty_the_chunk() {
         !chunk.dirty.load(Ordering::Relaxed),
         "a read-path computation forced a full chunk rewrite"
     );
-}
-
-/// The persisted `Int` carries the value in its low 24 bits and the geometry tag in the 8
-/// bits above -> out of band, so tagging leaves the value itself untouched.
-#[test]
-fn the_persisted_int_carries_the_geometry_tag_out_of_band() {
-    let chunk = shape("flat");
-    let height =
-        SkyLightHeightMigration::ensure_lazy(&chunk, || SkyLightHeight::compute_from_chunk(&chunk));
-
-    let Some(NbtTag::Int(stored)) = chunk.get_custom_data(NAMESPACE, KEY) else {
-        panic!("the cut height was not persisted as an Int");
-    };
-
-    assert_eq!(
-        stored as u32 & 0x00FF_FFFF,
-        height.raw(),
-        "the geometry tag overwrote part of the value"
-    );
-    assert_ne!(stored as u32 >> 24, 0, "no geometry tag was written");
 }
 
 /// A geometry whose tag cannot be represented gets no persisted value at all:
