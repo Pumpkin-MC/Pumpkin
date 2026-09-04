@@ -75,6 +75,13 @@ impl BlockEntity for HopperBlockEntity {
     fn tick(&self, world: &Arc<World>) {
         self.ticked_game_time
             .store(world.get_world_age(), Ordering::Relaxed);
+        // Same guard as `trial_spawner.rs::tick` (checks `block.id == BlockId::TRIAL_SPAWNER`
+        // before `from_state_id`): the block entity can outlive the block itself for one tick
+        // when destroyed concurrently on another Rayon worker.
+        let block = world.get_block(&self.position);
+        if block.id != Block::HOPPER.id {
+            return;
+        }
         if self.cooldown_time.fetch_sub(1, Ordering::Relaxed) <= 0 {
             self.cooldown_time.store(0, Ordering::Relaxed);
             let state =
@@ -304,32 +311,39 @@ impl HopperBlockEntity {
                 return false;
             }
             let target_pos = self.position.offset(to_offset(&self.facing));
-            let items: [ItemStack; 5] = self
-                .items
-                .read()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .clone();
-            for item in &items {
-                if !item.is_empty() {
-                    let mut move_event = crate::plugin::api::events::inventory::inventory_move_item::InventoryMoveItemEvent::new(
-                        self.position,
-                        target_pos,
-                        item.item.registry_key.to_string(),
-                        1,
-                    );
-                    if let Some(server) = world.server.upgrade() {
-                        server
-                            .plugin_manager
-                            .fire_blocking(&server, &mut move_event);
-                    }
-                    if move_event.cancelled {
-                        continue;
-                    }
-                    let mut item_clone = item.clone();
-                    let one_item = item_clone.split(1);
-                    if Self::add_one_item(self, container.as_ref(), &one_item) {
-                        return true;
-                    }
+            for slot in 0..Self::INVENTORY_SIZE {
+                let item = self.get_stack(slot);
+                if item.is_empty() {
+                    continue;
+                }
+                let mut move_event = crate::plugin::api::events::inventory::inventory_move_item::InventoryMoveItemEvent::new(
+                    self.position,
+                    target_pos,
+                    item.item.registry_key.to_string(),
+                    1,
+                );
+                if let Some(server) = world.server.upgrade() {
+                    server
+                        .plugin_manager
+                        .fire_blocking(&server, &mut move_event);
+                }
+                if move_event.cancelled {
+                    continue;
+                }
+                // Vanilla `HopperBlockEntity.ejectItems`: actually remove the item from the
+                // hopper before offering it to the target, restoring it on failure. Reading a
+                // clone and never writing back left the source stack untouched, duplicating
+                // the item into the target while the hopper kept its full stack.
+                let one_item = self.remove_stack_specific(slot, 1);
+                if Self::add_one_item(self, container.as_ref(), &one_item) {
+                    return true;
+                }
+                let mut restored = self.get_stack(slot);
+                if restored.is_empty() {
+                    self.set_stack(slot, one_item);
+                } else {
+                    restored.item_count += one_item.item_count;
+                    self.set_stack(slot, restored);
                 }
             }
         }
