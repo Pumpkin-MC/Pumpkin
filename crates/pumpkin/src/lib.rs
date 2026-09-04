@@ -218,10 +218,34 @@ pub fn stop_server() {
 pub fn stop_or_exit_server() {
     if SERVER_IS_STOPPING.load(Ordering::Acquire) {
         // Server is already stopping, so we forcefully exit.
+        restore_terminal();
         exit(SERVER_EXIT_CODE.load(Ordering::Acquire));
     }
     stop_server();
 }
+
+/// Restores the terminal after an exit that may have raced a blocked console read.
+///
+/// The console thread spends nearly all its time blocked inside `readline()`, which puts the
+/// terminal into raw mode for the duration of the call. `std::process::exit` skips destructors,
+/// so exiting while a read is in flight (the common case, since every exit path races that
+/// blocked thread) leaves the shell that launched us without local echo.
+#[cfg(unix)]
+pub fn restore_terminal() {
+    use std::process::{Command, Stdio};
+
+    if stdin().is_terminal() {
+        let _ = Command::new("stty")
+            .arg("sane")
+            .stdin(Stdio::inherit())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+}
+
+#[cfg(not(unix))]
+pub fn restore_terminal() {}
 
 fn resolve_some<T: Future, D, F: FnOnce(D) -> T>(
     opt: Option<D>,
