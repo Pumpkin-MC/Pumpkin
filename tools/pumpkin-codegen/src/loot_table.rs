@@ -1,8 +1,11 @@
-use std::{fs, path::Path};
+use std::{collections::BTreeMap, fs, path::Path};
 
 use heck::ToShoutySnakeCase;
 use proc_macro2::{Span, TokenStream};
-use pumpkin_util::loot_table::{LootBonusFormula, LootCondition};
+use pumpkin_util::loot_table::{
+    LootBonusFormula, LootCondition, LootEntityPredicate, LootEntityProperty,
+    LootEntityPropertyValue, LootEntityTarget,
+};
 use quote::{format_ident, quote};
 use serde::Deserialize;
 use syn::LitStr;
@@ -76,6 +79,8 @@ struct PredicateStruct {
     items: Option<serde_json::Value>,
     #[serde(default)]
     predicates: Option<serde_json::Value>,
+    #[serde(flatten)]
+    entity_properties: BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -110,6 +115,8 @@ struct ConditionStruct {
     #[serde(default)]
     predicate: Option<PredicateStruct>,
     #[serde(default)]
+    entity: Option<String>,
+    #[serde(default)]
     term: Option<Box<ConditionStruct>>,
     #[serde(default)]
     terms: Option<Vec<ConditionStruct>>,
@@ -142,6 +149,33 @@ fn parse_condition(cond: &ConditionStruct) -> LootCondition {
                 unenchanted_chance,
                 enchanted_chance_base,
                 enchanted_chance_per_level_above_first,
+            }
+        }
+        "minecraft:entity_properties" => {
+            let target = match cond.entity.as_deref() {
+                Some("this") => LootEntityTarget::This,
+                Some("attacker") => LootEntityTarget::Attacker,
+                Some("direct_attacker") => LootEntityTarget::DirectAttacker,
+                _ => return LootCondition::None,
+            };
+
+            let Some(predicate) = &cond.predicate else {
+                return LootCondition::None;
+            };
+
+            let mut properties = Vec::new();
+            for (key, value) in &predicate.entity_properties {
+                flatten_entity_properties(key, value, &mut properties);
+            }
+            if properties.is_empty() {
+                return LootCondition::None;
+            }
+
+            LootCondition::EntityProperties {
+                target,
+                predicate: LootEntityPredicate {
+                    properties: Box::leak(properties.into_boxed_slice()),
+                },
             }
         }
         "minecraft:all_of" => {
@@ -205,6 +239,37 @@ fn parse_condition(cond: &ConditionStruct) -> LootCondition {
             }
         }
         _ => LootCondition::None,
+    }
+}
+
+fn flatten_entity_properties(
+    path: &str,
+    value: &serde_json::Value,
+    properties: &mut Vec<LootEntityProperty>,
+) {
+    match value {
+        serde_json::Value::Object(values) => {
+            for (key, value) in values {
+                flatten_entity_properties(&format!("{path}/{key}"), value, properties);
+            }
+        }
+        serde_json::Value::Bool(value) => properties.push(LootEntityProperty {
+            key: Box::leak(path.to_owned().into_boxed_str()),
+            value: LootEntityPropertyValue::Bool(*value),
+        }),
+        serde_json::Value::Number(value) => {
+            if let Some(value) = value.as_i64() {
+                properties.push(LootEntityProperty {
+                    key: Box::leak(path.to_owned().into_boxed_str()),
+                    value: LootEntityPropertyValue::Integer(value),
+                });
+            }
+        }
+        serde_json::Value::String(value) => properties.push(LootEntityProperty {
+            key: Box::leak(path.to_owned().into_boxed_str()),
+            value: LootEntityPropertyValue::String(Box::leak(value.clone().into_boxed_str())),
+        }),
+        _ => {}
     }
 }
 
@@ -539,6 +604,8 @@ fn extract_entries_with_depth(
                     LootCondition::NoSilkTouch
                 } else if saw_shears {
                     LootCondition::NoSilkTouchOrShears
+                } else if child_cond != LootCondition::None {
+                    child_cond
                 } else {
                     entry_cond
                 };
@@ -581,6 +648,37 @@ fn condition_to_tokens(cond: LootCondition) -> TokenStream {
                 }
             }
         }
+        LootCondition::EntityProperties { target, predicate } => {
+            let target_tokens = match target {
+                LootEntityTarget::This => quote! { LootEntityTarget::This },
+                LootEntityTarget::Attacker => quote! { LootEntityTarget::Attacker },
+                LootEntityTarget::DirectAttacker => quote! { LootEntityTarget::DirectAttacker },
+            };
+            let property_tokens = predicate.properties.iter().map(|property| {
+                let key = LitStr::new(property.key, Span::call_site());
+                let value = match property.value {
+                    LootEntityPropertyValue::Bool(value) => {
+                        quote! { LootEntityPropertyValue::Bool(#value) }
+                    }
+                    LootEntityPropertyValue::Integer(value) => {
+                        quote! { LootEntityPropertyValue::Integer(#value) }
+                    }
+                    LootEntityPropertyValue::String(value) => {
+                        let value = LitStr::new(value, Span::call_site());
+                        quote! { LootEntityPropertyValue::String(#value) }
+                    }
+                };
+                quote! { LootEntityProperty { key: #key, value: #value } }
+            });
+            quote! {
+                LootCondition::EntityProperties {
+                    target: #target_tokens,
+                    predicate: LootEntityPredicate {
+                        properties: &[#(#property_tokens),*],
+                    },
+                }
+            }
+        }
         LootCondition::AllOf(list) => {
             let tokens: Vec<TokenStream> = list.iter().copied().map(condition_to_tokens).collect();
             quote! { LootCondition::AllOf(&[#(#tokens),*]) }
@@ -615,7 +713,6 @@ fn emit_table(
     for (pool_idx, pool) in table.pools.iter().enumerate() {
         let min_rolls = pool.rolls.min();
         let max_rolls = pool.rolls.max();
-
         let pool_cond = combine_conditions(&pool.conditions);
 
         let mut parsed_entries = Vec::new();

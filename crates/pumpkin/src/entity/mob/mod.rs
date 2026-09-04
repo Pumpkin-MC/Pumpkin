@@ -673,6 +673,9 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn get_mob_entity(&self) -> &MobEntity;
 
+    /// Publishes entity-specific state used by generic loot predicates.
+    fn populate_loot_context(&self, _params: &mut crate::world::loot::LootContextParameters) {}
+
     fn mob_bedrock_identifier(&self) -> Option<&'static str> {
         None
     }
