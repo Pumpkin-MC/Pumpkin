@@ -272,8 +272,9 @@ fn relight(
         for dz in 0..3 {
             let pos = Vector2::new(cache.x + dx, cache.z + dz);
             let chunk = &chunks[&pos];
-            cache.chunks.push(
-                if pos == center || neighbours == Neighbours::Proto {
+            cache
+                .chunks
+                .push(if pos == center || neighbours == Neighbours::Proto {
                     let mut proto = ProtoChunk::from_chunk_data(chunk, &world_gen);
                     // A `full` chunk is past the lighting stage and would be skipped.
                     proto.stage = StagedChunkEnum::Features;
@@ -282,8 +283,7 @@ fn relight(
                     Chunk::Proto(Box::new(proto))
                 } else {
                     Chunk::Level(chunk.clone())
-                },
-            );
+                });
         }
     }
 
@@ -438,7 +438,9 @@ fn load_chunks(region_dir: &Path) -> HashMap<Vector2<i32>, (Arc<ChunkData>, Vani
 
 /// The light pass reads a 1 chunk rim, so only centers with all eight neighbours present can be
 /// judged. Ordered so a run picks the same chunks every time.
-fn eligible_centers(loaded: &HashMap<Vector2<i32>, (Arc<ChunkData>, VanillaLight)>) -> Vec<Vector2<i32>> {
+fn eligible_centers(
+    loaded: &HashMap<Vector2<i32>, (Arc<ChunkData>, VanillaLight)>,
+) -> Vec<Vector2<i32>> {
     let mut centers: Vec<Vector2<i32>> = loaded
         .keys()
         .copied()
@@ -633,7 +635,10 @@ fn dump_a_column() {
 
     let loaded = load_chunks(&region_dir);
     let chunks: HashMap<_, _> = loaded.iter().map(|(p, (c, _))| (*p, c.clone())).collect();
-    assert!(chunks.contains_key(&center), "chunk {center:?} is not saved");
+    assert!(
+        chunks.contains_key(&center),
+        "chunk {center:?} is not saved"
+    );
 
     let (proto, _) = relight(&chunks, center, Neighbours::Loaded);
     let (chunk, vanilla) = &loaded[&center];
@@ -678,7 +683,8 @@ fn dump_a_column() {
 /// `PUMPKIN_DUMP_SLICE="-261,54,16"`
 #[test]
 fn dump_a_slice() {
-    let (Some(region_dir), Some(spec)) = (save_dir(), std::env::var_os("PUMPKIN_DUMP_SLICE")) else {
+    let (Some(region_dir), Some(spec)) = (save_dir(), std::env::var_os("PUMPKIN_DUMP_SLICE"))
+    else {
         eprintln!("PUMPKIN_DUMP_SLICE not set, skipping");
         return;
     };
@@ -694,10 +700,7 @@ fn dump_a_slice() {
     let section = ((by >> 4) - chunk.section.min_y / 16) as usize;
     let ly = (by & 15) as usize;
 
-    for (title, pick) in [
-        ("vanilla", true),
-        ("pumpkin", false),
-    ] {
+    for (title, pick) in [("vanilla", true), ("pumpkin", false)] {
         println!("\n{title} sky at y={by}, chunk {center:?}   (rows = local z, cols = local x)");
         print!("     ");
         for lx in 0..16 {
@@ -759,7 +762,12 @@ fn dump_shape_occluding_candidates() {
     }
     let hits: Vec<String> = hits
         .into_iter()
-        .map(|(name, faces)| format!("{name} [{}]", faces.into_iter().collect::<Vec<_>>().join(",")))
+        .map(|(name, faces)| {
+            format!(
+                "{name} [{}]",
+                faces.into_iter().collect::<Vec<_>>().join(",")
+            )
+        })
         .collect();
     println!("{} blocks would occlude by shape:", hits.len());
     for h in &hits {

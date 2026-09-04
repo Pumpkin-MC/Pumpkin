@@ -254,7 +254,6 @@ impl ChunkHeightmaps {
         (val as i32) + min_y - 1
     }
 
-    #[expect(clippy::too_many_arguments)]
     /// Applies a block change to every heightmap in a single downward walk.
     ///
     /// Each map settles on its own predicate, so one walk reads and unpacks a column block

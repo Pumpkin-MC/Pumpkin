@@ -48,13 +48,13 @@ use crate::generation::noise::router::surface_height_sampler::SurfaceHeightSampl
 use crate::generation::noise::{CHUNK_DIM, ChunkNoiseGenerator, LAVA_BLOCK, WATER_BLOCK};
 use crate::generation::section_coords::section_to_block;
 use crate::generation::structure::lazily_generate_structure;
-use crate::lighting::section_flags::SectionMask;
 use crate::generation::structure::placement::should_generate_structure;
 use crate::generation::structure::structures::{
     StructureGeneratorContext, StructureInstance, create_chunk_random,
 };
 use crate::generation::structure::try_generate_structure;
 use crate::generation::surface::rule::try_apply_material_rule;
+use crate::lighting::section_flags::SectionMask;
 use crate::{
     chunk::CHUNK_AREA,
     generation::{biome, positions::chunk_pos},

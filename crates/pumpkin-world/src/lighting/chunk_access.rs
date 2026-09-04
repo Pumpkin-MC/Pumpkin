@@ -41,7 +41,7 @@ const fn vertical_in(chunk: &ChunkData, relative: &Vector3<i32>) -> VerticalInCh
     }
 }
 
-/// Holds `Arc<ChunkData>`, not a DashMap guard (deadlock vs waiting writers).
+/// Holds `Arc<ChunkData>`, not a `DashMap` guard (deadlock vs waiting writers).
 pub(super) struct ChunkCursor<'a> {
     pub(super) level: &'a Level,
     pub(super) counters: &'a LocalCounters<'a>,
