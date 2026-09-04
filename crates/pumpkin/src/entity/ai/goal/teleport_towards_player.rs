@@ -51,26 +51,13 @@ impl TeleportTowardsPlayerGoal {
             .living_entity
             .get_attribute_value(&Attributes::FOLLOW_RANGE);
 
-        let player = world.get_closest_player(pos, follow_range)?;
-
-        if !player.get_entity().is_alive() {
-            return None;
-        }
-
-        let living = player.get_living_entity()?;
-        if !self.target_predicate.test(
-            &world,
-            Some(&self.enderman.mob_entity.living_entity),
-            living,
-        ) {
-            return None;
-        }
-
-        if self.enderman.is_player_staring(&player) || self.enderman.is_angry() {
-            return Some(player);
-        }
-
-        None
+        // A nearer player that is not anger-inducing must not hide a farther one that is.
+        let enderman: &dyn EntityBase = self.enderman.as_ref();
+        world.get_nearest_player(pos, follow_range, |player| {
+            self.target_predicate
+                .test(&world, Some(enderman), player.as_ref())
+                && (self.enderman.is_player_staring(player) || self.enderman.is_angry())
+        })
     }
 }
 
@@ -83,7 +70,7 @@ impl Goal for TeleportTowardsPlayerGoal {
         true
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         if let Some(target) = &self.target_player
             && let Some(player) = target.get_player()
         {

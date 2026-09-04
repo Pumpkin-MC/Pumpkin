@@ -45,9 +45,9 @@ impl Goal for PickUpBlockGoal {
         let (bx, by, bz) = {
             let mut rng = mob.get_random();
             (
-                pos.x.floor() as i32 + rng.random_range(-2..=2),
-                pos.y.floor() as i32 + rng.random_range(0..=2),
-                pos.z.floor() as i32 + rng.random_range(-2..=2),
+                (pos.x - 2.0 + rng.random::<f64>() * 4.0).floor() as i32,
+                (pos.y + rng.random::<f64>() * 3.0).floor() as i32,
+                (pos.z - 2.0 + rng.random::<f64>() * 4.0).floor() as i32,
             )
         };
 
@@ -92,9 +92,5 @@ impl Goal for PickUpBlockGoal {
         // TODO: Emit game event (BLOCK_DESTROY)
         world.set_block_state(&target_pos, BlockStateId::AIR, BlockFlags::NOTIFY_ALL);
         self.enderman.set_carried_block(Some(default_state_id));
-    }
-
-    fn should_continue(&self, _mob: &dyn Mob) -> bool {
-        false
     }
 }

@@ -4,6 +4,7 @@ use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::ai::goal::{Controls, Goal};
 use crate::entity::ai::pathfinder::NavigatorGoal;
+use crate::entity::ai::util::default_random_pos;
 use crate::entity::mob::Mob;
 
 pub struct PathfindToRaidGoal {
@@ -27,81 +28,54 @@ impl PathfindToRaidGoal {
     }
 }
 
+impl PathfindToRaidGoal {
+    /// An active raid that is still running, with the raider outside a village.
+    fn raid_is_calling(mob: &dyn Mob) -> bool {
+        let Some(raider) = mob.as_raider() else {
+            return false;
+        };
+        if !raider.has_active_raid() {
+            return false;
+        }
+        let Some(raid_id) = raider.get_raider_data().raid_id.load() else {
+            return false;
+        };
+
+        let pos = mob.get_entity().block_pos.load();
+        let world = mob.get_entity().world.load();
+        {
+            let raids = world
+                .raids
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let Some(raid) = raids.get(raid_id) else {
+                return false;
+            };
+            if raid.is_over() {
+                return false;
+            }
+        }
+
+        // TODO: this should count nearby POI sections instead.
+        world
+            .villager_poi
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get_nearest_job_site(pos, 32)
+            .is_none()
+    }
+}
+
 impl Goal for PathfindToRaidGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
-        let Some(raider) = mob.as_raider() else {
-            return false;
-        };
-
-        let target = mob.get_mob_entity().get_target().clone();
-        if target.is_some() || !raider.has_active_raid() {
-            return false;
-        }
-
-        let Some(raid_id) = raider.get_raider_data().raid_id.load() else {
-            return false;
-        };
-
-        let pos = mob.get_entity().block_pos.load();
-        let world = mob.get_entity().world.load();
-        let is_village = {
-            let raids = world
-                .raids
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let Some(raid) = raids.get(raid_id) else {
-                return false;
-            };
-            if raid.is_over() {
-                return false;
-            }
-            world
-                .villager_poi
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .get_nearest_job_site(pos, 32)
-                .is_some()
-        };
-
-        !is_village
+        mob.get_mob_entity().get_target().is_none()
+            && !mob.get_entity().has_passengers()
+            && Self::raid_is_calling(mob)
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
-        let Some(raider) = mob.as_raider() else {
-            return false;
-        };
-
-        let target = mob.get_mob_entity().get_target().clone();
-        if target.is_some() || !raider.has_active_raid() {
-            return false;
-        }
-
-        let Some(raid_id) = raider.get_raider_data().raid_id.load() else {
-            return false;
-        };
-
-        let pos = mob.get_entity().block_pos.load();
-        let world = mob.get_entity().world.load();
-        let is_village = {
-            let raids = world
-                .raids
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let Some(raid) = raids.get(raid_id) else {
-                return false;
-            };
-            if raid.is_over() {
-                return false;
-            }
-            world
-                .villager_poi
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .get_nearest_job_site(pos, 32)
-                .is_some()
-        };
-
-        !is_village
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        // Keep pathing to the raid even once a target appears.
+        Self::raid_is_calling(mob)
     }
 
     fn controls(&self) -> Controls {
@@ -159,49 +133,36 @@ impl Goal for PathfindToRaidGoal {
         }
 
         // Pathfind towards raid center if idle
-        let pos = entity.pos.load();
-        let mut nav = mob
+        let is_idle = mob
             .get_mob_entity()
             .navigator
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_idle();
 
-        if nav.is_idle() {
-            // Generate a point towards the raid center
-            let center_vec = Vector3::new(
+        if is_idle {
+            let raid_center = Vector3::new(
                 f64::from(raid_center.0.x) + 0.5,
                 f64::from(raid_center.0.y),
                 f64::from(raid_center.0.z) + 0.5,
             );
-            let dir = center_vec - pos;
-            let dir_len = dir.x.hypot(dir.z);
-
-            let step_dist = 15.0f64.min(dir_len);
-            let norm_dir_x = if dir_len > 0.001 {
-                dir.x / dir_len
-            } else {
-                0.0
-            };
-            let norm_dir_z = if dir_len > 0.001 {
-                dir.z / dir_len
-            } else {
-                0.0
-            };
-
-            // Add slight random offset (-45 to +45 degrees)
-            let angle = (rand::random::<f64>() - 0.5) * std::f64::consts::FRAC_PI_2;
-            let cos_a = angle.cos();
-            let sin_a = angle.sin();
-            let rx = norm_dir_x * cos_a - norm_dir_z * sin_a;
-            let rz = norm_dir_x * sin_a + norm_dir_z * cos_a;
-
-            let dest = Vector3::new(pos.x + rx * step_dist, pos.y, pos.z + rz * step_dist);
-
-            nav.set_progress(NavigatorGoal {
-                current_progress: pos,
-                destination: dest,
-                speed: self.speed_modifier,
-            });
+            if let Some(dest) = default_random_pos::get_pos_towards(
+                mob,
+                15,
+                4,
+                raid_center,
+                std::f64::consts::FRAC_PI_2,
+            ) {
+                mob.get_mob_entity()
+                    .navigator
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .set_progress(NavigatorGoal::new(
+                        mob.get_entity().pos.load(),
+                        dest,
+                        self.speed_modifier,
+                    ));
+            }
         }
     }
 }

@@ -16,6 +16,10 @@ impl AmbientStandGoal {
 }
 
 impl Goal for AmbientStandGoal {
+    fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
+        false
+    }
+
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
         self.cooldown += 1;
         if self.cooldown > 0 && mob.get_random().random_range(0..1000) < self.cooldown {
@@ -23,6 +27,10 @@ impl Goal for AmbientStandGoal {
         }
 
         false
+    }
+
+    fn should_run_every_tick(&self) -> bool {
+        true
     }
 
     fn controls(&self) -> Controls {

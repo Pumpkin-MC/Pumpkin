@@ -4,6 +4,7 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_util::Hand;
+use rand::RngExt;
 use std::sync::Arc;
 
 use crate::entity::ai::goal::{Controls, Goal};
@@ -20,7 +21,11 @@ pub struct BowAttackGoal {
     speed: f64,
     attack_interval: i32,
     squared_range: f64,
-    cooldown: i32,
+    attack_time: i32,
+    see_time: i32,
+    strafing_clockwise: bool,
+    strafing_backwards: bool,
+    strafing_time: i32,
     draw_ticks: i32,
     drawing: bool,
 }
@@ -38,7 +43,11 @@ impl BowAttackGoal {
             speed,
             attack_interval,
             squared_range: f64::from(range * range),
-            cooldown: -1,
+            attack_time: -1,
+            see_time: 0,
+            strafing_clockwise: false,
+            strafing_backwards: false,
+            strafing_time: -1,
             draw_ticks: 0,
             drawing: false,
         }
@@ -144,38 +153,28 @@ impl BowAttackGoal {
 
 impl Goal for BowAttackGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
-        let target = mob.get_mob_entity().get_target().clone();
-        let Some(target) = target else {
-            return false;
-        };
-        if !target.get_entity().is_alive() {
-            return false;
-        }
-        Self::is_holding_bow(mob)
+        mob.get_mob_entity().get_target().is_some() && Self::is_holding_bow(mob)
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
-        let target = mob.get_mob_entity().get_target().clone();
-        let Some(target) = target else {
-            return false;
-        };
-        target.get_entity().is_alive() && Self::is_holding_bow(mob)
-    }
-
-    fn start(&mut self, _mob: &dyn Mob) {
-        self.cooldown = -1;
-        self.draw_ticks = 0;
-        self.drawing = false;
-    }
-
-    fn stop(&mut self, mob: &dyn Mob) {
-        self.stop_drawing(mob);
-        self.cooldown = -1;
-        mob.get_mob_entity()
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        let navigating = !mob
+            .get_mob_entity()
             .navigator
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .stop();
+            .is_idle();
+        (self.can_start(mob) || navigating) && Self::is_holding_bow(mob)
+    }
+
+    fn start(&mut self, mob: &dyn Mob) {
+        mob.get_mob_entity().set_attacking(true);
+    }
+
+    fn stop(&mut self, mob: &dyn Mob) {
+        mob.get_mob_entity().set_attacking(false);
+        self.see_time = 0;
+        self.attack_time = -1;
+        self.stop_drawing(mob);
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
@@ -188,48 +187,89 @@ impl Goal for BowAttackGoal {
         let target_pos = target.get_entity().pos.load();
         let distance_sq = mob_pos.squared_distance_to_vec(&target_pos);
 
-        mob.get_mob_entity()
-            .look_control
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .look_at_entity_with_range(&target, 30.0, 30.0);
+        let has_line_of_sight = mob.has_line_of_sight(target.get_entity());
+        if has_line_of_sight != (self.see_time > 0) {
+            self.see_time = 0;
+        }
+        if has_line_of_sight {
+            self.see_time += 1;
+        } else {
+            self.see_time -= 1;
+        }
 
-        // Close the gap while out of shooting range, otherwise hold position.
         {
             let mut navigator = mob
                 .get_mob_entity()
                 .navigator
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if distance_sq > self.squared_range {
+            if distance_sq <= self.squared_range && self.see_time >= 20 {
+                navigator.stop();
+                self.strafing_time += 1;
+            } else {
                 navigator.set_progress(NavigatorGoal {
                     current_progress: mob_pos,
                     destination: target_pos,
                     speed: self.speed,
                 });
-            } else {
-                navigator.stop();
+                self.strafing_time = -1;
             }
         }
+
+        if self.strafing_time >= 20 {
+            if mob.get_random().random::<f32>() < 0.3 {
+                self.strafing_clockwise = !self.strafing_clockwise;
+            }
+            if mob.get_random().random::<f32>() < 0.3 {
+                self.strafing_backwards = !self.strafing_backwards;
+            }
+            self.strafing_time = 0;
+        }
+
+        if self.strafing_time > -1 {
+            if distance_sq > self.squared_range * 0.75 {
+                self.strafing_backwards = false;
+            } else if distance_sq < self.squared_range * 0.25 {
+                self.strafing_backwards = true;
+            }
+            mob.get_mob_entity()
+                .move_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .strafe(
+                    if self.strafing_backwards { -0.5 } else { 0.5 },
+                    if self.strafing_clockwise { 0.5 } else { -0.5 },
+                );
+        }
+
+        // Always through the look control, which smooths towards the same angle.
+        mob.get_mob_entity()
+            .look_control
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .look_at_entity_with_range(&target, 30.0, 30.0);
 
         if self.drawing {
-            self.draw_ticks += 1;
-            if self.draw_ticks >= Self::DRAW_TIME {
+            if !has_line_of_sight && self.see_time < -60 {
                 self.stop_drawing(mob);
-                Self::shoot(mob, &target);
-                self.cooldown = self.attack_interval;
+            } else if has_line_of_sight {
+                self.draw_ticks += 1;
+                if self.draw_ticks >= Self::DRAW_TIME {
+                    self.stop_drawing(mob);
+                    Self::shoot(mob, &target);
+                    self.attack_time = self.attack_interval;
+                }
             }
-            return;
-        }
-
-        self.cooldown -= 1;
-        if self.cooldown <= 0 && distance_sq <= self.squared_range {
-            let stack = Self::main_hand_item(mob);
-            mob.get_mob_entity()
-                .living_entity
-                .set_active_hand(Hand::Right, stack, i32::MAX);
-            self.drawing = true;
-            self.draw_ticks = 0;
+        } else {
+            self.attack_time -= 1;
+            if self.attack_time <= 0 && self.see_time >= -60 {
+                let stack = Self::main_hand_item(mob);
+                mob.get_mob_entity()
+                    .living_entity
+                    .set_active_hand(Hand::Right, stack, i32::MAX);
+                self.drawing = true;
+                self.draw_ticks = 0;
+            }
         }
     }
 

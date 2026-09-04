@@ -27,7 +27,7 @@ impl Goal for InteractGoal {
         self.look_at_goal.can_start(mob)
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         self.look_at_goal.should_continue(mob)
     }
 

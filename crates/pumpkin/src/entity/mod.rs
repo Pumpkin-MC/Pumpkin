@@ -130,6 +130,16 @@ pub const fn equipment_break_status(slot: &EquipmentSlot) -> EntityStatus {
     }
 }
 
+impl dyn EntityBase + '_ {
+    /// Inherent on the trait object so both sides can be `&dyn EntityBase`.
+    #[must_use]
+    pub fn is_allied_to(&self, other: &dyn EntityBase) -> bool {
+        self.get_entity().entity_id == other.get_entity().entity_id
+            || self.considers_entity_as_ally(other)
+            || other.considers_entity_as_ally(self)
+    }
+}
+
 pub trait EntityBase: Send + Sync + std::any::Any {
     fn write_nbt(&self, nbt: &mut NbtCompound) {
         self.get_entity().write_nbt(nbt);
@@ -237,6 +247,44 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     fn get_mob(&self) -> Option<&dyn mob::Mob> {
         None
+    }
+
+    /// Players are tracked by profile name, every other entity by its UUID.
+    fn get_scoreboard_name(&self) -> String {
+        self.get_player().map_or_else(
+            || self.get_entity().entity_uuid.to_string(),
+            |player| player.gameprofile.name.clone(),
+        )
+    }
+
+    fn get_team(&self) -> Option<crate::world::scoreboard::Team> {
+        if let Some(player) = self.get_player() {
+            return player.get_team();
+        }
+        let world = self.get_entity().world.load();
+        let scoreboard = world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        scoreboard
+            .get_entity_team(&self.get_scoreboard_name())
+            .cloned()
+    }
+
+    fn is_allied_to_team(&self, other: Option<&crate::world::scoreboard::Team>) -> bool {
+        match (self.get_team(), other) {
+            (Some(team), Some(other)) => team.name == other.name,
+            _ => false,
+        }
+    }
+
+    fn considers_entity_as_ally(&self, other: &dyn EntityBase) -> bool {
+        if let Some(tamable) = self.get_mob().and_then(mob::Mob::as_tamable)
+            && let Some(considered) = tamable.tamable_considers_entity_as_ally(other)
+        {
+            return considered;
+        }
+        self.is_allied_to_team(other.get_team().as_ref())
     }
 
     fn tick_in_void(&self, _dyn_self: &dyn EntityBase) {
@@ -3308,6 +3356,22 @@ impl Entity {
             pos.y + f64::from(self.entity_dimension.load().eye_height),
             pos.z,
         )
+    }
+
+    /// No solid block between the two eye positions.
+    #[must_use]
+    pub fn has_line_of_sight(&self, other: &Self) -> bool {
+        let from = self.get_eye_pos();
+        let to = other.get_eye_pos();
+        if from.squared_distance_to_vec(&to) > 128.0 * 128.0 {
+            return false;
+        }
+        self.world
+            .load_full()
+            .raycast(from, to, |block_pos, world| {
+                world.get_block_state(block_pos).is_solid()
+            })
+            .is_none()
     }
 
     pub fn get_eye_y(&self) -> f64 {

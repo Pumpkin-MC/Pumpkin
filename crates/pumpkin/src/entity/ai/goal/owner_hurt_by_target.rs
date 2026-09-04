@@ -1,22 +1,26 @@
+use super::track_target::TrackTargetGoal;
 use super::{Controls, Goal};
 use crate::entity::EntityBase;
+use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::mob::Mob;
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
 
-const FOLLOW_RANGE: f64 = 16.0;
-
 pub struct OwnerHurtByTargetGoal {
+    track_target_goal: TrackTargetGoal,
     target: Option<Arc<dyn EntityBase>>,
-    last_attacked_time: i32,
+    target_predicate: TargetPredicate,
+    timestamp: i32,
 }
 
 impl OwnerHurtByTargetGoal {
     #[must_use]
     pub fn new() -> Box<Self> {
         Box::new(Self {
+            track_target_goal: TrackTargetGoal::with_default(false),
             target: None,
-            last_attacked_time: 0,
+            target_predicate: TargetPredicate::create_attackable(),
+            timestamp: 0,
         })
     }
 }
@@ -31,69 +35,60 @@ impl Goal for OwnerHurtByTargetGoal {
             return false;
         };
 
-        let entity = &mob.get_mob_entity().living_entity.entity;
-        let world = entity.world.load_full();
+        let world = mob.get_mob_entity().living_entity.entity.world.load_full();
         let Some(owner) = world.get_player_by_uuid(owner_uuid) else {
             return false;
         };
 
-        let attacked_time = owner.living_entity.last_attacked_time.load(Relaxed);
-        if attacked_time == self.last_attacked_time {
+        let timestamp = owner.living_entity.last_attacked_time.load(Relaxed);
+        if timestamp == self.timestamp {
             return false;
         }
 
-        let attacker_id = owner.living_entity.last_attacker_id.load(Relaxed);
-        if attacker_id == 0 {
+        let other_id = owner.living_entity.last_attacker_id.load(Relaxed);
+        if other_id == 0 {
             return false;
         }
 
-        let Some(attacker) = world.get_entity_by_id(attacker_id) else {
+        let Some(other) = world.get_entity_by_id(other_id) else {
             return false;
         };
 
-        if !attacker.get_entity().is_alive() {
+        if !self
+            .track_target_goal
+            .can_track(mob, Some(other.as_ref()), &self.target_predicate)
+            || !mob.can_attack_with_owner(other.as_ref(), &*owner)
+        {
             return false;
         }
 
-        if !mob.can_attack_with_owner(attacker.as_ref(), &*owner) {
-            return false;
-        }
-
-        self.target = Some(attacker);
+        self.target = Some(other);
         true
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
-        let target = mob.get_mob_entity().get_target();
-        let Some(t) = target.as_ref() else {
-            return false;
-        };
-        if !t.get_entity().is_alive() {
-            return false;
-        }
-        let my_pos = mob.get_entity().pos.load();
-        let target_pos = t.get_entity().pos.load();
-        my_pos.squared_distance_to_vec(&target_pos) <= FOLLOW_RANGE * FOLLOW_RANGE
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        self.track_target_goal.should_continue(mob)
     }
 
     fn start(&mut self, mob: &dyn Mob) {
-        let mob_entity = mob.get_mob_entity();
-        mob_entity.set_target(self.target.clone());
+        mob.set_mob_target(self.target.clone());
 
         if let Some(owner_uuid) = mob.get_owner_uuid() {
-            let world = mob_entity.living_entity.entity.world.load_full();
+            let world = mob.get_mob_entity().living_entity.entity.world.load_full();
             if let Some(owner) = world.get_player_by_uuid(owner_uuid) {
-                self.last_attacked_time = owner.living_entity.last_attacked_time.load(Relaxed);
+                self.timestamp = owner.living_entity.last_attacked_time.load(Relaxed);
             }
         }
+
+        self.track_target_goal.start(mob);
     }
 
     fn stop(&mut self, mob: &dyn Mob) {
         self.target = None;
-        mob.get_mob_entity().set_target(None);
+        self.track_target_goal.stop(mob);
     }
 
     fn controls(&self) -> Controls {
-        Controls::TARGET
+        self.track_target_goal.controls()
     }
 }

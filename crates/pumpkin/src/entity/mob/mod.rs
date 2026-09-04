@@ -3,6 +3,7 @@ use crate::entity::ai::control::MoveControlTrait;
 use crate::entity::ai::control::look_control::LookControl;
 use crate::entity::ai::control::move_control::MoveControl;
 use crate::entity::ai::goal::goal_selector::GoalSelector;
+use crate::entity::ai::sensing::Sensing;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
@@ -77,6 +78,7 @@ pub struct MobEntity {
     pub navigator: std::sync::Mutex<Navigator>,
     pub target: std::sync::Mutex<Option<Arc<dyn EntityBase>>>,
     pub look_control: std::sync::Mutex<LookControl>,
+    pub sensing: std::sync::Mutex<Sensing>,
     pub move_control: std::sync::Mutex<Box<dyn MoveControlTrait>>,
     pub position_target: AtomicCell<BlockPos>,
     pub position_target_range: AtomicI32,
@@ -174,6 +176,7 @@ impl MobEntity {
             navigator: std::sync::Mutex::new(Navigator::default()),
             target: std::sync::Mutex::new(None),
             look_control: std::sync::Mutex::new(LookControl::default()),
+            sensing: std::sync::Mutex::new(Sensing::default()),
             move_control: std::sync::Mutex::new(Box::new(MoveControl::default())),
             position_target: AtomicCell::new(BlockPos::ZERO),
             position_target_range: AtomicI32::new(-1),
@@ -668,6 +671,15 @@ pub trait Mob: EntityBase + Send + Sync {
         rand::rng()
     }
 
+    fn has_line_of_sight(&self, target: &crate::entity::Entity) -> bool {
+        let mob_entity = self.get_mob_entity();
+        mob_entity
+            .sensing
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .has_line_of_sight(&mob_entity.living_entity.entity, target)
+    }
+
     fn requires_custom_persistence(&self) -> bool {
         false
     }
@@ -719,6 +731,8 @@ pub trait Mob: EntityBase + Send + Sync {
     fn get_trading_player(&self) -> Option<Arc<Player>> {
         None
     }
+
+    fn clear_trading_player(&self) {}
 
     fn get_home(&self) -> Option<BlockPos> {
         None
@@ -781,6 +795,12 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn as_animal(&self) -> Option<&dyn crate::entity::passive::animal::Animal> {
         None
+    }
+
+    /// How much this mob likes standing on `pos`, used to rank stroll candidates.
+    fn get_walk_target_value(&self, pos: &BlockPos) -> f32 {
+        self.as_animal()
+            .map_or(0.0, |animal| animal.animal_walk_target_value(pos))
     }
 
     fn as_tamable(&self) -> Option<&dyn crate::entity::passive::tamable::TamableAnimal> {
@@ -1147,6 +1167,12 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
         let age = mob_entity.living_entity.entity.age.load(Relaxed);
         let entity_id = mob_entity.living_entity.entity.entity_id;
+
+        mob_entity
+            .sensing
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .tick();
 
         // 1. "Take" selectors out of the mutexes
         let mut target_selector = {

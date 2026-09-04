@@ -92,12 +92,12 @@ impl Goal for OfferFlowerGoal {
         }
     }
 
-    fn should_continue(&self, _mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
         self.tick > 0
     }
 
     fn start(&mut self, mob: &dyn Mob) {
-        self.tick = OFFER_TICKS;
+        self.tick = self.get_tick_count(OFFER_TICKS);
         if let Some(golem) = mob.as_iron_golem() {
             golem.offer_flower(true);
         } else {
@@ -128,7 +128,7 @@ impl Goal for OfferFlowerGoal {
                     .has_tag(&tag::EntityType::MINECRAFT_ACCEPTS_IRON_GOLEM_GIFT)
                     && bb.intersects(&target_entity.bounding_box.load())
                 {
-                    // Target accepted gift
+                    // TODO: hand the poppy over once mobs can hold equipment gifts.
                 }
             }
         }

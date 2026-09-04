@@ -168,7 +168,7 @@ impl WanderingTraderEntity {
             );
 
             // Priority 1: TradeWithPlayerGoal
-            goal_selector.add_goal(1, Box::new(TradeWithPlayerGoal::new(0.5)));
+            goal_selector.add_goal(1, Box::new(TradeWithPlayerGoal::new()));
 
             // Priority 1: AvoidEntityGoals
             goal_selector.add_goal(
@@ -588,6 +588,13 @@ impl Mob for WanderingTraderEntity {
         &self.mob_entity
     }
 
+    fn clear_trading_player(&self) {
+        *self
+            .trading_player
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+    }
+
     fn get_trading_player(&self) -> Option<Arc<Player>> {
         let trading = self
             .trading_player
@@ -852,7 +859,7 @@ impl Goal for LookAtTradingPlayerGoal {
         mob_pos.squared_distance_to_vec(&player_pos) <= self.range * self.range
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let Some(player) = mob.get_trading_player() else {
             return false;
         };
@@ -932,7 +939,7 @@ impl Goal for WanderToPositionGoal {
         Self::is_too_far_away(&wander_pos, &entity_pos, self.stop_distance)
     }
 
-    fn should_continue(&self, _mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
         let Some(trader) = self.trader.upgrade() else {
             return false;
         };
@@ -1038,7 +1045,7 @@ impl Goal for MoveTowardsRestrictionGoal {
         mob_entity.has_position_target() && !mob_entity.is_in_position_target_range()
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let mob_entity = mob.get_mob_entity();
         !mob_entity
             .navigator
@@ -1121,7 +1128,7 @@ impl Goal for WanderingTraderUseItemGoal {
         false
     }
 
-    fn should_continue(&self, _mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
         let Some(trader) = self.trader.upgrade() else {
             return false;
         };

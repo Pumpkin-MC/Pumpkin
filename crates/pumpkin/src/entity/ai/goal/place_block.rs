@@ -5,6 +5,7 @@ use crate::entity::mob::Mob;
 use crate::entity::mob::enderman::EndermanEntity;
 use pumpkin_data::Block;
 use pumpkin_data::block_properties::is_air;
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 use rand::RngExt;
@@ -49,9 +50,9 @@ impl Goal for PlaceBlockGoal {
         let (bx, by, bz) = {
             let mut rng = mob.get_random();
             (
-                pos.x.floor() as i32 + rng.random_range(-1..=1),
-                pos.y.floor() as i32 + rng.random_range(0..=2),
-                pos.z.floor() as i32 + rng.random_range(-1..=1),
+                (pos.x - 1.0 + rng.random::<f64>() * 2.0).floor() as i32,
+                (pos.y + rng.random::<f64>() * 2.0).floor() as i32,
+                (pos.z - 1.0 + rng.random::<f64>() * 2.0).floor() as i32,
             )
         };
 
@@ -70,12 +71,17 @@ impl Goal for PlaceBlockGoal {
             return;
         }
 
+        // Never place into an occupied block.
         let world_clone = entity.world.load_full();
+        if !world_clone
+            .get_entities_at_box(&BoundingBox::from_block(&target_pos))
+            .is_empty()
+        {
+            return;
+        }
+
+        // TODO: also check the carried block can survive there.
         world_clone.set_block_state(&target_pos, block_state_id, BlockFlags::NOTIFY_ALL);
         self.enderman.set_carried_block(None);
-    }
-
-    fn should_continue(&self, _mob: &dyn Mob) -> bool {
-        false
     }
 }

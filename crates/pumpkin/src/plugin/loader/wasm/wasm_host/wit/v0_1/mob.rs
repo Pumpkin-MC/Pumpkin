@@ -216,7 +216,7 @@ impl Goal for CustomWasmGoal {
         false
     }
 
-    fn should_continue(&self, _mob: &dyn InternalMob) -> bool {
+    fn should_continue(&mut self, _mob: &dyn InternalMob) -> bool {
         false
     }
 

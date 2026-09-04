@@ -89,7 +89,7 @@ impl Goal for FleeSunGoal {
         }
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let is_idle = mob
             .get_mob_entity()
             .navigator

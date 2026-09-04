@@ -217,7 +217,7 @@ impl Goal for EvokerCastingSpellGoal {
         evoker.is_casting_spell()
     }
 
-    fn should_continue(&self, _mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
         let Some(evoker) = self.evoker.upgrade() else {
             return false;
         };
@@ -279,7 +279,7 @@ impl Goal for EvokerAttackSpellGoal {
         target.is_some()
     }
 
-    fn should_continue(&self, _mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
         self.warmup_delay > 0
     }
 
@@ -438,7 +438,7 @@ impl Goal for EvokerSummonSpellGoal {
         vex_count < max_allowed
     }
 
-    fn should_continue(&self, _mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
         self.warmup_delay > 0
     }
 
@@ -550,7 +550,7 @@ impl Goal for EvokerWololoSpellGoal {
         false
     }
 
-    fn should_continue(&self, _mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
         self.warmup_delay > 0
     }
 

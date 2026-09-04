@@ -510,7 +510,7 @@ impl Goal for SlimeAttackGoal {
         self.grow_tired_timer = 300;
     }
 
-    fn should_continue(&self, _mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
         self.slime.entity.get_target().is_some() && self.grow_tired_timer > 0
     }
 

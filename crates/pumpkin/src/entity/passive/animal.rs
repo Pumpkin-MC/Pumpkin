@@ -11,6 +11,18 @@ use pumpkin_util::math::vector3::Vector3;
 pub trait Animal: Mob {
     fn is_food(&self, item_stack: &ItemStack) -> bool;
 
+    /// Animals prefer grass, then bright spots.
+    fn animal_walk_target_value(&self, pos: &pumpkin_util::math::position::BlockPos) -> f32 {
+        let world = self.get_mob_entity().living_entity.entity.world.load();
+        if world.get_block(&pos.down()).id == pumpkin_data::Block::GRASS_BLOCK.id {
+            return 10.0;
+        }
+        let brightness = f32::from(world.get_max_local_raw_brightness(pos)) / 15.0;
+        let curved = brightness / 3.0f32.mul_add(-brightness, 4.0);
+        let ambient = world.dimension.ambient_light;
+        (1.0 - curved).mul_add(ambient, curved) - 0.5
+    }
+
     fn play_eating_sound(&self, sound: Sound) {
         let mob_entity = self.get_mob_entity();
         let entity = &mob_entity.living_entity.entity;

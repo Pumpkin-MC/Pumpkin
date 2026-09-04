@@ -64,7 +64,7 @@ impl BeeEntity {
 
             goal_selector.add_goal(0, Box::new(MeleeAttackGoal::new(1.4, true)));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
-            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.25, &[])));
+            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.25, &[], false)));
             goal_selector.add_goal(5, Box::new(FollowParentGoal::new(1.25)));
             goal_selector.add_goal(8, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(9, Box::new(SwimGoal::default()));

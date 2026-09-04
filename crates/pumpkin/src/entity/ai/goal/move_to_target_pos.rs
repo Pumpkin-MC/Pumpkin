@@ -159,7 +159,7 @@ impl<M: MoveToTargetPos> Goal for MoveToTargetPosGoal<M> {
         self.find_target_pos(mob)
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let world = mob.get_entity().world.load_full();
         let can_target = self
             .move_to_target_pos

@@ -83,7 +83,7 @@ impl Goal for BreakDoorGoal {
         self.is_valid_difficulty(level_info.difficulty) && !self.door_interact_goal.is_open(mob)
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let world = mob.get_entity().world.load();
         let level_info = world.level_info.load();
         let mob_pos = mob.get_entity().pos.load();

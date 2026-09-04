@@ -34,7 +34,7 @@ impl Goal for SitWhenOrderedToGoal {
         mob.is_sitting()
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         mob.is_sitting()
     }
 
