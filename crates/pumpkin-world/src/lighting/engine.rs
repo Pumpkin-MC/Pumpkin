@@ -75,6 +75,135 @@ impl LightCell {
     }
 }
 
+/// The popped cell, positioned in the world and in the cache so a step can be taken from it.
+#[derive(Clone, Copy)]
+struct Source {
+    x: i32,
+    y: i32,
+    z: i32,
+    rel_x: i32,
+    rel_z: i32,
+    local_x: usize,
+    local_z: usize,
+    chunk_idx: usize,
+}
+
+/// One neighbour of a [`Source`], already resolved to its chunk in the cache.
+#[derive(Clone, Copy)]
+struct Neighbor {
+    x: i32,
+    y: i32,
+    z: i32,
+    chunk_idx: usize,
+}
+
+impl Source {
+    /// One step, or `None` when it leaves the cache. Only the stepped axis is tested.
+    #[inline]
+    const fn step(self, dir: BlockDirection, bounds: CacheBounds) -> Option<Neighbor> {
+        match dir {
+            BlockDirection::Down => {
+                if self.y == bounds.min_y {
+                    return None;
+                }
+                Some(Neighbor {
+                    x: self.x,
+                    y: self.y - 1,
+                    z: self.z,
+                    chunk_idx: self.chunk_idx,
+                })
+            }
+            BlockDirection::Up => {
+                if self.y + 1 >= bounds.max_y {
+                    return None;
+                }
+                Some(Neighbor {
+                    x: self.x,
+                    y: self.y + 1,
+                    z: self.z,
+                    chunk_idx: self.chunk_idx,
+                })
+            }
+            BlockDirection::North if self.local_z == 0 => {
+                if self.rel_z == 0 {
+                    return None;
+                }
+                Some(Neighbor {
+                    x: self.x,
+                    y: self.y,
+                    z: self.z - 1,
+                    chunk_idx: self.chunk_idx - 1,
+                })
+            }
+            BlockDirection::North => Some(Neighbor {
+                x: self.x,
+                y: self.y,
+                z: self.z - 1,
+                chunk_idx: self.chunk_idx,
+            }),
+            BlockDirection::South if self.local_z == 15 => {
+                if self.rel_z + 1 >= bounds.size {
+                    return None;
+                }
+                Some(Neighbor {
+                    x: self.x,
+                    y: self.y,
+                    z: self.z + 1,
+                    chunk_idx: self.chunk_idx + 1,
+                })
+            }
+            BlockDirection::South => Some(Neighbor {
+                x: self.x,
+                y: self.y,
+                z: self.z + 1,
+                chunk_idx: self.chunk_idx,
+            }),
+            BlockDirection::West if self.local_x == 0 => {
+                if self.rel_x == 0 {
+                    return None;
+                }
+                Some(Neighbor {
+                    x: self.x - 1,
+                    y: self.y,
+                    z: self.z,
+                    chunk_idx: self.chunk_idx - bounds.size as usize,
+                })
+            }
+            BlockDirection::West => Some(Neighbor {
+                x: self.x - 1,
+                y: self.y,
+                z: self.z,
+                chunk_idx: self.chunk_idx,
+            }),
+            BlockDirection::East if self.local_x == 15 => {
+                if self.rel_x + 1 >= bounds.size {
+                    return None;
+                }
+                Some(Neighbor {
+                    x: self.x + 1,
+                    y: self.y,
+                    z: self.z,
+                    chunk_idx: self.chunk_idx + bounds.size as usize,
+                })
+            }
+            BlockDirection::East => Some(Neighbor {
+                x: self.x + 1,
+                y: self.y,
+                z: self.z,
+                chunk_idx: self.chunk_idx,
+            }),
+        }
+    }
+}
+
+/// The 3x3 cache's extent, constant for one [`LightPropagator::propagate`] drain.
+#[derive(Clone, Copy)]
+struct CacheBounds {
+    min_y: i32,
+    max_y: i32,
+    size: i32,
+}
+
 pub struct BlockLightProvider;
 impl LightProvider for BlockLightProvider {
     #[inline]
@@ -262,6 +391,11 @@ impl<P: LightProvider> LightPropagator<P> {
         let cache_size = cache.size;
         let min_y = cache.bottom_y() as i32;
         let max_y = min_y + cache.height() as i32;
+        let bounds = CacheBounds {
+            min_y,
+            max_y,
+            size: cache_size,
+        };
 
         while let Some(entry) = self.queue.pop_front() {
             let pos = entry.pos;
@@ -287,8 +421,9 @@ impl<P: LightProvider> LightPropagator<P> {
             let local_x = (px & 15) as usize;
             let local_y = (py & 15) as usize;
             let local_z = (pz & 15) as usize;
+            let chunk_idx = (rel_x * cache_size + rel_z) as usize;
             let from_id = Self::neighbor_state(
-                &cache.chunks[(rel_x * cache_size + rel_z) as usize],
+                &cache.chunks[chunk_idx],
                 LightCell {
                     y: py,
                     min_y,
@@ -298,8 +433,17 @@ impl<P: LightProvider> LightPropagator<P> {
                     local_z,
                 },
             );
+            let source = Source {
+                x: px,
+                y: py,
+                z: pz,
+                rel_x,
+                rel_z,
+                local_x,
+                local_z,
+                chunk_idx,
+            };
 
-            // Source is in-cache; only the stepped axis can leave.
             for dir in BlockDirection::all() {
                 if let Some(skip_dir) = entry.skip_direction
                     && dir == skip_dir
@@ -307,73 +451,22 @@ impl<P: LightProvider> LightPropagator<P> {
                     continue;
                 }
 
-                let (nx, ny, nz, nrel_x, nrel_z) = match dir {
-                    BlockDirection::Down => {
-                        if py == min_y {
-                            continue;
-                        }
-                        (px, py - 1, pz, rel_x, rel_z)
-                    }
-                    BlockDirection::Up => {
-                        if py + 1 >= max_y {
-                            continue;
-                        }
-                        (px, py + 1, pz, rel_x, rel_z)
-                    }
-                    BlockDirection::North => {
-                        if local_z == 0 {
-                            if rel_z == 0 {
-                                continue;
-                            }
-                            (px, py, pz - 1, rel_x, rel_z - 1)
-                        } else {
-                            (px, py, pz - 1, rel_x, rel_z)
-                        }
-                    }
-                    BlockDirection::South => {
-                        if local_z == 15 {
-                            if rel_z + 1 >= cache_size {
-                                continue;
-                            }
-                            (px, py, pz + 1, rel_x, rel_z + 1)
-                        } else {
-                            (px, py, pz + 1, rel_x, rel_z)
-                        }
-                    }
-                    BlockDirection::West => {
-                        if local_x == 0 {
-                            if rel_x == 0 {
-                                continue;
-                            }
-                            (px - 1, py, pz, rel_x - 1, rel_z)
-                        } else {
-                            (px - 1, py, pz, rel_x, rel_z)
-                        }
-                    }
-                    BlockDirection::East => {
-                        if local_x == 15 {
-                            if rel_x + 1 >= cache_size {
-                                continue;
-                            }
-                            (px + 1, py, pz, rel_x + 1, rel_z)
-                        } else {
-                            (px + 1, py, pz, rel_x, rel_z)
-                        }
-                    }
+                let Some(neighbor) = source.step(dir, bounds) else {
+                    continue;
                 };
 
                 let cell = LightCell {
-                    y: ny,
+                    y: neighbor.y,
                     min_y,
-                    section_idx: ((ny - min_y) >> 4) as usize,
-                    local_x: (nx & 15) as usize,
-                    local_y: (ny & 15) as usize,
-                    local_z: (nz & 15) as usize,
+                    section_idx: ((neighbor.y - min_y) >> 4) as usize,
+                    local_x: (neighbor.x & 15) as usize,
+                    local_y: (neighbor.y & 15) as usize,
+                    local_z: (neighbor.z & 15) as usize,
                 };
 
                 // Relaxation: levels only rise, no visited set.
                 if let Some(new_level) = Self::try_raise(
-                    &mut cache.chunks[(nrel_x * cache_size + nrel_z) as usize],
+                    &mut cache.chunks[neighbor.chunk_idx],
                     from_id,
                     dir,
                     current_light,
@@ -381,7 +474,7 @@ impl<P: LightProvider> LightPropagator<P> {
                 ) && new_level > 1
                 {
                     self.queue.push_back(PropagationEntry {
-                        pos: BlockPos(Vector3::new(nx, ny, nz)),
+                        pos: BlockPos(Vector3::new(neighbor.x, neighbor.y, neighbor.z)),
                         level: new_level,
                         skip_direction: Some(dir.opposite()),
                     });
