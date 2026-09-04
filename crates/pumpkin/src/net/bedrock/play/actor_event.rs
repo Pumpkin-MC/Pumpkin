@@ -17,14 +17,11 @@ impl BedrockClient {
         }
 
         let entity = player.get_entity();
-        entity.world.load().broadcast_to_chunk_bedrock(
-            entity.chunk_pos.load(),
-            &SActorEvent {
-                target_runtime_id: VarULong(entity.entity_id as u64),
-                event_id: ActorEventID::Feed,
-                data: packet.data,
-                fire_at_position: None,
-            },
-        );
+        entity.send_tracked_bedrock(&SActorEvent {
+            target_runtime_id: VarULong(entity.entity_id as u64),
+            event_id: ActorEventID::Feed,
+            data: packet.data,
+            fire_at_position: None,
+        });
     }
 }

@@ -1091,6 +1091,7 @@ impl Server {
                 let _guard = player_handle.enter();
                 player.tick(self);
             });
+            world.entity_tracker.update_bedrock_lifecycles(world);
         }
     }
 

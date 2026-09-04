@@ -20,13 +20,13 @@ impl BedrockClient {
         broadcast_packet.actor_runtime_id = VarULong(entity.entity_id as u64);
         broadcast_packet.flags |= pumpkin_protocol::bedrock::server::emote::EMOTE_FLAG_SERVER_SIDE;
 
-        world.broadcast_packet_except_editioned(
-            &[player.gameprofile.id],
-            &CEntityAnimation::new(
-                VarInt(entity.entity_id),
-                Animation::SwingMainArm, // Fallback for Java? Or just ignore
-            ),
-            &broadcast_packet,
+        let je_packet = CEntityAnimation::new(
+            VarInt(entity.entity_id),
+            Animation::SwingMainArm, // Fallback for Java? Or just ignore
         );
+        world.broadcast_packet_except(&[player.gameprofile.id], &je_packet);
+        if let Some(tracked) = world.entity_tracker.get_tracked_entity(entity.entity_id) {
+            tracked.send_to_tracking_players_bedrock(&broadcast_packet, &world);
+        }
     }
 }

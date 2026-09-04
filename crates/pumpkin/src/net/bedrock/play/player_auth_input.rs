@@ -10,9 +10,9 @@ impl BedrockClient {
         packet: SPlayerAuthInput,
         server: &Arc<Server>,
     ) {
-        if !player.has_client_loaded() {
+        let Some(movement_guard) = player.lock_client_movement_if_loaded() else {
             return;
-        }
+        };
         if player.living_entity.dead.load(Ordering::Relaxed)
             || player.living_entity.health.load() <= 0.0
         {
@@ -38,6 +38,11 @@ impl BedrockClient {
 
         let pos_changed = new_pos != old_pos;
         let rot_changed = new_pitch != old_pitch || new_yaw != old_yaw;
+        let delta = pumpkin_util::math::vector3::Vector3::new(
+            new_pos.x - old_pos.x,
+            new_pos.y - old_pos.y,
+            new_pos.z - old_pos.z,
+        );
 
         if pos_changed || rot_changed {
             let world = player.world();
@@ -52,12 +57,6 @@ impl BedrockClient {
 
             let je_yaw = (new_yaw * 256.0 / 360.0).rem_euclid(256.0);
             let je_pitch = (new_pitch * 256.0 / 360.0).rem_euclid(256.0);
-
-            let delta = pumpkin_util::math::vector3::Vector3::new(
-                new_pos.x - old_pos.x,
-                new_pos.y - old_pos.y,
-                new_pos.z - old_pos.z,
-            );
 
             let bedrock_move_packet = pumpkin_protocol::bedrock::client::CMovePlayer::new(
                 pumpkin_protocol::codec::var_ulong::VarULong(player.entity_id() as u64),
@@ -90,7 +89,7 @@ impl BedrockClient {
                     ),
                 );
             } else if pos_changed && rot_changed {
-                world.broadcast_packet_except_editioned(
+                world.broadcast_packet_except(
                     &[player.gameprofile.id],
                     &pumpkin_protocol::java::client::play::CUpdateEntityPosRot::new(
                         player.entity_id().into(),
@@ -103,10 +102,9 @@ impl BedrockClient {
                         je_pitch as u8, // Use converted Java byte
                         on_ground,
                     ),
-                    &bedrock_move_packet,
                 );
             } else if pos_changed {
-                world.broadcast_packet_except_editioned(
+                world.broadcast_packet_except(
                     &[player.gameprofile.id],
                     &pumpkin_protocol::java::client::play::CUpdateEntityPos::new(
                         player.entity_id().into(),
@@ -117,10 +115,9 @@ impl BedrockClient {
                         ),
                         on_ground,
                     ),
-                    &bedrock_move_packet,
                 );
             } else if rot_changed {
-                world.broadcast_packet_except_editioned(
+                world.broadcast_packet_except(
                     &[player.gameprofile.id],
                     &pumpkin_protocol::java::client::play::CUpdateEntityRot::new(
                         player.entity_id().into(),
@@ -128,9 +125,11 @@ impl BedrockClient {
                         je_pitch as u8, // Use converted Java byte
                         on_ground,
                     ),
-                    &bedrock_move_packet,
                 );
             }
+
+            // Bedrock must only receive movement for actors whose spawn packet was accepted.
+            world.send_to_tracking_players_bedrock(entity, &bedrock_move_packet);
 
             if rot_changed {
                 world.broadcast_packet_except(
@@ -144,10 +143,14 @@ impl BedrockClient {
             }
 
             if pos_changed {
-                chunker::update_position(player);
                 player.check_location_enchantments(new_pos, on_ground);
                 player.progress_motion(delta);
             }
+        }
+        drop(movement_guard);
+
+        if pos_changed {
+            chunker::update_position(player);
         }
 
         let input_data = packet.input_data;

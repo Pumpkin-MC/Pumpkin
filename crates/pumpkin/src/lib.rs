@@ -63,6 +63,9 @@ pub mod plugin;
 pub mod server;
 pub mod world;
 
+#[cfg(test)]
+pub(crate) mod test_support;
+
 pub struct LoggingConfig {
     pub color: bool,
     pub threads: bool,

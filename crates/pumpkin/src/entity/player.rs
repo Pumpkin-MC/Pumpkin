@@ -388,6 +388,38 @@ pub enum PlayerWeather {
     Downfall,
 }
 
+struct BedrockEntityChunkBatch {
+    world: Arc<World>,
+    chunks: Vec<Vector2<i32>>,
+    center_chunk: Vector2<i32>,
+    epoch: u32,
+}
+
+#[derive(Default)]
+struct BedrockEntityChunkQueue {
+    pending: VecDeque<BedrockEntityChunkBatch>,
+    worker_running: bool,
+}
+
+struct ChunkWatcherTransition {
+    world: Arc<World>,
+    loading_chunks: Vec<Vector2<i32>>,
+    unloading_chunks: Vec<Vector2<i32>>,
+    completion: Option<tokio::sync::oneshot::Sender<Vec<Vector2<i32>>>>,
+}
+
+#[derive(Default)]
+struct ChunkWatcherTransitionQueue {
+    pending: VecDeque<ChunkWatcherTransition>,
+    worker_running: bool,
+}
+
+pub(crate) struct HeldChunkTickets {
+    pub(crate) center: Vector2<i32>,
+    pub(crate) view_level: Option<i8>,
+    pub(crate) simulation_level: Option<i8>,
+}
+
 pub struct Player {
     /// The underlying living entity object that represents the player.
     pub living_entity: LivingEntity,
@@ -467,6 +499,7 @@ pub struct Player {
     /// Whether the client has reported that it has loaded.
     pub client_loaded: AtomicBool,
     pub bedrock_spawned: AtomicBool,
+    bedrock_entity_chunks: Mutex<BedrockEntityChunkQueue>,
     /// Whether the player is frozen in place (movement locked for dialogues/cutscenes).
     pub is_movement_locked: AtomicBool,
     /// The amount of time (in ticks) the client has to report having finished loading before being timed out.
@@ -487,8 +520,12 @@ pub struct Player {
     pub experience_pick_up_delay: Mutex<u32>,
     pub chunk_sender: Mutex<crate::net::ChunkSender>,
     pub chunk_listener: Mutex<Receiver<(Vector2<i32>, Weak<ChunkData>)>>,
-    pub held_chunk_tickets: Mutex<Option<(Option<i8>, Option<i8>)>>,
+    pub(crate) held_chunk_tickets: Mutex<Option<HeldChunkTickets>>,
+    chunk_watcher_transitions: Mutex<ChunkWatcherTransitionQueue>,
     pub chunk_send_epoch: AtomicU32,
+    /// Prevents stale player ticks from streaming either world's chunks during a world transfer.
+    chunk_streaming_paused: AtomicBool,
+    client_movement_lock: Mutex<()>,
     pub has_played_before: AtomicBool,
     root_vehicle_uuid: AtomicCell<Option<Uuid>>,
     pub chat_session: Arc<Mutex<ChatSession>>,
@@ -758,6 +795,7 @@ impl Player {
             last_attacked_ticks: AtomicU32::new(0),
             client_loaded: AtomicBool::new(initially_loaded),
             bedrock_spawned: AtomicBool::new(false),
+            bedrock_entity_chunks: Mutex::new(BedrockEntityChunkQueue::default()),
             client_loaded_timeout: AtomicU32::new(if initially_loaded { 0 } else { 60 }),
             chat_spam_tick_count: AtomicU32::new(0),
             // Item usage tracking
@@ -785,7 +823,10 @@ impl Player {
             chunk_sender: Mutex::new(crate::net::ChunkSender::new()),
             chunk_listener: Mutex::new(world.level.chunk_listener.add_global_chunk_listener()),
             held_chunk_tickets: Mutex::new(None),
+            chunk_watcher_transitions: Mutex::new(ChunkWatcherTransitionQueue::default()),
             chunk_send_epoch: AtomicU32::new(0),
+            chunk_streaming_paused: AtomicBool::new(false),
+            client_movement_lock: Mutex::new(()),
             last_sent_xp: AtomicI32::new(-1),
             last_sent_health: AtomicI32::new(-1),
             last_sent_food: AtomicU8::new(0),
@@ -978,6 +1019,250 @@ impl Player {
         self.client.spawn_task(task)
     }
 
+    /// Queues a completed Bedrock chunk batch for entity loading. The single worker is held until
+    /// each entity-load task finishes, preventing successive network batches from creating
+    /// overlapping actor bursts.
+    fn queue_bedrock_entity_chunks(
+        self: &Arc<Self>,
+        world: Arc<World>,
+        chunks: Vec<Vector2<i32>>,
+        center_chunk: Vector2<i32>,
+        epoch: u32,
+    ) {
+        if chunks.is_empty() {
+            return;
+        }
+
+        let should_start = {
+            let mut queue = self
+                .bedrock_entity_chunks
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            queue.pending.push_back(BedrockEntityChunkBatch {
+                world,
+                chunks,
+                center_chunk,
+                epoch,
+            });
+            if self.bedrock_spawned.load(Ordering::Acquire) && !queue.worker_running {
+                queue.worker_running = true;
+                true
+            } else {
+                false
+            }
+        };
+
+        if should_start {
+            self.start_bedrock_entity_chunk_worker();
+        }
+    }
+
+    /// Atomically validates the chunk generation and publishes `PlayerSpawn`. World changes and
+    /// teleports advance the same generation while holding `bedrock_entity_chunks`, so a stale
+    /// tick cannot unlock actors for a destination whose terrain has not arrived.
+    fn try_finish_bedrock_spawn(
+        self: &Arc<Self>,
+        client: &crate::net::bedrock::BedrockClient,
+        expected_world: &Arc<World>,
+        expected_epoch: u32,
+    ) -> bool {
+        let should_start = {
+            let mut queue = self
+                .bedrock_entity_chunks
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if self.bedrock_spawned.load(Ordering::Acquire)
+                || self.is_chunk_streaming_paused()
+                || self.chunk_send_epoch.load(Ordering::Acquire) != expected_epoch
+                || !Arc::ptr_eq(&self.world(), expected_world)
+                || self
+                    .chunk_sender
+                    .lock()
+                    .map_or(0, |sender| sender.bedrock_completed_chunks_count())
+                    <= 4
+            {
+                return false;
+            }
+
+            let spawn_queued = client
+                .serialize_packet(&CPlayStatus::PlayerSpawn)
+                .is_ok_and(|data| client.try_enqueue_packet_data_checked(data));
+            if !spawn_queued {
+                return false;
+            }
+
+            self.bedrock_spawned.store(true, Ordering::Release);
+            if !queue.pending.is_empty() && !queue.worker_running {
+                queue.worker_running = true;
+                true
+            } else {
+                false
+            }
+        };
+
+        if should_start {
+            self.start_bedrock_entity_chunk_worker();
+        }
+        true
+    }
+
+    fn start_bedrock_entity_chunk_worker(self: &Arc<Self>) {
+        let worker_player = Arc::clone(self);
+        let handle = self.spawn_task(async move {
+            worker_player.run_bedrock_entity_chunk_worker().await;
+        });
+        if handle.is_none() {
+            self.bedrock_entity_chunks
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .worker_running = false;
+        }
+    }
+
+    async fn run_bedrock_entity_chunk_worker(self: Arc<Self>) {
+        loop {
+            let batch = {
+                let mut queue = self
+                    .bedrock_entity_chunks
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                if !self.bedrock_spawned.load(Ordering::Acquire) {
+                    queue.worker_running = false;
+                    return;
+                }
+                let Some(batch) = queue.pending.pop_front() else {
+                    queue.worker_running = false;
+                    return;
+                };
+                batch
+            };
+
+            if self.chunk_send_epoch.load(Ordering::Acquire) != batch.epoch
+                || !Arc::ptr_eq(&self.world(), &batch.world)
+            {
+                continue;
+            }
+
+            if let Some(handle) = batch.world.spawn_world_entity_chunks(
+                Arc::clone(&self),
+                batch.chunks,
+                batch.center_chunk,
+                batch.epoch,
+            ) {
+                let _ = handle.await;
+            }
+        }
+    }
+
+    pub(crate) fn queue_chunk_watcher_transition(
+        self: &Arc<Self>,
+        world: Arc<World>,
+        loading_chunks: Vec<Vector2<i32>>,
+        unloading_chunks: Vec<Vector2<i32>>,
+    ) {
+        self.enqueue_chunk_watcher_transition(world, loading_chunks, unloading_chunks, None);
+    }
+
+    async fn queue_chunk_watcher_transition_and_wait(
+        self: &Arc<Self>,
+        world: Arc<World>,
+        loading_chunks: Vec<Vector2<i32>>,
+        unloading_chunks: Vec<Vector2<i32>>,
+    ) -> Vec<Vector2<i32>> {
+        let (completion, completed) = tokio::sync::oneshot::channel();
+        self.enqueue_chunk_watcher_transition(
+            world,
+            loading_chunks,
+            unloading_chunks,
+            Some(completion),
+        );
+        completed.await.unwrap_or_default()
+    }
+
+    fn enqueue_chunk_watcher_transition(
+        self: &Arc<Self>,
+        world: Arc<World>,
+        loading_chunks: Vec<Vector2<i32>>,
+        unloading_chunks: Vec<Vector2<i32>>,
+        completion: Option<tokio::sync::oneshot::Sender<Vec<Vector2<i32>>>>,
+    ) {
+        if loading_chunks.is_empty() && unloading_chunks.is_empty() {
+            if let Some(completion) = completion {
+                let _ = completion.send(Vec::new());
+            }
+            return;
+        }
+
+        let Some(server) = world.server.upgrade() else {
+            if let Some(completion) = completion {
+                let _ = completion.send(Vec::new());
+            }
+            return;
+        };
+
+        let should_start = {
+            let mut queue = self
+                .chunk_watcher_transitions
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            queue.pending.push_back(ChunkWatcherTransition {
+                world,
+                loading_chunks,
+                unloading_chunks,
+                completion,
+            });
+            if queue.worker_running {
+                false
+            } else {
+                queue.worker_running = true;
+                true
+            }
+        };
+
+        if should_start {
+            let player = Arc::clone(self);
+            server.spawn_task(async move {
+                player.run_chunk_watcher_transition_worker().await;
+            });
+        }
+    }
+
+    async fn run_chunk_watcher_transition_worker(self: Arc<Self>) {
+        loop {
+            let transition = {
+                let mut queue = self
+                    .chunk_watcher_transitions
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let Some(transition) = queue.pending.pop_front() else {
+                    queue.worker_running = false;
+                    return;
+                };
+                transition
+            };
+
+            transition
+                .world
+                .level
+                .mark_chunks_as_newly_watched(&transition.loading_chunks)
+                .await;
+            let chunks_to_clean = transition
+                .world
+                .level
+                .mark_chunks_as_not_watched(&transition.unloading_chunks)
+                .await;
+            if !chunks_to_clean.is_empty() {
+                transition
+                    .world
+                    .remove_entities_in_chunks(&chunks_to_clean)
+                    .await;
+            }
+            if let Some(completion) = transition.completion {
+                let _ = completion.send(chunks_to_clean);
+            }
+        }
+    }
+
     pub const fn inventory(&self) -> &Arc<PlayerInventory> {
         &self.inventory
     }
@@ -1037,17 +1322,15 @@ impl Player {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .increment_custom(statistics::CustomStatistic::LeaveGame, 1);
         let world = self.world();
+        self.pause_chunk_streaming_for_transfer();
         world.remove_player(self, true).await;
 
         let cylindrical = self.watched_section.load();
         self.clean_up_chunk_tickets(&world.level);
-        if let Ok(mut sender) = self.chunk_sender.lock() {
-            sender.reset();
-        }
 
         // Radial chunks are all of the chunks the player is theoretically viewing.
         // Given enough time, all of these chunks will be in memory.
-        let radial_chunks = cylindrical.all_chunks_within();
+        let radial_chunks: Vec<_> = cylindrical.all_chunks_within().collect();
 
         debug!(
             "Removing player {}, unwatching {} chunks",
@@ -1057,18 +1340,14 @@ impl Player {
 
         let level = &world.level;
 
-        // Decrement the value of watched chunks
-        let chunks_to_clean = level.mark_chunks_as_not_watched(radial_chunks).await;
-        // Remove chunks with no watchers from the cache
-        if !chunks_to_clean.is_empty() {
-            world.remove_entities_in_chunks(&chunks_to_clean).await;
-            level.clean_entity_chunks(&chunks_to_clean);
-        }
+        // Serialize the final unwatch behind every movement transition published before the
+        // disconnect pause. The worker also removes entities from chunks with no remaining views.
+        self.queue_chunk_watcher_transition_and_wait(world.clone(), Vec::new(), radial_chunks)
+            .await;
         // Remove left over entries from all possiblily loaded chunks
         let cleaned_chunks = level.clean_memory();
         if !cleaned_chunks.is_empty() {
             world.remove_entities_in_chunks(&cleaned_chunks).await;
-            level.clean_entity_chunks(&cleaned_chunks);
         }
 
         debug!(
@@ -1096,22 +1375,21 @@ impl Player {
     }
 
     pub fn clean_up_chunk_tickets(&self, level: &Arc<pumpkin_world::level::Level>) {
-        let mut lock = level
-            .chunk_loading
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let held = self
             .held_chunk_tickets
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .take();
-        if let Some((view_level, sim_level)) = held {
-            let center = self.get_entity().chunk_pos.load();
-            if let Some(view) = view_level {
-                lock.remove_ticket(center, view);
+        let mut lock = level
+            .chunk_loading
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(held) = held {
+            if let Some(view) = held.view_level {
+                lock.remove_ticket(held.center, view);
             }
-            if let Some(sim) = sim_level {
-                lock.remove_ticket(center, sim);
+            if let Some(sim) = held.simulation_level {
+                lock.remove_ticket(held.center, sim);
             }
         }
         lock.send_change();
@@ -1132,10 +1410,60 @@ impl Player {
         if let Ok(mut listener) = self.chunk_listener.lock() {
             *listener = new_world.level.chunk_listener.add_global_chunk_listener();
         }
-        self.chunk_send_epoch.fetch_add(1, Ordering::Relaxed);
+        if !self.is_chunk_streaming_paused() {
+            self.reset_chunk_send_generation();
+        }
+    }
+
+    fn reset_chunk_send_generation(&self) {
+        let mut bedrock_entity_chunks = self
+            .bedrock_entity_chunks
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        self.chunk_send_epoch.fetch_add(1, Ordering::AcqRel);
         if let Ok(mut sender) = self.chunk_sender.lock() {
             sender.reset();
         }
+        if matches!(self.client.as_ref(), ClientPlatform::Bedrock(_)) {
+            self.bedrock_spawned.store(false, Ordering::Release);
+            self.set_client_loaded(false);
+            bedrock_entity_chunks.pending.clear();
+        }
+    }
+
+    pub(crate) fn pause_chunk_streaming_for_transfer(&self) {
+        self.chunk_streaming_paused.store(true, Ordering::Release);
+        // A packet handler which passed the loaded-state check before the flag changed must
+        // finish its old-world transform before the transfer applies its destination transform.
+        let _movement_guard = self
+            .client_movement_lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        // Reset while holding the same locks used by spawn completion. Besides invalidating
+        // asynchronous encoders, acquiring `chunk_sender` is a barrier for a tick which entered
+        // chunk streaming immediately before the pause flag changed.
+        self.reset_chunk_send_generation();
+    }
+
+    pub(crate) fn is_chunk_streaming_paused(&self) -> bool {
+        self.chunk_streaming_paused.load(Ordering::Acquire)
+    }
+
+    pub(crate) fn lock_client_movement_if_loaded(&self) -> Option<std::sync::MutexGuard<'_, ()>> {
+        let guard = self.lock_client_movement_if_unpaused()?;
+        self.has_client_loaded().then_some(guard)
+    }
+
+    pub(crate) fn lock_client_movement_if_unpaused(&self) -> Option<std::sync::MutexGuard<'_, ()>> {
+        let guard = self
+            .client_movement_lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        (!self.is_chunk_streaming_paused()).then_some(guard)
+    }
+
+    pub(crate) fn resume_chunk_streaming_after_transfer(&self) {
+        self.chunk_streaming_paused.store(false, Ordering::Release);
     }
 
     #[expect(clippy::too_many_lines)]
@@ -2564,8 +2892,11 @@ impl Player {
         {
             *xp -= 1;
         }
-        if let Ok(listener) = self.chunk_listener.try_lock()
+        let chunk_streaming_paused = self.is_chunk_streaming_paused();
+        if !chunk_streaming_paused
+            && let Ok(listener) = self.chunk_listener.try_lock()
             && let Ok(mut sender) = self.chunk_sender.try_lock()
+            && !self.is_chunk_streaming_paused()
         {
             let center = self.get_entity().chunk_pos.load();
             let view_dist =
@@ -2579,66 +2910,144 @@ impl Player {
 
         let world = self.world();
         let player_chunk = self.get_entity().chunk_pos.load();
-        let epoch = self.chunk_send_epoch.load(Ordering::Relaxed);
+        let epoch = self.chunk_send_epoch.load(Ordering::Acquire);
         let version = match self.client.as_ref() {
             ClientPlatform::Java(java_client) => java_client.version.load(),
             ClientPlatform::Bedrock(_) => JavaMinecraftVersion::V_1_20_2,
         };
 
-        let prepared_batch = self.chunk_sender.try_lock().ok().and_then(|mut sender| {
-            sender.prepare_batch(&world.level, player_chunk, epoch, version)
-        });
+        let prepared_batch = if chunk_streaming_paused {
+            None
+        } else {
+            self.chunk_sender.try_lock().ok().and_then(|mut sender| {
+                if self.is_chunk_streaming_paused()
+                    || self.chunk_send_epoch.load(Ordering::Acquire) != epoch
+                    || !Arc::ptr_eq(&self.world(), &world)
+                {
+                    None
+                } else {
+                    sender.prepare_batch(&world.level, player_chunk, epoch, version)
+                }
+            })
+        };
 
-        let total_sent_chunks = prepared_batch.map_or_else(
-            || {
-                self.chunk_sender
-                    .try_lock()
-                    .map_or(0, |s| s.sent_chunks_count())
-            },
-            |batch| match self.client.as_ref() {
-                ClientPlatform::Java(_) => {
-                    let mut per_player_cache = rustc_hash::FxHashMap::default();
-                    let encoded =
-                        crate::net::ChunkSender::encode_batch(&batch, &mut per_player_cache);
-                    let current_epoch = self.chunk_send_epoch.load(Ordering::Relaxed);
-                    self.chunk_sender.try_lock().map_or(0, |mut sender| {
-                        sender.commit_batch(&batch, &encoded, &self.client, current_epoch);
-                        sender.sent_chunks_count()
+        let total_sent_chunks = if chunk_streaming_paused {
+            0
+        } else {
+            prepared_batch.map_or_else(
+                || {
+                    self.chunk_sender.try_lock().map_or(0, |sender| {
+                        if self.is_chunk_streaming_paused() {
+                            0
+                        } else if matches!(self.client.as_ref(), ClientPlatform::Bedrock(_)) {
+                            sender.bedrock_completed_chunks_count()
+                        } else {
+                            sender.sent_chunks_count()
+                        }
                     })
-                }
-                ClientPlatform::Bedrock(_) => {
-                    let current_epoch = self.chunk_send_epoch.load(Ordering::Relaxed);
-                    let (chunks, total_sent_chunks) = self.chunk_sender.try_lock().map_or_else(
-                        |_| (Vec::new(), 0),
-                        |mut sender| {
-                            let chunks = sender.commit_bedrock_batch(&batch, current_epoch);
-                            let total_sent_chunks = sender.sent_chunks_count();
-                            (chunks, total_sent_chunks)
-                        },
-                    );
-                    if !chunks.is_empty() {
-                        let client = self.client.clone();
-                        self.spawn_task(async move {
-                            client.send_chunks(&chunks).await;
-                        });
+                },
+                |batch| match self.client.as_ref() {
+                    ClientPlatform::Java(_) => {
+                        let mut per_player_cache = rustc_hash::FxHashMap::default();
+                        let encoded =
+                            crate::net::ChunkSender::encode_batch(&batch, &mut per_player_cache);
+                        self.chunk_sender.try_lock().map_or(0, |mut sender| {
+                            if self.is_chunk_streaming_paused()
+                                || !Arc::ptr_eq(&self.world(), &world)
+                            {
+                                return 0;
+                            }
+                            let current_epoch = self.chunk_send_epoch.load(Ordering::Acquire);
+                            sender.commit_batch(&batch, &encoded, &self.client, current_epoch);
+                            sender.sent_chunks_count()
+                        })
                     }
-                    total_sent_chunks
-                }
-            },
-        );
+                    ClientPlatform::Bedrock(bedrock_client) => {
+                        let committed_batch =
+                            self.chunk_sender.try_lock().ok().and_then(|mut sender| {
+                                if self.is_chunk_streaming_paused()
+                                    || !Arc::ptr_eq(&self.world(), &world)
+                                {
+                                    None
+                                } else {
+                                    let current_epoch =
+                                        self.chunk_send_epoch.load(Ordering::Acquire);
+                                    sender.commit_bedrock_batch(&batch, current_epoch)
+                                }
+                            });
+                        if let Some(committed_batch) = committed_batch {
+                            let bedrock_client = Arc::clone(bedrock_client);
+                            let player = bedrock_client.player.load_full().as_ref().clone();
+                            let batch_world = Arc::clone(&world);
+                            self.spawn_task(async move {
+                                let Some(player) = player else {
+                                    return;
+                                };
+                                let send_result = bedrock_client
+                                    .send_chunks_for_batch(
+                                        &committed_batch.chunks,
+                                        &player,
+                                        &batch_world,
+                                        committed_batch.epoch_snapshot,
+                                    )
+                                    .await;
+
+                                let current_epoch = player.chunk_send_epoch.load(Ordering::Acquire);
+                                let expected_world_is_current =
+                                    Arc::ptr_eq(&player.world(), &batch_world);
+                                let ready_entity_chunks = player.chunk_sender.lock().map_or_else(
+                                    |_| Vec::new(),
+                                    |mut sender| {
+                                        sender.on_bedrock_batch_completed(
+                                            &committed_batch,
+                                            &send_result.queued_positions,
+                                            &send_result.cancelled_positions,
+                                            current_epoch,
+                                            expected_world_is_current,
+                                        )
+                                    },
+                                );
+
+                                // Entity chunks depend on their Bedrock level-chunk packets. Do not
+                                // hold the chunk-sender lock while queueing world/entity work. The
+                                // per-player worker also keeps actors behind PlayerSpawn and processes
+                                // one completed chunk batch at a time.
+                                if !ready_entity_chunks.is_empty() {
+                                    let center_chunk = player.get_entity().chunk_pos.load();
+                                    player.queue_bedrock_entity_chunks(
+                                        batch_world,
+                                        ready_entity_chunks,
+                                        center_chunk,
+                                        committed_batch.epoch_snapshot,
+                                    );
+                                }
+                            });
+                        }
+                        self.chunk_sender
+                            .try_lock()
+                            .map_or(0, |sender| sender.bedrock_completed_chunks_count())
+                    }
+                },
+            )
+        };
 
         if let ClientPlatform::Bedrock(bedrock_client) = self.client.as_ref()
             && !self.bedrock_spawned.load(Ordering::Relaxed)
             && total_sent_chunks > 4
         {
-            if let Ok(data) = bedrock_client.serialize_packet(&CPlayStatus::PlayerSpawn) {
-                bedrock_client.try_enqueue_packet(data);
-            }
-            self.bedrock_spawned.store(true, Ordering::Relaxed);
-            self.set_client_loaded(true);
-            self.send_health();
-            if self.living_entity.health.load() <= 0.0 {
-                self.send_bedrock_respawn_state(RespawnState::SearchingForSpawn);
+            let client_player = bedrock_client.player.load_full();
+            if client_player
+                .as_ref()
+                .as_ref()
+                .is_some_and(|client_player| {
+                    client_player.try_finish_bedrock_spawn(bedrock_client, &world, epoch)
+                })
+            {
+                self.set_client_loaded(true);
+                self.send_health();
+                if self.living_entity.health.load() <= 0.0 {
+                    self.send_bedrock_respawn_state(RespawnState::SearchingForSpawn);
+                }
             }
         }
         self.tick_counter.fetch_add(1, Ordering::Relaxed);
@@ -2842,6 +3251,12 @@ impl Player {
 
     #[must_use]
     pub fn has_client_loaded(&self) -> bool {
+        if self.is_chunk_streaming_paused()
+            || (matches!(self.client.as_ref(), ClientPlatform::Bedrock(_))
+                && !self.bedrock_spawned.load(Ordering::Acquire))
+        {
+            return false;
+        }
         if !self.supports_player_loaded() {
             return true;
         }
@@ -2909,6 +3324,94 @@ impl Player {
 
     pub const fn entity_id(&self) -> i32 {
         self.living_entity.entity.entity_id
+    }
+
+    pub(crate) fn bedrock_add_player_packet(
+        &self,
+    ) -> pumpkin_protocol::bedrock::client::add_player::CAddPlayer {
+        let entity = self.get_entity();
+        let position = entity.pos.load();
+        let velocity = entity.velocity.load();
+        let held_item = self.inventory().held_item();
+        pumpkin_protocol::bedrock::client::add_player::CAddPlayer {
+            uuid: self.gameprofile.id,
+            player_name: self.gameprofile.name.clone(),
+            target_runtime_id: VarULong(self.entity_id() as u64),
+            platform_chat_id: String::new(),
+            position: Vector3::new(position.x as f32, position.y as f32, position.z as f32),
+            velocity: Vector3::new(velocity.x as f32, velocity.y as f32, velocity.z as f32),
+            rotation: Vector2::new(entity.pitch.load(), entity.yaw.load()),
+            y_head_rotation: entity.head_yaw.load(),
+            carried_item: (&held_item).into(),
+            player_game_type: self.gamemode.load().into(),
+            entity_data: entity.bedrock_metadata(),
+            synced_properties:
+                pumpkin_protocol::bedrock::client::set_actor_data::PropertySyncData::default(),
+            abilities_data: SerializedAbilitiesData {
+                target_player_raw_id: i64::from(self.entity_id()),
+                player_permissions: PlayerPermissionLevel::Visitor,
+                command_permissions: CommandPermissionLevel::Any,
+                layers: vec![SerializedAbilitiesDataSerializedLayer {
+                    serialized_layer: 0,
+                    abilities_set: 0,
+                    ability_value: 0,
+                    fly_speed: 0.05,
+                    vertical_fly_speed: 0.05,
+                    walk_speed: 0.1,
+                }],
+            },
+            actor_links: Vec::new(),
+            device_id: String::new(),
+            build_platform: pumpkin_protocol::bedrock::client::common::BuildPlatform::Unknown,
+        }
+    }
+
+    pub(crate) fn bedrock_player_list_add_packet(
+        &self,
+    ) -> pumpkin_protocol::bedrock::client::player_list::CPlayerList {
+        pumpkin_protocol::bedrock::client::player_list::CPlayerList {
+            action: pumpkin_protocol::bedrock::client::player_list::CPlayerList::ACTION_ADD,
+            entries: vec![
+                pumpkin_protocol::bedrock::client::player_list::PlayerListEntry {
+                    uuid: self.gameprofile.id,
+                    entity_unique_id: VarLong(i64::from(self.entity_id())),
+                    username: self.gameprofile.name.clone(),
+                    xuid: String::new(),
+                    platform_chat_id: String::new(),
+                    build_platform:
+                        pumpkin_protocol::bedrock::client::common::BuildPlatform::Unknown,
+                    skin: (**self.bedrock_skin.load()).clone(),
+                    is_teacher: false,
+                    is_host: false,
+                    is_sub_client: false,
+                    player_color: [0; 4],
+                },
+            ],
+        }
+    }
+
+    pub(crate) fn bedrock_player_list_remove_packet(
+        &self,
+    ) -> pumpkin_protocol::bedrock::client::player_list::CPlayerList {
+        pumpkin_protocol::bedrock::client::player_list::CPlayerList {
+            action: pumpkin_protocol::bedrock::client::player_list::CPlayerList::ACTION_REMOVE,
+            entries: vec![
+                pumpkin_protocol::bedrock::client::player_list::PlayerListEntry {
+                    uuid: self.gameprofile.id,
+                    entity_unique_id: VarLong(i64::from(self.entity_id())),
+                    username: self.gameprofile.name.clone(),
+                    xuid: String::new(),
+                    platform_chat_id: String::new(),
+                    build_platform:
+                        pumpkin_protocol::bedrock::client::common::BuildPlatform::Unknown,
+                    skin: pumpkin_protocol::bedrock::client::player_list::Skin::steve(),
+                    is_teacher: false,
+                    is_host: false,
+                    is_sub_client: false,
+                    player_color: [0; 4],
+                },
+            ],
+        }
     }
 
     /// Sets the player's camera target entity ID.
@@ -3667,14 +4170,11 @@ impl Player {
         res.map(|(pos, _)| pos)
     }
 
-    pub async fn unload_watched_chunks(&self, world: &World) {
-        let radial_chunks = self.watched_section.load().all_chunks_within();
-        let level = &world.level;
-        let chunks_to_clean = level.mark_chunks_as_not_watched(radial_chunks).await;
-        if !chunks_to_clean.is_empty() {
-            world.remove_entities_in_chunks(&chunks_to_clean).await;
-            level.clean_entity_chunks(&chunks_to_clean);
-        }
+    pub async fn unload_watched_chunks(self: &Arc<Self>, world: &Arc<World>) {
+        let radial_chunks: Vec<_> = self.watched_section.load().all_chunks_within().collect();
+        let chunks_to_clean = self
+            .queue_chunk_watcher_transition_and_wait(world.clone(), Vec::new(), radial_chunks)
+            .await;
         for chunk in &chunks_to_clean {
             self.send_client_packet(&CUnloadChunk::new(chunk.x, chunk.y))
                 .await;
@@ -3723,18 +4223,27 @@ impl Player {
                 let new_world = event.new_world;
 
                 self.set_client_loaded(false);
+                self.pause_chunk_streaming_for_transfer();
                 let Some(player) = current_world.remove_player(self, false).await else {
+                    self.resume_chunk_streaming_after_transfer();
                     return;
                 };
-               new_world.players.rcu(|current_list| {
-                    let mut new_list = (**current_list).clone();
-                    new_list.push(player.clone());
-                    new_list
-                });
                 self.unload_watched_chunks(&current_world).await;
+
+                let last_pos = self.living_entity.entity.last_pos.load();
+                let death_dimension =
+                    ResourceLocation::from(current_world.dimension.minecraft_name);
+                let death_location = BlockPos(Vector3::new(
+                    last_pos.x.round() as i32,
+                    last_pos.y.round() as i32,
+                    last_pos.z.round() as i32,
+                ));
 
                 self.change_world_chunks(&current_world.level, &new_world);
                 self.living_entity.entity.set_world(new_world.clone());
+                player.get_entity().set_pos(position);
+                player.get_entity().set_rotation(yaw, pitch);
+                player.get_entity().last_pos.store(position);
 
                 if new_world.dimension == pumpkin_data::dimension::Dimension::THE_NETHER {
                     self.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::EnterDimension {
@@ -3746,13 +4255,6 @@ impl Player {
                     });
                 }
 
-                let last_pos = self.living_entity.entity.last_pos.load();
-                let death_dimension = ResourceLocation::from(self.world().dimension.minecraft_name);
-                let death_location = BlockPos(Vector3::new(
-                    last_pos.x.round() as i32,
-                    last_pos.y.round() as i32,
-                    last_pos.z.round() as i32,
-                ));
                 match self.client.as_ref() {
                     ClientPlatform::Java(java) => {
                         let packet = CRespawn::new(
@@ -3793,15 +4295,21 @@ impl Player {
                         if let Ok(data) = bedrock.serialize_packet(&change_dim_packet) {
                             bedrock.enqueue_packet(data).await;
                         }
-                        self.bedrock_spawned.store(false, Ordering::Relaxed);
                     }
                 }
 
                 self.send_permission_lvl_update();
 
-                player.get_entity().set_pos(position);
-                player.get_entity().set_rotation(yaw, pitch);
-                player.get_entity().last_pos.store(position);
+                new_world.players.rcu(|current_list| {
+                    let mut new_list = (**current_list).clone();
+                    new_list.push(player.clone());
+                    new_list
+                });
+                let tracked_player = player.clone() as Arc<dyn EntityBase>;
+                new_world
+                    .entity_tracker
+                    .add_entity(&tracked_player, &new_world);
+                new_world.sync_bedrock_player_lists_on_join(&player).await;
 
                 self.send_abilities_update();
 
@@ -3813,6 +4321,7 @@ impl Player {
 
                 self.send_health();
 
+                self.resume_chunk_streaming_after_transfer();
                 new_world.send_world_info(&player, position, yaw, pitch);
 
                 if let ClientPlatform::Java(java_client) = player.client.as_ref() {
@@ -3824,7 +4333,7 @@ impl Player {
                     java_client.send_chunks(&[chunk]).await;
                 }
 
-                player.request_teleport(position, yaw, pitch);
+                player.request_teleport_in_current_chunk_epoch(position, yaw, pitch);
 
                 let mut changed_world_event = crate::plugin::api::events::player::player_changed_world::PlayerChangedWorldEvent {
                     player: player.clone(),
@@ -3841,6 +4350,37 @@ impl Player {
     /// Rarly used, for example when waking up the player from a bed or their first time spawn. Otherwise, the `teleport` method should be used.
     /// The player should respond with the `SConfirmTeleport` packet.
     pub fn request_teleport(&self, position: Vector3<f64>, yaw: f32, pitch: f32) {
+        self.request_teleport_inner(position, yaw, pitch, true);
+    }
+
+    pub(crate) fn request_teleport_in_current_chunk_epoch(
+        &self,
+        position: Vector3<f64>,
+        yaw: f32,
+        pitch: f32,
+    ) {
+        self.request_teleport_inner(position, yaw, pitch, false);
+    }
+
+    pub(crate) fn advance_chunk_send_epoch(&self) {
+        let _spawn_guard = self
+            .bedrock_entity_chunks
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _chunk_sender_guard = self
+            .chunk_sender
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        self.chunk_send_epoch.fetch_add(1, Ordering::AcqRel);
+    }
+
+    fn request_teleport_inner(
+        &self,
+        position: Vector3<f64>,
+        yaw: f32,
+        pitch: f32,
+        advance_chunk_epoch: bool,
+    ) {
         // This is the ultra special magic code used to create the teleport id
         // This returns the old value
         // This operation wraps around on overflow.
@@ -3861,7 +4401,9 @@ impl Player {
         }
 
         let i = self.teleport_id_count.fetch_add(1, Ordering::Relaxed);
-        self.chunk_send_epoch.fetch_add(1, Ordering::Relaxed);
+        if advance_chunk_epoch {
+            self.advance_chunk_send_epoch();
+        }
         let teleport_id = i + 1;
         self.living_entity.entity.set_pos(position);
         let entity = &self.living_entity.entity;
@@ -6039,9 +6581,16 @@ impl Player {
         };
 
         if all {
-            world.broadcast_editioned(&je_packet, &be_packet);
+            self.get_entity().send_tracked_editioned(
+                self.get_entity().chunk_pos.load(),
+                &je_packet,
+                &be_packet,
+            );
         } else {
-            world.broadcast_packet_except_editioned(&[self.gameprofile.id], &je_packet, &be_packet);
+            world.broadcast_packet_except(&[self.gameprofile.id], &je_packet);
+            if let Some(tracked) = world.entity_tracker.get_tracked_entity(entity_id) {
+                tracked.send_to_tracking_players_bedrock(&be_packet, &world);
+            }
         }
     }
 

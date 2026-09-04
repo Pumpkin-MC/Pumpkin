@@ -3,6 +3,9 @@ use super::*;
 
 impl JavaClient {
     pub fn handle_move_vehicle(&self, player: &Arc<Player>, packet: &SMoveVehicle) {
+        let Some(movement_guard) = player.lock_client_movement_if_loaded() else {
+            return;
+        };
         let entity = player.get_entity();
         let last_pos = entity.pos.load();
         let pos = Vector3::new(packet.x, packet.y, packet.z);
@@ -27,6 +30,7 @@ impl JavaClient {
                 cm,
             );
         }
+        drop(movement_guard);
         chunker::update_position(player);
     }
 }

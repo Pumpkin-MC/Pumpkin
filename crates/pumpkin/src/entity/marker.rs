@@ -90,5 +90,7 @@ impl EntityBase for MarkerEntity {
 
     fn send_java_spawn_packet(&self, _client: &JavaClient) {}
 
-    fn send_bedrock_spawn_packet(&self, _client: &BedrockClient) {}
+    fn try_send_bedrock_spawn_packet(&self, _client: &BedrockClient) -> bool {
+        true
+    }
 }

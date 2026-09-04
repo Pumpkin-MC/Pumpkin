@@ -1,14 +1,17 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
 
+enum TeleportResult {
+    Success,
+    WrongId,
+    NotTeleporting,
+}
+
 impl JavaClient {
     pub fn handle_confirm_teleport(&self, player: &Player, confirm_teleport: &SConfirmTeleport) {
-        enum TeleportResult {
-            Success,
-            WrongId,
-            NotTeleporting,
-        }
-
+        let Some(_movement_guard) = player.lock_client_movement_if_unpaused() else {
+            return;
+        };
         let result = {
             let mut awaiting_teleport = player
                 .awaiting_teleport

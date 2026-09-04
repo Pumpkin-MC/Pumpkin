@@ -771,6 +771,11 @@ impl ChunkEntityData {
             z: position.y,
             data: std::sync::Mutex::new(entities),
             dirty: AtomicBool::new(false),
+            materialized: AtomicBool::new(false),
+            snapshot_needs_rewrite: AtomicBool::new(false),
+            dormant_entities: std::sync::Mutex::new(Vec::new()),
+            live_snapshot_uuids: std::sync::Mutex::new(rustc_hash::FxHashSet::default()),
+            pending_materialization_uuids: std::sync::Mutex::new(rustc_hash::FxHashSet::default()),
         })
     }
 

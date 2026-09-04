@@ -177,9 +177,7 @@ pub fn send_attribute_updates_for_living(
 
     living
         .entity
-        .world
-        .load()
-        .broadcast_editioned(&je_packet, &be_packet);
+        .send_tracked_editioned(living.entity.chunk_pos.load(), &je_packet, &be_packet);
 }
 
 impl Clone for AttributeInstance {

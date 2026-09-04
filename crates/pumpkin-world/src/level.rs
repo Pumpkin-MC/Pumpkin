@@ -24,9 +24,10 @@ use pumpkin_config::{chunk::ChunkConfig, lighting::LightingEngineConfig, world::
 use pumpkin_data::biome::Biome;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::{Block, BlockStateId, block_properties::has_random_ticks, fluid::Fluid};
+use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::{position::BlockPos, vector2::Vector2};
 use pumpkin_util::world_seed::Seed;
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 use std::{
@@ -47,6 +48,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tokio_util::task::TaskTracker;
+use uuid::Uuid;
 
 pub type SyncChunk = Arc<ChunkData>;
 pub type SyncEntityChunk = Arc<ChunkEntityData>;
@@ -317,14 +319,14 @@ impl Level {
     pub fn spawn_entity_generation(self: &Arc<Self>, pos: Vector2<i32>) {
         let level = self.clone();
         rayon::spawn(move || {
-            let arc_chunk = Arc::new(ChunkEntityData {
-                x: pos.x,
-                z: pos.y,
-                data: std::sync::Mutex::new(Vec::new()),
-                dirty: AtomicBool::new(false),
-            });
-
-            level.loaded_entity_chunks.insert(pos, arc_chunk.clone());
+            let generated_chunk = Arc::new(ChunkEntityData::empty(pos.x, pos.y));
+            let arc_chunk = match level.loaded_entity_chunks.entry(pos) {
+                Entry::Occupied(entry) => entry.get().clone(),
+                Entry::Vacant(entry) => {
+                    entry.insert(generated_chunk.clone());
+                    generated_chunk
+                }
+            };
 
             if let Some((_, waiters)) = level.pending_entity_generations.remove(&pos) {
                 for tx in waiters {
@@ -734,8 +736,15 @@ impl Level {
                         match data {
                             LoadedData::Loaded(chunk) => {
                                 let pos = Vector2::new(chunk.x, chunk.z);
-                                level.loaded_entity_chunks.insert(pos, chunk.clone());
-                                let _ = sender.send((Arc::downgrade(&chunk), true)).await;
+                                let (chunk, first_load) =
+                                    match level.loaded_entity_chunks.entry(pos) {
+                                        Entry::Occupied(entry) => (entry.get().clone(), false),
+                                        Entry::Vacant(entry) => {
+                                            entry.insert(chunk.clone());
+                                            (chunk, true)
+                                        }
+                                    };
+                                let _ = sender.send((Arc::downgrade(&chunk), first_load)).await;
                             }
                             LoadedData::Missing(pos) | LoadedData::Error((pos, _)) => {
                                 let (tx, rx) = oneshot::channel();
@@ -776,8 +785,13 @@ impl Level {
         }
 
         if let Ok((chunk, _)) = self.load_single_entity_chunk(pos).await {
-            self.loaded_entity_chunks.insert(pos, chunk.clone());
-            chunk
+            match self.loaded_entity_chunks.entry(pos) {
+                Entry::Occupied(entry) => entry.get().clone(),
+                Entry::Vacant(entry) => {
+                    entry.insert(chunk.clone());
+                    chunk
+                }
+            }
         } else {
             let (tx, rx) = oneshot::channel();
             match self.pending_entity_generations.entry(pos) {
@@ -789,14 +803,8 @@ impl Level {
                     self.spawn_entity_generation(pos);
                 }
             }
-            rx.await.unwrap_or_else(|_| {
-                Arc::new(ChunkEntityData {
-                    x: pos.x,
-                    z: pos.y,
-                    data: std::sync::Mutex::new(Vec::new()),
-                    dirty: AtomicBool::new(false),
-                })
-            })
+            rx.await
+                .unwrap_or_else(|_| Arc::new(ChunkEntityData::empty(pos.x, pos.y)))
         }
     }
 
@@ -910,6 +918,61 @@ impl Level {
             .map(|x| x.value().clone())
     }
 
+    /// Returns stable references to the currently loaded entity chunks. Callers
+    /// must inspect each chunk's materialization state before replacing data.
+    pub fn entity_chunks(&self) -> Vec<(Vector2<i32>, SyncEntityChunk)> {
+        self.loaded_entity_chunks
+            .iter()
+            .map(|entry| (*entry.key(), entry.value().clone()))
+            .collect()
+    }
+
+    /// Applies live snapshots for an autosave (`authoritative_chunks = None`) or
+    /// for just the chunks being unloaded. An unload transfers ownership back to
+    /// persistence; other chunks only update the supplied UUIDs, preserving their
+    /// unrelated live records if an entity crossed a boundary before serialization.
+    ///
+    /// The world must serialize this with entity materialization and other saves.
+    pub async fn update_entity_chunk_snapshots(
+        self: &Arc<Self>,
+        mut snapshots: FxHashMap<Vector2<i32>, Vec<NbtCompound>>,
+        snapshot_uuids: &FxHashSet<Uuid>,
+        authoritative_chunks: Option<&FxHashSet<Vector2<i32>>>,
+    ) {
+        for (chunk_pos, chunk) in self.entity_chunks() {
+            let entities = snapshots.remove(&chunk_pos).unwrap_or_default();
+            if let Some(chunks) = authoritative_chunks {
+                if chunks.contains(&chunk_pos) {
+                    chunk.replace_unloaded_entities(entities, snapshot_uuids);
+                } else {
+                    chunk.merge_unloaded_entities(entities, snapshot_uuids);
+                }
+            } else if chunk.entities_are_materialized() {
+                // Retained pending records are no longer authoritative if their
+                // UUID is now live (or removed) elsewhere in the world snapshot.
+                chunk.merge_unloaded_entities(Vec::new(), snapshot_uuids);
+                chunk.replace_entities(entities);
+            } else {
+                chunk.reconcile_entities(entities, snapshot_uuids);
+            }
+        }
+
+        // A live entity can enter an entity chunk which has not yet been fetched.
+        // Load its untouched disk records before merging the live snapshot.
+        for (chunk_pos, entities) in snapshots {
+            let chunk = self.get_entity_chunk(chunk_pos).await;
+            if let Some(chunks) = authoritative_chunks {
+                if chunks.contains(&chunk_pos) {
+                    chunk.replace_unloaded_entities(entities, snapshot_uuids);
+                } else {
+                    chunk.merge_unloaded_entities(entities, snapshot_uuids);
+                }
+            } else {
+                chunk.reconcile_entities(entities, snapshot_uuids);
+            }
+        }
+    }
+
     pub async fn get_or_fetch_entity_chunk<R, F: Fn(&SyncEntityChunk) -> R>(
         self: &Arc<Self>,
         pos: Vector2<i32>,
@@ -1003,6 +1066,233 @@ mod tests {
     use super::*;
     use pumpkin_config::world::LevelConfig;
     use tempfile::TempDir;
+
+    fn persisted_entity(id: &str, uuid: u128, marker: i32) -> NbtCompound {
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("id", id.to_owned());
+        nbt.put_uuid("UUID", Uuid::from_u128(uuid));
+        nbt.put_int("marker", marker);
+        nbt
+    }
+
+    fn snapshot_uuids(snapshots: &FxHashMap<Vector2<i32>, Vec<NbtCompound>>) -> FxHashSet<Uuid> {
+        snapshots
+            .values()
+            .flatten()
+            .map(|nbt| nbt.get_uuid("UUID").unwrap())
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn entity_persistence_flow_preserves_dormant_records_without_reviving_removed_entities() {
+        let temp_dir = TempDir::new().unwrap();
+        let config = LevelConfig::default();
+        let level = Level::from_root_folder(
+            &config,
+            temp_dir.path().to_path_buf(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        let source_pos = Vector2::new(0, 0);
+        let target_pos = Vector2::new(1, 0);
+        let dormant_source = persisted_entity("missing_mod:source", 1, 10);
+        let dormant_target = persisted_entity("missing_mod:target", 2, 20);
+        let moving = persisted_entity("minecraft:pig", 3, 30);
+        let survivor = persisted_entity("minecraft:pig", 4, 40);
+
+        // Begin with real on-disk entity chunks, before either chunk is live.
+        for (pos, data) in [
+            (source_pos, vec![dormant_source.clone(), moving.clone()]),
+            (target_pos, vec![dormant_target.clone()]),
+        ] {
+            let chunk = Arc::new(ChunkEntityData::empty(pos.x, pos.y));
+            *chunk.data.lock().unwrap() = data;
+            chunk.mark_dirty(true);
+            level.write_entity_chunks(vec![(pos, chunk)]).await;
+        }
+        let source = level.get_entity_chunk(source_pos).await;
+        let pending = source.take_entities_for_materialization().unwrap();
+        assert_eq!(pending, vec![dormant_source.clone(), moving.clone()]);
+        source.retain_dormant_entities(vec![dormant_source.clone()]);
+
+        // The pig crosses into a chunk whose persisted records have not spawned.
+        // Repeated autosaves replace its snapshot rather than accumulating copies.
+        let mut snapshots = FxHashMap::from_iter([(target_pos, vec![moving, survivor.clone()])]);
+        for marker in [31, 32] {
+            snapshots.get_mut(&target_pos).unwrap()[0].put_int("marker", marker);
+            level
+                .update_entity_chunk_snapshots(snapshots.clone(), &snapshot_uuids(&snapshots), None)
+                .await;
+            level.write_entity_chunks(level.entity_chunks()).await;
+        }
+        let target = level.get_entity_chunk(target_pos).await;
+        assert!(!target.entities_are_materialized());
+        assert_eq!(target.data.lock().unwrap().len(), 3);
+        assert_eq!(target.data.lock().unwrap()[1].get_int("marker"), Some(32));
+
+        // Unloading another chunk provides only a partial snapshot. It must not
+        // erase live snapshots in the still-loaded, unmaterialized destination.
+        level
+            .update_entity_chunk_snapshots(
+                FxHashMap::default(),
+                &FxHashSet::default(),
+                Some(&FxHashSet::from_iter([source_pos])),
+            )
+            .await;
+        level.clean_entity_chunks([source_pos]);
+        assert_eq!(target.data.lock().unwrap().len(), 3);
+
+        // Remove the pig, then the final survivor. Neither UUID is present in its
+        // next autosave, including the entirely empty live set from the review.
+        snapshots.insert(target_pos, vec![survivor.clone()]);
+        level
+            .update_entity_chunk_snapshots(snapshots.clone(), &snapshot_uuids(&snapshots), None)
+            .await;
+        assert_eq!(
+            *target.data.lock().unwrap(),
+            vec![dormant_target.clone(), survivor]
+        );
+        level.write_entity_chunks(level.entity_chunks()).await;
+        level
+            .update_entity_chunk_snapshots(FxHashMap::default(), &FxHashSet::default(), None)
+            .await;
+        assert!(target.is_dirty());
+        level.shutdown().await;
+
+        // A fresh Level and file manager force a disk read, not an in-memory cache
+        // hit. Only the genuinely dormant records may be materialized on restart.
+        let restarted = Level::from_root_folder(
+            &config,
+            temp_dir.path().to_path_buf(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        for (pos, dormant) in [(source_pos, dormant_source), (target_pos, dormant_target)] {
+            let chunk = restarted.get_entity_chunk(pos).await;
+            let pending = chunk.take_entities_for_materialization().unwrap();
+            assert_eq!(pending, vec![dormant]);
+            assert!(chunk.take_entities_for_materialization().is_none());
+            chunk.retain_dormant_entities(pending);
+            chunk.replace_entities(Vec::new());
+        }
+        restarted.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn unload_transfers_ownership_to_cached_chunks_without_losing_or_duplicating_entities() {
+        let temp_dir = TempDir::new().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            temp_dir.path().to_path_buf(),
+            0,
+            Dimension::OVERWORLD,
+        );
+
+        // A destination may be untouched, or already materialized but still cached
+        // because a watcher arrived during unload. Exercise both authoritative and
+        // out-of-scope destinations: the snapshots are no longer world-owned.
+        for (index, (materialized, in_scope)) in
+            [(false, false), (true, false), (false, true), (true, true)]
+                .into_iter()
+                .enumerate()
+        {
+            let destination = Vector2::new(index as i32, 0);
+            let chunk = level.get_entity_chunk(destination).await;
+            if materialized {
+                assert!(
+                    chunk
+                        .take_entities_for_materialization()
+                        .unwrap()
+                        .is_empty()
+                );
+            }
+            let detached = persisted_entity("minecraft:pig", 10 + index as u128, 1);
+            let other_live = persisted_entity("minecraft:pig", 20 + index as u128, 2);
+            let remaining = if in_scope {
+                Vec::new()
+            } else {
+                vec![other_live]
+            };
+            let mut initial = remaining.clone();
+            initial.push(detached.clone());
+            let snapshots = FxHashMap::from_iter([(destination, initial)]);
+            level
+                .update_entity_chunk_snapshots(snapshots.clone(), &snapshot_uuids(&snapshots), None)
+                .await;
+
+            let snapshots = FxHashMap::from_iter([(destination, vec![detached.clone()])]);
+            let unloading = FxHashSet::from_iter([if in_scope {
+                destination
+            } else {
+                Vector2::new(-1, 0)
+            }]);
+            level
+                .update_entity_chunk_snapshots(
+                    snapshots.clone(),
+                    &snapshot_uuids(&snapshots),
+                    Some(&unloading),
+                )
+                .await;
+
+            // Autosaving the remaining live world must retain the transferred
+            // entity until materialization actually takes ownership of it.
+            let snapshots = FxHashMap::from_iter([(destination, remaining.clone())]);
+            level
+                .update_entity_chunk_snapshots(snapshots.clone(), &snapshot_uuids(&snapshots), None)
+                .await;
+            assert!(chunk.data.lock().unwrap().contains(&detached));
+            assert_eq!(
+                chunk.take_entities_for_materialization().unwrap(),
+                vec![detached]
+            );
+            assert!(chunk.take_entities_for_materialization().is_none());
+
+            // If it then dies, no preservation copy may survive the next save.
+            level
+                .update_entity_chunk_snapshots(snapshots.clone(), &snapshot_uuids(&snapshots), None)
+                .await;
+            assert_eq!(*chunk.data.lock().unwrap(), remaining);
+        }
+        level.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn live_entity_elsewhere_supersedes_pending_nbt_in_a_materialized_chunk() {
+        let temp_dir = TempDir::new().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            temp_dir.path().to_path_buf(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        let source_pos = Vector2::new(0, 0);
+        let destination = Vector2::new(1, 0);
+        let source = level.get_entity_chunk(source_pos).await;
+        assert!(
+            source
+                .take_entities_for_materialization()
+                .unwrap()
+                .is_empty()
+        );
+        let entity = persisted_entity("minecraft:pig", 1, 10);
+        let snapshots = FxHashMap::from_iter([(source_pos, vec![entity.clone()])]);
+        level
+            .update_entity_chunk_snapshots(
+                snapshots.clone(),
+                &snapshot_uuids(&snapshots),
+                Some(&FxHashSet::from_iter([source_pos])),
+            )
+            .await;
+        assert_eq!(*source.data.lock().unwrap(), vec![entity.clone()]);
+
+        let snapshots = FxHashMap::from_iter([(destination, vec![entity])]);
+        level
+            .update_entity_chunk_snapshots(snapshots.clone(), &snapshot_uuids(&snapshots), None)
+            .await;
+        assert!(source.data.lock().unwrap().is_empty());
+        assert!(source.take_entities_for_materialization().is_none());
+        level.shutdown().await;
+    }
 
     #[tokio::test]
     async fn dimension_paths_26_2() {

@@ -253,21 +253,38 @@ impl ClientPlatform {
         }
     }
 
-    pub fn try_enqueue_spawn_packet(&self, entity: &Arc<dyn crate::entity::EntityBase>) {
-        self.enqueue_spawn_packet(entity);
+    /// Attempts to queue an entity's spawn packet.
+    ///
+    /// Java retains its existing fire-and-forget behavior. Bedrock reports whether the actor
+    /// packet was accepted by its bounded outgoing queue so entity tracking can retry safely.
+    pub fn try_enqueue_spawn_packet(&self, entity: &Arc<dyn crate::entity::EntityBase>) -> bool {
+        match self {
+            Self::Java(java) => {
+                entity.send_java_spawn_packet(java);
+                true
+            }
+            Self::Bedrock(bedrock) => {
+                bedrock.has_outgoing_packet_capacity()
+                    && entity.try_send_bedrock_spawn_packet(bedrock)
+            }
+        }
     }
 
     pub fn enqueue_spawn_packet(&self, entity: &Arc<dyn crate::entity::EntityBase>) {
         match self {
             Self::Java(java) => entity.send_java_spawn_packet(java),
-            Self::Bedrock(bedrock) => entity.send_bedrock_spawn_packet(bedrock),
+            Self::Bedrock(bedrock) => {
+                entity.send_bedrock_spawn_packet(bedrock);
+            }
         }
     }
 
     pub async fn send_chunks(&self, chunks: &[SyncChunk]) {
         match self {
             Self::Java(java) => java.send_chunks(chunks).await,
-            Self::Bedrock(bedrock) => bedrock.send_chunks(chunks).await,
+            Self::Bedrock(bedrock) => {
+                bedrock.send_chunks(chunks).await;
+            }
         }
     }
 
