@@ -244,34 +244,27 @@ impl<E: Payload + ToFromWasmEvent + Clone + 'static> EventHandler<E> for WasmPlu
                 .store
                 .call_guest(move |mut guest| {
                     Box::pin(async move {
-                        let (wasm_event, event_cleanup, server_res, server_rep) =
-                            guest.with(|mut store| {
-                                let wasm_event = event.to_wasm_event(store.data_mut());
-                                let event_cleanup = EventResourceCleanup::capture(&wasm_event);
-                                match store.data_mut().add_server(server) {
-                                    Ok(resource) => {
-                                        let rep = resource.rep();
-                                        Ok((wasm_event, event_cleanup, resource, rep))
-                                    }
-                                    Err(error) => {
-                                        event_cleanup.cleanup(store.data_mut());
-                                        Err(error)
-                                    }
+                        let (wasm_event, server_res) = guest.with(|mut store| {
+                            let wasm_event = event.to_wasm_event(store.data_mut());
+                            match store.data_mut().add_server(server) {
+                                Ok(resource) => Ok((wasm_event, resource)),
+                                Err(error) => {
+                                    cleanup_event(&wasm_event, store.data_mut());
+                                    Err(error)
                                 }
-                            })?;
+                            }
+                        })?;
+                        // Lowering transfers these resources to the guest. Only a
+                        // successfully returned event is owned by the host again.
                         let result = guest
                             .call(function, (handler_id, server_res, wasm_event))
                             .await
                             .map(|(returned_event,)| returned_event);
-                        guest.with(|mut store| {
-                            if let Ok(returned_event) = &result {
+                        if let Ok(returned_event) = &result {
+                            guest.with(|mut store| {
                                 cleanup_event(returned_event, store.data_mut());
-                            }
-                            event_cleanup.cleanup(store.data_mut());
-                            let _ = store.data_mut().resource_table.delete::<
-                                crate::plugin::loader::wasm::wasm_host::state::ServerResource,
-                            >(wasmtime::component::Resource::new_own(server_rep));
-                        });
+                            });
+                        }
                         result.map(|_| ())
                     })
                 })
@@ -299,35 +292,30 @@ impl<E: Payload + ToFromWasmEvent + Clone + 'static> EventHandler<E> for WasmPlu
                 .store
                 .call_guest(move |mut guest| {
                     Box::pin(async move {
-                        let (wasm_event, event_cleanup, server_res, server_rep) =
-                            guest.with(|mut store| {
-                                let wasm_event = owned_event.to_wasm_event(store.data_mut());
-                                let event_cleanup = EventResourceCleanup::capture(&wasm_event);
-                                match store.data_mut().add_server(server) {
-                                    Ok(resource) => {
-                                        let rep = resource.rep();
-                                        Ok((wasm_event, event_cleanup, resource, rep))
-                                    }
-                                    Err(error) => {
-                                        event_cleanup.cleanup(store.data_mut());
-                                        Err(error)
-                                    }
+                        let (wasm_event, server_res) = guest.with(|mut store| {
+                            let wasm_event = owned_event.to_wasm_event(store.data_mut());
+                            match store.data_mut().add_server(server) {
+                                Ok(resource) => Ok((wasm_event, resource)),
+                                Err(error) => {
+                                    cleanup_event(&wasm_event, store.data_mut());
+                                    Err(error)
                                 }
-                            })?;
+                            }
+                        })?;
+                        // Lowering transfers these resources to the guest. Only a
+                        // successfully returned event is owned by the host again.
                         let result = guest
                             .call(function, (handler_id, server_res, wasm_event))
                             .await
                             .map(|(returned_event,)| returned_event);
-                        guest.with(|mut store| {
-                            let result = result.map(|returned_event| {
-                                E::from_wasm_event(returned_event, store.data_mut())
-                            });
-                            event_cleanup.cleanup(store.data_mut());
-                            let _ = store.data_mut().resource_table.delete::<
-                                crate::plugin::loader::wasm::wasm_host::state::ServerResource,
-                            >(wasmtime::component::Resource::new_own(server_rep));
-                            result
-                        })
+                        match result {
+                            Ok(returned_event) => Ok(guest.with(|mut store| {
+                                let mut updated_event = owned_event;
+                                updated_event.apply_wasm_event(returned_event, store.data_mut());
+                                updated_event
+                            })),
+                            Err(error) => Err(error),
+                        }
                     })
                 })
                 .await;

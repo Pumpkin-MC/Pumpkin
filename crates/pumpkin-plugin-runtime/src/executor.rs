@@ -6,7 +6,7 @@ use std::{
     panic::{AssertUnwindSafe, catch_unwind},
     pin::Pin,
     sync::{
-        Arc, Mutex as StdMutex,
+        Arc, Mutex as StdMutex, OnceLock,
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
@@ -111,7 +111,23 @@ struct GuestStoreCall<T, F, R> {
     result: oneshot::Sender<wasmtime::Result<R>>,
     context: ReentryContext,
     reentry: Arc<ReentryState<T>>,
+    guest_call_failure: Arc<GuestCallFailure>,
     root_admission: Option<RootAdmissionGuard>,
+}
+
+#[derive(Default)]
+struct GuestCallFailure {
+    message: OnceLock<String>,
+}
+
+impl GuestCallFailure {
+    fn record(&self, error: &wasmtime::Error) {
+        let _ = self.message.set(format!("{error:#}"));
+    }
+
+    fn message(&self) -> Option<String> {
+        self.message.get().cloned()
+    }
 }
 
 impl<T, F, R> GuestStoreJob<T> for GuestStoreCall<T, F, R>
@@ -126,17 +142,29 @@ where
             result,
             context,
             reentry,
+            guest_call_failure,
             root_admission,
         } = *self;
         Box::pin(async move {
+            let failure_for_scope = Arc::clone(&guest_call_failure);
             let output = scope(context, async move {
                 let _active_context = reentry.enter_active_context(context);
-                call(LegacyGuestScope::concurrent(accessor)).await
+                call(LegacyGuestScope::concurrent(accessor, failure_for_scope)).await
             })
             .await;
+            let guest_call_failure = guest_call_failure.message();
             drop(root_admission);
-            let _ = result.send(output);
-            Ok(())
+            if let Some(message) = guest_call_failure {
+                let output = match output {
+                    Ok(_) => Err(wasmtime::Error::msg(message.clone())),
+                    Err(error) => Err(error),
+                };
+                let _ = result.send(output);
+                Err(wasmtime::Error::msg(message))
+            } else {
+                let _ = result.send(output);
+                Ok(())
+            }
         })
     }
 
@@ -146,17 +174,29 @@ where
             result,
             context,
             reentry,
+            guest_call_failure,
             root_admission,
         } = *self;
         Box::pin(async move {
+            let failure_for_scope = Arc::clone(&guest_call_failure);
             let output = scope(context, async move {
                 let _active_context = reentry.enter_active_context(context);
-                call(LegacyGuestScope::reentrant(store)).await
+                call(LegacyGuestScope::reentrant(store, failure_for_scope)).await
             })
             .await;
+            let guest_call_failure = guest_call_failure.message();
             drop(root_admission);
-            let _ = result.send(output);
-            Ok(())
+            if let Some(message) = guest_call_failure {
+                let output = match output {
+                    Ok(_) => Err(wasmtime::Error::msg(message.clone())),
+                    Err(error) => Err(error),
+                };
+                let _ = result.send(output);
+                Err(wasmtime::Error::msg(message))
+            } else {
+                let _ = result.send(output);
+                Ok(())
+            }
         })
     }
 }
@@ -172,21 +212,30 @@ enum LegacyGuestAccess<'a, T: 'static> {
 /// Wasmtime Store context is never exposed outside this crate.
 pub struct LegacyGuestScope<'a, T: 'static> {
     access: LegacyGuestAccess<'a, T>,
+    guest_call_failure: Arc<GuestCallFailure>,
 }
 
 impl<'a, T> LegacyGuestScope<'a, T>
 where
     T: Send + 'static,
 {
-    const fn concurrent(accessor: &'a Accessor<T>) -> Self {
+    const fn concurrent(
+        accessor: &'a Accessor<T>,
+        guest_call_failure: Arc<GuestCallFailure>,
+    ) -> Self {
         Self {
             access: LegacyGuestAccess::Concurrent(accessor),
+            guest_call_failure,
         }
     }
 
-    const fn reentrant(store: StoreContextMut<'a, T>) -> Self {
+    const fn reentrant(
+        store: StoreContextMut<'a, T>,
+        guest_call_failure: Arc<GuestCallFailure>,
+    ) -> Self {
         Self {
             access: LegacyGuestAccess::Reentrant(store),
+            guest_call_failure,
         }
     }
 
@@ -217,14 +266,21 @@ where
         Params: ComponentNamedList + Lower + 'static,
         Return: ComponentNamedList + Lift + 'static,
     {
-        match &mut self.access {
+        if let Some(message) = self.guest_call_failure.message() {
+            return Err(wasmtime::Error::msg(message));
+        }
+        let result = match &mut self.access {
             LegacyGuestAccess::Concurrent(accessor) => {
                 function.call_concurrent(&**accessor, params).await
             }
             LegacyGuestAccess::Reentrant(store) => {
                 function.call_async(store.as_context_mut(), params).await
             }
+        };
+        if let Err(error) = &result {
+            self.guest_call_failure.record(error);
         }
+        result
     }
 }
 
@@ -431,6 +487,7 @@ impl<T> Drop for ReentryRegistration<T> {
 struct StoreShared<T, P> {
     sender: mpsc::Sender<StoreMessage<T>>,
     accepting: Arc<AtomicBool>,
+    guest_call_failure: Arc<GuestCallFailure>,
     send_gate: Mutex<()>,
     lifecycle: Arc<Lifecycle>,
     reentry: Arc<ReentryState<T>>,
@@ -499,6 +556,9 @@ where
                 "Wasm plugin store driver failed: {error}"
             ))),
             DriverState::Stopped => Err(wasmtime::Error::msg(message)),
+            _ if self.shared.guest_call_failure.message().is_some() => Err(wasmtime::Error::msg(
+                "Wasm plugin store failed during a guest call",
+            )),
             _ if self.shared.accepting.load(Ordering::Acquire) => Ok(()),
             _ => Err(wasmtime::Error::msg(message)),
         }
@@ -544,6 +604,11 @@ where
         F: for<'a> FnOnce(LegacyGuestScope<'a, T>) -> StoreFuture<'a, R> + Send + 'static,
         R: Send + 'static,
     {
+        if let Some(message) = self.shared.guest_call_failure.message() {
+            return Err(wasmtime::Error::msg(format!(
+                "Wasm plugin store failed during a guest call: {message}"
+            )));
+        }
         let (result, receiver) = oneshot::channel();
         let inherited_context = self.shared.policy.inherited_context();
         let (context, root_admission) = if let Some(context) = inherited_context {
@@ -564,6 +629,7 @@ where
             result,
             context,
             reentry: Arc::clone(&self.shared.reentry),
+            guest_call_failure: Arc::clone(&self.shared.guest_call_failure),
             root_admission,
         });
 
@@ -643,9 +709,7 @@ where
         registration.close();
         receiver.close();
         while let Ok(job) = receiver.try_recv() {
-            if let Err(error) = job.run_reentrant(store.as_context_mut()).await {
-                tracing::error!(%error, "Accepted reentrant Wasm plugin call failed while draining");
-            }
+            job.run_reentrant(store.as_context_mut()).await?;
         }
         Ok(output)
     }
@@ -710,9 +774,11 @@ where
         let (control, control_receiver) = mpsc::unbounded_channel();
         let lifecycle = Lifecycle::new();
         let accepting = Arc::new(AtomicBool::new(true));
+        let guest_call_failure = Arc::new(GuestCallFailure::default());
         let shared = Arc::new(StoreShared {
             sender,
             accepting: Arc::clone(&accepting),
+            guest_call_failure,
             send_gate: Mutex::new(()),
             lifecycle: Arc::clone(&lifecycle),
             reentry: Arc::new(ReentryState::new()),

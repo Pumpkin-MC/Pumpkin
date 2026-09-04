@@ -30,13 +30,14 @@ mod tests {
         time::{Duration, timeout},
     };
     use wasm_encoder::{
-        CodeSection, ComponentBuilder, ComponentExportKind, ComponentTypeRef, EntityType,
-        ExportKind, ExportSection, Function, FunctionSection, ImportSection, Instruction, Module,
-        ModuleArg, PrimitiveValType, TypeSection,
+        CodeSection, ComponentBuilder, ComponentExportKind, ComponentTypeRef, ComponentValType,
+        ConstExpr, EntityType, ExportKind, ExportSection, Function, FunctionSection, GlobalSection,
+        GlobalType, ImportSection, Instruction, Module, ModuleArg, PrimitiveValType, TypeBounds,
+        TypeSection, ValType,
     };
     use wasmtime::{
         Config, Engine, Store,
-        component::{Component, Linker, TypedFunc},
+        component::{Component, Linker, Resource, ResourceType, TypedFunc},
     };
 
     use super::{
@@ -45,6 +46,19 @@ mod tests {
     };
 
     struct TestHostState;
+
+    struct BoundaryResource;
+
+    struct BoundaryState {
+        resource_drops: Arc<AtomicUsize>,
+        store_dropped: Arc<AtomicBool>,
+    }
+
+    impl Drop for BoundaryState {
+        fn drop(&mut self) {
+            self.store_dropped.store(true, Ordering::Release);
+        }
+    }
 
     struct TestSpawner {
         runtime: tokio::runtime::Handle,
@@ -354,6 +368,140 @@ mod tests {
             component.core_alias_export(Some("run-core"), guest_instance, "run", ExportKind::Func);
         let run = component.lift_func(Some("run"), run_core, function_type, []);
         component.export("run", ComponentExportKind::Func, run, None);
+        component.finish()
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn owned_resource_component() -> Vec<u8> {
+        let mut module = Module::new();
+        let mut types = TypeSection::new();
+        types.ty().function([ValType::I32], []);
+        types.ty().function([ValType::I32], [ValType::I32]);
+        types.ty().function([], []);
+        module.section(&types);
+
+        let mut imports = ImportSection::new();
+        imports.import("", "resource-drop", EntityType::Function(0));
+        module.section(&imports);
+
+        let mut functions = FunctionSection::new();
+        functions.function(0);
+        functions.function(1);
+        functions.function(0);
+        functions.function(0);
+        functions.function(2);
+        module.section(&functions);
+
+        let mut globals = GlobalSection::new();
+        globals.global(
+            GlobalType {
+                val_type: ValType::I32,
+                mutable: true,
+                shared: false,
+            },
+            &ConstExpr::i32_const(0),
+        );
+        module.section(&globals);
+
+        let mut exports = ExportSection::new();
+        exports.export("drop", ExportKind::Func, 1);
+        exports.export("return", ExportKind::Func, 2);
+        exports.export("trap", ExportKind::Func, 3);
+        exports.export("retain", ExportKind::Func, 4);
+        exports.export("drop-retained", ExportKind::Func, 5);
+        module.section(&exports);
+
+        let mut drop_body = Function::new([]);
+        drop_body.instruction(&Instruction::LocalGet(0));
+        drop_body.instruction(&Instruction::Call(0));
+        drop_body.instruction(&Instruction::End);
+        let mut return_body = Function::new([]);
+        return_body.instruction(&Instruction::LocalGet(0));
+        return_body.instruction(&Instruction::End);
+        let mut trap_body = Function::new([]);
+        trap_body.instruction(&Instruction::Unreachable);
+        trap_body.instruction(&Instruction::End);
+        let mut retain_body = Function::new([]);
+        retain_body.instruction(&Instruction::LocalGet(0));
+        retain_body.instruction(&Instruction::GlobalSet(0));
+        retain_body.instruction(&Instruction::End);
+        let mut drop_retained_body = Function::new([]);
+        drop_retained_body.instruction(&Instruction::GlobalGet(0));
+        drop_retained_body.instruction(&Instruction::Call(0));
+        drop_retained_body.instruction(&Instruction::End);
+        let mut code = CodeSection::new();
+        code.function(&drop_body);
+        code.function(&return_body);
+        code.function(&trap_body);
+        code.function(&retain_body);
+        code.function(&drop_retained_body);
+        module.section(&code);
+
+        let mut component = ComponentBuilder::default();
+        let resource =
+            component.import("resource", ComponentTypeRef::Type(TypeBounds::SubResource));
+        let resource_drop = component.resource_drop(resource);
+        let (owned_resource, owned) = component.type_defined(Some("owned-resource"));
+        owned.own(resource);
+
+        let (drop_type, mut drop_signature) = component.type_function(Some("drop-type"));
+        drop_signature
+            .params([("resource", ComponentValType::Type(owned_resource))])
+            .result(None);
+        let (return_type, mut return_signature) = component.type_function(Some("return-type"));
+        return_signature
+            .params([("resource", ComponentValType::Type(owned_resource))])
+            .result(Some(ComponentValType::Type(owned_resource)));
+        let (drop_retained_type, mut drop_retained_signature) =
+            component.type_function(Some("drop-retained-type"));
+        drop_retained_signature
+            .params([] as [(&str, PrimitiveValType); 0])
+            .result(None);
+
+        let module = component.core_module(Some("guest"), &module);
+        let intrinsics = component.core_instantiate_exports(
+            Some("intrinsics"),
+            [("resource-drop", ExportKind::Func, resource_drop)],
+        );
+        let instance = component.core_instantiate(
+            Some("guest-instance"),
+            module,
+            [("", ModuleArg::Instance(intrinsics))],
+        );
+        let drop_core =
+            component.core_alias_export(Some("drop-core"), instance, "drop", ExportKind::Func);
+        let return_core =
+            component.core_alias_export(Some("return-core"), instance, "return", ExportKind::Func);
+        let trap_core =
+            component.core_alias_export(Some("trap-core"), instance, "trap", ExportKind::Func);
+        let retain_core =
+            component.core_alias_export(Some("retain-core"), instance, "retain", ExportKind::Func);
+        let drop_retained_core = component.core_alias_export(
+            Some("drop-retained-core"),
+            instance,
+            "drop-retained",
+            ExportKind::Func,
+        );
+        let drop_resource = component.lift_func(Some("drop"), drop_core, drop_type, []);
+        let return_resource = component.lift_func(Some("return"), return_core, return_type, []);
+        let trap = component.lift_func(Some("trap"), trap_core, drop_type, []);
+        let retain = component.lift_func(Some("retain"), retain_core, drop_type, []);
+        let drop_retained = component.lift_func(
+            Some("drop-retained"),
+            drop_retained_core,
+            drop_retained_type,
+            [],
+        );
+        component.export("drop", ComponentExportKind::Func, drop_resource, None);
+        component.export("return", ComponentExportKind::Func, return_resource, None);
+        component.export("trap", ComponentExportKind::Func, trap, None);
+        component.export("retain", ComponentExportKind::Func, retain, None);
+        component.export(
+            "drop-retained",
+            ComponentExportKind::Func,
+            drop_retained,
+            None,
+        );
         component.finish()
     }
 
@@ -1242,6 +1390,257 @@ mod tests {
         assert!(later_error.to_string().contains("ended without reporting"));
     }
 
+    #[allow(clippy::too_many_lines)]
+    async fn caught_reentrant_guest_trap_stops_driver_and_queued_work() {
+        let mut config = Config::new();
+        config.wasm_component_model(true);
+        config.wasm_component_model_async(true);
+        config.concurrency_support(true);
+        let engine = Engine::new(&config).expect("test engine");
+        let component = Component::new(&engine, sync_reentry_component()).expect("test component");
+        let run_slot = Arc::new(OnceLock::<TypedFunc<(), ()>>::new());
+        let driver_slot = Arc::new(OnceLock::<ConcurrentStore>::new());
+        let host_calls = Arc::new(AtomicUsize::new(0));
+        let queued_call_ran = Arc::new(AtomicBool::new(false));
+
+        let mut linker = Linker::<TestHostState>::new(&engine);
+        let run_for_host = Arc::clone(&run_slot);
+        let driver_for_host = Arc::clone(&driver_slot);
+        let calls_for_host = Arc::clone(&host_calls);
+        let queued_for_host = Arc::clone(&queued_call_ran);
+        linker
+            .root()
+            .func_wrap_async("host", move |mut store, ()| {
+                let run = *run_for_host.get().expect("run initialized");
+                let driver = driver_for_host
+                    .get()
+                    .expect("store driver initialized")
+                    .clone();
+                let host_calls = Arc::clone(&calls_for_host);
+                let queued_call_ran = Arc::clone(&queued_for_host);
+                Box::new(async move {
+                    if host_calls.fetch_add(1, Ordering::SeqCst) != 0 {
+                        return Err(wasmtime::Error::msg("intentional reentrant guest failure"));
+                    }
+
+                    let first_driver = driver.clone();
+                    let second_driver = driver.clone();
+                    let queued = async move {
+                        tokio::join!(
+                            biased;
+                            first_driver.call_guest(move |mut guest| {
+                                Box::pin(async move { guest.call(run, ()).await })
+                            }),
+                            second_driver.call_guest(move |_| {
+                                queued_call_ran.store(true, Ordering::Release);
+                                Box::pin(async move { Ok(()) })
+                            }),
+                        )
+                    };
+                    assert!(driver.pump_reentry(&mut store, queued).await.is_err());
+                    Ok(())
+                })
+            })
+            .expect("link host function");
+
+        let mut store = Store::new(&engine, TestHostState);
+        let instance = linker
+            .instantiate_async(&mut store, &component)
+            .await
+            .expect("instantiate test component");
+        let run = instance
+            .get_typed_func::<(), ()>(&mut store, "run")
+            .expect("run export");
+        assert!(run_slot.set(run).is_ok());
+        let driver = ConcurrentStore::new(store).await;
+        assert!(driver_slot.set(driver.clone()).is_ok());
+
+        let error = timeout(
+            Duration::from_secs(2),
+            driver.call_guest(move |mut guest| Box::pin(async move { guest.call(run, ()).await })),
+        )
+        .await
+        .expect("reentrant guest trap timed out")
+        .expect_err("reentrant guest call should fail");
+        assert!(error.to_string().contains("wasm backtrace"), "{error}");
+
+        let mut join = driver.driver_join();
+        let retained = join.wait().await.expect_err("driver should fail");
+        assert!(retained.to_string().contains("wasm backtrace"));
+        assert!(!queued_call_ran.load(Ordering::Acquire));
+        assert_eq!(host_calls.load(Ordering::SeqCst), 2);
+    }
+
+    #[allow(clippy::too_many_lines)]
+    async fn owned_resource_lifecycle_retires_store_on_trap() {
+        let mut config = Config::new();
+        config.wasm_component_model(true);
+        config.wasm_component_model_async(true);
+        config.concurrency_support(true);
+        let engine = Engine::new(&config).expect("test engine");
+        let component =
+            Component::new(&engine, owned_resource_component()).expect("test component");
+        let resource_drops = Arc::new(AtomicUsize::new(0));
+        let store_dropped = Arc::new(AtomicBool::new(false));
+        let mut linker = Linker::<BoundaryState>::new(&engine);
+        linker
+            .root()
+            .resource(
+                "resource",
+                ResourceType::host::<BoundaryResource>(),
+                |store, rep| {
+                    assert!(matches!(rep, 11 | 22 | 33 | 44));
+                    store.data().resource_drops.fetch_add(1, Ordering::SeqCst);
+                    Ok(())
+                },
+            )
+            .expect("link host resource");
+        let mut store = Store::new(
+            &engine,
+            BoundaryState {
+                resource_drops: Arc::clone(&resource_drops),
+                store_dropped: Arc::clone(&store_dropped),
+            },
+        );
+        let instance = linker
+            .instantiate_async(&mut store, &component)
+            .await
+            .expect("instantiate test component");
+        let drop_resource = instance
+            .get_typed_func::<(Resource<BoundaryResource>,), ()>(&mut store, "drop")
+            .expect("drop export");
+        let return_resource = instance
+            .get_typed_func::<(Resource<BoundaryResource>,), (Resource<BoundaryResource>,)>(
+                &mut store, "return",
+            )
+            .expect("return export");
+        let trap = instance
+            .get_typed_func::<(Resource<BoundaryResource>,), ()>(&mut store, "trap")
+            .expect("trap export");
+        let retain = instance
+            .get_typed_func::<(Resource<BoundaryResource>,), ()>(&mut store, "retain")
+            .expect("retain export");
+        let drop_retained = instance
+            .get_typed_func::<(), ()>(&mut store, "drop-retained")
+            .expect("drop-retained export");
+        let driver = LegacyStore::start(
+            store,
+            LegacySyncReentry::new(),
+            Arc::new(TestSpawner {
+                runtime: tokio::runtime::Handle::current(),
+            }),
+        )
+        .await
+        .expect("start test Store driver");
+        let handle = driver.handle();
+
+        let setup_error = driver
+            .call_guest(|_| {
+                Box::pin(async move { Err::<(), _>(wasmtime::Error::msg("setup failed")) })
+            })
+            .await
+            .expect_err("pre-call setup should fail");
+        assert!(setup_error.to_string().contains("setup failed"));
+        assert_eq!(driver.state(), DriverState::Accepting);
+        driver
+            .call_guest(|_| Box::pin(async move { Ok(()) }))
+            .await
+            .expect("pre-call setup failure should leave the store usable");
+
+        driver
+            .call_guest(move |mut context| {
+                Box::pin(async move { context.call(drop_resource, (Resource::new_own(11),)).await })
+            })
+            .await
+            .expect("guest should drop the owned resource");
+        assert_eq!(resource_drops.load(Ordering::SeqCst), 1);
+
+        let (returned,) = driver
+            .call_guest(move |mut context| {
+                Box::pin(async move {
+                    context
+                        .call(return_resource, (Resource::new_own(22),))
+                        .await
+                })
+            })
+            .await
+            .expect("guest should return the owned resource");
+        assert_eq!(returned.rep(), 22);
+        assert!(returned.owned());
+        assert_eq!(resource_drops.load(Ordering::SeqCst), 1);
+
+        driver
+            .call_guest(move |mut context| {
+                Box::pin(async move { context.call(drop_resource, (returned,)).await })
+            })
+            .await
+            .expect("returned ownership should be droppable");
+        assert_eq!(resource_drops.load(Ordering::SeqCst), 2);
+
+        driver
+            .call_guest(move |mut context| {
+                Box::pin(async move { context.call(retain, (Resource::new_own(44),)).await })
+            })
+            .await
+            .expect("guest should retain ownership across calls");
+        assert_eq!(resource_drops.load(Ordering::SeqCst), 2);
+        driver
+            .call_guest(move |mut context| {
+                Box::pin(async move { context.call(drop_retained, ()).await })
+            })
+            .await
+            .expect("guest should drop retained ownership later");
+        assert_eq!(resource_drops.load(Ordering::SeqCst), 3);
+
+        let call_error = driver
+            .call_guest(move |mut context| {
+                Box::pin(async move { context.call(trap, (Resource::new_own(33),)).await })
+            })
+            .await
+            .expect_err("guest call should fail");
+        assert!(
+            call_error.to_string().contains("wasm backtrace"),
+            "{call_error}"
+        );
+
+        let later_call_ran = Arc::new(AtomicBool::new(false));
+        let ran = Arc::clone(&later_call_ran);
+        let immediate_error = handle
+            .call_guest(move |_| {
+                ran.store(true, Ordering::Release);
+                Box::pin(async move { Ok(()) })
+            })
+            .await
+            .expect_err("a call after a guest trap should be rejected");
+        assert!(
+            immediate_error.to_string().contains("guest call")
+                || immediate_error.to_string().contains("wasm backtrace"),
+            "{immediate_error}"
+        );
+        assert!(!later_call_ran.load(Ordering::Acquire));
+
+        let mut join = driver.driver_join();
+        let retained = join.wait().await.expect_err("driver should fail");
+        assert!(
+            retained.to_string().contains("wasm backtrace"),
+            "{retained}"
+        );
+        // Trapping does not run the destructor for a guest-held handle. Its
+        // backing host data is released when the failed Store is dropped.
+        assert!(store_dropped.load(Ordering::Acquire));
+        assert_eq!(resource_drops.load(Ordering::SeqCst), 3);
+        assert_eq!(driver.state(), DriverState::Failed(Arc::clone(&retained)));
+
+        let later_error = handle
+            .call(|_| Box::pin(async move { Ok(()) }))
+            .await
+            .expect_err("later calls should retain the guest failure");
+        assert!(
+            later_error.to_string().contains("wasm backtrace"),
+            "{later_error}"
+        );
+    }
+
     fn shutdown_does_not_hide_terminal_failure() {
         let error = super::executor::reconcile_shutdown_result(
             Ok(Ok("finalized")),
@@ -1257,6 +1656,8 @@ mod tests {
         startup_task_loss_is_reported().await;
         active_driver_task_loss_is_reported().await;
         driver_panic_is_reported().await;
+        caught_reentrant_guest_trap_stops_driver_and_queued_work().await;
+        owned_resource_lifecycle_retires_store_on_trap().await;
         shutdown_does_not_hide_terminal_failure();
 
         let store = ConcurrentStore::new(test_store()).await;
