@@ -456,20 +456,26 @@ impl JavaClient {
         let Ok(serialized) = rx.await else {
             return;
         };
+        let sent_count = serialized.len();
+        if sent_count == 0 {
+            return;
+        }
 
         if version >= JavaMinecraftVersion::V_1_20_2 {
             self.send_packet(&CChunkBatchStart).await;
         }
 
+        // Keep the whole batch on the priority queue. Otherwise the batch end can overtake chunk
+        // data queued on the normal channel, leaving the client unable to render those chunks.
         for (chunk_data, light_data) in serialized {
-            self.enqueue_packet(chunk_data).await;
+            self.send_packet_now_data(chunk_data).await;
             if let Some(light_data) = light_data {
-                self.enqueue_packet(light_data).await;
+                self.send_packet_now_data(light_data).await;
             }
         }
 
         if version >= JavaMinecraftVersion::V_1_20_2 {
-            self.send_packet(&CChunkBatchEnd::new(chunks.len() as u16))
+            self.send_packet(&CChunkBatchEnd::new(sent_count as u16))
                 .await;
         }
     }
