@@ -3205,9 +3205,18 @@ impl EntityBase for LivingEntity {
                 .fetch_update(Relaxed, Relaxed, |time| Some(time.saturating_add(1)))
                 .unwrap_or_else(|time| time)
                 .saturating_add(1);
-            // Players remain part of the world until their client requests a
-            // respawn. Removing one here breaks reconnecting while dead.
             if self.entity.entity_type == &EntityType::PLAYER {
+                // Bedrock keeps a dead remote player actor in its death pose.
+                // Remove Java players after the animation so respawn can
+                // recreate a live, interactable actor with the same identity.
+                if time == 10 {
+                    self.entity
+                        .world
+                        .load()
+                        .despawn_dead_java_player_for_bedrock(&self.entity);
+                }
+                // Players remain part of the world until their client requests a
+                // respawn. Removing one here breaks reconnecting while dead.
                 return;
             }
             // Only send death particles once (on the exact tick death_time reaches 20)

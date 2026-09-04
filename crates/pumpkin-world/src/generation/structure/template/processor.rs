@@ -471,9 +471,7 @@ impl StructureProcessor {
             }
             Self::LavaSubmergedBlock => {
                 let world_state_id = placer.get_block_state(&world_pos);
-                if world_state_id.to_block_id() == BlockId::LAVA
-                    && (!state.is_full_cube() || !state.is_solid_block())
-                {
+                if world_state_id.to_block_id() == BlockId::LAVA && !state.is_solid_render() {
                     return None;
                 }
                 Some(state)

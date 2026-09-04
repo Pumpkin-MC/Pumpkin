@@ -153,6 +153,7 @@ use crate::block::blocks::snow::LayeredSnowBlock;
 use crate::block::blocks::soul_sand::SoulSandBlock;
 use crate::block::blocks::spawner::SpawnerBlock;
 use crate::block::blocks::sponge::{SpongeBlock, WetSpongeBlock};
+use crate::block::blocks::spreading_snowy_block::{MyceliumBlock, PodzolBlock};
 use crate::block::blocks::stairs::StairBlock;
 use crate::block::blocks::structure_block::StructureBlock;
 use crate::block::blocks::structure_void::StructureVoidBlock;
@@ -401,6 +402,8 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(AmethystBlock);
     manager.register(BuddingAmethystBlock);
     manager.register(GrassBlock);
+    manager.register(MyceliumBlock);
+    manager.register(PodzolBlock);
     manager.register(RootedDirtBlock);
     manager.register(NyliumBlock);
     manager.register(BubbleColumnBlock);

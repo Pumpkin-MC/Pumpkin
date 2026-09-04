@@ -2583,8 +2583,13 @@ impl Player {
             sender.prepare_batch(&world.level, player_chunk, epoch, version)
         });
 
-        let total_sent_chunks = if let Some(batch) = prepared_batch {
-            match self.client.as_ref() {
+        let total_sent_chunks = prepared_batch.map_or_else(
+            || {
+                self.chunk_sender
+                    .try_lock()
+                    .map_or(0, |s| s.sent_chunks_count())
+            },
+            |batch| match self.client.as_ref() {
                 ClientPlatform::Java(_) => {
                     let mut per_player_cache = rustc_hash::FxHashMap::default();
                     let encoded =
@@ -2596,21 +2601,25 @@ impl Player {
                     })
                 }
                 ClientPlatform::Bedrock(_) => {
-                    let chunks: Vec<_> = batch.chunks.into_iter().map(|c| c.chunk).collect();
-                    let client = self.client.clone();
-                    self.spawn_task(async move {
-                        client.send_chunks(&chunks).await;
-                    });
-                    self.chunk_sender
-                        .try_lock()
-                        .map_or(0, |s| s.sent_chunks_count())
+                    let current_epoch = self.chunk_send_epoch.load(Ordering::Relaxed);
+                    let (chunks, total_sent_chunks) = self.chunk_sender.try_lock().map_or_else(
+                        |_| (Vec::new(), 0),
+                        |mut sender| {
+                            let chunks = sender.commit_bedrock_batch(&batch, current_epoch);
+                            let total_sent_chunks = sender.sent_chunks_count();
+                            (chunks, total_sent_chunks)
+                        },
+                    );
+                    if !chunks.is_empty() {
+                        let client = self.client.clone();
+                        self.spawn_task(async move {
+                            client.send_chunks(&chunks).await;
+                        });
+                    }
+                    total_sent_chunks
                 }
-            }
-        } else {
-            self.chunk_sender
-                .try_lock()
-                .map_or(0, |s| s.sent_chunks_count())
-        };
+            },
+        );
 
         if let ClientPlatform::Bedrock(bedrock_client) = self.client.as_ref()
             && !self.bedrock_spawned.load(Ordering::Relaxed)

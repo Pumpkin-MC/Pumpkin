@@ -635,6 +635,10 @@ impl BlockState {
     /// Bit flag indicating this state receives random tick events.
     const HAS_RANDOM_TICKS: u16 = 1 << 9;
 
+    const IS_SOLID_RENDER: u16 = 1 << 10;
+    const CAN_OCCLUDE: u16 = 1 << 11;
+    const HAS_ANALOG_OUTPUT_SIGNAL: u16 = 1 << 12;
+
     /// Returns `true` if this state receives random tick events.
     const fn has_random_ticks(&self) -> bool {
         self.state_flags & Self::HAS_RANDOM_TICKS != 0
@@ -647,6 +651,18 @@ impl BlockState {
 
     pub const fn is_liquid(&self) -> bool {
         self.state_flags & Self::IS_LIQUID != 0
+    }
+
+    pub const fn is_solid_render(&self) -> bool {
+        self.state_flags & Self::IS_SOLID_RENDER != 0
+    }
+
+    pub const fn can_occlude(&self) -> bool {
+        self.state_flags & Self::CAN_OCCLUDE != 0
+    }
+
+    pub const fn has_analog_output_signal(&self) -> bool {
+        self.state_flags & Self::HAS_ANALOG_OUTPUT_SIGNAL != 0
     }
 
     /// Emits the `BlockState { … }` struct literal token stream for code generation.

@@ -196,26 +196,23 @@ impl DesertPyramidPiece {
         }
 
         let world_pos = self.piece.offset_pos(x, y, z);
-        if !bb.contains_pos(&world_pos) {
-            return;
+        let mut random = RandomGenerator::Legacy(LegacyRand::from_seed(hash_block_pos(
+            world_pos.x,
+            world_pos.y,
+            world_pos.z,
+        ) as u64));
+
+        if self.piece.add_chest(
+            chunk,
+            bb,
+            &mut random,
+            x,
+            y,
+            z,
+            "minecraft:chests/desert_pyramid",
+        ) {
+            self.has_placed_chest[index] = true;
         }
-
-        self.piece
-            .add_block(chunk, Block::CHEST.default_state, x, y, z, bb);
-
-        let mut nbt = NbtCompound::new();
-        nbt.put_int("x", world_pos.x);
-        nbt.put_int("y", world_pos.y);
-        nbt.put_int("z", world_pos.z);
-        nbt.put_string("id", "minecraft:chest".to_string());
-        nbt.put_string("LootTable", "minecraft:chests/desert_pyramid".to_string());
-
-        let mut random =
-            LegacyRand::from_seed(hash_block_pos(world_pos.x, world_pos.y, world_pos.z) as u64);
-        nbt.put_long("LootTableSeed", random.next_i64());
-
-        chunk.add_block_entity(nbt);
-        self.has_placed_chest[index] = true;
     }
 
     fn add_cellar(&self, chunk: &mut ProtoChunk, bb: &BlockBox, random: &mut RandomGenerator) {
