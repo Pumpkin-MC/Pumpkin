@@ -1,20 +1,12 @@
-//! Per-pass instrumentation for the lighting hot path.
-//!
-//! Split out of `runtime` so the engine file holds propagation logic only. The counters
-//! live in one flat array: the hot path bumps them by index, and the array is snapshotted
-//! and reset in a single sweep per pass.
+//! Hot-path counters. Local `Cell` tally, folded into atomics on drop.
 
 use std::cell::Cell;
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
-/// Declares the counters once and derives everything else from that one list.
-///
-/// The variants number themselves from zero upwards in declaration order
 macro_rules! light_counters {
     ($($variant:ident => $name:literal,)+) => {
-        /// One counter per measured operation on the lighting hot path.
         #[derive(Clone, Copy)]
         #[repr(usize)]
         pub(super) enum Counter {
@@ -49,9 +41,6 @@ light_counters! {
 
 const COUNTER_COUNT: usize = Counter::NAMES.len();
 
-/// Per-tick counts for the lighting hot path. `sky_column_read` is O(height)
-/// per `checkBlock`; `get_sky`/`block_state`/`chunk_loaded` are 6x per
-/// propagated cell. Logged sorted by count from [`LightPassStats`].
 pub(super) struct LightCounters([AtomicU64; COUNTER_COUNT]);
 
 impl LightCounters {
@@ -68,12 +57,6 @@ impl LightCounters {
     }
 }
 
-/// Per-operation tally that adds itself to [`LightCounters`] when it goes out of scope.
-///
-/// One propagation step bumps around two dozen counters, and every one of them used to be
-/// a `lock xadd` on a line no other thread was interested in.
-///
-/// `Cell` rather than a plain array so a shared `&LocalCounters` can still count.
 pub(super) struct LocalCounters<'a> {
     local: [Cell<u64>; COUNTER_COUNT],
     shared: &'a LightCounters,
@@ -101,10 +84,6 @@ impl<'a> LocalCounters<'a> {
 }
 
 impl Drop for LocalCounters<'_> {
-    /// Folds the tally into the shared counters. Untouched counters are skipped, so a
-    /// one-shot light query pays a handful of compares instead of an atomic.
-    ///
-    /// Must happen before [`LightCounters::snapshot_and_reset`] reads them.
     fn drop(&mut self) {
         for (slot, shared) in self.local.iter().zip(self.shared.0.iter()) {
             let value = slot.get();
@@ -115,7 +94,6 @@ impl Drop for LocalCounters<'_> {
     }
 }
 
-/// One `runUpdates` slice. `hot` is sorted most-used first.
 #[derive(Clone, Copy)]
 pub struct LightPassStats {
     pub elapsed: Duration,
@@ -125,8 +103,6 @@ pub struct LightPassStats {
 }
 
 impl LightPassStats {
-    /// Built by [`super::DynamicLightEngine::drain_queued`]; `counts` stays private so the
-    /// counter layout is not part of the public surface.
     pub(super) const fn new(
         elapsed: Duration,
         updates: i32,
@@ -141,13 +117,7 @@ impl LightPassStats {
         }
     }
 
-    /// Reads one counter out of the snapshot. -> only for tests
-    #[cfg(test)]
-    pub(super) const fn count(&self, counter: Counter) -> u64 {
-        self.counts[counter as usize]
-    }
-
-    fn hot_pairs(&self) -> Vec<(&'static str, u64)> {
+    fn hot_list(&self) -> String {
         let mut items: Vec<(&'static str, u64)> = Counter::NAMES
             .iter()
             .zip(self.counts.iter())
@@ -155,10 +125,6 @@ impl LightPassStats {
             .collect();
         items.sort_unstable_by_key(|a| std::cmp::Reverse(a.1));
         items
-    }
-
-    fn hot_list(&self) -> String {
-        self.hot_pairs()
             .into_iter()
             .map(|(name, count)| format!("{name}={count}"))
             .collect::<Vec<_>>()

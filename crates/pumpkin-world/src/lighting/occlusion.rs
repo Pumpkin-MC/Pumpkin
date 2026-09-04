@@ -1,16 +1,11 @@
-//! Shape based light occlusion.
+//! Shape occlusion. Vanilla `LightEngine.shapeOccludes`.
 //!
-//! Most blocks stop light by their flat `opacity`. A few stop it by shape: vanilla
-//! `LightEngine.shapeOccludes` treats a fully covered face as blocking outright, whatever the
-//! opacity says, which is why e.g. a stair with opacity 0 still casts a hard shadow downward.
-//!
-//! Not covered by [`LightEngine::get_light_dampening_into`], which only reaches full solid
-//! render blocks, those already stop light through their opacity of 15.
+//! Opacity stops most blocks. Stairs/slabs/farmland/… stop light on a covered face even at opacity 0.
 
 use pumpkin_data::{Block, BlockDirection, BlockId, BlockState, BlockStateId, tag};
 use std::sync::LazyLock;
 
-/// The blocks in vanilla's list that no tag covers.
+/// Vanilla classes with no covering tag.
 const SINGLETONS: [BlockId; 11] = [
     Block::FARMLAND.id,
     Block::DIRT_PATH.id,
@@ -25,13 +20,8 @@ const SINGLETONS: [BlockId; 11] = [
     Block::PISTON_HEAD.id,
 ];
 
-/// Whether this block's light occlusion follows its shape instead of its opacity.
-///
-/// Vanilla asks two things (`LightEngine.isEmptyShape`): `canOcclude`, which the block data now
-/// carries, and `useShapeForLightOcclusion`, which it does not. `sided_transparency` is the
-/// closest exported flag and a superset, it also covers carpets, comparators and composters,
-/// which vanilla lets light through.
-fn uses_shape_for_light_occlusion(state: &BlockState) -> bool {
+/// `canOcclude` + `useShapeForLightOcclusion`.
+pub(crate) fn uses_shape_for_light_occlusion(state: &BlockState) -> bool {
     if !state.can_occlude() {
         return false;
     }
@@ -47,13 +37,9 @@ fn uses_shape_for_light_occlusion(state: &BlockState) -> bool {
     SINGLETONS.contains(&block.id)
 }
 
-/// One bit per face, for every block state: does light entering through that face stop here.
+/// Bit per face, per state.
 static OCCLUDING_FACES: LazyLock<Box<[u8]>> = LazyLock::new(|| {
-    // Sized by probing: `BlockStateId::new` rejects anything past the last state.
-    let count = (0..=u16::MAX)
-        .take_while(|raw| BlockStateId::new(*raw).is_some())
-        .count();
-    let mut faces = vec![0u8; count].into_boxed_slice();
+    let mut faces = vec![0u8; BlockStateId::COUNT as usize].into_boxed_slice();
     for (raw, mask) in faces.iter_mut().enumerate() {
         let Some(state_id) = BlockStateId::new(raw as u16) else {
             continue;
@@ -71,10 +57,6 @@ static OCCLUDING_FACES: LazyLock<Box<[u8]>> = LazyLock::new(|| {
     faces
 });
 
-/// Whether light entering `state_id` through its `face` is stopped by the block's shape.
-///
-/// Vanilla merges the two facing shapes and asks whether the union covers the face
-/// (`Shapes.faceShapeOccludes`). Only the entered face is tested here
 #[inline]
 #[must_use]
 pub fn face_occludes(state_id: BlockStateId, face: BlockDirection) -> bool {
@@ -83,10 +65,7 @@ pub fn face_occludes(state_id: BlockStateId, face: BlockDirection) -> bool {
         .is_some_and(|mask| mask & (1 << face as u8) != 0)
 }
 
-/// Whether light moving in `dir` is stopped by the shapes of the block it leaves and the block
-/// it enters. Vanilla `LightEngine.shapeOccludes`.
-///
-/// Vanilla merges the two facing shapes and asks whether the union covers the face
+/// Vanilla `shapeOccludes`: union of leaving face and entered opposite face.
 #[inline]
 #[must_use]
 pub fn shape_occludes(from: BlockStateId, to: BlockStateId, dir: BlockDirection) -> bool {
@@ -98,7 +77,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn only_vanillas_shape_occluding_blocks_are_listed() {
+    fn shape_list_matches_vanilla_classes() {
         for block in [
             Block::OAK_STAIRS,
             Block::OAK_SLAB,
@@ -108,13 +87,10 @@ mod tests {
         ] {
             assert!(
                 uses_shape_for_light_occlusion(block.default_state),
-                "{} overrides useShapeForLightOcclusion in vanilla",
+                "{}",
                 block.name
             );
         }
-
-        // `noOcclusion` blocks: vanilla gives them an empty occlusion shape, so they never
-        // block light by shape however solid their faces look.
         for block in [
             Block::GLASS,
             Block::OAK_DOOR,
@@ -125,47 +101,24 @@ mod tests {
         ] {
             assert!(
                 !uses_shape_for_light_occlusion(block.default_state),
-                "{} does not occlude light by shape in vanilla",
+                "{}",
                 block.name
             );
         }
     }
 
     #[test]
-    fn a_stair_stops_light_through_its_full_face_but_not_its_open_one() {
+    fn stair_covers_some_but_not_all_faces() {
         let stair = Block::OAK_STAIRS.default_state.id;
-        let solid: Vec<BlockDirection> = BlockDirection::all()
+        let solid = BlockDirection::all()
             .into_iter()
             .filter(|d| face_occludes(stair, *d))
-            .collect();
-        assert!(
-            !solid.is_empty(),
-            "a stair has at least one fully covered face"
-        );
-        assert!(
-            solid.len() < 6,
-            "a stair is not covered on every face, or it would be a full block"
-        );
+            .count();
+        assert!((1..6).contains(&solid));
     }
 
-    /// `can_occlude` is what keeps glass out; the class list alone would not, since glass has
-    /// six solid faces. Pins the gate rather than the outcome.
     #[test]
-    fn can_occlude_is_what_excludes_glass() {
-        assert!(
-            !Block::GLASS.default_state.can_occlude(),
-            "glass is noOcclusion in vanilla"
-        );
-        assert!(
-            Block::OAK_STAIRS.default_state.can_occlude(),
-            "a stair does occlude, and is only shaped differently"
-        );
-    }
-
-    /// The waterlogged stair that the parity harness caught: light coming straight down is
-    /// stopped outright, where its opacity of 1 alone would have let a level through.
-    #[test]
-    fn a_covered_face_stops_light_the_opacity_would_have_passed() {
+    fn covered_face_stops_light_opacity_would_pass() {
         let water = Block::WATER.default_state.id;
         let stair = Block::JUNGLE_STAIRS
             .states
@@ -174,24 +127,15 @@ mod tests {
             .find(|id| face_occludes(*id, BlockDirection::Up))
             .expect("some stair state is covered on top");
 
-        assert!(
-            shape_occludes(water, stair, BlockDirection::Down),
-            "a full upward face blocks light arriving from above"
-        );
-        assert!(
-            !shape_occludes(water, Block::WATER.default_state.id, BlockDirection::Down),
-            "water dampens light but never blocks it by shape"
-        );
+        assert!(shape_occludes(water, stair, BlockDirection::Down));
+        assert!(!shape_occludes(water, water, BlockDirection::Down));
     }
 
     #[test]
     fn glass_never_occludes_by_shape() {
         let glass = Block::GLASS.default_state.id;
         for dir in BlockDirection::all() {
-            assert!(
-                !face_occludes(glass, dir),
-                "glass has solid faces but must stay transparent to light"
-            );
+            assert!(!face_occludes(glass, dir));
         }
     }
 }

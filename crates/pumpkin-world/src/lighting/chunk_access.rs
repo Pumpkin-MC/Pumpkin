@@ -1,27 +1,17 @@
-//! Chunk resolution and per-block light access for the runtime light engine.
-//!
-//! Every `level.read_chunk_sync` is a `DashMap` lookup, and the propagation loops hit the
-//! same chunk many times in a row. [`ChunkCursor`] memoizes the last one, and
-//! [`ChunkCursor::resolve`] hands out that chunk together with the in-chunk indices: one
-//! position is decoded once, and the light read, the opacity and the write of that step
-//! all reuse it.
+//! Runtime chunk cursor. Memoizes the last `DashMap` lookup.
 
 use super::stats::{Counter, LocalCounters};
 use crate::chunk::ChunkData;
-use pumpkin_data::BlockStateId;
 use crate::chunk::io::Dirtiable;
 use crate::chunk::palette::BlockPalette;
 use crate::level::Level;
+use pumpkin_data::BlockStateId;
+use pumpkin_data::{Block, BlockDirection};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use std::sync::Arc;
 
-/// A position resolved against its chunk: where its Y sits, and for `Inside` the section
-/// and in-section indices every accessor below needs.
-///
-/// Small and `Copy` on purpose -> it is handed to three or four accessors per propagation
-/// step, and each of them used to derive it again from the raw [`BlockPos`].
 #[derive(Clone, Copy)]
 pub(super) enum VerticalInChunk {
     Below,
@@ -34,7 +24,6 @@ pub(super) enum VerticalInChunk {
     Above,
 }
 
-/// Derives the cell from coordinates that are already chunk-relative.
 const fn vertical_in(chunk: &ChunkData, relative: &Vector3<i32>) -> VerticalInChunk {
     let rel_y = relative.y - chunk.section.min_y;
     if rel_y < 0 {
@@ -52,22 +41,9 @@ const fn vertical_in(chunk: &ChunkData, relative: &Vector3<i32>) -> VerticalInCh
     }
 }
 
-/// Memoized chunk handle for one lighting operation.
-///
-/// Every `level.read_chunk_sync` is a `DashMap` lookup: hash, shard `RwLock`, table probe,
-/// `Arc` deref -> several potential cache misses and an atomic. A single
-/// sky propagation step touches 6 neighbours, each with "loaded?", read, opacity and
-/// write, so up to 24 such lookups -> and at least two thirds of them land in the
-/// same chunk as the origin position. The cursor turns those into a compare plus
-/// a pointer deref.
-///
-/// Deliberately holds the `Arc<ChunkData>` and not the `DashMap` guard: keeping a shard read
-/// guard alive across further lookups can deadlock against a waiting writer on the same
-/// shard (`parking_lot` lets `read()` block as soon as a writer is queued).
+/// Holds `Arc<ChunkData>`, not a DashMap guard (deadlock vs waiting writers).
 pub(super) struct ChunkCursor<'a> {
     pub(super) level: &'a Level,
-    /// A shared reference for cursor, so it can be
-    /// copied out and handed to a closure while the cursor itself is borrowed mutably.
     pub(super) counters: &'a LocalCounters<'a>,
     memo: Option<(Vector2<i32>, Option<Arc<ChunkData>>)>,
 }
@@ -98,7 +74,6 @@ impl<'a> ChunkCursor<'a> {
         self.chunk_at(chunk_pos)
     }
 
-    /// Resolves a position once: the chunk it lives in, plus its cell inside that chunk.
     pub(super) fn resolve(&mut self, pos: &BlockPos) -> Option<(&Arc<ChunkData>, VerticalInChunk)> {
         let (chunk_pos, relative) = pos.chunk_and_chunk_relative_position();
         let chunk = self.chunk_at(chunk_pos)?;
@@ -118,17 +93,14 @@ impl<'a> ChunkCursor<'a> {
             .and_then(|(chunk, cell)| Self::block_light_at(chunk, cell))
     }
 
-    /// The block state at `pos`, or void air if the chunk is not loaded.
     pub(super) fn block_state(&mut self, pos: &BlockPos) -> &'static pumpkin_data::BlockState {
         self.counters.bump(Counter::BlockState);
         self.resolve(pos).map_or_else(
-            || pumpkin_data::Block::VOID_AIR.default_state,
+            || Block::VOID_AIR.default_state,
             |(chunk, cell)| Self::block_state_at(chunk, cell),
         )
     }
 
-    /// `false` if the write cannot land (chunk not loaded, Y outside the
-    /// chunk height). Callers must not re-queue such positions.
     pub(super) fn set_sky_light(&mut self, pos: &BlockPos, light_level: u8) -> bool {
         self.counters.bump(Counter::SetSky);
         self.resolve(pos)
@@ -141,33 +113,13 @@ impl<'a> ChunkCursor<'a> {
             .is_some_and(|(chunk, cell)| Self::write_light_at(chunk, cell, light_level, true))
     }
 
-    // The accessors below take an already resolved chunk and cell. A propagation step asks
-    // "loaded?", reads the light level, reads the opacity and then writes.
-    //
-    // They deliberately do not bump counters: the caller already did that when it resolved.
-
     pub(super) fn block_state_at(
         chunk: &ChunkData,
         cell: VerticalInChunk,
     ) -> &'static pumpkin_data::BlockState {
-        let VerticalInChunk::Inside {
-            section_index,
-            y_in_section,
-            local_x,
-            local_z,
-        } = cell
-        else {
-            return pumpkin_data::Block::VOID_AIR.default_state;
-        };
-        chunk.section.with_blocks(|sections| {
-            sections.get(section_index).map_or_else(
-                || pumpkin_data::Block::VOID_AIR.default_state,
-                |section| section.get(local_x, y_in_section, local_z).to_state(),
-            )
-        })
+        Self::state_id_at(chunk, cell).to_state()
     }
 
-    /// The raw state id, so a caller can ask for both opacity and face occlusion from one read.
     pub(super) fn state_id_at(chunk: &ChunkData, cell: VerticalInChunk) -> BlockStateId {
         let VerticalInChunk::Inside {
             section_index,
@@ -176,19 +128,20 @@ impl<'a> ChunkCursor<'a> {
             local_z,
         } = cell
         else {
-            return pumpkin_data::Block::VOID_AIR.default_state.id;
+            return Block::VOID_AIR.default_state.id;
         };
         chunk.section.with_blocks(|sections| {
-            sections.get(section_index).map_or(
-                pumpkin_data::Block::VOID_AIR.default_state.id,
-                |section| section.get(local_x, y_in_section, local_z),
-            )
+            sections
+                .get(section_index)
+                .map_or(Block::VOID_AIR.default_state.id, |section| {
+                    section.get(local_x, y_in_section, local_z)
+                })
         })
     }
 
     pub(super) fn sky_light_at(chunk: &ChunkData, cell: VerticalInChunk) -> u8 {
         match cell {
-            // Vanilla: sky below the world is 0, above the world is 15.
+            // Vanilla: below world = 0, above = 15.
             VerticalInChunk::Below => 0,
             VerticalInChunk::Above => 15,
             VerticalInChunk::Inside {
@@ -259,5 +212,71 @@ impl<'a> ChunkCursor<'a> {
             chunk.mark_dirty(true);
         }
         true
+    }
+
+    /// One light lock: `max_possible` skip, shape occlusion, raise. Lock order: light then section.
+    pub(super) fn raise_light(
+        chunk: &ChunkData,
+        cell: VerticalInChunk,
+        from: BlockStateId,
+        dir: BlockDirection,
+        incoming: u8,
+        block_light: bool,
+    ) -> Option<u8> {
+        let VerticalInChunk::Inside {
+            section_index,
+            y_in_section,
+            local_x,
+            local_z,
+        } = cell
+        else {
+            return None;
+        };
+
+        let mut engine = chunk
+            .light_engine
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let sections = if block_light {
+            &mut engine.block_light
+        } else {
+            &mut engine.sky_light
+        };
+        let section = sections.get_mut(section_index)?;
+        let stored = section.get(local_x, y_in_section, local_z);
+        let max_possible = if !block_light && dir == BlockDirection::Down {
+            incoming
+        } else {
+            incoming.saturating_sub(1)
+        };
+        if stored >= max_possible {
+            return None;
+        }
+
+        let state_id = chunk.section.with_blocks(|sections| {
+            sections
+                .get(section_index)
+                .map_or(BlockStateId::AIR, |s| s.get(local_x, y_in_section, local_z))
+        });
+        if crate::lighting::occlusion::shape_occludes(from, state_id, dir) {
+            return None;
+        }
+
+        let opacity = crate::lighting::opacity_of(state_id);
+        let new_level = if !block_light && dir == BlockDirection::Down {
+            crate::lighting::sky_descended(incoming, opacity)
+        } else {
+            crate::lighting::decayed(incoming, opacity)
+        };
+        if new_level <= stored {
+            return None;
+        }
+
+        section.set(local_x, y_in_section, local_z, new_level);
+        drop(engine);
+        if !chunk.is_dirty() {
+            chunk.mark_dirty(true);
+        }
+        Some(new_level)
     }
 }

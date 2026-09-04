@@ -1,8 +1,4 @@
-//! Persistence of the cut height in `PumpkinCustomData`.
-//!
-//! Exactly one supported format version, a geometry tag so a value can never be read back
-//! under a world height it was not computed for, and a lazy path that recomputes rather
-//! than repairing.
+//! Persist cut height in `PumpkinCustomData`. v1 key + geometry tag; unusable values recompute.
 
 use super::SkyLightHeight;
 use crate::chunk::ChunkData;

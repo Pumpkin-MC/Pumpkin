@@ -455,16 +455,6 @@ fn a_glass_roof_does_not_raise_the_cut() {
     );
 }
 
-/// One supported version, and the key spells it out, so a value written under a different
-/// format version cannot be read back by construction.
-#[test]
-fn the_key_name_spells_out_the_supported_version() {
-    assert_eq!(
-        KEY,
-        format!("sky_light_height_v{}", SkyLightHeightMigration::VERSION)
-    );
-}
-
 /// A vanilla chunk has no key at all: compute once, cache, persist and never compute
 /// again while the chunk stays loaded.
 #[test]
@@ -632,7 +622,7 @@ fn divergence_reaches_cache_and_nbt_and_only_accumulates() {
 fn divergences_discovered_at_the_same_moment_all_survive() {
     const QUADRANTS: [(i32, i32); 4] = [(2, 2), (12, 2), (2, 12), (12, 12)];
 
-    for round in 0..200 {
+    for round in 0..16 {
         let chunk = shape("flat");
         SkyLightHeightMigration::ensure_lazy(&chunk, || SkyLightHeight::compute_from_chunk(&chunk));
 

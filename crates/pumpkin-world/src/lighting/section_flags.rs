@@ -1,18 +1,12 @@
-//! Per-section dirty masks for the light passes.
-//!
-//! Level chunks answer from their block palette, which holds a handful of states instead of
-//! 4096 blocks. Proto chunks have no palette and instead track the mask as blocks are written.
+//! Per-section seed masks. Level chunks: palette. Proto: maintained on write.
 
-use crate::ProtoChunk;
 use crate::chunk_system::Chunk;
 
-/// One bit per section, set when the section can seed a light pass.
+/// One bit per section. Indices >= 32 stay set so they are never skipped.
 #[derive(Clone, Copy, Default)]
 pub struct SectionMask(u32);
 
 impl SectionMask {
-    /// Sections beyond bit 31 are never skipped: a mask cannot describe them, and claiming
-    /// they are empty would drop light.
     #[inline]
     #[must_use]
     pub const fn contains(self, section: usize) -> bool {
@@ -27,14 +21,10 @@ impl SectionMask {
     }
 }
 
-/// Sections that can seed the block light pass.
-///
-/// A section seeds when it holds a light emitting block. Rim sections also seed from the
-/// light they already carry, so a uniform container at or below level 1 is what clears them:
-/// level 1 cannot spread, and the pass never lowers a level.
+/// Emitter sections, plus already-lit rim storage (level 1 cannot spread).
 pub(super) fn block_light_seeds(chunk: &Chunk, on_rim: bool) -> SectionMask {
     match chunk {
-        Chunk::Proto(proto) => proto_emitters(proto),
+        Chunk::Proto(proto) => proto.emitter_sections,
         Chunk::Level(level) => {
             let mut mask = SectionMask::default();
             level.section.with_blocks(|sections| {
@@ -59,10 +49,4 @@ pub(super) fn block_light_seeds(chunk: &Chunk, on_rim: bool) -> SectionMask {
             mask
         }
     }
-}
-
-/// Proto chunks keep the mask up to date as blocks are written, so there is nothing to scan.
-#[inline]
-const fn proto_emitters(proto: &ProtoChunk) -> SectionMask {
-    proto.emitter_sections
 }

@@ -1,8 +1,4 @@
-//! The packed 24-bit cut height value.
-//!
-//! Bit layout, band arithmetic and the two ways to derive it (from a finished chunk and
-//! from a `ProtoChunk` during worldgen). Everything that decides what the value *means*
-//! lives here; [`super::migration`] only decides how it is stored.
+//! Packed 24-bit cut height: hex Y, flags, spread. Migration is storage only.
 
 use super::{DECODE_SAFETY_MARGIN, SPREAD_SCALES, SkyLightTier};
 use crate::ProtoChunk;

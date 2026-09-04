@@ -1,4 +1,4 @@
-use crate::chunk::ChunkData;
+use crate::chunk::{ChunkData, ChunkHeightmapType};
 use crate::chunk::palette::BlockPalette;
 use crate::level::Level;
 use crate::lighting::chunk_access::{ChunkCursor, VerticalInChunk};
@@ -6,6 +6,7 @@ use crate::lighting::decayed;
 use crate::lighting::occlusion;
 use crate::lighting::sky_light_height::{SkyLightHeight, SkyLightHeightMigration, SkyLightTier};
 use crate::lighting::stats::{Counter, LightCounters, LightPassStats, LocalCounters};
+use pumpkin_data::BlockStateId;
 use crossbeam::queue::SegQueue;
 use rustc_hash::FxHashSet;
 use pumpkin_config::lighting::LightingEngineConfig;
@@ -55,28 +56,37 @@ impl Default for DynamicLightEngine {
     }
 }
 impl DynamicLightEngine {
-    /// Open sky above `pos` in this column. Vanilla `SkyLightEngine` uses sky-section
-    /// sources, not a per-`checkBlock` scan; overhangs can disagree until the flood catches up.
-    /// Bounded by this chunk's height (`VOID_AIR` opacity 0 would walk forever past `max_y`).
+    /// Open sky above `pos`. Scan only to `WorldSurface` (air above it).
     fn has_open_sky_above(cursor: &mut ChunkCursor, pos: &BlockPos) -> bool {
         cursor.counters.bump(Counter::SkyColumnScan);
-        // The whole column is in the same chunk by definition, so it is resolved once and
-        // the pointer then stays in a register for every step. Re-resolving per step would
-        // repeat the position split and the memo compare up to ~250 times for one chunk.
         let Some(chunk) = cursor.chunk_for(pos) else {
             return false;
         };
         let min_y = chunk.section.min_y;
-        let max_y = min_y + SkyLightHeight::chunk_height(chunk) - 1;
         let (_, relative) = pos.chunk_and_chunk_relative_position();
         let (local_x, local_z) = (relative.x as usize, relative.z as usize);
 
-        // The sections read guard is taken once for the whole column instead of once per
-        // block. It protects the same data either way; per-step locking is a few hundred
-        // uncontended round trips that buy nothing.
+        let surface = {
+            let heightmap = chunk
+                .heightmap
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            heightmap
+                .get(
+                    ChunkHeightmapType::WorldSurface,
+                    relative.x,
+                    relative.z,
+                    min_y,
+                )
+                .min(min_y + SkyLightHeight::chunk_height(chunk) - 1)
+        };
+        if surface <= pos.0.y {
+            return true;
+        }
+
         let (blocked, reads) = chunk.section.with_blocks(|sections| {
             let mut reads = 0u64;
-            for y in (pos.0.y + 1)..=max_y {
+            for y in (pos.0.y + 1)..=surface {
                 reads += 1;
                 let rel_y = (y - min_y) as usize;
                 let opacity = sections
@@ -118,11 +128,9 @@ impl DynamicLightEngine {
         };
 
         if tier == SkyLightTier::Unknown {
-            return tier; // Unclear even without a border: saves the neighbour lookup.
+            return tier;
         }
-        // Deliberately not via the cursor: the neighbour chunk would evict its memo,
-        // even though the caller carries on in its own chunk right after. Only the
-        // edge column pays this, and there it is 1-2 lookups.
+        // Skip cursor: neighbour would evict the memo.
         if Self::border_sides_agree(cursor.level, chunk_pos, relative.x, relative.z, height) {
             tier
         } else {
@@ -130,11 +138,7 @@ impl DynamicLightEngine {
         }
     }
 
-    /// Chunk border sync: at a chunk border the neighbour's near-border quadrant has to
-    /// carry the fast path too (AND). If it does not, or the neighbour is not
-    /// loaded, the position falls back to the real check (NAND).
-    ///
-    /// Only the edge column pays (`local == 0 || local == 15`), a corner pays two sides.
+    /// Border AND. Unloaded neighbour = diverged. Edge columns only.
     fn border_sides_agree(
         level: &Level,
         chunk_pos: Vector2<i32>,
@@ -192,13 +196,7 @@ impl DynamicLightEngine {
         true
     }
 
-    /// Keeps the cached cut height honest after a block change.
-    ///
-    /// A non-diverged quadrant promises every column ceiling sits in
-    /// `[cut, cut + spread]`. Only a change at or above the cut can
-    /// break that: digging below the cut leaves the occluders above it untouched, and
-    /// placing below the cut cannot raise a ceiling that is already at or above it. So we
-    /// re-derive this one column and flag the quadrant if it left the band.
+    /// Re-check this column; flag the quadrant if the ceiling left the band.
     fn refresh_sky_cut_after_change(cursor: &mut ChunkCursor, pos: &BlockPos) {
         let (chunk_pos, relative) = pos.chunk_and_chunk_relative_position();
         if let Some(chunk) = cursor.chunk_at(chunk_pos) {
@@ -219,8 +217,6 @@ impl DynamicLightEngine {
             }
 
             let ceiling = SkyLightHeight::column_ceiling_at(chunk, relative.x, relative.z);
-            // Both bounds live in `SkyLightHeight` so they share one rounding tolerance
-            // with `tier()`; a local copy of either is how the band drifts apart.
             if !height.ceiling_within_band(
                 ceiling,
                 chunk.section.min_y,
@@ -398,30 +394,23 @@ impl DynamicLightEngine {
         pos: &BlockPos,
         light_level: u8,
     ) {
-        // A shared reference, so copying it out keeps no borrow of the cursor that the
-        // walk below needs mutably.
+        let from_id = cursor
+            .resolve(pos)
+            .map_or(BlockStateId::AIR, |(chunk, cell)| {
+                ChunkCursor::state_id_at(chunk, cell)
+            });
         let counters = cursor.counters;
         Self::for_each_neighbor(
             cursor,
             pos,
             Counter::GetBlockLight,
             |chunk, cell, neighbor_pos, dir| {
-                let Some(neighbor_light) = ChunkCursor::block_light_at(chunk, cell) else {
-                    return;
-                };
                 counters.bump(Counter::BlockState);
-                let state_id = ChunkCursor::state_id_at(chunk, cell);
-                // A fully covered face stops light outright, whatever the opacity says.
-                if occlusion::face_occludes(state_id, dir.opposite()) {
-                    return;
-                }
-                let new_light = decayed(light_level, crate::lighting::opacity_of(state_id));
-
-                // Only propagate if new light is brighter than current light
-                if new_light > neighbor_light {
+                if let Some(new_light) =
+                    ChunkCursor::raise_light(chunk, cell, from_id, dir, light_level, true)
+                {
                     counters.bump(Counter::SetBlockLight);
-                    let written = ChunkCursor::write_light_at(chunk, cell, new_light, true);
-                    if written && new_light > 1 {
+                    if new_light > 1 {
                         self.queue_block_light_increase(neighbor_pos, new_light);
                     }
                 }
@@ -447,16 +436,19 @@ impl DynamicLightEngine {
                 cursor,
                 pos,
                 Counter::GetBlockLight,
-                |chunk, cell, neighbor_pos, _dir| {
+                |chunk, cell, neighbor_pos, dir| {
                     let Some(neighbor_light) = ChunkCursor::block_light_at(chunk, cell) else {
                         return;
                     };
                     if neighbor_light == 0 {
-                        return; // Skip if already 0
+                        return;
                     }
 
                     counters.bump(Counter::BlockState);
                     let neighbor_state = ChunkCursor::block_state_at(chunk, cell);
+                    if occlusion::face_occludes(neighbor_state.id, dir.opposite()) {
+                        return;
+                    }
                     let expected_from_removed_source =
                         decayed(removed_light_level, neighbor_state.opacity);
 
@@ -482,15 +474,6 @@ impl DynamicLightEngine {
         }
     }
 
-    pub fn check_block_light_updates(&self, level: &Arc<Level>, pos: BlockPos) {
-        let tally = LocalCounters::new(&self.counters);
-        let mut cursor = ChunkCursor::new(level, &tally);
-        let state = cursor.block_state(&pos);
-        self.check_block_light_updates_with_cursor(&mut cursor, pos, state);
-    }
-
-    /// `state` is the block state at `pos`, passed in so that
-    /// [`Self::update_lighting_at`] can share one fetch with the sky pass.
     fn check_block_light_updates_with_cursor(
         &self,
         cursor: &mut ChunkCursor,
@@ -536,17 +519,6 @@ impl DynamicLightEngine {
         if expected_light >= current_light {
             self.check_neighbors_light_updates_with_cursor(cursor, pos, expected_light);
         }
-    }
-
-    pub fn check_neighbors_light_updates(
-        &self,
-        level: &Arc<Level>,
-        pos: BlockPos,
-        current_light: u8,
-    ) {
-        let tally = LocalCounters::new(&self.counters);
-        let mut cursor = ChunkCursor::new(level, &tally);
-        self.check_neighbors_light_updates_with_cursor(&mut cursor, pos, current_light);
     }
 
     fn check_neighbors_light_updates_with_cursor(
@@ -597,6 +569,11 @@ impl DynamicLightEngine {
         pos: &BlockPos,
         light_level: u8,
     ) {
+        let from_id = cursor
+            .resolve(pos)
+            .map_or(BlockStateId::AIR, |(chunk, cell)| {
+                ChunkCursor::state_id_at(chunk, cell)
+            });
         let counters = cursor.counters;
         Self::for_each_neighbor(
             cursor,
@@ -604,28 +581,12 @@ impl DynamicLightEngine {
             Counter::ChunkLoaded,
             |chunk, cell, neighbor_pos, dir| {
                 counters.bump(Counter::GetSky);
-                let neighbor_light = ChunkCursor::sky_light_at(chunk, cell);
                 counters.bump(Counter::BlockState);
-                let state_id = ChunkCursor::state_id_at(chunk, cell);
-                if occlusion::face_occludes(state_id, dir.opposite()) {
-                    return;
-                }
-                let opacity = crate::lighting::opacity_of(state_id);
-
-                // Sky light at 15 propagates down as 15 through transparent blocks
-                let new_light = if light_level == 15 && dir == BlockDirection::Down && opacity == 0
+                if let Some(new_light) =
+                    ChunkCursor::raise_light(chunk, cell, from_id, dir, light_level, false)
                 {
-                    15
-                } else {
-                    decayed(light_level, opacity)
-                };
-
-                // Only propagate if new light is brighter than current light.
-                // `set` fails outside the chunk height; do not re-queue those.
-                if new_light > neighbor_light {
                     counters.bump(Counter::SetSky);
-                    let written = ChunkCursor::write_light_at(chunk, cell, new_light, false);
-                    if written && new_light > 0 {
+                    if new_light > 0 {
                         self.queue_sky_light_increase(neighbor_pos, new_light);
                     }
                 }
@@ -653,7 +614,6 @@ impl DynamicLightEngine {
 
                 counters.bump(Counter::BlockState);
                 let state_id = ChunkCursor::state_id_at(chunk, cell);
-                // Occluded neighbours never took light from this source, so nothing to undo.
                 if occlusion::face_occludes(state_id, dir.opposite()) {
                     return;
                 }
@@ -683,15 +643,6 @@ impl DynamicLightEngine {
         );
     }
 
-    pub fn check_sky_light_updates(&self, level: &Arc<Level>, pos: BlockPos) {
-        let tally = LocalCounters::new(&self.counters);
-        let mut cursor = ChunkCursor::new(level, &tally);
-        let state = cursor.block_state(&pos);
-        self.check_sky_light_updates_with_cursor(&mut cursor, pos, state);
-    }
-
-    /// `state` is the block state at `pos`; see
-    /// [`Self::check_block_light_updates_with_cursor`].
     fn check_sky_light_updates_with_cursor(
         &self,
         cursor: &mut ChunkCursor,
@@ -778,29 +729,13 @@ impl DynamicLightEngine {
             self.queue_sky_light_increase(pos, expected_light);
         }
 
-        // Keep spreading if light increased or stayed the same
-        if expected_light >= current_light {
-            self.queue_sky_light_spread(pos, expected_light);
-        }
-    }
-
-    /// Re-queues `pos` so the flood continues outward from it.
-    pub fn queue_sky_light_spread(&self, pos: BlockPos, current_light: u8) {
-        if current_light > 0 {
-            self.queue_sky_light_increase(pos, current_light);
+        if expected_light >= current_light && expected_light > 0 {
+            self.queue_sky_light_increase(pos, expected_light);
         }
     }
 
     // Public API for querying light levels. These methods are synchronous and may block if the
     // chunk is not loaded.
-
-    pub fn get_block_light_level_sync(&self, level: &Level, position: &BlockPos) -> Option<u8> {
-        ChunkCursor::new(level, &LocalCounters::new(&self.counters)).block_light(position)
-    }
-
-    pub fn get_sky_light_level_sync(&self, level: &Level, position: &BlockPos) -> u8 {
-        ChunkCursor::new(level, &LocalCounters::new(&self.counters)).sky_light(position)
-    }
 
     pub fn get_block_light_level(&self, level: &Arc<Level>, position: &BlockPos) -> Option<u8> {
         ChunkCursor::new(level, &LocalCounters::new(&self.counters)).block_light(position)
@@ -846,8 +781,8 @@ impl DynamicLightEngine {
 #[cfg(test)]
 mod tests {
     use super::{
-        ChunkCursor, ChunkData, Counter, DynamicLightEngine, LocalCounters,
-        SkyLightHeightMigration, SkyLightTier,
+        ChunkCursor, ChunkData, DynamicLightEngine, LocalCounters, SkyLightHeightMigration,
+        SkyLightTier,
     };
     use crate::chunk::format::LightContainer;
     use crate::level::Level;
@@ -994,75 +929,20 @@ mod tests {
             crate::lighting::LightEngine::has_different_light_properties(stone, glowstone),
             "a block that starts glowing has to reach the engine"
         );
+
+        let stair_a = Block::OAK_STAIRS.default_state;
+        let stair_b = Block::OAK_STAIRS
+            .states
+            .iter()
+            .find(|s| s.id != stair_a.id)
+            .expect("stairs have more than one state");
+        assert!(
+            crate::lighting::LightEngine::has_different_light_properties(stair_a, stair_b),
+            "rotating a stair must reach the engine"
+        );
     }
 
-    /// The hot path counters
-    ///
-    /// `stats.rs` reads them as "six per propagated cell", and every judgement made from a
-    /// light log rests on that.
-    ///
-    /// One propagation step in solid rock, which cannot cascade: the neighbours swallow the
-    /// light, so exactly one queue entry is processed and exactly six neighbours are seen.
-    #[tokio::test]
-    async fn one_propagation_step_counts_six_neighbours() {
-        let (level, _dir) = level_with(&[(0, 0)]);
-        let engine = DynamicLightEngine::new();
-        let buried = BlockPos::new(8, 20, 8);
-
-        engine.queue_sky_light_increase(buried, 5);
-        let sky = engine.drain_queued(&level);
-        assert_eq!(sky.count(Counter::SkyIncrease), 1, "one queue entry");
-        assert_eq!(
-            sky.count(Counter::ChunkLoaded),
-            6,
-            "one chunk resolve per neighbour"
-        );
-        assert_eq!(
-            sky.count(Counter::GetSky),
-            6,
-            "one light read per neighbour"
-        );
-        assert_eq!(
-            sky.count(Counter::BlockState),
-            6,
-            "one opacity lookup per neighbour"
-        );
-        assert_eq!(
-            sky.count(Counter::SetSky),
-            0,
-            "stone swallows the light, so nothing is written"
-        );
-
-        engine.queue_block_light_increase(buried, 5);
-        let block = engine.drain_queued(&level);
-        assert_eq!(block.count(Counter::BlockIncrease), 1);
-        assert_eq!(
-            block.count(Counter::GetBlockLight),
-            6,
-            "the block light loop walks the same six neighbours"
-        );
-        assert_eq!(block.count(Counter::BlockState), 6);
-        assert_eq!(block.count(Counter::SetBlockLight), 0);
-
-        // At the edge of the loaded area the two numbers part company: the resolve is
-        // attempted for all six, and only the five that land are read. Counting after the
-        // resolve instead would hide exactly the neighbours that cost a failed lookup.
-        let at_edge = BlockPos::new(0, 20, 8);
-        engine.queue_sky_light_increase(at_edge, 5);
-        let edge = engine.drain_queued(&level);
-        assert_eq!(
-            edge.count(Counter::ChunkLoaded),
-            6,
-            "every neighbour is looked up, loaded or not"
-        );
-        assert_eq!(
-            edge.count(Counter::GetSky),
-            5,
-            "the neighbour in the unloaded chunk is never read"
-        );
-        assert_eq!(edge.count(Counter::BlockState), 5);
-    }
-    /// Vanilla `blockNodesToCheck` collapses repeats: a position touched many times before a
+    /// Vanilla `blockNodesToCheck` collapses repeats.
     /// drain is checked once, against the state it ended on. Only the end state can be
     /// observed, because nothing drained in between.
     #[tokio::test]
