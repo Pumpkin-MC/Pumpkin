@@ -314,7 +314,7 @@ async fn negotiate_inner(
         address,
         state.incoming.clone(),
     ));
-    *handler.session.lock().await = Some(session.clone());
+    handler.set_session(session.clone()).await;
 
     let offer = RTCSessionDescription::offer(offer).map_err(|error| error.to_string())?;
     peer.set_remote_description(offer)
@@ -429,10 +429,35 @@ struct NetherNetEventHandler {
     gathering_notify: Arc<tokio::sync::Notify>,
 }
 
+impl NetherNetEventHandler {
+    async fn set_session(self: &Arc<Self>, session: Arc<NetherNetSession>) {
+        *self.session.lock().await = Some(session.clone());
+        let handler = self.clone();
+        tokio::spawn(async move {
+            // Signaling drops its session reference before the channels open.
+            // Keep that session alive, but bound abandoned negotiations and
+            // break the peer -> handler -> session -> peer cycle on closure.
+            if tokio::time::timeout(Duration::from_secs(30), session.closed.cancelled())
+                .await
+                .is_err()
+                && session.accepted.load(Ordering::Acquire)
+            {
+                session.closed.cancelled().await;
+            }
+            session.mark_closed();
+            handler.session.lock().await.take();
+            // A peer state callback may already have marked the session closed;
+            // transport cleanup must still run in that case.
+            let _ = session.peer.close().await;
+        });
+    }
+}
+
 #[async_trait]
 impl PeerConnectionEventHandler for NetherNetEventHandler {
     async fn on_data_channel(&self, channel: Arc<dyn DataChannel>) {
-        if let Some(session) = self.session.lock().await.as_ref() {
+        let session = self.session.lock().await.clone();
+        if let Some(session) = session {
             let label = channel.label().await;
             let ordered = channel.ordered().await;
             let negotiated = channel.negotiated().await;
@@ -598,33 +623,38 @@ impl NetherNetSession {
 
         let session = self.clone();
         tokio::spawn(async move {
-            let mut opened = false;
-            while let Some(event) = channel.poll().await {
-                match event {
-                    DataChannelEvent::OnOpen => {
-                        opened = true;
-                        session.channel_opened(bit).await;
-                    }
-                    DataChannelEvent::OnMessage(msg) => {
-                        if !opened {
+            tokio::select! {
+                () = session.closed.cancelled() => {},
+                () = async {
+                let mut opened = false;
+                while let Some(event) = channel.poll().await {
+                    match event {
+                        DataChannelEvent::OnOpen => {
                             opened = true;
                             session.channel_opened(bit).await;
                         }
-                        if let Err(error) = session.receive_segment(bit, msg.data.into()).await {
-                            warn!(
-                                "Invalid NetherNet message from {}: {error}",
-                                session.address
-                            );
+                        DataChannelEvent::OnMessage(msg) => {
+                            if !opened {
+                                opened = true;
+                                session.channel_opened(bit).await;
+                            }
+                            if let Err(error) = session.receive_segment(bit, msg.data.into()).await {
+                                warn!(
+                                    "Invalid NetherNet message from {}: {error}",
+                                    session.address
+                                );
+                                break;
+                            }
+                        }
+                        DataChannelEvent::OnClose => break,
+                        DataChannelEvent::OnError => {
+                            warn!(address = %session.address, "Failed to read NetherNet data channel");
                             break;
                         }
+                        _ => {}
                     }
-                    DataChannelEvent::OnClose => break,
-                    DataChannelEvent::OnError => {
-                        warn!(address = %session.address, "Failed to read NetherNet data channel");
-                        break;
-                    }
-                    _ => {}
                 }
+                } => {},
             }
             session.close().await;
         });
@@ -1013,6 +1043,116 @@ fn unix_time() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn abandoned_sessions_expire_after_signaling_returns()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut abandoned = None;
+        let mut active = None;
+        for accepted in [false, true] {
+            let address = "127.0.0.1:19132".parse()?;
+            let handler = Arc::new(NetherNetEventHandler {
+                session: Mutex::new(None),
+                address,
+                gathering_notify: Arc::new(tokio::sync::Notify::new()),
+            });
+            let peer = Arc::new(
+                Box::pin(
+                    PeerConnectionBuilder::new()
+                        .with_handler(handler.clone())
+                        .with_udp_addrs(vec!["127.0.0.1:0"])
+                        .build(),
+                )
+                .await?,
+            );
+            let (incoming, _receiver) = mpsc::channel(1);
+            let session = Arc::new(NetherNetSession::new(peer, None, address, incoming));
+            handler.set_session(session.clone()).await;
+            if accepted {
+                session.channel_opened(1).await;
+                session.channel_opened(2).await;
+                active = Some(session.clone());
+            } else {
+                abandoned = Some(Arc::downgrade(&session));
+            }
+            drop(session);
+            drop(handler);
+        }
+        let weak = abandoned.ok_or("missing pending session")?;
+        // A signaling response is returned before the channels have opened.
+        assert!(
+            weak.upgrade().is_some(),
+            "signaling must keep the pending session alive"
+        );
+        let released = tokio::time::timeout(Duration::from_secs(35), async {
+            while weak.upgrade().is_some() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+        assert!(
+            released.is_ok(),
+            "abandoned negotiation retained its session"
+        );
+        let active = active.ok_or("missing accepted session")?;
+        let stayed_open = !active.is_closed();
+        active.close().await;
+        assert!(
+            stayed_open,
+            "accepted session expired with the pending sessions"
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn closed_sessions_are_released() -> Result<(), Box<dyn std::error::Error>> {
+        let address = "127.0.0.1:19132".parse()?;
+        let mut sessions = Vec::new();
+        for remote_close in [false, true] {
+            let handler = Arc::new(NetherNetEventHandler {
+                session: Mutex::new(None),
+                address,
+                gathering_notify: Arc::new(tokio::sync::Notify::new()),
+            });
+            let peer = Arc::new(
+                Box::pin(
+                    PeerConnectionBuilder::new()
+                        .with_handler(handler.clone())
+                        .with_udp_addrs(vec!["127.0.0.1:0"])
+                        .build(),
+                )
+                .await?,
+            );
+            let (incoming, _receiver) = mpsc::channel(1);
+            let session = Arc::new(NetherNetSession::new(peer, None, address, incoming));
+            handler.set_session(session.clone()).await;
+            let channel = session
+                .peer
+                .create_data_channel(RELIABLE_CHANNEL, None)
+                .await?;
+            session.attach_channel(channel).await?;
+            sessions.push(Arc::downgrade(&session));
+            if remote_close {
+                handler
+                    .on_connection_state_change(RTCPeerConnectionState::Disconnected)
+                    .await;
+            }
+            session.close().await;
+            drop(session);
+            drop(handler);
+        }
+        let released = tokio::time::timeout(Duration::from_secs(1), async {
+            while sessions.iter().any(|session| session.upgrade().is_some()) {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await;
+        assert!(
+            released.is_ok(),
+            "closed sessions remain owned by their event handlers"
+        );
+        Ok(())
+    }
 
     #[test]
     fn fragments_round_trip() {
