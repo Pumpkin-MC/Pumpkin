@@ -101,9 +101,15 @@ pub struct ChunkEntityData {
     /// Records that non-empty persisted data was consumed and therefore must be
     /// rewritten even if the eventual authoritative live snapshot is empty.
     snapshot_needs_rewrite: AtomicBool,
-    /// Persisted records Pumpkin cannot currently materialize (for example an entity
-    /// type supplied by a missing mod). These must survive authoritative live snapshots.
+    /// Records which are not live: unsupported entities, and entities unloaded
+    /// into a chunk which remains cached. Both survive authoritative live snapshots.
     dormant_entities: std::sync::Mutex<Vec<NbtCompound>>,
+    /// UUIDs added by live snapshots before this chunk was materialized. Unlike
+    /// untouched disk records, these must be replaced even after the entity dies.
+    live_snapshot_uuids: std::sync::Mutex<FxHashSet<Uuid>>,
+    /// Newly unloaded records which can be materialized, unlike unsupported
+    /// dormant records. These are consumed once even if the chunk was already live.
+    pending_materialization_uuids: std::sync::Mutex<FxHashSet<Uuid>>,
 }
 
 impl ChunkEntityData {
@@ -117,28 +123,81 @@ impl ChunkEntityData {
             materialized: AtomicBool::new(false),
             snapshot_needs_rewrite: AtomicBool::new(false),
             dormant_entities: std::sync::Mutex::new(Vec::new()),
+            live_snapshot_uuids: std::sync::Mutex::new(FxHashSet::with_hasher(
+                rustc_hash::FxBuildHasher,
+            )),
+            pending_materialization_uuids: std::sync::Mutex::new(FxHashSet::with_hasher(
+                rustc_hash::FxBuildHasher,
+            )),
         }
     }
 
-    /// Takes the persisted entities exactly once when the entity chunk becomes
-    /// live. Later watchers observe `None` and use the world's live entities.
+    /// Takes persisted or newly unloaded entities exactly once. Later watchers
+    /// observe `None` and use the world's live entities unless more entities have
+    /// since been transferred back to this chunk by an unload.
     pub fn take_entities_for_materialization(&self) -> Option<Vec<NbtCompound>> {
+        let mut dormant = self
+            .dormant_entities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut live_snapshot_uuids = self
+            .live_snapshot_uuids
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut pending_uuids = self
+            .pending_materialization_uuids
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut data = self
             .data
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if self
-            .materialized
-            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-            .is_err()
-        {
-            return None;
+        if self.materialized.swap(true, Ordering::AcqRel) {
+            if pending_uuids.is_empty() {
+                return None;
+            }
+            let mut pending = Vec::new();
+            dormant.retain(|entity| {
+                if entity
+                    .get_uuid("UUID")
+                    .is_some_and(|uuid| pending_uuids.contains(&uuid))
+                {
+                    pending.push(entity.clone());
+                    false
+                } else {
+                    true
+                }
+            });
+            data.retain(|entity| {
+                entity
+                    .get_uuid("UUID")
+                    .is_none_or(|uuid| !pending_uuids.contains(&uuid))
+            });
+            pending_uuids.clear();
+            self.snapshot_needs_rewrite.store(true, Ordering::Release);
+            return Some(pending);
         }
 
-        let entities = std::mem::take(&mut *data);
+        let mut entities = std::mem::take(&mut *data);
         if !entities.is_empty() {
             self.snapshot_needs_rewrite.store(true, Ordering::Release);
         }
+        // Reconciled records are snapshots of entities already owned by the live
+        // world, not entities waiting to spawn. They may since have moved or died.
+        entities.retain(|entity| {
+            entity
+                .get_uuid("UUID")
+                .is_none_or(|uuid| !live_snapshot_uuids.contains(&uuid))
+        });
+        live_snapshot_uuids.clear();
+        // Pending records were included in `data`; drop their preservation copies
+        // now that ownership is handed back to the live world.
+        dormant.retain(|entity| {
+            entity
+                .get_uuid("UUID")
+                .is_none_or(|uuid| !pending_uuids.contains(&uuid))
+        });
+        pending_uuids.clear();
         Some(entities)
     }
 
@@ -193,25 +252,110 @@ impl ChunkEntityData {
     }
 
     /// Reconciles a chunk whose persisted contents have not been materialized
-    /// with live entity snapshots. Dormant entities are retained, while any old
-    /// occurrence of a live UUID is removed before the current chunk's snapshots
-    /// are appended.
+    /// with its complete live entity snapshot. Untouched disk records are retained,
+    /// but previously reconciled live records are replaced even if their UUID is no
+    /// longer live. Otherwise removing an entity would leave its last NBT behind.
     pub fn reconcile_entities(&self, entities: Vec<NbtCompound>, live_uuids: &FxHashSet<Uuid>) {
-        if entities.is_empty() && live_uuids.is_empty() {
-            return;
-        }
-
+        let mut dormant = self
+            .dormant_entities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut live_snapshot_uuids = self
+            .live_snapshot_uuids
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut pending_uuids = self
+            .pending_materialization_uuids
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut data = self
             .data
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let previous_len = data.len();
-        data.retain(|entity| {
+        dormant.retain(|entity| {
             entity
                 .get_uuid("UUID")
                 .is_none_or(|uuid| !live_uuids.contains(&uuid))
         });
+        pending_uuids.retain(|uuid| !live_uuids.contains(uuid));
+        data.retain(|entity| {
+            entity.get_uuid("UUID").is_none_or(|uuid| {
+                !live_uuids.contains(&uuid) && !live_snapshot_uuids.contains(&uuid)
+            })
+        });
         let changed = data.len() != previous_len || !entities.is_empty();
+        live_snapshot_uuids.clear();
+        live_snapshot_uuids.extend(entities.iter().filter_map(|entity| entity.get_uuid("UUID")));
+        data.extend(entities);
+        if changed {
+            self.dirty.store(true, Ordering::Release);
+        }
+    }
+
+    /// Transfers a complete chunk snapshot from the live world back to persistence.
+    /// These entities are no longer world-owned and must be eligible to spawn again.
+    pub fn replace_unloaded_entities(&self, entities: Vec<NbtCompound>, uuids: &FxHashSet<Uuid>) {
+        self.transfer_unloaded_entities(entities, uuids, true);
+    }
+
+    /// Transfers only the supplied UUIDs, preserving unrelated live records. An
+    /// entity may have crossed out of the unloading chunks before being serialized.
+    pub fn merge_unloaded_entities(&self, entities: Vec<NbtCompound>, uuids: &FxHashSet<Uuid>) {
+        self.transfer_unloaded_entities(entities, uuids, false);
+    }
+
+    fn transfer_unloaded_entities(
+        &self,
+        entities: Vec<NbtCompound>,
+        uuids: &FxHashSet<Uuid>,
+        complete: bool,
+    ) {
+        if !complete && uuids.is_empty() && entities.is_empty() {
+            return;
+        }
+
+        let mut dormant = self
+            .dormant_entities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut live_snapshot_uuids = self
+            .live_snapshot_uuids
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut pending_uuids = self
+            .pending_materialization_uuids
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut data = self
+            .data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let keep = |entity: &NbtCompound| {
+            entity
+                .get_uuid("UUID")
+                .is_none_or(|uuid| !uuids.contains(&uuid))
+        };
+        dormant.retain(keep);
+        pending_uuids.retain(|uuid| !uuids.contains(uuid));
+        let previous_len = data.len();
+        if complete && self.entities_are_materialized() {
+            data.clone_from(&dormant);
+        } else {
+            data.retain(|entity| {
+                keep(entity)
+                    && (!complete
+                        || entity
+                            .get_uuid("UUID")
+                            .is_none_or(|uuid| !live_snapshot_uuids.contains(&uuid)))
+            });
+        }
+        let snapshot_needs_rewrite =
+            complete && self.snapshot_needs_rewrite.swap(false, Ordering::AcqRel);
+        let changed = snapshot_needs_rewrite || data.len() != previous_len || !entities.is_empty();
+        live_snapshot_uuids.retain(|uuid| !complete && !uuids.contains(uuid));
+        pending_uuids.extend(entities.iter().filter_map(|entity| entity.get_uuid("UUID")));
+        dormant.extend(entities.iter().cloned());
         data.extend(entities);
         if changed {
             self.dirty.store(true, Ordering::Release);
@@ -1138,6 +1282,22 @@ mod tests {
     }
 
     #[test]
+    fn empty_unload_rewrites_a_consumed_entity_snapshot() {
+        let chunk = ChunkEntityData::empty(4, -2);
+        chunk
+            .data
+            .lock()
+            .unwrap()
+            .push(entity_nbt(1, Uuid::from_u128(1)));
+        assert_eq!(chunk.take_entities_for_materialization().unwrap().len(), 1);
+
+        chunk.replace_unloaded_entities(Vec::new(), &rustc_hash::FxHashSet::default());
+
+        assert!(chunk.dirty.load(std::sync::atomic::Ordering::Acquire));
+        assert!(chunk.data.lock().unwrap().is_empty());
+    }
+
+    #[test]
     fn dormant_entity_records_survive_repeated_live_snapshot_replacement() {
         let dormant_uuid = Uuid::from_u128(1);
         let live_uuid = Uuid::from_u128(2);
@@ -1197,6 +1357,75 @@ mod tests {
         assert_eq!(saved[0].get_int("marker"), Some(1));
         assert_eq!(saved[1].get_int("marker"), Some(20));
         assert!(!chunk.entities_are_materialized());
+    }
+
+    #[test]
+    fn materialization_does_not_respawn_previously_reconciled_live_entities() {
+        let dormant_uuid = Uuid::from_u128(1);
+        let live_uuid = Uuid::from_u128(2);
+        let chunk = ChunkEntityData::empty(4, -2);
+        chunk.data.lock().unwrap().push(entity_nbt(1, dormant_uuid));
+        chunk.reconcile_entities(
+            vec![entity_nbt(2, live_uuid)],
+            &rustc_hash::FxHashSet::from_iter([live_uuid]),
+        );
+
+        // The live entity may have died since the last autosave. Its old snapshot
+        // must not be mistaken for an untouched disk entity waiting to spawn.
+        let pending = chunk.take_entities_for_materialization().unwrap();
+        assert_eq!(pending, vec![entity_nbt(1, dormant_uuid)]);
+        assert!(chunk.take_entities_for_materialization().is_none());
+    }
+
+    #[test]
+    fn partial_unload_updates_only_the_supplied_entity_uuids() {
+        let dormant_uuid = Uuid::from_u128(1);
+        let moving_uuid = Uuid::from_u128(2);
+        let staying_uuid = Uuid::from_u128(3);
+        let chunk = ChunkEntityData::empty(4, -2);
+        chunk.data.lock().unwrap().push(entity_nbt(1, dormant_uuid));
+        chunk.reconcile_entities(
+            vec![entity_nbt(2, moving_uuid), entity_nbt(3, staying_uuid)],
+            &rustc_hash::FxHashSet::from_iter([moving_uuid, staying_uuid]),
+        );
+
+        chunk.merge_unloaded_entities(Vec::new(), &rustc_hash::FxHashSet::from_iter([moving_uuid]));
+        assert_eq!(
+            *chunk.data.lock().unwrap(),
+            vec![entity_nbt(1, dormant_uuid), entity_nbt(3, staying_uuid)]
+        );
+
+        chunk.merge_unloaded_entities(
+            vec![entity_nbt(20, moving_uuid)],
+            &rustc_hash::FxHashSet::from_iter([moving_uuid]),
+        );
+        assert_eq!(
+            *chunk.data.lock().unwrap(),
+            vec![
+                entity_nbt(1, dormant_uuid),
+                entity_nbt(3, staying_uuid),
+                entity_nbt(20, moving_uuid)
+            ]
+        );
+
+        chunk.reconcile_entities(Vec::new(), &rustc_hash::FxHashSet::default());
+        assert_eq!(
+            *chunk.data.lock().unwrap(),
+            vec![entity_nbt(1, dormant_uuid), entity_nbt(20, moving_uuid)]
+        );
+
+        let pending = chunk.take_entities_for_materialization().unwrap();
+        assert_eq!(
+            pending,
+            vec![entity_nbt(1, dormant_uuid), entity_nbt(20, moving_uuid)]
+        );
+        assert!(chunk.take_entities_for_materialization().is_none());
+        chunk.retain_dormant_entities(vec![entity_nbt(1, dormant_uuid)]);
+        chunk.replace_entities(Vec::new());
+        assert_eq!(
+            *chunk.data.lock().unwrap(),
+            vec![entity_nbt(1, dormant_uuid)]
+        );
     }
 
     #[test]

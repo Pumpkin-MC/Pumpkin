@@ -622,8 +622,12 @@ impl World {
     ) -> (FxHashMap<Vector2<i32>, Vec<NbtCompound>>, FxHashSet<Uuid>) {
         let mut snapshots: FxHashMap<Vector2<i32>, Vec<NbtCompound>> = FxHashMap::default();
         let mut saved_uuids = FxHashSet::default();
+        let mut snapshot_uuids = FxHashSet::default();
         for entity in entities {
             let base_entity = entity.get_entity();
+            // Removed entities still identify obsolete snapshots in other chunks,
+            // especially when this is only the subset being unloaded.
+            snapshot_uuids.insert(base_entity.entity_uuid);
             if base_entity.is_removed() || !saved_uuids.insert(base_entity.entity_uuid) {
                 continue;
             }
@@ -633,7 +637,7 @@ impl World {
             entity.write_nbt(&mut nbt);
             snapshots.entry(chunk_pos).or_default().push(nbt);
         }
-        (snapshots, saved_uuids)
+        (snapshots, snapshot_uuids)
     }
 
     /// Rebuilds every materialized entity chunk from the live entity list.
@@ -643,26 +647,10 @@ impl World {
     /// materialized chunks are replaced too, which removes snapshots of entities
     /// that moved away or were discarded.
     async fn rebuild_all_entity_chunk_snapshots(&self, entities: &[Arc<dyn EntityBase>]) {
-        let (mut snapshots, live_uuids) = Self::entity_chunk_snapshots(entities);
-
-        for (chunk_pos, chunk) in self.level.entity_chunks() {
-            let entities = snapshots.remove(&chunk_pos).unwrap_or_default();
-            if chunk.entities_are_materialized() {
-                chunk.replace_entities(entities);
-            } else {
-                chunk.reconcile_entities(entities, &live_uuids);
-            }
-        }
-
-        // An entity can cross into a chunk before that chunk's persisted entities
-        // are materialized. Preserve those untouched entities while replacing any
-        // prior snapshot of the live UUID.
-        for (chunk_pos, entities) in snapshots {
-            self.level
-                .get_entity_chunk(chunk_pos)
-                .await
-                .reconcile_entities(entities, &live_uuids);
-        }
+        let (snapshots, snapshot_uuids) = Self::entity_chunk_snapshots(entities);
+        self.level
+            .update_entity_chunk_snapshots(snapshots, &snapshot_uuids, None)
+            .await;
     }
 
     /// Rebuilds the chunks being unloaded from the entities removed from the live
@@ -673,25 +661,10 @@ impl World {
         entities: &[Arc<dyn EntityBase>],
         chunks: &FxHashSet<Vector2<i32>>,
     ) {
-        let (mut snapshots, live_uuids) = Self::entity_chunk_snapshots(entities);
-
-        // Also remove stale occurrences of these live UUIDs from other loaded
-        // chunks (for example after an entity crossed a boundary).
-        for (chunk_pos, chunk) in self.level.entity_chunks() {
-            let entities = snapshots.remove(&chunk_pos).unwrap_or_default();
-            if chunks.contains(&chunk_pos) && chunk.entities_are_materialized() {
-                chunk.replace_entities(entities);
-            } else {
-                chunk.reconcile_entities(entities, &live_uuids);
-            }
-        }
-
-        for (chunk_pos, entities) in snapshots {
-            self.level
-                .get_entity_chunk(chunk_pos)
-                .await
-                .reconcile_entities(entities, &live_uuids);
-        }
+        let (snapshots, snapshot_uuids) = Self::entity_chunk_snapshots(entities);
+        self.level
+            .update_entity_chunk_snapshots(snapshots, &snapshot_uuids, Some(chunks))
+            .await;
     }
 
     /// Serializes the live block entities of a chunk back into that chunk's block
@@ -7283,6 +7256,37 @@ mod tests {
     };
     use pumpkin_nbt::compound::NbtCompound;
     use uuid::Uuid;
+
+    #[tokio::test]
+    async fn entity_snapshots_prefer_live_duplicates_and_keep_removed_uuid_cleanup() {
+        let fixture = crate::test_support::TestServer::new().await;
+        let uuid = Uuid::from_u128(1);
+        let position = pumpkin_util::math::vector3::Vector3::new(1.0, 64.0, 1.0);
+        let removed = super::from_type(
+            &pumpkin_data::entity::EntityType::PIG,
+            position,
+            &fixture.world,
+            uuid,
+        );
+        removed
+            .get_entity()
+            .removal_reason
+            .store(Some(super::RemovalReason::Discarded));
+        let live = super::from_type(
+            &pumpkin_data::entity::EntityType::PIG,
+            position,
+            &fixture.world,
+            uuid,
+        );
+        let (snapshots, uuids) = super::World::entity_chunk_snapshots(&[removed.clone(), live]);
+        assert_eq!(snapshots.values().map(Vec::len).sum::<usize>(), 1);
+        assert!(uuids.contains(&uuid));
+
+        let (snapshots, uuids) = super::World::entity_chunk_snapshots(&[removed]);
+        assert!(snapshots.is_empty());
+        assert!(uuids.contains(&uuid));
+        fixture.shutdown().await;
+    }
 
     #[test]
     fn bedrock_block_breaking_rate_uses_progress_per_tick() {

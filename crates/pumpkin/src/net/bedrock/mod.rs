@@ -484,6 +484,26 @@ impl BedrockClient {
         self.player.store(Arc::new(Some(player)));
     }
 
+    /// Observes the real normal FIFO without starting the network writer in integration tests.
+    #[cfg(test)]
+    pub(crate) async fn drain_outgoing_packets_for_test(&self) -> Vec<Bytes> {
+        let mut receiver = self.outgoing_packet_queue_recv.lock().await;
+        let receiver = receiver.as_mut().expect("test owns outgoing queue");
+        let mut packets = Vec::new();
+        while let Ok(packet) = receiver.try_recv() {
+            packets.push(packet.data);
+            if let Some(completion) = packet.completion {
+                let _ = completion.send(());
+            }
+        }
+        packets
+    }
+
+    #[cfg(test)]
+    pub(crate) fn outgoing_packet_capacity_for_test(&self) -> usize {
+        self.outgoing_packet_queue_send.capacity()
+    }
+
     pub async fn enqueue_packet(&self, packet_data: Bytes) {
         self.enqueue_packet_data(packet_data).await;
     }

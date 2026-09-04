@@ -1,6 +1,44 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
 
+struct ClientMovementSnapshot {
+    chunk_send_epoch: u32,
+    teleport_id: i32,
+}
+
+impl ClientMovementSnapshot {
+    fn capture(player: &Player) -> Option<Self> {
+        let _movement_guard = player.lock_client_movement_if_loaded()?;
+        // Vanilla ignores movement while a teleport still awaits confirmation.
+        if player
+            .awaiting_teleport
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_some()
+        {
+            return None;
+        }
+        Some(Self {
+            chunk_send_epoch: player.chunk_send_epoch.load(Ordering::Acquire),
+            teleport_id: player.teleport_id_count.load(Ordering::Relaxed),
+        })
+    }
+
+    fn lock_if_current<'a>(&self, player: &'a Player) -> Option<std::sync::MutexGuard<'a, ()>> {
+        let movement_guard = player.lock_client_movement_if_loaded()?;
+        // A move-event plugin can complete a transfer or even confirm a same-world teleport
+        // before returning. Loaded state and the pending teleport alone cannot detect that.
+        (self.chunk_send_epoch == player.chunk_send_epoch.load(Ordering::Acquire)
+            && self.teleport_id == player.teleport_id_count.load(Ordering::Relaxed)
+            && player
+                .awaiting_teleport
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_none())
+        .then_some(movement_guard)
+    }
+}
+
 impl JavaClient {
     const fn clamp_horizontal(pos: f64) -> f64 {
         pos.clamp(-3.0E7, 3.0E7)
@@ -49,23 +87,14 @@ impl JavaClient {
         server: &Arc<Server>,
         packet: &SPlayerPosition,
     ) {
-        if !player.has_client_loaded() {
+        let Some(movement) = ClientMovementSnapshot::capture(player) else {
             return;
-        }
+        };
         if player.get_entity().has_vehicle() {
             return;
         }
-        // Ignore movement packets while awaiting a teleport confirmation (vanilla behavior)
-        if player
-            .awaiting_teleport
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_some()
-        {
-            return;
-        }
         if player.is_movement_locked.load(Ordering::Relaxed) {
-            let Some(_movement_guard) = player.lock_client_movement_if_loaded() else {
+            let Some(_movement_guard) = movement.lock_if_current(player) else {
                 return;
             };
             self.force_tp(player, player.get_entity().pos.load());
@@ -97,7 +126,7 @@ impl JavaClient {
             };
 
             'after: {
-                let Some(movement_guard) = player.lock_client_movement_if_loaded() else {
+                let Some(movement_guard) = movement.lock_if_current(player) else {
                     return;
                 };
                 let pos = event.to;
@@ -187,7 +216,7 @@ impl JavaClient {
             }
 
             'cancelled: {
-                let Some(_movement_guard) = player.lock_client_movement_if_loaded() else {
+                let Some(_movement_guard) = movement.lock_if_current(player) else {
                     return;
                 };
                 self.force_tp(player, player.get_entity().pos.load());
@@ -202,23 +231,14 @@ impl JavaClient {
         server: &Arc<Server>,
         packet: &SPlayerPositionRotation,
     ) {
-        if !player.has_client_loaded() {
+        let Some(movement) = ClientMovementSnapshot::capture(player) else {
             return;
-        }
+        };
         if player.get_entity().has_vehicle() {
             return;
         }
-        // Ignore movement packets while awaiting a teleport confirmation (vanilla behavior)
-        if player
-            .awaiting_teleport
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_some()
-        {
-            return;
-        }
         if player.is_movement_locked.load(Ordering::Relaxed) {
-            let Some(_movement_guard) = player.lock_client_movement_if_loaded() else {
+            let Some(_movement_guard) = movement.lock_if_current(player) else {
                 return;
             };
             let entity = player.get_entity();
@@ -257,7 +277,7 @@ impl JavaClient {
             );
 
             'after: {
-                let Some(movement_guard) = player.lock_client_movement_if_loaded() else {
+                let Some(movement_guard) = movement.lock_if_current(player) else {
                     return;
                 };
                 let pos = event.to;
@@ -365,7 +385,7 @@ impl JavaClient {
             }
 
             'cancelled: {
-                let Some(_movement_guard) = player.lock_client_movement_if_loaded() else {
+                let Some(_movement_guard) = movement.lock_if_current(player) else {
                     return;
                 };
                 self.force_tp(player, position);
@@ -388,5 +408,164 @@ impl JavaClient {
             player.get_entity().pitch.load(),
             Vec::new(),
         ));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Mutex, atomic::AtomicU32};
+
+    use super::*;
+    use crate::{
+        net::ClientPlatform,
+        plugin::{BoxFuture, EventHandler, EventPriority},
+        test_support::TestServer,
+    };
+
+    const TELEPORT_POSITION: Vector3<f64> = Vector3::new(256.0, 120.0, -256.0);
+    const EVENT_POSITION: Vector3<f64> = Vector3::new(3.0, 100.0, 4.0);
+
+    #[derive(Clone, Copy)]
+    enum MoveAction {
+        Rewrite,
+        Teleport { confirm: bool, advance_epoch: bool },
+    }
+
+    struct MovePlugin {
+        action: Mutex<(MoveAction, bool)>,
+        calls: AtomicU32,
+    }
+
+    impl EventHandler<PlayerMoveEvent> for MovePlugin {
+        fn handle_blocking<'a>(
+            &'a self,
+            _server: &'a Arc<Server>,
+            event: &'a mut PlayerMoveEvent,
+        ) -> BoxFuture<'a, ()> {
+            Box::pin(async move {
+                self.calls.fetch_add(1, Ordering::Relaxed);
+                let (action, cancelled) = *self.action.lock().unwrap();
+                event.cancelled = cancelled;
+                event.to = EVENT_POSITION;
+                if let MoveAction::Teleport {
+                    confirm,
+                    advance_epoch,
+                } = action
+                {
+                    if advance_epoch {
+                        event.player.request_teleport(TELEPORT_POSITION, 90.0, 30.0);
+                    } else {
+                        event.player.request_teleport_in_current_chunk_epoch(
+                            TELEPORT_POSITION,
+                            90.0,
+                            30.0,
+                        );
+                    }
+                    if confirm {
+                        confirm_teleport(&event.player);
+                    }
+                }
+            })
+        }
+    }
+
+    fn java_client(player: &Player) -> &JavaClient {
+        let ClientPlatform::Java(client) = player.client.as_ref() else {
+            panic!("expected a Java player");
+        };
+        client
+    }
+
+    fn confirm_teleport(player: &Player) {
+        java_client(player).handle_confirm_teleport(
+            player,
+            &SConfirmTeleport {
+                teleport_id: player.teleport_id_count.load(Ordering::Relaxed).into(),
+            },
+        );
+    }
+
+    fn send_movement(player: &Arc<Player>, server: &Arc<Server>, include_rotation: bool) {
+        let position = Vector3::new(1.0, 100.0, 1.0);
+        if include_rotation {
+            java_client(player).handle_position_rotation(
+                player,
+                server,
+                &SPlayerPositionRotation {
+                    position,
+                    yaw: 12.0,
+                    pitch: 24.0,
+                    collision: FLAG_ON_GROUND,
+                },
+            );
+        } else {
+            java_client(player).handle_position(
+                player,
+                server,
+                &SPlayerPosition {
+                    position,
+                    collision: FLAG_ON_GROUND,
+                },
+            );
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn java_move_event_teleports_are_not_overwritten() {
+        let fixture = TestServer::new().await;
+        let player = fixture.new_java_player().await;
+        let plugin = Arc::new(MovePlugin {
+            action: Mutex::new((MoveAction::Rewrite, false)),
+            calls: AtomicU32::new(0),
+        });
+        fixture
+            .server
+            .plugin_manager
+            .register::<PlayerMoveEvent, _>(plugin.clone(), EventPriority::Normal, true);
+
+        for include_rotation in [false, true] {
+            for cancelled in [false, true] {
+                // Cover a pending teleport, one already confirmed by the plugin, and a
+                // confirmed teleport that deliberately leaves the chunk epoch unchanged.
+                for (confirm, advance_epoch) in [(false, true), (true, true), (true, false)] {
+                    *plugin.action.lock().unwrap() = (
+                        MoveAction::Teleport {
+                            confirm,
+                            advance_epoch,
+                        },
+                        cancelled,
+                    );
+                    player.get_entity().set_pos(Vector3::new(0.0, 100.0, 0.0));
+                    player.get_entity().set_rotation(0.0, 0.0);
+                    let previous_id = player.teleport_id_count.load(Ordering::Relaxed);
+
+                    send_movement(&player, &fixture.server, include_rotation);
+
+                    assert_eq!(player.get_entity().pos.load(), TELEPORT_POSITION);
+                    assert_eq!(player.get_entity().yaw.load(), 90.0);
+                    assert_eq!(player.get_entity().pitch.load(), 30.0);
+                    assert_eq!(
+                        player.teleport_id_count.load(Ordering::Relaxed),
+                        previous_id + 1,
+                        "cancelling the move must not send a second correction teleport"
+                    );
+                    assert_eq!(player.awaiting_teleport.lock().unwrap().is_none(), confirm);
+                    if !confirm {
+                        confirm_teleport(&player);
+                        assert_eq!(player.get_entity().pos.load(), TELEPORT_POSITION);
+                    }
+                }
+            }
+
+            // Rejecting stale events must not prevent a plugin from changing an ordinary
+            // movement destination when no teleport or transfer occurred.
+            *plugin.action.lock().unwrap() = (MoveAction::Rewrite, false);
+            player.get_entity().set_pos(Vector3::new(0.0, 100.0, 0.0));
+            send_movement(&player, &fixture.server, include_rotation);
+            assert_eq!(player.get_entity().pos.load(), EVENT_POSITION);
+        }
+        assert_eq!(plugin.calls.load(Ordering::Relaxed), 14);
+        assert!(!java_client(&player).is_closed());
+        fixture.shutdown().await;
     }
 }

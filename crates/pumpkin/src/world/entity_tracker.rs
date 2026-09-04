@@ -31,18 +31,23 @@ use crate::net::java::JavaClient;
 use crate::world::World;
 use crate::world::chunker::{get_view_distance, is_within_view_distance};
 
-/// Actor packets share Bedrock's bounded normal queue with terrain. A small per-player
-/// budget prevents a dense entity chunk from filling that queue in a single world tick.
-const BEDROCK_ACTOR_PAIRINGS_PER_TICK: usize = 64;
+/// Pumpkin's transport budget for actor lifecycle packets sharing the normal queue with
+/// terrain. This limits packets, not actors: a player spawn costs two packets (`PlayerList`
+/// and `AddPlayer`), other spawns and removals cost one. Deferred actors remain pending.
+const BEDROCK_ACTOR_PACKETS_PER_TICK: usize = 64;
 
-fn take_bedrock_pairing_budget(budgets: &mut FxHashMap<Uuid, usize>, player_id: Uuid) -> bool {
+fn take_bedrock_packet_budget(
+    budgets: &mut FxHashMap<Uuid, usize>,
+    player_id: Uuid,
+    packet_count: usize,
+) -> bool {
     let Some(remaining) = budgets.get_mut(&player_id) else {
         return false;
     };
-    if *remaining == 0 {
+    let Some(next) = remaining.checked_sub(packet_count) else {
         return false;
-    }
-    *remaining -= 1;
+    };
+    *remaining = next;
     true
 }
 
@@ -315,7 +320,15 @@ impl TrackedEntity {
 
         for player in players {
             if self.pending_pairings.contains(&player.gameprofile.id)
-                && take_bedrock_pairing_budget(bedrock_budgets, player.gameprofile.id)
+                && take_bedrock_packet_budget(
+                    bedrock_budgets,
+                    player.gameprofile.id,
+                    if self.entity.get_player().is_some() {
+                        2
+                    } else {
+                        1
+                    },
+                )
             {
                 self.update_player(player, world);
             }
@@ -335,7 +348,7 @@ impl TrackedEntity {
         for player in players {
             let player_id = player.gameprofile.id;
             if self.pending_removals.contains(&player_id)
-                && take_bedrock_pairing_budget(bedrock_budgets, player_id)
+                && take_bedrock_packet_budget(bedrock_budgets, player_id, 1)
                 && self.remove_pairing(player)
             {
                 self.seen_by.remove(&player_id);
@@ -938,11 +951,11 @@ impl EntityTracker {
     /// runs while game ticks are frozen so chunk streaming cannot leave joins or despawns stuck.
     pub fn update_bedrock_lifecycles(&self, world: &World) {
         let players = world.players.load();
-        let mut bedrock_pairing_budgets = players
+        let mut bedrock_packet_budgets = players
             .iter()
             .filter_map(|player| {
                 matches!(player.client.as_ref(), ClientPlatform::Bedrock(_))
-                    .then_some((player.gameprofile.id, BEDROCK_ACTOR_PAIRINGS_PER_TICK))
+                    .then_some((player.gameprofile.id, BEDROCK_ACTOR_PACKETS_PER_TICK))
             })
             .collect::<FxHashMap<_, _>>();
         let mut completed_removals = Vec::new();
@@ -951,7 +964,7 @@ impl EntityTracker {
         // new pairings. This prevents a large spawn backlog from delaying despawns for seconds.
         for entry in &self.entity_map {
             let tracked = entry.value();
-            tracked.retry_pending_removals(players.as_ref(), world, &mut bedrock_pairing_budgets);
+            tracked.retry_pending_removals(players.as_ref(), world, &mut bedrock_packet_budgets);
             if tracked.removing.load(Ordering::Acquire) && tracked.removal_complete() {
                 completed_removals.push(tracked.entity_id);
             }
@@ -966,7 +979,7 @@ impl EntityTracker {
             if tracked.removing.load(Ordering::Acquire) {
                 continue;
             }
-            tracked.retry_pending_pairings(players.as_ref(), world, &mut bedrock_pairing_budgets);
+            tracked.retry_pending_pairings(players.as_ref(), world, &mut bedrock_packet_budgets);
         }
     }
 
@@ -1022,20 +1035,271 @@ impl EntityTracker {
 
 #[cfg(test)]
 mod tests {
-    use super::{BEDROCK_ACTOR_PAIRINGS_PER_TICK, take_bedrock_pairing_budget};
+    use super::*;
+    use crate::net::bedrock::BedrockClient;
+    use crate::test_support::TestServer;
+    use pumpkin_protocol::Packet;
+    use pumpkin_protocol::bedrock::client::{
+        add_player::CAddPlayer, level_chunk::CLevelChunk, player_list::CPlayerList,
+    };
+    use pumpkin_protocol::bedrock::packet_decoder::BedrockBatchDecoder;
+    use pumpkin_world::chunk::ChunkData;
     use rustc_hash::FxHashMap;
+    use std::io::Cursor;
     use uuid::Uuid;
 
-    #[test]
-    fn bedrock_actor_pairing_budget_is_strictly_bounded_per_tick() {
-        let player_id = Uuid::from_u128(1);
-        let mut budgets = FxHashMap::from_iter([(player_id, BEDROCK_ACTOR_PAIRINGS_PER_TICK)]);
+    async fn decode_packets(client: &BedrockClient) -> Vec<pumpkin_protocol::RawPacket> {
+        let mut decoder = BedrockBatchDecoder::new();
+        let mut packets = Vec::new();
+        for data in client.drain_outgoing_packets_for_test().await {
+            let payload = decoder.get_packet_payload(data.to_vec()).await.unwrap();
+            let mut reader = Cursor::new(payload);
+            let packet = decoder.get_game_packet(&mut reader).unwrap();
+            assert_eq!(reader.position() as usize, reader.get_ref().len());
+            packets.push(packet);
+        }
+        packets
+    }
 
-        let accepted = (0..BEDROCK_ACTOR_PAIRINGS_PER_TICK + 10)
-            .filter(|_| take_bedrock_pairing_budget(&mut budgets, player_id))
+    async fn send_entity_chunk(fixture: &TestServer, player: &Arc<Player>) {
+        let position = player.get_entity().chunk_pos.load();
+        let chunk = ChunkData::empty_sync(position.x, position.y);
+        fixture.world.level.loaded_chunks.insert(position, chunk);
+        let epoch = player.chunk_send_epoch.load(Ordering::Acquire);
+        let batch = {
+            let mut sender = player.chunk_sender.lock().unwrap();
+            sender.enqueue_chunk(position);
+            let prepared = sender
+                .prepare_batch(
+                    &fixture.world.level,
+                    position,
+                    epoch,
+                    JavaMinecraftVersion::V_1_20_2,
+                )
+                .unwrap();
+            sender.commit_bedrock_batch(&prepared, epoch).unwrap()
+        };
+        let ClientPlatform::Bedrock(client) = player.client.as_ref() else {
+            panic!("Bedrock test player");
+        };
+        // Exercise the production plugin hook, chunk encoder and bounded queue before
+        // completing the sender state; no fabricated chunk-ready flag is used.
+        let result = client
+            .send_chunks_for_batch(&batch.chunks, player, &fixture.world, epoch)
+            .await;
+        assert_eq!(result.queued_positions, vec![position]);
+        let ready = player
+            .chunk_sender
+            .lock()
+            .unwrap()
+            .on_bedrock_batch_completed(
+                &batch,
+                &result.queued_positions,
+                &result.cancelled_positions,
+                epoch,
+                true,
+            );
+        fixture.world.entity_tracker.update_player_for_chunks(
+            player,
+            &fixture.world,
+            &ready.into_iter().collect(),
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn bedrock_join_queues_terrain_before_packet_budgeted_player_spawns() {
+        let fixture = TestServer::new().await;
+        let watcher = fixture.new_bedrock_player().await;
+        let ClientPlatform::Bedrock(client) = watcher.client.as_ref() else {
+            panic!("Bedrock test player");
+        };
+        let mut actors = Vec::new();
+        // Each real player pairing emits PlayerList and AddPlayer, so this backlog
+        // crosses a 64-packet budget but not the old 64-pairing budget.
+        for _ in 0..33 {
+            let actor: Arc<dyn EntityBase> = fixture.new_java_player().await;
+            fixture
+                .world
+                .entity_tracker
+                .add_entity(&actor, &fixture.world);
+            actors.push(actor);
+        }
+        fixture
+            .world
+            .entity_tracker
+            .update_bedrock_lifecycles(&fixture.world);
+        assert!(
+            decode_packets(client).await.is_empty(),
+            "actors need terrain first"
+        );
+
+        send_entity_chunk(&fixture, &watcher).await;
+        fixture
+            .world
+            .entity_tracker
+            .update_bedrock_lifecycles(&fixture.world);
+        let packets = decode_packets(client).await;
+        assert_eq!(packets[0].id, CLevelChunk::PACKET_ID);
+        assert_eq!(
+            packets.len(),
+            65,
+            "terrain followed by at most 64 actor packets"
+        );
+        for pair in packets[1..].chunks_exact(2) {
+            assert_eq!(pair[0].id, CPlayerList::PACKET_ID);
+            assert_eq!(pair[1].id, CAddPlayer::PACKET_ID);
+        }
+
+        fixture
+            .world
+            .entity_tracker
+            .update_bedrock_lifecycles(&fixture.world);
+        let packets = decode_packets(client).await;
+        assert_eq!(packets.len(), 2, "the final actor is deferred, not dropped");
+        assert_eq!(packets[0].id, CPlayerList::PACKET_ID);
+        assert_eq!(packets[1].id, CAddPlayer::PACKET_ID);
+        for actor in &actors {
+            let tracked = fixture
+                .world
+                .entity_tracker
+                .get_tracked_entity(actor.get_entity().entity_id)
+                .unwrap();
+            assert!(tracked.has_active_bedrock_pairing(&watcher.gameprofile.id));
+        }
+        fixture
+            .world
+            .entity_tracker
+            .update_bedrock_lifecycles(&fixture.world);
+        assert!(
+            decode_packets(client).await.is_empty(),
+            "no duplicate pairings"
+        );
+
+        for actor in actors {
+            fixture
+                .world
+                .entity_tracker
+                .remove_entity(actor.as_ref(), &fixture.world);
+        }
+        fixture
+            .world
+            .entity_tracker
+            .update_bedrock_lifecycles(&fixture.world);
+        let packets = decode_packets(client).await;
+        assert_eq!(packets.len(), 33);
+        assert!(
+            packets
+                .iter()
+                .all(|packet| packet.id == CRemoveActor::PACKET_ID)
+        );
+        assert!(fixture.world.entity_tracker.entity_map.is_empty());
+        fixture.shutdown().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn bedrock_pairing_retries_full_queue_and_orders_removal_after_spawn() {
+        let fixture = TestServer::new().await;
+        let watcher = fixture.new_bedrock_player().await;
+        let ClientPlatform::Bedrock(client) = watcher.client.as_ref() else {
+            panic!("Bedrock test player");
+        };
+        send_entity_chunk(&fixture, &watcher).await;
+        assert_eq!(decode_packets(client).await.len(), 1);
+        let actor: Arc<dyn EntityBase> = fixture.new_java_player().await;
+        fixture
+            .world
+            .entity_tracker
+            .add_entity(&actor, &fixture.world);
+        let tracked = fixture
+            .world
+            .entity_tracker
+            .get_tracked_entity(actor.get_entity().entity_id)
+            .unwrap();
+        let filler = client
+            .serialize_packet(&CRemoveActor::new(VarLong(-1)))
+            .unwrap();
+        let capacity = client.outgoing_packet_capacity_for_test();
+        for _ in 0..capacity - 1 {
+            assert!(client.try_enqueue_packet_data_checked(filler.clone()));
+        }
+        fixture
+            .world
+            .entity_tracker
+            .update_bedrock_lifecycles(&fixture.world);
+        assert!(!tracked.seen_by.contains(&watcher.gameprofile.id));
+        assert!(tracked.pending_pairings.contains(&watcher.gameprofile.id));
+        let packets = decode_packets(client).await;
+        assert_eq!(packets.len(), capacity - 1, "no partial player spawn");
+        assert!(
+            packets
+                .iter()
+                .all(|packet| packet.id == CRemoveActor::PACKET_ID)
+        );
+
+        fixture
+            .world
+            .entity_tracker
+            .update_bedrock_lifecycles(&fixture.world);
+        assert!(tracked.has_active_bedrock_pairing(&watcher.gameprofile.id));
+        // Leave the accepted spawn queued, then saturate the queue before despawning.
+        for _ in 0..client.outgoing_packet_capacity_for_test() {
+            assert!(client.try_enqueue_packet_data_checked(filler.clone()));
+        }
+        fixture
+            .world
+            .entity_tracker
+            .remove_entity(actor.as_ref(), &fixture.world);
+        fixture
+            .world
+            .entity_tracker
+            .update_bedrock_lifecycles(&fixture.world);
+        assert!(tracked.pending_removals.contains(&watcher.gameprofile.id));
+        assert!(!tracked.has_active_bedrock_pairing(&watcher.gameprofile.id));
+        let packets = decode_packets(client).await;
+        assert_eq!(packets.len(), capacity);
+        assert_eq!(packets[0].id, CPlayerList::PACKET_ID);
+        assert_eq!(packets[1].id, CAddPlayer::PACKET_ID);
+
+        fixture
+            .world
+            .entity_tracker
+            .update_bedrock_lifecycles(&fixture.world);
+        let packets = decode_packets(client).await;
+        assert_eq!(
+            packets.len(),
+            1,
+            "despawn is retried after the queued spawn"
+        );
+        assert_eq!(packets[0].id, CRemoveActor::PACKET_ID);
+        assert!(
+            !fixture
+                .world
+                .entity_tracker
+                .has_entity_with_id(tracked.entity_id)
+        );
+        fixture
+            .world
+            .entity_tracker
+            .update_bedrock_lifecycles(&fixture.world);
+        assert!(decode_packets(client).await.is_empty());
+        fixture.shutdown().await;
+    }
+
+    #[test]
+    fn bedrock_actor_packet_budget_keeps_player_spawns_atomic() {
+        let player_id = Uuid::from_u128(1);
+        let mut budgets = FxHashMap::from_iter([(player_id, BEDROCK_ACTOR_PACKETS_PER_TICK)]);
+
+        // One removal leaves an odd budget. A player spawn must reserve both of its packets.
+        assert!(take_bedrock_packet_budget(&mut budgets, player_id, 1));
+        let accepted = (0..BEDROCK_ACTOR_PACKETS_PER_TICK)
+            .filter(|_| take_bedrock_packet_budget(&mut budgets, player_id, 2))
             .count();
 
-        assert_eq!(accepted, BEDROCK_ACTOR_PAIRINGS_PER_TICK);
+        assert_eq!(accepted, 31);
+        assert_eq!(budgets[&player_id], 1);
+        assert!(take_bedrock_packet_budget(&mut budgets, player_id, 1));
+        assert!(!take_bedrock_packet_budget(&mut budgets, player_id, 1));
         assert_eq!(budgets[&player_id], 0);
     }
 }
