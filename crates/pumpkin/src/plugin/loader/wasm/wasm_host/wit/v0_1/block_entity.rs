@@ -32,8 +32,9 @@ use crate::block::entities::sign::{
 use crate::block::entities::skull::SkullBlockEntity as InternalSkullBlockEntity;
 use crate::block::entities::smoker::SmokerBlockEntity as InternalSmokerBlockEntity;
 use crate::block::entities::structure_block::StructureBlockBlockEntity as InternalStructureBlockBlockEntity;
+use crate::plugin::loader::wasm::wasm_host::state;
 use crate::plugin::loader::wasm::wasm_host::{
-    state::{BlockEntityResource, ContainerBlockEntityResource, PluginHostState},
+    state::PluginHostState,
     wit::v0_1::pumpkin::{
         self,
         plugin::{
@@ -91,9 +92,9 @@ fn block_entity_from_resource(
 ) -> wasmtime::Result<Arc<dyn InternalBlockEntity>> {
     state
         .resource_table
-        .get::<BlockEntityResource>(&Resource::new_own(entity.rep()))
+        .get::<Arc<dyn InternalBlockEntity>>(&Resource::new_own(entity.rep()))
         .map_err(|_| wasmtime::Error::msg("invalid block entity resource handle"))
-        .map(|resource| resource.provider.clone())
+        .map(|resource| resource.clone())
 }
 
 const fn from_wasm_dye_color(color: DyeColor) -> InternalDyeColor {
@@ -287,10 +288,7 @@ impl HostBlockEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<BlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -302,7 +300,12 @@ fn get_container_from_be<T>(
     let provider = entity.clone();
     entity.get_inventory().map_or_else(
         || Err(wasmtime::Error::msg("Block entity inventory not available")),
-        |inventory| state.add_container_block_entity(provider, inventory),
+        |inventory| {
+            state.add(state::ContainerBlockEntity {
+                provider,
+                inventory,
+            })
+        },
     )
 }
 
@@ -311,12 +314,7 @@ impl HostContainerBlockEntity for PluginHostState {
         &mut self,
         res: Resource<ContainerBlockEntity>,
     ) -> wasmtime::Result<Resource<BlockEntity>> {
-        let container = self
-            .resource_table
-            .get::<ContainerBlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| wasmtime::Error::msg("invalid container block entity resource handle"))?;
-        let provider = container.provider.provider.clone();
-        self.add_block_entity(provider)
+        self.add(self.get(&res)?.provider.clone())
     }
 
     async fn get_inventory(
@@ -327,31 +325,18 @@ impl HostContainerBlockEntity for PluginHostState {
             crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::inventory::Inventory,
         >,
     >{
-        let container = self
-            .resource_table
-            .get::<ContainerBlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| wasmtime::Error::msg("invalid container block entity resource handle"))?;
-        let inventory = container.provider.inventory.clone();
-        self.add_inventory(
+        let inventory = self.get(&res)?.inventory.clone();
+        self.add(
             crate::plugin::loader::wasm::wasm_host::state::InventoryProvider::Generic(inventory),
         )
     }
 
     async fn get_size(&mut self, res: Resource<ContainerBlockEntity>) -> wasmtime::Result<u32> {
-        let container = self
-            .resource_table
-            .get::<ContainerBlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| wasmtime::Error::msg("invalid container block entity resource handle"))?;
-        Ok(container.provider.inventory.size() as u32)
+        Ok(self.get(&res)?.inventory.size() as u32)
     }
 
     async fn is_empty(&mut self, res: Resource<ContainerBlockEntity>) -> wasmtime::Result<bool> {
-        let container = self
-            .resource_table
-            .get::<ContainerBlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| wasmtime::Error::msg("invalid container block entity resource handle"))?;
-        let inventory = container.provider.inventory.clone();
-        Ok(inventory.is_empty())
+        Ok(self.get(&res)?.inventory.is_empty())
     }
 
     async fn get_stack(
@@ -359,18 +344,12 @@ impl HostContainerBlockEntity for PluginHostState {
         res: Resource<ContainerBlockEntity>,
         slot: u32,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let container = self
-            .resource_table
-            .get::<ContainerBlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| wasmtime::Error::msg("invalid container block entity resource handle"))?;
-        let inventory = container.provider.inventory.clone();
+        let inventory = self.get(&res)?.inventory.clone();
         let stack = inventory.get_stack(slot as usize);
         if stack.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(self.add_item_stack(Arc::new(
-                tokio::sync::Mutex::new(stack),
-            ))?))
+            Ok(Some(self.add(Arc::new(tokio::sync::Mutex::new(stack)))?))
         }
     }
 
@@ -380,15 +359,11 @@ impl HostContainerBlockEntity for PluginHostState {
         slot: u32,
         stack_res: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
-        let container = self
-            .resource_table
-            .get::<ContainerBlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| wasmtime::Error::msg("invalid container block entity resource handle"))?;
-        let inventory = container.provider.inventory.clone();
+        let inventory = self.get(&res)?.inventory.clone();
 
         let stack = match stack_res {
             Some(res) => {
-                let lock = self.get_item_stack(&res)?;
+                let lock = self.get(&res)?;
                 lock.lock().await.clone()
             }
             None => pumpkin_data::item_stack::ItemStack::EMPTY.clone(),
@@ -403,36 +378,23 @@ impl HostContainerBlockEntity for PluginHostState {
         res: Resource<ContainerBlockEntity>,
         slot: u32,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let container = self
-            .resource_table
-            .get::<ContainerBlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| wasmtime::Error::msg("invalid container block entity resource handle"))?;
-        let inventory = container.provider.inventory.clone();
+        let inventory = self.get(&res)?.inventory.clone();
         let removed = inventory.remove_stack(slot as usize);
         if removed.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(self.add_item_stack(Arc::new(
-                tokio::sync::Mutex::new(removed),
-            ))?))
+            Ok(Some(self.add(Arc::new(tokio::sync::Mutex::new(removed)))?))
         }
     }
 
     async fn clear(&mut self, res: Resource<ContainerBlockEntity>) -> wasmtime::Result<()> {
-        let container = self
-            .resource_table
-            .get::<ContainerBlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| wasmtime::Error::msg("invalid container block entity resource handle"))?;
-        let inventory = container.provider.inventory.clone();
+        let inventory = self.get(&res)?.inventory.clone();
         inventory.clear();
         Ok(())
     }
 
     async fn drop(&mut self, rep: Resource<ContainerBlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<ContainerBlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -441,12 +403,7 @@ impl HostCommandBlockEntity for PluginHostState {
         &mut self,
         res: Resource<CommandBlockEntity>,
     ) -> wasmtime::Result<Resource<BlockEntity>> {
-        let entity = self
-            .resource_table
-            .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| wasmtime::Error::msg("invalid command block entity resource handle"))?;
-        let provider = entity.provider.clone();
-        self.add_block_entity(provider)
+        self.add(self.get(&res)?.clone() as _)
     }
 
     async fn last_output(&mut self, res: Resource<CommandBlockEntity>) -> wasmtime::Result<String> {
@@ -539,10 +496,7 @@ impl HostCommandBlockEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<CommandBlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -551,12 +505,7 @@ impl HostSignBlockEntity for PluginHostState {
         &mut self,
         res: Resource<SignBlockEntity>,
     ) -> wasmtime::Result<Resource<BlockEntity>> {
-        let entity = self
-            .resource_table
-            .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| wasmtime::Error::msg("invalid sign block entity resource handle"))?;
-        let provider = entity.provider.clone();
-        self.add_block_entity(provider)
+        self.add(self.get(&res)?.clone() as _)
     }
 
     async fn get_front_text(
@@ -690,10 +639,7 @@ impl HostSignBlockEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<SignBlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -702,12 +648,7 @@ impl HostJukeboxBlockEntity for PluginHostState {
         &mut self,
         res: Resource<JukeboxBlockEntity>,
     ) -> wasmtime::Result<Resource<BlockEntity>> {
-        let entity = self
-            .resource_table
-            .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| wasmtime::Error::msg("invalid jukebox block entity resource handle"))?;
-        let provider = entity.provider.clone();
-        self.add_block_entity(provider)
+        self.add(self.get(&res)?.clone() as _)
     }
 
     async fn get_container(
@@ -761,10 +702,7 @@ impl HostJukeboxBlockEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<JukeboxBlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -773,12 +711,7 @@ impl HostChestBlockEntity for PluginHostState {
         &mut self,
         res: Resource<ChestBlockEntity>,
     ) -> wasmtime::Result<Resource<BlockEntity>> {
-        let entity = self
-            .resource_table
-            .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| wasmtime::Error::msg("invalid chest block entity resource handle"))?;
-        let provider = entity.provider.clone();
-        self.add_block_entity(provider)
+        self.add(self.get(&res)?.clone() as _)
     }
 
     async fn get_container(
@@ -800,10 +733,7 @@ impl HostChestBlockEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<ChestBlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -812,14 +742,7 @@ impl HostMobSpawnerBlockEntity for PluginHostState {
         &mut self,
         res: Resource<MobSpawnerBlockEntity>,
     ) -> wasmtime::Result<Resource<BlockEntity>> {
-        let entity = self
-            .resource_table
-            .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| {
-                wasmtime::Error::msg("invalid mob spawner block entity resource handle")
-            })?;
-        let provider = entity.provider.clone();
-        self.add_block_entity(provider)
+        self.add(self.get(&res)?.clone() as _)
     }
 
     async fn get_spawn_count(
@@ -862,10 +785,7 @@ impl HostMobSpawnerBlockEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<MobSpawnerBlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -874,12 +794,7 @@ impl HostMapBlockEntity for PluginHostState {
         &mut self,
         res: Resource<MapBlockEntity>,
     ) -> wasmtime::Result<Resource<BlockEntity>> {
-        let entity = self
-            .resource_table
-            .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| wasmtime::Error::msg("invalid map block entity resource handle"))?;
-        let provider = entity.provider.clone();
-        self.add_block_entity(provider)
+        self.add(self.get(&res)?.clone() as _)
     }
 
     async fn get_map_id(&mut self, res: Resource<MapBlockEntity>) -> wasmtime::Result<i32> {
@@ -990,10 +905,7 @@ impl HostMapBlockEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<MapBlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -1002,14 +914,7 @@ impl HostHangingSignBlockEntity for PluginHostState {
         &mut self,
         res: Resource<HangingSignBlockEntity>,
     ) -> wasmtime::Result<Resource<BlockEntity>> {
-        let entity = self
-            .resource_table
-            .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| {
-                wasmtime::Error::msg("invalid hanging sign block entity resource handle")
-            })?;
-        let provider = entity.provider.clone();
-        self.add_block_entity(provider)
+        self.add(self.get(&res)?.clone() as _)
     }
 
     async fn get_front_text(
@@ -1143,10 +1048,7 @@ impl HostHangingSignBlockEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<HangingSignBlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -1155,14 +1057,7 @@ impl HostTrappedChestBlockEntity for PluginHostState {
         &mut self,
         res: Resource<TrappedChestBlockEntity>,
     ) -> wasmtime::Result<Resource<BlockEntity>> {
-        let entity = self
-            .resource_table
-            .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| {
-                wasmtime::Error::msg("invalid trapped chest block entity resource handle")
-            })?;
-        let provider = entity.provider.clone();
-        self.add_block_entity(provider)
+        self.add(self.get(&res)?.clone() as _)
     }
 
     async fn get_container(
@@ -1187,10 +1082,7 @@ impl HostTrappedChestBlockEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<TrappedChestBlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -1201,21 +1093,11 @@ macro_rules! impl_basic_block_entity {
                 &mut self,
                 res: Resource<$resource_name>,
             ) -> wasmtime::Result<Resource<BlockEntity>> {
-                let entity = self
-                    .resource_table
-                    .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-                    .map_err(|_| {
-                        wasmtime::Error::msg(concat!("invalid ", $name_str, " resource handle"))
-                    })?;
-                let provider = entity.provider.clone();
-                self.add_block_entity(provider)
+                self.add(self.get(&res)?.clone() as _)
             }
 
             async fn drop(&mut self, rep: Resource<$resource_name>) -> wasmtime::Result<()> {
-                let _ = self
-                    .resource_table
-                    .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-                Ok(())
+                self.drop(rep)
             }
         }
     };
@@ -1228,14 +1110,7 @@ macro_rules! impl_container_basic_block_entity {
                 &mut self,
                 res: Resource<$resource_name>,
             ) -> wasmtime::Result<Resource<BlockEntity>> {
-                let entity = self
-                    .resource_table
-                    .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-                    .map_err(|_| {
-                        wasmtime::Error::msg(concat!("invalid ", $name_str, " resource handle"))
-                    })?;
-                let provider = entity.provider.clone();
-                self.add_block_entity(provider)
+                self.add(self.get(&res)?.clone() as _)
             }
 
             async fn get_container(
@@ -1246,10 +1121,7 @@ macro_rules! impl_container_basic_block_entity {
             }
 
             async fn drop(&mut self, rep: Resource<$resource_name>) -> wasmtime::Result<()> {
-                let _ = self
-                    .resource_table
-                    .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-                Ok(())
+                self.drop(rep)
             }
         }
     };
@@ -1262,14 +1134,7 @@ macro_rules! impl_cooking_host_block_entity {
                 &mut self,
                 res: Resource<$resource_name>,
             ) -> wasmtime::Result<Resource<BlockEntity>> {
-                let entity = self
-                    .resource_table
-                    .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-                    .map_err(|_| {
-                        wasmtime::Error::msg(concat!("invalid ", $name_str, " resource handle"))
-                    })?;
-                let provider = entity.provider.clone();
-                self.add_block_entity(provider)
+                self.add(self.get(&res)?.clone() as _)
             }
 
             async fn get_container(
@@ -1335,10 +1200,7 @@ macro_rules! impl_cooking_host_block_entity {
             }
 
             async fn drop(&mut self, rep: Resource<$resource_name>) -> wasmtime::Result<()> {
-                let _ = self
-                    .resource_table
-                    .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-                Ok(())
+                self.drop(rep)
             }
         }
     };
@@ -1368,12 +1230,7 @@ impl HostBannerBlockEntity for PluginHostState {
         &mut self,
         res: Resource<BannerBlockEntity>,
     ) -> wasmtime::Result<Resource<BlockEntity>> {
-        let entity = self
-            .resource_table
-            .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| wasmtime::Error::msg("invalid banner block entity resource handle"))?;
-        let provider = entity.provider.clone();
-        self.add_block_entity(provider)
+        self.add(self.get(&res)?.clone() as _)
     }
 
     async fn get_custom_name(
@@ -1388,10 +1245,7 @@ impl HostBannerBlockEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<BannerBlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -1400,12 +1254,7 @@ impl HostBarrelBlockEntity for PluginHostState {
         &mut self,
         res: Resource<BarrelBlockEntity>,
     ) -> wasmtime::Result<Resource<BlockEntity>> {
-        let entity = self
-            .resource_table
-            .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| wasmtime::Error::msg("invalid barrel block entity resource handle"))?;
-        let provider = entity.provider.clone();
-        self.add_block_entity(provider)
+        self.add(self.get(&res)?.clone() as _)
     }
 
     async fn get_container(
@@ -1420,10 +1269,7 @@ impl HostBarrelBlockEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<BarrelBlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -1432,12 +1278,7 @@ impl HostBeaconBlockEntity for PluginHostState {
         &mut self,
         res: Resource<BeaconBlockEntity>,
     ) -> wasmtime::Result<Resource<BlockEntity>> {
-        let entity = self
-            .resource_table
-            .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| wasmtime::Error::msg("invalid beacon block entity resource handle"))?;
-        let provider = entity.provider.clone();
-        self.add_block_entity(provider)
+        self.add(self.get(&res)?.clone() as _)
     }
 
     async fn get_container(
@@ -1483,10 +1324,7 @@ impl HostBeaconBlockEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<BeaconBlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -1495,12 +1333,7 @@ impl HostBeehiveBlockEntity for PluginHostState {
         &mut self,
         res: Resource<BeehiveBlockEntity>,
     ) -> wasmtime::Result<Resource<BlockEntity>> {
-        let entity = self
-            .resource_table
-            .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| wasmtime::Error::msg("invalid beehive block entity resource handle"))?;
-        let provider = entity.provider.clone();
-        self.add_block_entity(provider)
+        self.add(self.get(&res)?.clone() as _)
     }
 
     async fn get_bee_count(&mut self, res: Resource<BeehiveBlockEntity>) -> wasmtime::Result<u32> {
@@ -1518,10 +1351,7 @@ impl HostBeehiveBlockEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<BeehiveBlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -1530,12 +1360,7 @@ impl HostBellBlockEntity for PluginHostState {
         &mut self,
         res: Resource<BellBlockEntity>,
     ) -> wasmtime::Result<Resource<BlockEntity>> {
-        let entity = self
-            .resource_table
-            .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| wasmtime::Error::msg("invalid bell block entity resource handle"))?;
-        let provider = entity.provider.clone();
-        self.add_block_entity(provider)
+        self.add(self.get(&res)?.clone() as _)
     }
 
     async fn is_ringing(&mut self, res: Resource<BellBlockEntity>) -> wasmtime::Result<bool> {
@@ -1555,10 +1380,7 @@ impl HostBellBlockEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<BellBlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -1567,14 +1389,7 @@ impl HostBrewingStandBlockEntity for PluginHostState {
         &mut self,
         res: Resource<BrewingStandBlockEntity>,
     ) -> wasmtime::Result<Resource<BlockEntity>> {
-        let entity = self
-            .resource_table
-            .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| {
-                wasmtime::Error::msg("invalid brewing stand block entity resource handle")
-            })?;
-        let provider = entity.provider.clone();
-        self.add_block_entity(provider)
+        self.add(self.get(&res)?.clone() as _)
     }
 
     async fn get_container(
@@ -1606,10 +1421,7 @@ impl HostBrewingStandBlockEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<BrewingStandBlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -1618,14 +1430,7 @@ impl HostChiseledBookshelfBlockEntity for PluginHostState {
         &mut self,
         res: Resource<ChiseledBookshelfBlockEntity>,
     ) -> wasmtime::Result<Resource<BlockEntity>> {
-        let entity = self
-            .resource_table
-            .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| {
-                wasmtime::Error::msg("invalid chiseled bookshelf block entity resource handle")
-            })?;
-        let provider = entity.provider.clone();
-        self.add_block_entity(provider)
+        self.add(self.get(&res)?.clone() as _)
     }
 
     async fn get_container(
@@ -1650,10 +1455,7 @@ impl HostChiseledBookshelfBlockEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<ChiseledBookshelfBlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -1662,12 +1464,7 @@ impl HostComparatorBlockEntity for PluginHostState {
         &mut self,
         res: Resource<ComparatorBlockEntity>,
     ) -> wasmtime::Result<Resource<BlockEntity>> {
-        let entity = self
-            .resource_table
-            .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| wasmtime::Error::msg("invalid comparator block entity resource handle"))?;
-        let provider = entity.provider.clone();
-        self.add_block_entity(provider)
+        self.add(self.get(&res)?.clone() as _)
     }
 
     async fn get_output_signal(
@@ -1684,10 +1481,7 @@ impl HostComparatorBlockEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<ComparatorBlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -1696,12 +1490,7 @@ impl HostCrafterBlockEntity for PluginHostState {
         &mut self,
         res: Resource<CrafterBlockEntity>,
     ) -> wasmtime::Result<Resource<BlockEntity>> {
-        let entity = self
-            .resource_table
-            .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| wasmtime::Error::msg("invalid crafter block entity resource handle"))?;
-        let provider = entity.provider.clone();
-        self.add_block_entity(provider)
+        self.add(self.get(&res)?.clone() as _)
     }
 
     async fn get_container(
@@ -1734,10 +1523,7 @@ impl HostCrafterBlockEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<CrafterBlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -1746,14 +1532,7 @@ impl HostCreakingHeartBlockEntity for PluginHostState {
         &mut self,
         res: Resource<CreakingHeartBlockEntity>,
     ) -> wasmtime::Result<Resource<BlockEntity>> {
-        let entity = self
-            .resource_table
-            .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| {
-                wasmtime::Error::msg("invalid creaking heart block entity resource handle")
-            })?;
-        let provider = entity.provider.clone();
-        self.add_block_entity(provider)
+        self.add(self.get(&res)?.clone() as _)
     }
 
     async fn get_creaking_uuid(
@@ -1768,10 +1547,7 @@ impl HostCreakingHeartBlockEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<CreakingHeartBlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -1780,14 +1556,7 @@ impl HostEndGatewayBlockEntity for PluginHostState {
         &mut self,
         res: Resource<EndGatewayBlockEntity>,
     ) -> wasmtime::Result<Resource<BlockEntity>> {
-        let entity = self
-            .resource_table
-            .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| {
-                wasmtime::Error::msg("invalid end gateway block entity resource handle")
-            })?;
-        let provider = entity.provider.clone();
-        self.add_block_entity(provider)
+        self.add(self.get(&res)?.clone() as _)
     }
 
     async fn get_age(&mut self, res: Resource<EndGatewayBlockEntity>) -> wasmtime::Result<i64> {
@@ -1810,10 +1579,7 @@ impl HostEndGatewayBlockEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<EndGatewayBlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -1822,14 +1588,7 @@ impl HostEnderChestBlockEntity for PluginHostState {
         &mut self,
         res: Resource<EnderChestBlockEntity>,
     ) -> wasmtime::Result<Resource<BlockEntity>> {
-        let entity = self
-            .resource_table
-            .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| {
-                wasmtime::Error::msg("invalid ender chest block entity resource handle")
-            })?;
-        let provider = entity.provider.clone();
-        self.add_block_entity(provider)
+        self.add(self.get(&res)?.clone() as _)
     }
 
     async fn viewer_count(
@@ -1840,10 +1599,7 @@ impl HostEnderChestBlockEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<EnderChestBlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -1852,14 +1608,7 @@ impl HostShulkerBoxBlockEntity for PluginHostState {
         &mut self,
         res: Resource<ShulkerBoxBlockEntity>,
     ) -> wasmtime::Result<Resource<BlockEntity>> {
-        let entity = self
-            .resource_table
-            .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| {
-                wasmtime::Error::msg("invalid shulker box block entity resource handle")
-            })?;
-        let provider = entity.provider.clone();
-        self.add_block_entity(provider)
+        self.add(self.get(&res)?.clone() as _)
     }
 
     async fn get_container(
@@ -1877,10 +1626,7 @@ impl HostShulkerBoxBlockEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<ShulkerBoxBlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -1889,12 +1635,7 @@ impl HostHopperBlockEntity for PluginHostState {
         &mut self,
         res: Resource<HopperBlockEntity>,
     ) -> wasmtime::Result<Resource<BlockEntity>> {
-        let entity = self
-            .resource_table
-            .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| wasmtime::Error::msg("invalid hopper block entity resource handle"))?;
-        let provider = entity.provider.clone();
-        self.add_block_entity(provider)
+        self.add(self.get(&res)?.clone() as _)
     }
 
     async fn get_container(
@@ -1915,10 +1656,7 @@ impl HostHopperBlockEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<HopperBlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -1927,12 +1665,7 @@ impl HostJigsawBlockEntity for PluginHostState {
         &mut self,
         res: Resource<JigsawBlockEntity>,
     ) -> wasmtime::Result<Resource<BlockEntity>> {
-        let entity = self
-            .resource_table
-            .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| wasmtime::Error::msg("invalid jigsaw block entity resource handle"))?;
-        let provider = entity.provider.clone();
-        self.add_block_entity(provider)
+        self.add(self.get(&res)?.clone() as _)
     }
 
     async fn get_name(&mut self, res: Resource<JigsawBlockEntity>) -> wasmtime::Result<String> {
@@ -2019,10 +1752,7 @@ impl HostJigsawBlockEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<JigsawBlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -2031,12 +1761,7 @@ impl HostLecternBlockEntity for PluginHostState {
         &mut self,
         res: Resource<LecternBlockEntity>,
     ) -> wasmtime::Result<Resource<BlockEntity>> {
-        let entity = self
-            .resource_table
-            .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| wasmtime::Error::msg("invalid lectern block entity resource handle"))?;
-        let provider = entity.provider.clone();
-        self.add_block_entity(provider)
+        self.add(self.get(&res)?.clone() as _)
     }
 
     async fn get_container(
@@ -2057,10 +1782,7 @@ impl HostLecternBlockEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<LecternBlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -2069,12 +1791,7 @@ impl HostPistonBlockEntity for PluginHostState {
         &mut self,
         res: Resource<PistonBlockEntity>,
     ) -> wasmtime::Result<Resource<BlockEntity>> {
-        let entity = self
-            .resource_table
-            .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| wasmtime::Error::msg("invalid piston block entity resource handle"))?;
-        let provider = entity.provider.clone();
-        self.add_block_entity(provider)
+        self.add(self.get(&res)?.clone() as _)
     }
 
     async fn get_progress(&mut self, res: Resource<PistonBlockEntity>) -> wasmtime::Result<f32> {
@@ -2102,10 +1819,7 @@ impl HostPistonBlockEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<PistonBlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -2114,14 +1828,7 @@ impl HostSculkShriekerBlockEntity for PluginHostState {
         &mut self,
         res: Resource<SculkShriekerBlockEntity>,
     ) -> wasmtime::Result<Resource<BlockEntity>> {
-        let entity = self
-            .resource_table
-            .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| {
-                wasmtime::Error::msg("invalid sculk shrieker block entity resource handle")
-            })?;
-        let provider = entity.provider.clone();
-        self.add_block_entity(provider)
+        self.add(self.get(&res)?.clone() as _)
     }
 
     async fn get_warning_level(
@@ -2136,10 +1843,7 @@ impl HostSculkShriekerBlockEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<SculkShriekerBlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -2148,12 +1852,7 @@ impl HostSkullBlockEntity for PluginHostState {
         &mut self,
         res: Resource<SkullBlockEntity>,
     ) -> wasmtime::Result<Resource<BlockEntity>> {
-        let entity = self
-            .resource_table
-            .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| wasmtime::Error::msg("invalid skull block entity resource handle"))?;
-        let provider = entity.provider.clone();
-        self.add_block_entity(provider)
+        self.add(self.get(&res)?.clone() as _)
     }
 
     async fn get_note_block_sound(
@@ -2168,10 +1867,7 @@ impl HostSkullBlockEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<SkullBlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -2180,14 +1876,7 @@ impl HostStructureBlockBlockEntity for PluginHostState {
         &mut self,
         res: Resource<StructureBlockBlockEntity>,
     ) -> wasmtime::Result<Resource<BlockEntity>> {
-        let entity = self
-            .resource_table
-            .get::<BlockEntityResource>(&Resource::new_own(res.rep()))
-            .map_err(|_| {
-                wasmtime::Error::msg("invalid structure block block entity resource handle")
-            })?;
-        let provider = entity.provider.clone();
-        self.add_block_entity(provider)
+        self.add(self.get(&res)?.clone() as _)
     }
 
     async fn get_name(
@@ -2261,10 +1950,7 @@ impl HostStructureBlockBlockEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<StructureBlockBlockEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<BlockEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 

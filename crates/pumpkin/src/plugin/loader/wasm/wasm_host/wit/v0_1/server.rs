@@ -15,7 +15,7 @@ use super::player::{
 use crate::data::SaveJSONConfiguration;
 use crate::plugin::{
     loader::wasm::wasm_host::{
-        state::{PlayerResource, PluginHostState, ServerResource},
+        state::PluginHostState,
         wit::v0_1::pumpkin::{
             self,
             plugin::{
@@ -33,14 +33,6 @@ use crate::plugin::{
     },
     permissions,
 };
-
-impl PluginHostState {
-    fn get_server_res(&self, res: &Resource<Server>) -> wasmtime::Result<&ServerResource> {
-        self.resource_table
-            .get::<ServerResource>(&Resource::new_own(res.rep()))
-            .map_err(wasmtime::Error::from)
-    }
-}
 
 impl pumpkin::plugin::server::Host for PluginHostState {}
 
@@ -79,9 +71,9 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
     }
 
     async fn get_difficulty(&mut self, res: Resource<Server>) -> wasmtime::Result<Difficulty> {
-        let resource = self.get_server_res(&res)?;
+        let resource = self.get(&res)?;
 
-        Ok(match resource.provider.get_difficulty() {
+        Ok(match resource.get_difficulty() {
             pumpkin_util::Difficulty::Peaceful => Difficulty::Peaceful,
             pumpkin_util::Difficulty::Easy => Difficulty::Easy,
             pumpkin_util::Difficulty::Normal => Difficulty::Normal,
@@ -125,10 +117,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         Ok(server
             .get_all_players()
             .into_iter()
-            .map(|player| {
-                self.add_player(player)
-                    .expect("failed to add player resource")
-            })
+            .map(|player| self.add(player).expect("failed to add player resource"))
             .collect())
     }
 
@@ -144,7 +133,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
 
         server
             .get_player_by_name(&name)
-            .map(|player| self.add_player(player))
+            .map(|player| self.add(player))
             .transpose()
     }
 
@@ -162,7 +151,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
 
         server
             .get_player_by_uuid(uuid)
-            .map(|player| self.add_player(player))
+            .map(|player| self.add(player))
             .transpose()
     }
 
@@ -180,7 +169,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             .load()
             .iter()
             .map(|world| {
-                self.add_world(world.clone())
+                self.add(world.clone())
                     .expect("failed to add world resource")
             })
             .collect())
@@ -202,7 +191,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             .iter()
             .find(|world| world.get_world_name() == name || world.dimension.minecraft_name == name)
             .map(|world| {
-                self.add_world(world.clone())
+                self.add(world.clone())
                     .expect("failed to add world resource")
             }))
     }
@@ -225,11 +214,11 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         _rep: Resource<Server>,
         world: Resource<pumpkin::plugin::world::World>,
     ) -> wasmtime::Result<Vec<Resource<pumpkin::plugin::player::Player>>> {
-        let world_res = self.get_world_res(&world)?;
-        let players = world_res.provider.players.load();
+        let world_res = self.get(&world)?;
+        let players = world_res.players.load();
         let mut player_resources = Vec::with_capacity(players.len());
         for p in players.iter() {
-            let res = self.add_player(p.clone())?;
+            let res = self.add(p.clone())?;
             player_resources.push(res);
         }
         Ok(player_resources)
@@ -240,8 +229,8 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         _rep: Resource<Server>,
         world: Resource<pumpkin::plugin::world::World>,
     ) -> wasmtime::Result<u32> {
-        let world_res = self.get_world_res(&world)?;
-        Ok(world_res.provider.players.load().len() as u32)
+        let world_res = self.get(&world)?;
+        Ok(world_res.players.load().len() as u32)
     }
 
     async fn delete_message_by_signature(
@@ -396,7 +385,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             .server
             .as_ref()
             .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-        self.add_recipe_manager(server.recipe_manager.clone())
+        self.add(server.recipe_manager.clone())
     }
 
     async fn get_op_manager(
@@ -407,7 +396,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             .server
             .as_ref()
             .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-        self.add_op_manager(server.clone())
+        self.add(server.clone())
     }
 
     async fn get_ban_manager(
@@ -418,7 +407,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             .server
             .as_ref()
             .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-        self.add_ban_manager(server.clone())
+        self.add(server.clone())
     }
 
     async fn get_whitelist_manager(
@@ -429,7 +418,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             .server
             .as_ref()
             .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-        self.add_whitelist_manager(server.clone())
+        self.add(server.clone())
     }
 
     async fn get_advancement(
@@ -468,7 +457,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             .server
             .as_ref()
             .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-        self.add_enchantment_manager(server.enchantment_manager.clone())
+        self.add(server.enchantment_manager.clone())
     }
 
     async fn get_enchantment(
@@ -482,7 +471,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
 
         if let Some(entry) = server.enchantment_manager.get(&id).await {
-            let description = self.add_text_component(entry.description)?;
+            let description = self.add(entry.description)?;
             return Ok(Some(WitCustomEnchantment {
                 id: entry.id,
                 description,
@@ -500,8 +489,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         }
 
         if let Some(vanilla) = super::enchantment::find_vanilla_enchantment(&id) {
-            let description =
-                self.add_text_component(TextComponent::translate(vanilla.description, []))?;
+            let description = self.add(TextComponent::translate(vanilla.description, []))?;
             return Ok(Some(WitCustomEnchantment {
                 id: vanilla.name.to_string(),
                 description,
@@ -552,7 +540,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
             .server
             .as_ref()
             .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
-        self.add_datapack_manager(server.clone())
+        self.add(server.clone())
     }
 
     async fn set_server_links(
@@ -577,10 +565,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<Server>) -> wasmtime::Result<()> {
-        self.resource_table
-            .delete::<ServerResource>(Resource::new_own(rep.rep()))
-            .map_err(wasmtime::Error::from)?;
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -616,7 +601,7 @@ impl pumpkin::plugin::server::HostServerWithStore<PluginHostState> for HasSelf<P
             .await?;
 
         host.get()
-            .add_world(world)
+            .add(world)
             .map_err(|_| wasmtime::Error::msg("failed to add world resource"))
     }
 
@@ -713,10 +698,8 @@ impl pumpkin::plugin::server::HostServerWithStore<PluginHostState> for HasSelf<P
             let native_sender = match sender {
                 WasmCommandSender::Console => CommandSender::Console,
                 WasmCommandSender::Player(player_res) => {
-                    let player_resource = state
-                        .resource_table
-                        .get::<PlayerResource>(&Resource::new_own(player_res.rep()))?;
-                    CommandSender::Player(player_resource.provider.clone())
+                    let player_resource = state.take(player_res)?;
+                    CommandSender::Player(player_resource.clone())
                 }
             };
             let plugin = state
@@ -819,12 +802,7 @@ impl pumpkin::plugin::server::HostOpManager for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<WitOpManager>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<crate::plugin::loader::wasm::wasm_host::state::OpManagerResource>(
-                Resource::new_own(rep.rep()),
-            );
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -1162,12 +1140,7 @@ impl pumpkin::plugin::server::HostBanManager for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<WitBanManager>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<crate::plugin::loader::wasm::wasm_host::state::BanManagerResource>(
-            Resource::new_own(rep.rep()),
-        );
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -1411,12 +1384,7 @@ impl pumpkin::plugin::server::HostWhitelistManager for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<WitWhitelistManager>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<crate::plugin::loader::wasm::wasm_host::state::WhitelistManagerResource>(
-            Resource::new_own(rep.rep()),
-        );
-        Ok(())
+        self.drop(rep)
     }
 }
 

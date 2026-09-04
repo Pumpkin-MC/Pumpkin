@@ -45,7 +45,7 @@ impl HostEnchantmentManager for PluginHostState {
             .ok_or_else(|| wasmtime::Error::msg("Server not available"))?;
 
         if let Some(entry) = server.enchantment_manager.get(&id).await {
-            let description = self.add_text_component(entry.description)?;
+            let description = self.add(entry.description)?;
             return Ok(Some(WitCustomEnchantment {
                 id: entry.id,
                 description,
@@ -59,8 +59,7 @@ impl HostEnchantmentManager for PluginHostState {
         }
 
         if let Some(vanilla) = find_vanilla_enchantment(&id) {
-            let description =
-                self.add_text_component(TextComponent::translate(vanilla.description, []))?;
+            let description = self.add(TextComponent::translate(vanilla.description, []))?;
             return Ok(Some(WitCustomEnchantment {
                 id: vanilla.name.to_string(),
                 description,

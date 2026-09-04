@@ -16,10 +16,8 @@ use crate::{
     },
     net::DisconnectReason,
     plugin::loader::wasm::wasm_host::{
-        DowncastResourceExt, WasmPlugin,
-        state::{
-            GuiResource, PlayerResource, PluginHostState, TextComponentResource, WorldResource,
-        },
+        WasmPlugin,
+        state::PluginHostState,
         wit::v0_1::{
             events::{
                 from_wasm_game_mode, from_wasm_position, to_wasm_game_mode, to_wasm_position,
@@ -78,7 +76,7 @@ const fn from_wit_client_game_event(
 }
 
 pub(crate) fn from_wit_server_link(
-    state: &PluginHostState,
+    state: &mut PluginHostState,
     link: pumpkin::plugin::player::ServerLink,
 ) -> wasmtime::Result<(pumpkin_protocol::Label, String)> {
     use pumpkin::plugin::player::{KnownServerLink, ServerLinkLabel};
@@ -101,10 +99,8 @@ pub(crate) fn from_wit_server_link(
             pumpkin_protocol::Label::BuiltIn(link_type)
         }
         ServerLinkLabel::Custom(text) => {
-            let text_res = state
-                .resource_table
-                .get::<TextComponentResource>(&Resource::new_own(text.rep()))?;
-            pumpkin_protocol::Label::TextComponent(Box::new(text_res.provider.clone()))
+            let text_res = state.take(text)?;
+            pumpkin_protocol::Label::TextComponent(Box::new(text_res.clone()))
         }
     };
     Ok((label, link.url))
@@ -563,22 +559,17 @@ pub fn player_from_resource(
     state: &PluginHostState,
     player: &Resource<Player>,
 ) -> wasmtime::Result<std::sync::Arc<crate::entity::player::Player>> {
-    state
-        .resource_table
-        .get::<PlayerResource>(&Resource::new_own(player.rep()))
+    state.get(player)
         .map_err(|_| wasmtime::Error::msg("invalid player resource handle"))
-        .map(|resource| resource.provider.clone())
+        .map(|resource| resource.clone())
 }
 
 pub(crate) fn text_component_from_resource(
     state: &PluginHostState,
     text: &Resource<pumpkin::plugin::text::TextComponent>,
 ) -> pumpkin_util::text::TextComponent {
-    state
-        .resource_table
-        .get::<TextComponentResource>(&Resource::new_own(text.rep()))
+    state.get(text)
         .expect("invalid text-component resource handle")
-        .provider
         .clone()
 }
 
@@ -586,11 +577,8 @@ fn world_from_resource(
     state: &PluginHostState,
     world: &Resource<pumpkin::plugin::world::World>,
 ) -> std::sync::Arc<crate::world::World> {
-    state
-        .resource_table
-        .get::<WorldResource>(&Resource::new_own(world.rep()))
+    state.get(world)
         .expect("invalid world resource handle")
-        .provider
         .clone()
 }
 
@@ -1089,57 +1077,18 @@ const fn from_wasm_bedrock_disconnect_reason(
     }
 }
 
-impl DowncastResourceExt<PlayerResource> for Resource<Player> {
-    fn downcast_ref<'a>(&'a self, state: &'a mut PluginHostState) -> &'a PlayerResource {
-        state
-            .resource_table
-            .get_any_mut(self.rep())
-            .map_err(|_| wasmtime::Error::msg("invalid player resource handle"))
-            .expect("valid player resource handle")
-            .downcast_ref::<PlayerResource>()
-            .ok_or("resource type mismatch")
-            .map_err(wasmtime::Error::msg)
-            .expect("resource type mismatch")
-    }
-
-    fn downcast_mut<'a>(&'a self, state: &'a mut PluginHostState) -> &'a mut PlayerResource {
-        state
-            .resource_table
-            .get_any_mut(self.rep())
-            .map_err(|_| wasmtime::Error::msg("invalid player resource handle"))
-            .expect("valid player resource handle")
-            .downcast_mut::<PlayerResource>()
-            .ok_or("resource type mismatch")
-            .map_err(wasmtime::Error::msg)
-            .expect("resource type mismatch")
-    }
-
-    fn consume(self, state: &mut PluginHostState) -> PlayerResource {
-        state
-            .resource_table
-            .delete::<PlayerResource>(Resource::new_own(self.rep()))
-            .map_err(|_| wasmtime::Error::msg("invalid player resource handle"))
-            .expect("invalid player resource handle")
-    }
-}
-
 impl pumpkin::plugin::player::Host for PluginHostState {
     async fn get_world_players(
         &mut self,
         world_ref: Resource<pumpkin::plugin::world::World>,
     ) -> wasmtime::Result<Vec<Resource<pumpkin::plugin::player::Player>>> {
-        let world = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::WorldResource>(
-                &Resource::new_own(world_ref.rep()),
-            )
+        let world = self.get(&world_ref)
             .map_err(|_| wasmtime::Error::msg("invalid world resource handle"))?
-            .provider
             .clone();
 
         let mut players = Vec::new();
         for player in world.players.load().iter() {
-            players.push(self.add_player(player.clone())?);
+            players.push(self.add(player.clone())?);
         }
 
         Ok(players)
@@ -1163,7 +1112,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
         let stack = if let Some(stack_res) = stack {
-            self.get_item_stack(&stack_res)?.lock().await.clone()
+            self.get(&stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
@@ -1192,7 +1141,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
         let stack = if let Some(stack_res) = stack {
-            self.get_item_stack(&stack_res)?.lock().await.clone()
+            self.get(&stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
@@ -1216,7 +1165,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         >,
     >{
         let player = player_from_resource(self, &player)?;
-        self.add_player_inventory(player)
+        self.add(player)
     }
 
     async fn get_ender_chest(
@@ -1228,7 +1177,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         >,
     >{
         let player = player_from_resource(self, &player)?;
-        self.add_inventory(
+        self.add(
             crate::plugin::loader::wasm::wasm_host::state::InventoryProvider::PlayerEnderChest(
                 player,
             ),
@@ -1245,9 +1194,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         if stack.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(self.add_item_stack(Arc::new(
-                tokio::sync::Mutex::new(stack),
-            ))?))
+            Ok(Some(self.add(Arc::new(tokio::sync::Mutex::new(stack)))?))
         }
     }
 
@@ -1262,9 +1209,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         if stack.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(self.add_item_stack(Arc::new(
-                tokio::sync::Mutex::new(stack),
-            ))?))
+            Ok(Some(self.add(Arc::new(tokio::sync::Mutex::new(stack)))?))
         }
     }
 
@@ -1276,7 +1221,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
         let stack = if let Some(stack_res) = stack {
-            self.get_item_stack(&stack_res)?.lock().await.clone()
+            self.get(&stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
@@ -1362,9 +1307,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         if stack.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(self.add_item_stack(Arc::new(
-                tokio::sync::Mutex::new(stack),
-            ))?))
+            Ok(Some(self.add(Arc::new(tokio::sync::Mutex::new(stack)))?))
         }
     }
 
@@ -1373,7 +1316,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         player: Resource<Player>,
     ) -> wasmtime::Result<Resource<pumpkin::plugin::world::Entity>> {
         let player = player_from_resource(self, &player)?;
-        self.add_entity(player as Arc<dyn EntityBase>)
+        self.add(player as Arc<dyn EntityBase>)
             .map_err(|_| wasmtime::Error::msg("failed to add entity resource"))
     }
 
@@ -1411,7 +1354,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     ) -> wasmtime::Result<wasmtime::component::Resource<pumpkin::plugin::world::World>> {
         let player = player_from_resource(self, &player)?;
         let world = player.world();
-        self.add_world(world)
+        self.add(world)
             .map_err(|_| wasmtime::Error::msg("failed to add world resource"))
     }
 
@@ -1491,7 +1434,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     ) -> wasmtime::Result<Resource<pumpkin::plugin::text::TextComponent>> {
         let player = player_from_resource(self, &player)?;
         let display_name = player.get_display_name();
-        self.add_text_component(display_name)
+        self.add(display_name)
             .map_err(|_| wasmtime::Error::msg("failed to add text-component resource"))
     }
 
@@ -1515,7 +1458,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         tab_list_name.map_or_else(
             || Ok(None),
             |name| {
-                self.add_text_component(name)
+                self.add(name)
                     .map(Some)
                     .map_err(|_| wasmtime::Error::msg("failed to add text-component resource"))
             },
@@ -2365,7 +2308,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         for (hit_entity, hit_pos, distance) in hits {
             if hit_entity.get_entity().entity_id != self_id {
                 let entity_res = self
-                    .add_entity(hit_entity)
+                    .add(hit_entity)
                     .map_err(|_| wasmtime::Error::msg("failed to add entity resource"))?;
                 return Ok(Some(pumpkin::plugin::world::RayTraceEntityResult {
                     entity: entity_res,
@@ -2985,7 +2928,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     ) -> wasmtime::Result<Option<Resource<pumpkin::plugin::player::JavaPlayer>>> {
         let player = player_from_resource(self, &player)?;
         if let crate::net::ClientPlatform::Java(_) = player.client.as_ref() {
-            Ok(Some(self.add_java_player(player)?))
+            Ok(Some(self.add(player)?))
         } else {
             Ok(None)
         }
@@ -2997,17 +2940,14 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     ) -> wasmtime::Result<Option<Resource<pumpkin::plugin::player::BedrockPlayer>>> {
         let player = player_from_resource(self, &player)?;
         if let crate::net::ClientPlatform::Bedrock(_) = player.client.as_ref() {
-            Ok(Some(self.add_bedrock_player(player)?))
+            Ok(Some(self.add(player)?))
         } else {
             Ok(None)
         }
     }
 
     async fn drop(&mut self, rep: Resource<Player>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<PlayerResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -3269,11 +3209,8 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
     ) -> wasmtime::Result<()> {
         let (player, gui, plugin) = {
             let state = host.get();
-            let gui = state
-                .resource_table
-                .get::<GuiResource>(&Resource::new_own(gui.rep()))
+            let gui = state.get(&gui)
                 .map_err(|_| wasmtime::Error::msg("invalid gui resource handle"))?
-                .provider
                 .clone();
             (
                 player_from_resource(state, &player)?,
@@ -3627,14 +3564,7 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
         &mut self,
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
     ) -> wasmtime::Result<pumpkin::plugin::player::JavaMinecraftVersion> {
-        let player = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
-                &Resource::new_own(player.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
-            .provider
-            .clone();
+        let player = self.get(&player)?.clone();
 
         let client = player
             .client
@@ -3647,14 +3577,7 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
         &mut self,
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
     ) -> wasmtime::Result<String> {
-        let player = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
-                &Resource::new_own(player.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
-            .provider
-            .clone();
+        let player = self.get(&player)?.clone();
 
         let client = player
             .client
@@ -3667,14 +3590,7 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
         &mut self,
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
     ) -> wasmtime::Result<String> {
-        let player = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
-                &Resource::new_own(player.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
-            .provider
-            .clone();
+        let player = self.get(&player)?.clone();
 
         let client = player
             .client
@@ -3687,14 +3603,7 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
         &mut self,
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
     ) -> wasmtime::Result<pumpkin::plugin::player::JavaPlayerSettings> {
-        let player = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
-                &Resource::new_own(player.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
-            .provider
-            .clone();
+        let player = self.get(&player)?.clone();
 
         let config = player.config.load();
         let mask = config.skin_parts;
@@ -3741,14 +3650,7 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
         player: Resource<pumpkin::plugin::player::JavaPlayer>,
         packet: pumpkin::plugin::java_packets::ClientboundPacket,
     ) -> wasmtime::Result<()> {
-        let player = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
-                &Resource::new_own(player.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
-            .provider
-            .clone();
+        let player = self.get(&player)?.clone();
 
         let client = player
             .client
@@ -3768,14 +3670,7 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
         channel: String,
         data: Vec<u8>,
     ) -> wasmtime::Result<()> {
-        let player = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
-                &Resource::new_own(player.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
-            .provider
-            .clone();
+        let player = self.get(&player)?.clone();
 
         if let crate::net::ClientPlatform::Java(_) = player.client.as_ref() {
             player
@@ -3789,50 +3684,27 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
 
     async fn get_scoreboard(
         &mut self,
-        player_res: Resource<pumpkin::plugin::player::JavaPlayer>,
+        player: Resource<pumpkin::plugin::player::JavaPlayer>,
     ) -> wasmtime::Result<Resource<pumpkin::plugin::scoreboard::Scoreboard>> {
-        let player = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
-                &Resource::new_own(player_res.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
-            .provider
-            .clone();
-        self.add_scoreboard(
-            crate::plugin::loader::wasm::wasm_host::state::ScoreboardProvider::Player(player),
-        )
+        let player = self.get(&player)?.clone();
+        self.add(crate::plugin::loader::wasm::wasm_host::state::ScoreboardProvider::Player(player))
     }
 
     async fn reset_scoreboard(
         &mut self,
-        player_res: Resource<pumpkin::plugin::player::JavaPlayer>,
+        player: Resource<pumpkin::plugin::player::JavaPlayer>,
     ) -> wasmtime::Result<()> {
-        let player = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
-                &Resource::new_own(player_res.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
-            .provider
-            .clone();
+        let player = self.get(&player)?.clone();
         player.reset_scoreboard();
         Ok(())
     }
 
     async fn send_resource_pack(
         &mut self,
-        player_res: Resource<pumpkin::plugin::player::JavaPlayer>,
+        player: Resource<pumpkin::plugin::player::JavaPlayer>,
         pack: pumpkin::plugin::player::JavaResourcePack,
     ) -> wasmtime::Result<()> {
-        let player = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
-                &Resource::new_own(player_res.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
-            .provider
-            .clone();
+        let player = self.get(&player)?.clone();
 
         let uuid = Uuid::from_wit(&pack.id);
         let prompt_message = pack
@@ -3858,17 +3730,10 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
 
     async fn remove_resource_pack(
         &mut self,
-        player_res: Resource<pumpkin::plugin::player::JavaPlayer>,
+        player: Resource<pumpkin::plugin::player::JavaPlayer>,
         id: pumpkin::plugin::uuid::Uuid,
     ) -> wasmtime::Result<()> {
-        let player = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
-                &Resource::new_own(player_res.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
-            .provider
-            .clone();
+        let player = self.get(&player)?.clone();
 
         let uuid = Uuid::from_wit(&id);
 
@@ -3884,16 +3749,9 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
 
     async fn clear_resource_packs(
         &mut self,
-        player_res: Resource<pumpkin::plugin::player::JavaPlayer>,
+        player: Resource<pumpkin::plugin::player::JavaPlayer>,
     ) -> wasmtime::Result<()> {
-        let player = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
-                &Resource::new_own(player_res.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
-            .provider
-            .clone();
+        let player = self.get(&player)?.clone();
 
         if let crate::net::ClientPlatform::Java(client) = player.client.as_ref() {
             client
@@ -3909,14 +3767,7 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
         event: pumpkin::plugin::player::ClientGameEvent,
         value: f32,
     ) -> wasmtime::Result<()> {
-        let player = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
-                &Resource::new_own(player.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
-            .provider
-            .clone();
+        let player = self.get(&player)?.clone();
 
         let internal_event = from_wit_client_game_event(event);
         player.send_game_event(internal_event, value);
@@ -3929,14 +3780,7 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
         entity_id: i32,
         status: pumpkin::plugin::entity_statuses::EntityStatus,
     ) -> wasmtime::Result<()> {
-        let player = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
-                &Resource::new_own(player.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
-            .provider
-            .clone();
+        let player = self.get(&player)?.clone();
 
         // SAFETY: The WIT enum variants and discriminants are 1:1 generated from entity_statuses.json
         let internal_status: pumpkin_data::entity_status::EntityStatus =
@@ -3953,12 +3797,7 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
         &mut self,
         rep: Resource<pumpkin::plugin::player::JavaPlayer>,
     ) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
-            Resource::new_own(rep.rep()),
-        );
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -3973,14 +3812,7 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
     ) -> wasmtime::Result<()> {
         let (player, protocol_dialog, plugin) = {
             let state = host.get();
-            let player = state
-                .resource_table
-                .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
-                    &Resource::new_own(player.rep()),
-                )
-                .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
-                .provider
-                .clone();
+            let player = state.get(&player)?.clone();
             let protocol_dialog = super::events::dialog::protocol_dialog_from_wasm(state, &dialog);
             let plugin = state
                 .plugin
@@ -4043,14 +3875,7 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
     ) -> wasmtime::Result<()> {
         let (player, plugin) = {
             let state = host.get();
-            let player = state
-                .resource_table
-                .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
-                    &Resource::new_own(player.rep()),
-                )
-                .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
-                .provider
-                .clone();
+            let player = state.get(&player)?.clone();
             let plugin = state
                 .plugin
                 .as_ref()
@@ -4104,14 +3929,7 @@ impl pumpkin::plugin::player::HostJavaPlayerWithStore<PluginHostState>
     ) -> wasmtime::Result<()> {
         let (player, reason, plugin) = {
             let state = host.get();
-            let player = state
-                .resource_table
-                .get::<crate::plugin::loader::wasm::wasm_host::state::JavaPlayerResource>(
-                    &Resource::new_own(player.rep()),
-                )
-                .map_err(|_| wasmtime::Error::msg("invalid java-player resource handle"))?
-                .provider
-                .clone();
+            let player = state.get(&player)?.clone();
             let reason = text_component_from_resource(state, &options.reason);
             let plugin = state
                 .plugin
@@ -4163,14 +3981,7 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
         &mut self,
         player: Resource<pumpkin::plugin::player::BedrockPlayer>,
     ) -> wasmtime::Result<pumpkin::plugin::player::BedrockMinecraftVersion> {
-        let player = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::BedrockPlayerResource>(
-                &Resource::new_own(player.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid bedrock-player resource handle"))?
-            .provider
-            .clone();
+        let player = self.get(&player)?;
 
         if let crate::net::ClientPlatform::Bedrock(client) = player.client.as_ref() {
             Ok(to_wasm_bedrock_version(client.version.load()))
@@ -4184,14 +3995,7 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
         player: Resource<pumpkin::plugin::player::BedrockPlayer>,
         ability: pumpkin::plugin::player::BedrockAbility,
     ) -> wasmtime::Result<bool> {
-        let player = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::BedrockPlayerResource>(
-                &Resource::new_own(player.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid bedrock-player resource handle"))?
-            .provider
-            .clone();
+        let player = self.get(&player)?.clone();
 
         let ability = from_wasm_bedrock_ability(ability);
         let abilities = player
@@ -4226,14 +4030,7 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
         ability: pumpkin::plugin::player::BedrockAbility,
         value: bool,
     ) -> wasmtime::Result<()> {
-        let player = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::BedrockPlayerResource>(
-                &Resource::new_own(player.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid bedrock-player resource handle"))?
-            .provider
-            .clone();
+        let player = self.get(&player)?.clone();
 
         let ability = from_wasm_bedrock_ability(ability);
         {
@@ -4270,14 +4067,7 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
         player: Resource<pumpkin::plugin::player::BedrockPlayer>,
         flag: pumpkin::plugin::player::BedrockStatusFlag,
     ) -> wasmtime::Result<bool> {
-        let player = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::BedrockPlayerResource>(
-                &Resource::new_own(player.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid bedrock-player resource handle"))?
-            .provider
-            .clone();
+        let player = self.get(&player)?.clone();
 
         let flag_index = from_wasm_bedrock_status_flag(flag);
         if flag_index < 64 {
@@ -4303,14 +4093,7 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
         flag: pumpkin::plugin::player::BedrockStatusFlag,
         value: bool,
     ) -> wasmtime::Result<()> {
-        let player = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::BedrockPlayerResource>(
-                &Resource::new_own(player.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid bedrock-player resource handle"))?
-            .provider
-            .clone();
+        let player = self.get(&player)?.clone();
 
         let flag_index = from_wasm_bedrock_status_flag(flag);
         if flag_index < 64 {
@@ -4390,14 +4173,7 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
         &mut self,
         player: Resource<pumpkin::plugin::player::BedrockPlayer>,
     ) -> wasmtime::Result<pumpkin::plugin::player::BedrockPlayerSettings> {
-        let player = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::BedrockPlayerResource>(
-                &Resource::new_own(player.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid bedrock-player resource handle"))?
-            .provider
-            .clone();
+        let player = self.get(&player)?.clone();
 
         if let crate::net::ClientPlatform::Bedrock(client) = player.client.as_ref() {
             let data = client.client_data.load();
@@ -4440,14 +4216,7 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
         player: Resource<pumpkin::plugin::player::BedrockPlayer>,
         packet: pumpkin::plugin::bedrock_packets::ClientboundPacket,
     ) -> wasmtime::Result<()> {
-        let player = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::BedrockPlayerResource>(
-                &Resource::new_own(player.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid bedrock-player resource handle"))?
-            .provider
-            .clone();
+        let player = self.get(&player)?.clone();
 
         if let Some(bytes) = crate::plugin::loader::wasm::wasm_host::wit::v0_1::generated_packets::serialize_bedrock_packet(
             &packet,
@@ -4459,16 +4228,10 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
 
     async fn open_form(
         &mut self,
-        player_res: Resource<pumpkin::plugin::player::BedrockPlayer>,
+        player: Resource<pumpkin::plugin::player::BedrockPlayer>,
         form: Form,
     ) -> wasmtime::Result<u32> {
-        let player = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::BedrockPlayerResource>(
-                &Resource::new_own(player_res.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid bedrock-player resource handle"))?
-            .provider
+        let player = self.get(&player)?
             .clone();
 
         if let crate::net::ClientPlatform::Bedrock(client) = player.client.as_ref() {
@@ -4498,48 +4261,27 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
 
     async fn get_scoreboard(
         &mut self,
-        player_res: Resource<pumpkin::plugin::player::BedrockPlayer>,
+        player: Resource<pumpkin::plugin::player::BedrockPlayer>,
     ) -> wasmtime::Result<Resource<pumpkin::plugin::scoreboard::BedrockScoreboard>> {
-        let player = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::BedrockPlayerResource>(
-                &Resource::new_own(player_res.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid bedrock-player resource handle"))?
-            .provider
-            .clone();
-        self.add_bedrock_scoreboard(player)
+        let player = self.get(&player)?.clone();
+        self.add(player)
     }
 
     async fn reset_scoreboard(
         &mut self,
-        player_res: Resource<pumpkin::plugin::player::BedrockPlayer>,
+        player: Resource<pumpkin::plugin::player::BedrockPlayer>,
     ) -> wasmtime::Result<()> {
-        let player = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::BedrockPlayerResource>(
-                &Resource::new_own(player_res.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid bedrock-player resource handle"))?
-            .provider
-            .clone();
+        let player = self.get(&player)?.clone();
         player.reset_scoreboard();
         Ok(())
     }
 
     async fn send_resource_packs_info(
         &mut self,
-        player_res: Resource<pumpkin::plugin::player::BedrockPlayer>,
+        player: Resource<pumpkin::plugin::player::BedrockPlayer>,
         info: pumpkin::plugin::player::BedrockResourcePacksInfo,
     ) -> wasmtime::Result<()> {
-        let player = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::BedrockPlayerResource>(
-                &Resource::new_own(player_res.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid bedrock-player resource handle"))?
-            .provider
-            .clone();
+        let player = self.get(&player)?.clone();
 
         if let crate::net::ClientPlatform::Bedrock(client) = player.client.as_ref() {
             let entries = info
@@ -4586,12 +4328,7 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
         &mut self,
         rep: Resource<pumpkin::plugin::player::BedrockPlayer>,
     ) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<crate::plugin::loader::wasm::wasm_host::state::BedrockPlayerResource>(
-            Resource::new_own(rep.rep()),
-        );
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -4605,14 +4342,7 @@ impl pumpkin::plugin::player::HostBedrockPlayerWithStore<PluginHostState>
     ) -> wasmtime::Result<()> {
         let (player, plugin) = {
             let state = host.get();
-            let player = state
-                .resource_table
-                .get::<crate::plugin::loader::wasm::wasm_host::state::BedrockPlayerResource>(
-                    &Resource::new_own(player.rep()),
-                )
-                .map_err(|_| wasmtime::Error::msg("invalid bedrock-player resource handle"))?
-                .provider
-                .clone();
+            let player = state.get(&player)?.clone();
             let plugin = state
                 .plugin
                 .as_ref()
