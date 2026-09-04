@@ -270,9 +270,11 @@ impl<P: LightProvider> LightPropagator<P> {
                 continue;
             }
 
+            let px = pos.0.x;
             let py = pos.0.y;
-            let rel_x = (pos.0.x >> 4) - cache_x;
-            let rel_z = (pos.0.z >> 4) - cache_z;
+            let pz = pos.0.z;
+            let rel_x = (px >> 4) - cache_x;
+            let rel_z = (pz >> 4) - cache_z;
             if py < min_y
                 || py >= max_y
                 || rel_x < 0
@@ -282,18 +284,22 @@ impl<P: LightProvider> LightPropagator<P> {
             {
                 continue;
             }
+            let local_x = (px & 15) as usize;
+            let local_y = (py & 15) as usize;
+            let local_z = (pz & 15) as usize;
             let from_id = Self::neighbor_state(
                 &cache.chunks[(rel_x * cache_size + rel_z) as usize],
                 LightCell {
                     y: py,
                     min_y,
                     section_idx: ((py - min_y) >> 4) as usize,
-                    local_x: (pos.0.x & 15) as usize,
-                    local_y: (py & 15) as usize,
-                    local_z: (pos.0.z & 15) as usize,
+                    local_x,
+                    local_y,
+                    local_z,
                 },
             );
 
+            // Source is in-cache; only the stepped axis can leave.
             for dir in BlockDirection::all() {
                 if let Some(skip_dir) = entry.skip_direction
                     && dir == skip_dir
@@ -301,22 +307,61 @@ impl<P: LightProvider> LightPropagator<P> {
                     continue;
                 }
 
-                let neighbor_pos = pos.offset(dir.to_offset());
-                let nx = neighbor_pos.0.x;
-                let ny = neighbor_pos.0.y;
-                let nz = neighbor_pos.0.z;
+                let (nx, ny, nz, nrel_x, nrel_z) = match dir {
+                    BlockDirection::Down => {
+                        if py == min_y {
+                            continue;
+                        }
+                        (px, py - 1, pz, rel_x, rel_z)
+                    }
+                    BlockDirection::Up => {
+                        if py + 1 >= max_y {
+                            continue;
+                        }
+                        (px, py + 1, pz, rel_x, rel_z)
+                    }
+                    BlockDirection::North => {
+                        if local_z == 0 {
+                            if rel_z == 0 {
+                                continue;
+                            }
+                            (px, py, pz - 1, rel_x, rel_z - 1)
+                        } else {
+                            (px, py, pz - 1, rel_x, rel_z)
+                        }
+                    }
+                    BlockDirection::South => {
+                        if local_z == 15 {
+                            if rel_z + 1 >= cache_size {
+                                continue;
+                            }
+                            (px, py, pz + 1, rel_x, rel_z + 1)
+                        } else {
+                            (px, py, pz + 1, rel_x, rel_z)
+                        }
+                    }
+                    BlockDirection::West => {
+                        if local_x == 0 {
+                            if rel_x == 0 {
+                                continue;
+                            }
+                            (px - 1, py, pz, rel_x - 1, rel_z)
+                        } else {
+                            (px - 1, py, pz, rel_x, rel_z)
+                        }
+                    }
+                    BlockDirection::East => {
+                        if local_x == 15 {
+                            if rel_x + 1 >= cache_size {
+                                continue;
+                            }
+                            (px + 1, py, pz, rel_x + 1, rel_z)
+                        } else {
+                            (px + 1, py, pz, rel_x, rel_z)
+                        }
+                    }
+                };
 
-                if ny < min_y || ny >= max_y {
-                    continue;
-                }
-
-                let rel_x = (nx >> 4) - cache_x;
-                let rel_z = (nz >> 4) - cache_z;
-                if rel_x < 0 || rel_x >= cache_size || rel_z < 0 || rel_z >= cache_size {
-                    continue;
-                }
-
-                let chunk_idx = (rel_x * cache_size + rel_z) as usize;
                 let cell = LightCell {
                     y: ny,
                     min_y,
@@ -328,7 +373,7 @@ impl<P: LightProvider> LightPropagator<P> {
 
                 // Relaxation: levels only rise, no visited set.
                 if let Some(new_level) = Self::try_raise(
-                    &mut cache.chunks[chunk_idx],
+                    &mut cache.chunks[(nrel_x * cache_size + nrel_z) as usize],
                     from_id,
                     dir,
                     current_light,
@@ -336,7 +381,7 @@ impl<P: LightProvider> LightPropagator<P> {
                 ) && new_level > 1
                 {
                     self.queue.push_back(PropagationEntry {
-                        pos: neighbor_pos,
+                        pos: BlockPos(Vector3::new(nx, ny, nz)),
                         level: new_level,
                         skip_direction: Some(dir.opposite()),
                     });
