@@ -1,6 +1,9 @@
 pub mod advancement;
 pub mod statistics;
 
+#[cfg(test)]
+mod swimming_tests;
+
 use core::f32;
 use std::collections::{HashMap, VecDeque};
 use std::f64::consts::TAU;
