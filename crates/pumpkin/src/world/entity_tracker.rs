@@ -1145,7 +1145,7 @@ mod tests {
             65,
             "terrain followed by at most 64 actor packets"
         );
-        for pair in packets[1..].chunks_exact(2) {
+        for pair in packets[1..].as_chunks::<2>().0 {
             assert_eq!(pair[0].id, CPlayerList::PACKET_ID);
             assert_eq!(pair[1].id, CAddPlayer::PACKET_ID);
         }
