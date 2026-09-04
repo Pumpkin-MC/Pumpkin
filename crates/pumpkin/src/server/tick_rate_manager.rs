@@ -14,7 +14,7 @@ const MIN_TICKRATE: f32 = 1.0;
 /// Vanilla `TickCommand.MAX_TICKRATE`. Without this, `nanoseconds_per_tick` could truncates to 0.
 const MAX_TICKRATE: f32 = 10000.0;
 
-fn clamp_tickrate(rate: f32) -> f32 {
+const fn clamp_tickrate(rate: f32) -> f32 {
     rate.clamp(MIN_TICKRATE, MAX_TICKRATE)
 }
 
