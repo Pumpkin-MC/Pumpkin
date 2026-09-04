@@ -587,7 +587,7 @@ impl PumpkinServer {
                                  {
 
                                      if let ClientPlatform::Java(client) = player.client.as_ref() {
-                                         client.set_player(player.clone());
+                                         client.set_player(&player);
                                      }
                                      world
                                          .spawn_java_player(&server_clone.basic_config, &player, &server_clone)
@@ -703,7 +703,7 @@ impl PumpkinServer {
                         profile,
                         Some(config),
                     ) {
-                        client.set_player(player.clone());
+                        client.set_player(&player);
                         client.progress_player_packets(&player).await;
                         client.close().await;
                         client.await_tasks().await;

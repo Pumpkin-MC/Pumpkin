@@ -92,7 +92,7 @@ pub struct BedrockClient {
     session: Arc<NetherNetSession>,
     /// The client's IP address.
     pub address: SocketAddr,
-    pub player: ArcSwap<Option<Arc<Player>>>,
+    pub player: ArcSwap<std::sync::Weak<Player>>,
     pub version: AtomicCell<BedrockMinecraftVersion>,
     pub client_data: ArcSwap<Option<Arc<ClientData>>>,
     /// All Bedrock clients
@@ -141,7 +141,7 @@ impl BedrockClient {
         let rt_handle = tokio::runtime::Handle::current();
         Self {
             session,
-            player: ArcSwap::new(Arc::new(None)),
+            player: ArcSwap::from_pointee(std::sync::Weak::new()),
             address,
             version: AtomicCell::new(BedrockMinecraftVersion::Unknown),
             client_data: ArcSwap::new(Arc::new(None)),
@@ -306,8 +306,7 @@ impl BedrockClient {
     }
 
     pub async fn send_chunks(&self, chunks: &[SyncChunk]) {
-        let player = self.player.load_full();
-        let Some(player) = player.as_ref() else {
+        let Some(player) = self.player.load().upgrade() else {
             debug!(
                 "send_chunks: player not set yet, dropping {} chunks",
                 chunks.len()
@@ -402,8 +401,8 @@ impl BedrockClient {
         }
     }
 
-    pub fn set_player(&self, player: Arc<Player>) {
-        self.player.store(Arc::new(Some(player)));
+    pub fn set_player(&self, player: &Arc<Player>) {
+        self.player.store(Arc::new(Arc::downgrade(player)));
     }
 
     pub async fn enqueue_packet(&self, packet_data: Bytes) {
