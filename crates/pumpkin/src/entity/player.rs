@@ -4176,6 +4176,9 @@ impl Player {
             && !self.has_effect(&StatusEffect::RAID_OMEN)
         {
             let world = self.world();
+            if !world.dimension.can_start_raid {
+                return;
+            }
             let player_pos = self.living_entity.entity.block_pos.load();
             let pos_f64 = self.living_entity.entity.pos.load();
 

@@ -73,8 +73,7 @@ impl BlockBehaviour for NetherPortalBlock {
         let difficulty = level_info.difficulty;
         if !level_info.game_rules.spawn_mobs
             || difficulty == Difficulty::Peaceful
-            || (args.world.dimension != Dimension::OVERWORLD
-                && args.world.dimension != Dimension::OVERWORLD_CAVES)
+            || !args.world.dimension.nether_portal_spawns_piglin
         {
             return;
         }
