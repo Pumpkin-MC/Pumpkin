@@ -16,19 +16,13 @@ use crate::{
         },
     },
     plugin::loader::wasm::wasm_host::{
-        DowncastResourceExt, PluginInstance, WasmPlugin,
+        PluginInstance, WasmPlugin,
         args::build_consumed_args_from_context,
-        state::{CommandSenderResource, ConsumedArgsResource, PluginHostState, ServerResource},
+        state::PluginHostState,
         wit::v0_1::pumpkin::plugin::command::{CommandError as CommandErrorWit, SuggestionRequest},
     },
     server::Server,
 };
-
-fn remove_resource<T: 'static>(state: &mut PluginHostState, rep: u32) {
-    let _ = state
-        .resource_table
-        .delete::<T>(wasmtime::component::Resource::new_own(rep));
-}
 
 fn map_command_result(
     state: &mut PluginHostState,
@@ -44,9 +38,12 @@ fn map_command_result(
             .create_without_context(TextComponent::text("Invalid requirement"))),
         Err(CommandErrorWit::PermissionDenied) => Err(DISPATCHER_PARSE_EXCEPTION
             .create_without_context(TextComponent::text("Permission denied"))),
-        Err(CommandErrorWit::CommandFailed(resource)) => {
-            Err(DISPATCHER_PARSE_EXCEPTION.create_without_context(resource.consume(state).provider))
-        }
+        Err(CommandErrorWit::CommandFailed(resource)) => Err(DISPATCHER_PARSE_EXCEPTION
+            .create_without_context(
+                state
+                    .take(resource)
+                    .expect("todo: make this method return a result"),
+            )),
     }
 }
 
@@ -72,44 +69,28 @@ impl CommandExecutor for WasmCommandExecutor {
                     .store
                     .call_guest(move |mut guest| {
                         Box::pin(async move {
-                            let (sender_resource, server_resource, args_resource, reps) = guest
-                                .with(|mut store| {
-                                    let sender_resource =
-                                        store.data_mut().add_command_sender(sender)?;
-                                    let sender_rep = sender_resource.rep();
-                                    let server_resource = match store.data_mut().add_server(server)
-                                    {
+                            let (sender_resource, server_resource, args_resource) =
+                                guest.with(|mut store| {
+                                    let sender_resource = store.data_mut().add(sender)?;
+                                    let server_resource = match store.data_mut().add(server) {
                                         Ok(resource) => resource,
                                         Err(error) => {
-                                            remove_resource::<CommandSenderResource>(
-                                                store.data_mut(),
-                                                sender_rep,
-                                            );
+                                            store.data_mut().discard(sender_resource);
                                             return Err(error);
                                         }
                                     };
-                                    let server_rep = server_resource.rep();
-                                    let args_resource =
-                                        match store.data_mut().add_consumed_args(consumed_args) {
-                                            Ok(resource) => resource,
-                                            Err(error) => {
-                                                remove_resource::<ServerResource>(
-                                                    store.data_mut(),
-                                                    server_rep,
-                                                );
-                                                remove_resource::<CommandSenderResource>(
-                                                    store.data_mut(),
-                                                    sender_rep,
-                                                );
-                                                return Err(error);
-                                            }
-                                        };
-                                    let reps = (sender_rep, server_rep, args_resource.rep());
+                                    let args_resource = match store.data_mut().add(consumed_args) {
+                                        Ok(resource) => resource,
+                                        Err(error) => {
+                                            store.data_mut().discard(sender_resource);
+                                            store.data_mut().discard(server_resource);
+                                            return Err(error);
+                                        }
+                                    };
                                     Ok::<_, wasmtime::Error>((
                                         sender_resource,
                                         server_resource,
                                         args_resource,
-                                        reps,
                                     ))
                                 })?;
 
@@ -121,12 +102,7 @@ impl CommandExecutor for WasmCommandExecutor {
                                 .await;
 
                             guest.with(|mut store| {
-                                let result = result
-                                    .map(|(result,)| map_command_result(store.data_mut(), result));
-                                remove_resource::<CommandSenderResource>(store.data_mut(), reps.0);
-                                remove_resource::<ServerResource>(store.data_mut(), reps.1);
-                                remove_resource::<ConsumedArgsResource>(store.data_mut(), reps.2);
-                                result
+                                result.map(|(result,)| map_command_result(store.data_mut(), result))
                             })
                         })
                     })
@@ -173,29 +149,17 @@ impl SuggestionProvider for WasmCommandSuggestionProvider {
                     .store
                     .call_guest(move |mut guest| {
                         Box::pin(async move {
-                            let (sender_resource, server_resource, reps) =
-                                guest.with(|mut store| {
-                                    let sender_resource =
-                                        store.data_mut().add_command_sender(sender)?;
-                                    let sender_rep = sender_resource.rep();
-                                    let server_resource = match store.data_mut().add_server(server)
-                                    {
-                                        Ok(resource) => resource,
-                                        Err(error) => {
-                                            remove_resource::<CommandSenderResource>(
-                                                store.data_mut(),
-                                                sender_rep,
-                                            );
-                                            return Err(error);
-                                        }
-                                    };
-                                    let reps = (sender_rep, server_resource.rep());
-                                    Ok::<_, wasmtime::Error>((
-                                        sender_resource,
-                                        server_resource,
-                                        reps,
-                                    ))
-                                })?;
+                            let (sender_resource, server_resource) = guest.with(|mut store| {
+                                let sender_resource = store.data_mut().add(sender)?;
+                                let server_resource = match store.data_mut().add(server) {
+                                    Ok(resource) => resource,
+                                    Err(error) => {
+                                        store.data_mut().discard(sender_resource);
+                                        return Err(error);
+                                    }
+                                };
+                                Ok::<_, wasmtime::Error>((sender_resource, server_resource))
+                            })?;
                             let response = guest
                                 .call(
                                     function,
@@ -204,11 +168,11 @@ impl SuggestionProvider for WasmCommandSuggestionProvider {
                                 .await
                                 .map(|(response,)| response);
                             guest.with(|mut store| {
-                                let suggestions = response.map(|response| {
+                                response.map(|response| {
                                     let mut builder = builder;
                                     for suggestion in response.values {
                                         if let Some(tooltip) = suggestion.tooltip {
-                                            let text = tooltip.consume(store.data_mut()).provider;
+                                            let text = store.data_mut().take(tooltip).expect("Invalid text component");
                                             builder = builder
                                                 .suggest_with_tooltip(suggestion.value, text);
                                         } else {
@@ -216,10 +180,7 @@ impl SuggestionProvider for WasmCommandSuggestionProvider {
                                         }
                                     }
                                     builder.build()
-                                });
-                                remove_resource::<CommandSenderResource>(store.data_mut(), reps.0);
-                                remove_resource::<ServerResource>(store.data_mut(), reps.1);
-                                suggestions
+                                })
                             })
                         })
                     })

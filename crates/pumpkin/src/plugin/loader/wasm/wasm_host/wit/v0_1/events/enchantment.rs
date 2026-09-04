@@ -1,11 +1,12 @@
 use std::sync::Arc;
+use pumpkin_data::item_stack::ItemStack;
 use tokio::sync::Mutex;
 use wasmtime::component::Resource;
 
 use crate::plugin::{
     enchantment::{enchant_item::EnchantItemEvent, prepare_item_enchant::PrepareItemEnchantEvent},
     loader::wasm::wasm_host::{
-        state::{ItemStackResource, PluginHostState},
+        state::PluginHostState,
         wit::v0_1::{
             events::{ToFromWasmEvent, consume_player},
             item_stack::{from_wit_enchantment, to_wit_enchantment},
@@ -22,22 +23,21 @@ fn consume_item_stack(
     item: &Resource<
         crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::item_stack::ItemStack,
     >,
-) -> pumpkin_data::item_stack::ItemStack {
+) -> ItemStack {
     let mutex = state
         .resource_table
-        .delete::<ItemStackResource>(Resource::new_own(item.rep()))
-        .expect("invalid item stack resource handle")
-        .provider;
+        .delete::<Arc<Mutex<ItemStack>>>(Resource::new_own(item.rep()))
+        .expect("invalid item stack resource handle");
     mutex.try_lock().expect("lock item stack").clone()
 }
 
 impl ToFromWasmEvent for PrepareItemEnchantEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         let item = state
-            .add_item_stack(Arc::new(Mutex::new(self.item.clone())))
+            .add(Arc::new(Mutex::new(self.item.clone())))
             .expect("failed to add item stack resource");
 
         let offers = (0..3)
@@ -86,10 +86,10 @@ impl ToFromWasmEvent for PrepareItemEnchantEvent {
 impl ToFromWasmEvent for EnchantItemEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
         let item = state
-            .add_item_stack(Arc::new(Mutex::new(self.item.clone())))
+            .add(Arc::new(Mutex::new(self.item.clone())))
             .expect("failed to add item stack resource");
 
         let enchantments_to_add = self

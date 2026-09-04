@@ -2,7 +2,7 @@ use std::sync::Arc;
 use wasmtime::component::{Access, HasSelf, Resource};
 
 use crate::plugin::loader::wasm::wasm_host::{
-    state::{LivingEntityResource, PluginHostState},
+    state::PluginHostState,
     wit::v0_1::pumpkin::plugin::{
         attributes::{
             Attribute, AttributeModifier as WitAttributeModifier,
@@ -24,9 +24,9 @@ pub fn living_entity_from_resource(
 ) -> wasmtime::Result<std::sync::Arc<dyn crate::entity::EntityBase>> {
     state
         .resource_table
-        .get::<LivingEntityResource>(&Resource::new_own(entity.rep()))
+        .get::<Arc<dyn crate::entity::EntityBase>>(&Resource::new_own(entity.rep()))
         .map_err(|_| wasmtime::Error::msg("invalid living entity resource handle"))
-        .map(|resource| resource.provider.clone())
+        .map(|resource| resource.clone())
 }
 
 fn active_plugin(
@@ -151,7 +151,7 @@ impl HostLivingEntity for PluginHostState {
         this: Resource<WitLivingEntity>,
     ) -> wasmtime::Result<Resource<Entity>> {
         let entity = living_entity_from_resource(self, &this)?;
-        self.add_entity(entity)
+        self.add(entity)
     }
 
     async fn as_mob(
@@ -160,7 +160,7 @@ impl HostLivingEntity for PluginHostState {
     ) -> wasmtime::Result<Option<Resource<WitMob>>> {
         let entity = living_entity_from_resource(self, &this)?;
         if entity.get_mob().is_some() {
-            Ok(Some(self.add_mob(entity)?))
+            Ok(Some(self.add(entity)?))
         } else {
             Ok(None)
         }
@@ -398,9 +398,7 @@ impl HostLivingEntity for PluginHostState {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let stack = equipment.get(&slot);
             if !stack.is_empty() {
-                return Ok(Some(
-                    self.add_item_stack(Arc::new(tokio::sync::Mutex::new(stack)))?,
-                ));
+                return Ok(Some(self.add(Arc::new(tokio::sync::Mutex::new(stack)))?));
             }
         }
         Ok(None)
@@ -416,7 +414,7 @@ impl HostLivingEntity for PluginHostState {
         if let Some(living) = entity.get_living_entity() {
             let slot = from_wit_equipment_slot(slot);
             let item_stack = if let Some(stack_res) = stack {
-                self.get_item_stack(&stack_res)?.lock().await.clone()
+                self.get(&stack_res)?.lock().await.clone()
             } else {
                 pumpkin_data::item_stack::ItemStack::EMPTY.clone()
             };
@@ -481,22 +479,14 @@ impl HostLivingEntity for PluginHostState {
     ) -> wasmtime::Result<()> {
         let entity = living_entity_from_resource(self, &this)?;
         if let Some(player) = entity.get_player() {
-            let text_res = self
-                .resource_table
-                .get::<crate::plugin::loader::wasm::wasm_host::state::TextComponentResource>(
-                    &Resource::new_own(message.rep()),
-                )
-                .map_err(|_| wasmtime::Error::msg("invalid text component resource handle"))?;
-            player.send_system_message(&text_res.provider);
+            let text_res = self.take(message)?;
+            player.send_system_message(&text_res);
         }
         Ok(())
     }
 
     async fn drop(&mut self, rep: Resource<WitLivingEntity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<LivingEntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 

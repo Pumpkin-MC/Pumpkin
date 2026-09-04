@@ -15,7 +15,7 @@ use crate::{
         BoxFuture, EventHandler, Payload,
         loader::wasm::wasm_host::{
             PluginInstance, WasmPlugin,
-            state::{PlayerResource, PluginHostState, TextComponentResource, WorldResource},
+            state::PluginHostState,
             wit::{self, v0_1::pumpkin},
         },
     },
@@ -203,9 +203,8 @@ pub(super) fn consume_player(
 ) -> Arc<Player> {
     state
         .resource_table
-        .delete::<PlayerResource>(Resource::new_own(player.rep()))
+        .delete::<Arc<Player>>(Resource::new_own(player.rep()))
         .expect("invalid player resource handle")
-        .provider
 }
 
 pub(super) fn consume_text_component(
@@ -214,9 +213,8 @@ pub(super) fn consume_text_component(
 ) -> pumpkin_util::text::TextComponent {
     state
         .resource_table
-        .delete::<TextComponentResource>(Resource::new_own(text_component.rep()))
+        .delete::<pumpkin_util::text::TextComponent>(Resource::new_own(text_component.rep()))
         .expect("invalid text-component resource handle")
-        .provider
 }
 
 pub(super) fn consume_world(
@@ -225,9 +223,8 @@ pub(super) fn consume_world(
 ) -> Arc<World> {
     state
         .resource_table
-        .delete::<WorldResource>(Resource::new_own(world.rep()))
+        .delete::<Arc<World>>(Resource::new_own(world.rep()))
         .expect("invalid world resource handle")
-        .provider
 }
 
 impl<E: Payload + ToFromWasmEvent + Clone + 'static> EventHandler<E> for WasmPluginEventHandler {
@@ -246,7 +243,7 @@ impl<E: Payload + ToFromWasmEvent + Clone + 'static> EventHandler<E> for WasmPlu
                     Box::pin(async move {
                         let (wasm_event, server_res) = guest.with(|mut store| {
                             let wasm_event = event.to_wasm_event(store.data_mut());
-                            match store.data_mut().add_server(server) {
+                            match store.data_mut().add(server) {
                                 Ok(resource) => Ok((wasm_event, resource)),
                                 Err(error) => {
                                     cleanup_event(&wasm_event, store.data_mut());
@@ -294,7 +291,7 @@ impl<E: Payload + ToFromWasmEvent + Clone + 'static> EventHandler<E> for WasmPlu
                     Box::pin(async move {
                         let (wasm_event, server_res) = guest.with(|mut store| {
                             let wasm_event = owned_event.to_wasm_event(store.data_mut());
-                            match store.data_mut().add_server(server) {
+                            match store.data_mut().add(server) {
                                 Ok(resource) => Ok((wasm_event, resource)),
                                 Err(error) => {
                                     cleanup_event(&wasm_event, store.data_mut());
