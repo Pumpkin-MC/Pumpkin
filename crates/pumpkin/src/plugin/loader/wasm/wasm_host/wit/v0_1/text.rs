@@ -170,10 +170,7 @@ impl pumpkin::plugin::text::HostTextComponent for PluginHostState {
         &mut self,
         text_component: Resource<TextComponent>,
     ) -> wasmtime::Result<String> {
-        Ok(self
-            .get(&text_component)?
-            .clone()
-            .to_pretty_console())
+        Ok(self.get(&text_component)?.clone().to_pretty_console())
     }
 
     async fn color_named(

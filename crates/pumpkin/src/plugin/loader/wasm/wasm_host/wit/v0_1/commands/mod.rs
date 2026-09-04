@@ -456,13 +456,13 @@ impl pumpkin::plugin::command::HostCommandSenderWithStore<PluginHostState>
     async fn has_permission(
         mut host: Access<'_, PluginHostState, Self>,
         sender: Resource<CommandSender>,
-        server: Resource<Server>,
+        server: /* borrow */ Resource<Server>,
         node: String,
     ) -> wasmtime::Result<bool> {
         let (sender, server, plugin) = {
             let state = host.get();
             let sender = state.get(&sender)?.clone();
-            let server = state.take(server)?;
+            let server = state.get(&server)?.clone();
             let plugin = state
                 .plugin
                 .as_ref()

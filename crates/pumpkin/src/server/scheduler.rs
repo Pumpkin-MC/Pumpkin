@@ -214,7 +214,9 @@ impl TaskScheduler {
                             })?;
                             let result = guest.call(function, (handler_id, server_resource)).await;
                             guest.with(|mut store| {
-                                let _ = store.data_mut().resource_table.delete::<Arc<Server>>(wasmtime::component::Resource::new_own(server_rep));
+                                let _ = store.data_mut().resource_table.delete::<Arc<Server>>(
+                                    wasmtime::component::Resource::new_own(server_rep),
+                                );
                             });
                             result
                         })
