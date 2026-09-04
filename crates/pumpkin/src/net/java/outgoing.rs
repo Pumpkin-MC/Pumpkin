@@ -335,10 +335,24 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
         let mut flush_request = FlushRequest::None;
         let mut packets_to_frame = VecDeque::new();
         let mut disconnected = false;
-        // One FIFO: `Flush` is vanilla `flushChannel`. Stop the drain there so
-        // tick N+1 does not share tick N's TCP flush.
+        // write this prefix, flush, then the next tick.
         match first {
-            OutgoingPacket::Flush => flush_request = FlushRequest::Always,
+            OutgoingPacket::Flush => {
+                if !flush_writer(
+                    &mut writer,
+                    &mut unflushed,
+                    &mut pending_completions,
+                    &close_token,
+                    id,
+                )
+                .await
+                {
+                    close_token.cancel();
+                    break;
+                }
+                last_tcp_flush = Instant::now();
+                continue;
+            }
             data @ OutgoingPacket::Data { .. } => {
                 data.ingest(&mut flush_request, &mut packets_to_frame);
                 loop {
@@ -708,6 +722,32 @@ mod tests {
         tx.try_send(OutgoingPacket::Flush).unwrap();
         tokio::time::sleep(Duration::from_millis(20)).await;
         assert_eq!(flushes.load(Ordering::SeqCst), 2);
+
+        drop(tx);
+        close.cancel();
+        writer.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn lagged_writer_flushes_once_per_queued_tick_barrier() {
+        let (tx, rx) = tokio::sync::mpsc::channel(4096);
+        let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let flushes = Arc::new(AtomicUsize::new(0));
+        let suspend = Arc::new(AtomicBool::new(true));
+        let close = CancellationToken::new();
+
+        let writer = spawn_writer(rx, writes, flushes.clone(), suspend, close.clone());
+
+        tx.try_send(packet(1)).unwrap();
+        tx.try_send(OutgoingPacket::Flush).unwrap();
+        tx.try_send(packet(2)).unwrap();
+        tx.try_send(OutgoingPacket::Flush).unwrap();
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        assert_eq!(
+            flushes.load(Ordering::SeqCst),
+            2,
+            "each Flush must be its own TCP flush even if both ticks were already queued"
+        );
 
         drop(tx);
         close.cancel();

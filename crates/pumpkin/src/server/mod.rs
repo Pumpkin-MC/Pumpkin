@@ -1085,8 +1085,7 @@ impl Server {
     /// Main server tick method. This now handles both player/network ticking (which always runs)
     /// and world/game logic ticking (which is affected by freeze state).
     pub fn tick(self: &Arc<Self>) {
-        // Hold the socket flush for the whole tick so packets from this game tick
-        // land in one TCP flush instead of mixing with tick N+1.
+        // Do not flush mid-tick; `Flush` is `flushChannel`.
         self.suspend_player_flushes();
         if self.tick_rate_manager.runs_normally() || self.tick_rate_manager.is_sprinting() {
             self.tick_worlds();
@@ -1094,9 +1093,6 @@ impl Server {
         } else {
             self.tick_players_and_network();
         }
-        // Vanilla `tickChildren`: `level.tick` (`broadcastChanges`) then
-        // `tickConnection`. A second flush picks up `setBlock` from packets that
-        // arrived after this tick's in-world flush.
         self.flush_pending_block_updates();
         self.resume_player_flushes();
     }
@@ -1137,13 +1133,8 @@ impl Server {
         let worlds = self.worlds.load();
         let handle = self.runtime.clone();
 
-        // Vanilla `MinecraftServer.tickChildren`: `tickCount++` then
-        // `forceGameTimeSynchronization` then `ServerLevel.tick` -> `tickTime()`.
-        // Pumpkin increments `tick_count` after the tick (`update_tick_times`), so
-        // `tick_count + 1` is vanilla's `tickCount` for this tick.
+        // Sync before `tickTime()`. `tick_count + 1` is this vanilla tick.
         if self.tick_count.load(Ordering::Relaxed).wrapping_add(1) % 20 == 0 {
-            // Vanilla `MinecraftServer.forceGameTimeSynchronization`: one packet,
-            // overworld `getGameTime()` only.
             if let Some(overworld) = worlds
                 .iter()
                 .find(|world| world.dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name)
