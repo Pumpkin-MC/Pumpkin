@@ -247,10 +247,9 @@ impl CustomWasmGoal {
                             };
                             Ok::<_, wasmtime::Error>((server_resource, entity_resource))
                         })?;
-                        let result = guest
+                        guest
                             .call(function, (goal_id, server_resource, entity_resource))
-                            .await;
-                        result
+                            .await
                     })
                 })
                 .await

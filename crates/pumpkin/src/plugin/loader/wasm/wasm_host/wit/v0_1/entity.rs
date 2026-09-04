@@ -273,9 +273,8 @@ impl HostEntity for PluginHostState {
         entity: Resource<Entity>,
         name: Resource<TextComponent>,
     ) -> wasmtime::Result<()> {
-        let text_res = self.take(name)?;
+        let text = self.take(name)?;
         let entity_base = self.get(&entity)?;
-        let text = text_res.clone();
         entity_base.get_entity().set_custom_name(text);
         Ok(())
     }

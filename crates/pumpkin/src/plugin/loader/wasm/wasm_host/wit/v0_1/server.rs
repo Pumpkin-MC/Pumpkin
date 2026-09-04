@@ -698,8 +698,8 @@ impl pumpkin::plugin::server::HostServerWithStore<PluginHostState> for HasSelf<P
             let native_sender = match sender {
                 WasmCommandSender::Console => CommandSender::Console,
                 WasmCommandSender::Player(player_res) => {
-                    let player_resource = state.take(player_res)?;
-                    CommandSender::Player(player_resource.clone())
+                    let player = state.take(player_res)?;
+                    CommandSender::Player(player)
                 }
             };
             let plugin = state
