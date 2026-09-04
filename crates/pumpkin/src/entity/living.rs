@@ -45,6 +45,7 @@ use pumpkin_data::data_component_impl::{
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::fluid::Fluid;
+use pumpkin_data::game_rules::{GameRule, GameRuleValue};
 use pumpkin_data::item_stack::{DamageResult, ItemStack};
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::{Block, Enchantment};
@@ -171,6 +172,33 @@ impl EffectParticle {
                 | effect.effect_type.color as u32) as i32,
         }
     }
+}
+
+fn is_allowed_by_team_rules(
+    own_team: Option<&crate::world::scoreboard::Team>,
+    their_team: Option<&crate::world::scoreboard::Team>,
+) -> bool {
+    use crate::world::scoreboard::CollisionRule;
+
+    let own_rule = own_team.map_or(CollisionRule::Always, |team| team.collision_rule);
+    let their_rule = their_team.map_or(CollisionRule::Always, |team| team.collision_rule);
+
+    if own_rule == CollisionRule::Never || their_rule == CollisionRule::Never {
+        return false;
+    }
+
+    let same_team = own_team
+        .zip(their_team)
+        .is_some_and(|(own, their)| own.name == their.name);
+
+    if (own_rule == CollisionRule::PushOwnTeam || their_rule == CollisionRule::PushOwnTeam)
+        && same_team
+    {
+        return false;
+    }
+
+    (own_rule != CollisionRule::PushOtherTeams && their_rule != CollisionRule::PushOtherTeams)
+        || same_team
 }
 
 impl LivingEntity {
@@ -1236,6 +1264,85 @@ impl LivingEntity {
         if suffocating {
             caller.damage(caller, 1.0, DamageType::IN_WALL);
         }
+
+        self.push_entities(caller);
+    }
+
+    fn push_entities(&self, dyn_self: &dyn EntityBase) {
+        let world = self.entity.world.load();
+        let entity_bb = self.entity.bounding_box.load();
+        let own_team = dyn_self
+            .get_player()
+            .and_then(super::player::Player::get_team);
+
+        let pushable: Vec<Arc<dyn EntityBase>> = world
+            .get_all_at_box(&entity_bb)
+            .into_iter()
+            .filter(|entity| {
+                let entity_ref = entity.get_entity();
+                entity_ref.entity_id != self.entity.entity_id
+                    && !entity.is_spectator()
+                    && entity.is_pushable()
+                    && is_allowed_by_team_rules(
+                        own_team.as_ref(),
+                        entity
+                            .get_player()
+                            .and_then(super::player::Player::get_team)
+                            .as_ref(),
+                    )
+            })
+            .collect();
+
+        if pushable.is_empty() {
+            return;
+        }
+
+        // Entity cramming check
+        let max_cramming = match world.get_game_rule(&GameRule::MaxEntityCramming) {
+            GameRuleValue::Int(value) => value,
+            GameRuleValue::Bool(_) => 0,
+        };
+        if max_cramming > 0
+            && pushable.len() as i64 > max_cramming - 1
+            && rand::random::<u32>().is_multiple_of(4)
+        {
+            let count = pushable
+                .iter()
+                .filter(|entity| !entity.is_passenger())
+                .count();
+            if count as i64 > max_cramming - 1 {
+                dyn_self.damage(dyn_self, 6.0, DamageType::CRAMMING);
+            }
+        }
+
+        for entity in pushable {
+            entity.push(dyn_self);
+        }
+    }
+
+    /// Decays player velocity like vanilla `travelInAir` friction.
+    fn apply_travel_friction(&self) {
+        let mut velo = self.entity.velocity.load();
+        if velo.x == 0.0 && velo.z == 0.0 {
+            return;
+        }
+
+        let friction = if self.entity.on_ground.load(Relaxed) {
+            f64::from(
+                self.entity
+                    .get_block_with_y_offset(0.500_001)
+                    .1
+                    .slipperiness,
+            ) * 0.91
+        } else {
+            0.91
+        };
+
+        velo.x *= friction;
+
+        velo.z *= friction;
+
+        self.entity.velocity.store(velo);
     }
 
     fn travel_in_air(&self, caller: &dyn EntityBase) {
@@ -2839,7 +2946,6 @@ impl LivingEntity {
                 let resistance = self.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE);
                 self.entity
                     .apply_knockback(knockback_after_resistance(0.4, resistance), dx, dz);
-                self.entity.send_velocity();
             }
         }
 
@@ -3000,11 +3106,24 @@ impl EntityBase for LivingEntity {
             // Vanilla-like order: freeze logic runs after movement/collisions.
             self.entity.tick_frozen(caller);
         } else if is_alive {
+            // Client-authoritative players skip `travel`, so decay pushed velocity like
+            // vanilla to prevent it accumulating and launching the player.
+            self.apply_travel_friction();
+
             let suffocating = self.entity.tick_block_collisions(caller);
             if suffocating {
                 caller.damage(caller, 1.0, DamageType::IN_WALL);
             }
+
+            // Players push other entities like any living entity.
+            self.push_entities(caller);
+
             self.entity.tick_frozen(caller);
+        }
+
+        // Coalesce velocity sends to once per tick.
+        if self.entity.velocity_dirty.swap(false, Ordering::SeqCst) {
+            self.entity.send_velocity();
         }
 
         // TODO
