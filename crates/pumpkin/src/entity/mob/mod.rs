@@ -89,17 +89,6 @@ pub struct MobEntity {
     last_sent_pitch: AtomicU8,
     last_sent_head_yaw: AtomicU8,
 }
-
-/// Tick boundaries (both inclusive) when monsters do not burn in sunlight (26.1).
-///
-/// Sourced from `data/minecraft/timeline/day.json` — `monsters_burn` keyframes:
-/// `value=false` at tick 12542 (dusk), `value=true` at tick 23460 (dawn).
-///
-/// TODO: Replace with `EnvironmentAttributes::MONSTERS_BURN` lookup once the
-/// `EnvironmentAttributeSystem` is implemented in `pumpkin-data`.
-pub(crate) const NIGHT_START: i64 = 12542;
-pub(crate) const NIGHT_END: i64 = 23459;
-
 impl MobEntity {
     const AI_DISABLED_FLAG: u8 = 1;
     const LEFT_HANDED_FLAG: u8 = 2;
@@ -535,22 +524,16 @@ impl MobEntity {
         let world_arc = entity.world.load();
         let world = world_arc.as_ref();
 
-        // Night boundary from data/minecraft/timeline/day.json — monsters_burn keyframes:
-        // value=false at tick 12542 (dusk), value=true at tick 23460 (dawn).
-        // TODO: read directly from EnvironmentAttributes::MONSTERS_BURN once implemented.
-
-        let day_time = world.get_time_of_day() % 24000;
-        if (NIGHT_START..=NIGHT_END).contains(&day_time) {
+        let eye_block_pos = entity.get_eye_pos().to_block_pos();
+        if !world.monsters_burn(&eye_block_pos) {
             return false;
         }
 
         // Vanilla: getLightLevelDependentMagicValue() — sky light at eye pos, scaled 0–1.
-        let eye_block_pos = entity.get_eye_pos();
         let brightness = world
             .level
             .light_engine
-            .get_sky_light_level(&world.level, &eye_block_pos.to_block_pos())
-            as f32
+            .get_sky_light_level(&world.level, &eye_block_pos) as f32
             / 15.0;
 
         if brightness <= 0.5 {
