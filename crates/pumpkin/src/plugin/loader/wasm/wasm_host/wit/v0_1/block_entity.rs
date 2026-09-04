@@ -1277,7 +1277,8 @@ impl HostJigsawBlockEntity for PluginHostState {
             .get(&res)?
             .name
             .try_lock()
-            .map_or_default(|g| g.clone()))
+            .ok()
+            .map_or_else(String::new, |g| g.clone()))
     }
 
     async fn get_target(&mut self, res: Resource<JigsawBlockEntity>) -> wasmtime::Result<String> {
@@ -1285,7 +1286,8 @@ impl HostJigsawBlockEntity for PluginHostState {
             .get(&res)?
             .target
             .try_lock()
-            .map_or_default(|g| g.clone()))
+            .ok()
+            .map_or_else(String::new, |g| g.clone()))
     }
 
     async fn get_pool(&mut self, res: Resource<JigsawBlockEntity>) -> wasmtime::Result<String> {
@@ -1293,7 +1295,8 @@ impl HostJigsawBlockEntity for PluginHostState {
             .get(&res)?
             .pool
             .try_lock()
-            .map_or_default(|g| g.clone()))
+            .ok()
+            .map_or_else(String::new, |g| g.clone()))
     }
 
     async fn get_final_state(
@@ -1304,7 +1307,8 @@ impl HostJigsawBlockEntity for PluginHostState {
             .get(&res)?
             .final_state
             .try_lock()
-            .map_or_default(|g| g.clone()))
+            .ok()
+            .map_or_else(String::new, |g| g.clone()))
     }
 
     async fn get_selection_priority(
@@ -1436,7 +1440,8 @@ impl HostStructureBlockBlockEntity for PluginHostState {
             .get(&res)?
             .name
             .try_lock()
-            .map_or_default(|g| g.clone()))
+            .ok()
+            .map_or_else(String::new, |g| g.clone()))
     }
 
     async fn get_author(
@@ -1447,7 +1452,8 @@ impl HostStructureBlockBlockEntity for PluginHostState {
             .get(&res)?
             .author
             .try_lock()
-            .map_or_default(|g| g.clone()))
+            .ok()
+            .map_or_else(String::new, |g| g.clone()))
     }
 
     async fn get_mode(
@@ -1458,7 +1464,8 @@ impl HostStructureBlockBlockEntity for PluginHostState {
             .get(&res)?
             .mode
             .try_lock()
-            .map_or_default(|g| g.clone()))
+            .ok()
+            .map_or_else(String::new, |g| g.clone()))
     }
 
     async fn get_integrity(

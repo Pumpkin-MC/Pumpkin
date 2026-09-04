@@ -238,6 +238,7 @@ mod resource_with {
         type Internal = Arc<Server>;
     }
 
+    #[allow(clippy::wildcard_imports)]
     mod block_entities {
         use super::super::pumpkin::plugin;
         use crate::block::entities::*;
