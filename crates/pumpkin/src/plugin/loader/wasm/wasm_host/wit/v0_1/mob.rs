@@ -3,12 +3,13 @@ use wasmtime::component::{Access, HasSelf, Resource};
 
 use pumpkin_util::math::vector3::Vector3;
 
+use crate::entity::EntityBase;
 use crate::entity::ai::goal::Goal;
 use crate::entity::mob::Mob as InternalMob;
 use crate::entity::passive::tamable::TamableAnimal;
 use crate::plugin::loader::wasm::wasm_host::{
     PluginInstance, WasmPlugin,
-    state::{MobResource, PluginHostState},
+    state::PluginHostState,
     wit::v0_1::entity::entity_from_resource,
     wit::v0_1::pumpkin::plugin::{
         common::Position,
@@ -26,6 +27,7 @@ use crate::plugin::loader::wasm::wasm_host::{
     },
     wit::v0_1::uuid::UuidExt,
 };
+use crate::server::Server;
 
 pub fn mob_from_resource(
     state: &PluginHostState,
@@ -33,9 +35,9 @@ pub fn mob_from_resource(
 ) -> wasmtime::Result<std::sync::Arc<dyn crate::entity::EntityBase>> {
     state
         .resource_table
-        .get::<MobResource>(&Resource::new_own(entity.rep()))
+        .get::<Arc<dyn EntityBase>>(&Resource::new_own(entity.rep()))
         .map_err(|_| wasmtime::Error::msg("invalid mob resource handle"))
-        .map(|resource| resource.provider.clone())
+        .map(|resource| resource.clone())
 }
 
 #[must_use]
@@ -241,36 +243,28 @@ impl CustomWasmGoal {
                 .store
                 .call_guest(move |mut guest| {
                     Box::pin(async move {
-                        let (server_resource, entity_resource, reps) =
+                        let (server_resource, entity_resource) =
                             guest.with(|mut store| {
                                 let server = store.data_mut().server.clone().ok_or_else(|| {
                                     wasmtime::Error::msg("Wasm plugin server is not available")
                                 })?;
-                                let server_resource = store.data_mut().add_server(server)?;
+                                let server_resource = store.data_mut().add(server)?;
                                 let server_rep = server_resource.rep();
-                                let entity_resource = match store.data_mut().add_entity(entity) {
+                                let entity_resource = match store.data_mut().add(entity) {
                                     Ok(resource) => resource,
                                     Err(error) => {
-                                        let _ = store.data_mut().resource_table.delete::<
-                                            crate::plugin::loader::wasm::wasm_host::state::ServerResource,
-                                        >(wasmtime::component::Resource::new_own(server_rep));
+                                        let _ =
+                                            store.data_mut().resource_table.delete::<Arc<Server>>(
+                                                wasmtime::component::Resource::new_own(server_rep),
+                                            );
                                         return Err(error);
                                     }
                                 };
-                                let reps = (server_rep, entity_resource.rep());
-                                Ok::<_, wasmtime::Error>((server_resource, entity_resource, reps))
+                                Ok::<_, wasmtime::Error>((server_resource, entity_resource))
                             })?;
                         let result = guest
                             .call(function, (goal_id, server_resource, entity_resource))
                             .await;
-                        guest.with(|mut store| {
-                            let _ = store.data_mut().resource_table.delete::<
-                                crate::plugin::loader::wasm::wasm_host::state::ServerResource,
-                            >(wasmtime::component::Resource::new_own(reps.0));
-                            let _ = store.data_mut().resource_table.delete::<
-                                crate::plugin::loader::wasm::wasm_host::state::EntityResource,
-                            >(wasmtime::component::Resource::new_own(reps.1));
-                        });
                         result
                     })
                 })
@@ -313,7 +307,7 @@ impl Goal for CustomWasmGoal {
 impl HostMob for PluginHostState {
     async fn as_entity(&mut self, this: Resource<WitMob>) -> wasmtime::Result<Resource<Entity>> {
         let entity = mob_from_resource(self, &this)?;
-        self.add_entity(entity)
+        self.add(entity)
     }
 
     async fn as_living(
@@ -321,7 +315,7 @@ impl HostMob for PluginHostState {
         this: Resource<WitMob>,
     ) -> wasmtime::Result<Resource<WitLivingEntity>> {
         let entity = mob_from_resource(self, &this)?;
-        self.add_living_entity(entity)
+        self.add(entity)
     }
 
     async fn add_ai_goal(
@@ -422,7 +416,7 @@ impl HostMob for PluginHostState {
             .get_mob()
             .and_then(|mob| mob.get_mob_entity().get_target())
         {
-            return Ok(Some(self.add_entity(target)?));
+            return Ok(Some(self.add(target)?));
         }
         Ok(None)
     }
@@ -889,10 +883,7 @@ impl HostMob for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<WitMob>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<MobResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 

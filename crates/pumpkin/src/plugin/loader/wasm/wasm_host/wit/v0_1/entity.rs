@@ -4,7 +4,7 @@ use wasmtime::component::{Access, HasSelf, Resource};
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::plugin::loader::wasm::wasm_host::{
-    state::{EntityResource, PluginHostState},
+    state::PluginHostState,
     wit::v0_1::events::to_wasm_position,
     wit::v0_1::pumpkin::plugin::{
         common::{EntityPose, NbtTree as WitNbtTree, Position},
@@ -32,11 +32,9 @@ pub fn entity_from_resource(
     state: &PluginHostState,
     entity: &Resource<Entity>,
 ) -> wasmtime::Result<std::sync::Arc<dyn crate::entity::EntityBase>> {
-    state
-        .resource_table
-        .get::<EntityResource>(&Resource::new_own(entity.rep()))
+    state.get(entity)
         .map_err(|_| wasmtime::Error::msg("invalid entity resource handle"))
-        .map(|resource| resource.provider.clone())
+        .map(|resource| resource.clone())
 }
 
 fn active_plugin(
@@ -100,7 +98,7 @@ impl HostEntity for PluginHostState {
     async fn get_world(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Resource<World>> {
         let entity = entity_from_resource(self, &entity)?;
         let world = entity.get_entity().world.load_full();
-        self.add_world(world)
+        self.add(world)
             .map_err(|_| wasmtime::Error::msg("failed to add world resource"))
     }
 
@@ -275,7 +273,7 @@ impl HostEntity for PluginHostState {
     ) -> wasmtime::Result<Resource<TextComponent>> {
         let entity = entity_from_resource(self, &entity)?;
         let name = entity.get_name();
-        self.add_text_component(name)
+        self.add(name)
             .map_err(|_| wasmtime::Error::msg("failed to add text component resource"))
     }
 
@@ -284,14 +282,9 @@ impl HostEntity for PluginHostState {
         entity: Resource<Entity>,
         name: Resource<TextComponent>,
     ) -> wasmtime::Result<()> {
+        let text_res = self.take(name)?;
         let entity_base = entity_from_resource(self, &entity)?;
-        let text_res = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::TextComponentResource>(
-                &Resource::new_own(name.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid text component resource handle"))?;
-        let text = text_res.provider.clone();
+        let text = text_res.clone();
         entity_base.get_entity().set_custom_name(text);
         Ok(())
     }
@@ -303,9 +296,9 @@ impl HostEntity for PluginHostState {
         let entity = entity_from_resource(self, &entity)?;
         let name = entity.get_entity().custom_name.load();
         if let Some(name) = name.as_ref() {
-            Ok(Some(self.add_text_component(name.clone()).map_err(
-                |_| wasmtime::Error::msg("failed to add text component resource"),
-            )?))
+            Ok(Some(self.add(name.clone()).map_err(|_| {
+                wasmtime::Error::msg("failed to add text component resource")
+            })?))
         } else {
             Ok(None)
         }
@@ -447,7 +440,7 @@ impl HostEntity for PluginHostState {
             // Don't include the entity itself
             if e.get_entity().entity_id != entity.get_entity().entity_id {
                 result.push(
-                    self.add_entity(e)
+                    self.add(e)
                         .map_err(|_| wasmtime::Error::msg("failed to add entity resource"))?,
                 );
             }
@@ -466,7 +459,7 @@ impl HostEntity for PluginHostState {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(v) = vehicle.as_ref() {
-            Ok(Some(self.add_entity(Arc::clone(v)).map_err(|_| {
+            Ok(Some(self.add(Arc::clone(v)).map_err(|_| {
                 wasmtime::Error::msg("failed to add entity resource")
             })?))
         } else {
@@ -487,7 +480,7 @@ impl HostEntity for PluginHostState {
         let mut result = Vec::new();
         for p in passengers.iter() {
             result.push(
-                self.add_entity(Arc::clone(p))
+                self.add(Arc::clone(p))
                     .map_err(|_| wasmtime::Error::msg("failed to add entity resource"))?,
             );
         }
@@ -704,7 +697,7 @@ impl HostEntity for PluginHostState {
         for (hit_entity, hit_pos, distance) in hits {
             if hit_entity.get_entity().entity_id != self_id {
                 let entity_res = self
-                    .add_entity(hit_entity)
+                    .add(hit_entity)
                     .map_err(|_| wasmtime::Error::msg("failed to add entity resource"))?;
                 return Ok(Some(WitRayTraceEntityResult {
                     entity: entity_res,
@@ -781,7 +774,7 @@ impl HostEntity for PluginHostState {
     ) -> wasmtime::Result<Option<Resource<WitLivingEntity>>> {
         let entity = entity_from_resource(self, &this)?;
         if entity.get_living_entity().is_some() {
-            Ok(Some(self.add_living_entity(entity)?))
+            Ok(Some(self.add(entity)?))
         } else {
             Ok(None)
         }
@@ -793,7 +786,7 @@ impl HostEntity for PluginHostState {
     ) -> wasmtime::Result<Option<Resource<WitMob>>> {
         let entity = entity_from_resource(self, &this)?;
         if entity.get_mob().is_some() {
-            Ok(Some(self.add_mob(entity)?))
+            Ok(Some(self.add(entity)?))
         } else {
             Ok(None)
         }
@@ -810,10 +803,7 @@ impl HostEntity for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<Entity>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<EntityResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -826,19 +816,12 @@ impl
         mut host: Access<'_, PluginHostState, Self>,
         entity: Resource<Entity>,
         pos: Position,
-        world_ref: Resource<World>,
+        world: Resource<World>,
     ) -> wasmtime::Result<()> {
         let (entity, world, plugin) = {
             let state = host.get();
+            let world = state.take(world)?;
             let entity = entity_from_resource(state, &entity)?;
-            let world = state
-                .resource_table
-                .get::<crate::plugin::loader::wasm::wasm_host::state::WorldResource>(
-                    &Resource::new_own(world_ref.rep()),
-                )
-                .map_err(|_| wasmtime::Error::msg("invalid world resource handle"))?
-                .provider
-                .clone();
             (entity, world, active_plugin(state)?)
         };
         let pos = Vector3::new(pos.0, pos.1, pos.2);

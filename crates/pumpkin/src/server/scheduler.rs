@@ -208,15 +208,13 @@ impl TaskScheduler {
                     .call_guest(move |mut guest| {
                         Box::pin(async move {
                             let (server_resource, server_rep) = guest.with(|mut store| {
-                                let resource = store.data_mut().add_server(server_clone)?;
+                                let resource = store.data_mut().add(server_clone)?;
                                 let rep = resource.rep();
                                 Ok::<_, wasmtime::Error>((resource, rep))
                             })?;
                             let result = guest.call(function, (handler_id, server_resource)).await;
                             guest.with(|mut store| {
-                                let _ = store.data_mut().resource_table.delete::<
-                                    crate::plugin::loader::wasm::wasm_host::state::ServerResource,
-                                >(wasmtime::component::Resource::new_own(server_rep));
+                                let _ = store.data_mut().resource_table.delete::<Arc<Server>>(wasmtime::component::Resource::new_own(server_rep));
                             });
                             result
                         })

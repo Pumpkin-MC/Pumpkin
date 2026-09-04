@@ -35,7 +35,7 @@ use crate::plugin::{
 impl ToFromWasmEvent for InventoryOpenEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::InventoryOpenEvent(InventoryOpenEventData {
@@ -58,7 +58,7 @@ impl ToFromWasmEvent for InventoryOpenEvent {
 impl ToFromWasmEvent for InventoryDragEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::InventoryDragEvent(InventoryDragEventData {
@@ -81,7 +81,7 @@ impl ToFromWasmEvent for InventoryDragEvent {
 impl ToFromWasmEvent for CraftItemEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::CraftItemEvent(CraftItemEventData {
@@ -194,7 +194,7 @@ impl ToFromWasmEvent for FurnaceBurnEvent {
 impl ToFromWasmEvent for FurnaceExtractEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::FurnaceExtractEvent(FurnaceExtractEventData {
@@ -267,7 +267,7 @@ impl ToFromWasmEvent for HopperInventorySearchEvent {
 impl ToFromWasmEvent for InventoryCreativeEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::InventoryCreativeEvent(InventoryCreativeEventData {
@@ -296,7 +296,7 @@ impl ToFromWasmEvent for InventoryCreativeEvent {
 impl ToFromWasmEvent for InventoryInteractEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::InventoryInteractEvent(InventoryInteractEventData {
@@ -367,7 +367,7 @@ impl ToFromWasmEvent for InventoryPickupItemEvent {
 impl ToFromWasmEvent for PrepareAnvilEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::PrepareAnvilEvent(PrepareAnvilEventData {
@@ -392,7 +392,7 @@ impl ToFromWasmEvent for PrepareAnvilEvent {
 impl ToFromWasmEvent for PrepareGrindstoneEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::PrepareGrindstoneEvent(PrepareGrindstoneEventData {
@@ -415,7 +415,7 @@ impl ToFromWasmEvent for PrepareGrindstoneEvent {
 impl ToFromWasmEvent for PrepareInventoryResultEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::PrepareInventoryResultEvent(PrepareInventoryResultEventData {
@@ -438,7 +438,7 @@ impl ToFromWasmEvent for PrepareInventoryResultEvent {
 impl ToFromWasmEvent for PrepareItemCraftEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::PrepareItemCraftEvent(PrepareItemCraftEventData {
@@ -463,7 +463,7 @@ impl ToFromWasmEvent for PrepareItemCraftEvent {
 impl ToFromWasmEvent for PrepareSmithingEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::PrepareSmithingEvent(PrepareSmithingEventData {
@@ -486,7 +486,7 @@ impl ToFromWasmEvent for PrepareSmithingEvent {
 impl ToFromWasmEvent for SmithItemEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::SmithItemEvent(SmithItemEventData {
@@ -511,7 +511,7 @@ impl ToFromWasmEvent for SmithItemEvent {
 impl ToFromWasmEvent for TradeSelectEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
-            .add_player(self.player.clone())
+            .add(self.player.clone())
             .expect("failed to add player resource");
 
         Event::TradeSelectEvent(TradeSelectEventData {

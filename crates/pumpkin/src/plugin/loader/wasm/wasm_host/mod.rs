@@ -413,7 +413,7 @@ impl WasmPlugin {
                         store.data_mut().wasi_http_hooks.allow_outbound = allow_http_outbound;
                         store.data_mut().server = Some(server);
                         store.data_mut().name = Some(name);
-                        store.data_mut().add_context(context)
+                        store.data_mut().add(context)
                     })?;
 
                     guest
@@ -455,7 +455,7 @@ impl WasmPlugin {
             .shutdown(move |accessor| {
                 Box::pin(async move {
                     let (context_res, context_rep) = accessor.with(|mut store| {
-                        let resource = store.data_mut().add_context(context)?;
+                        let resource = store.data_mut().add(context)?;
                         let rep = resource.rep();
                         Ok::<_, wasmtime::Error>((resource, rep))
                     })?;
@@ -464,9 +464,9 @@ impl WasmPlugin {
                         .await
                         .map(|(result,)| result);
                     accessor.with(|mut store| {
-                        let _ = store.data_mut().resource_table.delete::<
-                            crate::plugin::loader::wasm::wasm_host::state::ContextResource,
-                        >(wasmtime::component::Resource::new_own(context_rep));
+                        let _ = store.data_mut().resource_table.delete::<Arc<Context>>(
+                            wasmtime::component::Resource::new_own(context_rep),
+                        );
                     });
                     result
                 })
@@ -496,12 +496,6 @@ impl WasmPlugin {
             })
             .await
     }
-}
-
-pub trait DowncastResourceExt<E> {
-    fn downcast_ref<'a>(&'a self, state: &'a mut PluginHostState) -> &'a E;
-    fn downcast_mut<'a>(&'a self, state: &'a mut PluginHostState) -> &'a mut E;
-    fn consume(self, state: &mut PluginHostState) -> E;
 }
 
 #[cfg(test)]
