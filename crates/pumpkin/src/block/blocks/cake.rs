@@ -32,21 +32,10 @@ impl CakeBlock {
         location: &BlockPos,
         state_id: BlockStateId,
     ) -> BlockActionResult {
-        match player.gamemode.load() {
-            GameMode::Survival | GameMode::Adventure => {
-                let hunger_level = player.hunger_manager.level.load();
-                if hunger_level >= 20 {
-                    return BlockActionResult::Pass;
-                }
-                player.hunger_manager.level.store(20.min(hunger_level + 2));
-                player
-                    .hunger_manager
-                    .saturation
-                    .store(player.hunger_manager.saturation.load() + 0.4);
-                player.send_health();
-            }
-            GameMode::Creative | GameMode::Spectator => {}
+        if !player.can_eat(false) {
+            return BlockActionResult::Pass;
         }
+        player.hunger_manager.eat(player, 2, 0.4);
 
         let mut properties = CakeLikeProperties::from_state_id(state_id);
         match properties.bites {

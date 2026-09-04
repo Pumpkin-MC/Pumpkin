@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use pumpkin_data::{Block, BlockState, BlockStateId, item::Item, item_stack::ItemStack};
 use pumpkin_macros::pumpkin_block_from_tag;
-use pumpkin_util::{GameMode, math::position::BlockPos};
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{
     tick::TickPriority,
     world::{BlockAccessor, BlockFlags},
@@ -61,14 +61,8 @@ impl CandleCakeBlock {
         location: &BlockPos,
         world: &Arc<World>,
     ) -> BlockActionResult {
-        match player.gamemode.load() {
-            GameMode::Survival | GameMode::Adventure => {
-                if player.hunger_manager.level.load() >= 20 {
-                    return BlockActionResult::Pass;
-                }
-            }
-            GameMode::Creative => {}
-            GameMode::Spectator => return BlockActionResult::Pass,
+        if !player.can_eat(false) {
+            return BlockActionResult::Pass;
         }
 
         let candle_item = candle_from_cake(block);
