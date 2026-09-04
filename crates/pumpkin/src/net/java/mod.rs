@@ -53,7 +53,6 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use tracing::{debug, error, warn};
 
-pub mod config;
 pub mod handshake;
 pub mod login;
 pub mod pending;
@@ -65,9 +64,7 @@ use arc_swap::ArcSwap;
 use pending::PendingConnection;
 
 use crate::entity::player::Player;
-use crate::net::{
-    ClientPlatform, GameProfile, PacketHandlerResult, PacketRateLimiter, PlayerConfig,
-};
+use crate::net::{ClientPlatform, GameProfile, PacketRateLimiter, PlayerConfig};
 use crate::plugin::api::events::world::chunk_send::ChunkSend;
 use crate::plugin::player::player_custom_payload::PlayerCustomPayloadEvent;
 use crate::{error::PumpkinError, server::Server};
