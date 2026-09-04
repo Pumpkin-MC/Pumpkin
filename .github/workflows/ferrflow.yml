@@ -1,0 +1,28 @@
+name: Versioning
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: ferrflow-versioning
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Compute version and tag
+    if: github.repository == 'Pumpkin-MC/Pumpkin'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - uses: FerrLabs/FerrFlow@v7
+        with:
+          bot: true
