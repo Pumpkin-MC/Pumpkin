@@ -41,6 +41,27 @@ pub struct ItemEntity {
 
 const ITEM_UPDATE_INTERVAL: u32 = 20;
 
+fn java_item_metadata(item_stack: &ItemStack, version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
+    let item_stack = ItemStackSerializer::from(item_stack.clone());
+    let mut data = Vec::new();
+
+    if version < JavaMinecraftVersion::V_1_9 {
+        // Legacy DataWatcher header: type 5 (item stack), index 10.
+        data.push((5 << 5) | 10);
+        item_stack.write_with_version(&mut data, &version).ok()?;
+        data.push(127);
+    } else if version >= JavaMinecraftVersion::V_1_21 {
+        Metadata::new(pumpkin_data::tracked_data::item::ITEM, item_stack)
+            .write(&mut data, &version)
+            .ok()?;
+        data.push(255);
+    } else {
+        return None;
+    }
+
+    Some(data.into_boxed_slice())
+}
+
 impl ItemEntity {
     pub fn new(entity: Entity, item_stack: ItemStack) -> Self {
         entity.velocity.store(Vector3::new(
@@ -668,25 +689,40 @@ impl EntityBase for ItemEntity {
             client.try_enqueue_packet(data);
         }
 
-        if client.version.load() >= JavaMinecraftVersion::V_1_21 {
-            let metadata = Metadata::new(
-                pumpkin_data::tracked_data::item::ITEM,
-                ItemStackSerializer::from(
-                    self.item_stack
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .clone(),
-                ),
-            );
-            let mut data = Vec::new();
-            if metadata.write(&mut data, &client.version.load()).is_ok() {
-                data.push(255);
-                let meta_packet =
-                    CSetEntityMetadata::new(self.entity.entity_id.into(), data.into());
-                if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
-                    client.try_enqueue_packet(meta_data);
-                }
+        let version = client.version.load();
+        let metadata = {
+            let item_stack = self
+                .item_stack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            java_item_metadata(&item_stack, version)
+        };
+        if let Some(metadata) = metadata {
+            let meta_packet = CSetEntityMetadata::new(self.entity.entity_id.into(), metadata);
+            if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
+                client.try_enqueue_packet(meta_data);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::java_item_metadata;
+    use pumpkin_data::{item::Item, item_stack::ItemStack};
+    use pumpkin_util::version::JavaMinecraftVersion;
+
+    #[test]
+    fn legacy_item_entity_metadata_populates_datawatcher_index_ten() {
+        let metadata = java_item_metadata(
+            &ItemStack::new(1, &Item::STONE),
+            JavaMinecraftVersion::V_1_7_2,
+        )
+        .unwrap();
+
+        assert_eq!(
+            metadata.as_ref(),
+            [0xAA, 0x00, 0x01, 0x01, 0x00, 0x00, 0x00, 0x7F]
+        );
     }
 }
