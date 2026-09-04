@@ -29,15 +29,6 @@ impl PluginBossBar {
     }
 }
 
-fn player_from_resource(
-    state: &PluginHostState,
-    player: &Resource<
-        crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::player::Player,
-    >,
-) -> wasmtime::Result<std::sync::Arc<crate::entity::player::Player>> {
-    state.get(player).cloned()
-}
-
 const fn to_wit_color(color: BossbarColor) -> WitColor {
     match color {
         BossbarColor::Pink => WitColor::Pink,
@@ -104,7 +95,6 @@ fn from_wit_metadata(metadata: WitMetadata) -> BossbarFlags {
     f
 }
 
-
 impl boss_bar::Host for PluginHostState {}
 
 impl boss_bar::HostBossBar for PluginHostState {
@@ -142,12 +132,8 @@ impl boss_bar::HostBossBar for PluginHostState {
             crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::text::TextComponent,
         >,
     > {
-        let title = {
-            let bossbar = self.get(&res)?.lock().await;
-            bossbar.bossbar.title.clone()
-        };
+        let title = self.get(&res)?.lock().await.bossbar.title.clone();
         self.add(title)
-            .map_err(|_| wasmtime::Error::msg("Failed to add text component"))
     }
 
     async fn set_title(
@@ -157,7 +143,7 @@ impl boss_bar::HostBossBar for PluginHostState {
             crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::text::TextComponent,
         >,
     ) -> wasmtime::Result<()> {
-        let title = self.get(&title)?;
+        let title = self.take(title)?;
         let mut pbb = self.get(&res)?.lock().await;
         pbb.bossbar.title = title.clone();
         if let Some(server) = pbb.server.upgrade() {
@@ -294,8 +280,8 @@ impl boss_bar::HostBossBar for PluginHostState {
             crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::player::Player,
         >,
     ) -> wasmtime::Result<()> {
+        let player = self.take(player)?;
         let mut pbb = self.get(&res)?.lock().await;
-        let player = player_from_resource(self, &player)?;
         let uuid = player.gameprofile.id;
 
         if !pbb.players.contains(&uuid) {
@@ -312,8 +298,8 @@ impl boss_bar::HostBossBar for PluginHostState {
             crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::player::Player,
         >,
     ) -> wasmtime::Result<()> {
+        let player = self.take(player)?;
         let mut pbb = self.get(&res)?.lock().await;
-        let player = player_from_resource(self, &player)?;
         let uuid = player.gameprofile.id;
 
         if let Some(idx) = pbb.players.iter().position(|&x| x == uuid) {

@@ -40,7 +40,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         number_format: Option<scoreboard::NumberFormat>,
     ) -> wasmtime::Result<()> {
         let provider = self.get(&res)?.clone();
-        let display_name = self.get(&display_name)?.clone();
+        let display_name = self.take(display_name)?;
         let nf = map_number_format(number_format, self)?;
 
         let rt = match render_type {
@@ -90,7 +90,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         number_format: Option<scoreboard::NumberFormat>,
     ) -> wasmtime::Result<()> {
         let provider = self.get(&res)?.clone();
-        let display_name = self.get(&display_name)?.clone();
+        let display_name = self.take(display_name)?;
         let nf = map_number_format(number_format, self)?;
 
         let rt = match render_type {
@@ -376,7 +376,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         settings: TeamSettings,
     ) -> wasmtime::Result<()> {
         let provider = self.get(&res)?.clone();
-        let team = map_team_settings(name, &settings, self)?;
+        let team = map_team_settings(name, settings, self)?;
         match provider {
             ScoreboardProvider::World(world) => {
                 world
@@ -444,7 +444,7 @@ impl scoreboard::HostScoreboard for PluginHostState {
         settings: TeamSettings,
     ) -> wasmtime::Result<()> {
         let provider = self.get(&res)?.clone();
-        let team = map_team_settings(name, &settings, self)?;
+        let team = map_team_settings(name, settings, self)?;
         match provider {
             ScoreboardProvider::World(world) => {
                 world
@@ -733,12 +733,12 @@ const fn map_display_slot(slot: DisplaySlot) -> pumpkin_data::scoreboard::Scoreb
 
 fn map_team_settings(
     name: String,
-    settings: &TeamSettings,
-    state: &PluginHostState,
+    settings: TeamSettings,
+    state: &mut PluginHostState,
 ) -> wasmtime::Result<Team> {
-    let display_name = state.get(&settings.display_name)?.clone();
-    let player_prefix = state.get(&settings.prefix)?.clone();
-    let player_suffix = state.get(&settings.suffix)?.clone();
+    let display_name = state.take(settings.display_name)?.clone();
+    let player_prefix = state.take(settings.prefix)?.clone();
+    let player_suffix = state.take(settings.suffix)?.clone();
 
     let mut options = 0;
     if settings.friendly_fire {

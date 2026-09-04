@@ -702,11 +702,7 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
     }
 
     async fn get_dimension(&mut self, world: Resource<World>) -> wasmtime::Result<String> {
-        Ok(self
-            .get(&world)?
-            .dimension
-            .minecraft_name
-            .to_string())
+        Ok(self.get(&world)?.dimension.minecraft_name.to_string())
     }
 
     async fn get_top_block_y(
@@ -726,11 +722,9 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         x: i32,
         z: i32,
     ) -> wasmtime::Result<i32> {
-        Ok(self.get(&world)?.get_heightmap_height(
-            ChunkHeightmapType::MotionBlocking,
-            x,
-            z,
-        ))
+        Ok(self
+            .get(&world)?
+            .get_heightmap_height(ChunkHeightmapType::MotionBlocking, x, z))
     }
 
     async fn is_raining(&mut self, world: Resource<World>) -> wasmtime::Result<bool> {
@@ -747,9 +741,8 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         message: Resource<pumpkin::plugin::text::TextComponent>,
         overlay: bool,
     ) -> wasmtime::Result<()> {
-        let msg = self.get(&message)?;
-        self.get(&world)?
-            .broadcast_system_message(&msg, overlay);
+        let msg = self.take(message)?;
+        self.get(&world)?.broadcast_system_message(&msg, overlay);
         Ok(())
     }
 
@@ -2218,7 +2211,9 @@ impl WasmChunkGenerator {
                             .call(function, (generator_id, phase, buffer_resource))
                             .await;
                         guest.with(|mut store| {
-                            let _ = store.data_mut().resource_table.delete::<ChunkBuffer>(wasmtime::component::Resource::new_own(buffer_rep));
+                            let _ = store.data_mut().resource_table.delete::<ChunkBuffer>(
+                                wasmtime::component::Resource::new_own(buffer_rep),
+                            );
                         });
                         result
                     })

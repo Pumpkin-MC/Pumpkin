@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use pumpkin_data::item_stack::ItemStack;
+use std::sync::Arc;
 use tokio::sync::Mutex;
 use wasmtime::component::Resource;
 

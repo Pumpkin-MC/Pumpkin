@@ -3,14 +3,12 @@ use wasmtime::component::{Access, HasSelf, Resource};
 
 use pumpkin_util::math::vector3::Vector3;
 
-use crate::entity::EntityBase;
 use crate::entity::ai::goal::Goal;
 use crate::entity::mob::Mob as InternalMob;
 use crate::entity::passive::tamable::TamableAnimal;
 use crate::plugin::loader::wasm::wasm_host::{
     PluginInstance, WasmPlugin,
     state::PluginHostState,
-    wit::v0_1::entity::entity_from_resource,
     wit::v0_1::pumpkin::plugin::{
         common::Position,
         uuid::Uuid,
@@ -28,17 +26,6 @@ use crate::plugin::loader::wasm::wasm_host::{
     wit::v0_1::uuid::UuidExt,
 };
 use crate::server::Server;
-
-pub fn mob_from_resource(
-    state: &PluginHostState,
-    entity: &Resource<WitMob>,
-) -> wasmtime::Result<std::sync::Arc<dyn crate::entity::EntityBase>> {
-    state
-        .resource_table
-        .get::<Arc<dyn EntityBase>>(&Resource::new_own(entity.rep()))
-        .map_err(|_| wasmtime::Error::msg("invalid mob resource handle"))
-        .map(|resource| resource.clone())
-}
 
 #[must_use]
 pub const fn from_wit_path_node_type(
@@ -243,25 +230,23 @@ impl CustomWasmGoal {
                 .store
                 .call_guest(move |mut guest| {
                     Box::pin(async move {
-                        let (server_resource, entity_resource) =
-                            guest.with(|mut store| {
-                                let server = store.data_mut().server.clone().ok_or_else(|| {
-                                    wasmtime::Error::msg("Wasm plugin server is not available")
-                                })?;
-                                let server_resource = store.data_mut().add(server)?;
-                                let server_rep = server_resource.rep();
-                                let entity_resource = match store.data_mut().add(entity) {
-                                    Ok(resource) => resource,
-                                    Err(error) => {
-                                        let _ =
-                                            store.data_mut().resource_table.delete::<Arc<Server>>(
-                                                wasmtime::component::Resource::new_own(server_rep),
-                                            );
-                                        return Err(error);
-                                    }
-                                };
-                                Ok::<_, wasmtime::Error>((server_resource, entity_resource))
+                        let (server_resource, entity_resource) = guest.with(|mut store| {
+                            let server = store.data_mut().server.clone().ok_or_else(|| {
+                                wasmtime::Error::msg("Wasm plugin server is not available")
                             })?;
+                            let server_resource = store.data_mut().add(server)?;
+                            let server_rep = server_resource.rep();
+                            let entity_resource = match store.data_mut().add(entity) {
+                                Ok(resource) => resource,
+                                Err(error) => {
+                                    let _ = store.data_mut().resource_table.delete::<Arc<Server>>(
+                                        wasmtime::component::Resource::new_own(server_rep),
+                                    );
+                                    return Err(error);
+                                }
+                            };
+                            Ok::<_, wasmtime::Error>((server_resource, entity_resource))
+                        })?;
                         let result = guest
                             .call(function, (goal_id, server_resource, entity_resource))
                             .await;
@@ -306,16 +291,14 @@ impl Goal for CustomWasmGoal {
 
 impl HostMob for PluginHostState {
     async fn as_entity(&mut self, this: Resource<WitMob>) -> wasmtime::Result<Resource<Entity>> {
-        let entity = mob_from_resource(self, &this)?;
-        self.add(entity)
+        self.add(self.get(&this)?.clone())
     }
 
     async fn as_living(
         &mut self,
         this: Resource<WitMob>,
     ) -> wasmtime::Result<Resource<WitLivingEntity>> {
-        let entity = mob_from_resource(self, &this)?;
-        self.add(entity)
+        self.add(self.get(&this)?.clone())
     }
 
     async fn add_ai_goal(
@@ -324,7 +307,7 @@ impl HostMob for PluginHostState {
         priority: u8,
         goal: crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::BuiltinAiGoal,
     ) -> wasmtime::Result<()> {
-        let entity = mob_from_resource(self, &this)?;
+        let entity = self.get(&this)?;
         if let Some(mob) = entity.get_mob() {
             let mob_entity = mob.get_mob_entity();
             match goal {
@@ -367,7 +350,7 @@ impl HostMob for PluginHostState {
         let Some(plugin) = self.plugin.as_ref().and_then(std::sync::Weak::upgrade) else {
             return Err(wasmtime::Error::msg("Plugin not active"));
         };
-        let entity = mob_from_resource(self, &this)?;
+        let entity = self.get(&this)?;
         if let Some(mob) = entity.get_mob() {
             let mob_entity = mob.get_mob_entity();
             mob_entity.add_goal(priority, CustomWasmGoal { plugin, goal_id });
@@ -380,7 +363,7 @@ impl HostMob for PluginHostState {
         this: Resource<WitMob>,
         disabled: bool,
     ) -> wasmtime::Result<()> {
-        let entity = mob_from_resource(self, &this)?;
+        let entity = self.get(&this)?;
         if let Some(mob) = entity.get_mob() {
             mob.get_mob_entity().set_no_ai(disabled);
         }
@@ -388,7 +371,7 @@ impl HostMob for PluginHostState {
     }
 
     async fn is_ai_disabled(&mut self, this: Resource<WitMob>) -> wasmtime::Result<bool> {
-        let entity = mob_from_resource(self, &this)?;
+        let entity = self.get(&this)?;
         Ok(entity
             .get_mob()
             .is_none_or(|mob| mob.get_mob_entity().is_no_ai()))
@@ -399,8 +382,8 @@ impl HostMob for PluginHostState {
         this: Resource<WitMob>,
         target: Option<Resource<Entity>>,
     ) -> wasmtime::Result<()> {
-        let entity = mob_from_resource(self, &this)?;
-        let target_entity = target.map(|t| entity_from_resource(self, &t)).transpose()?;
+        let entity = self.get(&this)?.clone();
+        let target_entity = target.map(|t| self.take(t)).transpose()?;
         if let Some(mob) = entity.get_mob() {
             mob.get_mob_entity().set_target(target_entity);
         }
@@ -411,7 +394,7 @@ impl HostMob for PluginHostState {
         &mut self,
         this: Resource<WitMob>,
     ) -> wasmtime::Result<Option<Resource<Entity>>> {
-        let entity = mob_from_resource(self, &this)?;
+        let entity = self.get(&this)?;
         if let Some(target) = entity
             .get_mob()
             .and_then(|mob| mob.get_mob_entity().get_target())
@@ -427,7 +410,7 @@ impl HostMob for PluginHostState {
         pos: Position,
         speed: f64,
     ) -> wasmtime::Result<bool> {
-        let entity = mob_from_resource(self, &this)?;
+        let entity = self.get(&this)?;
         Ok(entity.get_mob().is_some_and(|mob| {
             let mob_pos = entity.get_entity().pos.load();
             let dest = Vector3::new(pos.0, pos.1, pos.2);
@@ -448,8 +431,8 @@ impl HostMob for PluginHostState {
         target: Resource<Entity>,
         speed: f64,
     ) -> wasmtime::Result<bool> {
-        let entity = mob_from_resource(self, &this)?;
-        let target_entity = entity_from_resource(self, &target)?;
+        let entity = self.get(&this)?.clone();
+        let target_entity = self.take(target)?;
         Ok(entity.get_mob().is_some_and(|mob| {
             let mob_pos = entity.get_entity().pos.load();
             let target_pos = target_entity.get_entity().pos.load();
@@ -470,7 +453,7 @@ impl HostMob for PluginHostState {
     }
 
     async fn stop_navigation(&mut self, this: Resource<WitMob>) -> wasmtime::Result<()> {
-        let entity = mob_from_resource(self, &this)?;
+        let entity = self.get(&this)?;
         if let Some(mob) = entity.get_mob() {
             mob.get_mob_entity()
                 .navigator
@@ -482,7 +465,7 @@ impl HostMob for PluginHostState {
     }
 
     async fn is_navigating(&mut self, this: Resource<WitMob>) -> wasmtime::Result<bool> {
-        let entity = mob_from_resource(self, &this)?;
+        let entity = self.get(&this)?;
         Ok(entity.get_mob().is_some_and(|mob| {
             let is_idle = mob
                 .get_mob_entity()
@@ -495,7 +478,7 @@ impl HostMob for PluginHostState {
     }
 
     async fn has_reached_destination(&mut self, this: Resource<WitMob>) -> wasmtime::Result<bool> {
-        let entity = mob_from_resource(self, &this)?;
+        let entity = self.get(&this)?;
         Ok(entity.get_mob().is_none_or(|mob| {
             mob.get_mob_entity()
                 .navigator
@@ -510,7 +493,7 @@ impl HostMob for PluginHostState {
         this: Resource<WitMob>,
         speed: f64,
     ) -> wasmtime::Result<()> {
-        let entity = mob_from_resource(self, &this)?;
+        let entity = self.get(&this)?;
         if let Some(mob) = entity.get_mob() {
             mob.get_mob_entity()
                 .navigator
@@ -527,7 +510,7 @@ impl HostMob for PluginHostState {
         pos: Position,
         max_distance: f32,
     ) -> wasmtime::Result<bool> {
-        let entity = mob_from_resource(self, &this)?;
+        let entity = self.get(&this)?;
         Ok(entity.get_mob().is_some_and(|mob| {
             let living = &mob.get_mob_entity().living_entity;
             let dest = Vector3::new(pos.0, pos.1, pos.2);
@@ -545,7 +528,7 @@ impl HostMob for PluginHostState {
         node_type: WitPathNodeType,
         malus: f32,
     ) -> wasmtime::Result<()> {
-        let entity = mob_from_resource(self, &this)?;
+        let entity = self.get(&this)?;
         if let Some(mob) = entity.get_mob() {
             let internal_type = from_wit_path_node_type(node_type);
             mob.get_mob_entity()
@@ -562,7 +545,7 @@ impl HostMob for PluginHostState {
         this: Resource<WitMob>,
         node_type: WitPathNodeType,
     ) -> wasmtime::Result<f32> {
-        let entity = mob_from_resource(self, &this)?;
+        let entity = self.get(&this)?;
         Ok(entity.get_mob().map_or(0.0, |mob| {
             let internal_type = from_wit_path_node_type(node_type);
             mob.get_mob_entity()
@@ -574,7 +557,7 @@ impl HostMob for PluginHostState {
     }
 
     async fn look_at(&mut self, this: Resource<WitMob>, pos: Position) -> wasmtime::Result<()> {
-        let entity = mob_from_resource(self, &this)?;
+        let entity = self.get(&this)?;
         if let Some(mob) = entity.get_mob() {
             mob.get_mob_entity()
                 .look_control
@@ -590,8 +573,8 @@ impl HostMob for PluginHostState {
         this: Resource<WitMob>,
         target: Resource<Entity>,
     ) -> wasmtime::Result<()> {
-        let entity = mob_from_resource(self, &this)?;
-        let target_entity = entity_from_resource(self, &target)?;
+        let target_entity = self.take(target)?;
+        let entity = self.get(&this)?;
         if let Some(mob) = entity.get_mob() {
             mob.get_mob_entity()
                 .look_control
@@ -604,7 +587,7 @@ impl HostMob for PluginHostState {
 
     #[allow(clippy::too_many_lines)]
     async fn get_mob_data(&mut self, this: Resource<WitMob>) -> wasmtime::Result<WitMobData> {
-        let entity = mob_from_resource(self, &this)?;
+        let entity = self.get(&this)?;
         let any = entity.cast_any();
 
         if let Some(sheep) = any.downcast_ref::<crate::entity::passive::sheep::SheepEntity>() {
@@ -726,7 +709,7 @@ impl HostMob for PluginHostState {
         this: Resource<WitMob>,
         data: WitMobData,
     ) -> wasmtime::Result<bool> {
-        let entity = mob_from_resource(self, &this)?;
+        let entity = self.get(&this)?;
         let any = entity.cast_any();
 
         match data {
@@ -872,13 +855,13 @@ impl HostMob for PluginHostState {
         this: Resource<WitMob>,
         ticks: i32,
     ) -> wasmtime::Result<()> {
-        let entity = mob_from_resource(self, &this)?;
+        let entity = self.get(&this)?;
         entity.get_entity().set_frozen_ticks(ticks);
         Ok(())
     }
 
     async fn get_freeze_ticks(&mut self, this: Resource<WitMob>) -> wasmtime::Result<i32> {
-        let entity = mob_from_resource(self, &this)?;
+        let entity = self.get(&this)?;
         Ok(entity.get_entity().get_frozen_ticks())
     }
 
@@ -898,7 +881,7 @@ impl
     ) -> wasmtime::Result<()> {
         let (entity, plugin) = {
             let state = host.get();
-            let entity = mob_from_resource(state, &this)?;
+            let entity = state.get(&this)?.clone();
             let plugin = state
                 .plugin
                 .as_ref()

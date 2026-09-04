@@ -1,38 +1,11 @@
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use wasmtime::component::Resource;
 
 use crate::block::entities::BlockEntity as InternalBlockEntity;
-use crate::block::entities::banner::BannerBlockEntity as InternalBannerBlockEntity;
-use crate::block::entities::beacon::BeaconBlockEntity as InternalBeaconBlockEntity;
-use crate::block::entities::beehive::BeehiveBlockEntity as InternalBeehiveBlockEntity;
-use crate::block::entities::bell::BellBlockEntity as InternalBellBlockEntity;
-use crate::block::entities::blasting_furnace::BlastingFurnaceBlockEntity as InternalBlastingFurnaceBlockEntity;
-use crate::block::entities::brewing_stand::BrewingStandBlockEntity as InternalBrewingStandBlockEntity;
-use crate::block::entities::chest::ChestBlockEntity as InternalChestBlockEntity;
-use crate::block::entities::chiseled_bookshelf::ChiseledBookshelfBlockEntity as InternalChiseledBookshelfBlockEntity;
-use crate::block::entities::command_block::CommandBlockEntity as InternalCommandBlockEntity;
-use crate::block::entities::comparator::ComparatorBlockEntity as InternalComparatorBlockEntity;
-use crate::block::entities::crafter::CrafterBlockEntity as InternalCrafterBlockEntity;
-use crate::block::entities::creaking_heart::CreakingHeartBlockEntity as InternalCreakingHeartBlockEntity;
-use crate::block::entities::end_gateway::EndGatewayBlockEntity as InternalEndGatewayBlockEntity;
-use crate::block::entities::furnace::FurnaceBlockEntity as InternalFurnaceBlockEntity;
 use crate::block::entities::furnace_like_block_entity::CookingBlockEntityBase;
-use crate::block::entities::hanging_sign::HangingSignBlockEntity as InternalHangingSignBlockEntity;
-use crate::block::entities::hopper::HopperBlockEntity as InternalHopperBlockEntity;
-use crate::block::entities::jigsaw_block::JigsawBlockEntity as InternalJigsawBlockEntity;
-use crate::block::entities::jukebox::JukeboxBlockEntity as InternalJukeboxBlockEntity;
-use crate::block::entities::lectern::LecternBlockEntity as InternalLecternBlockEntity;
-use crate::block::entities::map::MapBlockEntity as InternalMapBlockEntity;
-use crate::block::entities::mob_spawner::MobSpawnerBlockEntity as InternalMobSpawnerBlockEntity;
-use crate::block::entities::piston::PistonBlockEntity as InternalPistonBlockEntity;
-use crate::block::entities::sculk_shrieker::SculkShriekerBlockEntity as InternalSculkShriekerBlockEntity;
-use crate::block::entities::sign::{
-    DyeColor as InternalDyeColor, SignBlockEntity as InternalSignBlockEntity, Text as InternalText,
-};
-use crate::block::entities::skull::SkullBlockEntity as InternalSkullBlockEntity;
-use crate::block::entities::smoker::SmokerBlockEntity as InternalSmokerBlockEntity;
-use crate::block::entities::structure_block::StructureBlockBlockEntity as InternalStructureBlockBlockEntity;
-use crate::plugin::loader::wasm::wasm_host::state;
+use crate::block::entities::sign::{DyeColor as InternalDyeColor, Text as InternalText};
+use crate::plugin::loader::wasm::wasm_host::state::{self, FromResource};
 use crate::plugin::loader::wasm::wasm_host::{
     state::PluginHostState,
     wit::v0_1::pumpkin::{
@@ -86,17 +59,6 @@ use crate::plugin::loader::wasm::wasm_host::{
 
 impl pumpkin::plugin::block_entity::Host for PluginHostState {}
 
-fn block_entity_from_resource(
-    state: &PluginHostState,
-    entity: &Resource<BlockEntity>,
-) -> wasmtime::Result<Arc<dyn InternalBlockEntity>> {
-    state
-        .resource_table
-        .get::<Arc<dyn InternalBlockEntity>>(&Resource::new_own(entity.rep()))
-        .map_err(|_| wasmtime::Error::msg("invalid block entity resource handle"))
-        .map(|resource| resource.clone())
-}
-
 const fn from_wasm_dye_color(color: DyeColor) -> InternalDyeColor {
     match color {
         DyeColor::White => InternalDyeColor::White,
@@ -149,9 +111,7 @@ fn to_wasm_sign_text(text: &InternalText) -> SignText {
             .map(str::into_string)
             .to_vec(),
         color: to_wasm_dye_color(text.get_color()),
-        has_glowing_text: text
-            .has_glowing_text
-            .load(std::sync::atomic::Ordering::Relaxed),
+        has_glowing_text: text.has_glowing_text.load(Ordering::Relaxed),
     }
 }
 
@@ -177,12 +137,12 @@ fn from_wasm_sign_text(text: SignText) -> InternalText {
 
 impl HostBlockEntity for PluginHostState {
     async fn resource_location(&mut self, res: Resource<BlockEntity>) -> wasmtime::Result<String> {
-        let entity = block_entity_from_resource(self, &res)?;
+        let entity = self.get(&res)?;
         Ok(entity.resource_location().to_string())
     }
 
     async fn get_position(&mut self, res: Resource<BlockEntity>) -> wasmtime::Result<WitBlockPos> {
-        let entity = block_entity_from_resource(self, &res)?;
+        let entity = self.get(&res)?;
         let pos = entity.get_position();
         Ok(WitBlockPos {
             x: pos.0.x,
@@ -192,17 +152,17 @@ impl HostBlockEntity for PluginHostState {
     }
 
     async fn get_id(&mut self, res: Resource<BlockEntity>) -> wasmtime::Result<u32> {
-        let entity = block_entity_from_resource(self, &res)?;
+        let entity = self.get(&res)?;
         Ok(entity.get_id())
     }
 
     async fn is_dirty(&mut self, res: Resource<BlockEntity>) -> wasmtime::Result<bool> {
-        let entity = block_entity_from_resource(self, &res)?;
+        let entity = self.get(&res)?;
         Ok(entity.is_dirty())
     }
 
     async fn clear_dirty(&mut self, res: Resource<BlockEntity>) -> wasmtime::Result<()> {
-        let entity = block_entity_from_resource(self, &res)?;
+        let entity = self.get(&res)?;
         entity.clear_dirty();
         Ok(())
     }
@@ -214,7 +174,7 @@ impl HostBlockEntity for PluginHostState {
         key: String,
         value: super::common::WitNbtTree,
     ) -> wasmtime::Result<()> {
-        let entity = block_entity_from_resource(self, &res)?;
+        let entity = self.get(&res)?;
         let pos = entity.get_position();
         let tag = super::common::from_wit_nbt_tree(&value).map_err(wasmtime::Error::msg)?;
         if let Some(server) = &self.server {
@@ -241,7 +201,7 @@ impl HostBlockEntity for PluginHostState {
         namespace: String,
         key: String,
     ) -> wasmtime::Result<Option<super::common::WitNbtTree>> {
-        let entity = block_entity_from_resource(self, &res)?;
+        let entity = self.get(&res)?;
         let pos = entity.get_position();
         if let Some(server) = &self.server {
             for world in server.worlds.load().iter() {
@@ -259,7 +219,7 @@ impl HostBlockEntity for PluginHostState {
         namespace: String,
         key: String,
     ) -> wasmtime::Result<()> {
-        let entity = block_entity_from_resource(self, &res)?;
+        let entity = self.get(&res)?;
         let pos = entity.get_position();
         if let Some(server) = &self.server {
             for world in server.worlds.load().iter() {
@@ -275,7 +235,7 @@ impl HostBlockEntity for PluginHostState {
         namespace: String,
         key: String,
     ) -> wasmtime::Result<bool> {
-        let entity = block_entity_from_resource(self, &res)?;
+        let entity = self.get(&res)?;
         let pos = entity.get_position();
         if let Some(server) = &self.server {
             for world in server.worlds.load().iter() {
@@ -292,11 +252,11 @@ impl HostBlockEntity for PluginHostState {
     }
 }
 
-fn get_container_from_be<T>(
+fn get_container_from_be(
     state: &mut PluginHostState,
-    res: &Resource<T>,
+    res: &Resource<impl FromResource<Internal = Arc<impl InternalBlockEntity>>>,
 ) -> wasmtime::Result<Resource<ContainerBlockEntity>> {
-    let entity = block_entity_from_resource(state, &Resource::new_own(res.rep()))?;
+    let entity = state.get(res)?.clone();
     let provider = entity.clone();
     entity.get_inventory().map_or_else(
         || Err(wasmtime::Error::msg("Block entity inventory not available")),
@@ -359,15 +319,11 @@ impl HostContainerBlockEntity for PluginHostState {
         slot: u32,
         stack_res: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
-        let inventory = self.get(&res)?.inventory.clone();
-
         let stack = match stack_res {
-            Some(res) => {
-                let lock = self.get(&res)?;
-                lock.lock().await.clone()
-            }
+            Some(res) => self.take(res)?.lock().await.clone(),
             None => pumpkin_data::item_stack::ItemStack::EMPTY.clone(),
         };
+        let inventory = self.get(&res)?.inventory.clone();
 
         inventory.set_stack(slot as usize, stack);
         Ok(())
@@ -407,92 +363,41 @@ impl HostCommandBlockEntity for PluginHostState {
     }
 
     async fn last_output(&mut self, res: Resource<CommandBlockEntity>) -> wasmtime::Result<String> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        entity
-            .as_any()
-            .downcast_ref::<InternalCommandBlockEntity>()
-            .map_or_else(
-                || Err(wasmtime::Error::msg("Not a command block entity")),
-                |cmd| {
-                    Ok(cmd
-                        .last_output
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .clone())
-                },
-            )
+        Ok(self
+            .get(&res)?
+            .last_output
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone())
     }
 
     async fn track_output(&mut self, res: Resource<CommandBlockEntity>) -> wasmtime::Result<bool> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        entity
-            .as_any()
-            .downcast_ref::<InternalCommandBlockEntity>()
-            .map_or_else(
-                || Err(wasmtime::Error::msg("Not a command block entity")),
-                |cmd| Ok(cmd.track_output.load(std::sync::atomic::Ordering::Relaxed)),
-            )
+        Ok(self.get(&res)?.track_output.load(Ordering::Relaxed))
     }
 
     async fn success_count(&mut self, res: Resource<CommandBlockEntity>) -> wasmtime::Result<u32> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        entity
-            .as_any()
-            .downcast_ref::<InternalCommandBlockEntity>()
-            .map_or_else(
-                || Err(wasmtime::Error::msg("Not a command block entity")),
-                |cmd| Ok(cmd.success_count.load(std::sync::atomic::Ordering::Relaxed)),
-            )
+        Ok(self.get(&res)?.success_count.load(Ordering::Relaxed))
     }
 
     async fn command(&mut self, res: Resource<CommandBlockEntity>) -> wasmtime::Result<String> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        entity
-            .as_any()
-            .downcast_ref::<InternalCommandBlockEntity>()
-            .map_or_else(
-                || Err(wasmtime::Error::msg("Not a command block entity")),
-                |cmd| {
-                    Ok(cmd
-                        .command
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .clone())
-                },
-            )
+        Ok(self
+            .get(&res)?
+            .command
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone())
     }
 
     async fn auto(&mut self, res: Resource<CommandBlockEntity>) -> wasmtime::Result<bool> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        entity
-            .as_any()
-            .downcast_ref::<InternalCommandBlockEntity>()
-            .map_or_else(
-                || Err(wasmtime::Error::msg("Not a command block entity")),
-                |cmd| Ok(cmd.auto.load(std::sync::atomic::Ordering::Relaxed)),
-            )
+        Ok(self.get(&res)?.auto.load(Ordering::Relaxed))
     }
 
     async fn condition_met(&mut self, res: Resource<CommandBlockEntity>) -> wasmtime::Result<bool> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        entity
-            .as_any()
-            .downcast_ref::<InternalCommandBlockEntity>()
-            .map_or_else(
-                || Err(wasmtime::Error::msg("Not a command block entity")),
-                |cmd| Ok(cmd.condition_met.load(std::sync::atomic::Ordering::Relaxed)),
-            )
+        Ok(self.get(&res)?.condition_met.load(Ordering::Relaxed))
     }
 
     async fn powered(&mut self, res: Resource<CommandBlockEntity>) -> wasmtime::Result<bool> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        entity
-            .as_any()
-            .downcast_ref::<InternalCommandBlockEntity>()
-            .map_or_else(
-                || Err(wasmtime::Error::msg("Not a command block entity")),
-                |cmd| Ok(cmd.powered.load(std::sync::atomic::Ordering::Relaxed)),
-            )
+        Ok(self.get(&res)?.powered.load(Ordering::Relaxed))
     }
 
     async fn drop(&mut self, rep: Resource<CommandBlockEntity>) -> wasmtime::Result<()> {
@@ -512,14 +417,7 @@ impl HostSignBlockEntity for PluginHostState {
         &mut self,
         res: Resource<SignBlockEntity>,
     ) -> wasmtime::Result<SignText> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        entity
-            .as_any()
-            .downcast_ref::<InternalSignBlockEntity>()
-            .map_or_else(
-                || Err(wasmtime::Error::msg("Not a sign block entity")),
-                |sign| Ok(to_wasm_sign_text(&sign.front_text)),
-            )
+        Ok(to_wasm_sign_text(&self.get(&res)?.front_text))
     }
 
     async fn set_front_text(
@@ -527,49 +425,32 @@ impl HostSignBlockEntity for PluginHostState {
         res: Resource<SignBlockEntity>,
         text: SignText,
     ) -> wasmtime::Result<()> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        entity
-            .as_any()
-            .downcast_ref::<InternalSignBlockEntity>()
-            .map_or_else(
-                || Err(wasmtime::Error::msg("Not a sign block entity")),
-                |sign| {
-                    let new_text = from_wasm_sign_text(text);
-                    sign.front_text.has_glowing_text.store(
-                        new_text
-                            .has_glowing_text
-                            .load(std::sync::atomic::Ordering::Relaxed),
-                        std::sync::atomic::Ordering::Relaxed,
-                    );
-                    sign.front_text.set_color(new_text.get_color());
-                    (*sign
-                        .front_text
-                        .messages
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner))
-                    .clone_from(
-                        &new_text
-                            .messages
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner),
-                    );
-                    Ok(())
-                },
-            )
+        let sign = self.get(&res)?;
+        let new_text = from_wasm_sign_text(text);
+        sign.front_text.has_glowing_text.store(
+            new_text.has_glowing_text.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+        sign.front_text.set_color(new_text.get_color());
+        (*sign
+            .front_text
+            .messages
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner))
+        .clone_from(
+            &new_text
+                .messages
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        Ok(())
     }
 
     async fn get_back_text(
         &mut self,
         res: Resource<SignBlockEntity>,
     ) -> wasmtime::Result<SignText> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        entity
-            .as_any()
-            .downcast_ref::<InternalSignBlockEntity>()
-            .map_or_else(
-                || Err(wasmtime::Error::msg("Not a sign block entity")),
-                |sign| Ok(to_wasm_sign_text(&sign.back_text)),
-            )
+        Ok(to_wasm_sign_text(&self.get(&res)?.back_text))
     }
 
     async fn set_back_text(
@@ -577,46 +458,29 @@ impl HostSignBlockEntity for PluginHostState {
         res: Resource<SignBlockEntity>,
         text: SignText,
     ) -> wasmtime::Result<()> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        entity
-            .as_any()
-            .downcast_ref::<InternalSignBlockEntity>()
-            .map_or_else(
-                || Err(wasmtime::Error::msg("Not a sign block entity")),
-                |sign| {
-                    let new_text = from_wasm_sign_text(text);
-                    sign.back_text.has_glowing_text.store(
-                        new_text
-                            .has_glowing_text
-                            .load(std::sync::atomic::Ordering::Relaxed),
-                        std::sync::atomic::Ordering::Relaxed,
-                    );
-                    sign.back_text.set_color(new_text.get_color());
-                    (*sign
-                        .back_text
-                        .messages
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner))
-                    .clone_from(
-                        &new_text
-                            .messages
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner),
-                    );
-                    Ok(())
-                },
-            )
+        let sign = self.get(&res)?;
+        let new_text = from_wasm_sign_text(text);
+        sign.back_text.has_glowing_text.store(
+            new_text.has_glowing_text.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+        sign.back_text.set_color(new_text.get_color());
+        (*sign
+            .back_text
+            .messages
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner))
+        .clone_from(
+            &new_text
+                .messages
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        Ok(())
     }
 
     async fn is_waxed(&mut self, res: Resource<SignBlockEntity>) -> wasmtime::Result<bool> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        entity
-            .as_any()
-            .downcast_ref::<InternalSignBlockEntity>()
-            .map_or_else(
-                || Err(wasmtime::Error::msg("Not a sign block entity")),
-                |sign| Ok(sign.is_waxed.load(std::sync::atomic::Ordering::Relaxed)),
-            )
+        Ok(self.get(&res)?.is_waxed.load(Ordering::Relaxed))
     }
 
     async fn set_waxed(
@@ -624,18 +488,8 @@ impl HostSignBlockEntity for PluginHostState {
         res: Resource<SignBlockEntity>,
         waxed: bool,
     ) -> wasmtime::Result<()> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        entity
-            .as_any()
-            .downcast_ref::<InternalSignBlockEntity>()
-            .map_or_else(
-                || Err(wasmtime::Error::msg("Not a sign block entity")),
-                |sign| {
-                    sign.is_waxed
-                        .store(waxed, std::sync::atomic::Ordering::Relaxed);
-                    Ok(())
-                },
-            )
+        self.get(&res)?.is_waxed.store(waxed, Ordering::Relaxed);
+        Ok(())
     }
 
     async fn drop(&mut self, rep: Resource<SignBlockEntity>) -> wasmtime::Result<()> {
@@ -659,28 +513,12 @@ impl HostJukeboxBlockEntity for PluginHostState {
     }
 
     async fn is_playing(&mut self, res: Resource<JukeboxBlockEntity>) -> wasmtime::Result<bool> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        entity
-            .as_any()
-            .downcast_ref::<InternalJukeboxBlockEntity>()
-            .map_or_else(
-                || Err(wasmtime::Error::msg("Not a jukebox block entity")),
-                |jukebox| Ok(jukebox.is_playing()),
-            )
+        Ok(self.get(&res)?.is_playing())
     }
 
     async fn stop_playing(&mut self, res: Resource<JukeboxBlockEntity>) -> wasmtime::Result<()> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        entity
-            .as_any()
-            .downcast_ref::<InternalJukeboxBlockEntity>()
-            .map_or_else(
-                || Err(wasmtime::Error::msg("Not a jukebox block entity")),
-                |jukebox| {
-                    jukebox.stop_playing();
-                    Ok(())
-                },
-            )
+        self.get(&res)?.stop_playing();
+        Ok(())
     }
 
     async fn start_playing(
@@ -688,17 +526,8 @@ impl HostJukeboxBlockEntity for PluginHostState {
         res: Resource<JukeboxBlockEntity>,
         length_in_ticks: u64,
     ) -> wasmtime::Result<()> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        entity
-            .as_any()
-            .downcast_ref::<InternalJukeboxBlockEntity>()
-            .map_or_else(
-                || Err(wasmtime::Error::msg("Not a jukebox block entity")),
-                |jukebox| {
-                    jukebox.start_playing(length_in_ticks);
-                    Ok(())
-                },
-            )
+        self.get(&res)?.start_playing(length_in_ticks);
+        Ok(())
     }
 
     async fn drop(&mut self, rep: Resource<JukeboxBlockEntity>) -> wasmtime::Result<()> {
@@ -722,14 +551,7 @@ impl HostChestBlockEntity for PluginHostState {
     }
 
     async fn viewer_count(&mut self, res: Resource<ChestBlockEntity>) -> wasmtime::Result<u32> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        entity
-            .as_any()
-            .downcast_ref::<InternalChestBlockEntity>()
-            .map_or_else(
-                || Err(wasmtime::Error::msg("Not a chest block entity")),
-                |chest| Ok(chest.get_viewer_count() as u32),
-            )
+        Ok(self.get(&res)?.get_viewer_count() as u32)
     }
 
     async fn drop(&mut self, rep: Resource<ChestBlockEntity>) -> wasmtime::Result<()> {
@@ -749,39 +571,18 @@ impl HostMobSpawnerBlockEntity for PluginHostState {
         &mut self,
         res: Resource<MobSpawnerBlockEntity>,
     ) -> wasmtime::Result<i32> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        entity
-            .as_any()
-            .downcast_ref::<InternalMobSpawnerBlockEntity>()
-            .map_or_else(
-                || Err(wasmtime::Error::msg("Not a mob spawner block entity")),
-                |spawner| Ok(spawner.spawn_count),
-            )
+        Ok(self.get(&res)?.spawn_count)
     }
 
     async fn get_spawn_range(
         &mut self,
         res: Resource<MobSpawnerBlockEntity>,
     ) -> wasmtime::Result<i32> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        entity
-            .as_any()
-            .downcast_ref::<InternalMobSpawnerBlockEntity>()
-            .map_or_else(
-                || Err(wasmtime::Error::msg("Not a mob spawner block entity")),
-                |spawner| Ok(spawner.spawn_range),
-            )
+        Ok(self.get(&res)?.spawn_range)
     }
 
     async fn get_delay(&mut self, res: Resource<MobSpawnerBlockEntity>) -> wasmtime::Result<i32> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        entity
-            .as_any()
-            .downcast_ref::<InternalMobSpawnerBlockEntity>()
-            .map_or_else(
-                || Err(wasmtime::Error::msg("Not a mob spawner block entity")),
-                |spawner| Ok(spawner.delay.load(std::sync::atomic::Ordering::Relaxed)),
-            )
+        Ok(self.get(&res)?.delay.load(Ordering::Relaxed))
     }
 
     async fn drop(&mut self, rep: Resource<MobSpawnerBlockEntity>) -> wasmtime::Result<()> {
@@ -798,14 +599,7 @@ impl HostMapBlockEntity for PluginHostState {
     }
 
     async fn get_map_id(&mut self, res: Resource<MapBlockEntity>) -> wasmtime::Result<i32> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        entity
-            .as_any()
-            .downcast_ref::<InternalMapBlockEntity>()
-            .map_or_else(
-                || Err(wasmtime::Error::msg("Not a map block entity")),
-                |map_be| Ok(map_be.get_map_id()),
-            )
+        Ok(self.get(&res)?.get_map_id())
     }
 
     async fn set_map_id(
@@ -813,22 +607,12 @@ impl HostMapBlockEntity for PluginHostState {
         res: Resource<MapBlockEntity>,
         map_id: i32,
     ) -> wasmtime::Result<()> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        let map_be = entity
-            .as_any()
-            .downcast_ref::<InternalMapBlockEntity>()
-            .ok_or_else(|| wasmtime::Error::msg("Not a map block entity"))?;
-        map_be.set_map_id(map_id);
+        self.get(&res)?.set_map_id(map_id);
         Ok(())
     }
 
     async fn get_colors(&mut self, res: Resource<MapBlockEntity>) -> wasmtime::Result<Vec<u8>> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        let map_be = entity
-            .as_any()
-            .downcast_ref::<InternalMapBlockEntity>()
-            .ok_or_else(|| wasmtime::Error::msg("Not a map block entity"))?;
-        Ok(map_be.get_colors())
+        Ok(self.get(&res)?.get_colors())
     }
 
     async fn set_colors(
@@ -836,12 +620,7 @@ impl HostMapBlockEntity for PluginHostState {
         res: Resource<MapBlockEntity>,
         colors: Vec<u8>,
     ) -> wasmtime::Result<()> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        let map_be = entity
-            .as_any()
-            .downcast_ref::<InternalMapBlockEntity>()
-            .ok_or_else(|| wasmtime::Error::msg("Not a map block entity"))?;
-        map_be.set_colors(&colors);
+        self.get(&res)?.set_colors(&colors);
         Ok(())
     }
 
@@ -852,12 +631,7 @@ impl HostMapBlockEntity for PluginHostState {
         y: u32,
         color: u8,
     ) -> wasmtime::Result<()> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        let map_be = entity
-            .as_any()
-            .downcast_ref::<InternalMapBlockEntity>()
-            .ok_or_else(|| wasmtime::Error::msg("Not a map block entity"))?;
-        map_be.set_pixel(x as usize, y as usize, color);
+        self.get(&res)?.set_pixel(x as usize, y as usize, color);
         Ok(())
     }
 
@@ -867,25 +641,15 @@ impl HostMapBlockEntity for PluginHostState {
         x: u32,
         y: u32,
     ) -> wasmtime::Result<u8> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        let map_be = entity
-            .as_any()
-            .downcast_ref::<InternalMapBlockEntity>()
-            .ok_or_else(|| wasmtime::Error::msg("Not a map block entity"))?;
-        Ok(map_be.get_pixel(x as usize, y as usize))
+        Ok(self.get(&res)?.get_pixel(x as usize, y as usize))
     }
 
     async fn update(&mut self, res: Resource<MapBlockEntity>) -> wasmtime::Result<()> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        let map_be = entity
-            .as_any()
-            .downcast_ref::<InternalMapBlockEntity>()
-            .ok_or_else(|| wasmtime::Error::msg("Not a map block entity"))?;
         let server = self
             .server
             .as_ref()
             .ok_or_else(|| wasmtime::Error::msg("Server context not set"))?;
-        map_be.broadcast_map_data(server);
+        self.get(&res)?.broadcast_map_data(server);
         Ok(())
     }
 
@@ -894,13 +658,8 @@ impl HostMapBlockEntity for PluginHostState {
         res: Resource<MapBlockEntity>,
         frame_data: Vec<u8>,
     ) -> wasmtime::Result<()> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        let map_be = entity
-            .as_any()
-            .downcast_ref::<InternalMapBlockEntity>()
-            .ok_or_else(|| wasmtime::Error::msg("Not a map block entity"))?;
         let server_opt = self.server.as_deref();
-        map_be.stream_frame(&frame_data, server_opt);
+        self.get(&res)?.stream_frame(&frame_data, server_opt);
         Ok(())
     }
 
@@ -921,14 +680,7 @@ impl HostHangingSignBlockEntity for PluginHostState {
         &mut self,
         res: Resource<HangingSignBlockEntity>,
     ) -> wasmtime::Result<SignText> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        entity
-            .as_any()
-            .downcast_ref::<InternalHangingSignBlockEntity>()
-            .map_or_else(
-                || Err(wasmtime::Error::msg("Not a hanging sign block entity")),
-                |sign| Ok(to_wasm_sign_text(&sign.front_text)),
-            )
+        Ok(to_wasm_sign_text(&self.get(&res)?.front_text))
     }
 
     async fn set_front_text(
@@ -936,49 +688,32 @@ impl HostHangingSignBlockEntity for PluginHostState {
         res: Resource<HangingSignBlockEntity>,
         text: SignText,
     ) -> wasmtime::Result<()> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        entity
-            .as_any()
-            .downcast_ref::<InternalHangingSignBlockEntity>()
-            .map_or_else(
-                || Err(wasmtime::Error::msg("Not a hanging sign block entity")),
-                |sign| {
-                    let new_text = from_wasm_sign_text(text);
-                    sign.front_text.has_glowing_text.store(
-                        new_text
-                            .has_glowing_text
-                            .load(std::sync::atomic::Ordering::Relaxed),
-                        std::sync::atomic::Ordering::Relaxed,
-                    );
-                    sign.front_text.set_color(new_text.get_color());
-                    (*sign
-                        .front_text
-                        .messages
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner))
-                    .clone_from(
-                        &new_text
-                            .messages
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner),
-                    );
-                    Ok(())
-                },
-            )
+        let sign = self.get(&res)?;
+        let new_text = from_wasm_sign_text(text);
+        sign.front_text.has_glowing_text.store(
+            new_text.has_glowing_text.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+        sign.front_text.set_color(new_text.get_color());
+        (*sign
+            .front_text
+            .messages
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner))
+        .clone_from(
+            &new_text
+                .messages
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        Ok(())
     }
 
     async fn get_back_text(
         &mut self,
         res: Resource<HangingSignBlockEntity>,
     ) -> wasmtime::Result<SignText> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        entity
-            .as_any()
-            .downcast_ref::<InternalHangingSignBlockEntity>()
-            .map_or_else(
-                || Err(wasmtime::Error::msg("Not a hanging sign block entity")),
-                |sign| Ok(to_wasm_sign_text(&sign.back_text)),
-            )
+        Ok(to_wasm_sign_text(&self.get(&res)?.back_text))
     }
 
     async fn set_back_text(
@@ -986,46 +721,29 @@ impl HostHangingSignBlockEntity for PluginHostState {
         res: Resource<HangingSignBlockEntity>,
         text: SignText,
     ) -> wasmtime::Result<()> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        entity
-            .as_any()
-            .downcast_ref::<InternalHangingSignBlockEntity>()
-            .map_or_else(
-                || Err(wasmtime::Error::msg("Not a hanging sign block entity")),
-                |sign| {
-                    let new_text = from_wasm_sign_text(text);
-                    sign.back_text.has_glowing_text.store(
-                        new_text
-                            .has_glowing_text
-                            .load(std::sync::atomic::Ordering::Relaxed),
-                        std::sync::atomic::Ordering::Relaxed,
-                    );
-                    sign.back_text.set_color(new_text.get_color());
-                    (*sign
-                        .back_text
-                        .messages
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner))
-                    .clone_from(
-                        &new_text
-                            .messages
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner),
-                    );
-                    Ok(())
-                },
-            )
+        let sign = self.get(&res)?;
+        let new_text = from_wasm_sign_text(text);
+        sign.back_text.has_glowing_text.store(
+            new_text.has_glowing_text.load(Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+        sign.back_text.set_color(new_text.get_color());
+        (*sign
+            .back_text
+            .messages
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner))
+        .clone_from(
+            &new_text
+                .messages
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        Ok(())
     }
 
     async fn is_waxed(&mut self, res: Resource<HangingSignBlockEntity>) -> wasmtime::Result<bool> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        entity
-            .as_any()
-            .downcast_ref::<InternalHangingSignBlockEntity>()
-            .map_or_else(
-                || Err(wasmtime::Error::msg("Not a hanging sign block entity")),
-                |sign| Ok(sign.is_waxed.load(std::sync::atomic::Ordering::Relaxed)),
-            )
+        Ok(self.get(&res)?.is_waxed.load(Ordering::Relaxed))
     }
 
     async fn set_waxed(
@@ -1033,18 +751,8 @@ impl HostHangingSignBlockEntity for PluginHostState {
         res: Resource<HangingSignBlockEntity>,
         waxed: bool,
     ) -> wasmtime::Result<()> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        entity
-            .as_any()
-            .downcast_ref::<InternalHangingSignBlockEntity>()
-            .map_or_else(
-                || Err(wasmtime::Error::msg("Not a hanging sign block entity")),
-                |sign| {
-                    sign.is_waxed
-                        .store(waxed, std::sync::atomic::Ordering::Relaxed);
-                    Ok(())
-                },
-            )
+        self.get(&res)?.is_waxed.store(waxed, Ordering::Relaxed);
+        Ok(())
     }
 
     async fn drop(&mut self, rep: Resource<HangingSignBlockEntity>) -> wasmtime::Result<()> {
@@ -1071,14 +779,7 @@ impl HostTrappedChestBlockEntity for PluginHostState {
         &mut self,
         res: Resource<TrappedChestBlockEntity>,
     ) -> wasmtime::Result<u32> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        entity
-            .as_any()
-            .downcast_ref::<crate::block::entities::trapped_chest::TrappedChestBlockEntity>()
-            .map_or_else(
-                || Err(wasmtime::Error::msg("Not a trapped chest block entity")),
-                |chest| Ok(chest.get_viewer_count() as u32),
-            )
+        Ok(self.get(&res)?.get_viewer_count() as u32)
     }
 
     async fn drop(&mut self, rep: Resource<TrappedChestBlockEntity>) -> wasmtime::Result<()> {
@@ -1148,55 +849,35 @@ macro_rules! impl_cooking_host_block_entity {
                 &mut self,
                 res: Resource<$resource_name>,
             ) -> wasmtime::Result<u16> {
-                let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-                Ok(entity
-                    .as_any()
-                    .downcast_ref::<$internal_type>()
-                    .map_or(0, |b| b.get_cooking_time_spent()))
+                Ok(self.get(&res)?.get_cooking_time_spent())
             }
 
             async fn get_cooking_total_time(
                 &mut self,
                 res: Resource<$resource_name>,
             ) -> wasmtime::Result<u16> {
-                let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-                Ok(entity
-                    .as_any()
-                    .downcast_ref::<$internal_type>()
-                    .map_or(0, |b| b.get_cooking_total_time()))
+                Ok(self.get(&res)?.get_cooking_total_time())
             }
 
             async fn get_lit_time_remaining(
                 &mut self,
                 res: Resource<$resource_name>,
             ) -> wasmtime::Result<u16> {
-                let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-                Ok(entity
-                    .as_any()
-                    .downcast_ref::<$internal_type>()
-                    .map_or(0, |b| b.get_lit_time_remaining()))
+                Ok(self.get(&res)?.get_lit_time_remaining())
             }
 
             async fn get_lit_total_time(
                 &mut self,
                 res: Resource<$resource_name>,
             ) -> wasmtime::Result<u16> {
-                let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-                Ok(entity
-                    .as_any()
-                    .downcast_ref::<$internal_type>()
-                    .map_or(0, |b| b.get_lit_total_time()))
+                Ok(self.get(&res)?.get_lit_total_time())
             }
 
             async fn is_burning(
                 &mut self,
                 res: Resource<$resource_name>,
             ) -> wasmtime::Result<bool> {
-                let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-                Ok(entity
-                    .as_any()
-                    .downcast_ref::<$internal_type>()
-                    .is_some_and(|b| b.is_burning()))
+                Ok(self.get(&res)?.is_burning())
             }
 
             async fn drop(&mut self, rep: Resource<$resource_name>) -> wasmtime::Result<()> {
@@ -1237,11 +918,12 @@ impl HostBannerBlockEntity for PluginHostState {
         &mut self,
         res: Resource<BannerBlockEntity>,
     ) -> wasmtime::Result<Option<String>> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalBannerBlockEntity>()
-            .and_then(|b| b.custom_name.try_lock().ok().and_then(|g| g.clone())))
+        Ok(self
+            .get(&res)?
+            .custom_name
+            .try_lock()
+            .ok()
+            .and_then(|g| g.clone()))
     }
 
     async fn drop(&mut self, rep: Resource<BannerBlockEntity>) -> wasmtime::Result<()> {
@@ -1292,35 +974,18 @@ impl HostBeaconBlockEntity for PluginHostState {
         &mut self,
         res: Resource<BeaconBlockEntity>,
     ) -> wasmtime::Result<i32> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalBeaconBlockEntity>()
-            .map_or(-1, |b| {
-                b.primary_effect.load(std::sync::atomic::Ordering::Relaxed)
-            }))
+        Ok(self.get(&res)?.primary_effect.load(Ordering::Relaxed))
     }
 
     async fn get_secondary_effect(
         &mut self,
         res: Resource<BeaconBlockEntity>,
     ) -> wasmtime::Result<i32> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalBeaconBlockEntity>()
-            .map_or(-1, |b| {
-                b.secondary_effect
-                    .load(std::sync::atomic::Ordering::Relaxed)
-            }))
+        Ok(self.get(&res)?.secondary_effect.load(Ordering::Relaxed))
     }
 
     async fn get_levels(&mut self, res: Resource<BeaconBlockEntity>) -> wasmtime::Result<i32> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalBeaconBlockEntity>()
-            .map_or(0, |b| b.levels.load(std::sync::atomic::Ordering::Relaxed)))
+        Ok(self.get(&res)?.levels.load(Ordering::Relaxed))
     }
 
     async fn drop(&mut self, rep: Resource<BeaconBlockEntity>) -> wasmtime::Result<()> {
@@ -1337,17 +1002,13 @@ impl HostBeehiveBlockEntity for PluginHostState {
     }
 
     async fn get_bee_count(&mut self, res: Resource<BeehiveBlockEntity>) -> wasmtime::Result<u32> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalBeehiveBlockEntity>()
-            .map_or(0, |b| {
-                b.bees
-                    .try_lock()
-                    .ok()
-                    .and_then(|g| g.as_ref().map(|v| v.len() as u32))
-                    .unwrap_or(0)
-            }))
+        Ok(self
+            .get(&res)?
+            .bees
+            .try_lock()
+            .ok()
+            .and_then(|g| g.as_ref().map(|v| v.len() as u32))
+            .unwrap_or(0))
     }
 
     async fn drop(&mut self, rep: Resource<BeehiveBlockEntity>) -> wasmtime::Result<()> {
@@ -1364,19 +1025,11 @@ impl HostBellBlockEntity for PluginHostState {
     }
 
     async fn is_ringing(&mut self, res: Resource<BellBlockEntity>) -> wasmtime::Result<bool> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalBellBlockEntity>()
-            .is_some_and(|b| b.ringing.load()))
+        Ok(self.get(&res)?.ringing.load())
     }
 
     async fn get_ring_ticks(&mut self, res: Resource<BellBlockEntity>) -> wasmtime::Result<i32> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalBellBlockEntity>()
-            .map_or(0, |b| b.ring_ticks.load()))
+        Ok(self.get(&res)?.ring_ticks.load())
     }
 
     async fn drop(&mut self, rep: Resource<BellBlockEntity>) -> wasmtime::Result<()> {
@@ -1403,21 +1056,11 @@ impl HostBrewingStandBlockEntity for PluginHostState {
         &mut self,
         res: Resource<BrewingStandBlockEntity>,
     ) -> wasmtime::Result<i32> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalBrewingStandBlockEntity>()
-            .map_or(0, |b| {
-                b.brew_time.load(std::sync::atomic::Ordering::Relaxed)
-            }))
+        Ok(self.get(&res)?.brew_time.load(Ordering::Relaxed))
     }
 
     async fn get_fuel(&mut self, res: Resource<BrewingStandBlockEntity>) -> wasmtime::Result<i32> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalBrewingStandBlockEntity>()
-            .map_or(0, |b| b.fuel.load(std::sync::atomic::Ordering::Relaxed)))
+        Ok(self.get(&res)?.fuel.load(Ordering::Relaxed))
     }
 
     async fn drop(&mut self, rep: Resource<BrewingStandBlockEntity>) -> wasmtime::Result<()> {
@@ -1444,14 +1087,7 @@ impl HostChiseledBookshelfBlockEntity for PluginHostState {
         &mut self,
         res: Resource<ChiseledBookshelfBlockEntity>,
     ) -> wasmtime::Result<i8> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalChiseledBookshelfBlockEntity>()
-            .map_or(-1, |b| {
-                b.last_interacted_slot
-                    .load(std::sync::atomic::Ordering::Relaxed)
-            }))
+        Ok(self.get(&res)?.last_interacted_slot.load(Ordering::Relaxed))
     }
 
     async fn drop(&mut self, rep: Resource<ChiseledBookshelfBlockEntity>) -> wasmtime::Result<()> {
@@ -1471,13 +1107,7 @@ impl HostComparatorBlockEntity for PluginHostState {
         &mut self,
         res: Resource<ComparatorBlockEntity>,
     ) -> wasmtime::Result<u8> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalComparatorBlockEntity>()
-            .map_or(0, |b| {
-                b.output_signal.load(std::sync::atomic::Ordering::Relaxed)
-            }))
+        Ok(self.get(&res)?.output_signal.load(Ordering::Relaxed))
     }
 
     async fn drop(&mut self, rep: Resource<ComparatorBlockEntity>) -> wasmtime::Result<()> {
@@ -1504,22 +1134,14 @@ impl HostCrafterBlockEntity for PluginHostState {
         &mut self,
         res: Resource<CrafterBlockEntity>,
     ) -> wasmtime::Result<i32> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalCrafterBlockEntity>()
-            .map_or(0, |b| {
-                b.crafting_ticks_remaining
-                    .load(std::sync::atomic::Ordering::Relaxed)
-            }))
+        Ok(self
+            .get(&res)?
+            .crafting_ticks_remaining
+            .load(Ordering::Relaxed))
     }
 
     async fn is_triggered(&mut self, res: Resource<CrafterBlockEntity>) -> wasmtime::Result<bool> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalCrafterBlockEntity>()
-            .is_some_and(|b| b.triggered.load(std::sync::atomic::Ordering::Relaxed)))
+        Ok(self.get(&res)?.triggered.load(Ordering::Relaxed))
     }
 
     async fn drop(&mut self, rep: Resource<CrafterBlockEntity>) -> wasmtime::Result<()> {
@@ -1539,11 +1161,7 @@ impl HostCreakingHeartBlockEntity for PluginHostState {
         &mut self,
         res: Resource<CreakingHeartBlockEntity>,
     ) -> wasmtime::Result<Option<String>> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalCreakingHeartBlockEntity>()
-            .and_then(|b| b.creaking_uuid.load().map(|u| u.to_string())))
+        Ok(self.get(&res)?.creaking_uuid.load().map(|u| u.to_string()))
     }
 
     async fn drop(&mut self, rep: Resource<CreakingHeartBlockEntity>) -> wasmtime::Result<()> {
@@ -1560,22 +1178,14 @@ impl HostEndGatewayBlockEntity for PluginHostState {
     }
 
     async fn get_age(&mut self, res: Resource<EndGatewayBlockEntity>) -> wasmtime::Result<i64> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalEndGatewayBlockEntity>()
-            .map_or(0, |b| b.age.try_lock().ok().map_or(0, |g| *g)))
+        Ok(self.get(&res)?.age.try_lock().ok().map_or(0, |g| *g))
     }
 
     async fn is_exact_teleport(
         &mut self,
         res: Resource<EndGatewayBlockEntity>,
     ) -> wasmtime::Result<bool> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalEndGatewayBlockEntity>()
-            .is_some_and(|b| b.exact_teleport.try_lock().is_ok_and(|g| *g)))
+        Ok(self.get(&res)?.exact_teleport.try_lock().is_ok_and(|g| *g))
     }
 
     async fn drop(&mut self, rep: Resource<EndGatewayBlockEntity>) -> wasmtime::Result<()> {
@@ -1646,13 +1256,7 @@ impl HostHopperBlockEntity for PluginHostState {
     }
 
     async fn get_cooldown(&mut self, res: Resource<HopperBlockEntity>) -> wasmtime::Result<i32> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalHopperBlockEntity>()
-            .map_or(0, |b| {
-                b.cooldown_time.load(std::sync::atomic::Ordering::Relaxed)
-            }))
+        Ok(self.get(&res)?.cooldown_time.load(Ordering::Relaxed))
     }
 
     async fn drop(&mut self, rep: Resource<HopperBlockEntity>) -> wasmtime::Result<()> {
@@ -1669,86 +1273,52 @@ impl HostJigsawBlockEntity for PluginHostState {
     }
 
     async fn get_name(&mut self, res: Resource<JigsawBlockEntity>) -> wasmtime::Result<String> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalJigsawBlockEntity>()
-            .map_or_else(String::new, |b| {
-                b.name
-                    .try_lock()
-                    .ok()
-                    .map_or_else(String::new, |g| g.clone())
-            }))
+        Ok(self
+            .get(&res)?
+            .name
+            .try_lock()
+            .map_or_default(|g| g.clone()))
     }
 
     async fn get_target(&mut self, res: Resource<JigsawBlockEntity>) -> wasmtime::Result<String> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalJigsawBlockEntity>()
-            .map_or_else(String::new, |b| {
-                b.target
-                    .try_lock()
-                    .ok()
-                    .map_or_else(String::new, |g| g.clone())
-            }))
+        Ok(self
+            .get(&res)?
+            .target
+            .try_lock()
+            .map_or_default(|g| g.clone()))
     }
 
     async fn get_pool(&mut self, res: Resource<JigsawBlockEntity>) -> wasmtime::Result<String> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalJigsawBlockEntity>()
-            .map_or_else(String::new, |b| {
-                b.pool
-                    .try_lock()
-                    .ok()
-                    .map_or_else(String::new, |g| g.clone())
-            }))
+        Ok(self
+            .get(&res)?
+            .pool
+            .try_lock()
+            .map_or_default(|g| g.clone()))
     }
 
     async fn get_final_state(
         &mut self,
         res: Resource<JigsawBlockEntity>,
     ) -> wasmtime::Result<String> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalJigsawBlockEntity>()
-            .map_or_else(String::new, |b| {
-                b.final_state
-                    .try_lock()
-                    .ok()
-                    .map_or_else(String::new, |g| g.clone())
-            }))
+        Ok(self
+            .get(&res)?
+            .final_state
+            .try_lock()
+            .map_or_default(|g| g.clone()))
     }
 
     async fn get_selection_priority(
         &mut self,
         res: Resource<JigsawBlockEntity>,
     ) -> wasmtime::Result<i32> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalJigsawBlockEntity>()
-            .map_or(0, |b| {
-                b.selection_priority
-                    .load(std::sync::atomic::Ordering::Relaxed)
-            }))
+        Ok(self.get(&res)?.selection_priority.load(Ordering::Relaxed))
     }
 
     async fn get_placement_priority(
         &mut self,
         res: Resource<JigsawBlockEntity>,
     ) -> wasmtime::Result<i32> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalJigsawBlockEntity>()
-            .map_or(0, |b| {
-                b.placement_priority
-                    .load(std::sync::atomic::Ordering::Relaxed)
-            }))
+        Ok(self.get(&res)?.placement_priority.load(Ordering::Relaxed))
     }
 
     async fn drop(&mut self, rep: Resource<JigsawBlockEntity>) -> wasmtime::Result<()> {
@@ -1772,13 +1342,7 @@ impl HostLecternBlockEntity for PluginHostState {
     }
 
     async fn get_page(&mut self, res: Resource<LecternBlockEntity>) -> wasmtime::Result<u32> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalLecternBlockEntity>()
-            .map_or(0, |b| {
-                b.page.load(std::sync::atomic::Ordering::Relaxed) as u32
-            }))
+        Ok(self.get(&res)?.page.load(Ordering::Relaxed) as u32)
     }
 
     async fn drop(&mut self, rep: Resource<LecternBlockEntity>) -> wasmtime::Result<()> {
@@ -1795,27 +1359,15 @@ impl HostPistonBlockEntity for PluginHostState {
     }
 
     async fn get_progress(&mut self, res: Resource<PistonBlockEntity>) -> wasmtime::Result<f32> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalPistonBlockEntity>()
-            .map_or(0.0, |b| b.current_progress.load()))
+        Ok(self.get(&res)?.current_progress.load())
     }
 
     async fn is_extending(&mut self, res: Resource<PistonBlockEntity>) -> wasmtime::Result<bool> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalPistonBlockEntity>()
-            .is_some_and(|b| b.extending))
+        Ok(self.get(&res)?.extending)
     }
 
     async fn is_source(&mut self, res: Resource<PistonBlockEntity>) -> wasmtime::Result<bool> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalPistonBlockEntity>()
-            .is_some_and(|b| b.source))
+        Ok(self.get(&res)?.source)
     }
 
     async fn drop(&mut self, rep: Resource<PistonBlockEntity>) -> wasmtime::Result<()> {
@@ -1835,11 +1387,7 @@ impl HostSculkShriekerBlockEntity for PluginHostState {
         &mut self,
         res: Resource<SculkShriekerBlockEntity>,
     ) -> wasmtime::Result<i32> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalSculkShriekerBlockEntity>()
-            .map_or(0, |b| b.warning_level.try_lock().ok().map_or(0, |g| *g)))
+        Ok(self.get(&res)?.warning_level.try_lock().map_or(0, |g| *g))
     }
 
     async fn drop(&mut self, rep: Resource<SculkShriekerBlockEntity>) -> wasmtime::Result<()> {
@@ -1859,11 +1407,12 @@ impl HostSkullBlockEntity for PluginHostState {
         &mut self,
         res: Resource<SkullBlockEntity>,
     ) -> wasmtime::Result<Option<String>> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalSkullBlockEntity>()
-            .and_then(|b| b.note_block_sound.try_lock().ok().and_then(|g| g.clone())))
+        Ok(self
+            .get(&res)?
+            .note_block_sound
+            .try_lock()
+            .ok()
+            .and_then(|g| g.clone()))
     }
 
     async fn drop(&mut self, rep: Resource<SkullBlockEntity>) -> wasmtime::Result<()> {
@@ -1883,70 +1432,47 @@ impl HostStructureBlockBlockEntity for PluginHostState {
         &mut self,
         res: Resource<StructureBlockBlockEntity>,
     ) -> wasmtime::Result<String> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalStructureBlockBlockEntity>()
-            .map_or_else(String::new, |b| {
-                b.name
-                    .try_lock()
-                    .ok()
-                    .map_or_else(String::new, |g| g.clone())
-            }))
+        Ok(self
+            .get(&res)?
+            .name
+            .try_lock()
+            .map_or_default(|g| g.clone()))
     }
 
     async fn get_author(
         &mut self,
         res: Resource<StructureBlockBlockEntity>,
     ) -> wasmtime::Result<String> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalStructureBlockBlockEntity>()
-            .map_or_else(String::new, |b| {
-                b.author
-                    .try_lock()
-                    .ok()
-                    .map_or_else(String::new, |g| g.clone())
-            }))
+        Ok(self
+            .get(&res)?
+            .author
+            .try_lock()
+            .map_or_default(|g| g.clone()))
     }
 
     async fn get_mode(
         &mut self,
         res: Resource<StructureBlockBlockEntity>,
     ) -> wasmtime::Result<String> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalStructureBlockBlockEntity>()
-            .map_or_else(String::new, |b| {
-                b.mode
-                    .try_lock()
-                    .ok()
-                    .map_or_else(String::new, |g| g.clone())
-            }))
+        Ok(self
+            .get(&res)?
+            .mode
+            .try_lock()
+            .map_or_default(|g| g.clone()))
     }
 
     async fn get_integrity(
         &mut self,
         res: Resource<StructureBlockBlockEntity>,
     ) -> wasmtime::Result<f32> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalStructureBlockBlockEntity>()
-            .map_or(1.0, |b| b.integrity.try_lock().ok().map_or(1.0, |g| *g)))
+        Ok(self.get(&res)?.integrity.try_lock().map_or(1.0, |g| *g))
     }
 
     async fn get_seed(
         &mut self,
         res: Resource<StructureBlockBlockEntity>,
     ) -> wasmtime::Result<i64> {
-        let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        Ok(entity
-            .as_any()
-            .downcast_ref::<InternalStructureBlockBlockEntity>()
-            .map_or(0, |b| b.seed.try_lock().ok().map_or(0, |g| *g)))
+        Ok(self.get(&res)?.seed.try_lock().map_or(0, |g| *g))
     }
 
     async fn drop(&mut self, rep: Resource<StructureBlockBlockEntity>) -> wasmtime::Result<()> {
