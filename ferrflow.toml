@@ -1,0 +1,55 @@
+"$schema" = "https://ferrflow.com/schema/ferrflow.json"
+
+[workspace]
+tagTemplate = "{name}@v{version}"
+versioning = "semver"
+releaseCommitMode = "commit"
+releaseCommitBody = "summary"
+updateLockfiles = true
+updateDependents = true
+
+[workspace.changelog]
+groupByScope = true
+includeCommitLinks = true
+includeCompareLink = true
+
+[workspace.changelog.sections]
+feat = "Features"
+fix = "Bug Fixes"
+perf = "Performance"
+security = "Security"
+refactor = "Code Refactoring"
+docs = "Documentation"
+
+[workspace.hooks]
+preBump = "cargo fmt --all -- --check"
+# Stamps the supported protocol versions onto the workspace version as build
+# metadata. The hook receives FERRFLOW_NEW_VERSION, along with ten other
+# FERRFLOW_* variables, in its environment.
+postBump = "sh scripts/stamp-game-versions.sh"
+onFailure = "abort"
+
+# The 13 crates that inherit workspace.package.version release together as
+# `pumpkin`. The two plugin crates carry their own version because plugin
+# authors depend on them directly.
+[[package]]
+name = "pumpkin"
+path = "."
+changelog = "CHANGELOG.md"
+versionedFiles = [{ path = "Cargo.toml", format = "toml" }]
+
+[[package]]
+name = "pumpkin-plugin-api"
+path = "crates/pumpkin-plugin-api"
+changelog = "crates/pumpkin-plugin-api/CHANGELOG.md"
+versionedFiles = [
+  { path = "crates/pumpkin-plugin-api/Cargo.toml", format = "toml" },
+]
+
+[[package]]
+name = "pumpkin-plugin-utils"
+path = "crates/pumpkin-plugin-utils"
+changelog = "crates/pumpkin-plugin-utils/CHANGELOG.md"
+versionedFiles = [
+  { path = "crates/pumpkin-plugin-utils/Cargo.toml", format = "toml" },
+]
