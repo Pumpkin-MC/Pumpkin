@@ -1137,6 +1137,21 @@ impl Server {
         let worlds = self.worlds.load();
         let handle = self.runtime.clone();
 
+        // Vanilla `MinecraftServer.tickChildren`: `tickCount++` then
+        // `forceGameTimeSynchronization` then `ServerLevel.tick` -> `tickTime()`.
+        // Pumpkin increments `tick_count` after the tick (`update_tick_times`), so
+        // `tick_count + 1` is vanilla's `tickCount` for this tick.
+        if self.tick_count.load(Ordering::Relaxed).wrapping_add(1) % 20 == 0 {
+            // Vanilla `MinecraftServer.forceGameTimeSynchronization`: one packet,
+            // overworld `getGameTime()` only.
+            if let Some(overworld) = worlds
+                .iter()
+                .find(|world| world.dimension.minecraft_name == Dimension::OVERWORLD.minecraft_name)
+            {
+                overworld.force_game_time_synchronization();
+            }
+        }
+
         worlds.par_iter().for_each(|world| {
             let _guard = handle.enter();
             world.tick(self);
