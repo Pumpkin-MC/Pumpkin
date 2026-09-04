@@ -270,26 +270,29 @@ impl<P: LightProvider> LightPropagator<P> {
                 continue;
             }
 
-            let from_id = {
-                let rel_x = (pos.0.x >> 4) - cache_x;
-                let rel_z = (pos.0.z >> 4) - cache_z;
-                if rel_x < 0 || rel_x >= cache_size || rel_z < 0 || rel_z >= cache_size {
-                    BlockStateId::AIR
-                } else {
-                    let idx = (rel_x * cache_size + rel_z) as usize;
-                    Self::neighbor_state(
-                        &cache.chunks[idx],
-                        LightCell {
-                            y: pos.0.y,
-                            min_y,
-                            section_idx: ((pos.0.y - min_y) >> 4) as usize,
-                            local_x: (pos.0.x & 15) as usize,
-                            local_y: (pos.0.y & 15) as usize,
-                            local_z: (pos.0.z & 15) as usize,
-                        },
-                    )
-                }
-            };
+            let py = pos.0.y;
+            let rel_x = (pos.0.x >> 4) - cache_x;
+            let rel_z = (pos.0.z >> 4) - cache_z;
+            if py < min_y
+                || py >= max_y
+                || rel_x < 0
+                || rel_x >= cache_size
+                || rel_z < 0
+                || rel_z >= cache_size
+            {
+                continue;
+            }
+            let from_id = Self::neighbor_state(
+                &cache.chunks[(rel_x * cache_size + rel_z) as usize],
+                LightCell {
+                    y: py,
+                    min_y,
+                    section_idx: ((py - min_y) >> 4) as usize,
+                    local_x: (pos.0.x & 15) as usize,
+                    local_y: (py & 15) as usize,
+                    local_z: (pos.0.z & 15) as usize,
+                },
+            );
 
             for dir in BlockDirection::all() {
                 if let Some(skip_dir) = entry.skip_direction
