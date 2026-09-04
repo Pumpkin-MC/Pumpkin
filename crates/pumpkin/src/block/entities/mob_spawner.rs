@@ -145,6 +145,7 @@ impl BlockEntity for MobSpawnerBlockEntity {
 
             let spawn_range = self.spawn_range;
             let mut spawned_any = false;
+            let mut cancelled_any = false;
             for _ in 0..self.spawn_count {
                 let pos = self.position.0;
 
@@ -172,11 +173,28 @@ impl BlockEntity for MobSpawnerBlockEntity {
                 );
                 let yaw = rand::random::<f32>() * 360.0;
                 entity.get_entity().set_rotation(yaw, 0.0);
+
+                let mut event =
+                    crate::plugin::api::events::entity::spawner_spawn::SpawnerSpawnEvent::new(
+                        entity.get_entity().entity_id,
+                        self.position,
+                    );
+                if let Some(server) = world.server.upgrade() {
+                    server.plugin_manager.fire_blocking(&server, &mut event);
+                }
+                if event.cancelled {
+                    // Count a cancelled spawn as a completed attempt so the
+                    // spawner goes on its normal cooldown instead of retrying
+                    // every tick for as long as a plugin keeps cancelling.
+                    cancelled_any = true;
+                    continue;
+                }
+
                 world.spawn_entity(entity);
                 world.sync_world_event(WorldEvent::ParticlesMobblockSpawn, self.position, 0);
                 spawned_any = true;
             }
-            if spawned_any {
+            if spawned_any || cancelled_any {
                 self.update_spawns(world);
             }
         }
