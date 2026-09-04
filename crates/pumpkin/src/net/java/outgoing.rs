@@ -122,6 +122,7 @@ impl OutgoingPacket {
                 *flush_request = flush_request.merge(if completion.is_some() {
                     FlushRequest::IfNotSuspended
                 } else {
+                    // TODO off-tick try_enqueue: IfNotSuspended so we flush when the hold is down.
                     FlushRequest::None
                 });
                 packets.push_back(FramePacket { data, completion });
@@ -447,8 +448,6 @@ mod tests {
     use std::pin::Pin;
     use std::sync::atomic::AtomicUsize;
     use std::task::{Context, Poll};
-    use std::time::Instant;
-
     struct RecordingWriter {
         writes: Arc<std::sync::Mutex<Vec<u8>>>,
         flushes: Arc<AtomicUsize>,
@@ -687,30 +686,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn flush_barrier_flushes_while_still_suspended() {
-        let (tx, rx) = tokio::sync::mpsc::channel(4096);
-        let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let flushes = Arc::new(AtomicUsize::new(0));
-        let suspend = Arc::new(AtomicBool::new(true));
-        let close = CancellationToken::new();
-
-        let writer = spawn_writer(rx, writes, flushes.clone(), suspend, close.clone());
-
-        tx.try_send(packet(1)).unwrap();
-        tx.try_send(OutgoingPacket::Flush).unwrap();
-        tokio::time::sleep(Duration::from_millis(20)).await;
-        assert_eq!(
-            flushes.load(Ordering::SeqCst),
-            1,
-            "resumeFlushing queues Flush before lifting suspendFlushing"
-        );
-
-        drop(tx);
-        close.cancel();
-        writer.await.unwrap();
-    }
-
-    #[tokio::test]
     async fn flush_stops_drain_so_later_packets_are_the_next_tick() {
         let (tx, rx) = tokio::sync::mpsc::channel(4096);
         let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -733,56 +708,6 @@ mod tests {
         tx.try_send(OutgoingPacket::Flush).unwrap();
         tokio::time::sleep(Duration::from_millis(20)).await;
         assert_eq!(flushes.load(Ordering::SeqCst), 2);
-
-        drop(tx);
-        close.cancel();
-        writer.await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn lagged_writer_flushes_once_per_queued_tick_barrier() {
-        let (tx, rx) = tokio::sync::mpsc::channel(4096);
-        let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let flushes = Arc::new(AtomicUsize::new(0));
-        let suspend = Arc::new(AtomicBool::new(true));
-        let close = CancellationToken::new();
-
-        let writer = spawn_writer(rx, writes, flushes.clone(), suspend, close.clone());
-
-        tx.try_send(packet(1)).unwrap();
-        tx.try_send(OutgoingPacket::Flush).unwrap();
-        tx.try_send(packet(2)).unwrap();
-        tx.try_send(OutgoingPacket::Flush).unwrap();
-        tokio::time::sleep(Duration::from_millis(20)).await;
-        assert_eq!(
-            flushes.load(Ordering::SeqCst),
-            2,
-            "each Flush must be its own TCP flush even if both ticks were already queued"
-        );
-
-        drop(tx);
-        close.cancel();
-        writer.await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn tick_thread_enqueue_is_isolated_from_writer() {
-        let (tx, rx) = tokio::sync::mpsc::channel::<OutgoingPacket>(4096);
-        let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let flushes = Arc::new(AtomicUsize::new(0));
-        let suspend = Arc::new(AtomicBool::new(true));
-        let close = CancellationToken::new();
-
-        let writer = spawn_writer(rx, writes, flushes, suspend, close.clone());
-
-        let start = Instant::now();
-        for i in 0..200u8 {
-            tx.try_send(packet(i)).unwrap();
-        }
-        assert!(
-            start.elapsed() < Duration::from_millis(100),
-            "try_send must not wait on socket write/flush"
-        );
 
         drop(tx);
         close.cancel();

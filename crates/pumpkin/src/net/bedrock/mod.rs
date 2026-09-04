@@ -182,6 +182,7 @@ impl BedrockClient {
             else {
                 return;
             };
+            // TODO one FIFO like Java; priority recv can overtake.
             let Some(mut priority_packet_receiver) =
                 client.outgoing_packet_priority_recv.lock().await.take()
             else {

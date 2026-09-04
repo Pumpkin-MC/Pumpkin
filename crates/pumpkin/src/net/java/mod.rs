@@ -448,6 +448,7 @@ impl JavaClient {
         {
             match err {
                 tokio::sync::mpsc::error::TrySendError::Full(_) => {
+                    // TODO Full drops the newest packet; drop oldest or coalesce to avoid desync.
                     debug!(
                         "Failed to add packet to the outgoing packet queue for client {}: channel full",
                         self.id

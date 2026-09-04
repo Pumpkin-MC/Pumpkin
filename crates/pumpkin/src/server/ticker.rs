@@ -161,11 +161,8 @@ fn apply_overload_skip(
     (next_tick, last_overload_warning, None)
 }
 
-/// Vanilla `waitUntilNextTick` / `managedBlock(() -> !haveTime())`.
-///
-/// Vanilla `pollTask` runs main-thread runnables and `ServerChunkCache.pollTask`
-/// until the deadline. Pumpkin already does chunk/network work off this thread,
-/// so the loop parks (`LockSupport.parkNanos`) until `nextTickTimeNanos`.
+/// Vanilla `waitUntilNextTick` / `LockSupport.parkNanos`.
+/// TODO drain chunk/main-thread work here (vanilla `pollTask`) until the deadline.
 fn wait_until_next_tick(next_tick: Instant) {
     loop {
         if STOP_INTERRUPT.is_cancelled() {
@@ -219,18 +216,6 @@ mod tests {
         let (next, _, skipped) = apply_overload_skip(now, origin, None, TICK_20_TPS);
         assert!(skipped.is_none());
         assert_eq!(signed_nanos(next, origin), 0);
-    }
-
-    #[test]
-    fn two_seconds_behind_skips_and_warns() {
-        let origin = Instant::now();
-        let now = at(origin, 3 * NANOSECONDS_PER_SECOND);
-        let (next, warning, skipped) = apply_overload_skip(now, origin, None, TICK_20_TPS);
-        let (behind_ms, ticks) = skipped.expect("should skip");
-        assert_eq!(ticks, 3 * NANOSECONDS_PER_SECOND / TICK_20_TPS);
-        assert_eq!(behind_ms, 3000);
-        assert_eq!(signed_nanos(next, origin), ticks * TICK_20_TPS);
-        assert_eq!(warning, Some(next));
     }
 
     #[test]

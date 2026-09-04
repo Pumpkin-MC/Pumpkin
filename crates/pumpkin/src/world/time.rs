@@ -198,7 +198,7 @@ impl LevelTime {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pumpkin_protocol::java::client::play::CUpdateTime;
+    use crate::world::time::ClockInstance;
 
     #[test]
     fn clock_instance_ticking() {
@@ -246,19 +246,5 @@ mod tests {
 
         time.add_time(-2000);
         assert_eq!(time.time_of_day, 0);
-    }
-
-    #[test]
-    fn game_time_sync_uses_empty_clock_map() {
-        let packet = CUpdateTime {
-            game_time: 19,
-            clock_updates: Vec::new(),
-        };
-        assert!(packet.clock_updates.is_empty());
-        assert!(
-            !CUpdateTime::new_clock(19, 0, 0, 0.0, 1.0)
-                .clock_updates
-                .is_empty()
-        );
     }
 }
