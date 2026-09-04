@@ -96,14 +96,9 @@ pub struct JavaClient {
     rt_handle: tokio::runtime::Handle,
     /// An notifier that is triggered when this client is closed.
     close_token: CancellationToken,
-    /// A normal-priority queue of serialized packets to send to the network.
+    /// Per-connection FIFO of serialized packets (vanilla Netty eventLoop).
     outgoing_packet_queue_send: Sender<OutgoingPacket>,
-    /// A normal-priority queue of serialized packets to send to the network.
     outgoing_packet_queue_recv: Option<Receiver<OutgoingPacket>>,
-    /// A high-priority queue of serialized packets to send to the network.
-    outgoing_packet_priority_send: Sender<OutgoingPacket>,
-    /// A high-priority queue of serialized packets to send to the network.
-    outgoing_packet_priority_recv: Option<Receiver<OutgoingPacket>>,
     /// The packet encoder for outgoing packets.
     network_writer: std::sync::Mutex<Option<TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>>>,
     /// The packet decoder for incoming packets.
@@ -140,8 +135,7 @@ impl JavaClient {
         gameprofile: GameProfile,
         config: PlayerConfig,
     ) -> Self {
-        let (send, recv) = tokio::sync::mpsc::channel(4096);
-        let (priority_send, priority_recv) = tokio::sync::mpsc::channel(4096);
+        let (send, recv) = tokio::sync::mpsc::channel(8192);
 
         Self {
             id: pending.id,
@@ -155,8 +149,6 @@ impl JavaClient {
             rt_handle: tokio::runtime::Handle::current(),
             outgoing_packet_queue_send: send,
             outgoing_packet_queue_recv: Some(recv),
-            outgoing_packet_priority_send: priority_send,
-            outgoing_packet_priority_recv: Some(priority_recv),
             version: pending.version,
             network_writer: std::sync::Mutex::new(Some(pending.network_writer)),
             network_reader: std::sync::Mutex::new(Some(pending.network_reader)),
@@ -395,8 +387,7 @@ impl JavaClient {
             self.send_packet(&CChunkBatchStart).await;
         }
 
-        // Keep the whole batch on the priority queue. Otherwise the batch end can overtake chunk
-        // data queued on the normal channel, leaving the client unable to render those chunks.
+        // One FIFO per connection: batch start/data/end stay in enqueue order.
         for (chunk_data, light_data) in serialized {
             self.send_packet_now_data(chunk_data).await;
             if let Some(light_data) = light_data {
@@ -554,14 +545,14 @@ impl JavaClient {
         let (completion_tx, completion_rx) = oneshot::channel();
 
         if let Err(err) = self
-            .outgoing_packet_priority_send
+            .outgoing_packet_queue_send
             .send(OutgoingPacket::high_priority(packet, completion_tx))
             .await
         {
             // It is expected that the packet will fail if we are closed
             if !self.close_token.is_cancelled() {
                 warn!(
-                    "Failed to add high-priority packet to the outgoing packet queue for client {}: {}",
+                    "Failed to add packet to the outgoing packet queue for client {}: {}",
                     self.id, err
                 );
                 // We now need to close the connection to the client since the stream is in an
@@ -635,9 +626,6 @@ impl JavaClient {
         let Some(packet_receiver) = self.outgoing_packet_queue_recv.take() else {
             return;
         };
-        let Some(priority_packet_receiver) = self.outgoing_packet_priority_recv.take() else {
-            return;
-        };
         let close_token = self.close_token.clone();
         let Some(writer) = self
             .network_writer
@@ -650,15 +638,8 @@ impl JavaClient {
         let id = self.id;
         let suspend_flushing = self.suspend_flushing.clone();
         self.spawn_task(async move {
-            run_outgoing_packet_writer(
-                packet_receiver,
-                priority_packet_receiver,
-                writer,
-                close_token,
-                suspend_flushing,
-                id,
-            )
-            .await;
+            run_outgoing_packet_writer(packet_receiver, writer, close_token, suspend_flushing, id)
+                .await;
         });
     }
 
