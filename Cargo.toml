@@ -207,7 +207,7 @@ time = { version = "0.3", default-features = false, features = ["std"] }
 arc-swap = { version = "1.9", default-features = false }
 tokio-util = { version = "0.7.19", default-features = false }
 toml = { version = "1.1", default-features = false, features = ["parse", "display", "serde"] }
-reqwest = { version = "0.13.4", features = ["json"] }
+reqwest = { version = "0.13.4", default-features = false, features = ["rustls-no-provider", "json", "http2"] }
 notify = { version = "8.2.0", default-features = false, features = ["macos_fsevent"] }
 
 sysinfo = { version = "0.39", default-features = false, features = ["system"] }
@@ -229,3 +229,5 @@ postcard = { version = "1.1", default-features = false, features = ["alloc"] }
 tracing-serde-structured = { version = "0.4", default-features = false }
 wasmparser = { version = "0.258", default-features = false }
 webpki-root-certs = { version = "1.0.8", default-features = false }
+# ring-only: must match the provider the rest of the tree (wasmtime-wasi-http, rtc) uses
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
