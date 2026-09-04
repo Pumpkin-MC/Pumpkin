@@ -137,6 +137,8 @@ impl LevelTime {
     /// `getGameTime()` across two piston animation ticks.
     ///
     /// Vanilla `PlayerList.broadcastAll`: every player, not only this world's.
+    /// Per-player serialize is intentional; version grouping is world-scoped
+    /// `broadcast_editioned`.
     pub fn send_game_time_sync(&self, server: &crate::server::Server) {
         let java = CUpdateTime {
             game_time: self.world_age,
