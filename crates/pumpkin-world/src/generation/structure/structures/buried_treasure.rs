@@ -122,7 +122,11 @@ impl StructurePieceBase for BuriedTreasurePiece {
                 self.piece.bounding_box = BlockBox::new(pos.x, pos.y, pos.z, pos.x, pos.y, pos.z);
 
                 if chunk_box.contains_pos(&pos) {
-                    chunk.set_block_state(pos.x, pos.y, pos.z, Block::CHEST.default_state);
+                    let chest_state =
+                        StructurePiece::reorient(&pos, Block::CHEST.default_state, |p| {
+                            chunk.get_block_state(p)
+                        });
+                    chunk.set_block_state(pos.x, pos.y, pos.z, chest_state);
 
                     let mut nbt = NbtCompound::new();
                     nbt.put_string("id", "minecraft:chest".to_string());

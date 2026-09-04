@@ -10,7 +10,7 @@ use crate::lighting::sky_fill::SkyFill;
 use crate::lighting::storage::{get_block_light, get_sky_light, set_block_light, set_sky_light};
 use crate::lighting::{decayed, luminance_of, opacity_of, sky_descended};
 use pumpkin_config::lighting::LightingEngineConfig;
-use pumpkin_data::{BlockDirection, BlockStateId};
+use pumpkin_data::{BlockDirection, BlockState, BlockStateId};
 use pumpkin_util::HeightMap;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -260,6 +260,7 @@ impl<P: LightProvider> LightPropagator<P> {
         }
     }
 
+    #[expect(clippy::too_many_lines)]
     pub fn propagate(&mut self, cache: &mut Cache) {
         let cache_x = cache.x;
         let cache_z = cache.z;
@@ -614,6 +615,8 @@ impl SkyLightPropagator {
                         }
 
                         let mut light: u8 = 15;
+                        // The block the column just came through, for the edge test below.
+                        let mut above = BlockStateId::AIR;
                         for y in (bottom_y..=top_y).rev() {
                             let local_y_proto = y - bottom_y;
                             let state_id = c.get_block_state_raw(
@@ -622,7 +625,14 @@ impl SkyLightPropagator {
                                 local_z as i32,
                             );
 
-                            light = sky_descended(light, opacity_of(state_id));
+                            // The descent is the vertical half of the flood, so it owes the same shape test:
+                            // a covered face stops light outright, whatever the opacity says.
+                            light = if occlusion::shape_occludes(above, state_id, BlockDirection::Down) {
+                                0
+                            } else {
+                                sky_descended(light, opacity_of(state_id))
+                            };
+                            above = state_id;
                             let section_idx = (local_y_proto >> 4) as usize;
                             let local_y = (y & 15) as usize;
 
@@ -661,6 +671,7 @@ impl SkyLightPropagator {
                         // block that swallows the last light level.
                         c.section.with_blocks(|sections| {
                             let mut light: u8 = 15;
+                            let mut above = BlockStateId::AIR;
                             for y in (bottom_y..=top_y).rev() {
                                 let section_idx = ((y - bottom_y) >> 4) as usize;
                                 let local_y = (y & 15) as usize;
@@ -671,7 +682,14 @@ impl SkyLightPropagator {
                                         section.get(local_x, local_y, local_z)
                                     });
 
-                                light = sky_descended(light, opacity_of(state_id));
+                                // The descent is the vertical half of the flood, so it owes the same shape test:
+                                // a covered face stops light outright, whatever the opacity says.
+                                light = if occlusion::shape_occludes(above, state_id, BlockDirection::Down) {
+                                    0
+                                } else {
+                                    sky_descended(light, opacity_of(state_id))
+                                };
+                                above = state_id;
 
                                 if section_idx < light_engine.sky_light.len() {
                                     light_engine.sky_light[section_idx]
@@ -834,8 +852,57 @@ impl LightEngine {
         center.sky_light_height = crate::lighting::SkyLightHeight::compute_from_proto(center).raw();
     }
 
-}
 
+    /// Whether this state's occlusion shape is empty. Vanilla `LightEngine.isEmptyShape`.
+    #[inline]
+    #[must_use]
+    pub const fn is_empty_shape(state: &BlockState) -> bool {
+        !state.can_occlude()
+    }
+
+    /// Whether a block change can move any light. Vanilla
+    /// `LightEngine.hasDifferentLightProperties`.
+    #[inline]
+    #[must_use]
+    pub fn has_different_light_properties(old_state: &BlockState, new_state: &BlockState) -> bool {
+        if std::ptr::eq(old_state, new_state) || old_state.id == new_state.id {
+            return false;
+        }
+
+        old_state.opacity != new_state.opacity
+            || old_state.luminance != new_state.luminance
+            || old_state.can_occlude() != new_state.can_occlude()
+    }
+
+    /// Light lost crossing one block. Vanilla `LightEngine.getOpacity`.
+    #[inline]
+    #[must_use]
+    pub const fn get_opacity(state: &BlockState) -> u8 {
+        if state.opacity > 1 { state.opacity } else { 1 }
+    }
+
+    /// Light lost moving from one block into another. Vanilla
+    /// `LightEngine.getLightDampeningInto`, which returns 16 -- fully blocking -- when the
+    /// merged face shapes occlude.
+    #[inline]
+    #[must_use]
+    pub const fn get_light_dampening_into(
+        from_state: &BlockState,
+        to_state: &BlockState,
+        _direction: BlockDirection,
+        simple_opacity: u8,
+    ) -> u8 {
+        let from_empty = Self::is_empty_shape(from_state);
+        let to_empty = Self::is_empty_shape(to_state);
+        if from_empty && to_empty {
+            return simple_opacity;
+        }
+        if to_state.can_occlude() && to_state.is_solid_render() {
+            return 16;
+        }
+        simple_opacity
+    }
+}
 impl Default for LightEngine {
     fn default() -> Self {
         Self::new()

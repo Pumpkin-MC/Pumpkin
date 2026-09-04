@@ -105,6 +105,7 @@ pub mod rooted_dirt;
 pub mod snow;
 pub mod soul_sand;
 pub mod sponge;
+pub mod spreading_snowy_block;
 
 // Entities, hazards & misc gameplay blocks
 pub mod anvil;

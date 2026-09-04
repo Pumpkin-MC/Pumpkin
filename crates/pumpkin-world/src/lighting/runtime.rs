@@ -239,17 +239,6 @@ impl DynamicLightEngine {
             && self.sky_increase.is_empty()
     }
 
-    /// Whether a block change can move any light at all.
-    ///
-    /// Sky light reads `opacity`, block light `luminance` and `opacity`
-    #[must_use]
-    pub const fn block_change_affects_light(
-        old: &pumpkin_data::BlockState,
-        new: &pumpkin_data::BlockState,
-    ) -> bool {
-        old.opacity != new.opacity || old.luminance != new.luminance
-    }
-
     /// Vanilla `Level.setBlock` -> `LightEngine.checkBlock`: enqueue only, lock-free
     /// (see [`Self::propagate_lock`]). Flood is [`Self::drain_queued`].
     pub fn update_lighting_at(&self, _level: &Arc<Level>, pos: BlockPos) {
@@ -731,7 +720,7 @@ impl DynamicLightEngine {
         let opacity = state.opacity;
 
         // Calculate expected sky light
-        let expected_light = if opacity == 15 {
+        let expected_light = if opacity == 15 || state.is_solid_render() {
             // Fully opaque block = no light
             0
         } else {
@@ -978,8 +967,8 @@ mod tests {
         );
     }
 
-    /// Only `opacity` and `luminance` may decide whether the engine runs. The premises
-    /// are asserted
+    /// Only a real light property may decide whether the engine runs. The premises are
+    /// asserted, so the test fails loudly if the block data stops backing them.
     #[test]
     fn a_change_is_light_neutral_exactly_when_both_properties_match() {
         let stone = Block::STONE.default_state;
@@ -990,19 +979,19 @@ mod tests {
         assert_eq!(stone.opacity, dirt.opacity, "premise: both fully opaque");
         assert_eq!(stone.luminance, dirt.luminance, "premise: neither glows");
         assert!(
-            !DynamicLightEngine::block_change_affects_light(stone, dirt),
+            !crate::lighting::LightEngine::has_different_light_properties(stone, dirt),
             "swapping one opaque block for another cannot move any light"
         );
 
         assert_ne!(stone.opacity, air.opacity, "premise: opacity differs");
         assert!(
-            DynamicLightEngine::block_change_affects_light(stone, air),
+            crate::lighting::LightEngine::has_different_light_properties(stone, air),
             "opening a solid block up has to reach the engine"
         );
 
         assert_ne!(stone.luminance, glowstone.luminance, "premise: one glows");
         assert!(
-            DynamicLightEngine::block_change_affects_light(stone, glowstone),
+            crate::lighting::LightEngine::has_different_light_properties(stone, glowstone),
             "a block that starts glowing has to reach the engine"
         );
     }

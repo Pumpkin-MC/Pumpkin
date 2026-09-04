@@ -78,6 +78,7 @@ wasm-encoder = "0.258"
 
 # authentication
 reqwest = { workspace = true, features = ["json"] }
+rustls.workspace = true
 
 sha1.workspace = true
 
