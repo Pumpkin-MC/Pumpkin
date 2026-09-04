@@ -791,29 +791,43 @@ impl BedrockClient {
     }
 
     pub fn handle_client_cache_blob_status(&self, packet: SClientCacheBlobStatus) {
-        if packet.miss_hashes.is_empty() {
+        let mut cache = self
+            .blob_cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for hash in packet.hit_hashes {
+            cache.remove(&hash);
+        }
+        let mut missing_blobs = Vec::with_capacity(packet.miss_hashes.len());
+        for hash in &packet.miss_hashes {
+            if let Some(payload) = cache.get(hash) {
+                missing_blobs.push(MissingBlobData {
+                    blob_id: *hash,
+                    blob_data: payload.clone(),
+                });
+            } else {
+                warn!("Client requested missing blob {hash:#x} not found in server cache");
+            }
+        }
+        if missing_blobs.is_empty() {
             return;
         }
-        let missing_blobs = {
-            let cache = self
-                .blob_cache
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let mut missing_blobs = Vec::with_capacity(packet.miss_hashes.len());
-            for hash in packet.miss_hashes {
-                if let Some(payload) = cache.get(&hash) {
-                    missing_blobs.push(MissingBlobData {
-                        blob_id: hash,
-                        blob_data: payload.clone(),
-                    });
-                } else {
-                    warn!("Client requested missing blob {hash:#x} not found in server cache");
-                }
+        let data = match self.serialize_packet(&CClientCacheMissResponse { missing_blobs }) {
+            Ok(data) => data,
+            Err(error) => {
+                error!("Failed to serialize Bedrock cache miss response: {error}");
+                return;
             }
-            missing_blobs
         };
-        if !missing_blobs.is_empty() {
-            self.try_enqueue_client_packet(&CClientCacheMissResponse { missing_blobs });
+        // Retire misses only once the outgoing queue owns their payloads.
+        if self
+            .outgoing_packet_queue_send
+            .try_send(OutgoingPacket::normal(data))
+            .is_ok()
+        {
+            for hash in packet.miss_hashes {
+                cache.remove(&hash);
+            }
         }
     }
 
