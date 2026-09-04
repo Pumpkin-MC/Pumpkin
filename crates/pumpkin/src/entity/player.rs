@@ -2416,6 +2416,17 @@ impl Player {
     pub fn process_inbound_packets(&self) {
         const MAX_PACKETS_PER_TICK: usize = 64;
 
+        // Player::tick runs after the world's block-update flush. Acknowledge the previous tick's
+        // predictions here so Java clients receive the authoritative block states before resolving
+        // those predictions. Sending the ACK from the packet loop would make doors and other
+        // predicted blocks briefly revert because their updates are not flushed until the next tick.
+        if let ClientPlatform::Java(client) = self.client.as_ref() {
+            let seq = client.packet_sequence.swap(-1, Ordering::Relaxed);
+            if seq != -1 {
+                client.try_send_packet(&CAcknowledgeBlockChange::new(seq.into()));
+            }
+        }
+
         let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id) else {
             return;
         };
@@ -2448,11 +2459,6 @@ impl Player {
                             packet.payload.len(),
                             e
                         );
-                    }
-
-                    let seq = client.packet_sequence.swap(-1, Ordering::Relaxed);
-                    if seq != -1 {
-                        client.try_send_packet(&CAcknowledgeBlockChange::new(seq.into()));
                     }
                 }
                 ClientPlatform::Bedrock(client) => {
