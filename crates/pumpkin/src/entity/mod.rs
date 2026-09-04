@@ -35,7 +35,7 @@ use pumpkin_protocol::bedrock::client::{CAddActor, CSetActorMotion};
 use pumpkin_protocol::codec::var_long::VarLong;
 use pumpkin_protocol::java::client::play::{CUpdateEntityPos, CUpdateEntityPosRot};
 use pumpkin_protocol::{
-    PositionFlag,
+    BClientPacket, ClientPacket, PositionFlag,
     bedrock::client::{
         move_actor_delta::{
             CMoveActorDelta, MOVE_ACTOR_DELTA_FLAG_HAS_HEAD_YAW, MOVE_ACTOR_DELTA_FLAG_HAS_PITCH,
@@ -333,6 +333,24 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     }
 
     fn send_bedrock_spawn_packet(&self, client: &BedrockClient) {
+        let _ = self.try_send_bedrock_spawn_packet(client);
+    }
+
+    /// Attempts to enqueue this entity's Bedrock spawn lifecycle packets atomically.
+    /// Implementations with custom spawn packets should override this checked hook.
+    fn try_send_bedrock_spawn_packet(&self, client: &BedrockClient) -> bool {
+        if let Some(player) = self.get_player() {
+            let Ok(player_list) = client.serialize_packet(&player.bedrock_player_list_add_packet())
+            else {
+                return false;
+            };
+            let Ok(add_player) = client.serialize_packet(&player.bedrock_add_player_packet())
+            else {
+                return false;
+            };
+            return client.try_enqueue_packet_batch_checked(vec![player_list, add_player]);
+        }
+
         let entity = self.get_entity();
         let runtime_id = entity.entity_id as u64;
         let identifier = self
@@ -362,9 +380,9 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             },
             actor_links: Vec::new(),
         };
-        if let Ok(data) = client.serialize_packet(&packet) {
-            client.try_enqueue_packet(data);
-        }
+        client
+            .serialize_packet(&packet)
+            .is_ok_and(|data| client.try_enqueue_packet_data_checked(data))
     }
 
     fn send_java_spawn_packet(&self, client: &JavaClient) {
@@ -1198,10 +1216,45 @@ impl Entity {
         self.set_synced_data(tracked_data::entity::DATA_NO_GRAVITY, no_gravity);
     }
 
+    /// Sends a Bedrock actor packet only to clients which have been paired with this entity.
+    pub(crate) fn send_tracked_bedrock<P: BClientPacket + Sync>(&self, packet: &P) {
+        let world = self.world.load();
+        if let Some(tracked) = world.entity_tracker.get_tracked_entity(self.entity_id) {
+            tracked.send_to_tracking_players_bedrock(packet, &world);
+        }
+        self.send_tracked_bedrock_to_self(packet, &world);
+    }
+
+    /// The tracker intentionally excludes an entity's own player. Server-authored
+    /// movement such as knockback must still reach that Bedrock client.
+    fn send_tracked_bedrock_to_self<P: BClientPacket>(&self, packet: &P, world: &World) {
+        if self.entity_type == &EntityType::PLAYER
+            && let Some(player) = world.get_player_by_id(self.entity_id)
+            && let ClientPlatform::Bedrock(client) = player.client.as_ref()
+        {
+            client.try_enqueue_client_packet(packet);
+        }
+    }
+
+    /// Preserves Java's chunk broadcast while routing Bedrock through entity pairings.
+    pub(crate) fn send_tracked_editioned<J: ClientPacket, B: BClientPacket + Sync>(
+        &self,
+        chunk_pos: Vector2<i32>,
+        java_packet: &J,
+        bedrock_packet: &B,
+    ) {
+        let world = self.world.load();
+        world.broadcast_to_chunk(chunk_pos, java_packet);
+        if let Some(tracked) = world.entity_tracker.get_tracked_entity(self.entity_id) {
+            tracked.send_to_tracking_players_bedrock(bedrock_packet, &world);
+        }
+        self.send_tracked_bedrock_to_self(bedrock_packet, &world);
+    }
+
     pub fn send_velocity(&self) {
         let velocity = self.velocity.load();
         let chunk_pos = self.chunk_pos.load();
-        self.world.load().broadcast_to_chunk_editioned(
+        self.send_tracked_editioned(
             chunk_pos,
             &CEntityVelocity::new(self.entity_id.into(), velocity),
             &CSetActorMotion {
@@ -1710,7 +1763,7 @@ impl Entity {
                 self.on_ground.load(Relaxed),
             );
             if self.entity_type == &EntityType::PLAYER {
-                self.world.load().broadcast_to_chunk_editioned(
+                self.send_tracked_editioned(
                     chunk_pos,
                     &je_packet,
                     &CMovePlayer::new(
@@ -1737,7 +1790,7 @@ impl Entity {
                 if self.on_ground.load(Relaxed) {
                     flags |= MOVE_ACTOR_DELTA_FLAG_ON_GROUND;
                 }
-                self.world.load().broadcast_to_chunk_editioned(
+                self.send_tracked_editioned(
                     chunk_pos,
                     &je_packet,
                     &CMoveActorDelta::new(
@@ -1759,7 +1812,7 @@ impl Entity {
                 self.on_ground.load(Relaxed),
             );
             if self.entity_type == &EntityType::PLAYER {
-                self.world.load().broadcast_to_chunk_editioned(
+                self.send_tracked_editioned(
                     chunk_pos,
                     &je_packet,
                     &CMovePlayer::new(
@@ -1784,7 +1837,7 @@ impl Entity {
                     flags |= MOVE_ACTOR_DELTA_FLAG_ON_GROUND;
                 }
 
-                self.world.load().broadcast_to_chunk_editioned(
+                self.send_tracked_editioned(
                     chunk_pos,
                     &je_packet,
                     &CMoveActorDelta::new(
@@ -1807,7 +1860,7 @@ impl Entity {
                 self.on_ground.load(Relaxed),
             );
             if self.entity_type == &EntityType::PLAYER {
-                self.world.load().broadcast_to_chunk_editioned(
+                self.send_tracked_editioned(
                     chunk_pos,
                     &je_packet,
                     &CMovePlayer::new(
@@ -1831,7 +1884,7 @@ impl Entity {
                 if self.on_ground.load(Relaxed) {
                     flags |= MOVE_ACTOR_DELTA_FLAG_ON_GROUND;
                 }
-                self.world.load().broadcast_to_chunk_editioned(
+                self.send_tracked_editioned(
                     chunk_pos,
                     &je_packet,
                     &CMoveActorDelta::new(
@@ -1852,7 +1905,6 @@ impl Entity {
 
     pub fn send_bedrock_pos(&self) {
         let position = self.pos.load();
-        let chunk_pos = self.chunk_pos.load();
         let mut flags =
             MOVE_ACTOR_DELTA_FLAG_HAS_X | MOVE_ACTOR_DELTA_FLAG_HAS_Y | MOVE_ACTOR_DELTA_FLAG_HAS_Z;
         if self.on_ground.load(Relaxed) {
@@ -1868,8 +1920,7 @@ impl Entity {
             0,
             0,
         );
-        let world = self.world.load();
-        world.broadcast_to_chunk_bedrock(chunk_pos, &packet);
+        self.send_tracked_bedrock(&packet);
     }
 
     pub fn update_last_pos(&self) -> Vector3<f64> {
@@ -1905,7 +1956,7 @@ impl Entity {
         );
 
         if self.entity_type == &EntityType::PLAYER {
-            self.world.load().broadcast_to_chunk_editioned(
+            self.send_tracked_editioned(
                 chunk_pos,
                 &je_packet,
                 &CMovePlayer::new(
@@ -1930,7 +1981,7 @@ impl Entity {
                 flags |= MOVE_ACTOR_DELTA_FLAG_ON_GROUND;
             }
 
-            self.world.load().broadcast_to_chunk_editioned(
+            self.send_tracked_editioned(
                 chunk_pos,
                 &je_packet,
                 &CMoveActorDelta::new(
@@ -2982,8 +3033,6 @@ impl Entity {
                 }
             }
 
-            let world = self.world.load();
-            let chunk_pos = self.chunk_pos.load();
             let mut metadata = SyncedActorDataList(std::collections::HashMap::new());
             metadata.set(
                 entity_data_key::FLAGS,
@@ -3002,7 +3051,7 @@ impl Entity {
                 },
                 tick: VarULong(0),
             };
-            world.broadcast_to_chunk_bedrock(chunk_pos, &packet);
+            self.send_tracked_bedrock(&packet);
         }
     }
 
@@ -3027,33 +3076,6 @@ impl Entity {
     }
 
     pub fn send_bedrock_actor_data(&self, bedrock_meta: &SyncedActorDataList) {
-        let world = self.world.load();
-        let players = world.players.load();
-        let mut bedrock_recipients = Vec::new();
-
-        if let Some(tracked) = world.entity_tracker.get_tracked_entity(self.entity_id) {
-            for player in players.iter() {
-                if (tracked.seen_by.contains(&player.gameprofile.id)
-                    || player.entity_id() == self.entity_id)
-                    && let ClientPlatform::Bedrock(client) = player.client.as_ref()
-                {
-                    bedrock_recipients.push(client);
-                }
-            }
-        } else {
-            let chunk_pos = self.chunk_pos.load();
-            for player in players.iter() {
-                let center = player.get_entity().chunk_pos.load();
-                let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
-
-                if is_within_view_distance(chunk_pos, center, view_distance)
-                    && let ClientPlatform::Bedrock(client) = player.client.as_ref()
-                {
-                    bedrock_recipients.push(client);
-                }
-            }
-        }
-
         let packet = CSetActorData {
             target_runtime_id: VarULong(self.entity_id as u64),
             actor_data: SyncedActorDataList(bedrock_meta.0.clone()),
@@ -3063,11 +3085,9 @@ impl Entity {
             },
             tick: VarULong(0),
         };
-        for recipient in bedrock_recipients {
-            if let Ok(packet_data) = recipient.serialize_packet(&packet) {
-                recipient.try_enqueue_packet(packet_data);
-            }
-        }
+        // A not-yet-tracked entity has no valid Bedrock recipients. Its current metadata is
+        // included in AddActor/AddPlayer when the terrain-gated pairing is eventually created.
+        self.send_tracked_bedrock(&packet);
     }
 
     pub fn send_dirty_entity_data(&self) {
@@ -3407,11 +3427,7 @@ impl Entity {
             },
         };
 
-        self.world.load().broadcast_to_chunk_editioned(
-            self.chunk_pos.load(),
-            &je_packet,
-            &be_packet,
-        );
+        self.send_tracked_editioned(self.chunk_pos.load(), &je_packet, &be_packet);
     }
 
     pub fn unleash(&self) {
@@ -3463,11 +3479,7 @@ impl Entity {
             },
         };
 
-        self.world.load().broadcast_to_chunk_editioned(
-            self.chunk_pos.load(),
-            &je_packet,
-            &be_packet,
-        );
+        self.send_tracked_editioned(self.chunk_pos.load(), &je_packet, &be_packet);
     }
 
     pub fn tick_leash(&self) {

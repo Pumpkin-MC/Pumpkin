@@ -8,7 +8,6 @@ impl BedrockClient {
         }
 
         let entity = &player.get_entity();
-        let world = entity.world.load();
 
         let java_animation = match packet.action {
             AnimateAction::NoAction => None,
@@ -26,7 +25,7 @@ impl BedrockClient {
                 data: 0.0,
                 swing_source: None,
             };
-            world.broadcast_editioned(&je_packet, &be_packet);
+            entity.send_tracked_editioned(entity.chunk_pos.load(), &je_packet, &be_packet);
         }
     }
 }

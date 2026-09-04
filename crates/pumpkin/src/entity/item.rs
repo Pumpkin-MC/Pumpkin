@@ -638,7 +638,7 @@ impl EntityBase for ItemEntity {
         self
     }
 
-    fn send_bedrock_spawn_packet(&self, client: &crate::net::bedrock::BedrockClient) {
+    fn try_send_bedrock_spawn_packet(&self, client: &crate::net::bedrock::BedrockClient) -> bool {
         let entity = &self.entity;
         let runtime_id = entity.entity_id as u64;
         let data = {
@@ -657,9 +657,7 @@ impl EntityBase for ItemEntity {
             };
             client.serialize_packet(&packet).ok()
         };
-        if let Some(data) = data {
-            client.try_enqueue_packet(data);
-        }
+        data.is_some_and(|data| client.try_enqueue_packet_data_checked(data))
     }
 
     fn send_java_spawn_packet(&self, client: &crate::net::java::JavaClient) {

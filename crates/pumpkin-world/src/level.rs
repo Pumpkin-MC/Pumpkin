@@ -317,14 +317,14 @@ impl Level {
     pub fn spawn_entity_generation(self: &Arc<Self>, pos: Vector2<i32>) {
         let level = self.clone();
         rayon::spawn(move || {
-            let arc_chunk = Arc::new(ChunkEntityData {
-                x: pos.x,
-                z: pos.y,
-                data: std::sync::Mutex::new(Vec::new()),
-                dirty: AtomicBool::new(false),
-            });
-
-            level.loaded_entity_chunks.insert(pos, arc_chunk.clone());
+            let generated_chunk = Arc::new(ChunkEntityData::empty(pos.x, pos.y));
+            let arc_chunk = match level.loaded_entity_chunks.entry(pos) {
+                Entry::Occupied(entry) => entry.get().clone(),
+                Entry::Vacant(entry) => {
+                    entry.insert(generated_chunk.clone());
+                    generated_chunk
+                }
+            };
 
             if let Some((_, waiters)) = level.pending_entity_generations.remove(&pos) {
                 for tx in waiters {
@@ -734,8 +734,15 @@ impl Level {
                         match data {
                             LoadedData::Loaded(chunk) => {
                                 let pos = Vector2::new(chunk.x, chunk.z);
-                                level.loaded_entity_chunks.insert(pos, chunk.clone());
-                                let _ = sender.send((Arc::downgrade(&chunk), true)).await;
+                                let (chunk, first_load) =
+                                    match level.loaded_entity_chunks.entry(pos) {
+                                        Entry::Occupied(entry) => (entry.get().clone(), false),
+                                        Entry::Vacant(entry) => {
+                                            entry.insert(chunk.clone());
+                                            (chunk, true)
+                                        }
+                                    };
+                                let _ = sender.send((Arc::downgrade(&chunk), first_load)).await;
                             }
                             LoadedData::Missing(pos) | LoadedData::Error((pos, _)) => {
                                 let (tx, rx) = oneshot::channel();
@@ -776,8 +783,13 @@ impl Level {
         }
 
         if let Ok((chunk, _)) = self.load_single_entity_chunk(pos).await {
-            self.loaded_entity_chunks.insert(pos, chunk.clone());
-            chunk
+            match self.loaded_entity_chunks.entry(pos) {
+                Entry::Occupied(entry) => entry.get().clone(),
+                Entry::Vacant(entry) => {
+                    entry.insert(chunk.clone());
+                    chunk
+                }
+            }
         } else {
             let (tx, rx) = oneshot::channel();
             match self.pending_entity_generations.entry(pos) {
@@ -789,14 +801,8 @@ impl Level {
                     self.spawn_entity_generation(pos);
                 }
             }
-            rx.await.unwrap_or_else(|_| {
-                Arc::new(ChunkEntityData {
-                    x: pos.x,
-                    z: pos.y,
-                    data: std::sync::Mutex::new(Vec::new()),
-                    dirty: AtomicBool::new(false),
-                })
-            })
+            rx.await
+                .unwrap_or_else(|_| Arc::new(ChunkEntityData::empty(pos.x, pos.y)))
         }
     }
 
@@ -908,6 +914,15 @@ impl Level {
         self.loaded_entity_chunks
             .get(pos)
             .map(|x| x.value().clone())
+    }
+
+    /// Returns stable references to the currently loaded entity chunks. Callers
+    /// must inspect each chunk's materialization state before replacing data.
+    pub fn entity_chunks(&self) -> Vec<(Vector2<i32>, SyncEntityChunk)> {
+        self.loaded_entity_chunks
+            .iter()
+            .map(|entry| (*entry.key(), entry.value().clone()))
+            .collect()
     }
 
     pub async fn get_or_fetch_entity_chunk<R, F: Fn(&SyncEntityChunk) -> R>(

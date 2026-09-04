@@ -1,5 +1,5 @@
 use crate::block::entities::{BlockEntity, block_entity_from_nbt};
-use dashmap::DashMap;
+use dashmap::{DashMap, DashSet};
 use pumpkin_data::chunk::Biome;
 use pumpkin_data::item::{BedrockItem, BedrockItemVersion};
 use pumpkin_protocol::bedrock::client::item_registry::{CItemRegistry, ItemData};
@@ -109,8 +109,7 @@ use pumpkin_protocol::{
                 CreativeItemEntryPayload,
             },
             level_sound_event::CLevelSoundEvent,
-            player_list::{CPlayerList, PlayerListEntry, Skin},
-            remove_actor::CRemoveActor,
+            player_list::{CPlayerList, PlayerListEntry},
             start_game::{Experiments, GamePublishSetting, LevelSettings},
             update_attributes::{AttributeData, CUpdateAttributes},
         },
@@ -124,8 +123,8 @@ use pumpkin_protocol::{
         self,
         client::play::{
             CBlockEntityData, CDamageEvent, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate,
-            CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo, CSetSelectedSlot, CSoundEffect,
-            CSpawnEntity, GameEvent, InitChat, PlayerAction, PlayerInfoFlags,
+            CPlayerInfoUpdate, CRemovePlayerInfo, CSetSelectedSlot, CSoundEffect, CSpawnEntity,
+            GameEvent, InitChat, PlayerAction, PlayerInfoFlags,
         },
         server::play::SChatMessage,
     },
@@ -219,6 +218,47 @@ fn bedrock_chest_block_actor(state_id: BlockStateId, position: BlockPos) -> Opti
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
+/// Removes duplicate persisted UUIDs within one entity chunk while preserving the relative file
+/// order of retained entries. The last occurrence wins because the historical bug appended newer
+/// snapshots after older ones. Entries without a usable UUID remain distinct and receive a fresh
+/// one for the live entity.
+fn deduplicate_entity_nbts_by_uuid(
+    entity_nbts: Vec<NbtCompound>,
+    mut fresh_uuid: impl FnMut() -> Uuid,
+) -> Vec<(NbtCompound, Uuid)> {
+    // Reserve every valid persisted UUID up front so a generated UUID cannot steal the identity
+    // of a later entry in the same chunk.
+    let mut reserved_uuids: FxHashSet<_> = entity_nbts
+        .iter()
+        .filter_map(|entity_nbt| entity_nbt.get_uuid("UUID"))
+        .collect();
+    let last_persisted_occurrence: FxHashMap<_, _> = entity_nbts
+        .iter()
+        .enumerate()
+        .filter_map(|(index, entity_nbt)| entity_nbt.get_uuid("UUID").map(|uuid| (uuid, index)))
+        .collect();
+    let mut unique_entities = Vec::with_capacity(entity_nbts.len());
+
+    for (index, entity_nbt) in entity_nbts.into_iter().enumerate() {
+        let uuid = if let Some(uuid) = entity_nbt.get_uuid("UUID") {
+            if last_persisted_occurrence.get(&uuid) != Some(&index) {
+                continue;
+            }
+            uuid
+        } else {
+            loop {
+                let uuid = fresh_uuid();
+                if reserved_uuids.insert(uuid) {
+                    break uuid;
+                }
+            }
+        };
+        unique_entities.push((entity_nbt, uuid));
+    }
+
+    unique_entities
+}
+
 impl PumpkinError for GetBlockError {
     fn is_kick(&self) -> bool {
         false
@@ -253,6 +293,8 @@ pub struct World {
     /// A map of active entities within the world, keyed by their unique UUID.
     /// This does not include players.
     pub entities: ArcSwap<Vec<Arc<dyn EntityBase>>>,
+    /// Atomically reserves UUIDs before entities are admitted to the live list.
+    entity_uuids: DashSet<Uuid>,
     /// The world's scoreboard, used for tracking scores, objectives, and display information.
     pub scoreboard: std::sync::Mutex<Scoreboard>,
     /// The world's worldborder, defining the playable area and controlling its expansion or contraction.
@@ -293,6 +335,9 @@ pub struct World {
     pub custom_block_entity_data: DashMap<BlockPos, NbtCompound>,
     /// Entity tracker responsible for tracking entity visibility and sending delta/status packets to watchers.
     pub entity_tracker: entity_tracker::EntityTracker,
+    /// Serializes entity chunk materialization, autosave snapshots, and unload
+    /// snapshots so none of those transitions can observe a half-updated world.
+    entity_persistence_lock: tokio::sync::Mutex<()>,
 }
 
 #[derive(Clone, Copy)]
@@ -388,6 +433,7 @@ impl World {
             level_info,
             players: ArcSwap::new(Arc::new(Vec::new())),
             entities: ArcSwap::new(Arc::new(Vec::new())),
+            entity_uuids: DashSet::new(),
             scoreboard: std::sync::Mutex::new(Scoreboard::default()),
             worldborder: std::sync::Mutex::new(Worldborder::new(
                 0.0,
@@ -419,6 +465,7 @@ impl World {
             custom_data: std::sync::Mutex::new(custom_data),
             custom_block_entity_data: DashMap::new(),
             entity_tracker: entity_tracker::EntityTracker::new(),
+            entity_persistence_lock: tokio::sync::Mutex::new(()),
         }
     }
 
@@ -542,9 +589,11 @@ impl World {
     }
 
     pub async fn shutdown(&self) {
-        for entity in self.entities.load().iter() {
-            self.save_entity(entity).await;
-        }
+        {
+            let _persistence_guard = self.entity_persistence_lock.lock().await;
+            let entities = self.entities.load_full();
+            self.rebuild_all_entity_chunk_snapshots(&entities).await;
+        };
 
         let chunks: Vec<Vector2<i32>> = self
             .block_entities
@@ -568,26 +617,81 @@ impl World {
         self.level.shutdown().await;
     }
 
-    /// Serializes a live entity into its current chunk's entity data. The live
-    /// entity list is the source of truth while a chunk is loaded (its saved NBT
-    /// is consumed on load), so this simply appends the entity to the chunk it is
-    /// currently in; the chunk is rewritten from scratch every unload cycle, so
-    /// there is nothing stale to deduplicate.
-    async fn save_entity(&self, entity: &Arc<dyn EntityBase>) {
-        let base_entity = entity.get_entity();
-        if base_entity.is_removed() {
-            return;
+    fn entity_chunk_snapshots(
+        entities: &[Arc<dyn EntityBase>],
+    ) -> (FxHashMap<Vector2<i32>, Vec<NbtCompound>>, FxHashSet<Uuid>) {
+        let mut snapshots: FxHashMap<Vector2<i32>, Vec<NbtCompound>> = FxHashMap::default();
+        let mut saved_uuids = FxHashSet::default();
+        for entity in entities {
+            let base_entity = entity.get_entity();
+            if base_entity.is_removed() || !saved_uuids.insert(base_entity.entity_uuid) {
+                continue;
+            }
+
+            let chunk_pos = base_entity.chunk_pos.load();
+            let mut nbt = NbtCompound::new();
+            entity.write_nbt(&mut nbt);
+            snapshots.entry(chunk_pos).or_default().push(nbt);
         }
-        let current_chunk = base_entity.block_pos.load().chunk_position();
-        let mut nbt = NbtCompound::new();
-        entity.write_nbt(&mut nbt);
-        let chunk = self.level.get_entity_chunk(current_chunk).await;
-        chunk
-            .data
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .push(nbt);
-        chunk.mark_dirty(true);
+        (snapshots, saved_uuids)
+    }
+
+    /// Rebuilds every materialized entity chunk from the live entity list.
+    ///
+    /// A complete replacement is important here: appending one NBT record per
+    /// entity makes every autosave add another copy of the same entities. Empty
+    /// materialized chunks are replaced too, which removes snapshots of entities
+    /// that moved away or were discarded.
+    async fn rebuild_all_entity_chunk_snapshots(&self, entities: &[Arc<dyn EntityBase>]) {
+        let (mut snapshots, live_uuids) = Self::entity_chunk_snapshots(entities);
+
+        for (chunk_pos, chunk) in self.level.entity_chunks() {
+            let entities = snapshots.remove(&chunk_pos).unwrap_or_default();
+            if chunk.entities_are_materialized() {
+                chunk.replace_entities(entities);
+            } else {
+                chunk.reconcile_entities(entities, &live_uuids);
+            }
+        }
+
+        // An entity can cross into a chunk before that chunk's persisted entities
+        // are materialized. Preserve those untouched entities while replacing any
+        // prior snapshot of the live UUID.
+        for (chunk_pos, entities) in snapshots {
+            self.level
+                .get_entity_chunk(chunk_pos)
+                .await
+                .reconcile_entities(entities, &live_uuids);
+        }
+    }
+
+    /// Rebuilds the chunks being unloaded from the entities removed from the live
+    /// world. The caller holds `entity_persistence_lock`, preventing an autosave
+    /// or another unload from rebuilding the same chunks concurrently.
+    async fn rebuild_unloaded_entity_chunk_snapshots(
+        &self,
+        entities: &[Arc<dyn EntityBase>],
+        chunks: &FxHashSet<Vector2<i32>>,
+    ) {
+        let (mut snapshots, live_uuids) = Self::entity_chunk_snapshots(entities);
+
+        // Also remove stale occurrences of these live UUIDs from other loaded
+        // chunks (for example after an entity crossed a boundary).
+        for (chunk_pos, chunk) in self.level.entity_chunks() {
+            let entities = snapshots.remove(&chunk_pos).unwrap_or_default();
+            if chunks.contains(&chunk_pos) && chunk.entities_are_materialized() {
+                chunk.replace_entities(entities);
+            } else {
+                chunk.reconcile_entities(entities, &live_uuids);
+            }
+        }
+
+        for (chunk_pos, entities) in snapshots {
+            self.level
+                .get_entity_chunk(chunk_pos)
+                .await
+                .reconcile_entities(entities, &live_uuids);
+        }
     }
 
     /// Serializes the live block entities of a chunk back into that chunk's block
@@ -1144,16 +1248,9 @@ impl World {
 
     /// Broadcasts the skin layers of a player, encoding the metadata for each Java client's own
     /// protocol version since the tracked data index differs between versions.
-    fn broadcast_skin_parts<B: BClientPacket>(
-        &self,
-        except: &[uuid::Uuid],
-        entity_id: i32,
-        skin_parts: u8,
-        be_packet: &B,
-    ) {
+    fn broadcast_skin_parts(&self, except: &[uuid::Uuid], entity_id: i32, skin_parts: u8) {
         let players = self.players.load();
         let mut java_recipients = Vec::new();
-        let mut bedrock_recipients = Vec::new();
 
         for p in players.iter() {
             if except.contains(&p.gameprofile.id) {
@@ -1161,7 +1258,7 @@ impl World {
             }
             match p.client.as_ref() {
                 ClientPlatform::Java(_) => java_recipients.push(p),
-                ClientPlatform::Bedrock(be_client) => bedrock_recipients.push(be_client),
+                ClientPlatform::Bedrock(_) => {}
             }
         }
 
@@ -1193,8 +1290,6 @@ impl World {
                 }
             }
         }
-
-        Self::broadcast_bedrock_grouped(be_packet, bedrock_recipients.into_iter());
     }
 
     /// Broadcasts a packet to all connected players within the world, excluding the specified players.
@@ -1815,7 +1910,6 @@ impl World {
                     if let Some(server) = self.server.upgrade() {
                         server.spawn_task(async move {
                             world_clone.remove_entities_in_chunks(&cleaned_chunks).await;
-                            world_clone.level.clean_entity_chunks(&cleaned_chunks);
                         });
                     }
                 }
@@ -3120,26 +3214,10 @@ impl World {
         let gameprofile = &player.gameprofile;
         let velocity = player.get_entity().velocity.load();
 
-        // 1. Broadcast the new Bedrock player to everyone else (Java + Bedrock)
-        let bedrock_player_list = CPlayerList {
-            action: CPlayerList::ACTION_ADD,
-            entries: vec![PlayerListEntry {
-                uuid: gameprofile.id,
-                entity_unique_id: VarLong(runtime_id as i64),
-                username: gameprofile.name.clone(),
-                xuid: String::new(),
-                platform_chat_id: String::new(),
-                build_platform: BuildPlatform::Unknown,
-                skin: (**player.bedrock_skin.load()).clone(),
-                is_teacher: false,
-                is_host: false,
-                is_sub_client: false,
-                player_color: [0, 0, 0, 0],
-            }],
-        };
-
+        // 1. Broadcast the new Bedrock player to Java clients. Bedrock recipients receive the
+        // player-list entry atomically with the actor once their terrain barrier is satisfied.
         let gamemode = player.gamemode.load();
-        self.broadcast_packet_except_editioned(
+        self.broadcast_packet_except(
             &[gameprofile.id],
             &CPlayerInfoUpdate::new(
                 (PlayerInfoFlags::ADD_PLAYER
@@ -3164,44 +3242,13 @@ impl World {
                     ],
                 }],
             ),
-            &bedrock_player_list,
         );
 
-        let bedrock_add_player = CAddPlayer {
-            uuid: gameprofile.id,
-            player_name: gameprofile.name.clone(),
-            target_runtime_id: VarULong(runtime_id),
-            platform_chat_id: String::new(),
-            position: Vector3::new(position.x as f32, position.y as f32, position.z as f32),
-            velocity: Vector3::new(velocity.x as f32, velocity.y as f32, velocity.z as f32),
-            rotation: Vector2::new(pitch, yaw),
-            y_head_rotation: yaw,
-            carried_item: NetworkItemStackDescriptor::default(),
-            player_game_type: player.gamemode.load().into(),
-            entity_data: entity.bedrock_metadata(),
-            synced_properties: PropertySyncData::default(),
-            abilities_data: pumpkin_protocol::bedrock::client::SerializedAbilitiesData {
-                target_player_raw_id: runtime_id as i64,
-                player_permissions:
-                    pumpkin_protocol::bedrock::client::PlayerPermissionLevel::Visitor,
-                command_permissions: pumpkin_protocol::bedrock::client::CommandPermissionLevel::Any,
-                layers: vec![
-                    pumpkin_protocol::bedrock::client::SerializedAbilitiesDataSerializedLayer {
-                        serialized_layer: 0,
-                        abilities_set: 0,
-                        ability_value: 0,
-                        fly_speed: 0.05,
-                        vertical_fly_speed: 0.05,
-                        walk_speed: 0.1,
-                    },
-                ],
-            },
-            actor_links: Vec::new(),
-            device_id: String::new(),
-            build_platform: BuildPlatform::Unknown,
-        };
+        self.sync_bedrock_player_lists_on_join(&player).await;
 
-        self.broadcast_packet_except_editioned(
+        // Java can receive the actor immediately. Bedrock actor creation is deferred through
+        // EntityTracker until terrain and PlayerSpawn are ready for each recipient.
+        self.broadcast_packet_except(
             &[gameprofile.id],
             &CSpawnEntity::new(
                 (runtime_id as i32).into(),
@@ -3214,7 +3261,6 @@ impl World {
                 0.into(),
                 velocity,
             ),
-            &bedrock_add_player,
         );
 
         self.send_player_equipment(&player);
@@ -3222,97 +3268,11 @@ impl World {
         // Broadcast metadata to Java players so they can correctly interact with the new player
         let skin_parts = player.config.load().skin_parts;
 
-        self.broadcast_skin_parts(
-            &[gameprofile.id],
-            runtime_id as i32,
-            skin_parts,
-            &actor_data,
-        );
-
-        // 2. Spawn existing players for our new Bedrock client
-        let players = self.players.load();
-
-        for existing_player in players
-            .iter()
-            .filter(|p| p.gameprofile.id != gameprofile.id)
-        {
-            let ex_profile = &existing_player.gameprofile;
-            let ex_entity = &existing_player.get_entity();
-            let ex_pos = ex_entity.pos.load();
-            let ex_vel = ex_entity.velocity.load();
-
-            let ex_player_list = CPlayerList {
-                action: CPlayerList::ACTION_ADD,
-                entries: vec![PlayerListEntry {
-                    uuid: ex_profile.id,
-                    entity_unique_id: VarLong(existing_player.entity_id() as i64),
-                    username: ex_profile.name.clone(),
-                    xuid: String::new(),
-                    platform_chat_id: String::new(),
-                    build_platform: BuildPlatform::Unknown,
-                    skin: (**existing_player.bedrock_skin.load()).clone(),
-                    is_teacher: false,
-                    is_host: false,
-                    is_sub_client: false,
-                    player_color: [0, 0, 0, 0],
-                }],
-            };
-            // Send PlayerList FIRST
-            client.send_packet(&ex_player_list).await;
-
-            let ex_add_player = CAddPlayer {
-                uuid: ex_profile.id,
-                player_name: ex_profile.name.clone(),
-                target_runtime_id: VarULong(existing_player.entity_id() as u64),
-                platform_chat_id: String::new(),
-                position: Vector3::new(ex_pos.x as f32, ex_pos.y as f32, ex_pos.z as f32),
-                velocity: Vector3::new(ex_vel.x as f32, ex_vel.y as f32, ex_vel.z as f32),
-                rotation: Vector2::new(ex_entity.pitch.load(), ex_entity.yaw.load()),
-                y_head_rotation: ex_entity.head_yaw.load(),
-                carried_item: NetworkItemStackDescriptor::default(),
-                player_game_type: existing_player.gamemode.load().into(),
-                entity_data: ex_entity.bedrock_metadata(),
-                synced_properties: PropertySyncData::default(),
-                abilities_data: pumpkin_protocol::bedrock::client::SerializedAbilitiesData {
-                    target_player_raw_id: existing_player.entity_id() as i64,
-                    player_permissions:
-                        pumpkin_protocol::bedrock::client::PlayerPermissionLevel::Visitor,
-                    command_permissions:
-                        pumpkin_protocol::bedrock::client::CommandPermissionLevel::Any,
-                    layers: vec![
-                        pumpkin_protocol::bedrock::client::SerializedAbilitiesDataSerializedLayer {
-                            serialized_layer: 0,
-                            abilities_set: 0,
-                            ability_value: 0,
-                            fly_speed: 0.05,
-                            vertical_fly_speed: 0.05,
-                            walk_speed: 0.1,
-                        },
-                    ],
-                },
-                actor_links: Vec::new(),
-                device_id: String::new(),
-                build_platform: BuildPlatform::Unknown,
-            };
-
-            client.send_packet(&ex_add_player).await;
-
-            let ex_held_item = existing_player.inventory().held_item();
-
-            let ex_be_mob_equipment = pumpkin_protocol::bedrock::client::CMobEquipment {
-                target_runtime_id: (existing_player.entity_id() as u64).into(),
-                item: (&ex_held_item).into(),
-                slot: 0,
-                selected_slot: 0,
-                container_id: 0,
-            };
-
-            client.send_packet(&ex_be_mob_equipment).await;
-        }
+        self.broadcast_skin_parts(&[gameprofile.id], runtime_id as i32, skin_parts);
 
         player.has_played_before.store(true, Ordering::Relaxed);
 
-        // 3. Trigger Join Event and Broadcast Join Message
+        // 2. Trigger Join Event and Broadcast Join Message
         let msg_comp = TextComponent::translate_cross(
             translation::java::MULTIPLAYER_PLAYER_JOINED,
             translation::bedrock::MULTIPLAYER_PLAYER_JOINED,
@@ -3490,23 +3450,6 @@ impl World {
         player.request_teleport(position, yaw, pitch);
 
         let gameprofile = &player.gameprofile;
-        let bedrock_player_list = CPlayerList {
-            action: CPlayerList::ACTION_ADD,
-            entries: vec![PlayerListEntry {
-                uuid: gameprofile.id,
-                entity_unique_id: VarLong(entity_id as i64),
-                username: gameprofile.name.clone(),
-                xuid: String::new(),
-                platform_chat_id: String::new(),
-                build_platform: BuildPlatform::Unknown,
-                skin: (**player.bedrock_skin.load()).clone(),
-                is_teacher: false,
-                is_host: false,
-                is_sub_client: false,
-                player_color: [0, 0, 0, 0],
-            }],
-        };
-
         let player_actions = [
             PlayerAction::AddPlayer {
                 name: &gameprofile.name,
@@ -3533,7 +3476,8 @@ impl World {
             &java_player,
         );
 
-        self.broadcast_editioned(&player_info_update, &bedrock_player_list);
+        self.broadcast_packet_all(&player_info_update);
+        self.sync_bedrock_player_lists_on_join(player).await;
 
         // If the player has a custom tab_list_name, send an update for it
         if let Some(tab_list_name) = player.get_tab_list_name() {
@@ -3652,41 +3596,8 @@ impl World {
 
         let gameprofile = &player.gameprofile;
 
-        let bedrock_add_player = CAddPlayer {
-            uuid: gameprofile.id,
-            player_name: gameprofile.name.clone(),
-            target_runtime_id: VarULong(entity_id as u64),
-            platform_chat_id: String::new(),
-            position: Vector3::new(position.x as f32, position.y as f32, position.z as f32),
-            velocity: Vector3::new(velocity.x as f32, velocity.y as f32, velocity.z as f32),
-            rotation: Vector2::new(pitch, yaw),
-            y_head_rotation: yaw,
-            carried_item: NetworkItemStackDescriptor::default(),
-            player_game_type: player.gamemode.load().into(),
-            entity_data: player.get_entity().bedrock_metadata(),
-            synced_properties: PropertySyncData::default(),
-            abilities_data: pumpkin_protocol::bedrock::client::SerializedAbilitiesData {
-                target_player_raw_id: entity_id as i64,
-                player_permissions:
-                    pumpkin_protocol::bedrock::client::PlayerPermissionLevel::Visitor,
-                command_permissions: pumpkin_protocol::bedrock::client::CommandPermissionLevel::Any,
-                layers: vec![
-                    pumpkin_protocol::bedrock::client::SerializedAbilitiesDataSerializedLayer {
-                        serialized_layer: 0,
-                        abilities_set: 0,
-                        ability_value: 0,
-                        fly_speed: 0.05,
-                        vertical_fly_speed: 0.05,
-                        walk_speed: 0.1,
-                    },
-                ],
-            },
-            actor_links: Vec::new(),
-            device_id: String::new(),
-            build_platform: BuildPlatform::Unknown,
-        };
-
-        // Spawn the player for every client.
+        // Java can receive the actor immediately. Bedrock actor creation is deferred through
+        // EntityTracker until that recipient has terrain ready for the player's chunk.
         let spawn_entity = CSpawnEntity::new(
             entity_id.into(),
             gameprofile.id,
@@ -3699,29 +3610,12 @@ impl World {
             velocity,
         );
 
-        self.broadcast_packet_except_editioned(
-            &[player.gameprofile.id],
-            &spawn_entity,
-            &bedrock_add_player,
-        );
+        self.broadcast_packet_except(&[player.gameprofile.id], &spawn_entity);
 
         // Broadcast metadata to Java players so they can correctly interact with the new player
         let skin_parts = player.config.load().skin_parts;
 
-        self.broadcast_skin_parts(
-            &[gameprofile.id],
-            entity_id,
-            skin_parts,
-            &CSetActorData {
-                target_runtime_id: VarULong(entity_id as u64),
-                actor_data: player.get_entity().bedrock_metadata(),
-                synced_properties: PropertySyncData {
-                    int_entries_list: HashMap::new(),
-                    float_entries_list: HashMap::new(),
-                },
-                tick: VarULong(0),
-            },
-        );
+        self.broadcast_skin_parts(&[gameprofile.id], entity_id, skin_parts);
 
         // Spawn players for our client.
         let id = player.gameprofile.id;
@@ -4220,80 +4114,17 @@ impl World {
             return;
         };
         if matches!(player.client.as_ref(), ClientPlatform::Java(_)) {
-            self.broadcast_to_chunk_bedrock(
-                subject.chunk_pos.load(),
-                &CRemoveActor::new(VarLong(subject.entity_id.into())),
-            );
+            self.entity_tracker
+                .suspend_bedrock_entity(subject.entity_id, self);
         }
     }
 
-    async fn refresh_java_player_for_bedrock(&self, subject: &Player) {
+    fn refresh_java_player_for_bedrock(&self, subject: &Player) {
         if !matches!(subject.client.as_ref(), ClientPlatform::Java(_)) {
             return;
         }
-
-        let entity = subject.get_entity();
-        let entity_id = subject.entity_id();
-        let position = entity.pos.load();
-        let velocity = entity.velocity.load();
-        let player_list = CPlayerList {
-            action: CPlayerList::ACTION_ADD,
-            entries: vec![PlayerListEntry {
-                uuid: subject.gameprofile.id,
-                entity_unique_id: VarLong(entity_id.into()),
-                username: subject.gameprofile.name.clone(),
-                xuid: String::new(),
-                platform_chat_id: String::new(),
-                build_platform: BuildPlatform::Unknown,
-                skin: (**subject.bedrock_skin.load()).clone(),
-                is_teacher: false,
-                is_host: false,
-                is_sub_client: false,
-                player_color: [0; 4],
-            }],
-        };
-        let add_player = CAddPlayer {
-            uuid: subject.gameprofile.id,
-            player_name: subject.gameprofile.name.clone(),
-            target_runtime_id: VarULong(entity_id as u64),
-            platform_chat_id: String::new(),
-            position: Vector3::new(position.x as f32, position.y as f32, position.z as f32),
-            velocity: Vector3::new(velocity.x as f32, velocity.y as f32, velocity.z as f32),
-            rotation: Vector2::new(entity.pitch.load(), entity.yaw.load()),
-            y_head_rotation: entity.head_yaw.load(),
-            carried_item: NetworkItemStackDescriptor::default(),
-            player_game_type: subject.gamemode.load().into(),
-            entity_data: entity.bedrock_metadata(),
-            synced_properties: PropertySyncData::default(),
-            abilities_data: pumpkin_protocol::bedrock::client::SerializedAbilitiesData {
-                target_player_raw_id: entity_id as i64,
-                player_permissions:
-                    pumpkin_protocol::bedrock::client::PlayerPermissionLevel::Visitor,
-                command_permissions: pumpkin_protocol::bedrock::client::CommandPermissionLevel::Any,
-                layers: vec![
-                    pumpkin_protocol::bedrock::client::SerializedAbilitiesDataSerializedLayer {
-                        serialized_layer: 0,
-                        abilities_set: 0,
-                        ability_value: 0,
-                        fly_speed: 0.05,
-                        vertical_fly_speed: 0.05,
-                        walk_speed: 0.1,
-                    },
-                ],
-            },
-            actor_links: Vec::new(),
-            device_id: String::new(),
-            build_platform: BuildPlatform::Unknown,
-        };
-        let remove = CRemoveActor::new(VarLong(entity_id.into()));
-
-        for recipient in self.players.load().iter() {
-            if let ClientPlatform::Bedrock(client) = recipient.client.as_ref() {
-                client.send_packet(&remove).await;
-                client.send_packet(&player_list).await;
-                client.send_packet(&add_player).await;
-            }
-        }
+        self.entity_tracker
+            .resume_bedrock_entity(subject.entity_id(), self);
     }
 
     #[allow(clippy::too_many_lines)]
@@ -4446,15 +4277,11 @@ impl World {
 
                         // Detach from the old world before publishing into the new one, so no
                         // observer sees the player in a world whose chunk manager doesn't match.
+                        player.pause_chunk_streaming_for_transfer();
                         self.remove_player(player, false).await;
                         player.unload_watched_chunks(self).await;
                         player.change_world_chunks(&self.level, &destination);
                         player.living_entity.entity.set_world(destination.clone());
-                        destination.players.rcu(|current_list| {
-                            let mut new_list = (**current_list).clone();
-                            new_list.push(player.clone());
-                            new_list
-                        });
                     }
 
                     (Some(destination), position, yaw, pitch)
@@ -4564,10 +4391,29 @@ impl World {
         player.get_entity().set_pos(position);
         player.get_entity().set_rotation(yaw, pitch);
         player.get_entity().last_pos.store(position);
+        if target_world.uuid != self.uuid {
+            target_world.players.rcu(|current_list| {
+                let mut new_list = (**current_list).clone();
+                new_list.push(player.clone());
+                new_list
+            });
+            let tracked_player = player.clone() as Arc<dyn EntityBase>;
+            target_world
+                .entity_tracker
+                .add_entity(&tracked_player, &target_world);
+            target_world.sync_bedrock_player_lists_on_join(player).await;
+        }
 
         // TODO: difficulty, exp bar, status effect
 
+        if target_world.uuid == self.uuid {
+            // Cross-world transfers already advanced/reset this generation in
+            // `change_world_chunks`; same-world respawns must do it before scheduling chunks.
+            player.advance_chunk_send_epoch();
+        }
+
         // Load chunks and send world info FIRST (before teleport packet)
+        player.resume_chunk_streaming_after_transfer();
         target_world.send_world_info(player, position, yaw, pitch);
 
         // Ensure at least the center chunk is sent synchronously before teleport.
@@ -4581,9 +4427,9 @@ impl World {
         }
 
         // Send teleport packet after at least the center chunk was delivered
-        player.request_teleport(position, yaw, pitch);
+        player.request_teleport_in_current_chunk_epoch(position, yaw, pitch);
 
-        target_world.refresh_java_player_for_bedrock(player).await;
+        target_world.refresh_java_player_for_bedrock(player);
     }
 
     /// Returns true if enough players are sleeping and we should skip the night.
@@ -4619,14 +4465,16 @@ impl World {
         sleeping_player_count >= required_sleeping
     }
 
-    // NOTE: This function doesn't actually await on anything, it just spawns two tokio tasks
+    // NOTE: This function doesn't actually await on anything; it spawns one player-owned task.
     /// IMPORTANT: Chunks have to be non-empty
-    fn spawn_world_entity_chunks(
+    #[allow(clippy::too_many_lines)]
+    pub(crate) fn spawn_world_entity_chunks(
         self: &Arc<Self>,
         player: Arc<Player>,
         chunks: Vec<Vector2<i32>>,
         center_chunk: Vector2<i32>,
-    ) {
+        expected_epoch: u32,
+    ) -> Option<tokio::task::JoinHandle<()>> {
         #[cfg(debug_assertions)]
         let inst = std::time::Instant::now();
 
@@ -4638,6 +4486,7 @@ impl World {
             rel_x * rel_x + rel_z * rel_z
         });
 
+        let requested_chunks: FxHashSet<_> = chunks.iter().copied().collect();
         let mut entity_receiver = self.level.receive_entity_chunks(chunks);
         let level = self.level.clone();
         let world = self.clone();
@@ -4654,15 +4503,28 @@ impl World {
                     }
                 };
 
-                let Some((chunk_weak, first_load)) = recv_result else {
+                let Some((chunk_weak, _first_load)) = recv_result else {
                     break;
                 };
+
+                if player.chunk_send_epoch.load(Ordering::Acquire) != expected_epoch
+                    || !Arc::ptr_eq(&player.world(), &world)
+                {
+                    break;
+                }
 
                 let Some(chunk) = chunk_weak.upgrade() else {
                     continue;
                 };
 
                 let position = Vector2::new(chunk.x, chunk.z);
+                let _persistence_guard = world.entity_persistence_lock.lock().await;
+
+                if player.chunk_send_epoch.load(Ordering::Acquire) != expected_epoch
+                    || !Arc::ptr_eq(&player.world(), &world)
+                {
+                    break;
+                }
 
                 if !level.is_chunk_watched(&position) {
                     // No longer watched: don't make its entities live. Leave the
@@ -4675,40 +4537,40 @@ impl World {
                     continue 'main;
                 }
 
-                if first_load {
-                    // First watcher: consume the serialized entities and make them
-                    // live. The live entity list becomes the single source of
-                    // truth, so the chunk's NBT is taken (cleared) to avoid keeping
-                    // a duplicate copy that would be re-appended on the next unload
-                    // and doubled on every reload.
-                    let entity_nbts = std::mem::take(
-                        &mut *chunk
-                            .data
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner),
-                    );
+                if let Some(entity_nbts) = chunk.take_entities_for_materialization() {
+                    // The watcher that atomically materializes this chunk consumes
+                    // its serialized entities. Later watchers use the live entity
+                    // tracker, even if two fetches for this position raced.
+                    let original_entity_count = entity_nbts.len();
+                    let entity_nbts =
+                        deduplicate_entity_nbts_by_uuid(entity_nbts, Uuid::new_v4);
+                    let duplicate_count = original_entity_count - entity_nbts.len();
+                    if duplicate_count > 0 {
+                        warn!(
+                            "Discarded {duplicate_count} duplicate UUID entries while loading entity chunk {position:?}"
+                        );
+                    }
                     let mut entities_to_add: Vec<Arc<dyn EntityBase>> =
                         Vec::with_capacity(entity_nbts.len());
-                    for entity_nbt in &entity_nbts {
+                    let mut dormant_entity_nbts = Vec::new();
+                    for (entity_nbt, uuid) in entity_nbts {
                         let Some(id) = entity_nbt.get_string("id") else {
                             debug!("Entity has no ID");
+                            dormant_entity_nbts.push(entity_nbt);
                             continue;
                         };
                         let Some(entity_type) =
                             EntityType::from_name(id.strip_prefix("minecraft:").unwrap_or(id))
                         else {
                             warn!("Entity has no valid Entity Type {id}");
+                            dormant_entity_nbts.push(entity_nbt);
                             continue;
                         };
 
-                        // Keep the persisted UUID so the entity keeps its identity
-                        // across reloads (matching vanilla); only fall back to a
-                        // fresh one if it is missing/corrupt.
-                        let uuid = entity_nbt.get_uuid("UUID").unwrap_or_else(Uuid::new_v4);
                         // Pos is zero since it will be read from nbt.
                         let entity =
                             from_type(entity_type, Vector3::new(0.0, 0.0, 0.0), &world, uuid);
-                        entity.read_nbt_non_mut(entity_nbt);
+                        entity.read_nbt_non_mut(&entity_nbt);
                         entity.init_data_tracker();
 
                         let base_entity = entity.get_entity();
@@ -4717,9 +4579,24 @@ impl World {
                         // stale data.
                         base_entity.velocity.store(Vector3::default());
 
-                        player.client.enqueue_spawn_packet(&entity);
-                        player.try_restore_vehicle(&entity);
                         entities_to_add.push(entity);
+                    }
+                    chunk.retain_dormant_entities(dormant_entity_nbts);
+
+                    // Corrupt saves can contain the same UUID in different entity
+                    // chunks. Materialization is serialized, so filter against the
+                    // live world before admitting this batch as well.
+                    let before_global_dedup = entities_to_add.len();
+                    entities_to_add.retain(|entity| {
+                        world
+                            .entity_uuids
+                            .insert(entity.get_entity().entity_uuid)
+                    });
+                    let globally_duplicated = before_global_dedup - entities_to_add.len();
+                    if globally_duplicated > 0 {
+                        warn!(
+                            "Discarded {globally_duplicated} duplicate UUID entries already live while loading entity chunk {position:?}"
+                        );
                     }
 
                     if !entities_to_add.is_empty() {
@@ -4728,24 +4605,34 @@ impl World {
                             new_entities.extend(entities_to_add.iter().cloned());
                             new_entities
                         });
-                    }
-                } else {
-                    // The chunk's entities are already live (another watcher loaded
-                    // them). Just send this player the spawn packets for the live
-                    // entities currently in this chunk.
-                    for entity in world.entities.load().iter() {
-                        let base_entity = entity.get_entity();
-                        if base_entity.chunk_pos.load() == position {
-                            player.client.enqueue_spawn_packet(entity);
-                            player.try_restore_vehicle(entity);
+
+                        for entity in &entities_to_add {
+                            world
+                                .spawn_state
+                                .load()
+                                .add_entity(&world, entity.as_ref());
+                            world.entity_tracker.add_entity(entity, &world);
                         }
                     }
                 }
             }
 
+            // Existing live entities and newly loaded entities share the normal visibility
+            // predicate (including type tracking range and Bedrock chunk readiness). Scan the
+            // tracker once for this batch instead of scanning every live entity for every chunk.
+            if player.chunk_send_epoch.load(Ordering::Acquire) == expected_epoch
+                && Arc::ptr_eq(&player.world(), &world)
+            {
+                world.entity_tracker.update_player_for_chunks(
+                    &player,
+                    &world,
+                    &requested_chunks,
+                );
+            }
+
             #[cfg(debug_assertions)]
             debug!("Chunks queued after {}ms", inst.elapsed().as_millis());
-        });
+        })
     }
 
     /// Gets a `Player` by an entity id
@@ -5066,6 +4953,34 @@ impl World {
         Ok(())
     }
 
+    /// Synchronizes Bedrock's global player/skin list without coupling it to actor visibility.
+    /// Actor creation itself remains terrain-gated by `EntityTracker`.
+    pub(crate) async fn sync_bedrock_player_lists_on_join(&self, player: &Arc<Player>) {
+        let existing_players = self
+            .players
+            .load()
+            .iter()
+            .filter(|existing| existing.gameprofile.id != player.gameprofile.id)
+            .cloned()
+            .collect::<Vec<_>>();
+        let joining_client = match player.client.as_ref() {
+            ClientPlatform::Bedrock(client) => Some(Arc::clone(client)),
+            ClientPlatform::Java(_) => None,
+        };
+        let new_player_list = player.bedrock_player_list_add_packet();
+
+        for existing in existing_players {
+            if let ClientPlatform::Bedrock(recipient) = existing.client.as_ref() {
+                recipient.enqueue_client_packet(&new_player_list).await;
+            }
+            if let Some(client) = joining_client.as_ref() {
+                client
+                    .enqueue_client_packet(&existing.bedrock_player_list_add_packet())
+                    .await;
+            }
+        }
+    }
+
     /// Must only be called after the player's own `CLogin` packet has been sent.
     pub fn pair_new_player_with_tracked_entities(&self, player: &Arc<Player>) {
         self.entity_tracker
@@ -5113,31 +5028,22 @@ impl World {
             self.entity_tracker
                 .remove_entity(player.as_ref() as &dyn EntityBase, self);
             let uuid = player.gameprofile.id;
-            let entity_id = player.entity_id();
-
-            let bedrock_remove_player = CPlayerList {
-                action: CPlayerList::ACTION_REMOVE,
-                entries: vec![PlayerListEntry {
-                    uuid,
-                    entity_unique_id: VarLong(entity_id as i64),
-                    username: player.gameprofile.name.clone(),
-                    xuid: String::new(),
-                    platform_chat_id: String::new(),
-                    build_platform: BuildPlatform::Unknown,
-                    skin: Skin::steve(),
-                    is_teacher: false,
-                    is_host: false,
-                    is_sub_client: false,
-                    player_color: [0, 0, 0, 0],
-                }],
-            };
-
-            self.broadcast_editioned(&CRemovePlayerInfo::new(&[uuid]), &bedrock_remove_player);
-
-            self.broadcast_editioned(
-                &CRemoveEntities::new(&[entity_id.into()]),
-                &CRemoveActor::new(VarLong(entity_id as i64)),
-            );
+            // EntityTracker reliably queues actor removal for clients which had the actor. Player
+            // lists are global, so remove the entry independently for every Bedrock recipient.
+            self.broadcast_packet_all(&CRemovePlayerInfo::new(&[uuid]));
+            let bedrock_recipients = self
+                .players
+                .load()
+                .iter()
+                .filter_map(|recipient| match recipient.client.as_ref() {
+                    ClientPlatform::Bedrock(client) => Some(Arc::clone(client)),
+                    ClientPlatform::Java(_) => None,
+                })
+                .collect::<Vec<_>>();
+            let bedrock_player_list = player.bedrock_player_list_remove_packet();
+            for recipient in bedrock_recipients {
+                recipient.enqueue_client_packet(&bedrock_player_list).await;
+            }
 
             if fire_event {
                 let msg_comp = TextComponent::translate_cross(
@@ -5165,7 +5071,10 @@ impl World {
 
     #[expect(clippy::needless_pass_by_value)]
     pub fn spawn_entity_non_save(&self, entity: Arc<dyn EntityBase>) {
-        let _base_entity = entity.get_entity();
+        let base_entity = entity.get_entity();
+        if !self.entity_uuids.insert(base_entity.entity_uuid) {
+            return;
+        }
         self.entity_tracker.add_entity(&entity, self);
         self.spawn_state.load().add_entity(self, entity.as_ref());
 
@@ -5213,21 +5122,14 @@ impl World {
     pub fn add_entity_silent(&self, entity: Arc<dyn EntityBase>) {
         let base_entity = entity.get_entity();
 
-        // Guard against duplicate entities with the same UUID.
-        // This can happen when chunk entity data is loaded while the entity
-        // already exists in the world (e.g. another player is still tracking it).
-        let already_exists = self
-            .entities
-            .load()
-            .iter()
-            .any(|e| e.get_entity().entity_uuid == base_entity.entity_uuid);
-        if already_exists {
+        // Reserve the UUID atomically before publishing the entity. This also
+        // coordinates synchronous spawns with asynchronous chunk materialization.
+        if !self.entity_uuids.insert(base_entity.entity_uuid) {
             return;
         }
 
-        // The entity stays live-only: it is written to its chunk's saved data on
-        // unload (see `save_entity`), never at spawn, so it can't be both live and
-        // serialized at once (which would double it on the next reload).
+        // The entity stays live-only until the next snapshot rebuild, so spawning
+        // cannot append a second serialized copy immediately.
         self.spawn_state.load().add_entity(self, entity.as_ref());
         self.entity_tracker.add_entity(&entity, self);
 
@@ -5256,6 +5158,7 @@ impl World {
             new_entities.retain(|e| e.get_entity().entity_uuid != base_entity.entity_uuid);
             new_entities
         });
+        self.entity_uuids.remove(&base_entity.entity_uuid);
     }
 
     pub async fn remove_entities_in_chunks(
@@ -5266,9 +5169,13 @@ impl World {
         if chunks_set.is_empty() {
             return;
         }
+        let _persistence_guard = self.entity_persistence_lock.lock().await;
         let mut entities_to_remove = Vec::new();
 
         self.entities.rcu(|current_entities| {
+            // ArcSwap may retry this closure if another entity update wins the race.
+            // Keep only the entities selected by the successful iteration.
+            entities_to_remove.clear();
             let mut new_entities = (**current_entities).clone();
             new_entities.retain(|entity| {
                 let base_entity = entity.get_entity();
@@ -5283,15 +5190,25 @@ impl World {
             new_entities
         });
 
-        for entity in entities_to_remove {
+        for entity in &entities_to_remove {
             self.entity_tracker.remove_entity(entity.as_ref(), self);
-            self.save_entity(&entity).await;
             self.spawn_state.load().remove_entity(self, entity.as_ref());
         }
+
+        self.rebuild_unloaded_entity_chunk_snapshots(&entities_to_remove, &chunks_set)
+            .await;
 
         for chunk_pos in &chunks_set {
             self.save_block_entities(*chunk_pos);
             self.block_entities.remove(chunk_pos);
+        }
+
+        // Remove and enqueue the entity chunks for writing while the persistence
+        // lock is still held. Callers historically repeat this cleanup; those
+        // calls are harmless no-ops once these entries have been removed.
+        self.level.clean_entity_chunks(&chunks_set);
+        for entity in &entities_to_remove {
+            self.entity_uuids.remove(&entity.get_entity().entity_uuid);
         }
     }
 
@@ -6952,9 +6869,11 @@ impl World {
     }
 
     pub async fn save(&self) {
-        for entity in self.entities.load().iter() {
-            self.save_entity(entity).await;
-        }
+        {
+            let _persistence_guard = self.entity_persistence_lock.lock().await;
+            let entities = self.entities.load_full();
+            self.rebuild_all_entity_chunk_snapshots(&entities).await;
+        };
 
         let chunks: Vec<Vector2<i32>> = self
             .block_entities
@@ -7359,7 +7278,11 @@ mod tests {
     };
     use pumpkin_util::math::position::BlockPos;
 
-    use super::{bedrock_block_breaking_rate, bedrock_chest_block_actor};
+    use super::{
+        bedrock_block_breaking_rate, bedrock_chest_block_actor, deduplicate_entity_nbts_by_uuid,
+    };
+    use pumpkin_nbt::compound::NbtCompound;
+    use uuid::Uuid;
 
     #[test]
     fn bedrock_block_breaking_rate_uses_progress_per_tick() {
@@ -7382,6 +7305,54 @@ mod tests {
         assert_eq!(actor.get_int("pairx"), Some(4));
         assert_eq!(actor.get_int("pairz"), Some(7));
         assert_eq!(actor.get_bool("pairlead"), Some(true));
+    }
+
+    #[test]
+    fn persisted_entity_uuid_dedup_keeps_latest_and_assigns_missing_uuids() {
+        fn entity_nbt(marker: i32, uuid: Option<Uuid>) -> NbtCompound {
+            let mut nbt = NbtCompound::new();
+            nbt.put_int("marker", marker);
+            if let Some(uuid) = uuid {
+                nbt.put_uuid("UUID", uuid);
+            }
+            nbt
+        }
+
+        let duplicate_uuid = Uuid::from_u128(1);
+        let other_uuid = Uuid::from_u128(2);
+        let first_generated_uuid = Uuid::from_u128(3);
+        let second_generated_uuid = Uuid::from_u128(4);
+        let mut generated_uuids =
+            [duplicate_uuid, first_generated_uuid, second_generated_uuid].into_iter();
+
+        let entities = deduplicate_entity_nbts_by_uuid(
+            vec![
+                entity_nbt(10, Some(duplicate_uuid)),
+                entity_nbt(20, None),
+                entity_nbt(30, Some(duplicate_uuid)),
+                entity_nbt(40, Some(other_uuid)),
+                entity_nbt(50, None),
+            ],
+            || generated_uuids.next().expect("test UUIDs exhausted"),
+        );
+
+        assert_eq!(entities.len(), 4);
+        assert_eq!(
+            entities
+                .iter()
+                .map(|(nbt, _)| nbt.get_int("marker").expect("marker should be present"))
+                .collect::<Vec<_>>(),
+            vec![20, 30, 40, 50]
+        );
+        assert_eq!(
+            entities.iter().map(|(_, uuid)| *uuid).collect::<Vec<_>>(),
+            vec![
+                first_generated_uuid,
+                duplicate_uuid,
+                other_uuid,
+                second_generated_uuid
+            ]
+        );
     }
 
     #[test]

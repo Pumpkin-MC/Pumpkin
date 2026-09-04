@@ -462,19 +462,30 @@ impl LivingEntity {
             }
         }
 
-        let chunk_pos = self.entity.chunk_pos.load();
-        self.entity.world.load().broadcast_to_chunk_editioned(
-            chunk_pos,
+        let world = self.entity.world.load();
+        world.broadcast_to_chunk(
+            self.entity.chunk_pos.load(),
             &CTakeItemEntity::new(
                 item.entity_id.into(),
                 self.entity.entity_id.into(),
                 VarInt(stack_amount as i32),
             ),
-            &CTakeItemActor {
-                item_runtime_id: VarULong(item.entity_id as u64),
-                actor_runtime_id: VarULong(self.entity.entity_id as u64),
-            },
         );
+        if let (Some(collector), Some(tracked_item)) = (
+            world
+                .entity_tracker
+                .get_tracked_entity(self.entity.entity_id),
+            world.entity_tracker.get_tracked_entity(item.entity_id),
+        ) {
+            collector.send_to_tracking_players_and_self_bedrock_filtered(
+                &CTakeItemActor {
+                    item_runtime_id: VarULong(item.entity_id as u64),
+                    actor_runtime_id: VarULong(self.entity.entity_id as u64),
+                },
+                &world,
+                |player| tracked_item.has_active_bedrock_pairing(&player.gameprofile.id),
+            );
+        }
     }
 
     /// Sends the Hand animation to all others, used when Eating for example
@@ -907,11 +918,8 @@ impl LivingEntity {
             ambient: effect.ambient,
         };
 
-        let chunk_pos = self.entity.chunk_pos.load();
         self.entity
-            .world
-            .load()
-            .broadcast_to_chunk_editioned(chunk_pos, &je_packet, &be_packet);
+            .send_tracked_editioned(self.entity.chunk_pos.load(), &je_packet, &be_packet);
         if effect.effect_type != &StatusEffect::INSTANT_HEALTH
             && effect.effect_type != &StatusEffect::INSTANT_DAMAGE
         {
@@ -1140,7 +1148,6 @@ impl LivingEntity {
     }
 
     pub fn swing_hand(&self) {
-        let world = self.entity.world.load();
         let entity_id = self.entity_id();
 
         let je_packet = pumpkin_protocol::java::client::play::CEntityAnimation::new(
@@ -1154,7 +1161,8 @@ impl LivingEntity {
             swing_source: None,
         };
 
-        world.broadcast_editioned(&je_packet, &be_packet);
+        self.entity
+            .send_tracked_editioned(self.entity.chunk_pos.load(), &je_packet, &be_packet);
     }
 
     fn tick_movement(&self, caller: &dyn EntityBase) {

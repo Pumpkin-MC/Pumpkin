@@ -61,11 +61,18 @@ use crate::{
     net::{DisconnectReason, PacketHandlerResult, PacketRateLimiter},
     plugin::api::events::world::chunk_send::ChunkSend,
     server::Server,
+    world::World,
 };
 use arc_swap::ArcSwap;
 use pumpkin_protocol::bedrock::server::login::ClientData;
-use pumpkin_util::version::BedrockMinecraftVersion;
+use pumpkin_util::{math::vector2::Vector2, version::BedrockMinecraftVersion};
 use pumpkin_world::level::SyncChunk;
+
+#[derive(Default)]
+pub(crate) struct BedrockChunkSendResult {
+    pub queued_positions: Vec<Vector2<i32>>,
+    pub cancelled_positions: Vec<Vector2<i32>>,
+}
 
 pub struct OutgoingPacket {
     pub data: Bytes,
@@ -305,51 +312,102 @@ impl BedrockClient {
         self.close().await;
     }
 
-    pub async fn send_chunks(&self, chunks: &[SyncChunk]) {
-        let player = self.player.load_full();
-        let Some(player) = player.as_ref() else {
+    pub async fn send_chunks(&self, chunks: &[SyncChunk]) -> Vec<Vector2<i32>> {
+        let player_snapshot = self.player.load_full();
+        let Some(player) = player_snapshot.as_ref() else {
             debug!(
                 "send_chunks: player not set yet, dropping {} chunks",
                 chunks.len()
             );
-            return;
+            return Vec::new();
         };
-        let Some(server) = player.world().server.upgrade() else {
-            return;
+        let world = player.world();
+        self.send_chunks_in_world(chunks, player, &world, None)
+            .await
+            .queued_positions
+    }
+
+    pub(crate) async fn send_chunks_for_batch(
+        &self,
+        chunks: &[SyncChunk],
+        player: &Arc<Player>,
+        world: &Arc<World>,
+        expected_epoch: u32,
+    ) -> BedrockChunkSendResult {
+        self.send_chunks_in_world(chunks, player, world, Some(expected_epoch))
+            .await
+    }
+
+    fn chunk_send_context_is_current(
+        player: &Player,
+        world: &Arc<World>,
+        expected_epoch: Option<u32>,
+    ) -> bool {
+        !player.is_chunk_streaming_paused()
+            && Arc::ptr_eq(&player.world(), world)
+            && expected_epoch.is_none_or(|expected_epoch| {
+                player.chunk_send_epoch.load(Ordering::Acquire) == expected_epoch
+            })
+    }
+
+    #[allow(clippy::too_many_lines)]
+    async fn send_chunks_in_world(
+        &self,
+        chunks: &[SyncChunk],
+        player: &Arc<Player>,
+        world: &Arc<World>,
+        expected_epoch: Option<u32>,
+    ) -> BedrockChunkSendResult {
+        let mut result = BedrockChunkSendResult::default();
+        if !Self::chunk_send_context_is_current(player, world, expected_epoch) {
+            return result;
+        }
+        let Some(server) = world.server.upgrade() else {
+            return result;
         };
 
         let mut valid_chunks = Vec::with_capacity(chunks.len());
         for chunk in chunks {
-            let mut event = ChunkSend::new(player.world(), chunk.clone());
+            if !Self::chunk_send_context_is_current(player, world, expected_epoch) {
+                return result;
+            }
+            let mut event = ChunkSend::new(Arc::clone(world), chunk.clone());
             server.plugin_manager.fire(&server, &mut event).await;
-            if !event.cancelled {
+            if !Self::chunk_send_context_is_current(player, world, expected_epoch) {
+                return result;
+            }
+            if event.cancelled {
+                result
+                    .cancelled_positions
+                    .push(Vector2::new(chunk.x, chunk.z));
+            } else {
                 valid_chunks.push(chunk.clone());
             }
         }
 
         if valid_chunks.is_empty() {
-            return;
+            return result;
         }
 
-        let bedrock_dimension =
-            if player.world().dimension == pumpkin_data::dimension::Dimension::THE_NETHER {
-                1
-            } else if player.world().dimension == pumpkin_data::dimension::Dimension::THE_END {
-                2
-            } else {
-                0
-            };
+        let bedrock_dimension = if world.dimension == pumpkin_data::dimension::Dimension::THE_NETHER
+        {
+            1
+        } else if world.dimension == pumpkin_data::dimension::Dimension::THE_END {
+            2
+        } else {
+            0
+        };
 
         let cache_enabled = server.advanced_config.networking.bedrock.chunk_caching
             && self.client_cache_supported.load(Ordering::Relaxed);
 
-        let world = player.world();
+        let encoding_world = Arc::clone(world);
         let (tx, rx) = tokio::sync::oneshot::channel();
         rayon::spawn(move || {
             let mut encoded_payloads = Vec::with_capacity(valid_chunks.len());
             let mut new_blobs = Vec::new();
             for chunk in valid_chunks {
-                let block_actors = world.bedrock_chunk_block_actors(&chunk);
+                let block_actors = encoding_world.bedrock_chunk_block_actors(&chunk);
                 match CLevelChunk::encode_chunk(
                     &chunk,
                     bedrock_dimension,
@@ -357,7 +415,7 @@ impl BedrockClient {
                     &block_actors,
                 ) {
                     Ok((payload, blobs)) => {
-                        encoded_payloads.push(payload);
+                        encoded_payloads.push((Vector2::new(chunk.x, chunk.z), payload));
                         new_blobs.extend(blobs);
                     }
                     Err(e) => error!("Failed to serialize Bedrock chunk: {:?}", e),
@@ -367,8 +425,11 @@ impl BedrockClient {
         });
 
         let Ok((encoded_payloads, new_blobs)) = rx.await else {
-            return;
+            return result;
         };
+        if !Self::chunk_send_context_is_current(player, world, expected_epoch) {
+            return result;
+        }
 
         if !new_blobs.is_empty() {
             let mut cache = self
@@ -383,7 +444,10 @@ impl BedrockClient {
         let mut packets_to_enqueue = Vec::with_capacity(encoded_payloads.len());
         {
             let encoder = self.network_writer.read().await;
-            for payload in encoded_payloads {
+            if !Self::chunk_send_context_is_current(player, world, expected_epoch) {
+                return result;
+            }
+            for (position, payload) in encoded_payloads {
                 let mut packet_buf = Vec::new();
                 match encoder.write_game_packet(
                     CLevelChunk::PACKET_ID as u16,
@@ -392,14 +456,28 @@ impl BedrockClient {
                     &payload,
                     &mut packet_buf,
                 ) {
-                    Ok(()) => packets_to_enqueue.push(packet_buf),
+                    Ok(()) => packets_to_enqueue.push((position, packet_buf)),
                     Err(err) => error!("Failed to write game packet wrapper: {err}"),
                 }
             }
         }
-        for packet_buf in packets_to_enqueue {
-            self.enqueue_packet_data(packet_buf.into()).await;
+        for (position, packet_buf) in packets_to_enqueue {
+            if !Self::chunk_send_context_is_current(player, world, expected_epoch) {
+                break;
+            }
+            let queued = if expected_epoch.is_some() {
+                // A full normal queue is a transient failure for a tracked batch. Retrying on a
+                // later tick is preferable to waiting here and enqueueing an obsolete packet
+                // after a teleport changes the batch epoch.
+                self.try_enqueue_packet_data_checked(packet_buf.into())
+            } else {
+                self.queue_packet_data(packet_buf.into()).await
+            };
+            if queued {
+                result.queued_positions.push(position);
+            }
         }
+        result
     }
 
     pub fn set_player(&self, player: Arc<Player>) {
@@ -421,6 +499,10 @@ impl BedrockClient {
     ///
     /// * `packet_data`: A `Bytes` payload representing the encoded packet.
     pub async fn enqueue_packet_data(&self, packet_data: Bytes) {
+        self.queue_packet_data(packet_data).await;
+    }
+
+    async fn queue_packet_data(&self, packet_data: Bytes) -> bool {
         if let Err(err) = self
             .outgoing_packet_queue_send
             .send(OutgoingPacket::normal(packet_data))
@@ -430,10 +512,17 @@ impl BedrockClient {
             if !self.is_closed() {
                 error!("Failed to add packet to the outgoing packet queue for client: {err}");
             }
+            false
+        } else {
+            true
         }
     }
 
     pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
+        self.try_enqueue_packet_data_checked(packet_data);
+    }
+
+    pub(crate) fn try_enqueue_packet_data_checked(&self, packet_data: Bytes) -> bool {
         if let Err(err) = self
             .outgoing_packet_queue_send
             .try_send(OutgoingPacket::normal(packet_data))
@@ -452,7 +541,45 @@ impl BedrockClient {
                     }
                 }
             }
+            false
+        } else {
+            true
         }
+    }
+
+    /// Atomically reserves normal-queue capacity for an ordered packet group. Either every
+    /// packet is queued in order or none are, which is required for `PlayerList` + `AddPlayer`.
+    pub(crate) fn try_enqueue_packet_batch_checked(&self, packets: Vec<Bytes>) -> bool {
+        if packets.is_empty() {
+            return true;
+        }
+
+        let permits = match self
+            .outgoing_packet_queue_send
+            .try_reserve_many(packets.len())
+        {
+            Ok(permits) => permits,
+            Err(tokio::sync::mpsc::error::TrySendError::Full(())) => {
+                debug!("Failed to reserve outgoing Bedrock packet batch: channel full");
+                return false;
+            }
+            Err(tokio::sync::mpsc::error::TrySendError::Closed(())) => {
+                if !self.is_closed() {
+                    error!("Failed to reserve outgoing Bedrock packet batch: channel closed");
+                }
+                return false;
+            }
+        };
+
+        for (permit, packet) in permits.zip(packets) {
+            permit.send(OutgoingPacket::normal(packet));
+        }
+        true
+    }
+
+    #[must_use]
+    pub(crate) fn has_outgoing_packet_capacity(&self) -> bool {
+        self.outgoing_packet_queue_send.capacity() > 0
     }
 
     pub fn write_raw_packet<P: BClientPacket>(

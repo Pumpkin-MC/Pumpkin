@@ -1,5 +1,8 @@
 use pumpkin_util::math::vector2::Vector2;
-use std::{num::NonZero, sync::Arc};
+use std::{
+    num::NonZero,
+    sync::{Arc, atomic::Ordering},
+};
 
 use pumpkin_protocol::{
     bedrock::client::network_chunk_publisher_update::CNetworkChunkPublisherUpdate,
@@ -8,7 +11,10 @@ use pumpkin_protocol::{
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 
 use crate::{
-    entity::{EntityBase, player::Player},
+    entity::{
+        EntityBase,
+        player::{HeldChunkTickets, Player},
+    },
     net::ClientPlatform,
 };
 
@@ -42,6 +48,15 @@ pub fn is_within_view_distance(
 
 #[allow(clippy::too_many_lines)]
 pub fn update_position(player: &Arc<Player>) {
+    let mut sender = player
+        .chunk_sender
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if player.is_chunk_streaming_paused() {
+        return;
+    }
+    let expected_epoch = player.chunk_send_epoch.load(Ordering::Acquire);
+
     let entity = &player.get_entity();
     let new_chunk_center = entity.chunk_pos.load();
     let old_cylindrical = player.watched_section.load();
@@ -58,22 +73,6 @@ pub fn update_position(player: &Arc<Player>) {
         return;
     }
 
-    match player.client.as_ref() {
-        ClientPlatform::Java(java_client) => {
-            java_client.try_send_packet(&CCenterChunk {
-                chunk_x: new_chunk_center.x.into(),
-                chunk_z: new_chunk_center.y.into(),
-            });
-        }
-        ClientPlatform::Bedrock(bedrock_client) => {
-            if let Ok(data) = bedrock_client.serialize_packet(&CNetworkChunkPublisherUpdate::new(
-                player.get_entity().block_pos.load(),
-                u32::from(view_distance.get()) * 16,
-            )) {
-                bedrock_client.try_enqueue_packet(data);
-            }
-        }
-    }
     let (loading_iter, unloading_iter) =
         Cylindrical::changed_chunks(old_cylindrical, new_cylindrical);
     let loading_chunks: Vec<_> = loading_iter.collect();
@@ -119,61 +118,62 @@ pub fn update_position(player: &Arc<Player>) {
             lock.add_ticket(new_chunk_center, sim);
         }
 
-        if let Some((held_view, held_sim)) = held_tickets.replace((new_view_level, new_sim_level)) {
-            if let Some(view) = held_view {
-                lock.remove_ticket(old_cylindrical.center, view);
+        if let Some(held) = held_tickets.replace(HeldChunkTickets {
+            center: new_chunk_center,
+            view_level: new_view_level,
+            simulation_level: new_sim_level,
+        }) {
+            if let Some(view) = held.view_level {
+                lock.remove_ticket(held.center, view);
             }
-            if let Some(sim) = held_sim {
-                lock.remove_ticket(old_cylindrical.center, sim);
+            if let Some(sim) = held.simulation_level {
+                lock.remove_ticket(held.center, sim);
             }
         }
         lock.send_change();
     };
     drop(held_tickets);
 
-    {
-        let mut sender = player
-            .chunk_sender
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        for pos in &unloading_chunks {
-            sender.unload_chunk(&player.client, *pos);
+    match player.client.as_ref() {
+        ClientPlatform::Java(java_client) => {
+            java_client.try_send_packet(&CCenterChunk {
+                chunk_x: new_chunk_center.x.into(),
+                chunk_z: new_chunk_center.y.into(),
+            });
         }
-        for pos in &loading_chunks {
-            sender.enqueue_chunk(*pos);
+        ClientPlatform::Bedrock(bedrock_client) => {
+            if let Ok(data) = bedrock_client.serialize_packet(&CNetworkChunkPublisherUpdate::new(
+                player.get_entity().block_pos.load(),
+                u32::from(view_distance.get()) * 16,
+            )) {
+                bedrock_client.try_enqueue_packet(data);
+            }
         }
+    }
+
+    for pos in &unloading_chunks {
+        sender.unload_chunk(&player.client, *pos);
+    }
+    for pos in &loading_chunks {
+        sender.enqueue_chunk(*pos);
     }
     player.watched_section.store(new_cylindrical);
 
-    // Make sure the watched section and the chunk watcher updates are async atomic. We want to
-    // ensure what we unload when the player disconnects is correct.
-    if !loading_chunks.is_empty() || !unloading_chunks.is_empty() {
-        let level = world.level.clone();
-        let world_clone = world.clone();
-        let loading_chunks_clone = loading_chunks.clone();
-        let unloading_chunks_clone = unloading_chunks;
+    // Queue watcher counts before releasing `chunk_sender`. Transfer pause acquires the same
+    // lock, so its full-radius unwatch is guaranteed to follow every published movement update.
+    player.queue_chunk_watcher_transition(world.clone(), loading_chunks.clone(), unloading_chunks);
+    drop(sender);
 
-        if let Some(server) = world.server.upgrade() {
-            server.spawn_task(async move {
-                level
-                    .mark_chunks_as_newly_watched(&loading_chunks_clone)
-                    .await;
-                let chunks_to_clean = level
-                    .mark_chunks_as_not_watched(&unloading_chunks_clone)
-                    .await;
-
-                if !chunks_to_clean.is_empty() {
-                    world_clone
-                        .remove_entities_in_chunks(&chunks_to_clean)
-                        .await;
-                    world_clone.level.clean_entity_chunks(&chunks_to_clean);
-                }
-            });
-        }
-    }
-
-    if !loading_chunks.is_empty() {
-        world.spawn_world_entity_chunks(player.clone(), loading_chunks, new_chunk_center);
+    // Bedrock entity chunks are activated only after their corresponding level-chunk packets
+    // have been queued. This keeps a large persisted entity population from racing terrain and
+    // arriving as one unbounded join-time burst.
+    if !loading_chunks.is_empty() && matches!(player.client.as_ref(), ClientPlatform::Java(_)) {
+        let _ = world.spawn_world_entity_chunks(
+            player.clone(),
+            loading_chunks,
+            new_chunk_center,
+            expected_epoch,
+        );
     }
     world.entity_tracker.update_player_position(player, &world);
 }

@@ -9,10 +9,10 @@ use pumpkin_data::{Block, BlockState, BlockStateId};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use rustc_hash::{FxHashMap, FxHashSet};
+use uuid::Uuid;
 
 use std::sync::RwLock;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use thiserror::Error;
 
 pub mod format;
@@ -92,6 +92,131 @@ pub struct ChunkEntityData {
     pub data: std::sync::Mutex<Vec<NbtCompound>>,
 
     pub dirty: AtomicBool,
+    /// Whether the serialized entities have been moved into the live world.
+    ///
+    /// Entity chunk data must not be treated as an authoritative snapshot until
+    /// this transition has happened. A chunk can be fetched just as its final
+    /// watcher leaves, in which case its persisted data must remain untouched.
+    materialized: AtomicBool,
+    /// Records that non-empty persisted data was consumed and therefore must be
+    /// rewritten even if the eventual authoritative live snapshot is empty.
+    snapshot_needs_rewrite: AtomicBool,
+    /// Persisted records Pumpkin cannot currently materialize (for example an entity
+    /// type supplied by a missing mod). These must survive authoritative live snapshots.
+    dormant_entities: std::sync::Mutex<Vec<NbtCompound>>,
+}
+
+impl ChunkEntityData {
+    #[must_use]
+    pub const fn empty(x: i32, z: i32) -> Self {
+        Self {
+            x,
+            z,
+            data: std::sync::Mutex::new(Vec::new()),
+            dirty: AtomicBool::new(false),
+            materialized: AtomicBool::new(false),
+            snapshot_needs_rewrite: AtomicBool::new(false),
+            dormant_entities: std::sync::Mutex::new(Vec::new()),
+        }
+    }
+
+    /// Takes the persisted entities exactly once when the entity chunk becomes
+    /// live. Later watchers observe `None` and use the world's live entities.
+    pub fn take_entities_for_materialization(&self) -> Option<Vec<NbtCompound>> {
+        let mut data = self
+            .data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if self
+            .materialized
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            return None;
+        }
+
+        let entities = std::mem::take(&mut *data);
+        if !entities.is_empty() {
+            self.snapshot_needs_rewrite.store(true, Ordering::Release);
+        }
+        Some(entities)
+    }
+
+    #[must_use]
+    pub fn entities_are_materialized(&self) -> bool {
+        self.materialized.load(Ordering::Acquire)
+    }
+
+    /// Retains records which could not be turned into live entities. They remain in
+    /// `data` for serialization and are also kept separately so later live snapshot
+    /// replacements cannot erase them.
+    pub fn retain_dormant_entities(&self, entities: Vec<NbtCompound>) {
+        if entities.is_empty() {
+            return;
+        }
+
+        let mut dormant = self
+            .dormant_entities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut data = self
+            .data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        dormant.extend(entities.iter().cloned());
+        data.extend(entities);
+    }
+
+    /// Replaces the serialized snapshot for a materialized entity chunk.
+    /// Replacing rather than appending makes repeated autosaves idempotent.
+    pub fn replace_entities(&self, mut entities: Vec<NbtCompound>) {
+        let dormant = self
+            .dormant_entities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !dormant.is_empty() {
+            let mut combined = Vec::with_capacity(dormant.len() + entities.len());
+            combined.extend(dormant.iter().cloned());
+            combined.append(&mut entities);
+            entities = combined;
+        }
+        let mut data = self
+            .data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let snapshot_needs_rewrite = self.snapshot_needs_rewrite.swap(false, Ordering::AcqRel);
+        if !snapshot_needs_rewrite && *data == entities {
+            return;
+        }
+        *data = entities;
+        self.dirty.store(true, Ordering::Release);
+    }
+
+    /// Reconciles a chunk whose persisted contents have not been materialized
+    /// with live entity snapshots. Dormant entities are retained, while any old
+    /// occurrence of a live UUID is removed before the current chunk's snapshots
+    /// are appended.
+    pub fn reconcile_entities(&self, entities: Vec<NbtCompound>, live_uuids: &FxHashSet<Uuid>) {
+        if entities.is_empty() && live_uuids.is_empty() {
+            return;
+        }
+
+        let mut data = self
+            .data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let previous_len = data.len();
+        data.retain(|entity| {
+            entity
+                .get_uuid("UUID")
+                .is_none_or(|uuid| !live_uuids.contains(&uuid))
+        });
+        let changed = data.len() != previous_len || !entities.is_empty();
+        data.extend(entities);
+        if changed {
+            self.dirty.store(true, Ordering::Release);
+        }
+    }
 }
 
 /// Represents pure block data for a chunk.
@@ -936,9 +1061,143 @@ pub enum ChunkSerializingError {
 
 #[cfg(test)]
 mod tests {
-    use super::ChunkSections;
+    use super::{ChunkEntityData, ChunkSections};
     use crate::chunk::palette::BlockPalette;
     use pumpkin_data::{Block, block_properties::has_random_ticks};
+    use pumpkin_nbt::compound::NbtCompound;
+    use uuid::Uuid;
+
+    fn entity_nbt(marker: i32, uuid: Uuid) -> NbtCompound {
+        let mut nbt = NbtCompound::new();
+        nbt.put_int("marker", marker);
+        nbt.put_uuid("UUID", uuid);
+        nbt
+    }
+
+    #[test]
+    fn materialized_entity_snapshots_replace_instead_of_append() {
+        let chunk = ChunkEntityData::empty(4, -2);
+        chunk
+            .data
+            .lock()
+            .unwrap()
+            .push(entity_nbt(1, Uuid::from_u128(1)));
+
+        let persisted = chunk
+            .take_entities_for_materialization()
+            .expect("first materialization should consume persisted entities");
+        assert_eq!(persisted.len(), 1);
+        assert!(chunk.entities_are_materialized());
+        assert!(chunk.take_entities_for_materialization().is_none());
+
+        chunk.replace_entities(vec![entity_nbt(2, Uuid::from_u128(1))]);
+        chunk.replace_entities(vec![entity_nbt(3, Uuid::from_u128(1))]);
+
+        let saved = chunk.data.lock().unwrap();
+        assert_eq!(saved.len(), 1);
+        assert_eq!(saved[0].get_int("marker"), Some(3));
+    }
+
+    #[test]
+    fn consumed_entity_snapshot_rewrites_an_authoritative_empty_snapshot() {
+        let chunk = ChunkEntityData::empty(4, -2);
+        chunk
+            .data
+            .lock()
+            .unwrap()
+            .push(entity_nbt(1, Uuid::from_u128(1)));
+
+        assert_eq!(
+            chunk
+                .take_entities_for_materialization()
+                .expect("chunk should materialize")
+                .len(),
+            1
+        );
+        assert!(!chunk.dirty.load(std::sync::atomic::Ordering::Acquire));
+
+        chunk.replace_entities(Vec::new());
+
+        assert!(chunk.dirty.load(std::sync::atomic::Ordering::Acquire));
+        assert!(chunk.data.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn generated_empty_entity_chunk_stays_clean_after_empty_snapshot() {
+        let chunk = ChunkEntityData::empty(4, -2);
+        assert!(
+            chunk
+                .take_entities_for_materialization()
+                .expect("chunk should materialize")
+                .is_empty()
+        );
+
+        chunk.replace_entities(Vec::new());
+
+        assert!(!chunk.dirty.load(std::sync::atomic::Ordering::Acquire));
+    }
+
+    #[test]
+    fn dormant_entity_records_survive_repeated_live_snapshot_replacement() {
+        let dormant_uuid = Uuid::from_u128(1);
+        let live_uuid = Uuid::from_u128(2);
+        let chunk = ChunkEntityData::empty(4, -2);
+        chunk.data.lock().unwrap().push(entity_nbt(1, dormant_uuid));
+
+        let persisted = chunk
+            .take_entities_for_materialization()
+            .expect("chunk should materialize");
+        chunk.retain_dormant_entities(persisted);
+        chunk.replace_entities(vec![entity_nbt(2, live_uuid)]);
+        chunk.replace_entities(vec![entity_nbt(3, live_uuid)]);
+
+        let saved = chunk.data.lock().unwrap();
+        assert_eq!(saved.len(), 2);
+        assert_eq!(saved[0].get_int("marker"), Some(1));
+        assert_eq!(saved[1].get_int("marker"), Some(3));
+    }
+
+    #[test]
+    fn dormant_only_entity_chunk_survives_repeated_empty_live_snapshots() {
+        let dormant_uuid = Uuid::from_u128(1);
+        let chunk = ChunkEntityData::empty(4, -2);
+        chunk.data.lock().unwrap().push(entity_nbt(1, dormant_uuid));
+
+        let persisted = chunk
+            .take_entities_for_materialization()
+            .expect("chunk should materialize");
+        chunk.retain_dormant_entities(persisted);
+        chunk.replace_entities(Vec::new());
+        chunk.replace_entities(Vec::new());
+
+        let saved = chunk.data.lock().unwrap();
+        assert_eq!(saved.len(), 1);
+        assert_eq!(saved[0].get_uuid("UUID"), Some(dormant_uuid));
+        assert_eq!(saved[0].get_int("marker"), Some(1));
+    }
+
+    #[test]
+    fn unmaterialized_entity_merge_preserves_dormant_entities_and_is_idempotent() {
+        let dormant_uuid = Uuid::from_u128(1);
+        let moving_uuid = Uuid::from_u128(2);
+        let chunk = ChunkEntityData::empty(4, -2);
+        chunk
+            .data
+            .lock()
+            .unwrap()
+            .extend([entity_nbt(1, dormant_uuid), entity_nbt(2, moving_uuid)]);
+
+        let moving_snapshot = vec![entity_nbt(20, moving_uuid)];
+        let live_uuids = rustc_hash::FxHashSet::from_iter([moving_uuid]);
+        chunk.reconcile_entities(moving_snapshot.clone(), &live_uuids);
+        chunk.reconcile_entities(moving_snapshot, &live_uuids);
+
+        let saved = chunk.data.lock().unwrap();
+        assert_eq!(saved.len(), 2);
+        assert_eq!(saved[0].get_int("marker"), Some(1));
+        assert_eq!(saved[1].get_int("marker"), Some(20));
+        assert!(!chunk.entities_are_materialized());
+    }
 
     #[test]
     fn random_tick_cache_initializes_from_palette_contents() {

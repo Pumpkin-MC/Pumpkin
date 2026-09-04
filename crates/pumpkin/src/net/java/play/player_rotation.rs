@@ -3,9 +3,9 @@ use super::*;
 
 impl JavaClient {
     pub fn handle_rotation(&self, player: &Player, rotation: &SPlayerRotation) {
-        if !player.has_client_loaded() {
+        let Some(_movement_guard) = player.lock_client_movement_if_loaded() else {
             return;
-        }
+        };
         if !rotation.yaw.is_finite() || !rotation.pitch.is_finite() {
             self.try_kick(&TextComponent::translate_cross(
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
@@ -50,7 +50,8 @@ impl JavaClient {
             VarULong(0),
         );
 
-        world.broadcast_packet_except_editioned(&[player.gameprofile.id], &je_packet, &be_packet);
+        world.broadcast_packet_except(&[player.gameprofile.id], &je_packet);
+        world.send_to_tracking_players_bedrock(entity, &be_packet);
 
         let je_packet = CHeadRot::new(entity_id.into(), yaw as u8);
         world.broadcast_packet_except(&[player.gameprofile.id], &je_packet);
