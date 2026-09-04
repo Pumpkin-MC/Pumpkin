@@ -4,7 +4,7 @@ use wasmtime::component::Resource;
 
 use crate::plugin::api::gui::{PluginGui, PluginInventory};
 use crate::plugin::loader::wasm::wasm_host::{
-    state::{PluginHostState},
+    state::PluginHostState,
     wit::v0_1::pumpkin::plugin::{
         gui::{self, Gui},
         item_stack::ItemStack as WitHostItemStack,
@@ -131,10 +131,7 @@ impl gui::HostGui for PluginHostState {
         slot: u32,
         item: Resource<WitHostItemStack>,
     ) -> wasmtime::Result<()> {
-        let item_stack = {
-            let item_stack = self.get(&item)?;
-            item_stack.lock().await.clone()
-        };
+        let item_stack = self.take(item)?.lock().await.clone();
         let gui = self.get(&res)?.lock().await;
         let mut slots = gui
             .inventory

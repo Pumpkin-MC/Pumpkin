@@ -97,7 +97,7 @@ impl HostInventory for PluginHostState {
         item: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
         let stack = if let Some(stack_res) = item {
-            self.get(&stack_res)?.lock().await.clone()
+            self.take(stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
@@ -200,27 +200,29 @@ impl HostInventory for PluginHostState {
         Ok(())
     }
 
+    // Fixme: this method causes an unnecessary amount of resource table lookups
     async fn get_all_items(
         &mut self,
         res: Resource<WitInventory>,
     ) -> wasmtime::Result<Vec<Option<Resource<WitHostItemStack>>>> {
-        let size = self.get_size(Resource::new_own(res.rep())).await?;
+        let size = self.get_size(Resource::new_borrow(res.rep())).await?;
         let mut items = Vec::with_capacity(size as usize);
         for slot in 0..size {
-            let item = self.get_item(Resource::new_own(res.rep()), slot).await?;
+            let item = self.get_item(Resource::new_borrow(res.rep()), slot).await?;
             items.push(item);
         }
         Ok(items)
     }
 
+    // Fixme: this method causes an unnecessary amount of resource table lookups
     async fn set_all_items(
         &mut self,
         res: Resource<WitInventory>,
         items: Vec<Option<Resource<WitHostItemStack>>>,
     ) -> wasmtime::Result<()> {
-        let size = self.get_size(Resource::new_own(res.rep())).await?;
+        let size = self.get_size(Resource::new_borrow(res.rep())).await?;
         for (slot, item) in items.into_iter().take(size as usize).enumerate() {
-            self.set_item(Resource::new_own(res.rep()), slot as u32, item)
+            self.set_item(Resource::new_borrow(res.rep()), slot as u32, item)
                 .await?;
         }
         Ok(())
@@ -310,12 +312,12 @@ impl HostPlayerInventory for PluginHostState {
         hand: WitHand,
         item: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&res)?;
         let stack = if let Some(stack_res) = item {
-            self.get(&stack_res)?.lock().await.clone()
+            self.take(stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
+        let player = self.get(&res)?;
 
         let hand = from_wasm_hand(hand);
         let slot = match hand {
@@ -371,12 +373,12 @@ impl HostPlayerInventory for PluginHostState {
         res: Resource<WitPlayerInventory>,
         item: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&res)?;
         let stack = if let Some(stack_res) = item {
-            self.get(&stack_res)?.lock().await.clone()
+            self.take(stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
+        let player = self.get(&res)?;
         player.inventory().set_slot(39, stack.clone());
         let stack_serializer = ItemStackSerializer::from(stack);
         let packet = CSetContainerSlot::new(0, 0, 5, &stack_serializer);
@@ -402,12 +404,12 @@ impl HostPlayerInventory for PluginHostState {
         res: Resource<WitPlayerInventory>,
         item: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&res)?;
         let stack = if let Some(stack_res) = item {
-            self.get(&stack_res)?.lock().await.clone()
+            self.take(stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
+        let player = self.get(&res)?;
         player.inventory().set_slot(38, stack.clone());
         let stack_serializer = ItemStackSerializer::from(stack);
         let packet = CSetContainerSlot::new(0, 0, 6, &stack_serializer);
@@ -433,12 +435,12 @@ impl HostPlayerInventory for PluginHostState {
         res: Resource<WitPlayerInventory>,
         item: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&res)?;
         let stack = if let Some(stack_res) = item {
-            self.get(&stack_res)?.lock().await.clone()
+            self.take(stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
+        let player = self.get(&res)?;
         player.inventory().set_slot(37, stack.clone());
         let stack_serializer = ItemStackSerializer::from(stack);
         let packet = CSetContainerSlot::new(0, 0, 7, &stack_serializer);
@@ -464,12 +466,12 @@ impl HostPlayerInventory for PluginHostState {
         res: Resource<WitPlayerInventory>,
         item: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&res)?;
         let stack = if let Some(stack_res) = item {
-            self.get(&stack_res)?.lock().await.clone()
+            self.take(stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
+        let player = self.get(&res)?;
         player.inventory().set_slot(36, stack.clone());
         let stack_serializer = ItemStackSerializer::from(stack);
         let packet = CSetContainerSlot::new(0, 0, 8, &stack_serializer);
@@ -495,12 +497,12 @@ impl HostPlayerInventory for PluginHostState {
         res: Resource<WitPlayerInventory>,
         item: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
-        let player = self.get(&res)?;
         let stack = if let Some(stack_res) = item {
-            self.get(&stack_res)?.lock().await.clone()
+            self.take(stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
+        let player = self.get(&res)?;
         player.inventory().set_slot(40, stack.clone());
         let stack_serializer = ItemStackSerializer::from(stack);
         let packet = CSetContainerSlot::new(0, 0, 45, &stack_serializer);
@@ -508,13 +510,16 @@ impl HostPlayerInventory for PluginHostState {
         Ok(())
     }
 
+    // Fixme: this method causes an unnecessary amount of resource table lookups
     async fn clear_armor(&mut self, res: Resource<WitPlayerInventory>) -> wasmtime::Result<()> {
-        self.set_helmet(Resource::new_own(res.rep()), None).await?;
-        self.set_chestplate(Resource::new_own(res.rep()), None)
+        self.set_helmet(Resource::new_borrow(res.rep()), None)
             .await?;
-        self.set_leggings(Resource::new_own(res.rep()), None)
+        self.set_chestplate(Resource::new_borrow(res.rep()), None)
             .await?;
-        self.set_boots(Resource::new_own(res.rep()), None).await?;
+        self.set_leggings(Resource::new_borrow(res.rep()), None)
+            .await?;
+        self.set_boots(Resource::new_borrow(res.rep()), None)
+            .await?;
         Ok(())
     }
 
@@ -523,10 +528,11 @@ impl HostPlayerInventory for PluginHostState {
         self.clear(inv).await
     }
 
+    // Fixme: this method causes an unnecessary amount of resource table lookups
     async fn clear_all(&mut self, res: Resource<WitPlayerInventory>) -> wasmtime::Result<()> {
-        self.clear_main(Resource::new_own(res.rep())).await?;
-        self.clear_armor(Resource::new_own(res.rep())).await?;
-        self.set_off_hand(Resource::new_own(res.rep()), None)
+        self.clear_main(Resource::new_borrow(res.rep())).await?;
+        self.clear_armor(Resource::new_borrow(res.rep())).await?;
+        self.set_off_hand(Resource::new_borrow(res.rep()), None)
             .await?;
         Ok(())
     }

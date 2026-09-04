@@ -1,22 +1,25 @@
 use std::{collections::HashMap, sync::Arc};
 use wasmtime::component::Resource;
 
-use crate::plugin::{Context, loader::wasm::wasm_host::{
-    state::PluginHostState,
-    wit::v0_1::{
-        events::{ToFromWasmEvent, WasmPluginEventHandler},
-        pumpkin::{
-            self,
-            plugin::{
-                command::Command,
-                context::{Context as WitContext, MarketplaceMetadata},
-                event::{EventPriority, EventType},
-                permission::{Permission, PermissionDefault, PermissionLevel},
-                server::Server,
+use crate::plugin::{
+    Context,
+    loader::wasm::wasm_host::{
+        state::PluginHostState,
+        wit::v0_1::{
+            events::{ToFromWasmEvent, WasmPluginEventHandler},
+            pumpkin::{
+                self,
+                plugin::{
+                    command::Command,
+                    context::{Context as WitContext, MarketplaceMetadata},
+                    event::{EventPriority, EventType},
+                    permission::{Permission, PermissionDefault, PermissionLevel},
+                    server::Server,
+                },
             },
         },
     },
-}};
+};
 
 fn register_typed_event<E: crate::plugin::Payload + ToFromWasmEvent + Clone + 'static>(
     ctx: &Context,
@@ -72,9 +75,7 @@ fn register_player_event(
             register_typed_event::<PlayerCommandSendEvent>(ctx, handler, priority, blocking);
         }
         EventType::PlayerPermissionCheckEvent => {
-            register_typed_event::<PlayerPermissionCheckEvent>(
-                ctx, handler, priority, blocking,
-            );
+            register_typed_event::<PlayerPermissionCheckEvent>(ctx, handler, priority, blocking);
         }
         EventType::PlayerMoveEvent => {
             register_typed_event::<PlayerMoveEvent>(ctx, handler, priority, blocking);
@@ -95,14 +96,10 @@ fn register_player_event(
             register_typed_event::<PlayerItemHeldEvent>(ctx, handler, priority, blocking);
         }
         EventType::PlayerChangedMainHandEvent => {
-            register_typed_event::<PlayerChangedMainHandEvent>(
-                ctx, handler, priority, blocking,
-            );
+            register_typed_event::<PlayerChangedMainHandEvent>(ctx, handler, priority, blocking);
         }
         EventType::PlayerGamemodeChangeEvent => {
-            register_typed_event::<PlayerGamemodeChangeEvent>(
-                ctx, handler, priority, blocking,
-            );
+            register_typed_event::<PlayerGamemodeChangeEvent>(ctx, handler, priority, blocking);
         }
         EventType::PlayerCustomPayloadEvent => {
             register_typed_event::<PlayerCustomPayloadEvent>(ctx, handler, priority, blocking);
@@ -119,9 +116,7 @@ fn register_player_event(
             );
         }
         EventType::PlayerInteractEntityEvent => {
-            register_typed_event::<PlayerInteractEntityEvent>(
-                ctx, handler, priority, blocking,
-            );
+            register_typed_event::<PlayerInteractEntityEvent>(ctx, handler, priority, blocking);
         }
         EventType::PlayerInteractEvent => {
             register_typed_event::<PlayerInteractEvent>(ctx, handler, priority, blocking);
@@ -577,9 +572,7 @@ fn register_entity_event(
             register_typed_event::<CreatureSpawnEvent>(ctx, handler, priority, blocking);
         }
         EventType::EnderDragonChangePhaseEvent => {
-            register_typed_event::<EnderDragonChangePhaseEvent>(
-                ctx, handler, priority, blocking,
-            );
+            register_typed_event::<EnderDragonChangePhaseEvent>(ctx, handler, priority, blocking);
         }
         EventType::EntityBreakDoorEvent => {
             register_typed_event::<EntityBreakDoorEvent>(ctx, handler, priority, blocking);
@@ -591,9 +584,7 @@ fn register_entity_event(
             register_typed_event::<EntityDamageByBlockEvent>(ctx, handler, priority, blocking);
         }
         EventType::EntityDamageByEntityEvent => {
-            register_typed_event::<EntityDamageByEntityEvent>(
-                ctx, handler, priority, blocking,
-            );
+            register_typed_event::<EntityDamageByEntityEvent>(ctx, handler, priority, blocking);
         }
         EventType::EntityDropItemEvent => {
             register_typed_event::<EntityDropItemEvent>(ctx, handler, priority, blocking);
@@ -623,9 +614,7 @@ fn register_entity_event(
             register_typed_event::<EntitySpellCastEvent>(ctx, handler, priority, blocking);
         }
         EventType::EntityTargetLivingEntityEvent => {
-            register_typed_event::<EntityTargetLivingEntityEvent>(
-                ctx, handler, priority, blocking,
-            );
+            register_typed_event::<EntityTargetLivingEntityEvent>(ctx, handler, priority, blocking);
         }
         EventType::EntityToggleSwimEvent => {
             register_typed_event::<EntityToggleSwimEvent>(ctx, handler, priority, blocking);
@@ -667,37 +656,25 @@ fn register_entity_event(
             register_typed_event::<SlimeSplitEvent>(ctx, handler, priority, blocking);
         }
         EventType::StriderTemperatureChangeEvent => {
-            register_typed_event::<StriderTemperatureChangeEvent>(
-                ctx, handler, priority, blocking,
-            );
+            register_typed_event::<StriderTemperatureChangeEvent>(ctx, handler, priority, blocking);
         }
         EventType::VillagerAcquireTradeEvent => {
-            register_typed_event::<VillagerAcquireTradeEvent>(
-                ctx, handler, priority, blocking,
-            );
+            register_typed_event::<VillagerAcquireTradeEvent>(ctx, handler, priority, blocking);
         }
         EventType::VillagerCareerChangeEvent => {
-            register_typed_event::<VillagerCareerChangeEvent>(
-                ctx, handler, priority, blocking,
-            );
+            register_typed_event::<VillagerCareerChangeEvent>(ctx, handler, priority, blocking);
         }
         EventType::VillagerReplenishTradeEvent => {
-            register_typed_event::<VillagerReplenishTradeEvent>(
-                ctx, handler, priority, blocking,
-            );
+            register_typed_event::<VillagerReplenishTradeEvent>(ctx, handler, priority, blocking);
         }
         EventType::WardenAngerChangeEvent => {
             register_typed_event::<WardenAngerChangeEvent>(ctx, handler, priority, blocking);
         }
         EventType::AreaEffectCloudApplyEvent => {
-            register_typed_event::<AreaEffectCloudApplyEvent>(
-                ctx, handler, priority, blocking,
-            );
+            register_typed_event::<AreaEffectCloudApplyEvent>(ctx, handler, priority, blocking);
         }
         EventType::ArrowBodyCountChangeEvent => {
-            register_typed_event::<ArrowBodyCountChangeEvent>(
-                ctx, handler, priority, blocking,
-            );
+            register_typed_event::<ArrowBodyCountChangeEvent>(ctx, handler, priority, blocking);
         }
         EventType::BatToggleSleepEvent => {
             register_typed_event::<BatToggleSleepEvent>(ctx, handler, priority, blocking);
@@ -706,19 +683,13 @@ fn register_entity_event(
             register_typed_event::<CreeperPowerEvent>(ctx, handler, priority, blocking);
         }
         EventType::EntityCombustByBlockEvent => {
-            register_typed_event::<EntityCombustByBlockEvent>(
-                ctx, handler, priority, blocking,
-            );
+            register_typed_event::<EntityCombustByBlockEvent>(ctx, handler, priority, blocking);
         }
         EventType::EntityCombustByEntityEvent => {
-            register_typed_event::<EntityCombustByEntityEvent>(
-                ctx, handler, priority, blocking,
-            );
+            register_typed_event::<EntityCombustByEntityEvent>(ctx, handler, priority, blocking);
         }
         EventType::EntityKnockbackByEntityEvent => {
-            register_typed_event::<EntityKnockbackByEntityEvent>(
-                ctx, handler, priority, blocking,
-            );
+            register_typed_event::<EntityKnockbackByEntityEvent>(ctx, handler, priority, blocking);
         }
         EventType::EntityPortalEnterEvent => {
             register_typed_event::<EntityPortalEnterEvent>(ctx, handler, priority, blocking);
@@ -742,9 +713,7 @@ fn register_entity_event(
             register_typed_event::<HorseJumpEvent>(ctx, handler, priority, blocking);
         }
         EventType::LingeringPotionSplashEvent => {
-            register_typed_event::<LingeringPotionSplashEvent>(
-                ctx, handler, priority, blocking,
-            );
+            register_typed_event::<LingeringPotionSplashEvent>(ctx, handler, priority, blocking);
         }
         EventType::PigZapEvent => {
             register_typed_event::<PigZapEvent>(ctx, handler, priority, blocking);
@@ -762,9 +731,7 @@ fn register_entity_event(
             register_typed_event::<TrialSpawnerSpawnEvent>(ctx, handler, priority, blocking);
         }
         EventType::VillagerReputationChangeEvent => {
-            register_typed_event::<VillagerReputationChangeEvent>(
-                ctx, handler, priority, blocking,
-            );
+            register_typed_event::<VillagerReputationChangeEvent>(ctx, handler, priority, blocking);
         }
         _ => {
             tracing::error!("non-entity event should not be routed to register_entity_event");
@@ -1436,9 +1403,7 @@ fn register_hanging_event(
             register_typed_event::<HangingBreakEvent>(ctx, handler, priority, blocking);
         }
         EventType::HangingBreakByEntityEvent => {
-            register_typed_event::<HangingBreakByEntityEvent>(
-                ctx, handler, priority, blocking,
-            );
+            register_typed_event::<HangingBreakByEntityEvent>(ctx, handler, priority, blocking);
         }
         EventType::HangingPlaceEvent => {
             register_typed_event::<HangingPlaceEvent>(ctx, handler, priority, blocking);
@@ -1759,7 +1724,10 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         Ok(context_res.register_permission(util_permission))
     }
 
-    async fn get_data_folder(&mut self, _context: Resource<WitContext>) -> wasmtime::Result<String> {
+    async fn get_data_folder(
+        &mut self,
+        _context: Resource<WitContext>,
+    ) -> wasmtime::Result<String> {
         Ok("data".to_string())
     }
 
@@ -1767,9 +1735,7 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         &mut self,
         context: Resource<WitContext>,
     ) -> wasmtime::Result<Resource<Server>> {
-        let server_provider = self.get(&context)?.server.clone();
-        self.add(server_provider)
-            .map_err(|_| wasmtime::Error::msg("failed to add server resource"))
+        self.add(self.get(&context)?.server.clone())
     }
 
     async fn get_marketplace_metadata(

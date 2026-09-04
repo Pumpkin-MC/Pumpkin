@@ -214,7 +214,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         _rep: Resource<Server>,
         world: Resource<pumpkin::plugin::world::World>,
     ) -> wasmtime::Result<Vec<Resource<pumpkin::plugin::player::Player>>> {
-        let world_res = self.get(&world)?;
+        let world_res = self.take(world)?;
         let players = world_res.players.load();
         let mut player_resources = Vec::with_capacity(players.len());
         for p in players.iter() {
@@ -229,7 +229,7 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
         _rep: Resource<Server>,
         world: Resource<pumpkin::plugin::world::World>,
     ) -> wasmtime::Result<u32> {
-        let world_res = self.get(&world)?;
+        let world_res = self.take(world)?;
         Ok(world_res.players.load().len() as u32)
     }
 
@@ -264,11 +264,11 @@ impl pumpkin::plugin::server::HostServer for PluginHostState {
     async fn broadcast_tab_list_header_footer(
         &mut self,
         _rep: Resource<Server>,
-        header: wasmtime::component::Resource<pumpkin::plugin::text::TextComponent>,
-        footer: wasmtime::component::Resource<pumpkin::plugin::text::TextComponent>,
+        header: Resource<pumpkin::plugin::text::TextComponent>,
+        footer: Resource<pumpkin::plugin::text::TextComponent>,
     ) -> wasmtime::Result<()> {
-        let header = text_component_from_resource(self, &header);
-        let footer = text_component_from_resource(self, &footer);
+        let header = self.take(header)?;
+        let footer = self.take(footer)?;
         let server = self
             .server
             .as_ref()

@@ -14,8 +14,7 @@ impl HostEnchantmentManager for PluginHostState {
         _res: Resource<WitEnchantmentManager>,
         enchantment: WitCustomEnchantment,
     ) -> wasmtime::Result<Result<(), String>> {
-        let description =
-            super::player::text_component_from_resource(self, &enchantment.description);
+        let description = self.take(enchantment.description)?;
         let entry = CustomEnchantmentEntry {
             id: enchantment.id,
             description,
@@ -113,8 +112,8 @@ impl HostEnchantmentManager for PluginHostState {
         Ok(ids)
     }
 
-    async fn drop(&mut self, _rep: Resource<WitEnchantmentManager>) -> wasmtime::Result<()> {
-        Ok(())
+    async fn drop(&mut self, rep: Resource<WitEnchantmentManager>) -> wasmtime::Result<()> {
+        self.drop(rep)
     }
 }
 

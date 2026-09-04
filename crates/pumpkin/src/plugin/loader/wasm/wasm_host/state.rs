@@ -10,11 +10,7 @@ use wasmtime_wasi_http::{
 };
 
 use crate::{
-    entity::player::Player,
-    plugin::
-        loader::wasm::wasm_host::WasmPlugin
-    ,
-    server::Server,
+    entity::player::Player, plugin::loader::wasm::wasm_host::WasmPlugin, server::Server,
     world::World,
 };
 
@@ -184,6 +180,7 @@ impl PluginHostState {
 
     /// take the value of an **owned** [`Resource`] from the resource table
     pub fn take<T: FromResource>(&mut self, res: Resource<T>) -> wasmtime::Result<T::Internal> {
+        debug_assert!(res.owned());
         Ok(self.resource_table.delete(Resource::new_own(res.rep()))?)
     }
 
@@ -199,7 +196,9 @@ impl PluginHostState {
 
     pub fn discard_to_be_removed<T: FromResource>(&mut self, res: &Resource<T>) {
         assert!(res.owned());
-        let _ = self.resource_table.delete::<T::Internal>(Resource::new_own(res.rep()));
+        let _ = self
+            .resource_table
+            .delete::<T::Internal>(Resource::new_own(res.rep()));
     }
 }
 

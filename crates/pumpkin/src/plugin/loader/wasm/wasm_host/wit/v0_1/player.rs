@@ -559,7 +559,8 @@ pub fn player_from_resource(
     state: &PluginHostState,
     player: &Resource<Player>,
 ) -> wasmtime::Result<std::sync::Arc<crate::entity::player::Player>> {
-    state.get(player)
+    state
+        .get(player)
         .map_err(|_| wasmtime::Error::msg("invalid player resource handle"))
         .map(|resource| resource.clone())
 }
@@ -568,7 +569,8 @@ pub(crate) fn text_component_from_resource(
     state: &PluginHostState,
     text: &Resource<pumpkin::plugin::text::TextComponent>,
 ) -> pumpkin_util::text::TextComponent {
-    state.get(text)
+    state
+        .get(text)
         .expect("invalid text-component resource handle")
         .clone()
 }
@@ -577,7 +579,8 @@ fn world_from_resource(
     state: &PluginHostState,
     world: &Resource<pumpkin::plugin::world::World>,
 ) -> std::sync::Arc<crate::world::World> {
-    state.get(world)
+    state
+        .get(world)
         .expect("invalid world resource handle")
         .clone()
 }
@@ -1082,7 +1085,8 @@ impl pumpkin::plugin::player::Host for PluginHostState {
         &mut self,
         world_ref: Resource<pumpkin::plugin::world::World>,
     ) -> wasmtime::Result<Vec<Resource<pumpkin::plugin::player::Player>>> {
-        let world = self.get(&world_ref)
+        let world = self
+            .get(&world_ref)
             .map_err(|_| wasmtime::Error::msg("invalid world resource handle"))?
             .clone();
 
@@ -1527,11 +1531,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
         if let Some(target_res) = entity {
-            let target =
-                crate::plugin::loader::wasm::wasm_host::wit::v0_1::entity::entity_from_resource(
-                    self,
-                    &target_res,
-                )?;
+            let target = self.take(target_res)?;
             player.set_camera_entity_id(target.get_entity().entity_id);
         } else {
             player.reset_camera();
@@ -3209,7 +3209,8 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
     ) -> wasmtime::Result<()> {
         let (player, gui, plugin) = {
             let state = host.get();
-            let gui = state.get(&gui)
+            let gui = state
+                .get(&gui)
                 .map_err(|_| wasmtime::Error::msg("invalid gui resource handle"))?
                 .clone();
             (
@@ -4231,8 +4232,7 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
         player: Resource<pumpkin::plugin::player::BedrockPlayer>,
         form: Form,
     ) -> wasmtime::Result<u32> {
-        let player = self.get(&player)?
-            .clone();
+        let player = self.get(&player)?.clone();
 
         if let crate::net::ClientPlatform::Bedrock(client) = player.client.as_ref() {
             let form_id = client.next_form_id.fetch_add(1, Ordering::Relaxed);
@@ -4242,7 +4242,7 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
 
             let form_json = match form {
                 Form::Simple(simple) => self.serialize_simple_form(simple, locale),
-                Form::Modal(modal) => self.serialize_modal_form(&modal, locale),
+                Form::Modal(modal) => self.serialize_modal_form(modal, locale),
                 Form::Custom(custom) => self.serialize_custom_form(custom, locale),
             };
 

@@ -172,7 +172,10 @@ impl SuggestionProvider for WasmCommandSuggestionProvider {
                                     let mut builder = builder;
                                     for suggestion in response.values {
                                         if let Some(tooltip) = suggestion.tooltip {
-                                            let text = store.data_mut().take(tooltip).expect("Invalid text component");
+                                            let text = store
+                                                .data_mut()
+                                                .take(tooltip)
+                                                .expect("Invalid text component");
                                             builder = builder
                                                 .suggest_with_tooltip(suggestion.value, text);
                                         } else {

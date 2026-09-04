@@ -106,9 +106,9 @@ fn get_display_entity<'a>(
 impl HostDisplayEntity for PluginHostState {
     async fn from_entity(
         &mut self,
-        entity: Resource<Entity>,
+        entity: /* borrow */ Resource<Entity>,
     ) -> wasmtime::Result<Option<Resource<DisplayEntity>>> {
-        let entity = self.take(entity)?;
+        let entity = self.get(&entity)?.clone();
         if get_display_entity(entity.as_ref()).is_some() {
             Ok(Some(self.add(entity.clone())?))
         } else {
@@ -468,9 +468,9 @@ impl HostDisplayEntity for PluginHostState {
 impl HostBlockDisplayEntity for PluginHostState {
     async fn from_entity(
         &mut self,
-        entity: Resource<Entity>,
+        entity: /* borrow */ Resource<Entity>,
     ) -> wasmtime::Result<Option<Resource<BlockDisplayEntity>>> {
-        if let Ok(entity) = Arc::downcast(self.take(entity)?) {
+        if let Ok(entity) = Arc::downcast(self.get(&entity)?.clone()) {
             Ok(Some(self.add(entity)?))
         } else {
             Ok(None)
@@ -515,9 +515,9 @@ impl HostBlockDisplayEntity for PluginHostState {
 impl HostItemDisplayEntity for PluginHostState {
     async fn from_entity(
         &mut self,
-        entity: Resource<Entity>,
+        entity: /* borrow */ Resource<Entity>,
     ) -> wasmtime::Result<Option<Resource<ItemDisplayEntity>>> {
-        if let Ok(entity) = Arc::downcast(self.take(entity)?) {
+        if let Ok(entity) = Arc::downcast(self.get(&entity)?.clone()) {
             Ok(Some(self.add(entity)?))
         } else {
             Ok(None)
@@ -594,9 +594,9 @@ impl HostItemDisplayEntity for PluginHostState {
 impl HostTextDisplayEntity for PluginHostState {
     async fn from_entity(
         &mut self,
-        entity: Resource<Entity>,
+        entity: /* borrow */ Resource<Entity>,
     ) -> wasmtime::Result<Option<Resource<TextDisplayEntity>>> {
-        if let Ok(entity) = Arc::downcast(self.take(entity)?) {
+        if let Ok(entity) = Arc::downcast(self.get(&entity)?.clone()) {
             Ok(Some(self.add(entity)?))
         } else {
             Ok(None)
@@ -756,9 +756,9 @@ impl HostTextDisplayEntity for PluginHostState {
 impl HostInteractionEntity for PluginHostState {
     async fn from_entity(
         &mut self,
-        entity: Resource<Entity>,
+        entity: /* borrow */ Resource<Entity>,
     ) -> wasmtime::Result<Option<Resource<InteractionEntity>>> {
-        if let Ok(entity) = Arc::downcast(self.take(entity)?) {
+        if let Ok(entity) = Arc::downcast(self.get(&entity)?.clone()) {
             Ok(Some(self.add(entity)?))
         } else {
             Ok(None)

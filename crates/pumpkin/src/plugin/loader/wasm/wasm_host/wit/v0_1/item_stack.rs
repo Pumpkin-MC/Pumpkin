@@ -1,4 +1,4 @@
-use crate::plugin::loader::wasm::wasm_host::state::{PluginHostState};
+use crate::plugin::loader::wasm::wasm_host::state::PluginHostState;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::attributes::{
     Attribute as WitAttribute, AttributeModifier as WitAttributeModifier,
     ModifierOperation as WitModifierOperation,
@@ -17,7 +17,6 @@ use tokio::sync::Mutex;
 use wasmtime::component::Resource;
 
 use super::common::{WitNbtTree, from_wit_nbt_tree, to_wit_nbt_tree};
-use crate::plugin::loader::wasm::wasm_host::wit::v0_1::player::text_component_from_resource;
 use pumpkin_data::Enchantment;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::data_component::DataComponent;
@@ -517,9 +516,9 @@ impl HostItemStack for PluginHostState {
         lore: Vec<Resource<WitTextComponent>>,
     ) -> wasmtime::Result<()> {
         let lore = lore
-            .iter()
-            .map(|line| text_component_from_resource(self, line))
-            .collect();
+            .into_iter()
+            .map(|line| self.take(line))
+            .collect::<Result<_, _>>()?;
         let stack = self.get(&res)?;
         stack.lock().await.set_lore(lore);
         Ok(())
@@ -530,7 +529,7 @@ impl HostItemStack for PluginHostState {
         res: Resource<ItemStackHandle>,
         line: Resource<WitTextComponent>,
     ) -> wasmtime::Result<()> {
-        let line = text_component_from_resource(self, &line);
+        let line = self.take(line)?;
         let stack = self.get(&res)?;
         stack.lock().await.add_lore(line);
         Ok(())
@@ -558,10 +557,10 @@ impl HostItemStack for PluginHostState {
         res: Resource<ItemStackHandle>,
         name: Option<Resource<WitTextComponent>>,
     ) -> wasmtime::Result<()> {
+        let name = name.map(|r| self.take(r)).transpose()?;
         let stack = self.get(&res)?;
         let mut stack = stack.lock().await;
-        if let Some(name_res) = name {
-            let name = text_component_from_resource(self, &name_res);
+        if let Some(name) = name {
             if let Some((_, data)) = stack
                 .patch
                 .iter_mut()
