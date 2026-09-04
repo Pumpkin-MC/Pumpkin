@@ -1,5 +1,5 @@
 use crate::chunk::format::LightContainer;
-use crate::chunk::{ChunkData, ChunkLight};
+use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight};
 use crate::chunk_system::Chunk;
 use crate::chunk_system::generation_cache::Cache;
 use crate::generation::height_limit::HeightLimitView;
@@ -10,7 +10,6 @@ use crate::lighting::sky_fill::SkyFill;
 use crate::lighting::{decayed, luminance_of, opacity_of, sky_descended};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::{BlockDirection, BlockState, BlockStateId};
-use pumpkin_util::HeightMap;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use std::collections::VecDeque;
@@ -519,6 +518,27 @@ fn fill_sky_above(
     }
 }
 
+/// First air above the top non-air. Proto already stores that; level `WorldSurface` is inclusive.
+fn exclusive_column_top(cache: &Cache, x: i32, z: i32) -> i32 {
+    let rel_x = (x >> 4) - cache.x;
+    let rel_z = (z >> 4) - cache.z;
+    if rel_x < 0 || rel_z < 0 || rel_x >= cache.size || rel_z >= cache.size {
+        return cache.bottom_y() as i32;
+    }
+    let idx = (rel_x * cache.size + rel_z) as usize;
+    match &cache.chunks[idx] {
+        Chunk::Proto(c) => c.top_block_height_exclusive(x, z),
+        Chunk::Level(c) => {
+            let min_y = c.section.min_y;
+            c.heightmap
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get(ChunkHeightmapType::WorldSurface, x, z, min_y)
+                + 1
+        }
+    }
+}
+
 fn descend_sky_column(
     sky: &mut [LightContainer],
     local_x: usize,
@@ -561,12 +581,11 @@ impl SkyLightPropagator {
         let bottom_y = cache.bottom_y() as i32;
 
         let mut surface_heights = [0i32; 18 * 18];
-
         for z in start_z..end_z {
             let lz = (z - start_z) as usize;
             for x in start_x..end_x {
                 let lx = (x - start_x) as usize;
-                surface_heights[lx * 18 + lz] = cache.get_top_y(&HeightMap::WorldSurface, x, z);
+                surface_heights[lx * 18 + lz] = exclusive_column_top(cache, x, z);
             }
         }
 
@@ -748,7 +767,9 @@ impl SkyLightPropagator {
                 let chunk_idx = (rel_x * cache.size + rel_z) as usize;
                 // Sections the centre already holds as one uniform 15 need no column fill.
                 let is_center = chunk_idx == center_idx;
-                let from_rel_y = (top_y + 1 - bottom_y).max(0) as usize;
+                // `top_y` is exclusive: fill 15 from that air cell up, descend the solid below.
+                let from_rel_y = (top_y - bottom_y).max(0) as usize;
+                let descend_top = top_y - 1;
 
                 // A lit rim chunk already holds what reached it horizontally; the descent
                 // only knows this column and would overwrite that with a darker value.
@@ -777,7 +798,7 @@ impl SkyLightPropagator {
                             local_x,
                             local_z,
                             bottom_y,
-                            top_y,
+                            descend_top,
                             |y| {
                                 let rel = (y - bottom_y) as usize;
                                 map[col_height * 16 * local_x + 16 * rel + local_z]
@@ -807,7 +828,7 @@ impl SkyLightPropagator {
                                 local_x,
                                 local_z,
                                 bottom_y,
-                                top_y,
+                                descend_top,
                                 |y| {
                                     let rel = (y - bottom_y) as usize;
                                     sections.get(rel >> 4).map_or(BlockStateId::AIR, |section| {

@@ -408,6 +408,45 @@ fn compare(
 
 // -------------------------------------------------------------------------------------------
 
+/// Whether a chunk's stored sky light contradicts vanilla's own rule, and so cannot be a
+/// reference.
+///
+/// Vanilla holds 15 only in a source column: `ChunkSkyLightSources.findLowestSourceY` ends the
+/// column at the first block with `getLightDampening() != 0`, and a horizontal step caps at 14.
+/// A stored 15 at or under such a block is light vanilla wrote before the blocks above it were
+/// placed -- a tree grown over an already lit column -- which no correct relight reproduces.
+///
+/// Only `dampening != 0` is tested, not the shape occlusion `isEdgeOccluded` also applies, so
+/// the check errs towards keeping a chunk.
+fn sky_contradicts_vanillas_own_rule(chunk: &ChunkData, vanilla: &VanillaLight) -> bool {
+    let min_y = chunk.section.min_y;
+    let top_y = min_y + (chunk.section.count * 16) as i32 - 1;
+
+    for local_x in 0..16 {
+        for local_z in 0..16 {
+            let mut occluded = false;
+            for y in (min_y..=top_y).rev() {
+                let state = chunk
+                    .section
+                    .get_block_absolute_y(local_x, y, local_z)
+                    .unwrap_or(BlockStateId::AIR);
+                // The occluder's own cell is already out of the source column.
+                occluded |= state.to_state().opacity != 0;
+                if !occluded {
+                    continue;
+                }
+                let section = ((y - min_y) >> 4) as usize;
+                if let Some(data) = vanilla.sky[section].as_ref()
+                    && nibble_at(data, local_x, (y & 15) as usize, local_z) == 15
+                {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
 fn load_chunks(region_dir: &Path) -> HashMap<Vector2<i32>, (Arc<ChunkData>, VanillaLight)> {
     let mut out = HashMap::new();
     let Ok(entries) = std::fs::read_dir(region_dir) else {
@@ -500,12 +539,20 @@ fn pumpkin_reproduces_the_light_vanilla_stored() {
     let mut report = Report::default();
     let mut relight_time = std::time::Duration::ZERO;
     let mut worldgen_time = std::time::Duration::ZERO;
+    let mut compared_chunks = 0u32;
+    let mut stale_chunks = 0usize;
     for center in &centers {
+        let (chunk, vanilla) = &loaded[center];
+        if sky_contradicts_vanillas_own_rule(chunk, vanilla) {
+            stale_chunks += 1;
+            continue;
+        }
+
         let (proto, elapsed) = relight(&blocks, *center, Neighbours::Loaded);
         relight_time += elapsed;
         // Timed separately, because judging the result needs the neighbours' stored light.
         worldgen_time += relight(&blocks, *center, Neighbours::Proto).1;
-        let (chunk, vanilla) = &loaded[center];
+        compared_chunks += 1;
         compare(LightKind::Sky, *center, &proto, vanilla, chunk, &mut report);
         compare(
             LightKind::Block,
@@ -516,14 +563,18 @@ fn pumpkin_reproduces_the_light_vanilla_stored() {
             &mut report,
         );
     }
+    assert!(
+        compared_chunks > 0,
+        "every candidate chunk stores sky light vanilla's own rule cannot produce"
+    );
 
     println!(
-        "compared {} light values across {} chunks ({} uniform sections vanilla did not store)",
+        "compared {} light values across {compared_chunks} chunks ({} uniform sections vanilla did not store, {stale_chunks} of {} chunks skipped as stale)",
         report.compared,
-        centers.len(),
         report.skipped_sections,
+        centers.len(),
     );
-    let chunks_timed = centers.len() as u32;
+    let chunks_timed = compared_chunks;
     println!(
         "light pass, proto neighbours (what worldgen runs): {:?} per chunk",
         worldgen_time / chunks_timed,
