@@ -208,6 +208,7 @@ arc-swap = { version = "1.9", default-features = false }
 tokio-util = { version = "0.7.19", default-features = false }
 toml = { version = "1.1", default-features = false, features = ["parse", "display", "serde"] }
 reqwest = { version = "0.13.4", features = ["json"] }
+rustls = { version = "0.23.43" }
 notify = { version = "8.2.0", default-features = false, features = ["macos_fsevent"] }
 
 sysinfo = { version = "0.39", default-features = false, features = ["system"] }

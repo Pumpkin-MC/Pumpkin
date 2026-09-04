@@ -3497,6 +3497,7 @@ dependencies = [
  "rsa",
  "rustc-hash",
  "rustc_version_runtime",
+ "rustls",
  "rustyline",
  "serde",
  "serde_json",

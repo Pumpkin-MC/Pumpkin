@@ -49,6 +49,15 @@ static MAIN_THREAD: OnceLock<ThreadId> = OnceLock::new();
 async fn main() {
     let _ = MAIN_THREAD.set(thread::current().id());
 
+    // Both `ring` and `aws-lc-rs` end up enabled in the dependency graph
+    // (different dependents each pull in one), which rustls refuses to
+    // auto-resolve on its own — the first TLS connection anywhere in the
+    // process (including one made through a plugin's outbound-HTTP
+    // capability) panics with "Could not automatically determine the
+    // process-level CryptoProvider" otherwise. This has to run before
+    // anything in the process can possibly need TLS.
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
     // Initialize global Rayon thread pool with named worker threads
     let _ = rayon::ThreadPoolBuilder::new()
         .thread_name(|i| format!("Rayon-Worker-{i}"))
