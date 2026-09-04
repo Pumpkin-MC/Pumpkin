@@ -745,7 +745,7 @@ fn dump_shape_occluding_candidates() {
             continue;
         };
         let state = pumpkin_data::BlockState::from_id(state_id);
-        if !state.sided_transparency() || state.is_full_cube() {
+        if !(state.can_occlude() && state.sided_transparency()) {
             continue;
         }
         let block = pumpkin_data::Block::from_state_id(state_id);
@@ -813,13 +813,12 @@ fn dump_occlusion_properties() {
             })
             .collect();
         println!(
-            "{name:15} op={:2} sided_tr={:5} full_cube={:5} solid_block={:5} solid={:5} air={:5} side_solid=[{}]",
+            "{name:17} op={:2} can_occlude={:5} solid_render={:5} sided_tr={:5} full_cube={:5} side_solid=[{}]",
             state.opacity,
+            state.can_occlude(),
+            state.is_solid_render(),
             state.sided_transparency(),
             state.is_full_cube(),
-            state.is_solid_block(),
-            state.is_solid(),
-            state.is_air(),
             sides.join(","),
         );
     }

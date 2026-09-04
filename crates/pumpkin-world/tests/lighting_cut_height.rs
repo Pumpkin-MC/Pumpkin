@@ -146,7 +146,7 @@ impl World {
     }
 
     /// Changes the block without telling the engine, as the caller does when
-    /// [`DynamicLightEngine::block_change_affects_light`] says no.
+    /// [`LightEngine::has_different_light_properties`] says no.
     fn set_block_unannounced(&self, pos: BlockPos, id: BlockStateId) {
         let chunk = self.chunk_at(pos.0.x >> 4, pos.0.z >> 4);
         chunk.set_block_absolute_y(
