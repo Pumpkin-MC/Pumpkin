@@ -4,7 +4,7 @@ use super::*;
 impl PendingConnection {
     pub async fn handle_plugin_response(
         &mut self,
-        server: &Server,
+        server: &Arc<Server>,
         plugin_response: SLoginPluginResponse,
     ) -> Option<PacketHandlerResult> {
         debug!("Handling plugin");

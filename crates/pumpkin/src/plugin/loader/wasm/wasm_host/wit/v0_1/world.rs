@@ -281,21 +281,7 @@ impl PluginHostState {
     fn get_wit_biome(
         biome: &pumpkin_data::biome::Biome,
     ) -> wasmtime::Result<pumpkin::plugin::biomes::Biome> {
-        let mut names: Vec<String> = serde_json::from_str::<
-            std::collections::BTreeMap<String, serde_json::Value>,
-        >(&std::fs::read_to_string("assets/biome.json")?)?
-        .keys()
-        .cloned()
-        .collect();
-        names.sort();
-
-        let index = names
-            .iter()
-            .position(|n| n.strip_prefix("minecraft:").unwrap_or(n) == biome.registry_id)
-            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown biome: {}", biome.registry_id)))?;
-
-        // SAFETY: The WIT enum is generated from the sorted keys of assets/biome.json.
-        Ok(unsafe { std::mem::transmute::<u8, pumpkin::plugin::biomes::Biome>(index as u8) })
+        to_wit_biome(biome)
     }
 
     fn get_wit_block_entity(
@@ -1038,20 +1024,7 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         let world_ref = self.get_world_res(&world)?;
         let world_provider = world_ref.provider.clone();
 
-        let mut names: Vec<String> = serde_json::from_str::<
-            std::collections::BTreeMap<String, serde_json::Value>,
-        >(&std::fs::read_to_string("assets/entities.json")?)?
-        .keys()
-        .cloned()
-        .collect();
-        names.sort();
-
-        let type_name = names.get(entity_type as usize).ok_or_else(|| {
-            wasmtime::Error::msg(format!("Invalid entity type index: {}", entity_type as u8))
-        })?;
-
-        let internal_type = pumpkin_data::entity::EntityType::from_name(type_name)
-            .ok_or_else(|| wasmtime::Error::msg(format!("Invalid entity type: {type_name}")))?;
+        let internal_type = super::entity::from_wit_entity_type(entity_type)?;
 
         let internal_pos = pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2);
         let entity = crate::entity::r#type::from_type(
@@ -2340,9 +2313,24 @@ pub const fn from_wit_sound_category(
     }
 }
 
+pub(crate) fn to_wit_biome(
+    biome: &pumpkin_data::biome::Biome,
+) -> wasmtime::Result<pumpkin::plugin::biomes::Biome> {
+    let name = biome
+        .registry_id
+        .strip_prefix("minecraft:")
+        .unwrap_or(biome.registry_id);
+    let index = pumpkin_data::biome::Biome::ALL
+        .binary_search_by_key(&name, |b| b.registry_id)
+        .map_err(|_| wasmtime::Error::msg(format!("Unknown biome: {}", biome.registry_id)))?;
+
+    // SAFETY: The WIT enum is generated with variants matching Biome::ALL in alphabetical order.
+    Ok(unsafe { std::mem::transmute::<u8, pumpkin::plugin::biomes::Biome>(index as u8) })
+}
+
 #[cfg(test)]
 mod tests {
-    use super::pumpkin;
+    use super::*;
 
     #[test]
     fn wit_particle_ids_match_internal_particle_ids() {

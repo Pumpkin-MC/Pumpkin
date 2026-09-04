@@ -1112,9 +1112,7 @@ mod tests {
             unreachable!()
         };
         let mut height_sampler =
-            crate::generation::structure::height_sampler::NoiseHeightSampler::new(
-                world_gen, 1200, -1312,
-            );
+            crate::generation::structure::height_sampler::NoiseHeightSampler::new(world_gen);
         let generator = JigsawGenerator::new("minecraft:pillager_outpost/base_plates", 7)
             .with_expansion_hack(true);
 

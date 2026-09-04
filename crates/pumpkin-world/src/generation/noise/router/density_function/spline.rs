@@ -1,8 +1,8 @@
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::generation::noise::router::{
-    chunk_density_function::ChunkNoiseFunctionSampleOptions,
     chunk_noise_router::{ChunkNoiseFunctionComponent, StaticChunkNoiseFunctionComponentImpl},
+    density_volume::{DensityBuffer, DensityVolume},
     proto_noise_router::ProtoNoiseFunctionComponent,
 };
 
@@ -15,15 +15,10 @@ pub enum SplineValue {
 
 impl SplineValue {
     #[inline]
-    fn sample(
-        &self,
-        pos: &Vector3<i32>,
-        component_stack: &mut [ChunkNoiseFunctionComponent],
-        sample_options: &ChunkNoiseFunctionSampleOptions,
-    ) -> f32 {
+    fn sample_with(&self, location_of: &mut dyn FnMut(usize) -> f32) -> f32 {
         match self {
             Self::Fixed(fixed) => *fixed,
-            Self::Spline(spline) => spline.sample(pos, component_stack, sample_options),
+            Self::Spline(spline) => spline.sample_with(location_of),
         }
     }
 
@@ -154,26 +149,27 @@ impl Spline {
         &self,
         pos: &Vector3<i32>,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f32 {
-        let location = ChunkNoiseFunctionComponent::sample_from_stack(
-            &mut component_stack[..=self.input_index],
-            pos,
-            sample_options,
-        );
+        self.sample_with(&mut |index| {
+            ChunkNoiseFunctionComponent::sample_from_stack(&mut component_stack[..=index], pos)
+        })
+    }
+
+    fn sample_with(&self, location_of: &mut dyn FnMut(usize) -> f32) -> f32 {
+        let location = location_of(self.input_index);
 
         let n = self.points.len();
         let index_greater_than_x = self.points.partition_point(|p| location >= p.location);
 
         if index_greater_than_x == 0 {
             let point = &self.points[0];
-            let val = point.value.sample(pos, component_stack, sample_options);
+            let val = point.value.sample_with(location_of);
             return val + point.derivative * (location - point.location);
         }
 
         if index_greater_than_x == n {
             let point = &self.points[n - 1];
-            let val = point.value.sample(pos, component_stack, sample_options);
+            let val = point.value.sample_with(location_of);
             return val + point.derivative * (location - point.location);
         }
 
@@ -183,8 +179,8 @@ impl Spline {
         let start_x = previous.location;
         let end_x = current.location;
 
-        let start_value = previous.value.sample(pos, component_stack, sample_options);
-        let end_value = current.value.sample(pos, component_stack, sample_options);
+        let start_value = previous.value.sample_with(location_of);
+        let end_value = current.value.sample_with(location_of);
 
         let start_derivative = previous.derivative;
         let end_derivative = current.derivative;
@@ -233,9 +229,35 @@ impl StaticChunkNoiseFunctionComponentImpl for SplineFunction {
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
-        sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f32 {
-        self.spline.sample(pos, component_stack, sample_options)
+        self.spline.sample(pos, component_stack)
+    }
+
+    fn sample_volume(
+        &self,
+        component_stack: &mut [ChunkNoiseFunctionComponent],
+        buffer: &mut [f32],
+        volume: &DensityVolume,
+    ) {
+        let mut coordinates: Vec<(usize, DensityBuffer)> = Vec::new();
+        for (index, value) in buffer.iter_mut().enumerate() {
+            *value = self.spline.sample_with(&mut |location_index| {
+                let position = coordinates
+                    .iter()
+                    .position(|(coordinate_index, _)| *coordinate_index == location_index)
+                    .unwrap_or_else(|| {
+                        let mut coordinate = DensityBuffer::acquire(volume);
+                        ChunkNoiseFunctionComponent::sample_volume_from_stack(
+                            &mut component_stack[..=location_index],
+                            &mut coordinate,
+                            volume,
+                        );
+                        coordinates.push((location_index, coordinate));
+                        coordinates.len() - 1
+                    });
+                coordinates[position].1[index]
+            });
+        }
     }
 }
 

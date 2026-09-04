@@ -70,6 +70,17 @@ impl FireworkRocketEntity {
 
     pub fn explode_and_remove(&self, world: &World) {
         let entity = self.get_entity();
+        if let Some(server) = world.server.upgrade() {
+            let mut event =
+                crate::plugin::api::events::entity::firework_explode::FireworkExplodeEvent {
+                    entity_id: entity.entity_id,
+                    cancelled: false,
+                };
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return;
+            }
+        }
         world.send_entity_status(
             entity,
             EntityStatus::FireworksExplode,
@@ -97,16 +108,32 @@ impl EntityBase for FireworkRocketEntity {
                 let shooter = shooter.get_entity();
 
                 if shooter.is_fall_flying() {
-                    let rotation = shooter.rotation().to_f64();
-                    let shooter_vel = shooter.velocity.load();
+                    let mut boost_cancelled = false;
+                    if let Some(player) = world.get_player_by_id(shooter_id)
+                        && let Some(server) = world.server.upgrade()
+                    {
+                        let mut event = crate::plugin::api::events::player::player_elytra_boost::PlayerElytraBoostEvent {
+                            player,
+                            firework_id: entity.entity_id,
+                            cancelled: false,
+                        };
+                        server.plugin_manager.fire_blocking(&server, &mut event);
+                        if event.cancelled {
+                            boost_cancelled = true;
+                        }
+                    }
+                    if !boost_cancelled {
+                        let rotation = shooter.rotation().to_f64();
+                        let shooter_vel = shooter.velocity.load();
 
-                    let new_shooter_vel =
-                        shooter_vel + (rotation * 0.1 + (rotation * 1.5 - shooter_vel) * 0.5);
+                        let new_shooter_vel =
+                            shooter_vel + (rotation * 0.1 + (rotation * 1.5 - shooter_vel) * 0.5);
 
-                    shooter.set_velocity(new_shooter_vel);
+                        shooter.set_velocity(new_shooter_vel);
 
-                    entity.set_pos(shooter.pos.load());
-                    entity.set_velocity(new_shooter_vel);
+                        entity.set_pos(shooter.pos.load());
+                        entity.set_velocity(new_shooter_vel);
+                    }
                 }
             }
         } else {

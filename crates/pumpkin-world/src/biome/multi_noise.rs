@@ -19,10 +19,7 @@ mod test {
     #[test]
     fn sample_value() {
         use crate::generation::generator::{GeneratorInit, VanillaGenerator, WorldGenerator};
-        use crate::generation::noise::router::multi_noise_sampler::{
-            MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
-        };
-        use crate::generation::{biome_coords, positions::chunk_pos};
+        use crate::generation::noise::router::multi_noise_sampler::MultiNoiseSampler;
         use pumpkin_util::world_seed::Seed;
         type PosToPoint = (i32, i32, i32, i64, i64, i64, i64, i64, i64);
         let expected_data: Vec<PosToPoint> = read_data_from_file!(
@@ -44,16 +41,8 @@ mod test {
 
         let _chunk = ProtoChunk::new(chunk_x, chunk_z, &world_gen);
 
-        let start_x = chunk_pos::start_block_x(chunk_x);
-        let start_z = chunk_pos::start_block_z(chunk_z);
-        let horizontal_biome_end = biome_coords::from_block(16);
-        let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(
-            biome_coords::from_block(start_x),
-            biome_coords::from_block(start_z),
-            horizontal_biome_end as usize,
-        );
         let mut multi_noise_sampler =
-            MultiNoiseSampler::generate(&generator.base_router.multi_noise, &multi_noise_config);
+            MultiNoiseSampler::generate(&generator.base_router.multi_noise);
 
         for (x, y, z, tem, hum, con, ero, dep, wei) in expected_data {
             let point = multi_noise_sampler.sample(x, y, z);
@@ -77,10 +66,7 @@ mod test {
     //     let seed = 0;
     //     let generator = VanillaGenerator::new(Seed(seed as u64), Dimension::OVERWORLD);
 
-    //     let mut sampler = MultiNoiseSampler::generate(
-    //         &generator.base_router.multi_noise,
-    //         &MultiNoiseSamplerBuilderOptions::new(0, 0, 4),
-    //     );
+    //     let mut sampler = MultiNoiseSampler::generate(&generator.base_router.multi_noise);
 
     //     for (x, y, z, biome_id) in expected_data {
     //         let calculated_biome = MultiNoiseBiomeSupplier::OVERWORLD.biome(x, y, z, &mut sampler);

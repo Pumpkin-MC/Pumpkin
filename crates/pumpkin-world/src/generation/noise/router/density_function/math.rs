@@ -1,22 +1,14 @@
-use std::cell::RefCell;
-
 use pumpkin_data::noise_router::{
     BinaryData, BinaryOperation, ClampData, LinearData, RoundingData, RoundingOperation, UnaryData,
 };
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::generation::noise::router::{
-    chunk_density_function::ChunkNoiseFunctionSampleOptions,
     chunk_noise_router::{ChunkNoiseFunctionComponent, StaticChunkNoiseFunctionComponentImpl},
+    density_volume::{DensityBuffer, DensityVolume},
 };
 
-thread_local! {
-    static SCRATCH_BUFFER: RefCell<Vec<f32>> = const { RefCell::new(Vec::new()) };
-}
-
-use super::{
-    IndexToNoisePos, NoiseFunctionComponentRange, StaticIndependentChunkNoiseFunctionComponentImpl,
-};
+use super::{NoiseFunctionComponentRange, StaticIndependentChunkNoiseFunctionComponentImpl};
 
 pub struct Constant {
     value: f32,
@@ -45,8 +37,8 @@ impl StaticIndependentChunkNoiseFunctionComponentImpl for Constant {
         self.value
     }
 
-    fn fill(&self, array: &mut [f32], _mapper: &impl IndexToNoisePos) {
-        array.fill(self.value);
+    fn sample_volume(&self, buffer: &mut [f32], _volume: &DensityVolume) {
+        buffer.fill(self.value);
     }
 }
 
@@ -74,14 +66,28 @@ impl StaticChunkNoiseFunctionComponentImpl for Linear {
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
-        sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f32 {
         let input_density = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut component_stack[..=self.input_index],
             pos,
-            sample_options,
         );
         self.data.apply_density(input_density)
+    }
+
+    fn sample_volume(
+        &self,
+        component_stack: &mut [ChunkNoiseFunctionComponent],
+        buffer: &mut [f32],
+        volume: &DensityVolume,
+    ) {
+        ChunkNoiseFunctionComponent::sample_volume_from_stack(
+            &mut component_stack[..=self.input_index],
+            buffer,
+            volume,
+        );
+        for value in buffer.iter_mut() {
+            *value = self.data.apply_density(*value);
+        }
     }
 }
 
@@ -126,12 +132,10 @@ impl StaticChunkNoiseFunctionComponentImpl for Binary {
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
-        sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f32 {
         let input1_density = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut component_stack[..=self.input1_index],
             pos,
-            sample_options,
         );
 
         match self.data.operation {
@@ -139,7 +143,6 @@ impl StaticChunkNoiseFunctionComponentImpl for Binary {
                 let input2_density = ChunkNoiseFunctionComponent::sample_from_stack(
                     &mut component_stack[..=self.input2_index],
                     pos,
-                    sample_options,
                 );
                 input1_density + input2_density
             }
@@ -150,7 +153,6 @@ impl StaticChunkNoiseFunctionComponentImpl for Binary {
                     let input2_density = ChunkNoiseFunctionComponent::sample_from_stack(
                         &mut component_stack[..=self.input2_index],
                         pos,
-                        sample_options,
                     );
                     input1_density * input2_density
                 }
@@ -164,7 +166,6 @@ impl StaticChunkNoiseFunctionComponentImpl for Binary {
                     let input2_density = ChunkNoiseFunctionComponent::sample_from_stack(
                         &mut component_stack[..=self.input2_index],
                         pos,
-                        sample_options,
                     );
 
                     input1_density.min(input2_density)
@@ -179,7 +180,6 @@ impl StaticChunkNoiseFunctionComponentImpl for Binary {
                     let input2_density = ChunkNoiseFunctionComponent::sample_from_stack(
                         &mut component_stack[..=self.input2_index],
                         pos,
-                        sample_options,
                     );
 
                     input1_density.max(input2_density)
@@ -189,19 +189,17 @@ impl StaticChunkNoiseFunctionComponentImpl for Binary {
                 let input2_density = ChunkNoiseFunctionComponent::sample_from_stack(
                     &mut component_stack[..=self.input2_index],
                     pos,
-                    sample_options,
                 );
                 input1_density - input2_density
             }
             BinaryOperation::Div => {
-                let input2_density = ChunkNoiseFunctionComponent::sample_from_stack(
-                    &mut component_stack[..=self.input2_index],
-                    pos,
-                    sample_options,
-                );
-                if input2_density == 0.0 {
+                if input1_density == 0.0 {
                     0.0
                 } else {
+                    let input2_density = ChunkNoiseFunctionComponent::sample_from_stack(
+                        &mut component_stack[..=self.input2_index],
+                        pos,
+                    );
                     input1_density / input2_density
                 }
             }
@@ -209,126 +207,48 @@ impl StaticChunkNoiseFunctionComponentImpl for Binary {
                 let input2_density = ChunkNoiseFunctionComponent::sample_from_stack(
                     &mut component_stack[..=self.input2_index],
                     pos,
-                    sample_options,
                 );
-                input1_density.powf(input2_density)
+                f64::from(input1_density).powf(f64::from(input2_density)) as f32
             }
         }
     }
 
-    #[expect(clippy::too_many_lines)]
-    fn fill(
+    fn sample_volume(
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        array: &mut [f32],
-        mapper: &impl IndexToNoisePos,
-        sample_options: &mut ChunkNoiseFunctionSampleOptions,
+        buffer: &mut [f32],
+        volume: &DensityVolume,
     ) {
-        ChunkNoiseFunctionComponent::fill_from_stack(
+        ChunkNoiseFunctionComponent::sample_volume_from_stack(
             &mut component_stack[..=self.input1_index],
-            array,
-            mapper,
-            sample_options,
+            buffer,
+            volume,
         );
-
-        let len = array.len();
+        let mut input2 = DensityBuffer::acquire(volume);
+        ChunkNoiseFunctionComponent::sample_volume_from_stack(
+            &mut component_stack[..=self.input2_index],
+            &mut input2,
+            volume,
+        );
         match self.data.operation {
-            BinaryOperation::Add => {
-                SCRATCH_BUFFER.with(|scratch_cell| {
-                    let mut scratch = scratch_cell.borrow_mut();
-                    if scratch.len() < len {
-                        scratch.resize(len, 0.0);
-                    }
-                    let scratch_slice = &mut scratch[..len];
-
-                    ChunkNoiseFunctionComponent::fill_from_stack(
-                        &mut component_stack[..=self.input2_index],
-                        scratch_slice,
-                        mapper,
-                        sample_options,
-                    );
-
-                    for (a, b) in array.iter_mut().zip(scratch_slice.iter()) {
-                        *a += b;
-                    }
-                });
-            }
             BinaryOperation::Mul => {
-                for (index, value) in array.iter_mut().enumerate() {
-                    if *value != 0.0 {
-                        let pos = mapper.at(index, Some(sample_options));
-                        let density2 = ChunkNoiseFunctionComponent::sample_from_stack(
-                            &mut component_stack[..=self.input2_index],
-                            &pos,
-                            sample_options,
-                        );
-                        *value *= density2;
-                    }
-                }
-            }
-            BinaryOperation::Min => {
-                let input2_min = component_stack[self.input2_index].min();
-                for (index, value) in array.iter_mut().enumerate() {
-                    if *value >= input2_min {
-                        let pos = mapper.at(index, Some(sample_options));
-                        let density2 = ChunkNoiseFunctionComponent::sample_from_stack(
-                            &mut component_stack[..=self.input2_index],
-                            &pos,
-                            sample_options,
-                        );
-                        *value = value.min(density2);
-                    }
-                }
-            }
-            BinaryOperation::Max => {
-                let input2_max = component_stack[self.input2_index].max();
-                for (index, value) in array.iter_mut().enumerate() {
-                    if *value <= input2_max {
-                        let pos = mapper.at(index, Some(sample_options));
-                        let density2 = ChunkNoiseFunctionComponent::sample_from_stack(
-                            &mut component_stack[..=self.input2_index],
-                            &pos,
-                            sample_options,
-                        );
-                        *value = value.max(density2);
-                    }
-                }
-            }
-            BinaryOperation::Sub => {
-                for (index, value) in array.iter_mut().enumerate() {
-                    let pos = mapper.at(index, Some(sample_options));
-                    let density2 = ChunkNoiseFunctionComponent::sample_from_stack(
-                        &mut component_stack[..=self.input2_index],
-                        &pos,
-                        sample_options,
-                    );
-                    *value -= density2;
+                for (value, input2) in buffer.iter_mut().zip(input2.iter()) {
+                    *value *= input2;
                 }
             }
             BinaryOperation::Div => {
-                for (index, value) in array.iter_mut().enumerate() {
-                    let pos = mapper.at(index, Some(sample_options));
-                    let density2 = ChunkNoiseFunctionComponent::sample_from_stack(
-                        &mut component_stack[..=self.input2_index],
-                        &pos,
-                        sample_options,
-                    );
-                    *value = if density2 == 0.0 {
-                        0.0
-                    } else {
-                        *value / density2
-                    };
+                for (value, input2) in buffer.iter_mut().zip(input2.iter()) {
+                    *value /= input2;
                 }
             }
             BinaryOperation::Pow => {
-                for (index, value) in array.iter_mut().enumerate() {
-                    let pos = mapper.at(index, Some(sample_options));
-                    let density2 = ChunkNoiseFunctionComponent::sample_from_stack(
-                        &mut component_stack[..=self.input2_index],
-                        &pos,
-                        sample_options,
-                    );
-                    *value = value.powf(density2);
+                for (value, input2) in buffer.iter_mut().zip(input2.iter()) {
+                    *value = f64::from(*value).powf(f64::from(*input2)) as f32;
+                }
+            }
+            _ => {
+                for (value, input2) in buffer.iter_mut().zip(input2.iter()) {
+                    *value = self.data.apply_density(*value, *input2);
                 }
             }
         }
@@ -377,30 +297,26 @@ impl StaticChunkNoiseFunctionComponentImpl for Unary {
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
-        sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f32 {
         let input_density = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut component_stack[..=self.input_index],
             pos,
-            sample_options,
         );
         self.data.apply_density(input_density)
     }
 
-    fn fill(
+    fn sample_volume(
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        array: &mut [f32],
-        mapper: &impl IndexToNoisePos,
-        sample_options: &mut ChunkNoiseFunctionSampleOptions,
+        buffer: &mut [f32],
+        volume: &DensityVolume,
     ) {
-        ChunkNoiseFunctionComponent::fill_from_stack(
+        ChunkNoiseFunctionComponent::sample_volume_from_stack(
             &mut component_stack[..=self.input_index],
-            array,
-            mapper,
-            sample_options,
+            buffer,
+            volume,
         );
-        for value in array.iter_mut() {
+        for value in buffer.iter_mut() {
             *value = self.data.apply_density(*value);
         }
     }
@@ -450,30 +366,26 @@ impl StaticChunkNoiseFunctionComponentImpl for Clamp {
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
-        sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f32 {
         let input_density = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut component_stack[..=self.input_index],
             pos,
-            sample_options,
         );
         self.data.apply_density(input_density)
     }
 
-    fn fill(
+    fn sample_volume(
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        array: &mut [f32],
-        mapper: &impl IndexToNoisePos,
-        sample_options: &mut ChunkNoiseFunctionSampleOptions,
+        buffer: &mut [f32],
+        volume: &DensityVolume,
     ) {
-        ChunkNoiseFunctionComponent::fill_from_stack(
+        ChunkNoiseFunctionComponent::sample_volume_from_stack(
             &mut component_stack[..=self.input_index],
-            array,
-            mapper,
-            sample_options,
+            buffer,
+            volume,
         );
-        for value in array.iter_mut() {
+        for value in buffer.iter_mut() {
             *value = self.data.apply_density(*value);
         }
     }
@@ -522,36 +434,66 @@ impl StaticChunkNoiseFunctionComponentImpl for Lerp {
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
-        sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f32 {
         let alpha = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut component_stack[..=self.alpha_index],
             pos,
-            sample_options,
         );
+        if alpha == 0.0 {
+            return ChunkNoiseFunctionComponent::sample_from_stack(
+                &mut component_stack[..=self.first_index],
+                pos,
+            );
+        }
+        if alpha == 1.0 {
+            return ChunkNoiseFunctionComponent::sample_from_stack(
+                &mut component_stack[..=self.second_index],
+                pos,
+            );
+        }
         let first = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut component_stack[..=self.first_index],
             pos,
-            sample_options,
         );
         let second = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut component_stack[..=self.second_index],
             pos,
-            sample_options,
         );
         first + alpha * (second - first)
     }
 
-    fn fill(
+    fn sample_volume(
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        array: &mut [f32],
-        mapper: &impl IndexToNoisePos,
-        sample_options: &mut ChunkNoiseFunctionSampleOptions,
+        buffer: &mut [f32],
+        volume: &DensityVolume,
     ) {
-        for (index, value) in array.iter_mut().enumerate() {
-            let pos = mapper.at(index, Some(sample_options));
-            *value = self.sample(component_stack, &pos, sample_options);
+        ChunkNoiseFunctionComponent::sample_volume_from_stack(
+            &mut component_stack[..=self.alpha_index],
+            buffer,
+            volume,
+        );
+        let mut first = DensityBuffer::acquire(volume);
+        ChunkNoiseFunctionComponent::sample_volume_from_stack(
+            &mut component_stack[..=self.first_index],
+            &mut first,
+            volume,
+        );
+        let mut second = DensityBuffer::acquire(volume);
+        ChunkNoiseFunctionComponent::sample_volume_from_stack(
+            &mut component_stack[..=self.second_index],
+            &mut second,
+            volume,
+        );
+        for ((value, first), second) in buffer.iter_mut().zip(first.iter()).zip(second.iter()) {
+            let alpha = *value;
+            *value = if alpha == 0.0 {
+                *first
+            } else if alpha == 1.0 {
+                *second
+            } else {
+                first + alpha * (second - first)
+            };
         }
     }
 }
@@ -616,17 +558,14 @@ impl StaticChunkNoiseFunctionComponentImpl for Rounding {
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
-        sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f32 {
         let input = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut component_stack[..=self.input_index],
             pos,
-            sample_options,
         );
         let multiple = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut component_stack[..=self.multiple_index],
             pos,
-            sample_options,
         );
         if multiple == 0.0 {
             input
@@ -635,16 +574,27 @@ impl StaticChunkNoiseFunctionComponentImpl for Rounding {
         }
     }
 
-    fn fill(
+    fn sample_volume(
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
-        array: &mut [f32],
-        mapper: &impl IndexToNoisePos,
-        sample_options: &mut ChunkNoiseFunctionSampleOptions,
+        buffer: &mut [f32],
+        volume: &DensityVolume,
     ) {
-        for (index, value) in array.iter_mut().enumerate() {
-            let pos = mapper.at(index, Some(sample_options));
-            *value = self.sample(component_stack, &pos, sample_options);
+        ChunkNoiseFunctionComponent::sample_volume_from_stack(
+            &mut component_stack[..=self.input_index],
+            buffer,
+            volume,
+        );
+        let mut multiple = DensityBuffer::acquire(volume);
+        ChunkNoiseFunctionComponent::sample_volume_from_stack(
+            &mut component_stack[..=self.multiple_index],
+            &mut multiple,
+            volume,
+        );
+        for (value, multiple) in buffer.iter_mut().zip(multiple.iter()) {
+            if *multiple != 0.0 {
+                *value = round_to_integer(*value / multiple, self.data.operation) * multiple;
+            }
         }
     }
 }

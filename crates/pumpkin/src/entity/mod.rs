@@ -305,6 +305,14 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     }
 
     fn java_spawn_metadata(&self, version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
+        if version < JavaMinecraftVersion::V_1_9 {
+            let entity = self.get_entity();
+            let shared_flags = entity.flags.load(Ordering::Relaxed);
+            return (shared_flags != 0).then(|| {
+                // (0 << 5) | 0 = 0 (type: byte, index: 0 flags), value, 127 (terminator)
+                Box::<[u8]>::from([0x00u8, shared_flags as u8, 127u8])
+            });
+        }
         self.get_mob().map_or_else(
             || {
                 let entity = self.get_entity();
@@ -382,7 +390,9 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             if let Ok(data) = client.serialize_packet(&spawn_packet) {
                 client.try_enqueue_packet(data);
             }
-            if let Some(meta) = metadata {
+            if let Some(meta) = metadata
+                && (version >= JavaMinecraftVersion::V_1_9 || meta.last().copied() == Some(127))
+            {
                 let meta_packet = CSetEntityMetadata::new(entity.entity_id.into(), meta);
                 if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
                     client.try_enqueue_packet(meta_data);
@@ -3356,6 +3366,24 @@ impl Entity {
 
     pub fn leash_to(&self, holder: Arc<dyn EntityBase>) {
         let holder_entity_id = holder.get_entity().entity_id;
+        let world = self.world.load();
+        if let Some(server) = world.server.upgrade()
+            && let Some(player) = holder.get_player()
+            && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
+        {
+            let mut event =
+                crate::plugin::api::events::player::player_leash_entity::PlayerLeashEntityEvent {
+                    player: player_arc,
+                    entity_id: self.entity_id,
+                    holder_id: holder_entity_id,
+                    cancelled: false,
+                };
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return;
+            }
+        }
+
         *self
             .leashed_to
             .lock()
@@ -3387,6 +3415,19 @@ impl Entity {
     }
 
     pub fn unleash(&self) {
+        let world = self.world.load();
+        if let Some(server) = world.server.upgrade() {
+            let mut event =
+                crate::plugin::api::events::entity::entity_unleash::EntityUnleashEvent::new(
+                    self.entity_id,
+                    "unleashed".to_string(),
+                );
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return;
+            }
+        }
+
         let old_holder = self
             .leashed_to
             .lock()
@@ -3394,6 +3435,19 @@ impl Entity {
             .take();
         if old_holder.is_none() {
             return;
+        }
+
+        if let Some(holder) = &old_holder
+            && let Some(server) = world.server.upgrade()
+            && let Some(player) = holder.get_player()
+            && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
+        {
+            let mut event = crate::plugin::api::events::player::player_unleash_entity::PlayerUnleashEntityEvent {
+                player: player_arc,
+                entity_id: self.entity_id,
+                cancelled: false,
+            };
+            server.plugin_manager.fire_blocking(&server, &mut event);
         }
 
         let je_packet =

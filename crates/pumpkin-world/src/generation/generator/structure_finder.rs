@@ -112,14 +112,12 @@ pub fn find_nearest_structure_start(
         ProtoChunk,
         biome::{BiomeSupplier, MultiNoiseBiomeSupplier},
         generation::{
-            biome_coords,
             noise::router::{
-                multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
+                multi_noise_sampler::MultiNoiseSampler,
                 surface_height_sampler::{
                     SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
                 },
             },
-            positions::chunk_pos::{start_block_x, start_block_z},
             structure::{
                 lazily_generate_structure,
                 placement::should_generate_structure,
@@ -174,15 +172,10 @@ pub fn find_nearest_structure_start(
                 for &key in target_structures {
                     let start =
                         global_cache.get_or_compute_structure_start(key, chunk_x, chunk_z, || {
-                            let start_x = start_block_x(chunk_x);
-                            let start_z = start_block_z(chunk_z);
                             let settings = noise_generator.settings;
                             let mut height_sampler = SurfaceHeightEstimateSampler::generate(
                                 &noise_generator.base_router.surface_estimator,
                                 &SurfaceHeightSamplerBuilderOptions::new(
-                                    biome_coords::from_block(start_x),
-                                    biome_coords::from_block(start_z),
-                                    4,
                                     settings.shape.min_y as i32,
                                     settings.shape.height as i32,
                                     (settings.shape.height
@@ -192,7 +185,6 @@ pub fn find_nearest_structure_start(
                             );
                             let mut biome_sampler = MultiNoiseSampler::generate(
                                 &noise_generator.base_router.multi_noise,
-                                &MultiNoiseSamplerBuilderOptions::new(0, 0, 0),
                             );
                             let biome_supplier: &dyn BiomeSupplier =
                                 &MultiNoiseBiomeSupplier::OVERWORLD;
