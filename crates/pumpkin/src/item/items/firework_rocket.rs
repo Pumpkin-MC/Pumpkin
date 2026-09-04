@@ -41,7 +41,8 @@ impl ItemBehaviour for FireworkRocketItem {
                 player.get_entity().pos.load(),
                 &EntityType::FIREWORK_ROCKET,
             );
-            let entity = FireworkRocketEntity::new_shot(entity, player.get_entity());
+            let entity =
+                FireworkRocketEntity::new_shot_with_item(entity, player.get_entity(), item.clone());
             world.spawn_entity(Arc::new(entity));
             item.decrement_unless_creative(player.gamemode.load(), 1);
         }
@@ -49,15 +50,6 @@ impl ItemBehaviour for FireworkRocketItem {
 
     fn normal_use(&self, _item: &Item, player: &Player) {
         if player.get_entity().is_fall_flying() {
-            let world = player.world();
-            let entity = Entity::new(
-                world.clone(),
-                player.get_entity().pos.load(),
-                &EntityType::FIREWORK_ROCKET,
-            );
-            let entity = FireworkRocketEntity::new_shot(entity, player.get_entity());
-            world.spawn_entity(Arc::new(entity));
-
             let mut held = player.inventory().held_item();
             let mut is_main = true;
             if held.is_empty() || held.item.id != Item::FIREWORK_ROCKET.id {
@@ -67,6 +59,17 @@ impl ItemBehaviour for FireworkRocketItem {
                     return;
                 }
             }
+
+            let world = player.world();
+            let entity = Entity::new(
+                world.clone(),
+                player.get_entity().pos.load(),
+                &EntityType::FIREWORK_ROCKET,
+            );
+            let entity =
+                FireworkRocketEntity::new_shot_with_item(entity, player.get_entity(), held.clone());
+            world.spawn_entity(Arc::new(entity));
+
             held.decrement_unless_creative(player.gamemode.load(), 1);
             if is_main {
                 player.inventory().set_held_item(held);
