@@ -76,6 +76,20 @@ impl ItemBehaviour for ShearsItem {
             .downcast_ref::<crate::entity::passive::sheep::SheepEntity>()
             && !sheep.is_sheared()
         {
+            if let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id)
+                && let Some(server) = player.world().server.upgrade()
+            {
+                let mut event = crate::plugin::api::events::player::player_shear_entity::PlayerShearEntityEvent {
+                    player: player_arc,
+                    entity_id: sheep.mob_entity.living_entity.entity.entity_id,
+                    hand: 0,
+                    cancelled: false,
+                };
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return;
+                }
+            }
             sheep.set_sheared(true);
             let world = player.world();
             let pos = sheep.mob_entity.living_entity.entity.pos.load();
@@ -176,6 +190,24 @@ fn handle_beehive(
     });
 
     if let Some(new_state_id) = action {
+        let mut drops = vec![ItemStack::new(3, &Item::HONEYCOMB)];
+        if let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id)
+            && let Some(server) = player.world().server.upgrade()
+        {
+            let mut event =
+                crate::plugin::api::events::player::player_harvest_block::PlayerHarvestBlockEvent {
+                    player: player_arc,
+                    block_pos: *location,
+                    harvested_items: drops.clone(),
+                    cancelled: false,
+                };
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return false;
+            }
+            drops = event.harvested_items;
+        }
+
         world.set_block_state(location, new_state_id, BlockFlags::NOTIFY_ALL);
         world.play_sound(
             Sound::BlockBeehiveShear,
@@ -188,11 +220,13 @@ fn handle_beehive(
             f64::from(location.0.y) + 0.5,
             f64::from(location.0.z) + 0.5,
         );
-        let item_entity = Arc::new(ItemEntity::new(
-            Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
-            ItemStack::new(3, &Item::HONEYCOMB),
-        ));
-        world.spawn_entity(item_entity);
+        for item in drops {
+            let item_entity = Arc::new(ItemEntity::new(
+                Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
+                item,
+            ));
+            world.spawn_entity(item_entity);
+        }
         player.damage_held_item(1);
         return true;
     }

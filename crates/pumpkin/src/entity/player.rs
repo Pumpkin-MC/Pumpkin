@@ -1603,19 +1603,44 @@ impl Player {
             return false;
         }
 
+        let mut final_block_pos = block_pos;
+        if let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
+            && let Some(server) = self.world().server.upgrade()
+        {
+            let mut event =
+                crate::plugin::api::events::player::player_spawn_change::PlayerSpawnChangeEvent {
+                    player: player_arc,
+                    new_spawn: Some(block_pos),
+                    forced,
+                    cancelled: false,
+                };
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return false;
+            }
+            if let Some(pos) = event.new_spawn {
+                final_block_pos = pos;
+            }
+        }
+
         let bedrock_dimension = match dimension.minecraft_name {
             "minecraft:the_nether" => 1,
             "minecraft:the_end" => 2,
             _ => 0,
         };
         self.client.try_enqueue_packet_editioned(
-            &CPlayerSpawnPosition::new(block_pos, yaw, pitch, dimension.minecraft_name.to_owned()),
+            &CPlayerSpawnPosition::new(
+                final_block_pos,
+                yaw,
+                pitch,
+                dimension.minecraft_name.to_owned(),
+            ),
             &pumpkin_protocol::bedrock::client::CSetSpawnPosition {
                 spawn_position_type:
                     pumpkin_protocol::bedrock::client::SpawnPositionType::PlayerRespawn,
-                block_position: block_pos,
+                block_position: final_block_pos,
                 dimension_type: bedrock_dimension.into(),
-                spawn_block_pos: block_pos,
+                spawn_block_pos: final_block_pos,
             },
         );
 
@@ -1624,7 +1649,7 @@ impl Player {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(RespawnPoint {
             dimension,
-            position: block_pos,
+            position: final_block_pos,
             yaw,
             force: forced,
         });
@@ -2293,11 +2318,41 @@ impl Player {
     }
 
     pub fn open_sign_editor(&self, location: BlockPos, is_front_text: bool) {
+        if let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
+            && let Some(server) = self.world().server.upgrade()
+        {
+            let mut event =
+                crate::plugin::api::events::player::player_open_sign::PlayerOpenSignEvent {
+                    player: player_arc,
+                    block_pos: location,
+                    is_front: is_front_text,
+                    cancelled: false,
+                };
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return;
+            }
+        }
         let packet = COpenSignEditor::new(location, is_front_text);
         self.try_send_client_packet(&packet);
     }
 
-    pub fn set_velocity(&self, velocity: Vector3<f64>) {
+    pub fn set_velocity(&self, mut velocity: Vector3<f64>) {
+        if let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
+            && let Some(server) = self.world().server.upgrade()
+        {
+            let mut event =
+                crate::plugin::api::events::player::player_velocity::PlayerVelocityEvent {
+                    player: player_arc,
+                    velocity,
+                    cancelled: false,
+                };
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return;
+            }
+            velocity = event.velocity;
+        }
         self.living_entity.entity.set_velocity(velocity);
         self.try_send_client_packet(&CEntityVelocity::new(self.entity_id().into(), velocity));
     }
@@ -2340,6 +2395,20 @@ impl Player {
 
     /// Sends custom server links to the player (displayed in the client Esc pause menu).
     pub fn set_server_links(&self, links: &[pumpkin_protocol::Link<'_>]) {
+        if let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
+            && let Some(server) = self.world().server.upgrade()
+        {
+            let link_strings = links.iter().map(|l| l.url.clone()).collect();
+            let mut event =
+                crate::plugin::api::events::player::player_links_send::PlayerLinksSendEvent::new(
+                    player_arc,
+                    link_strings,
+                );
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return;
+            }
+        }
         let packet = CPlayServerLinks::new(links);
         self.try_send_client_packet(&packet);
     }
@@ -2514,8 +2583,13 @@ impl Player {
             sender.prepare_batch(&world.level, player_chunk, epoch, version)
         });
 
-        let total_sent_chunks = if let Some(batch) = prepared_batch {
-            match self.client.as_ref() {
+        let total_sent_chunks = prepared_batch.map_or_else(
+            || {
+                self.chunk_sender
+                    .try_lock()
+                    .map_or(0, |s| s.sent_chunks_count())
+            },
+            |batch| match self.client.as_ref() {
                 ClientPlatform::Java(_) => {
                     let mut per_player_cache = rustc_hash::FxHashMap::default();
                     let encoded =
@@ -2527,21 +2601,25 @@ impl Player {
                     })
                 }
                 ClientPlatform::Bedrock(_) => {
-                    let chunks: Vec<_> = batch.chunks.into_iter().map(|c| c.chunk).collect();
-                    let client = self.client.clone();
-                    self.spawn_task(async move {
-                        client.send_chunks(&chunks).await;
-                    });
-                    self.chunk_sender
-                        .try_lock()
-                        .map_or(0, |s| s.sent_chunks_count())
+                    let current_epoch = self.chunk_send_epoch.load(Ordering::Relaxed);
+                    let (chunks, total_sent_chunks) = self.chunk_sender.try_lock().map_or_else(
+                        |_| (Vec::new(), 0),
+                        |mut sender| {
+                            let chunks = sender.commit_bedrock_batch(&batch, current_epoch);
+                            let total_sent_chunks = sender.sent_chunks_count();
+                            (chunks, total_sent_chunks)
+                        },
+                    );
+                    if !chunks.is_empty() {
+                        let client = self.client.clone();
+                        self.spawn_task(async move {
+                            client.send_chunks(&chunks).await;
+                        });
+                    }
+                    total_sent_chunks
                 }
-            }
-        } else {
-            self.chunk_sender
-                .try_lock()
-                .map_or(0, |s| s.sent_chunks_count())
-        };
+            },
+        );
 
         if let ClientPlatform::Bedrock(bedrock_client) = self.client.as_ref()
             && !self.bedrock_spawned.load(Ordering::Relaxed)
@@ -3029,8 +3107,26 @@ impl Player {
     }
 
     pub fn increment_stat(&self, category: statistics::StatisticCategory, stat: i32, amount: i32) {
+        let final_amount = if let Some(player_arc) =
+            self.world().get_player_by_uuid(self.gameprofile.id)
+            && let Some(server) = self.world().server.upgrade()
+        {
+            let mut event = crate::plugin::api::events::player::player_statistic_increment::PlayerStatisticIncrementEvent {
+                player: player_arc,
+                statistic_id: format!("{category:?}:{stat}"),
+                amount,
+                cancelled: false,
+            };
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return;
+            }
+            event.amount
+        } else {
+            amount
+        };
         if let Ok(mut stats) = self.stats.try_lock() {
-            stats.increment(category, stat, amount);
+            stats.increment(category, stat, final_amount);
         }
     }
 
@@ -3729,6 +3825,14 @@ impl Player {
                 }
 
                 player.request_teleport(position, yaw, pitch);
+
+                let mut changed_world_event = crate::plugin::api::events::player::player_changed_world::PlayerChangedWorldEvent {
+                    player: player.clone(),
+                    from_world: current_world,
+                    to_world: new_world,
+                    cancelled: false,
+                };
+                server.plugin_manager.fire(&server, &mut changed_world_event).await;
             }
         }}
     }
@@ -4364,8 +4468,19 @@ impl Player {
         }
     }
 
-    #[allow(dead_code)]
-    async fn handle_killed(&self, death_msg: TextComponent) {
+    pub fn send_combat_death(&self, death_msg: &TextComponent) {
+        self.try_enqueue_packet_editioned(
+            &CCombatDeath::new(self.entity_id().into(), death_msg),
+            &SActorEvent {
+                target_runtime_id: VarULong(self.entity_id() as u64),
+                event_id: ActorEventID::Death,
+                data: VarInt(0),
+                fire_at_position: None,
+            },
+        );
+    }
+
+    pub fn handle_killed(&self, death_msg: &TextComponent) {
         self.trigger_advancement(
             crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerKilled,
         );
@@ -4402,17 +4517,7 @@ impl Player {
         if matches!(self.client.as_ref(), ClientPlatform::Java(_)) {
             self.set_client_loaded(false);
         }
-        self.client
-            .send_packet_now_editioned(
-                &CCombatDeath::new(self.entity_id().into(), &death_msg),
-                &SActorEvent {
-                    target_runtime_id: VarULong(self.entity_id() as u64),
-                    event_id: ActorEventID::Death,
-                    data: VarInt(0),
-                    fire_at_position: None,
-                },
-            )
-            .await;
+        self.send_combat_death(death_msg);
         self.send_health();
         self.send_bedrock_respawn_state(RespawnState::SearchingForSpawn);
     }
@@ -5137,10 +5242,28 @@ impl Player {
             return xp;
         }
 
+        let xp_used = (repaired + 1) / 2;
+
+        if let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id)
+            && let Some(server) = self.world().server.upgrade()
+        {
+            let mut event =
+                crate::plugin::api::events::player::player_item_mend::PlayerItemMendEvent {
+                    player: player_arc,
+                    item_name: stack.item.registry_key.to_string(),
+                    repair_amount: repaired,
+                    exp_consumed: xp_used,
+                    cancelled: false,
+                };
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return xp;
+            }
+        }
+
         let updated_stack = stack.clone();
         self.inventory.set_slot(slot_index, updated_stack.clone());
 
-        let xp_used = (repaired + 1) / 2;
         xp = xp.saturating_sub(xp_used);
 
         self.try_send_slot_set_packet(&CSetPlayerInventory::new(

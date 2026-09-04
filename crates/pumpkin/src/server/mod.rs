@@ -57,6 +57,7 @@ mod key_store;
 pub mod recipe;
 pub mod scheduler;
 pub mod seasonal_events;
+pub mod server_test_manager;
 pub mod tick_rate_manager;
 pub mod ticker;
 

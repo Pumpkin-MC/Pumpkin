@@ -195,6 +195,26 @@ impl Block {
         })
     }
 
+    #[must_use]
+    pub fn state_from_properties(
+        &'static self,
+        properties: &[(&str, &str)],
+    ) -> Option<&'static BlockState> {
+        self.states.iter().find(|state| {
+            let Some(state_properties) = self.properties(state.id) else {
+                return properties.is_empty();
+            };
+            let state_properties = state_properties.to_props();
+
+            state_properties.len() == properties.len()
+                && properties.iter().all(|(name, value)| {
+                    state_properties.iter().any(|(state_name, state_value)| {
+                        *state_name == *name && *state_value == *value
+                    })
+                })
+        })
+    }
+
     /// Returns whether this block is solid (based on default state)
     #[must_use]
     pub const fn is_solid(&self) -> bool {

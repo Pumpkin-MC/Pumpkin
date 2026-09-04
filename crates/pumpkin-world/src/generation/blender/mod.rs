@@ -301,7 +301,7 @@ impl Blender {
         if closest_distance == f64::INFINITY {
             None
         } else {
-            let shift = (shift_noise.sample(quart_x as f32, 0.0, quart_z as f32) * 12.0) as f64;
+            let shift = (shift_noise.sample(quart_x as f64, 0.0, quart_z as f64) * 12.0) as f64;
             let alpha = ((closest_distance + shift) / (HEIGHT_BLENDING_RANGE_CELLS + 1) as f64)
                 .clamp(0.0, 1.0);
             if alpha > 0.5 { None } else { closest_biome }

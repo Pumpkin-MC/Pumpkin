@@ -4,7 +4,7 @@ use crate::generation::height_limit::HeightLimitView;
 use crate::generation::proto_chunk::GenerationCache;
 use crate::lighting::storage::{get_block_light, get_sky_light, set_block_light, set_sky_light};
 use pumpkin_config::lighting::LightingEngineConfig;
-use pumpkin_data::{BlockDirection, BlockStateId};
+use pumpkin_data::{BlockDirection, BlockState, BlockStateId};
 use pumpkin_util::HeightMap;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -255,6 +255,7 @@ impl<P: LightProvider> LightPropagator<P> {
         self.decrease_queue.clear();
     }
 
+    #[expect(clippy::too_many_lines)]
     pub fn propagate(&mut self, cache: &mut Cache) {
         let cache_x = cache.x;
         let cache_z = cache.z;
@@ -319,7 +320,12 @@ impl<P: LightProvider> LightPropagator<P> {
                         let op = if state_id == BlockStateId::AIR {
                             0
                         } else {
-                            state_id.to_state().opacity
+                            let s = state_id.to_state();
+                            if s.can_occlude() {
+                                s.opacity.max(1)
+                            } else {
+                                s.opacity
+                            }
                         };
                         let light = P::get_light_proto(c, section_idx, local_x, local_y, local_z);
                         (op, light)
@@ -332,7 +338,12 @@ impl<P: LightProvider> LightPropagator<P> {
                         let op = if state_id == BlockStateId::AIR {
                             0
                         } else {
-                            state_id.to_state().opacity
+                            let s = state_id.to_state();
+                            if s.can_occlude() {
+                                s.opacity.max(1)
+                            } else {
+                                s.opacity
+                            }
                         };
                         (op, P::get_light(cache, neighbor_pos))
                     }
@@ -390,8 +401,12 @@ impl<P: LightProvider> LightPropagator<P> {
                     continue;
                 }
 
-                let state = cache.get_block_state(&neighbor_pos.0);
-                let opacity = state.to_state().opacity;
+                let state = cache.get_block_state(&neighbor_pos.0).to_state();
+                let opacity = if state.can_occlude() {
+                    state.opacity.max(1)
+                } else {
+                    state.opacity
+                };
 
                 let predicted = P::propagate_level(old_val, opacity, dir);
 
@@ -600,7 +615,12 @@ impl SkyLightPropagator {
                             let opacity = if state_id == BlockStateId::AIR {
                                 0
                             } else {
-                                state_id.to_state().opacity as i32
+                                let s = state_id.to_state();
+                                if s.can_occlude() {
+                                    s.opacity.max(1) as i32
+                                } else {
+                                    s.opacity as i32
+                                }
                             };
 
                             light = light.saturating_sub(opacity);
@@ -645,7 +665,12 @@ impl SkyLightPropagator {
                             let opacity = if state_id == BlockStateId::AIR {
                                 0
                             } else {
-                                state_id.to_state().opacity as i32
+                                let s = state_id.to_state();
+                                if s.can_occlude() {
+                                    s.opacity.max(1) as i32
+                                } else {
+                                    s.opacity as i32
+                                }
                             };
 
                             light = light.saturating_sub(opacity);
@@ -810,6 +835,53 @@ impl LightEngine {
             self.sky_light.propagate(cache);
             self.sky_light.visited.clear();
         }
+    }
+
+    /// Checks if a block state has an empty shape for light occlusion, matching vanilla `LightEngine.isEmptyShape`.
+    #[inline]
+    #[must_use]
+    pub const fn is_empty_shape(state: &BlockState) -> bool {
+        !state.can_occlude()
+    }
+
+    /// Checks if two block states have different light properties, matching vanilla `LightEngine.hasDifferentLightProperties`.
+    #[inline]
+    #[must_use]
+    pub fn has_different_light_properties(old_state: &BlockState, new_state: &BlockState) -> bool {
+        if std::ptr::eq(old_state, new_state) || old_state.id == new_state.id {
+            return false;
+        }
+
+        old_state.opacity != new_state.opacity
+            || old_state.luminance != new_state.luminance
+            || old_state.can_occlude() != new_state.can_occlude()
+    }
+
+    /// Returns the minimum light dampening for this block state, matching vanilla `LightEngine.getOpacity`.
+    #[inline]
+    #[must_use]
+    pub const fn get_opacity(state: &BlockState) -> u8 {
+        if state.opacity > 1 { state.opacity } else { 1 }
+    }
+
+    /// Calculates the light dampening between two blocks, matching vanilla `LightEngine.getLightDampeningInto`.
+    #[inline]
+    #[must_use]
+    pub const fn get_light_dampening_into(
+        from_state: &BlockState,
+        to_state: &BlockState,
+        _direction: BlockDirection,
+        simple_opacity: u8,
+    ) -> u8 {
+        let from_empty = Self::is_empty_shape(from_state);
+        let to_empty = Self::is_empty_shape(to_state);
+        if from_empty && to_empty {
+            return simple_opacity;
+        }
+        if to_state.can_occlude() && to_state.is_solid_render() {
+            return 16;
+        }
+        simple_opacity
     }
 }
 

@@ -1148,12 +1148,47 @@ impl JavaClient {
             }
             id if id == SCustomPayload::to_id(version) => {
                 let payload = SCustomPayload::read(&mut payload, &version)?;
+                let channel_str = payload.channel.to_string();
                 let mut event = PlayerCustomPayloadEvent::new(
                     player.clone(),
-                    payload.channel.to_string(),
+                    channel_str.clone(),
                     Bytes::copy_from_slice(payload.data),
                 );
                 server.plugin_manager.fire_blocking(server, &mut event);
+
+                if channel_str == "minecraft:register" {
+                    if let Ok(channels_data) = std::str::from_utf8(payload.data) {
+                        for ch in channels_data.split('\0') {
+                            if !ch.is_empty() {
+                                let mut reg_event = crate::plugin::api::events::player::player_register_channel::PlayerRegisterChannelEvent::new(
+                                    player.clone(),
+                                    ch.to_string(),
+                                );
+                                server.plugin_manager.fire_blocking(server, &mut reg_event);
+                                let mut ch_event = crate::plugin::api::events::player::player_channel::PlayerChannelEvent {
+                                    player: player.clone(),
+                                    channel: ch.to_string(),
+                                    cancelled: false,
+                                };
+                                server.plugin_manager.fire_blocking(server, &mut ch_event);
+                            }
+                        }
+                    }
+                } else if channel_str == "minecraft:unregister"
+                    && let Ok(channels_data) = std::str::from_utf8(payload.data)
+                {
+                    for ch in channels_data.split('\0') {
+                        if !ch.is_empty() {
+                            let mut unreg_event = crate::plugin::api::events::player::player_unregister_channel::PlayerUnregisterChannelEvent::new(
+                                player.clone(),
+                                ch.to_string(),
+                            );
+                            server
+                                .plugin_manager
+                                .fire_blocking(server, &mut unreg_event);
+                        }
+                    }
+                }
             }
             id if id == SRecipeBookChangeSettings::to_id(version) => {
                 self.handle_recipe_book_change_settings(

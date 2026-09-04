@@ -230,7 +230,18 @@ impl Context {
     pub fn unregister_command(&self, name: &str) {
         self.server.command_dispatcher.rcu(|dispatcher| {
             let mut new_dispatcher = (**dispatcher).clone();
-            new_dispatcher.disable_command(name.to_string());
+            new_dispatcher.deactivate_plugin_command_and_aliases(name);
+            Arc::new(new_dispatcher)
+        });
+
+        self.reload_commands_for_everyone();
+    }
+
+    pub(crate) fn unregister_commands(&self) {
+        let source = self.metadata.name.clone();
+        self.server.command_dispatcher.rcu(|dispatcher| {
+            let mut new_dispatcher = (**dispatcher).clone();
+            new_dispatcher.deactivate_commands_from_source(&source);
             Arc::new(new_dispatcher)
         });
 
@@ -317,6 +328,7 @@ impl Context {
             handler,
             priority,
             blocking,
+            source: Some(self.metadata.name.clone()),
             _phantom: std::marker::PhantomData,
         });
 

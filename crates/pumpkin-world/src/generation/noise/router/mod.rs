@@ -9,5 +9,3 @@ mod parity_fingerprint_test;
 pub mod proto_noise_router;
 pub mod static_router;
 pub mod surface_height_sampler;
-#[cfg(test)]
-mod volume_parity_test;

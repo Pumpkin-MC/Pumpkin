@@ -6,6 +6,7 @@ members = [
     "crates/pumpkin-codecs",
     "crates/pumpkin-config",
     "crates/pumpkin-data",
+    "crates/pumpkin-gametest",
     "crates/pumpkin-inventory",
     "crates/pumpkin-macros",
     "crates/pumpkin-nbt",
@@ -103,7 +104,7 @@ struct_excessive_bools = "allow"
 unused_async_trait_impl = "allow"
 
 [workspace.package]
-version = "0.1.0-dev+26.2-26.40"
+version = "0.1.0-dev+26.2-26.45"
 edition = "2024"
 rust-version = "1.95"
 license = "GPL-3.0"
@@ -154,7 +155,6 @@ colored = { version = "3.1", default-features = false }
 console-subscriber = { version = "0.5.0", default-features = false }
 crc-fast = { version = "1.10.0", default-features = false, features = ["std"] }
 criterion = { version = "0.8", default-features = false }
-crossbeam-utils = { version = "0.8.22", default-features = false, features = ["std"] }
 crypto-bigint = { version = "0.7.5", default-features = false }
 dashmap = { version = "6.2", default-features = false }
 ecdsa = { version = "0.17.0", default-features = false, features = ["std"] }
@@ -163,6 +163,7 @@ heck = { version = "0.5", default-features = false }
 hmac = { version = "=0.13.0", default-features = false }
 indexmap = { version = "2.14", default-features = false, features = ["std"] }
 itertools = { version = "0.15.0", default-features = false, features = ["use_std"] }
+libc = { version = "0.2", default-features = false }
 libloading = { version = "0.9", default-features = false, features = ["std"] }
 lru = { version = "0.18.3", default-features = false }
 lz4-java-wrc = { version = "0.2.0", default-features = false, features = ["lz4_flex"] }
@@ -180,7 +181,6 @@ pumpkin-inventory = { path = "crates/pumpkin-inventory", default-features = fals
 pumpkin-macros = { path = "crates/pumpkin-macros", default-features = false }
 pumpkin-nbt = { path = "crates/pumpkin-nbt", default-features = false }
 pumpkin-plugin-api = { path = "crates/pumpkin-plugin-api", default-features = false }
-pumpkin-plugin-utils = { path = "crates/pumpkin-plugin-utils", default-features = false }
 pumpkin-protocol = { path = "crates/pumpkin-protocol", default-features = false }
 pumpkin-util = { path = "crates/pumpkin-util", default-features = false }
 pumpkin-world = { path = "crates/pumpkin-world", default-features = false }
@@ -189,13 +189,11 @@ rand = { version = "0.10.2", default-features = false, features = ["std", "std_r
 rsa = { version = "=0.10.0-rc.18", default-features = false, features = ["std", "encoding"] }
 ed25519-dalek = { version = "3.0", default-features = false, features = ["fast"] }
 hex = { version = "0.4", default-features = false, features = ["std"] }
-cipher = { version = "0.5.2", default-features = false }
 rustc-hash = { version = "2.1.3", default-features = false, features = ["std"] }
 rustyline = { version = "18.0.1", default-features = false, features = ["with-file-history"] }
 ruzstd = { version = "0.9.0", default-features = false, features = ["std"] }
 sha1 = { version = "=0.11.0", default-features = false, features = ["oid"] }
 sha2 = { version = "=0.11.0", default-features = false, features = ["oid"] }
-signature = { version = "3.0.0", default-features = false, features = ["std"] }
 tracing = { version = "0.1.44", default-features = false, features = ["std", "attributes"] }
 tracing-subscriber = { version = "0.3.23", default-features = false, features = [
     "env-filter",
