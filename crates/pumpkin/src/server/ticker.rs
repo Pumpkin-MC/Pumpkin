@@ -82,7 +82,7 @@ impl Ticker {
                 );
             }
 
-            let should_tick_game_tests = manager.runs_normally() || manager.is_sprinting();
+            let should_tick_game_tests = manager.runs_normally() || sprinting;
 
             if sprinting {
                 manager.start_sprint_tick_work();

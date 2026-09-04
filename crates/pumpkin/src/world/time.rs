@@ -135,14 +135,17 @@ impl LevelTime {
     /// Vanilla `ClientboundSetTimePacket(overworld.getGameTime(), Map.of())`.
     /// Clock entries would rewind `clockManager` and can freeze client
     /// `getGameTime()` across two piston animation ticks.
-    pub fn send_game_time_sync(&self, world: &World) {
-        world.broadcast_editioned(
-            &CUpdateTime {
-                game_time: self.world_age,
-                clock_updates: Vec::new(),
-            },
-            &CSetTime::new(self.time_of_day as _),
-        );
+    ///
+    /// Vanilla `PlayerList.broadcastAll`: every player, not only this world's.
+    pub fn send_game_time_sync(&self, server: &crate::server::Server) {
+        let java = CUpdateTime {
+            game_time: self.world_age,
+            clock_updates: Vec::new(),
+        };
+        let bedrock = CSetTime::new(self.time_of_day as _);
+        server.for_each_player(|player| {
+            player.client.try_enqueue_packet_editioned(&java, &bedrock);
+        });
     }
 
     pub fn add_time(&mut self, time: i64) {

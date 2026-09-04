@@ -839,6 +839,14 @@ impl World {
             _ => {}
         }
         self.level_info.store(Arc::new(new_info));
+        if *rule == GameRule::AdvanceTime {
+            let level_time = self
+                .level_time
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
+            level_time.send_time(self);
+        }
     }
 
     pub fn add_synced_block_event(&self, pos: BlockPos, r#type: u8, data: u8) {
@@ -2428,13 +2436,13 @@ impl World {
     /// post-increment value, or a clock snapshot, makes `getGameTime()` hold
     /// for two client ticks, so `Entity.limitPistonMovement` does not reset
     /// `pistonDeltas` and clips the second honey/piston step at ±0.51.
-    pub fn force_game_time_synchronization(&self) {
+    pub fn force_game_time_synchronization(&self, server: &Server) {
         let level_time = self
             .level_time
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone();
-        level_time.send_game_time_sync(self);
+        level_time.send_game_time_sync(server);
     }
 
     pub fn get_time_of_day(&self) -> i64 {

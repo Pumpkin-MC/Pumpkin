@@ -125,11 +125,6 @@ pub struct JavaClient {
     tick_flush: TickFlush,
 }
 
-pub enum OutgoingPacketType {
-    Normal,
-    HighPriority,
-}
-
 impl JavaClient {
     #[must_use]
     pub fn from_pending(
@@ -559,6 +554,9 @@ impl JavaClient {
         self.send_packet_now_data(packet).await;
     }
 
+    /// Enqueue on the per-connection FIFO and wait until the writer has
+    /// `write_frame`d into the `BufWriter`. Does not wait for a TCP flush
+    /// while `suspendFlushing` is set.
     pub async fn send_packet_now_data(&self, packet: Bytes) {
         let (completion_tx, completion_rx) = oneshot::channel();
 
