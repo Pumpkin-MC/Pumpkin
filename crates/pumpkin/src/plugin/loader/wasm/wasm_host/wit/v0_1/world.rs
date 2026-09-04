@@ -2320,7 +2320,7 @@ impl WasmChunkGenerator {
                 })
                 .await;
             if let Err(error) = result {
-                tracing::error!(%error, generator_id, "Wasm chunk generation phase failed");
+                panic!("Wasm chunk generation phase failed for generator {generator_id}: {error}");
             }
         };
 
