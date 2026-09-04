@@ -365,7 +365,104 @@ impl FragmentBuffer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use async_trait::async_trait;
     use std::sync::atomic::AtomicUsize;
+    use webrtc::peer_connection::{PeerConnectionBuilder, PeerConnectionEventHandler};
+
+    async fn blob_test_client()
+    -> Result<crate::net::bedrock::BedrockClient, Box<dyn std::error::Error>> {
+        struct Handler;
+        #[async_trait]
+        impl PeerConnectionEventHandler for Handler {}
+        let peer = Arc::new(
+            Box::pin(
+                PeerConnectionBuilder::new()
+                    .with_handler(Arc::new(Handler))
+                    .with_udp_addrs(vec!["127.0.0.1:0"])
+                    .build(),
+            )
+            .await?,
+        );
+        let (incoming, _receiver) = mpsc::channel(1);
+        let address = "127.0.0.1:19132".parse()?;
+        let session = Arc::new(NetherNetSession::new(peer, None, address, incoming));
+        Ok(crate::net::bedrock::BedrockClient::new(
+            session,
+            address,
+            Arc::new(Mutex::new(std::collections::HashMap::new())),
+            crate::net::PacketRateLimiter::new(false, 0.0, 0.0),
+        ))
+    }
+
+    #[tokio::test]
+    async fn blob_status_releases_completed_payloads() -> Result<(), Box<dyn std::error::Error>> {
+        use pumpkin_protocol::bedrock::{
+            client::client_cache_miss_response::{CClientCacheMissResponse, MissingBlobData},
+            server::client_cache_blob_status::SClientCacheBlobStatus,
+        };
+
+        let client = blob_test_client().await?;
+        let mut outgoing = client
+            .outgoing_packet_queue_recv
+            .lock()
+            .await
+            .take()
+            .ok_or("missing queue")?;
+        for hash in 0..128 {
+            client
+                .blob_cache
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .insert(hash, vec![1; 65536]);
+            client.handle_client_cache_blob_status(SClientCacheBlobStatus {
+                hit_hashes: vec![hash],
+                miss_hashes: vec![],
+            });
+        }
+        let hits_retained = client
+            .blob_cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .len();
+        client
+            .blob_cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .extend([(1000, vec![2; 65536]), (1001, vec![3; 65536])]);
+        client.handle_client_cache_blob_status(SClientCacheBlobStatus {
+            hit_hashes: vec![],
+            miss_hashes: vec![1000],
+        });
+        let response = outgoing.try_recv()?;
+        let expected = client.serialize_packet(&CClientCacheMissResponse {
+            missing_blobs: vec![MissingBlobData {
+                blob_id: 1000,
+                blob_data: vec![2; 65536],
+            }],
+        })?;
+        let cache = client
+            .blob_cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        assert_eq!(response.data, expected);
+        assert_eq!(hits_retained, 0, "acknowledged payloads remain cached");
+        assert!(!cache.contains_key(&1000), "serviced miss remains cached");
+        assert_eq!(
+            cache.get(&1001),
+            Some(&vec![3; 65536]),
+            "unacknowledged payload was lost"
+        );
+        assert_eq!(
+            client.pending_bytes.load(Ordering::Relaxed),
+            response.data.len(),
+            "queued blob response must reserve its payload bytes"
+        );
+        crate::net::decrement_pending_bytes(&client.pending_bytes, response.data.len());
+        assert_eq!(client.pending_bytes.load(Ordering::Relaxed), 0);
+        client.close().await;
+        Ok(())
+    }
 
     #[tokio::test]
     async fn reliable_delivery_waits_until_no_bytes_are_outstanding() {
