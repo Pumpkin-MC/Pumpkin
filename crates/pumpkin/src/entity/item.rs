@@ -47,7 +47,7 @@ fn java_item_metadata(item_stack: &ItemStack, version: JavaMinecraftVersion) -> 
 
     if version < JavaMinecraftVersion::V_1_9 {
         // Legacy DataWatcher header: type 5 (item stack), index 10.
-        data.push((5 << 5) | 10);
+        data.push((5 << 5) | 0x0A);
         item_stack.write_with_version(&mut data, &version).ok()?;
         data.push(127);
     } else if version >= JavaMinecraftVersion::V_1_21 {
