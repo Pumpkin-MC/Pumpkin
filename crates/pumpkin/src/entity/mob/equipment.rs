@@ -661,11 +661,7 @@ impl RegionalDifficulty {
 #[must_use]
 fn moon_brightness(time_of_day: i64) -> f32 {
     let phase = (time_of_day / 24000 % 8) as i32;
-    if phase == 0 {
-        1.0
-    } else {
-        1.0 - (phase - 4).abs() as f32 / 4.0
-    }
+    (phase - 4).abs() as f32 / 4.0
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1045,4 +1041,33 @@ pub fn equip_mob_on_spawn(mob: &dyn EntityBase, world: &Arc<crate::world::World>
     drop(drop_chances);
 
     living.send_equipment_changes(&equipment_changes);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::moon_brightness;
+
+    #[test]
+    fn moon_brightness_matches_the_vanilla_phase_table() {
+        let expected = [1.0, 0.75, 0.5, 0.25, 0.0, 0.25, 0.5, 0.75];
+        for (phase, want) in expected.into_iter().enumerate() {
+            let time_of_day = phase as i64 * 24000;
+            assert!(
+                (moon_brightness(time_of_day) - want).abs() < f32::EPSILON,
+                "phase {phase}: got {}, want {want}",
+                moon_brightness(time_of_day)
+            );
+        }
+    }
+
+    #[test]
+    fn moon_brightness_wraps_every_eight_days() {
+        for phase in 0..8i64 {
+            assert!(
+                (moon_brightness(phase * 24000) - moon_brightness((phase + 8) * 24000)).abs()
+                    < f32::EPSILON,
+                "phase {phase} does not wrap"
+            );
+        }
+    }
 }
