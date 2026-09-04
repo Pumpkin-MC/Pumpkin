@@ -736,9 +736,9 @@ fn map_team_settings(
     settings: TeamSettings,
     state: &mut PluginHostState,
 ) -> wasmtime::Result<Team> {
-    let display_name = state.take(settings.display_name)?.clone();
-    let player_prefix = state.take(settings.prefix)?.clone();
-    let player_suffix = state.take(settings.suffix)?.clone();
+    let display_name = state.take(settings.display_name)?;
+    let player_prefix = state.take(settings.prefix)?;
+    let player_suffix = state.take(settings.suffix)?;
 
     let mut options = 0;
     if settings.friendly_fire {

@@ -179,6 +179,10 @@ impl PluginHostState {
     }
 
     /// take the value of an **owned** [`Resource`] from the resource table
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "Our 'cloning' then deletion of the handle wouldn't be sound if it still exists"
+    )]
     pub fn take<T: FromResource>(&mut self, res: Resource<T>) -> wasmtime::Result<T::Internal> {
         debug_assert!(res.owned());
         Ok(self.resource_table.delete(Resource::new_own(res.rep()))?)

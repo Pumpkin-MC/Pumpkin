@@ -18,17 +18,6 @@ use crate::plugin::loader::wasm::wasm_host::{
     },
 };
 
-pub fn living_entity_from_resource(
-    state: &PluginHostState,
-    entity: &Resource<WitLivingEntity>,
-) -> wasmtime::Result<std::sync::Arc<dyn crate::entity::EntityBase>> {
-    state
-        .resource_table
-        .get::<Arc<dyn crate::entity::EntityBase>>(&Resource::new_own(entity.rep()))
-        .map_err(|_| wasmtime::Error::msg("invalid living entity resource handle"))
-        .map(|resource| resource.clone())
-}
-
 fn active_plugin(
     state: &PluginHostState,
 ) -> wasmtime::Result<Arc<crate::plugin::loader::wasm::wasm_host::WasmPlugin>> {
@@ -501,7 +490,7 @@ impl crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::
         let (entity, plugin) = {
             let state = host.get();
             (
-                living_entity_from_resource(state, &this)?,
+                state.get(&this)?.clone(),
                 active_plugin(state)?,
             )
         };
