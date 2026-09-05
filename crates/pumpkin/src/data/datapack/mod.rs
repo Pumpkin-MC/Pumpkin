@@ -960,3 +960,4 @@ mod tests {
             "Unknown function tag: #test:missing"
         );
     }
+}
