@@ -5,13 +5,21 @@ use pumpkin_data::{
     tag,
     tag::Taggable,
 };
-use pumpkin_util::math::{boundingbox::EntityDimensions, position::BlockPos, vector3::Vector3};
+use pumpkin_util::math::{
+    boundingbox::EntityDimensions, position::BlockPos, vector2::Vector2, vector3::Vector3,
+};
 use pumpkin_world::{chunk::ChunkHeightmapType, world::BlockFlags};
+use rustc_hash::FxHashSet;
 use std::sync::Arc;
 
 use crate::world::World;
 
-const SEARCH_RADIUS_NETHER: i32 = 128;
+/// Portal search radius, in blocks of the *destination* dimension. The two
+/// values cover the same physical box, because the nether is 8x the overworld's
+/// coordinate scale. Vanilla cut the nether radius from 128 to 16 in 1.16.2
+/// "in order to correctly account for the 1:8 position scale"; do not "fix"
+/// this back to matching `SEARCH_RADIUS_OVERWORLD`.
+const SEARCH_RADIUS_NETHER: i32 = 16;
 const SEARCH_RADIUS_OVERWORLD: i32 = 128;
 
 #[derive(Debug, Clone)]
@@ -526,17 +534,34 @@ impl NetherPortal {
             poi_storage.get_in_square(target_pos, search_radius, Some(poi::POI_TYPE_NETHER_PORTAL))
         };
 
+        let candidates: Vec<BlockPos> = portal_positions
+            .into_iter()
+            .filter(|pos| {
+                pos.0.y >= min_y
+                    && pos.0.y <= search_max_y
+                    && worldborder.contains_block(pos.0.x, pos.0.z)
+            })
+            .collect();
+        drop(worldborder);
+
+        if candidates.is_empty() {
+            return None;
+        }
+
+        // The POI index survives chunk unloading, but the block reads below do
+        // not: `World::get_block_and_state` reports an unloaded chunk as air, so
+        // every candidate would be discarded and a duplicate portal built.
+        //
+        // Keep this load ahead of the reads. #3001 fixed the same fault with
+        // `get_block_state_id_async`, and 5d841d6d3 ("refactor(entities): from
+        // async to sync Part 2") reintroduced it by swapping that accessor for
+        // the plain sync one. Preloading also covers `get_on_axis`, which walks
+        // outward across chunk borders and was never guarded by that accessor.
+        Self::load_chunks(world, &Self::candidate_chunks(&candidates));
+
         let mut best: Option<(PortalSearchResult, f64, i32)> = None;
 
-        for pos in portal_positions {
-            if pos.0.y < min_y || pos.0.y > search_max_y {
-                continue;
-            }
-
-            if !worldborder.contains_block(pos.0.x, pos.0.z) {
-                continue;
-            }
-
+        for pos in candidates {
             let (block, state) = world.get_block_and_state(&pos);
             if block != &Block::NETHER_PORTAL {
                 continue;
@@ -575,6 +600,41 @@ impl NetherPortal {
         }
 
         best.map(|(result, _, _)| result)
+    }
+
+    /// Chunks that must be resident before the candidates' portal frames can be
+    /// measured. The scan walks up to `MAX_WIDTH`/`MAX_HEIGHT` blocks out from a
+    /// POI, so it can cross a chunk border in any direction.
+    fn candidate_chunks(candidates: &[BlockPos]) -> Vec<Vector2<i32>> {
+        let mut seen = FxHashSet::default();
+        let mut chunks = Vec::new();
+        for pos in candidates {
+            for dx in -1..=1 {
+                for dz in -1..=1 {
+                    let chunk = Vector2::new((pos.0.x >> 4) + dx, (pos.0.z >> 4) + dz);
+                    if seen.insert(chunk) {
+                        chunks.push(chunk);
+                    }
+                }
+            }
+        }
+        chunks
+    }
+
+    /// Loads `chunks` into memory, bridging from this Rayon thread back onto the
+    /// Tokio runtime. Vanilla gets this for free: `Level#getBlockState` loads the
+    /// chunk it needs rather than reporting a missing one as air.
+    fn load_chunks(world: &Arc<World>, chunks: &[Vector2<i32>]) {
+        let Ok(handle) = tokio::runtime::Handle::try_current() else {
+            return;
+        };
+        tokio::task::block_in_place(|| {
+            handle.block_on(async {
+                for chunk in chunks {
+                    world.level.get_or_fetch_chunk(*chunk, |_| ()).await;
+                }
+            });
+        });
     }
 
     #[allow(clippy::too_many_lines)]
@@ -834,6 +894,30 @@ impl NetherPortal {
 mod tests {
     use super::*;
     use pumpkin_util::math::boundingbox::EntityDimensions;
+
+    #[test]
+    fn candidate_chunks_are_deduped_with_neighbours() {
+        // Six portal blocks spanning one chunk -> that chunk plus its 8 neighbours.
+        let portal: Vec<BlockPos> = (0..2)
+            .flat_map(|dx| (0..3).map(move |dy| BlockPos::new(20 + dx, 64 + dy, 40)))
+            .collect();
+        let chunks = NetherPortal::candidate_chunks(&portal);
+        assert_eq!(chunks.len(), 9);
+        assert!(chunks.contains(&Vector2::new(1, 2)));
+        assert!(chunks.contains(&Vector2::new(0, 1)));
+        assert!(chunks.contains(&Vector2::new(2, 3)));
+
+        // Negative coordinates floor-divide, they do not truncate towards zero.
+        assert_eq!(
+            NetherPortal::candidate_chunks(&[BlockPos::new(-1, 64, -1)])[0],
+            Vector2::new(-2, -2)
+        );
+
+        // Candidates in adjacent chunks (1 and 2) share a 3-chunk column, so the
+        // union is 4x3, not two separate 3x3 blocks.
+        let split = [BlockPos::new(20, 64, 40), BlockPos::new(36, 64, 40)];
+        assert_eq!(NetherPortal::candidate_chunks(&split).len(), 12);
+    }
 
     #[test]
     fn portal_teleport_position_x_axis() {
