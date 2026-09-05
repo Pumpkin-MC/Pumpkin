@@ -2030,7 +2030,7 @@ impl Entity {
                 .on_entity_collision_fluid(fluid, caller);
         }
 
-        let lava_speed = if world.dimension == Dimension::THE_NETHER {
+        let lava_speed = if world.dimension.fast_lava {
             0.007
         } else {
             0.002_333_333

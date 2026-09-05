@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    future::Future,
     sync::{Arc, Weak},
 };
 
@@ -168,19 +169,14 @@ pub type ItemDisplayEntityResource = WasmResource<Arc<dyn EntityBase>>;
 pub type TextDisplayEntityResource = WasmResource<Arc<dyn EntityBase>>;
 pub type InteractionEntityResource = WasmResource<Arc<dyn EntityBase>>;
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct ChunkBuffer {
     pub x: i32,
     pub z: i32,
     pub min_y: i32,
     pub height: u32,
-    pub proto_chunk: *mut pumpkin_world::ProtoChunk,
+    pub proto_chunk: Arc<std::sync::Mutex<pumpkin_world::ProtoChunk>>,
 }
-
-// SAFETY: `ChunkBuffer` encapsulates a raw pointer to a proto chunk that is uniquely accessed during custom world generation phases.
-unsafe impl Send for ChunkBuffer {}
-// SAFETY: `ChunkBuffer` encapsulates a raw pointer to a proto chunk that is uniquely accessed during custom world generation phases.
-unsafe impl Sync for ChunkBuffer {}
 
 pub type ChunkBufferResource = WasmResource<ChunkBuffer>;
 
@@ -389,6 +385,16 @@ impl PluginHostState {
     pub fn add_consumed_args<T>(
         &mut self,
         provider: HashMap<String, OwnedArg>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(ConsumedArgsResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_owned_consumed_args<T>(
+        &mut self,
+        provider: OwnedConsumedArgs,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
         let resource = self
             .resource_table

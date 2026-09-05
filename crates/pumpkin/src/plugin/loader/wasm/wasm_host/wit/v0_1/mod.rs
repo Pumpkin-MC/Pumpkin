@@ -1,10 +1,10 @@
 use crate::plugin::{
     PluginMetadata,
     loader::wasm::wasm_host::{
-        PluginInitError, PluginInstance, WasmPlugin, state::PluginHostState,
+        PluginInitError, PluginInstance, concurrent_store::LegacySyncReentry,
+        state::PluginHostState,
     },
 };
-use tokio::sync::Mutex;
 use wasmtime::component::{HasSelf, InstancePre, Linker, bindgen};
 use wasmtime::{Engine, Store};
 
@@ -69,8 +69,70 @@ pub mod world;
 bindgen!({
     path: "../pumpkin-plugin-wit/v0.1",
     world: "plugin",
-    imports: { default: async | trappable },
-    exports: { default: async | trappable},
+    imports: {
+        "pumpkin:plugin/command@0.1.0.[method]command-sender.has-permission": async | store | trappable,
+        "pumpkin:plugin/datapack@0.1.0.[method]datapack-manager.disable-pack": async | store | trappable,
+        "pumpkin:plugin/datapack@0.1.0.[method]datapack-manager.enable-pack": async | store | trappable,
+        "pumpkin:plugin/datapack@0.1.0.[method]datapack-manager.execute-function": async | store | trappable,
+        "pumpkin:plugin/datapack@0.1.0.[method]datapack-manager.reload": async | store | trappable,
+        "pumpkin:plugin/ipc@0.1.0.send-ipc-message": async | store | trappable,
+        "pumpkin:plugin/player@0.1.0.[method]player.add-effect": async | store | trappable,
+        "pumpkin:plugin/player@0.1.0.[method]player.add-experience-levels": async | store | trappable,
+        "pumpkin:plugin/player@0.1.0.[method]player.add-experience-points": async | store | trappable,
+        "pumpkin:plugin/player@0.1.0.[method]player.award-advancement": async | store | trappable,
+        "pumpkin:plugin/player@0.1.0.[method]player.award-advancement-criterion": async | store | trappable,
+        "pumpkin:plugin/player@0.1.0.[method]player.ban": async | store | trappable,
+        "pumpkin:plugin/player@0.1.0.[method]player.ban-ip": async | store | trappable,
+        "pumpkin:plugin/player@0.1.0.[method]player.damage": async | store | trappable,
+        "pumpkin:plugin/player@0.1.0.[method]player.has-permission": async | store | trappable,
+        "pumpkin:plugin/player@0.1.0.[method]player.heal": async | store | trappable,
+        "pumpkin:plugin/player@0.1.0.[method]player.kill": async | store | trappable,
+        "pumpkin:plugin/player@0.1.0.[method]player.open-ender-chest": async | store | trappable,
+        "pumpkin:plugin/player@0.1.0.[method]player.open-gui": async | store | trappable,
+        "pumpkin:plugin/player@0.1.0.[method]player.respawn": async | store | trappable,
+        "pumpkin:plugin/player@0.1.0.[method]player.set-experience-level": async | store | trappable,
+        "pumpkin:plugin/player@0.1.0.[method]player.set-experience-points": async | store | trappable,
+        "pumpkin:plugin/player@0.1.0.[method]player.set-experience-progress": async | store | trappable,
+        "pumpkin:plugin/player@0.1.0.[method]player.set-food-level": async | store | trappable,
+        "pumpkin:plugin/player@0.1.0.[method]player.set-gamemode": async | store | trappable,
+        "pumpkin:plugin/player@0.1.0.[method]player.set-permission-level": async | store | trappable,
+        "pumpkin:plugin/player@0.1.0.[method]player.teleport": async | store | trappable,
+        "pumpkin:plugin/player@0.1.0.[method]player.teleport-world": async | store | trappable,
+        "pumpkin:plugin/player@0.1.0.[method]java-player.show-dialog": async | store | trappable,
+        "pumpkin:plugin/player@0.1.0.[method]java-player.clear-dialog": async | store | trappable,
+        "pumpkin:plugin/player@0.1.0.[method]java-player.kick": async | store | trappable,
+        "pumpkin:plugin/player@0.1.0.[method]bedrock-player.kick": async | store | trappable,
+        "pumpkin:plugin/server@0.1.0.[method]ban-manager.ban-ip": async | store | trappable,
+        "pumpkin:plugin/server@0.1.0.[method]ban-manager.ban-player": async | store | trappable,
+        "pumpkin:plugin/server@0.1.0.[method]op-manager.deop-player": async | store | trappable,
+        "pumpkin:plugin/server@0.1.0.[method]op-manager.op-player": async | store | trappable,
+        "pumpkin:plugin/server@0.1.0.[method]server.broadcast": async | store | trappable,
+        "pumpkin:plugin/server@0.1.0.[method]server.create-world": async | store | trappable,
+        "pumpkin:plugin/server@0.1.0.[method]server.execute-command": async | store | trappable,
+        "pumpkin:plugin/server@0.1.0.[method]server.save-all": async | store | trappable,
+        "pumpkin:plugin/server@0.1.0.[method]server.unload-world": async | store | trappable,
+        "pumpkin:plugin/server@0.1.0.[method]whitelist-manager.set-enabled": async | store | trappable,
+        "pumpkin:plugin/world@0.1.0.[method]entity.add-passenger": async | store | trappable,
+        "pumpkin:plugin/world@0.1.0.[method]entity.eject-passengers": async | store | trappable,
+        "pumpkin:plugin/world@0.1.0.[method]entity.remove-passenger": async | store | trappable,
+        "pumpkin:plugin/world@0.1.0.[method]entity.set-swimming": async | store | trappable,
+        "pumpkin:plugin/world@0.1.0.[method]entity.set-vehicle": async | store | trappable,
+        "pumpkin:plugin/world@0.1.0.[method]entity.teleport": async | store | trappable,
+        "pumpkin:plugin/world@0.1.0.[method]living-entity.damage": async | store | trappable,
+        "pumpkin:plugin/world@0.1.0.[method]mob.clear-ai-goals": async | store | trappable,
+        "pumpkin:plugin/world@0.1.0.[method]world.create-explosion": async | store | trappable,
+        "pumpkin:plugin/world@0.1.0.[method]world.save": async | store | trappable,
+        "pumpkin:plugin/world@0.1.0.[method]world.set-block": async | store | trappable,
+        "pumpkin:plugin/world@0.1.0.[method]world.set-block-by-id": async | store | trappable,
+        "pumpkin:plugin/world@0.1.0.[method]world.set-block-by-name": async | store | trappable,
+        "pumpkin:plugin/world@0.1.0.[method]world.set-block-state": async | store | trappable,
+        "pumpkin:plugin/world@0.1.0.[method]world.set-raining": async | store | trappable,
+        "pumpkin:plugin/world@0.1.0.[method]world.set-thundering": async | store | trappable,
+        "pumpkin:plugin/world@0.1.0.[method]world.spawn-entity": async | store | trappable,
+        "pumpkin:plugin/world@0.1.0.[method]world.strike-lightning": async | store | trappable,
+        default: async | trappable,
+    },
+    exports: { default: async | store | trappable},
 });
 
 impl pumpkin::plugin::java_packets::Host for PluginHostState {}
@@ -102,23 +164,33 @@ pub fn prepare_plugin(
 pub async fn init_plugin(
     engine: &Engine,
     plugin_pre: PluginPre<PluginHostState>,
-) -> Result<(WasmPlugin, PluginMetadata), PluginInitError> {
+    legacy_sync_reentry: &LegacySyncReentry,
+) -> Result<(PluginInstance, Store<PluginHostState>, PluginMetadata), PluginInitError> {
     let mut store = Store::new(engine, PluginHostState::new());
     store.limiter(|state| &mut state.limits);
-    let plugin = plugin_pre
-        .instantiate_async(&mut store)
+    let plugin = legacy_sync_reentry
+        .scope_bootstrap(plugin_pre.instantiate_async(&mut store))
         .await
         .map_err(PluginInitError::InstantiationFailed)?;
 
-    plugin
-        .call_init_plugin(&mut store)
+    store
+        .run_concurrent(async |accessor| {
+            legacy_sync_reentry
+                .scope_bootstrap(plugin.call_init_plugin(accessor))
+                .await
+        })
         .await
+        .map_err(PluginInitError::CallInitPluginFailed)?
         .map_err(PluginInitError::CallInitPluginFailed)?;
 
-    let metadata = plugin
-        .pumpkin_plugin_metadata()
-        .call_get_metadata(&mut store)
+    let metadata = store
+        .run_concurrent(async |accessor| {
+            legacy_sync_reentry
+                .scope_bootstrap(plugin.pumpkin_plugin_metadata().call_get_metadata(accessor))
+                .await
+        })
         .await
+        .map_err(PluginInitError::CallGetMetadataFailed)?
         .map_err(PluginInitError::CallGetMetadataFailed)?;
 
     let metadata = PluginMetadata {
@@ -135,11 +207,5 @@ pub async fn init_plugin(
         .permissions
         .clone_from(&metadata.permissions);
 
-    Ok((
-        WasmPlugin {
-            plugin_instance: PluginInstance::V0_1(plugin),
-            store: Mutex::new(store),
-        },
-        metadata,
-    ))
+    Ok((PluginInstance::V0_1(plugin), store, metadata))
 }

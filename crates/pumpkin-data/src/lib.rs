@@ -179,6 +179,14 @@ mod spawn_egg;
 #[path = "generated/dimension.rs"]
 pub mod dimension;
 
+#[cfg(feature = "environment_attribute")]
+#[rustfmt::skip]
+#[path = "generated/environment_attribute.rs"]
+pub mod environment_attribute;
+
+#[cfg(feature = "environment_attribute")]
+pub use environment_attribute::*;
+
 #[cfg(feature = "enchantment")]
 #[rustfmt::skip]
 #[path = "generated/enchantment.rs"]
@@ -456,3 +464,8 @@ pub mod dye_color;
 #[rustfmt::skip]
 #[path = "generated/block_transformer.rs"]
 pub mod block_transformer;
+
+#[cfg(feature = "trial_spawner")]
+#[rustfmt::skip]
+#[path = "generated/trial_spawner.rs"]
+pub mod trial_spawner;

@@ -11,7 +11,22 @@ use crate::plugin::loader::wasm::wasm_host::{
     },
 };
 use crate::world::scoreboard::{ScoreboardObjective, ScoreboardScore, Team};
+use pumpkin_protocol::NumberFormat;
 use pumpkin_protocol::codec::var_int::VarInt;
+
+fn map_number_format(
+    nf: Option<scoreboard::NumberFormat>,
+    state: &PluginHostState,
+) -> wasmtime::Result<Option<NumberFormat>> {
+    match nf {
+        None => Ok(None),
+        Some(scoreboard::NumberFormat::Blank) => Ok(Some(NumberFormat::Blank)),
+        Some(scoreboard::NumberFormat::Fixed(tc)) => {
+            let text = state.get_text_provider(&tc)?;
+            Ok(Some(NumberFormat::Fixed(text)))
+        }
+    }
+}
 
 impl PluginHostState {
     fn get_scoreboard_res(
@@ -42,16 +57,18 @@ impl scoreboard::HostScoreboard for PluginHostState {
         name: String,
         display_name: Resource<pumpkin::plugin::text::TextComponent>,
         render_type: RenderType,
+        number_format: Option<scoreboard::NumberFormat>,
     ) -> wasmtime::Result<()> {
         let provider = self.get_scoreboard_res(&res)?.provider.clone();
         let display_name = self.get_text_provider(&display_name)?;
+        let nf = map_number_format(number_format, self)?;
 
         let rt = match render_type {
             RenderType::Integer => pumpkin_protocol::java::client::play::RenderType::Integer,
             RenderType::Hearts => pumpkin_protocol::java::client::play::RenderType::Hearts,
         };
 
-        let objective = ScoreboardObjective::new(name, display_name, rt, None, "dummy");
+        let objective = ScoreboardObjective::new(name, display_name, rt, nf, "dummy");
 
         match provider {
             ScoreboardProvider::World(world) => {
@@ -90,16 +107,18 @@ impl scoreboard::HostScoreboard for PluginHostState {
         name: String,
         display_name: Resource<pumpkin::plugin::text::TextComponent>,
         render_type: RenderType,
+        number_format: Option<scoreboard::NumberFormat>,
     ) -> wasmtime::Result<()> {
         let provider = self.get_scoreboard_res(&res)?.provider.clone();
         let display_name = self.get_text_provider(&display_name)?;
+        let nf = map_number_format(number_format, self)?;
 
         let rt = match render_type {
             RenderType::Integer => pumpkin_protocol::java::client::play::RenderType::Integer,
             RenderType::Hearts => pumpkin_protocol::java::client::play::RenderType::Hearts,
         };
 
-        let objective = ScoreboardObjective::new(name, display_name, rt, None, "dummy");
+        let objective = ScoreboardObjective::new(name, display_name, rt, nf, "dummy");
 
         match provider {
             ScoreboardProvider::World(world) => {
@@ -238,9 +257,11 @@ impl scoreboard::HostScoreboard for PluginHostState {
         entity_name: String,
         objective_name: String,
         value: i32,
+        number_format: Option<scoreboard::NumberFormat>,
     ) -> wasmtime::Result<()> {
         let provider = self.get_scoreboard_res(&res)?.provider.clone();
-        let score = ScoreboardScore::new(entity_name, objective_name, VarInt(value), None, None);
+        let nf = map_number_format(number_format, self)?;
+        let score = ScoreboardScore::new(entity_name, objective_name, VarInt(value), None, nf);
         match provider {
             ScoreboardProvider::World(world) => {
                 world

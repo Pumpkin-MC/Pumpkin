@@ -622,6 +622,7 @@ impl GenerationSchedule {
                             for dz in -radius..=radius {
                                 let new_pos = pos.add_raw(dx, dz);
                                 let req_stage = dependency[dx.abs().max(dz.abs()) as usize];
+                                self.unload_chunks.remove(&new_pos);
                                 if new_pos == pos {
                                     let newly_created = Self::ensure_dependency_chain(
                                         &mut self.graph,
@@ -674,6 +675,7 @@ impl GenerationSchedule {
         }
 
         while let Some((pos, req_stage, dep_task)) = worklist.pop_front() {
+            self.unload_chunks.remove(&pos);
             let mut holder = self.chunk_map.remove(&pos).unwrap_or_default();
             let newly_created = Self::ensure_dependency_chain(
                 &mut self.graph,
@@ -861,7 +863,12 @@ impl GenerationSchedule {
             let Some(mut holder) = self.chunk_map.remove(&pos) else {
                 continue;
             };
-            debug_assert_eq!(holder.target_stage, StagedChunkEnum::None);
+            if holder.target_stage != StagedChunkEnum::None
+                || holder.dependency_stage != StagedChunkEnum::None
+            {
+                self.chunk_map.insert(pos, holder);
+                continue;
+            }
             if !holder.occupied.is_null() {
                 self.chunk_map.insert(pos, holder);
                 self.unload_chunks.insert(pos);
@@ -894,10 +901,10 @@ impl GenerationSchedule {
                             chunks.push((pos, Chunk::Level(chunk)));
                         }
                     }
-                    Chunk::Proto(_) => {
-                        // ProtoChunks are in-memory intermediate generation stages
-                        // (e.g. temporary border dependencies). Do not convert and save
-                        // incomplete chunks to disk during runtime unloads.
+                    Chunk::Proto(proto) => {
+                        if !matches!(proto.stage, StagedChunkEnum::Empty | StagedChunkEnum::None) {
+                            chunks.push((pos, Chunk::Proto(proto)));
+                        }
                     }
                 }
             }

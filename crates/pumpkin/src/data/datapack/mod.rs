@@ -52,9 +52,18 @@ pub enum DatapackEnablePosition {
 
 pub struct DatapackManager {
     loaded_packs: RwLock<Vec<LoadedDatapack>>,
-    functions: RwLock<HashMap<String, Vec<String>>>,
+    functions: RwLock<HashMap<String, Arc<[String]>>>,
     function_tags: RwLock<HashMap<String, Vec<String>>>,
     test_instances: RwLock<TestInstanceRegistry>,
+}
+
+fn share_function_bodies(
+    functions: HashMap<String, Vec<String>>,
+) -> HashMap<String, Arc<[String]>> {
+    functions
+        .into_iter()
+        .map(|(name, lines)| (name, lines.into()))
+        .collect()
 }
 
 impl Default for DatapackManager {
@@ -152,6 +161,7 @@ impl DatapackManager {
             .loaded_packs
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = loaded_packs_vec;
+        let all_functions = share_function_bodies(all_functions);
         *self
             .functions
             .write()
@@ -177,7 +187,9 @@ impl DatapackManager {
         self.functions
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone()
+            .iter()
+            .map(|(name, lines)| (name.clone(), lines.to_vec()))
+            .collect()
     }
 
     pub fn get_test_instance(&self, name: &str) -> Option<TestInstance> {
@@ -304,6 +316,19 @@ impl DatapackManager {
         source: &CommandSource,
         name: &str,
     ) -> Result<usize, String> {
+        self.visit_function_lines(name, |line| {
+            server
+                .command_dispatcher
+                .load()
+                .handle_command(source, line);
+        })
+    }
+
+    fn visit_function_lines(
+        &self,
+        name: &str,
+        mut visit: impl FnMut(&str),
+    ) -> Result<usize, String> {
         let (functions_to_run, is_tag) = if let Some(tag_name) = name.strip_prefix('#') {
             let tags = self
                 .function_tags
@@ -317,25 +342,28 @@ impl DatapackManager {
             (vec![name.to_string()], false)
         };
 
-        let all_fns = self
-            .functions
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let functions = {
+            let all_fns = self
+                .functions
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut functions = Vec::with_capacity(functions_to_run.len());
+            for fn_id in functions_to_run {
+                let Some(lines) = all_fns.get(&fn_id) else {
+                    if !is_tag {
+                        return Err(format!("Unknown function: {fn_id}"));
+                    }
+                    continue;
+                };
+                functions.push(Arc::clone(lines));
+            }
+            functions
+        };
+
         let mut total_executed = 0;
-
-        for fn_id in functions_to_run {
-            let Some(lines) = all_fns.get(&fn_id) else {
-                if !is_tag {
-                    return Err(format!("Unknown function: {fn_id}"));
-                }
-                continue;
-            };
-
-            for line in lines {
-                server
-                    .command_dispatcher
-                    .load()
-                    .handle_command(source, line);
+        for lines in functions {
+            for line in lines.iter() {
+                visit(line);
                 total_executed += 1;
             }
         }
@@ -843,5 +871,79 @@ fn load_recipes_from_dir(
                 *count += 1;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DatapackManager;
+
+    #[test]
+    fn function_dispatch_releases_the_functions_lock() {
+        let manager = DatapackManager::new();
+        manager
+            .functions
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(
+                "test:reentrant".to_string(),
+                vec!["first command".to_string(), "second command".to_string()].into(),
+            );
+
+        let mut visited = Vec::new();
+        let executed = manager
+            .visit_function_lines("test:reentrant", |line| {
+                let functions = manager
+                    .functions
+                    .try_write()
+                    .expect("function dispatch must not hold the functions read lock");
+                drop(functions);
+                visited.push(line.to_string());
+            })
+            .expect("execute function lines");
+
+        assert_eq!(executed, 2);
+        assert_eq!(visited, ["first command", "second command"]);
+    }
+
+    #[test]
+    fn function_resolution_preserves_unknown_errors_and_skips_missing_tag_entries() {
+        let manager = DatapackManager::new();
+        manager
+            .functions
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(
+                "test:known".to_string(),
+                vec!["known command".to_string()].into(),
+            );
+        manager
+            .function_tags
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(
+                "test:mixed".to_string(),
+                vec!["test:missing".to_string(), "test:known".to_string()],
+            );
+
+        let mut visited = Vec::new();
+        let executed = manager
+            .visit_function_lines("#test:mixed", |line| visited.push(line.to_string()))
+            .expect("execute function tag");
+        assert_eq!(executed, 1);
+        assert_eq!(visited, ["known command"]);
+
+        assert_eq!(
+            manager
+                .visit_function_lines("test:missing", |_| {})
+                .expect_err("unknown function must fail"),
+            "Unknown function: test:missing"
+        );
+        assert_eq!(
+            manager
+                .visit_function_lines("#test:missing", |_| {})
+                .expect_err("unknown function tag must fail"),
+            "Unknown function tag: #test:missing"
+        );
     }
 }

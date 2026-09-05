@@ -18,10 +18,37 @@ use crate::{
     plugin::loader::wasm::wasm_host::{
         DowncastResourceExt, PluginInstance, WasmPlugin,
         args::build_consumed_args_from_context,
+        state::{CommandSenderResource, ConsumedArgsResource, PluginHostState, ServerResource},
         wit::v0_1::pumpkin::plugin::command::{CommandError as CommandErrorWit, SuggestionRequest},
     },
     server::Server,
 };
+
+fn remove_resource<T: 'static>(state: &mut PluginHostState, rep: u32) {
+    let _ = state
+        .resource_table
+        .delete::<T>(wasmtime::component::Resource::new_own(rep));
+}
+
+fn map_command_result(
+    state: &mut PluginHostState,
+    result: Result<i32, CommandErrorWit>,
+) -> CommandExecutorResult {
+    match result {
+        Ok(value) => Ok(value),
+        Err(CommandErrorWit::InvalidConsumption(value)) => Err(DISPATCHER_PARSE_EXCEPTION
+            .create_without_context(TextComponent::text(format!(
+                "Invalid consumption: {value:?}"
+            )))),
+        Err(CommandErrorWit::InvalidRequirement) => Err(DISPATCHER_PARSE_EXCEPTION
+            .create_without_context(TextComponent::text("Invalid requirement"))),
+        Err(CommandErrorWit::PermissionDenied) => Err(DISPATCHER_PARSE_EXCEPTION
+            .create_without_context(TextComponent::text("Permission denied"))),
+        Err(CommandErrorWit::CommandFailed(resource)) => {
+            Err(DISPATCHER_PARSE_EXCEPTION.create_without_context(resource.consume(state).provider))
+        }
+    }
+}
 
 pub struct WasmCommandExecutor {
     pub handler_id: u32,
@@ -31,107 +58,87 @@ pub struct WasmCommandExecutor {
 
 impl CommandExecutor for WasmCommandExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let sender = context.source.output.clone();
+        let server = self.server.clone();
+        let consumed_args = build_consumed_args_from_context(context);
+        let handler_id = self.handler_id;
+        let function = match self.plugin.plugin_instance.as_ref() {
+            PluginInstance::V0_1(plugin) => plugin.func_handle_command(),
+        };
+
         tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
-                let mut store = self.plugin.store.lock().await;
-
-                let sender_resource = store
-                    .data_mut()
-                    .add_command_sender(context.source.output.clone())
-                    .map_err(|e| {
-                        DISPATCHER_PARSE_EXCEPTION.create_without_context(TextComponent::text(
-                            format!("Failed to create sender: {e}"),
-                        ))
-                    })?;
-                let server_resource = store
-                    .data_mut()
-                    .add_server(self.server.clone())
-                    .map_err(|e| {
-                        DISPATCHER_PARSE_EXCEPTION.create_without_context(TextComponent::text(
-                            format!("Failed to create server: {e}"),
-                        ))
-                    })?;
-                let consumed_args = build_consumed_args_from_context(context);
-                let args_resource = store
-                    .data_mut()
-                    .add_consumed_args(consumed_args)
-                    .map_err(|e| {
-                        DISPATCHER_PARSE_EXCEPTION.create_without_context(TextComponent::text(
-                            format!("Failed to create args: {e}"),
-                        ))
-                    })?;
-
-                let sender_rep = sender_resource.rep();
-                let server_rep = server_resource.rep();
-                let args_rep = args_resource.rep();
-
-                match self.plugin.plugin_instance {
-                    PluginInstance::V0_1(ref plugin) => {
-                        let result = plugin
-                            .call_handle_command(
-                                &mut *store,
-                                self.handler_id,
-                                sender_resource,
-                                server_resource,
-                                args_resource,
-                            )
-                            .await;
-
-                        let _ = store
-                            .data_mut()
-                            .resource_table
-                            .delete::<crate::plugin::loader::wasm::wasm_host::state::CommandSenderResource>(
-                                wasmtime::component::Resource::new_own(sender_rep),
-                            );
-                        let _ = store
-                            .data_mut()
-                            .resource_table
-                            .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
-                                wasmtime::component::Resource::new_own(server_rep),
-                            );
-                        let _ = store
-                            .data_mut()
-                            .resource_table
-                            .delete::<crate::plugin::loader::wasm::wasm_host::state::ConsumedArgsResource>(
-                                wasmtime::component::Resource::new_own(args_rep),
-                            );
-
-                        let result = result.map_err(|e| {
-                            DISPATCHER_PARSE_EXCEPTION.create_without_context(
-                                TextComponent::text(format!(
-                                    "Wasm command failed with following error: {e}"
-                                ))
-                                .color(Color::Named(NamedColor::Red)),
-                            )
-                        })?;
-
-                        match result {
-                            Ok(value) => Ok(value),
-                            Err(err) => match err {
-                                CommandErrorWit::InvalidConsumption(value) => {
-                                    Err(DISPATCHER_PARSE_EXCEPTION.create_without_context(
-                                        TextComponent::text(format!(
-                                            "Invalid consumption: {value:?}"
-                                        )),
+                self.plugin
+                    .store
+                    .call_guest(move |mut guest| {
+                        Box::pin(async move {
+                            let (sender_resource, server_resource, args_resource, reps) = guest
+                                .with(|mut store| {
+                                    let sender_resource =
+                                        store.data_mut().add_command_sender(sender)?;
+                                    let sender_rep = sender_resource.rep();
+                                    let server_resource = match store.data_mut().add_server(server)
+                                    {
+                                        Ok(resource) => resource,
+                                        Err(error) => {
+                                            remove_resource::<CommandSenderResource>(
+                                                store.data_mut(),
+                                                sender_rep,
+                                            );
+                                            return Err(error);
+                                        }
+                                    };
+                                    let server_rep = server_resource.rep();
+                                    let args_resource =
+                                        match store.data_mut().add_consumed_args(consumed_args) {
+                                            Ok(resource) => resource,
+                                            Err(error) => {
+                                                remove_resource::<ServerResource>(
+                                                    store.data_mut(),
+                                                    server_rep,
+                                                );
+                                                remove_resource::<CommandSenderResource>(
+                                                    store.data_mut(),
+                                                    sender_rep,
+                                                );
+                                                return Err(error);
+                                            }
+                                        };
+                                    let reps = (sender_rep, server_rep, args_resource.rep());
+                                    Ok::<_, wasmtime::Error>((
+                                        sender_resource,
+                                        server_resource,
+                                        args_resource,
+                                        reps,
                                     ))
-                                }
-                                CommandErrorWit::InvalidRequirement => {
-                                    Err(DISPATCHER_PARSE_EXCEPTION
-                                        .create_without_context(TextComponent::text("Invalid requirement")))
-                                }
-                                CommandErrorWit::PermissionDenied => {
-                                    Err(DISPATCHER_PARSE_EXCEPTION
-                                        .create_without_context(TextComponent::text("Permission denied")))
-                                }
-                                CommandErrorWit::CommandFailed(resource) => {
-                                    Err(DISPATCHER_PARSE_EXCEPTION.create_without_context(
-                                        resource.consume(store.data_mut()).provider,
-                                    ))
-                                }
-                            },
-                        }
-                    }
-                }
+                                })?;
+
+                            let result = guest
+                                .call(
+                                    function,
+                                    (handler_id, sender_resource, server_resource, args_resource),
+                                )
+                                .await;
+
+                            guest.with(|mut store| {
+                                let result = result
+                                    .map(|(result,)| map_command_result(store.data_mut(), result));
+                                remove_resource::<CommandSenderResource>(store.data_mut(), reps.0);
+                                remove_resource::<ServerResource>(store.data_mut(), reps.1);
+                                remove_resource::<ConsumedArgsResource>(store.data_mut(), reps.2);
+                                result
+                            })
+                        })
+                    })
+                    .await
+                    .map_err(|error| {
+                        DISPATCHER_PARSE_EXCEPTION.create_without_context(
+                            TextComponent::text(format!(
+                                "Wasm command failed with following error: {error}"
+                            ))
+                            .color(Color::Named(NamedColor::Red)),
+                        )
+                    })?
             })
         })
     }
@@ -145,74 +152,85 @@ pub struct WasmCommandSuggestionProvider {
 
 impl SuggestionProvider for WasmCommandSuggestionProvider {
     fn suggest(&self, context: &CommandContext, builder: SuggestionsBuilder) -> Suggestions {
+        let sender = context.source.output.clone();
+        let server = self.server.clone();
+        let input = context.input.clone();
+        let request = SuggestionRequest {
+            input: input.clone(),
+            cursor: input.len().try_into().unwrap_or(u32::MAX),
+            start: builder.start.try_into().unwrap_or(u32::MAX),
+            remaining: builder.remaining().to_string(),
+        };
+        let handler_id = self.handler_id;
+        let function = match self.plugin.plugin_instance.as_ref() {
+            PluginInstance::V0_1(plugin) => plugin.func_handle_command_suggestion(),
+        };
+
         tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
-                let mut store = self.plugin.store.lock().await;
-
-                let sender_resource = match store
-                    .data_mut()
-                    .add_command_sender(context.source.output.clone())
+                match self
+                    .plugin
+                    .store
+                    .call_guest(move |mut guest| {
+                        Box::pin(async move {
+                            let (sender_resource, server_resource, reps) =
+                                guest.with(|mut store| {
+                                    let sender_resource =
+                                        store.data_mut().add_command_sender(sender)?;
+                                    let sender_rep = sender_resource.rep();
+                                    let server_resource = match store.data_mut().add_server(server)
+                                    {
+                                        Ok(resource) => resource,
+                                        Err(error) => {
+                                            remove_resource::<CommandSenderResource>(
+                                                store.data_mut(),
+                                                sender_rep,
+                                            );
+                                            return Err(error);
+                                        }
+                                    };
+                                    let reps = (sender_rep, server_resource.rep());
+                                    Ok::<_, wasmtime::Error>((
+                                        sender_resource,
+                                        server_resource,
+                                        reps,
+                                    ))
+                                })?;
+                            let response = guest
+                                .call(
+                                    function,
+                                    (handler_id, sender_resource, server_resource, request),
+                                )
+                                .await
+                                .map(|(response,)| response);
+                            guest.with(|mut store| {
+                                let suggestions = response.map(|response| {
+                                    let mut builder = builder;
+                                    for suggestion in response.values {
+                                        if let Some(tooltip) = suggestion.tooltip {
+                                            let text = tooltip.consume(store.data_mut()).provider;
+                                            builder = builder
+                                                .suggest_with_tooltip(suggestion.value, text);
+                                        } else {
+                                            builder = builder.suggest(suggestion.value);
+                                        }
+                                    }
+                                    builder.build()
+                                });
+                                remove_resource::<CommandSenderResource>(store.data_mut(), reps.0);
+                                remove_resource::<ServerResource>(store.data_mut(), reps.1);
+                                suggestions
+                            })
+                        })
+                    })
+                    .await
                 {
-                    Ok(resource) => resource,
-                    Err(error) => {
-                        tracing::error!(
-                            "Failed to create command sender resource for suggestions: {error}"
-                        );
-                        return builder.build();
-                    }
-                };
-                let server_resource = match store.data_mut().add_server(self.server.clone()) {
-                    Ok(resource) => resource,
-                    Err(error) => {
-                        tracing::error!(
-                            "Failed to create server resource for suggestions: {error}"
-                        );
-                        return builder.build();
-                    }
-                };
-
-                let input = &context.input;
-                let request = SuggestionRequest {
-                    input: input.clone(),
-                    cursor: input.len().try_into().unwrap_or(u32::MAX),
-                    start: builder.start.try_into().unwrap_or(u32::MAX),
-                    remaining: builder.remaining().to_string(),
-                };
-
-                let response = match self.plugin.plugin_instance {
-                    PluginInstance::V0_1(ref plugin) => {
-                        plugin
-                            .call_handle_command_suggestion(
-                                &mut *store,
-                                self.handler_id,
-                                sender_resource,
-                                server_resource,
-                                &request,
-                            )
-                            .await
-                    }
-                };
-
-                let response = match response {
-                    Ok(response) => response,
+                    Ok(suggestions) => suggestions,
                     Err(error) => {
                         tracing::error!("Wasm command suggestion failed: {error}");
-                        return builder.build();
-                    }
-                };
-
-                let mut result_builder = builder;
-                for suggestion in response.values {
-                    if let Some(tooltip) = suggestion.tooltip {
-                        let text = tooltip.consume(store.data_mut()).provider;
-                        result_builder =
-                            result_builder.suggest_with_tooltip(suggestion.value, text);
-                    } else {
-                        result_builder = result_builder.suggest(suggestion.value);
+                        Suggestions::empty()
                     }
                 }
-
-                result_builder.build()
             })
         })
     }

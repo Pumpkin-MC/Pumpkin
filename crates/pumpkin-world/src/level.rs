@@ -662,7 +662,7 @@ impl Level {
                 .chunk_loading
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            lock.add_ticket(pos, 31);
+            lock.add_ticket(pos, ChunkLoading::FULL_CHUNK_LEVEL);
             lock.send_change();
         };
 
@@ -675,7 +675,7 @@ impl Level {
                 .chunk_loading
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            lock.remove_ticket(pos, 31);
+            lock.remove_ticket(pos, ChunkLoading::FULL_CHUNK_LEVEL);
             lock.send_change();
         };
 
