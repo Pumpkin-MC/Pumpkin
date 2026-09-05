@@ -1147,33 +1147,50 @@ pub trait ScreenHandler: Send + Sync {
 
                 slot.mark_dirty();
             }
-        } else if action_type == SlotActionType::Swap && (0..9).contains(&button) || button == 40 {
+        } else if action_type == SlotActionType::Swap && ((0..9).contains(&button) || button == 40)
+        {
             if slot_index < 0 {
                 return;
             }
-            let mut button_stack = player.get_inventory().get_stack(button as usize);
+            let player_inventory = player.get_inventory();
+            let mut button_stack = player_inventory.get_stack(button as usize);
             let source_slot = self.get_behaviour().slots[slot_index as usize].clone();
             let source_stack = source_slot.get_cloned_stack();
 
             if !button_stack.is_empty() || !source_stack.is_empty() {
                 if button_stack.is_empty() {
                     if source_slot.can_take_items(player) {
-                        player
-                            .get_inventory()
-                            .set_stack(button as usize, source_stack.clone());
+                        player_inventory.set_stack(button as usize, source_stack.clone());
                         source_slot.set_stack(ItemStack::EMPTY.clone());
                         source_slot.on_take_item(player, &source_stack);
                     }
                 } else if source_stack.is_empty() && source_slot.can_insert(&button_stack) {
                     let max_count = source_slot.get_max_item_count_for_stack(&button_stack);
                     if button_stack.item_count > max_count {
-                        // button_stack might need to be a ref instead of a clone
                         source_slot.set_stack(button_stack.split(max_count));
+                        player_inventory.set_stack(button as usize, button_stack);
                     } else {
-                        player
-                            .get_inventory()
-                            .set_stack(button as usize, ItemStack::EMPTY.clone());
+                        player_inventory.set_stack(button as usize, ItemStack::EMPTY.clone());
                         source_slot.set_stack(button_stack);
+                    }
+                } else if source_slot.can_take_items(player)
+                    && source_slot.can_insert(&button_stack)
+                {
+                    let max_count = source_slot.get_max_item_count_for_stack(&button_stack);
+                    if button_stack.item_count > max_count {
+                        source_slot.set_stack(button_stack.split(max_count));
+                        player_inventory.set_stack(button as usize, button_stack);
+                        source_slot.on_take_item(player, &source_stack);
+
+                        let mut displaced_stack = source_stack;
+                        player_inventory.insert_stack_anywhere(&mut displaced_stack);
+                        if !displaced_stack.is_empty() {
+                            player.drop_item(displaced_stack, true);
+                        }
+                    } else {
+                        player_inventory.set_stack(button as usize, source_stack.clone());
+                        source_slot.set_stack(button_stack);
+                        source_slot.on_take_item(player, &source_stack);
                     }
                 }
             }
