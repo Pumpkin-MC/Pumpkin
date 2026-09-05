@@ -24,22 +24,6 @@ pub const CURRENT_MC_VERSION: &str = "26.2";
 pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.26.45";
 pub const CURRENT_BEDROCK_MC_PROTOCOL: u32 = 2169;
 
-#[macro_export]
-macro_rules! global_path {
-    ($path:expr) => {{
-        use std::path::Path;
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .join(file!())
-            .parent()
-            .unwrap()
-            .join($path)
-    }};
-}
-
 // TODO: is there a way to do in-file benches?
 pub use generation::{
     GlobalRandomConfig, noise::router::proto_noise_router::ProtoNoiseRouters,
