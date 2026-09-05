@@ -1,5 +1,7 @@
+#[cfg(feature = "entity_type")]
+use crate::entity::EntityType;
 use crate::{
-    BlockState, BlockStateId,
+    BlockDirection, BlockState, BlockStateId,
     tag::{RegistryKey, Tag, Taggable},
 };
 use pumpkin_util::{
@@ -42,6 +44,23 @@ pub struct Block {
     pub flammable: Option<Flammable>,
     /// Defines the amount of XP dropped when the block is mined (e.g., Coal or Diamond).
     pub experience: Option<Experience>,
+    /// Vanilla `isValidSpawn` override. `None` means the default rule applies.
+    pub spawn_rule: Option<SpawnRule>,
+}
+
+/// Overrides for the default mob spawn surface check.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SpawnRule {
+    /// No mob may spawn on this block.
+    Never,
+    /// Any mob may spawn on this block.
+    Always,
+    /// Only ocelots and parrots may spawn on this block.
+    OcelotOrParrot,
+    /// Only polar bears may spawn on this block.
+    PolarBear,
+    /// Only fire immune mobs may spawn on this block.
+    FireImmune,
 }
 
 /// Helper struct to ensure the validity of BlockIds parsed from external sources.
@@ -124,6 +143,21 @@ impl Block {
     #[must_use]
     pub const fn get_speed_factor(&self) -> f32 {
         self.velocity_multiplier
+    }
+
+    #[cfg(feature = "entity_type")]
+    #[must_use]
+    pub fn is_valid_spawn(&self, state: &BlockState, entity_type: &EntityType) -> bool {
+        match self.spawn_rule {
+            None => state.is_side_solid(BlockDirection::Up) && state.luminance < 14,
+            Some(SpawnRule::Never) => false,
+            Some(SpawnRule::Always) => true,
+            Some(SpawnRule::OcelotOrParrot) => {
+                entity_type == &EntityType::OCELOT || entity_type == &EntityType::PARROT
+            }
+            Some(SpawnRule::PolarBear) => entity_type == &EntityType::POLAR_BEAR,
+            Some(SpawnRule::FireImmune) => entity_type.fire_immune,
+        }
     }
 
     #[must_use]

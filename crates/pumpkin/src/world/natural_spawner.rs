@@ -13,7 +13,7 @@ use pumpkin_data::tag::Block::MINECRAFT_PREVENT_MOB_SPAWNING_INSIDE;
 use pumpkin_data::tag::Fluid::{MINECRAFT_LAVA, MINECRAFT_WATER};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::tag::WorldgenBiome::MINECRAFT_REDUCE_WATER_AMBIENT_SPAWNS;
-use pumpkin_data::{Block, BlockDirection, BlockState};
+use pumpkin_data::{Block, BlockState};
 use pumpkin_util::GameMode;
 use pumpkin_util::math::get_section_cord;
 use pumpkin_util::math::position::BlockPos;
@@ -1019,7 +1019,7 @@ pub fn is_spawn_position_ok(
             let up = world.get_block_state(&block_pos.up());
             let cur = world.get_block_state(block_pos);
             let is_valid_spawn_below =
-                down.is_side_solid(BlockDirection::Up) && down.luminance < 14;
+                Block::from_state_id(down.id).is_valid_spawn(down, entity_type);
 
             if is_valid_spawn_below {
                 is_valid_empty_spawn_block(cur, entity_type)
@@ -1061,7 +1061,7 @@ pub fn is_spawn_position_ok_cache(
             let up = GenerationCache::get_block_state(cache, &up_pos).to_state();
 
             let is_valid_spawn_below =
-                down.is_side_solid(BlockDirection::Up) && down.luminance < 14;
+                Block::from_state_id(down.id).is_valid_spawn(down, entity_type);
 
             if is_valid_spawn_below {
                 is_valid_empty_spawn_block(state, entity_type)

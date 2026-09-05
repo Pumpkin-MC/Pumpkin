@@ -760,6 +760,36 @@ pub struct Block {
     pub experience: Option<Experience>,
     /// Position-derived shape offset applied by vanilla, if any.
     shape_offset: Option<BlockShapeOffset>,
+    /// Vanilla `isValidSpawn` override, if the block has one.
+    spawn_rule: Option<SpawnRule>,
+}
+
+/// Overrides for the default mob spawn surface check.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum SpawnRule {
+    /// No mob may spawn on this block.
+    Never,
+    /// Any mob may spawn on this block.
+    Always,
+    /// Only ocelots and parrots may spawn on this block.
+    OcelotOrParrot,
+    /// Only polar bears may spawn on this block.
+    PolarBear,
+    /// Only fire immune mobs may spawn on this block.
+    FireImmune,
+}
+
+impl SpawnRule {
+    fn to_tokens(&self) -> TokenStream {
+        match self {
+            Self::Never => quote! { SpawnRule::Never },
+            Self::Always => quote! { SpawnRule::Always },
+            Self::OcelotOrParrot => quote! { SpawnRule::OcelotOrParrot },
+            Self::PolarBear => quote! { SpawnRule::PolarBear },
+            Self::FireImmune => quote! { SpawnRule::FireImmune },
+        }
+    }
 }
 
 impl ToTokens for Block {
@@ -798,6 +828,12 @@ impl ToTokens for Block {
         } else {
             quote! { None }
         };
+        let spawn_rule = if let Some(spawn_rule) = &self.spawn_rule {
+            let spawn_rule_tokens = spawn_rule.to_tokens();
+            quote! { Some(#spawn_rule_tokens) }
+        } else {
+            quote! { None }
+        };
         tokens.extend(quote! {
             Block {
                 id: #id,
@@ -813,6 +849,7 @@ impl ToTokens for Block {
                 states: &[#(#states),*],
                 flammable: #flammable,
                 experience: #experience,
+                spawn_rule: #spawn_rule,
             }
         });
     }
@@ -1238,7 +1275,7 @@ pub fn build() -> TokenStream {
 
         use crate::{
             BlockState, BlockStateId, Block, BlockId,
-            blocks::{Flammable, ShapeOffset, ShapeOffsetType},
+            blocks::{Flammable, ShapeOffset, ShapeOffsetType, SpawnRule},
         };
         use crate::block_state::PistonBehavior;
         use pumpkin_util::math::int_provider::{UniformIntProvider, IntProvider, NormalIntProvider};

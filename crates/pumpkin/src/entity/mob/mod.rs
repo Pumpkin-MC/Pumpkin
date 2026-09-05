@@ -7,14 +7,15 @@ use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::Block;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
-use pumpkin_data::{Block, BlockDirection};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot};
 use pumpkin_util::Difficulty;
@@ -384,13 +385,22 @@ impl MobEntity {
         current_brightness <= dimension.monster_spawn_light_level.get(&mut random) as u8
     }
 
-    pub fn check_mob_spawn_rules(world: &World, pos: &BlockPos) -> bool {
+    pub fn check_mob_spawn_rules(
+        entity_type: &'static EntityType,
+        world: &World,
+        pos: &BlockPos,
+    ) -> bool {
         let below = pos.down();
         let state = world.get_block_state(&below);
-        state.is_side_solid(BlockDirection::Up)
+        Block::from_state_id(state.id).is_valid_spawn(state, entity_type)
     }
 
-    pub fn check_monster_spawn_rules(world: &World, pos: &BlockPos, is_thundering: bool) -> bool {
+    pub fn check_monster_spawn_rules(
+        entity_type: &'static EntityType,
+        world: &World,
+        pos: &BlockPos,
+        is_thundering: bool,
+    ) -> bool {
         if world.level_info.load().difficulty == Difficulty::Peaceful {
             return false;
         }
@@ -399,23 +409,29 @@ impl MobEntity {
             return false;
         }
 
-        Self::check_mob_spawn_rules(world, pos)
+        Self::check_mob_spawn_rules(entity_type, world, pos)
     }
 
-    pub fn check_any_light_monster_spawn_rules(world: &World, pos: &BlockPos) -> bool {
+    pub fn check_any_light_monster_spawn_rules(
+        entity_type: &'static EntityType,
+        world: &World,
+        pos: &BlockPos,
+    ) -> bool {
         if world.level_info.load().difficulty == Difficulty::Peaceful {
             return false;
         }
 
-        Self::check_mob_spawn_rules(world, pos)
+        Self::check_mob_spawn_rules(entity_type, world, pos)
     }
 
     pub fn check_surface_monsters_spawn_rules(
+        entity_type: &'static EntityType,
         world: &World,
         pos: &BlockPos,
         is_thundering: bool,
     ) -> bool {
-        Self::check_monster_spawn_rules(world, pos, is_thundering) && world.can_see_sky(pos)
+        Self::check_monster_spawn_rules(entity_type, world, pos, is_thundering)
+            && world.can_see_sky(pos)
     }
 
     pub fn check_animal_spawn_rules(world: &World, pos: &BlockPos) -> bool {
