@@ -644,7 +644,7 @@ impl LivingEntity {
         // Clamp current health to new max if needed and send metadata update
         let current_health = self.health.load();
         if current_health > max_health {
-            self.set_health(max_health);
+            self.set_health(max_health.max(1.0));
         }
     }
 
