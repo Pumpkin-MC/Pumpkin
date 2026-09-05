@@ -16,7 +16,7 @@ use axum::{
     body::Bytes,
     extract::{ConnectInfo, DefaultBodyLimit, Path, State},
     http::{
-        HeaderMap, HeaderValue, StatusCode,
+        HeaderMap, HeaderValue, StatusCode, Uri,
         header::{CONTENT_TYPE, HOST},
     },
     response::{IntoResponse, Response},
@@ -204,6 +204,7 @@ async fn join(
     State(state): State<EndpointState>,
     ConnectInfo(address): ConnectInfo<SocketAddr>,
     Path(network_id): Path<String>,
+    uri: Uri,
     headers: HeaderMap,
     offer: Bytes,
 ) -> Response {
@@ -217,11 +218,18 @@ async fn join(
         return (StatusCode::BAD_REQUEST, "SDP offer must be UTF-8").into_response();
     };
 
-    let advertised_ip = headers
-        .get(HOST)
-        .and_then(|host| host.to_str().ok())
+    let host = headers.get(HOST).and_then(|host| host.to_str().ok());
+    let uri_authority = uri.authority().map(axum::http::uri::Authority::as_str);
+    let advertised_ip = host
+        .or(uri_authority)
         .and_then(|host| host.parse::<axum::http::uri::Authority>().ok())
         .and_then(|authority| authority.host().parse().ok());
+    trace!(
+        ?host,
+        ?uri_authority,
+        ?advertised_ip,
+        "Resolved NetherNet advertised address"
+    );
     match Box::pin(negotiate_direct(&state, address, &offer, advertised_ip)).await {
         Ok((answer, _session)) => {
             trace!(%address, %network_id, length = answer.len(), "Returning NetherNet SDP answer");
@@ -266,6 +274,7 @@ async fn negotiate_inner(
 ) -> Result<(String, Arc<NetherNetSession>), String> {
     let signaling = if candidates.is_some() { "LAN" } else { "HTTP" };
     let direct_ip = candidates.is_none();
+    let advertised_ip = state.external_ip.or(advertised_ip);
     trace!(%address, signaling, "Starting NetherNet negotiation");
     let (offer, client_public_key) = {
         let offer = offer.to_string();
@@ -346,8 +355,11 @@ async fn negotiate_inner(
         .ok_or_else(|| "WebRTC did not produce a local description".to_string())?;
     let answer = remove_component_two_candidates(&answer.sdp);
     let answer = if direct_ip {
-        let (answer, ufrag, internal) =
-            proxy_answer(&answer, state.ice_router.public_addr().port())?;
+        let (answer, ufrag, internal) = proxy_answer(
+            &answer,
+            advertised_ip,
+            state.ice_router.public_addr().port(),
+        )?;
         session.set_ice_route(
             state
                 .ice_router
@@ -393,7 +405,7 @@ async fn build_peer(
         SocketAddr::new(state.ice_local_addr.ip(), 0)
     };
     let mut setting_engine = SettingEngine::default();
-    if direct_ip && let Some(external_ip) = state.external_ip.or(advertised_ip) {
+    if direct_ip && let Some(external_ip) = advertised_ip {
         setting_engine.set_nat_1to1_ips(vec![external_ip.to_string()], RTCIceCandidateType::Host);
     }
     Ok(Arc::new(
