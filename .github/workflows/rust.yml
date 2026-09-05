@@ -133,7 +133,7 @@ jobs:
           profile: pixel_5
           force-avd-creation: false
           emulator-options: -no-snapshot-load -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
-          script: adb push assets /data/local/tmp/ && cargo ndk-test -t arm64-v8a
+          script: ./android_test_script
   build_release:
     name: Build project in release
     runs-on: ${{ matrix.os }}

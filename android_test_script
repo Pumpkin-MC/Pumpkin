@@ -1,0 +1,2 @@
+adb push assets /data/local/tmp/$PWD/
+cargo ndk-test -t arm64-v8a
