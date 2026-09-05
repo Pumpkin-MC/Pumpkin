@@ -1,7 +1,10 @@
 use pumpkin_macros::{Event, cancellable};
 use pumpkin_util::math::vector3::Vector3;
 
-/// An event that occurs when a vehicle moves.
+/// An event that occurs after a vehicle changes position.
+///
+/// Cancelling the event restores the vehicle's starting position. Changes to
+/// [`Self::to`] are applied as the vehicle's final position.
 #[cancellable]
 #[derive(Event, Clone)]
 pub struct VehicleMoveEvent {

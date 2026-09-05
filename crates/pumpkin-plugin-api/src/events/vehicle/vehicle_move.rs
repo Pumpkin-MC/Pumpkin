@@ -2,6 +2,8 @@ use super::super::FromIntoEvent;
 use crate::wit::pumpkin::plugin::event::{Event, EventType, VehicleMoveEventData};
 
 /// Event triggered when a vehicle moves.
+///
+/// Register the handler as blocking to cancel the movement or change its target position.
 pub struct VehicleMoveEvent;
 impl FromIntoEvent for VehicleMoveEvent {
     const EVENT_TYPE: EventType = EventType::VehicleMoveEvent;

@@ -57,6 +57,10 @@ impl EntityBase for BoatEntity {
         None
     }
 
+    fn get_vehicle_entity(&self) -> Option<&VehicleEntity> {
+        Some(&self.vehicle)
+    }
+
     fn tick(&self, _caller: &dyn EntityBase, _server: &Server) {
         self.vehicle.tick();
 
