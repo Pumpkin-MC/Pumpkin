@@ -677,7 +677,7 @@ impl Server {
             self;
             &mut PlayerLoginEvent::new(player.clone(), TextComponent::text("You have been kicked from the server"));
             'after: {
-                player.screen_handler_sync_handler.store_player(player.clone());
+                player.screen_handler_sync_handler.store_player(&(player.clone() as Arc<dyn pumpkin_inventory::screen_handler::InventoryPlayer>));
                 world.add_player(&player).is_ok().then(|| {
                     {
                         let mut user_cache = self
