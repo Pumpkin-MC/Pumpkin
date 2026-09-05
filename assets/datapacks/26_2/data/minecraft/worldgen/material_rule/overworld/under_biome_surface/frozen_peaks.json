@@ -1,0 +1,49 @@
+{
+  "type": "minecraft:sequence",
+  "sequence": [
+    {
+      "type": "minecraft:condition",
+      "if_true": {
+        "type": "minecraft:steep"
+      },
+      "then_run": {
+        "type": "minecraft:block",
+        "result_state": "minecraft:packed_ice"
+      }
+    },
+    {
+      "type": "minecraft:condition",
+      "if_true": {
+        "type": "minecraft:noise_threshold",
+        "max_threshold": 0.2,
+        "min_threshold": -0.5,
+        "noise": "minecraft:packed_ice"
+      },
+      "then_run": {
+        "type": "minecraft:block",
+        "result_state": "minecraft:packed_ice"
+      }
+    },
+    {
+      "type": "minecraft:condition",
+      "if_true": {
+        "type": "minecraft:noise_threshold",
+        "max_threshold": 0.025,
+        "min_threshold": -0.0625,
+        "noise": "minecraft:ice"
+      },
+      "then_run": {
+        "type": "minecraft:block",
+        "result_state": "minecraft:ice"
+      }
+    },
+    {
+      "type": "minecraft:condition",
+      "if_true": "minecraft:not_underwater",
+      "then_run": {
+        "type": "minecraft:block",
+        "result_state": "minecraft:snow_block"
+      }
+    }
+  ]
+}

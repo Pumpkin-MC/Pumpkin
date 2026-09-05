@@ -14,6 +14,24 @@ pub fn build() -> String {
     ));
     let mut interface = Interface::new("sounds");
 
+    let mut category_enum = Enum::empty();
+    category_enum.case("master");
+    category_enum.case("music");
+    category_enum.case("records");
+    category_enum.case("weather");
+    category_enum.case("blocks");
+    category_enum.case("hostile");
+    category_enum.case("neutral");
+    category_enum.case("players");
+    category_enum.case("ambient");
+    category_enum.case("voice");
+    category_enum.case("ui");
+
+    interface.type_def(TypeDef::new(
+        "sound-category",
+        TypeDefKind::Enum(category_enum),
+    ));
+
     let mut sound_enum = Enum::empty();
     for sound in sounds {
         sound_enum.case(sound.replace(['_', '.'], "-"));

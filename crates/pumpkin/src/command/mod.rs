@@ -5,16 +5,13 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use crate::entity::player::Player;
-use crate::server::Server;
-use crate::world::World;
-use args::ConsumedArgs;
-
 use crate::block::entities::BlockEntity;
 use crate::block::entities::command_block::CommandBlockEntity;
 use crate::command::context::command_source::CommandSource;
 use crate::entity::EntityBase;
-use dispatcher::CommandError;
+use crate::entity::player::Player;
+use crate::server::Server;
+use crate::world::World;
 use pumpkin_data::{
     Block,
     block_properties::{BlockProperties, CommandBlockLikeProperties, Facing},
@@ -26,7 +23,6 @@ use pumpkin_util::permission::{PermissionDefault, PermissionLvl};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::translation::Locale;
 
-pub mod args;
 pub mod argument_builder;
 pub mod argument_types;
 pub mod client_suggestions;
@@ -39,7 +35,6 @@ pub mod parser;
 pub mod snbt;
 pub mod string_reader;
 pub mod suggestion;
-pub mod tree;
 
 /// Whether console and RCON command output is broadcast to online operators.
 ///
@@ -220,7 +215,7 @@ impl CommandSender {
                     return None;
                 }
 
-                let props = CommandBlockLikeProperties::from_state_id(state_id, block);
+                let props = CommandBlockLikeProperties::from_state_id(state_id);
                 Some((0.0, command_block_y_rot(props.facing)))
             }
         }
@@ -340,9 +335,8 @@ impl CommandSender {
             Self::CommandBlock(command_entity, world) => {
                 let pos = command_entity.position;
 
-                let (block, state_id) = world.get_block_and_state_id(&pos);
-                let command_block_props =
-                    CommandBlockLikeProperties::from_state_id(state_id, block);
+                let (_block, state_id) = world.get_block_and_state_id(&pos);
+                let command_block_props = CommandBlockLikeProperties::from_state_id(state_id);
                 let facing = command_block_props.facing;
 
                 let horizontal_direction = match facing {
@@ -403,27 +397,5 @@ const fn command_block_y_rot(facing: Facing) -> f32 {
     }
 }
 
-/// Represents the result of running a command after completion.
-///
-/// If the command **ran successfully**, an [`Ok`] is returned containing an [`i32`].
-/// This represents the 'output value' of the command, which is *homologous* to the
-/// `int` that command executors in vanilla return **upon success**.
-///
-/// **You should choose the successful result as `1` if**:
-/// - you don't know what value to use for a success for your
-///   own commands, or
-/// - you don't understand what this value means, or
-/// - you just simply don't care about this value at all
-///
-/// If the command **fails**, an [`Err`] is returned, containing the [`CommandError`]
-/// that led to this result.
-pub type CommandResult = Result<i32, CommandError>;
-
-pub trait CommandExecutor: Sync + Send {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult;
-}
+pub use node::dispatcher::CommandDispatcher;
+pub use node::{Command, CommandExecutor, CommandExecutorResult};

@@ -43,7 +43,7 @@ impl SaplingBlock {
         bone_meal: bool,
     ) {
         if OakSaplingLikeProperties::handles_block_id(block.id) {
-            let mut props = OakSaplingLikeProperties::from_state_id(state_id, block);
+            let mut props = OakSaplingLikeProperties::from_state_id(state_id);
             if props.stage == 0 {
                 props.stage = 1;
                 world.set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL);

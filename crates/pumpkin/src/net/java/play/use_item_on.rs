@@ -34,7 +34,36 @@ impl JavaClient {
         };
 
         if player.gamemode.load() == GameMode::Spectator {
-            // TODO: openMenu
+            let entity = &player.get_entity();
+            let world = entity.world.load_full();
+            let block = world.get_block(&position);
+
+            let event = PlayerInteractEvent::new(
+                player,
+                InteractAction::RightClickBlock,
+                block,
+                Some(position),
+            );
+
+            send_cancellable_blocking! {{
+                server;
+                event;
+                'cancelled: {
+                    let state_id = world.get_block_state_id(&position);
+                    player.try_send_client_packet(&CBlockUpdate::new(
+                        position,
+                        VarInt(i32::from(state_id.as_u16())),
+                    ));
+                    return Ok(());
+                }
+            }}
+
+            if let Some(factory) = server
+                .block_registry
+                .get_screen_handler_factory(block, player, &position, server, &world)
+            {
+                player.open_handled_screen(factory.as_ref(), Some(position));
+            }
             return Ok(());
         }
 
@@ -146,6 +175,9 @@ impl JavaClient {
             } else {
                 &EquipmentSlot::OFF_HAND
             };
+            if before.is_damageable() {
+                player.increment_stat(StatisticCategory::Broken, before.item.id as i32, 1);
+            }
             player.world().send_entity_status(
                 player.get_entity(),
                 equipment_break_status(slot),

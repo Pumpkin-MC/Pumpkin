@@ -113,7 +113,7 @@ impl ScreenHandler for StonecutterScreenHandler {
         }
     }
 
-    fn quick_move(&mut self, _player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
+    fn quick_move(&mut self, player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
         let mut stack = ItemStack::EMPTY.clone();
         let slot = self.get_behaviour().slots.get(slot_index as usize).cloned();
 
@@ -138,7 +138,13 @@ impl ScreenHandler for StonecutterScreenHandler {
                 if slot_stack.is_empty() {
                     slot.set_stack(ItemStack::EMPTY.clone());
                 } else {
-                    slot.set_stack(slot_stack);
+                    slot.set_stack(slot_stack.clone());
+                }
+
+                if slot_index == 1 {
+                    let mut taken_stack = stack.clone();
+                    taken_stack.set_count(stack.item_count - slot_stack.item_count);
+                    slot.on_take_item(player, &taken_stack);
                 }
             }
         }

@@ -27,3 +27,12 @@ impl ArgumentType for IdentifierArgumentType {
         examples!("foo", "foo:bar")
     }
 }
+
+impl IdentifierArgumentType {
+    pub fn get(
+        context: &crate::command::context::command_context::CommandContext,
+        name: &str,
+    ) -> Result<Identifier, CommandSyntaxError> {
+        Ok(context.get_argument::<Identifier>(name)?.clone())
+    }
+}

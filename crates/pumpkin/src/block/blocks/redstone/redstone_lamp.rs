@@ -1,6 +1,5 @@
 use crate::block::{OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs};
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::{tick::TickPriority, world::BlockFlags};
 
@@ -23,7 +22,7 @@ impl BlockBehaviour for RedstoneLamp {
     fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
         {
             let state = args.world.get_block_state(args.position);
-            let mut props = RedstoneLampProperties::from_state_id(state.id, args.block);
+            let mut props = RedstoneLampProperties::from_state_id(state.id);
             let is_lit = props.lit;
             let is_receiving_power = block_receives_redstone_power(args.world, args.position);
 
@@ -49,13 +48,13 @@ impl BlockBehaviour for RedstoneLamp {
 
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         let state = args.world.get_block_state(args.position);
-        let props = RedstoneLampProperties::from_state_id(state.id, args.block);
+        let props = RedstoneLampProperties::from_state_id(state.id);
         let is_lit = props.lit;
         let is_receiving_power = block_receives_redstone_power(args.world, args.position);
 
         if is_lit && !is_receiving_power {
             let block = args.world.get_block(args.position);
-            let mut props = RedstoneLampProperties::from_state_id(state.id, block);
+            let mut props = RedstoneLampProperties::from_state_id(state.id);
             props.lit = !props.lit;
             args.world.set_block_state(
                 args.position,

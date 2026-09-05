@@ -338,6 +338,22 @@ impl Slot for ArmorSlot {
             EquipmentSlot::Chest(_) => stack.is_chestplate() || stack.item == &Item::ELYTRA,
             EquipmentSlot::Legs(_) => stack.is_leggings(),
             EquipmentSlot::Feet(_) => stack.is_boots(),
+            EquipmentSlot::Saddle(_) => stack
+                .get_data_component::<pumpkin_data::data_component_impl::EquippableImpl>()
+                .map_or_else(
+                    || stack.item == &Item::SADDLE,
+                    |equippable| matches!(equippable.slot, EquipmentSlot::Saddle(_)),
+                ),
+            EquipmentSlot::Body(_) => stack
+                .get_data_component::<pumpkin_data::data_component_impl::EquippableImpl>()
+                .map_or_else(
+                    || {
+                        stack.item.registry_key.ends_with("_horse_armor")
+                            || stack.item.registry_key.ends_with("_nautilus_armor")
+                            || stack.item == &Item::WOLF_ARMOR
+                    },
+                    |equippable| matches!(equippable.slot, EquipmentSlot::Body(_)),
+                ),
             _ => true,
         }
     }

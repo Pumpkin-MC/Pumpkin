@@ -36,6 +36,10 @@ impl SmallFireballEntity {
 }
 
 impl EntityBase for SmallFireballEntity {
+    fn get_owner_id(&self) -> Option<i32> {
+        self.thrown.owner_id
+    }
+
     fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
         self.thrown.process_tick(caller);
     }

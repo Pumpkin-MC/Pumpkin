@@ -159,7 +159,15 @@ impl BedrockClient {
                 };
 
                 if player.gamemode.load() == GameMode::Spectator {
-                    // TODO: openMenu ?
+                    if let Some(factory) = server.block_registry.get_screen_handler_factory(
+                        block,
+                        player,
+                        &data.block_position,
+                        &server,
+                        &world,
+                    ) {
+                        player.open_handled_screen(factory.as_ref(), Some(data.block_position));
+                    }
                     return;
                 }
 
@@ -208,6 +216,13 @@ impl BedrockClient {
 
                     let mut stack = held_item;
                     if !stack.is_empty() {
+                        let item_id = stack.item.id;
+                        let before = stack.clone();
+                        player.increment_stat(
+                            pumpkin_data::statistic::StatisticCategory::Used,
+                            item_id as i32,
+                            1,
+                        );
                         server.item_registry.use_on_block(
                             &mut stack,
                             player,
@@ -244,6 +259,18 @@ impl BedrockClient {
                                 }
                             }
                         }
+                        if before.is_damageable() && stack.is_empty() {
+                            player.increment_stat(
+                                pumpkin_data::statistic::StatisticCategory::Broken,
+                                item_id as i32,
+                                1,
+                            );
+                            player.world().send_entity_status(
+                                player.get_entity(),
+                                crate::entity::equipment_break_status(&EquipmentSlot::MAIN_HAND),
+                                None,
+                            );
+                        }
                         player.inventory().set_held_item(stack);
                     }
                 } else if data.action_type.0 == 1 {
@@ -255,7 +282,14 @@ impl BedrockClient {
                         && (held.is_empty() || held.item.id != client_stack.item.id)
                     {
                         held = client_stack;
-                        player.inventory.set_held_item(held.clone());
+                        player.inventory().set_held_item(held.clone());
+                    }
+                    if !held.is_empty() {
+                        player.increment_stat(
+                            pumpkin_data::statistic::StatisticCategory::Used,
+                            held.item.id as i32,
+                            1,
+                        );
                     }
 
                     let event = PlayerInteractEvent::new(
@@ -361,6 +395,8 @@ impl BedrockClient {
                         let world = player.world();
                         if let Some(target) = world.get_entity_by_id(target_runtime_id) {
                             let mut stack = player.inventory().held_item();
+                            let item_id = stack.item.id;
+                            let before = stack.clone();
                             if !target.interact(player, &mut stack) {
                                 let Some(server) = world.server.upgrade() else {
                                     return;
@@ -368,8 +404,29 @@ impl BedrockClient {
                                 server
                                     .item_registry
                                     .use_on_entity(&mut stack, player, target);
-                                player.inventory().set_held_item(stack);
                             }
+                            if !stack.are_equal(&before) {
+                                player.increment_stat(
+                                    pumpkin_data::statistic::StatisticCategory::Used,
+                                    item_id as i32,
+                                    1,
+                                );
+                                if before.is_damageable() && stack.is_empty() {
+                                    player.increment_stat(
+                                        pumpkin_data::statistic::StatisticCategory::Broken,
+                                        item_id as i32,
+                                        1,
+                                    );
+                                    player.world().send_entity_status(
+                                        player.get_entity(),
+                                        crate::entity::equipment_break_status(
+                                            &EquipmentSlot::MAIN_HAND,
+                                        ),
+                                        None,
+                                    );
+                                }
+                            }
+                            player.inventory().set_held_item(stack);
                         }
                     }
                     // Attack

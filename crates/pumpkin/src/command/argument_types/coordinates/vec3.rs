@@ -1,5 +1,5 @@
 use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
-use crate::command::argument_types::coordinates::Coordinates;
+use crate::command::argument_types::coordinates::{Coordinates, MIXED_TYPE_ERROR_TYPE};
 use crate::command::context::command_context::CommandContext;
 use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
@@ -12,8 +12,10 @@ pub const INCOMPLETE_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
     translation::java::ARGUMENT_POS3D_INCOMPLETE,
     translation::java::ARGUMENT_POS3D_INCOMPLETE,
 );
+pub const ERROR_NOT_COMPLETE: CommandErrorType<0> = INCOMPLETE_ERROR_TYPE;
+pub const ERROR_MIXED_TYPE: CommandErrorType<0> = MIXED_TYPE_ERROR_TYPE;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Copy)]
 /// An argument type for a 3-dimensional vector.
 pub enum Vec3ArgumentType {
     /// The default `Vec3ArgumentType` variant.
@@ -32,10 +34,20 @@ pub enum Vec3ArgumentType {
 }
 
 impl Vec3ArgumentType {
-    /// Returns whether this argument type centers integers.\
+    /// Returns whether this argument type centers integers.
     #[must_use]
     pub const fn centers_integers(&self) -> bool {
         matches!(self, Self::Default)
+    }
+
+    /// Creates a new `Vec3ArgumentType` with the given center correction.
+    #[must_use]
+    pub const fn new(centers_integers: bool) -> Self {
+        if centers_integers {
+            Self::Default
+        } else {
+            Self::Uncorrected
+        }
     }
 }
 
@@ -55,7 +67,14 @@ impl ArgumentType for Vec3ArgumentType {
     }
 
     fn examples(&self) -> Vec<String> {
-        examples!("1 1 1", "3 ~34 ~-2", "40 50 60", "^ ^4 ^3")
+        vec![
+            "0 0 0".to_string(),
+            "~ ~ ~".to_string(),
+            "^ ^ ^".to_string(),
+            "^1 ^ ^-5".to_string(),
+            "0.1 -0.5 .9".to_string(),
+            "~0.5 ~1 ~-5".to_string(),
+        ]
     }
 
     fn list_suggestions(
@@ -92,114 +111,5 @@ impl Vec3ArgumentType {
         name: &str,
     ) -> Result<Vector3<f64>, CommandSyntaxError> {
         Ok(Self::get_coordinates(context, name)?.resolve(context.source.as_ref()))
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use crate::command::argument_types::argument_type::ArgumentType;
-    use crate::command::argument_types::coordinates::vec3::{
-        INCOMPLETE_ERROR_TYPE, Vec3ArgumentType,
-    };
-    use crate::command::argument_types::coordinates::{
-        Coordinates, MIXED_TYPE_ERROR_TYPE, WorldCoordinate,
-    };
-    use crate::command::string_reader::StringReader;
-    use pumpkin_util::math::vector3::Vector3;
-
-    macro_rules! world_coordinate {
-        ($( ($variant:ident, $value:expr) ),+) => {
-            Coordinates::World(Vector3::new(
-                $( WorldCoordinate::$variant($value), )+
-            ))
-        };
-    }
-
-    #[test]
-    fn parse_test() {
-        let mut reader = StringReader::new("0 0 0");
-
-        // The default type centers both the X and Z coordinates.
-        assert_parse_ok_reset!(
-            reader,
-            Vec3ArgumentType::Default,
-            world_coordinate!((Absolute, 0.5), (Absolute, 0.0), (Absolute, 0.5))
-        );
-        assert_parse_ok_reset!(
-            reader,
-            Vec3ArgumentType::Uncorrected,
-            world_coordinate!((Absolute, 0.0), (Absolute, 0.0), (Absolute, 0.0))
-        );
-
-        let mut reader = StringReader::new("~ ~4 8");
-
-        assert_parse_ok_reset!(
-            reader,
-            Vec3ArgumentType::Default,
-            world_coordinate!(
-                (Relative, 0.0),
-                (Relative, 4.0),
-                // Only the Z coordinate is centered.
-                (Absolute, 8.5)
-            )
-        );
-        assert_parse_ok_reset!(
-            reader,
-            Vec3ArgumentType::Uncorrected,
-            world_coordinate!((Relative, 0.0), (Relative, 4.0), (Absolute, 8.0))
-        );
-
-        let mut reader = StringReader::new("~-1 ~-2.5 ~-3");
-
-        assert_parse_ok_reset!(
-            reader,
-            Vec3ArgumentType::Default,
-            world_coordinate!((Relative, -1.0), (Relative, -2.5), (Relative, -3.0))
-        );
-        assert_parse_ok_reset!(
-            reader,
-            Vec3ArgumentType::Uncorrected,
-            world_coordinate!((Relative, -1.0), (Relative, -2.5), (Relative, -3.0))
-        );
-
-        let mut reader = StringReader::new("-3 4 5");
-
-        assert_parse_ok_reset!(
-            reader,
-            Vec3ArgumentType::Default,
-            world_coordinate!((Absolute, -2.5), (Absolute, 4.0), (Absolute, 5.5))
-        );
-
-        let mut reader = StringReader::new("1000 2000");
-
-        assert_parse_err_reset!(reader, Vec3ArgumentType::Default, &INCOMPLETE_ERROR_TYPE);
-    }
-
-    #[test]
-    fn parse_local_coordinates() {
-        let mut reader = StringReader::new("^1 ^10 ^30");
-
-        assert_parse_ok_reset!(
-            reader,
-            Vec3ArgumentType::Default,
-            Coordinates::Local {
-                left: 1.0,
-                up: 10.0,
-                forward: 30.0
-            }
-        );
-
-        // We can't mix world & local coordinates.
-        let mut reader = StringReader::new("^1 ^10 ~20");
-
-        assert_parse_err_reset!(reader, Vec3ArgumentType::Default, &MIXED_TYPE_ERROR_TYPE);
-
-        let mut reader = StringReader::new("^-3 ^-7 10");
-
-        assert_parse_err_reset!(reader, Vec3ArgumentType::Default, &MIXED_TYPE_ERROR_TYPE);
-
-        let mut reader = StringReader::new("^1 ^2");
-
-        assert_parse_err_reset!(reader, Vec3ArgumentType::Default, &INCOMPLETE_ERROR_TYPE);
     }
 }

@@ -1,6 +1,6 @@
 use pumpkin_data::{
     Block, BlockDirection, BlockStateId,
-    block_properties::{BambooLeaves, BambooLikeProperties, BlockProperties},
+    block_properties::{BambooLeaves, BambooLikeProperties},
     tag::Taggable,
 };
 use pumpkin_macros::pumpkin_block;
@@ -73,8 +73,7 @@ impl BlockBehaviour for BambooSaplingBlock {
 }
 
 fn grow_bamboo(world: &std::sync::Arc<crate::world::World>, position: &BlockPos) {
-    let mut props =
-        BambooLikeProperties::from_state_id(Block::BAMBOO.default_state.id, &Block::BAMBOO);
+    let mut props = BambooLikeProperties::from_state_id(Block::BAMBOO.default_state.id);
     props.leaves = BambooLeaves::Small;
     world.set_block_state(
         &position.up(),

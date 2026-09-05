@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_data::block_properties::{BlockProperties, BrownMushroomBlockLikeProperties};
+use pumpkin_data::block_properties::BrownMushroomBlockLikeProperties;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockId, BlockState, BlockStateId, tag};
 use pumpkin_util::math::position::BlockPos;
@@ -33,7 +33,7 @@ fn mushroom_tree_height(rng: &mut impl rand::Rng) -> i32 {
 impl MushroomPlantBlock {
     #[must_use]
     pub const fn may_place_on(state: &BlockState) -> bool {
-        state.is_solid() && (state.is_full_cube() || state.is_solid_block())
+        state.is_solid_render()
     }
 
     pub fn can_survive(

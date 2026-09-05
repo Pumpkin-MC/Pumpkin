@@ -1,3 +1,5 @@
+use super::server_test_manager::drain_game_test_queue;
+
 use crate::{
     STOP_INTERRUPT,
     plugin::server::{
@@ -5,6 +7,7 @@ use crate::{
     },
     server::Server,
 };
+use pumpkin_gametest::GameTestRunner;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
@@ -17,6 +20,7 @@ impl Ticker {
     pub fn run(server: &Arc<Server>) {
         let _guard = server.runtime.enter();
         let mut next_tick = Instant::now();
+        let mut game_test_runner = GameTestRunner::new();
 
         'ticker: loop {
             let tick_start_time = Instant::now();
@@ -25,11 +29,15 @@ impl Ticker {
             manager.tick();
 
             let tick_number = server.tick_count.load(Ordering::Relaxed);
-            server.runtime.block_on(
-                server
-                    .plugin_manager
-                    .fire(server, &mut ServerTickStartEvent::new(tick_number)),
-            );
+            if server.plugin_manager.has_handlers::<ServerTickStartEvent>() {
+                server.runtime.block_on(
+                    server
+                        .plugin_manager
+                        .fire(server, &mut ServerTickStartEvent::new(tick_number)),
+                );
+            }
+
+            let should_tick_game_tests = manager.runs_normally() || manager.is_sprinting();
 
             if manager.is_sprinting() {
                 manager.start_sprint_tick_work();
@@ -42,13 +50,22 @@ impl Ticker {
                 server.tick();
             }
 
+            if should_tick_game_tests {
+                server.runtime.block_on(async {
+                    drain_game_test_queue(server, &mut game_test_runner).await;
+                    game_test_runner.tick().await;
+                });
+            }
+
             let tick_duration_nanos = tick_start_time.elapsed().as_nanos() as i64;
 
             let tick_number = server.tick_count.load(Ordering::Relaxed);
-            server.runtime.block_on(server.plugin_manager.fire(
-                server,
-                &mut ServerTickEndEvent::new(tick_number, tick_duration_nanos),
-            ));
+            if server.plugin_manager.has_handlers::<ServerTickEndEvent>() {
+                server.runtime.block_on(server.plugin_manager.fire(
+                    server,
+                    &mut ServerTickEndEvent::new(tick_number, tick_duration_nanos),
+                ));
+            }
 
             server.update_tick_times(tick_duration_nanos);
 

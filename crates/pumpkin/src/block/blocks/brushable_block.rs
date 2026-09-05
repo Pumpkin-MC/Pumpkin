@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_data::block_properties::{BlockProperties, SuspiciousSandLikeProperties};
+use pumpkin_data::block_properties::SuspiciousSandLikeProperties;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, BlockId, BlockStateId};
 use pumpkin_world::world::BlockFlags;
@@ -23,7 +23,7 @@ impl BrushableBlock {
         block: &Block,
     ) {
         let state = world.get_block_state(pos);
-        let mut props = SuspiciousSandLikeProperties::from_state_id(state.id, block);
+        let mut props = SuspiciousSandLikeProperties::from_state_id(state.id);
 
         let is_gravel = block.id == BlockId::SUSPICIOUS_GRAVEL;
 

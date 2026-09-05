@@ -5,7 +5,7 @@ use std::{
     marker::PhantomData,
     pin::Pin,
     sync::{
-        Mutex,
+        Arc, Mutex,
         atomic::{AtomicU32, Ordering},
     },
 };
@@ -55,7 +55,7 @@ pub use vehicle::*;
 pub use world::*;
 
 pub(crate) static NEXT_HANDLER_ID: AtomicU32 = AtomicU32::new(0);
-pub(crate) static EVENT_HANDLERS: Mutex<BTreeMap<u32, Box<dyn ErasedEventHandler>>> =
+pub(crate) static EVENT_HANDLERS: Mutex<BTreeMap<u32, Arc<dyn ErasedEventHandler>>> =
     Mutex::new(BTreeMap::new());
 
 /// Connects an event marker type to its WIT-generated data type and [`EventType`] discriminant.
@@ -136,7 +136,7 @@ impl Context {
         EVENT_HANDLERS
             .lock()
             .map_err(|e| e.to_string())?
-            .insert(id, Box::new(wrapped));
+            .insert(id, Arc::new(wrapped));
 
         self.register_event(id, E::EVENT_TYPE, event_priority, blocking);
         Ok(id)

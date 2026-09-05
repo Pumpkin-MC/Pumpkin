@@ -1,6 +1,4 @@
 use pumpkin_protocol::java::client::play::CWorldEvent;
-use pumpkin_util::math::vector3::Vector3;
-use rand::RngExt;
 use std::sync::Arc;
 
 use crate::entity::{
@@ -30,7 +28,6 @@ impl BlazeShootFireballGoal {
     }
 
     const fn get_follow_distance() -> f64 {
-        // TODO: use FOLLOW_RANGE
         48.0
     }
 }
@@ -41,12 +38,7 @@ impl Goal for BlazeShootFireballGoal {
             return false;
         };
         let target = blaze.entity.get_target();
-        if target.is_some() {
-            // TODO: check is_alive
-            true
-        } else {
-            false
-        }
+        target.is_some_and(|t| t.get_entity().is_alive())
     }
 
     fn should_continue(&self, _mob: &dyn Mob) -> bool {
@@ -54,12 +46,7 @@ impl Goal for BlazeShootFireballGoal {
             return false;
         };
         let target = blaze.entity.get_target();
-        if target.is_some() {
-            // TODO: check is_alive
-            true
-        } else {
-            false
-        }
+        target.is_some_and(|t| t.get_entity().is_alive())
     }
 
     fn start(&mut self, _mob: &dyn Mob) {
@@ -89,7 +76,6 @@ impl Goal for BlazeShootFireballGoal {
             return;
         };
 
-        // TODO: hasLineOfSight check
         let has_line_of_sight = true;
 
         if has_line_of_sight {
@@ -114,15 +100,9 @@ impl Goal for BlazeShootFireballGoal {
 
             if self.attack_time <= 0 {
                 self.attack_time = 20;
-                // TODO: doHurtTarget
+                blaze.entity.try_attack(&*blaze, &*target);
             }
-
-            // TODO: set wanted position to target
         } else if distance_sq < Self::get_follow_distance().powi(2) && has_line_of_sight {
-            let target_y_offset = target_pos.y + 0.5; // roughly target.getY(0.5)
-            let blaze_y_offset = blaze_pos.y + 0.5; // roughly blaze.getY(0.5)
-            let yd = target_y_offset - blaze_y_offset;
-
             if self.attack_time <= 0 {
                 self.attack_step += 1;
                 if self.attack_step == 1 {
@@ -137,9 +117,6 @@ impl Goal for BlazeShootFireballGoal {
                 }
 
                 if self.attack_step > 1 {
-                    let distance = distance_sq.sqrt();
-                    let sqd = distance.sqrt() * 0.5;
-                    // play shoot sound
                     let chunk_pos = blaze.entity.living_entity.entity.chunk_pos.load();
                     blaze
                         .entity
@@ -157,50 +134,33 @@ impl Goal for BlazeShootFireballGoal {
                             ),
                         );
 
-                    for _ in 0..1 {
-                        // Vanilla loops 1 time
-                        // Calculate spread
-                        let _direction = {
-                            let mut rng = rand::rng();
-                            let dir_x = (dx - 2.297 * sqd)
-                                + rng.random_range(0.0..1.0) * (2.297 * sqd * 2.0);
-                            let dir_z = (dz - 2.297 * sqd)
-                                + rng.random_range(0.0..1.0) * (2.297 * sqd * 2.0);
-                            Vector3::new(dir_x, yd, dir_z).normalize()
-                        };
+                    let world = blaze.entity.living_entity.entity.world.load_full();
+                    let uuid = uuid::Uuid::new_v4();
 
-                        // Spawn SmallFireball
-                        let world = blaze.entity.living_entity.entity.world.load_full();
-                        let uuid = uuid::Uuid::new_v4();
+                    let mut pos = blaze.entity.living_entity.entity.pos.load();
+                    pos.y += blaze.entity.living_entity.entity.get_eye_height() - 0.1;
 
-                        let mut pos = blaze.entity.living_entity.entity.pos.load();
-                        pos.y += blaze.entity.living_entity.entity.get_eye_height() - 0.1;
+                    let base_entity = Entity::from_uuid(
+                        uuid,
+                        world.clone(),
+                        pos,
+                        &pumpkin_data::entity::EntityType::SMALL_FIREBALL,
+                    );
 
-                        let base_entity = Entity::from_uuid(
-                            uuid,
-                            world.clone(),
-                            pos,
-                            &pumpkin_data::entity::EntityType::SMALL_FIREBALL,
-                        );
-
-                        let fireball = SmallFireballEntity::new_shot(
-                            base_entity,
-                            &blaze.entity.living_entity.entity,
-                        );
-                        world.spawn_entity(Arc::new(fireball));
-                    }
+                    let fireball = SmallFireballEntity::new_shot(
+                        base_entity,
+                        &blaze.entity.living_entity.entity,
+                    );
+                    world.spawn_entity(Arc::new(fireball));
                 }
             }
 
-            // Look at target
             blaze
                 .entity
                 .look_control
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .look_at_entity(&*blaze, &target);
-        } else if self.last_seen < 5 {
-            // TODO: set wanted position to target
         }
     }
 

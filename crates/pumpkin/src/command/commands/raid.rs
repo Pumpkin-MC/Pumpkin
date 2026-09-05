@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use uuid::Uuid;
 
 use pumpkin_data::data_component_impl::EquipmentSlot;
@@ -5,41 +6,36 @@ use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::sound::Sound;
+use pumpkin_util::PermissionLvl;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 
-use std::sync::Arc;
-
-use crate::command::args::bounded_num::BoundedNumArgumentConsumer;
-use crate::command::args::{ConsumedArgs, FindArg};
-use crate::command::dispatcher::CommandError;
-use crate::command::tree::CommandTree;
-use crate::command::tree::builder::{argument, literal};
-use crate::command::{CommandExecutor, CommandResult, CommandSender};
+use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
+use crate::command::argument_types::core::integer::IntegerArgumentType;
+use crate::command::context::command_context::CommandContext;
+use crate::command::errors::error_types::DISPATCHER_PARSE_EXCEPTION;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::entity::EntityBase;
 use crate::entity::mob::raider::create_ominous_banner;
 use crate::entity::player::Player;
 use crate::entity::r#type::from_type;
-use crate::server::Server;
 use crate::world::raid::RaidStatus;
 
-const NAMES: [&str; 1] = ["raid"];
 const DESCRIPTION: &str = "Controls or queries village raids.";
-
-const ARG_OMEN_LVL: &str = "omenlvl";
-const ARG_LEVEL: &str = "level";
+const PERMISSION: &str = "minecraft:command.raid";
 
 struct StartExecutor {
     has_omen_lvl: bool,
 }
 
 impl CommandExecutor for StartExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        _server: &Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        let player = sender.as_player().ok_or(CommandError::InvalidRequirement)?;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let player = context.source.as_player().ok_or_else(|| {
+            DISPATCHER_PARSE_EXCEPTION.create_without_context(TextComponent::text(
+                "Only players can execute this command",
+            ))
+        })?;
         let entity = player.get_entity();
         let pos = entity.block_pos.load();
         let world = entity.world.load();
@@ -53,10 +49,7 @@ impl CommandExecutor for StartExecutor {
                 (true, None)
             } else {
                 let omen_lvl = if self.has_omen_lvl {
-                    BoundedNumArgumentConsumer::<i32>::find_arg(args, ARG_OMEN_LVL)
-                        .ok()
-                        .and_then(Result::ok)
-                        .unwrap_or(1)
+                    IntegerArgumentType::get(context, "omenlvl")?
                 } else {
                     1
                 };
@@ -70,16 +63,22 @@ impl CommandExecutor for StartExecutor {
             }
         };
         if is_already_started {
-            sender.send_message(TextComponent::text("Raid already started close by"));
+            context
+                .source
+                .send_feedback(TextComponent::text("Raid already started close by"), false);
             return Ok(0);
         }
         if raid_created.is_some() {
-            sender.send_message(TextComponent::text("Created a raid in your local village"));
+            context.source.send_feedback(
+                TextComponent::text("Created a raid in your local village"),
+                true,
+            );
             Ok(1)
         } else {
-            sender.send_message(TextComponent::text(
-                "Failed to create a raid in your local village",
-            ));
+            context.source.send_feedback(
+                TextComponent::text("Failed to create a raid in your local village"),
+                false,
+            );
             Ok(0)
         }
     }
@@ -88,13 +87,12 @@ impl CommandExecutor for StartExecutor {
 struct StopExecutor;
 
 impl CommandExecutor for StopExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        _server: &Server,
-        _args: &ConsumedArgs,
-    ) -> CommandResult {
-        let player = sender.as_player().ok_or(CommandError::InvalidRequirement)?;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let player = context.source.as_player().ok_or_else(|| {
+            DISPATCHER_PARSE_EXCEPTION.create_without_context(TextComponent::text(
+                "Only players can execute this command",
+            ))
+        })?;
         let entity = player.get_entity();
         let pos = entity.block_pos.load();
         let world = entity.world.load();
@@ -125,10 +123,14 @@ impl CommandExecutor for StopExecutor {
             for p in players {
                 p.remove_bossbar(bossbar_uuid);
             }
-            sender.send_message(TextComponent::text("Stopped raid"));
+            context
+                .source
+                .send_feedback(TextComponent::text("Stopped raid"), true);
             Ok(1)
         } else {
-            sender.send_message(TextComponent::text("No raid here"));
+            context
+                .source
+                .send_feedback(TextComponent::text("No raid here"), false);
             Ok(0)
         }
     }
@@ -137,13 +139,12 @@ impl CommandExecutor for StopExecutor {
 struct CheckExecutor;
 
 impl CommandExecutor for CheckExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        _server: &Server,
-        _args: &ConsumedArgs,
-    ) -> CommandResult {
-        let player = sender.as_player().ok_or(CommandError::InvalidRequirement)?;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let player = context.source.as_player().ok_or_else(|| {
+            DISPATCHER_PARSE_EXCEPTION.create_without_context(TextComponent::text(
+                "Only players can execute this command",
+            ))
+        })?;
         let entity = player.get_entity();
         let pos = entity.block_pos.load();
         let world = entity.world.load();
@@ -168,12 +169,18 @@ impl CommandExecutor for CheckExecutor {
         };
         info.map_or_else(
             || {
-                sender.send_message(TextComponent::text("Found no started raids"));
+                context
+                    .source
+                    .send_feedback(TextComponent::text("Found no started raids"), false);
                 Ok(0)
             },
             |msg| {
-                sender.send_message(TextComponent::text("Found a started raid!"));
-                sender.send_message(TextComponent::text(msg));
+                context
+                    .source
+                    .send_feedback(TextComponent::text("Found a started raid!"), false);
+                context
+                    .source
+                    .send_feedback(TextComponent::text(msg), false);
                 Ok(1)
             },
         )
@@ -183,13 +190,12 @@ impl CommandExecutor for CheckExecutor {
 struct SoundExecutor;
 
 impl CommandExecutor for SoundExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        _server: &Server,
-        _args: &ConsumedArgs,
-    ) -> CommandResult {
-        let player = sender.as_player().ok_or(CommandError::InvalidRequirement)?;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let player = context.source.as_player().ok_or_else(|| {
+            DISPATCHER_PARSE_EXCEPTION.create_without_context(TextComponent::text(
+                "Only players can execute this command",
+            ))
+        })?;
         let entity = player.get_entity();
         let pos = entity.pos.load();
         let world = entity.world.load();
@@ -207,13 +213,12 @@ impl CommandExecutor for SoundExecutor {
 struct SpawnLeaderExecutor;
 
 impl CommandExecutor for SpawnLeaderExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        _server: &Server,
-        _args: &ConsumedArgs,
-    ) -> CommandResult {
-        let player = sender.as_player().ok_or(CommandError::InvalidRequirement)?;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let player = context.source.as_player().ok_or_else(|| {
+            DISPATCHER_PARSE_EXCEPTION.create_without_context(TextComponent::text(
+                "Only players can execute this command",
+            ))
+        })?;
         let entity = player.get_entity();
         let pos = entity.pos.load();
         let world = entity.world.load();
@@ -237,7 +242,9 @@ impl CommandExecutor for SpawnLeaderExecutor {
         }
 
         world.spawn_entity(raider_entity);
-        sender.send_message(TextComponent::text("Spawned a raid captain"));
+        context
+            .source
+            .send_feedback(TextComponent::text("Spawned a raid captain"), true);
         Ok(1)
     }
 }
@@ -245,21 +252,17 @@ impl CommandExecutor for SpawnLeaderExecutor {
 struct SetOmenExecutor;
 
 impl CommandExecutor for SetOmenExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        _server: &Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        let player = sender.as_player().ok_or(CommandError::InvalidRequirement)?;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let player = context.source.as_player().ok_or_else(|| {
+            DISPATCHER_PARSE_EXCEPTION.create_without_context(TextComponent::text(
+                "Only players can execute this command",
+            ))
+        })?;
         let entity = player.get_entity();
         let pos = entity.block_pos.load();
         let world = entity.world.load();
 
-        let level = BoundedNumArgumentConsumer::<i32>::find_arg(args, ARG_LEVEL)
-            .ok()
-            .and_then(Result::ok)
-            .unwrap_or(1);
+        let level = IntegerArgumentType::get(context, "level")?;
 
         let res = {
             let mut raids = world
@@ -280,13 +283,18 @@ impl CommandExecutor for SetOmenExecutor {
         };
         match res {
             Ok(before) => {
-                sender.send_message(TextComponent::text(format!(
-                    "Changed village's raid omen level from {before} to {level}"
-                )));
+                context.source.send_feedback(
+                    TextComponent::text(format!(
+                        "Changed village's raid omen level from {before} to {level}"
+                    )),
+                    true,
+                );
                 Ok(1)
             }
             Err(msg) => {
-                sender.send_message(TextComponent::text(msg));
+                context
+                    .source
+                    .send_feedback(TextComponent::text(msg), false);
                 Ok(0)
             }
         }
@@ -296,13 +304,12 @@ impl CommandExecutor for SetOmenExecutor {
 struct GlowExecutor;
 
 impl CommandExecutor for GlowExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        _server: &Server,
-        _args: &ConsumedArgs,
-    ) -> CommandResult {
-        let player = sender.as_player().ok_or(CommandError::InvalidRequirement)?;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let player = context.source.as_player().ok_or_else(|| {
+            DISPATCHER_PARSE_EXCEPTION.create_without_context(TextComponent::text(
+                "Only players can execute this command",
+            ))
+        })?;
         let entity = player.get_entity();
         let pos = entity.block_pos.load();
         let world = entity.world.load();
@@ -318,7 +325,9 @@ impl CommandExecutor for GlowExecutor {
         };
         raiders.map_or_else(
             || {
-                sender.send_message(TextComponent::text("No raid found here"));
+                context
+                    .source
+                    .send_feedback(TextComponent::text("No raid found here"), false);
                 Ok(0)
             },
             |raider_uuids| {
@@ -344,30 +353,33 @@ impl CommandExecutor for GlowExecutor {
     }
 }
 
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION)
-        .then(
-            literal("start")
-                .execute(StartExecutor {
-                    has_omen_lvl: false,
-                })
-                .then(
-                    argument(
-                        ARG_OMEN_LVL,
-                        BoundedNumArgumentConsumer::<i32>::new().min(0),
-                    )
-                    .execute(StartExecutor { has_omen_lvl: true }),
-                ),
-        )
-        .then(literal("stop").execute(StopExecutor))
-        .then(literal("check").execute(CheckExecutor))
-        .then(literal("sound").execute(SoundExecutor))
-        .then(literal("spawnleader").execute(SpawnLeaderExecutor))
-        .then(
-            literal("setomen").then(
-                argument(ARG_LEVEL, BoundedNumArgumentConsumer::<i32>::new().min(0))
-                    .execute(SetOmenExecutor),
-            ),
-        )
-        .then(literal("glow").execute(GlowExecutor))
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Three),
+    ));
+
+    dispatcher.register(
+        command("raid", DESCRIPTION)
+            .requires(PERMISSION)
+            .then(
+                literal("start")
+                    .executes(StartExecutor {
+                        has_omen_lvl: false,
+                    })
+                    .then(
+                        argument("omenlvl", IntegerArgumentType::with_min(0))
+                            .executes(StartExecutor { has_omen_lvl: true }),
+                    ),
+            )
+            .then(literal("stop").executes(StopExecutor))
+            .then(literal("check").executes(CheckExecutor))
+            .then(literal("sound").executes(SoundExecutor))
+            .then(literal("spawnleader").executes(SpawnLeaderExecutor))
+            .then(literal("setomen").then(
+                argument("level", IntegerArgumentType::with_min(0)).executes(SetOmenExecutor),
+            ))
+            .then(literal("glow").executes(GlowExecutor)),
+    );
 }

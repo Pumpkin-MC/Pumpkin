@@ -37,6 +37,46 @@ pub struct ItemEntity {
     health: AtomicF32,
     never_despawn: AtomicBool,
     never_pickup: AtomicBool,
+    merge_reserved: AtomicBool,
+}
+
+struct ItemMergeReservation<'a> {
+    low: &'a AtomicBool,
+    high: &'a AtomicBool,
+}
+
+impl<'a> ItemMergeReservation<'a> {
+    fn acquire(low: &'a ItemEntity, high: &'a ItemEntity) -> Option<Self> {
+        if std::ptr::eq(low, high)
+            || low
+                .merge_reserved
+                .compare_exchange(false, true, AcqRel, Ordering::Acquire)
+                .is_err()
+        {
+            return None;
+        }
+
+        if high
+            .merge_reserved
+            .compare_exchange(false, true, AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            low.merge_reserved.store(false, Ordering::Release);
+            return None;
+        }
+
+        Some(Self {
+            low: &low.merge_reserved,
+            high: &high.merge_reserved,
+        })
+    }
+}
+
+impl Drop for ItemMergeReservation<'_> {
+    fn drop(&mut self) {
+        self.high.store(false, Ordering::Release);
+        self.low.store(false, Ordering::Release);
+    }
 }
 
 const ITEM_UPDATE_INTERVAL: u32 = 20;
@@ -65,6 +105,7 @@ impl ItemEntity {
             health: AtomicF32::new(5.0),
             never_despawn: AtomicBool::new(false),
             never_pickup: AtomicBool::new(false),
+            merge_reserved: AtomicBool::new(false),
         }
     }
 
@@ -92,6 +133,7 @@ impl ItemEntity {
             health: AtomicF32::new(5.0),
             never_despawn: AtomicBool::new(false),
             never_pickup: AtomicBool::new(false),
+            merge_reserved: AtomicBool::new(false),
         }
     }
 
@@ -106,6 +148,7 @@ impl ItemEntity {
             health: AtomicF32::new(5.0),
             never_despawn: AtomicBool::new(false),
             never_pickup: AtomicBool::new(false),
+            merge_reserved: AtomicBool::new(false),
         }
     }
 
@@ -168,6 +211,7 @@ impl ItemEntity {
         }
     }
 
+    #[expect(clippy::too_many_lines)]
     fn try_merge_with(&self, other: &Self) {
         // Always lock in entity_id order to prevent deadlock when two
         // items try to merge with each other concurrently.
@@ -176,6 +220,62 @@ impl ItemEntity {
         } else {
             (other, self)
         };
+        let Some(_reservation) = ItemMergeReservation::acquire(low, high) else {
+            return;
+        };
+
+        let (expected_low, expected_high, target_is_self) = {
+            let low_stack = low
+                .item_stack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let high_stack = high
+                .item_stack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let (self_stack, other_stack) = if self.entity.entity_id < other.entity.entity_id {
+                (&*low_stack, &*high_stack)
+            } else {
+                (&*high_stack, &*low_stack)
+            };
+
+            if !self_stack.are_equal(other_stack)
+                || self_stack.item_count + other_stack.item_count > self_stack.get_max_stack_size()
+            {
+                return;
+            }
+
+            (
+                low_stack.clone(),
+                high_stack.clone(),
+                other_stack.item_count < self_stack.item_count,
+            )
+        };
+        let (target, source) = if target_is_self {
+            (self, other)
+        } else {
+            (other, self)
+        };
+        if self.entity.removed.load(Ordering::SeqCst) || other.entity.removed.load(Ordering::SeqCst)
+        {
+            return;
+        }
+
+        let mut event = crate::plugin::api::events::entity::item_merge::ItemMergeEvent {
+            entity_id: target.entity.entity_id,
+            target_id: source.entity.entity_id,
+            cancelled: false,
+        };
+        let server = self.entity.world.load().server.upgrade();
+        if let Some(server) = server {
+            server.plugin_manager.fire_blocking(&server, &mut event);
+        }
+        if event.cancelled
+            || self.entity.removed.load(Ordering::SeqCst)
+            || other.entity.removed.load(Ordering::SeqCst)
+        {
+            return;
+        }
 
         let low_stack = low
             .item_stack
@@ -185,37 +285,32 @@ impl ItemEntity {
             .item_stack
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if low_stack.uid != expected_low.uid
+            || !low_stack.are_equal(&expected_low)
+            || high_stack.uid != expected_high.uid
+            || !high_stack.are_equal(&expected_high)
+            || self.entity.removed.load(Ordering::SeqCst)
+            || other.entity.removed.load(Ordering::SeqCst)
+        {
+            return;
+        }
 
         let (self_stack, other_stack) = if self.entity.entity_id < other.entity.entity_id {
             (low_stack, high_stack)
         } else {
             (high_stack, low_stack)
         };
-
         if !self_stack.are_equal(&other_stack)
             || self_stack.item_count + other_stack.item_count > self_stack.get_max_stack_size()
+            || (other_stack.item_count < self_stack.item_count) != target_is_self
         {
             return;
         }
-
-        let (target, mut stack1, source, mut stack2) =
-            if other_stack.item_count < self_stack.item_count {
-                (self, self_stack, other, other_stack)
-            } else {
-                (other, other_stack, self, self_stack)
-            };
-
-        let mut event = crate::plugin::api::events::entity::item_merge::ItemMergeEvent {
-            entity_id: target.entity.entity_id,
-            target_id: source.entity.entity_id,
-            cancelled: false,
+        let (mut stack1, mut stack2) = if target_is_self {
+            (self_stack, other_stack)
+        } else {
+            (other_stack, self_stack)
         };
-        if let Some(server) = self.entity.world.load().server.upgrade() {
-            server.plugin_manager.fire_blocking(&server, &mut event);
-        }
-        if event.cancelled {
-            return;
-        }
 
         // Vanilla code adds a .min(64). Not needed with Vanilla item data
 
@@ -465,17 +560,14 @@ impl EntityBase for ItemEntity {
     }
 
     fn init_data_tracker(&self) {
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::item::ITEM,
-                &ItemStackSerializer::from(
-                    self.item_stack
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .clone(),
-                ),
-            )],
-            None,
+        self.entity.set_synced_data(
+            pumpkin_data::tracked_data::item::ITEM,
+            ItemStackSerializer::from(
+                self.item_stack
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone(),
+            ),
         );
     }
 

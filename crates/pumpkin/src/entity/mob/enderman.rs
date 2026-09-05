@@ -19,10 +19,7 @@ use pumpkin_data::{
     tag::Taggable,
 };
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::{
-    codec::var_int::VarInt,
-    java::client::play::{CEntityPositionSync, Metadata},
-};
+use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use rand::RngExt;
 
@@ -178,38 +175,31 @@ impl EndermanEntity {
         let block_x = x.floor() as i32;
         let mut block_y = target_y.floor() as i32;
         let block_z = z.floor() as i32;
-        let mut found_ground = false;
-        loop {
+        let ground_pos = loop {
             let below_pos = BlockPos::new(block_x, block_y - 1, block_z);
             let below_state = world.get_block_state(&below_pos);
             if below_state.is_solid() {
-                found_ground = true;
-                break;
+                break Some(below_pos);
             }
             if block_y <= world.dimension.min_y {
-                break;
+                break None;
             }
             block_y -= 1;
             target_y = block_y as f64;
-        }
+        };
+        let Some(ground_pos) = ground_pos else {
+            return false;
+        };
 
-        if !found_ground {
+        if world
+            .get_fluid(&ground_pos)
+            .has_tag(&tag::Fluid::MINECRAFT_WATER)
+        {
             return false;
         }
 
-        let dest_pos = BlockPos::new(block_x, block_y, block_z);
-        let dest_fluid = world.get_fluid(&dest_pos);
-        if dest_fluid.has_tag(&tag::Fluid::MINECRAFT_WATER) {
-            return false;
-        }
-
-        let half_width = 0.3;
-        let height = 2.9;
-        let bb = BoundingBox::new(
-            Vector3::new(x - half_width, target_y, z - half_width),
-            Vector3::new(x + half_width, target_y + height, z + half_width),
-        );
-        if !world.is_space_empty(bb) {
+        let bb = BoundingBox::new_from_pos(x, target_y, z, &entity.entity_dimension.load());
+        if !world.is_space_empty(bb) || world.contains_any_liquid(bb) {
             return false;
         }
 
@@ -239,19 +229,7 @@ impl EndermanEntity {
             }
         }
 
-        entity.set_pos(new_pos);
-        let chunk_pos = entity.chunk_pos.load();
-        world.broadcast_to_chunk(
-            chunk_pos,
-            &CEntityPositionSync::new(
-                entity.entity_id.into(),
-                new_pos,
-                Vector3::new(0.0, 0.0, 0.0),
-                entity.yaw.load(),
-                entity.pitch.load(),
-                entity.on_ground.load(Ordering::Relaxed),
-            ),
-        );
+        entity.teleport(new_pos, None, None, &world);
 
         self.mob_entity
             .navigator
@@ -312,13 +290,10 @@ impl EndermanEntity {
 
     pub fn set_angry(&self, angry: bool) {
         self.angry.store(angry, Ordering::Relaxed);
-        self.mob_entity.living_entity.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::enderman::CREEPY,
-                angry,
-            )],
-            None,
-        );
+        self.mob_entity
+            .living_entity
+            .entity
+            .set_synced_data(pumpkin_data::tracked_data::enderman::CREEPY, angry);
     }
 
     pub fn is_angry(&self) -> bool {
@@ -327,25 +302,19 @@ impl EndermanEntity {
 
     pub fn set_provoked(&self, provoked: bool) {
         self.provoked.store(provoked, Ordering::Relaxed);
-        self.mob_entity.living_entity.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::enderman::STARED_AT,
-                provoked,
-            )],
-            None,
-        );
+        self.mob_entity
+            .living_entity
+            .entity
+            .set_synced_data(pumpkin_data::tracked_data::enderman::STARED_AT, provoked);
     }
 
     pub fn set_carried_block(&self, block_state: Option<BlockStateId>) {
         self.carried_block.store(block_state);
         let value = block_state.map_or(VarInt(0), |id| VarInt(id.as_u16() as i32));
-        self.mob_entity.living_entity.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::enderman::CARRY_STATE,
-                value,
-            )],
-            None,
-        );
+        self.mob_entity
+            .living_entity
+            .entity
+            .set_synced_data(pumpkin_data::tracked_data::enderman::CARRY_STATE, value);
     }
 
     pub fn get_carried_block(&self) -> Option<BlockStateId> {

@@ -1,547 +1,452 @@
 use pumpkin_data::translation;
-use pumpkin_util::{math::vector2::Vector2, text::TextComponent};
+use pumpkin_util::PermissionLvl;
+use pumpkin_util::math::vector2::Vector2;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
+use pumpkin_util::text::TextComponent;
 
-use crate::command::{
-    CommandError, CommandExecutor, CommandResult, CommandSender,
-    args::{
-        ConsumedArgs, FindArgDefaultName, bounded_num::BoundedNumArgumentConsumer,
-        position_2d::Position2DArgumentConsumer,
-    },
-    tree::{
-        CommandTree,
-        builder::{argument_default_name, literal},
-    },
-};
+use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
+use crate::command::argument_types::coordinates::vec2::Vec2ArgumentType;
+use crate::command::argument_types::core::double::DoubleArgumentType;
+use crate::command::argument_types::core::float::FloatArgumentType;
+use crate::command::argument_types::core::integer::IntegerArgumentType;
+use crate::command::argument_types::time::TimeArgumentType;
+use crate::command::context::command_context::CommandContext;
+use crate::command::context::command_source::CommandSource;
+use crate::command::errors::command_syntax_error::CommandSyntaxError;
+use crate::command::errors::error_types::CommandErrorType;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
 
-const NAMES: [&str; 1] = ["worldborder"];
+const DESCRIPTION: &str = "Manages the world border.";
+const PERMISSION: &str = "minecraft:command.worldborder";
 
-const DESCRIPTION: &str = "Worldborder command.";
+const ERROR_SAME_CENTER: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMANDS_WORLDBORDER_CENTER_FAILED,
+    translation::java::COMMANDS_WORLDBORDER_CENTER_FAILED,
+);
+const ERROR_SAME_SIZE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMANDS_WORLDBORDER_SET_FAILED_NOCHANGE,
+    translation::java::COMMANDS_WORLDBORDER_SET_FAILED_NOCHANGE,
+);
+const ERROR_TOO_SMALL: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMANDS_WORLDBORDER_SET_FAILED_SMALL,
+    translation::java::COMMANDS_WORLDBORDER_SET_FAILED_SMALL,
+);
+const ERROR_TOO_BIG: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMANDS_WORLDBORDER_SET_FAILED_BIG,
+    translation::java::COMMANDS_WORLDBORDER_SET_FAILED_BIG,
+);
+const ERROR_TOO_FAR_OUT: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMANDS_WORLDBORDER_SET_FAILED_FAR,
+    translation::java::COMMANDS_WORLDBORDER_SET_FAILED_FAR,
+);
+const ERROR_SAME_WARNING_TIME: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMANDS_WORLDBORDER_WARNING_TIME_FAILED,
+    translation::java::COMMANDS_WORLDBORDER_WARNING_TIME_FAILED,
+);
+const ERROR_SAME_WARNING_DISTANCE: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMANDS_WORLDBORDER_WARNING_DISTANCE_FAILED,
+    translation::java::COMMANDS_WORLDBORDER_WARNING_DISTANCE_FAILED,
+);
+const ERROR_SAME_DAMAGE_BUFFER: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMANDS_WORLDBORDER_DAMAGE_BUFFER_FAILED,
+    translation::java::COMMANDS_WORLDBORDER_DAMAGE_BUFFER_FAILED,
+);
+const ERROR_SAME_DAMAGE_AMOUNT: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMANDS_WORLDBORDER_DAMAGE_AMOUNT_FAILED,
+    translation::java::COMMANDS_WORLDBORDER_DAMAGE_AMOUNT_FAILED,
+);
 
-const fn distance_consumer() -> BoundedNumArgumentConsumer<f64> {
-    BoundedNumArgumentConsumer::new().min(0.0).name("distance")
-}
-
-const fn time_consumer() -> BoundedNumArgumentConsumer<i32> {
-    BoundedNumArgumentConsumer::new().min(0).name("time")
-}
-
-const fn damage_per_block_consumer() -> BoundedNumArgumentConsumer<f32> {
-    BoundedNumArgumentConsumer::new()
-        .min(0.0)
-        .name("damage_per_block")
-}
-
-const fn damage_buffer_consumer() -> BoundedNumArgumentConsumer<f32> {
-    BoundedNumArgumentConsumer::new().min(0.0).name("buffer")
-}
-
-const fn warning_distance_consumer() -> BoundedNumArgumentConsumer<i32> {
-    BoundedNumArgumentConsumer::new().min(0).name("distance")
-}
-
-struct GetExecutor;
-
-impl CommandExecutor for GetExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        _args: &ConsumedArgs,
-    ) -> CommandResult {
-        // TODO: Maybe ask player for world, or get the current world
-        let worlds = server.worlds.load();
-        let world = worlds.first().ok_or(CommandError::InvalidRequirement)?;
-        let diameter = world
+fn set_size(
+    source: &CommandSource,
+    distance: f64,
+    time_in_ticks: i64,
+) -> Result<i32, CommandSyntaxError> {
+    let world = source.world().clone();
+    let (current, diff) = {
+        let mut border = world
             .worldborder
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .new_diameter
-            .round() as i32;
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let current = border.new_diameter;
 
-        sender.send_message(pumpkin_macros::translate_cross!(
-            translation::java::COMMANDS_WORLDBORDER_GET,
-            translation::bedrock::COMMANDS_WORLDBORDER_GET_SUCCESS,
-            TextComponent::text(diameter.to_string())
-        ));
-
-        Ok(diameter)
-    }
-}
-
-struct SetExecutor;
-
-impl CommandExecutor for SetExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        // TODO: Maybe ask player for world, or get the current world
-        let worlds = server.worlds.load();
-        let world = worlds.first().ok_or(CommandError::InvalidRequirement)?;
-        let distance = distance_consumer().find_arg_default_name(args)??;
-
-        let (d, diff) = {
-            let mut border = world
-                .worldborder
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-            if (distance - border.new_diameter).abs() < f64::EPSILON {
-                return Err(CommandError::CommandFailed(
-                    pumpkin_macros::translate_cross!(
-                        translation::java::COMMANDS_WORLDBORDER_SET_FAILED_NOCHANGE,
-                        translation::bedrock::COMMANDS_WORLDBORDER_SET_SUCCESS
-                    ),
-                ));
-            }
-
-            let d = border.new_diameter;
-            border.set_diameter(world, distance, None);
-            (d, (distance - d) as i32)
-        };
-
-        sender.send_message(pumpkin_macros::translate_cross!(
-            translation::java::COMMANDS_WORLDBORDER_SET_IMMEDIATE,
-            translation::bedrock::COMMANDS_WORLDBORDER_SET_SUCCESS,
-            TextComponent::text(format!("{distance:.1}")),
-            TextComponent::text(format!("{d:.1}"))
-        ));
-
-        Ok(diff)
-    }
-}
-
-struct SetTimeExecutor;
-
-impl CommandExecutor for SetTimeExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        // TODO: Maybe ask player for world, or get the current world
-        let worlds = server.worlds.load();
-        let world = worlds.first().ok_or(CommandError::InvalidRequirement)?;
-        let distance = distance_consumer().find_arg_default_name(args)??;
-        let time = time_consumer().find_arg_default_name(args)??;
-
-        let (old_dist, ordering, diff) = {
-            let mut border = world
-                .worldborder
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-            let old_dist = format!("{:.1}", border.new_diameter);
-            let ordering = distance.total_cmp(&border.new_diameter);
-            if ordering == std::cmp::Ordering::Equal {
-                return Err(CommandError::CommandFailed(
-                    pumpkin_macros::translate_cross!(
-                        translation::java::COMMANDS_WORLDBORDER_SET_FAILED_NOCHANGE,
-                        translation::bedrock::COMMANDS_WORLDBORDER_SET_SUCCESS
-                    ),
-                ));
-            }
-            let d = border.new_diameter;
-            border.set_diameter(world, distance, Some(i64::from(time) * 1000));
-            (old_dist, ordering, (distance - d) as i32)
-        };
-
-        let dist = format!("{distance:.1}");
-        match ordering {
-            std::cmp::Ordering::Less => {
-                sender.send_message(pumpkin_macros::translate_cross!(
-                    translation::java::COMMANDS_WORLDBORDER_SET_SHRINK,
-                    translation::bedrock::COMMANDS_WORLDBORDER_SETSLOWLY_SHRINK_SUCCESS,
-                    TextComponent::text(dist),
-                    TextComponent::text(old_dist),
-                    TextComponent::text(time.to_string())
-                ));
-            }
-            std::cmp::Ordering::Greater => {
-                sender.send_message(pumpkin_macros::translate_cross!(
-                    translation::java::COMMANDS_WORLDBORDER_SET_GROW,
-                    translation::bedrock::COMMANDS_WORLDBORDER_SETSLOWLY_GROW_SUCCESS,
-                    TextComponent::text(dist),
-                    TextComponent::text(old_dist),
-                    TextComponent::text(time.to_string())
-                ));
-            }
-            std::cmp::Ordering::Equal => {}
+        if (current - distance).abs() < f64::EPSILON {
+            return Err(ERROR_SAME_SIZE.create_without_context());
+        }
+        if distance < 1.0 {
+            return Err(ERROR_TOO_SMALL.create_without_context());
+        }
+        if distance > 5.999_997e7 {
+            return Err(ERROR_TOO_BIG.create_without_context());
         }
 
-        Ok(diff)
-    }
-}
+        let speed = (time_in_ticks > 0).then(|| time_in_ticks * 50); // ticks to milliseconds
 
-struct AddExecutor;
+        border.set_diameter(&world, distance, speed);
+        (current, (distance - current) as i32)
+    };
 
-impl CommandExecutor for AddExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        // TODO: Maybe ask player for world, or get the current world
-        let worlds = server.worlds.load();
-        let world = worlds.first().ok_or(CommandError::InvalidRequirement)?;
-        let distance_add = distance_consumer().find_arg_default_name(args)??;
-
-        if distance_add == 0.0 {
-            return Err(CommandError::CommandFailed(
-                pumpkin_macros::translate_cross!(
-                    translation::java::COMMANDS_WORLDBORDER_SET_FAILED_NOCHANGE,
-                    translation::bedrock::COMMANDS_WORLDBORDER_SET_SUCCESS
+    let formatted_distance = format!("{distance:.1}");
+    if time_in_ticks > 0 {
+        let seconds_str = format!("{:.2}", time_in_ticks as f64 / 20.0);
+        if distance > current {
+            source.send_feedback(
+                TextComponent::translate_cross(
+                    translation::java::COMMANDS_WORLDBORDER_SET_GROW,
+                    translation::java::COMMANDS_WORLDBORDER_SET_GROW,
+                    [
+                        TextComponent::text(formatted_distance),
+                        TextComponent::text(seconds_str),
+                    ],
                 ),
-            ));
+                true,
+            );
+        } else {
+            source.send_feedback(
+                TextComponent::translate_cross(
+                    translation::java::COMMANDS_WORLDBORDER_SET_SHRINK,
+                    translation::java::COMMANDS_WORLDBORDER_SET_SHRINK,
+                    [
+                        TextComponent::text(formatted_distance),
+                        TextComponent::text(seconds_str),
+                    ],
+                ),
+                true,
+            );
         }
-
-        let (dist, old_dist) = {
-            let mut border = world
-                .worldborder
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-            let distance = border.new_diameter + distance_add;
-            let dist = format!("{distance:.1}");
-            let old_dist = format!("{:.1}", border.new_diameter);
-            border.set_diameter(world, distance, None);
-            (dist, old_dist)
-        };
-
-        sender.send_message(pumpkin_macros::translate_cross!(
-            translation::java::COMMANDS_WORLDBORDER_SET_IMMEDIATE,
-            translation::bedrock::COMMANDS_WORLDBORDER_SET_SUCCESS,
-            TextComponent::text(dist),
-            TextComponent::text(old_dist)
-        ));
-        Ok(distance_add as i32)
+    } else {
+        source.send_feedback(
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_WORLDBORDER_SET_IMMEDIATE,
+                translation::java::COMMANDS_WORLDBORDER_SET_IMMEDIATE,
+                [TextComponent::text(formatted_distance)],
+            ),
+            true,
+        );
     }
+
+    Ok(diff)
 }
 
-struct AddTimeExecutor;
+fn set_center(source: &CommandSource, center: Vector2<f64>) -> Result<i32, CommandSyntaxError> {
+    let world = source.world().clone();
+    let mut border = world
+        .worldborder
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-impl CommandExecutor for AddTimeExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        // TODO: Maybe ask player for world, or get the current world
-        let worlds = server.worlds.load();
-        let world = worlds.first().ok_or(CommandError::InvalidRequirement)?;
-        let distance_add = distance_consumer().find_arg_default_name(args)??;
-        let time = time_consumer().find_arg_default_name(args)??;
+    if (border.center_x - center.x).abs() < f64::EPSILON
+        && (border.center_z - center.y).abs() < f64::EPSILON
+    {
+        return Err(ERROR_SAME_CENTER.create_without_context());
+    }
 
-        let (distance, old_dist, ordering) = {
-            let mut border = world
-                .worldborder
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if center.x.abs() > 2.999_998_4e7 || center.y.abs() > 2.999_998_4e7 {
+        return Err(ERROR_TOO_FAR_OUT.create_without_context());
+    }
 
-            let distance = distance_add + border.new_diameter;
-            let old_dist = format!("{:.1}", border.new_diameter);
-            let ordering = distance.total_cmp(&border.new_diameter);
-            if ordering == std::cmp::Ordering::Equal {
-                return Err(CommandError::CommandFailed(
-                    pumpkin_macros::translate_cross!(
-                        translation::java::COMMANDS_WORLDBORDER_SET_FAILED_NOCHANGE,
-                        translation::bedrock::COMMANDS_WORLDBORDER_SET_SUCCESS
-                    ),
-                ));
-            }
-            border.set_diameter(world, distance, Some(i64::from(time) * 1000));
-            (distance, old_dist, ordering)
+    border.set_center(&world, center.x, center.y);
+
+    source.send_feedback(
+        TextComponent::translate_cross(
+            translation::java::COMMANDS_WORLDBORDER_CENTER_SUCCESS,
+            translation::java::COMMANDS_WORLDBORDER_CENTER_SUCCESS,
+            [
+                TextComponent::text(format!("{:.2}", center.x)),
+                TextComponent::text(format!("{:.2}", center.y)),
+            ],
+        ),
+        true,
+    );
+
+    Ok(0)
+}
+
+#[allow(clippy::unnecessary_wraps)]
+fn get_size(source: &CommandSource) -> Result<i32, CommandSyntaxError> {
+    let world = source.world().clone();
+    let size = world
+        .worldborder
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .new_diameter;
+
+    source.send_feedback(
+        TextComponent::translate_cross(
+            translation::java::COMMANDS_WORLDBORDER_GET,
+            translation::java::COMMANDS_WORLDBORDER_GET,
+            [TextComponent::text(format!("{size:.0}"))],
+        ),
+        false,
+    );
+
+    Ok((size + 0.5).floor() as i32)
+}
+
+fn set_damage_amount(
+    source: &CommandSource,
+    damage_per_block: f32,
+) -> Result<i32, CommandSyntaxError> {
+    let world = source.world().clone();
+    let mut border = world
+        .worldborder
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+    if (border.damage_per_block - damage_per_block).abs() < f32::EPSILON {
+        return Err(ERROR_SAME_DAMAGE_AMOUNT.create_without_context());
+    }
+
+    border.set_damage_per_block(damage_per_block);
+
+    source.send_feedback(
+        TextComponent::translate_cross(
+            translation::java::COMMANDS_WORLDBORDER_DAMAGE_AMOUNT_SUCCESS,
+            translation::java::COMMANDS_WORLDBORDER_DAMAGE_AMOUNT_SUCCESS,
+            [TextComponent::text(format!("{damage_per_block:.2}"))],
+        ),
+        true,
+    );
+
+    Ok(damage_per_block as i32)
+}
+
+fn set_damage_buffer(source: &CommandSource, distance: f32) -> Result<i32, CommandSyntaxError> {
+    let world = source.world().clone();
+    let mut border = world
+        .worldborder
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+    if (border.buffer - distance).abs() < f32::EPSILON {
+        return Err(ERROR_SAME_DAMAGE_BUFFER.create_without_context());
+    }
+
+    border.set_damage_buffer(distance);
+
+    source.send_feedback(
+        TextComponent::translate_cross(
+            translation::java::COMMANDS_WORLDBORDER_DAMAGE_BUFFER_SUCCESS,
+            translation::java::COMMANDS_WORLDBORDER_DAMAGE_BUFFER_SUCCESS,
+            [TextComponent::text(format!("{distance:.2}"))],
+        ),
+        true,
+    );
+
+    Ok(distance as i32)
+}
+
+fn set_warning_distance(source: &CommandSource, distance: i32) -> Result<i32, CommandSyntaxError> {
+    let world = source.world().clone();
+    let mut border = world
+        .worldborder
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+    if border.warning_blocks == distance {
+        return Err(ERROR_SAME_WARNING_DISTANCE.create_without_context());
+    }
+
+    border.set_warning_distance(&world, distance);
+
+    source.send_feedback(
+        TextComponent::translate_cross(
+            translation::java::COMMANDS_WORLDBORDER_WARNING_DISTANCE_SUCCESS,
+            translation::java::COMMANDS_WORLDBORDER_WARNING_DISTANCE_SUCCESS,
+            [TextComponent::text(distance.to_string())],
+        ),
+        true,
+    );
+
+    Ok(distance)
+}
+
+fn set_warning_time(source: &CommandSource, ticks: i32) -> Result<i32, CommandSyntaxError> {
+    let world = source.world().clone();
+    let mut border = world
+        .worldborder
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+    if border.warning_time == ticks {
+        return Err(ERROR_SAME_WARNING_TIME.create_without_context());
+    }
+
+    border.set_warning_delay(&world, ticks);
+
+    source.send_feedback(
+        TextComponent::translate_cross(
+            translation::java::COMMANDS_WORLDBORDER_WARNING_TIME_SUCCESS,
+            translation::java::COMMANDS_WORLDBORDER_WARNING_TIME_SUCCESS,
+            [TextComponent::text(format!("{:.2}", ticks as f64 / 20.0))],
+        ),
+        true,
+    );
+
+    Ok(ticks)
+}
+
+struct SetSizeExecutor {
+    is_add: bool,
+    has_time: bool,
+}
+
+impl CommandExecutor for SetSizeExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let distance = DoubleArgumentType::get(context, "distance")?;
+        let time = if self.has_time {
+            i64::from(TimeArgumentType::get(context, "time")?)
+        } else {
+            0
         };
 
-        let dist = format!("{distance:.1}");
-        match ordering {
-            std::cmp::Ordering::Less => {
-                sender.send_message(pumpkin_macros::translate_cross!(
-                    translation::java::COMMANDS_WORLDBORDER_SET_SHRINK,
-                    translation::bedrock::COMMANDS_WORLDBORDER_SETSLOWLY_SHRINK_SUCCESS,
-                    TextComponent::text(dist),
-                    TextComponent::text(old_dist),
-                    TextComponent::text(time.to_string())
-                ));
-            }
-            std::cmp::Ordering::Greater => {
-                sender.send_message(pumpkin_macros::translate_cross!(
-                    translation::java::COMMANDS_WORLDBORDER_SET_GROW,
-                    translation::bedrock::COMMANDS_WORLDBORDER_SETSLOWLY_GROW_SUCCESS,
-                    TextComponent::text(dist),
-                    TextComponent::text(old_dist),
-                    TextComponent::text(time.to_string())
-                ));
-            }
-            std::cmp::Ordering::Equal => {}
-        }
+        let target_distance = if self.is_add {
+            let current = context
+                .source
+                .world()
+                .worldborder
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .new_diameter;
+            current + distance
+        } else {
+            distance
+        };
 
-        Ok(distance_add as i32)
+        set_size(&context.source, target_distance, time)
     }
 }
 
 struct CenterExecutor;
 
 impl CommandExecutor for CenterExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        // TODO: Maybe ask player for world, or get the current world
-        let worlds = server.worlds.load();
-        let world = worlds.first().ok_or(CommandError::InvalidRequirement)?;
-        let Vector2 { x, y } = Position2DArgumentConsumer.find_arg_default_name(args)?;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let center = Vec2ArgumentType::get_vector2(context, "pos")?;
+        set_center(&context.source, center)
+    }
+}
 
-        world
-            .worldborder
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .set_center(world, x, y);
+struct GetSizeExecutor;
 
-        sender.send_message(pumpkin_macros::translate_cross!(
-            translation::java::COMMANDS_WORLDBORDER_CENTER_SUCCESS,
-            translation::bedrock::COMMANDS_WORLDBORDER_CENTER_SUCCESS,
-            TextComponent::text(format!("{x:.2}")),
-            TextComponent::text(format!("{y:.2}"))
-        ));
-
-        Ok(0)
+impl CommandExecutor for GetSizeExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        get_size(&context.source)
     }
 }
 
 struct DamageAmountExecutor;
 
 impl CommandExecutor for DamageAmountExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        // TODO: Maybe ask player for world, or get the current world
-        let worlds = server.worlds.load();
-        let world = worlds.first().ok_or(CommandError::InvalidRequirement)?;
-        let damage_per_block = damage_per_block_consumer().find_arg_default_name(args)??;
-
-        let old_damage = {
-            let mut border = world
-                .worldborder
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-            if (damage_per_block - border.damage_per_block).abs() < f32::EPSILON {
-                return Err(CommandError::CommandFailed(
-                    pumpkin_macros::translate_cross!(
-                        translation::java::COMMANDS_WORLDBORDER_DAMAGE_AMOUNT_FAILED,
-                        translation::bedrock::COMMANDS_WORLDBORDER_DAMAGE_AMOUNT_SUCCESS
-                    ),
-                ));
-            }
-
-            let old_damage = format!("{:.2}", border.damage_per_block);
-            border.damage_per_block = damage_per_block;
-            old_damage
-        };
-
-        let damage = format!("{damage_per_block:.2}");
-        sender.send_message(pumpkin_macros::translate_cross!(
-            translation::java::COMMANDS_WORLDBORDER_DAMAGE_AMOUNT_SUCCESS,
-            translation::bedrock::COMMANDS_WORLDBORDER_DAMAGE_AMOUNT_SUCCESS,
-            TextComponent::text(damage),
-            TextComponent::text(old_damage)
-        ));
-
-        Ok(damage_per_block as i32)
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let damage = FloatArgumentType::get(context, "damagePerBlock")?;
+        set_damage_amount(&context.source, damage)
     }
 }
 
 struct DamageBufferExecutor;
 
 impl CommandExecutor for DamageBufferExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        // TODO: Maybe ask player for world, or get the current world
-        let worlds = server.worlds.load();
-        let world = worlds.first().ok_or(CommandError::InvalidRequirement)?;
-        let buffer = damage_buffer_consumer().find_arg_default_name(args)??;
-
-        let old_buf = {
-            let mut border = world
-                .worldborder
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-            if (buffer - border.buffer).abs() < f32::EPSILON {
-                return Err(CommandError::CommandFailed(
-                    pumpkin_macros::translate_cross!(
-                        translation::java::COMMANDS_WORLDBORDER_DAMAGE_BUFFER_FAILED,
-                        translation::bedrock::COMMANDS_WORLDBORDER_DAMAGE_BUFFER_SUCCESS
-                    ),
-                ));
-            }
-
-            let old_buf = format!("{:.2}", border.buffer);
-            border.buffer = buffer;
-            old_buf
-        };
-
-        let buf = format!("{buffer:.2}");
-        sender.send_message(pumpkin_macros::translate_cross!(
-            translation::java::COMMANDS_WORLDBORDER_DAMAGE_BUFFER_SUCCESS,
-            translation::bedrock::COMMANDS_WORLDBORDER_DAMAGE_BUFFER_SUCCESS,
-            TextComponent::text(buf),
-            TextComponent::text(old_buf)
-        ));
-
-        Ok(buffer as i32)
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let distance = FloatArgumentType::get(context, "distance")?;
+        set_damage_buffer(&context.source, distance)
     }
 }
 
 struct WarningDistanceExecutor;
 
 impl CommandExecutor for WarningDistanceExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        // TODO: Maybe ask player for world, or get the current world
-        let worlds = server.worlds.load();
-        let world = worlds.first().ok_or(CommandError::InvalidRequirement)?;
-        let distance = warning_distance_consumer().find_arg_default_name(args)??;
-
-        let old_warning = {
-            let mut border = world
-                .worldborder
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-            if distance == border.warning_blocks {
-                return Err(CommandError::CommandFailed(
-                    pumpkin_macros::translate_cross!(
-                        translation::java::COMMANDS_WORLDBORDER_WARNING_DISTANCE_FAILED,
-                        translation::bedrock::COMMANDS_WORLDBORDER_WARNING_DISTANCE_SUCCESS
-                    ),
-                ));
-            }
-
-            let old_warning = border.warning_blocks;
-            border.set_warning_distance(world, distance);
-            old_warning
-        };
-
-        sender.send_message(pumpkin_macros::translate_cross!(
-            translation::java::COMMANDS_WORLDBORDER_WARNING_DISTANCE_SUCCESS,
-            translation::bedrock::COMMANDS_WORLDBORDER_WARNING_DISTANCE_SUCCESS,
-            TextComponent::text(distance.to_string()),
-            TextComponent::text(old_warning.to_string())
-        ));
-
-        Ok(distance)
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let distance = IntegerArgumentType::get(context, "distance")?;
+        set_warning_distance(&context.source, distance)
     }
 }
 
 struct WarningTimeExecutor;
 
 impl CommandExecutor for WarningTimeExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        // TODO: Maybe ask player for world, or get the current world
-        let worlds = server.worlds.load();
-        let world = worlds.first().ok_or(CommandError::InvalidRequirement)?;
-        let time = time_consumer().find_arg_default_name(args)??;
-
-        let old_time = {
-            let mut border = world
-                .worldborder
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-            if time == border.warning_time {
-                return Err(CommandError::CommandFailed(
-                    pumpkin_macros::translate_cross!(
-                        translation::java::COMMANDS_WORLDBORDER_WARNING_TIME_FAILED,
-                        translation::bedrock::COMMANDS_WORLDBORDER_WARNING_TIME_SUCCESS
-                    ),
-                ));
-            }
-
-            let old_time = border.warning_time;
-            border.set_warning_delay(world, time);
-            old_time
-        };
-
-        sender.send_message(pumpkin_macros::translate_cross!(
-            translation::java::COMMANDS_WORLDBORDER_WARNING_TIME_SUCCESS,
-            translation::bedrock::COMMANDS_WORLDBORDER_WARNING_TIME_SUCCESS,
-            TextComponent::text(time.to_string()),
-            TextComponent::text(old_time.to_string())
-        ));
-
-        Ok(time)
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let time = TimeArgumentType::get(context, "time")?;
+        set_warning_time(&context.source, time)
     }
 }
 
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION)
-        .then(
-            literal("add").then(
-                argument_default_name(distance_consumer())
-                    .execute(AddExecutor)
-                    .then(argument_default_name(time_consumer()).execute(AddTimeExecutor)),
-            ),
-        )
-        .then(
-            literal("center")
-                .then(argument_default_name(Position2DArgumentConsumer).execute(CenterExecutor)),
-        )
-        .then(
-            literal("damage")
-                .then(
-                    literal("amount").then(
-                        argument_default_name(damage_per_block_consumer())
-                            .execute(DamageAmountExecutor),
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Two),
+    ));
+
+    dispatcher.register(
+        command("worldborder", DESCRIPTION)
+            .requires(PERMISSION)
+            .then(
+                literal("add").then(
+                    argument(
+                        "distance",
+                        DoubleArgumentType::new(-5.999_997e7, 5.999_997e7),
+                    )
+                    .executes(SetSizeExecutor {
+                        is_add: true,
+                        has_time: false,
+                    })
+                    .then(
+                        argument("time", TimeArgumentType::new(0)).executes(SetSizeExecutor {
+                            is_add: true,
+                            has_time: true,
+                        }),
                     ),
-                )
-                .then(literal("buffer").then(
-                    argument_default_name(damage_buffer_consumer()).execute(DamageBufferExecutor),
-                )),
-        )
-        .then(literal("get").execute(GetExecutor))
-        .then(
-            literal("set").then(
-                argument_default_name(distance_consumer())
-                    .execute(SetExecutor)
-                    .then(argument_default_name(time_consumer()).execute(SetTimeExecutor)),
-            ),
-        )
-        .then(
-            literal("warning")
-                .then(
-                    literal("distance").then(
-                        argument_default_name(warning_distance_consumer())
-                            .execute(WarningDistanceExecutor),
-                    ),
-                )
-                .then(
-                    literal("time")
-                        .then(argument_default_name(time_consumer()).execute(WarningTimeExecutor)),
                 ),
-        )
+            )
+            .then(
+                literal("set").then(
+                    argument(
+                        "distance",
+                        DoubleArgumentType::new(-5.999_997e7, 5.999_997e7),
+                    )
+                    .executes(SetSizeExecutor {
+                        is_add: false,
+                        has_time: false,
+                    })
+                    .then(
+                        argument("time", TimeArgumentType::new(0)).executes(SetSizeExecutor {
+                            is_add: false,
+                            has_time: true,
+                        }),
+                    ),
+                ),
+            )
+            .then(
+                literal("center")
+                    .then(argument("pos", Vec2ArgumentType::Default).executes(CenterExecutor)),
+            )
+            .then(
+                literal("damage")
+                    .then(
+                        literal("amount").then(
+                            argument("damagePerBlock", FloatArgumentType::with_min(0.0))
+                                .executes(DamageAmountExecutor),
+                        ),
+                    )
+                    .then(
+                        literal("buffer").then(
+                            argument("distance", FloatArgumentType::with_min(0.0))
+                                .executes(DamageBufferExecutor),
+                        ),
+                    ),
+            )
+            .then(literal("get").executes(GetSizeExecutor))
+            .then(
+                literal("warning")
+                    .then(
+                        literal("distance").then(
+                            argument("distance", IntegerArgumentType::with_min(0))
+                                .executes(WarningDistanceExecutor),
+                        ),
+                    )
+                    .then(literal("time").then(
+                        argument("time", TimeArgumentType::new(0)).executes(WarningTimeExecutor),
+                    )),
+            ),
+    );
 }

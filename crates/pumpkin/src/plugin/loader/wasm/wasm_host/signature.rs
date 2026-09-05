@@ -182,15 +182,43 @@ pub fn fetch_market_public_key() -> Result<String, String> {
         return Ok(cached_key.clone());
     }
 
-    let mut response = ureq::get(PUMPKIN_MARKET_PUBLIC_KEY_URL)
-        .header("User-Agent", "Pumpkin-MC")
-        .call()
-        .map_err(|e| format!("Failed to fetch public key from market: {e}"))?;
-
-    let body = response
-        .body_mut()
-        .read_to_string()
-        .map_err(|e| format!("Failed to read public key response: {e}"))?;
+    let body = if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        tokio::task::block_in_place(|| {
+            handle.block_on(async {
+                let client = pumpkin_util::client_builder()
+                    .user_agent("Pumpkin-MC")
+                    .build()
+                    .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
+                let response = client
+                    .get(PUMPKIN_MARKET_PUBLIC_KEY_URL)
+                    .send()
+                    .await
+                    .map_err(|e| format!("Failed to fetch public key from market: {e}"))?;
+                response
+                    .text()
+                    .await
+                    .map_err(|e| format!("Failed to read public key response: {e}"))
+            })
+        })?
+    } else {
+        tokio::runtime::Runtime::new()
+            .map_err(|e| format!("Failed to create runtime: {e}"))?
+            .block_on(async {
+                let client = pumpkin_util::client_builder()
+                    .user_agent("Pumpkin-MC")
+                    .build()
+                    .map_err(|e| format!("Failed to build HTTP client: {e}"))?;
+                let response = client
+                    .get(PUMPKIN_MARKET_PUBLIC_KEY_URL)
+                    .send()
+                    .await
+                    .map_err(|e| format!("Failed to fetch public key from market: {e}"))?;
+                response
+                    .text()
+                    .await
+                    .map_err(|e| format!("Failed to read public key response: {e}"))
+            })?
+    };
 
     let key = body.trim().trim_matches('"').to_string();
     if key.is_empty() {

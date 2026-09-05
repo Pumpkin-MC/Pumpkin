@@ -1,11 +1,10 @@
 use crate::block::{
-    BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs,
+    BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
+    OnScheduledTickArgs, PathComputationType,
 };
 use crate::world::World;
-use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{BlockDirection, tag};
+use pumpkin_data::{BlockDirection, BlockState, BlockStateId, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
@@ -49,6 +48,10 @@ impl BlockBehaviour for LanternBlock {
                 .break_block(args.position, None, BlockFlags::empty());
         }
     }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
+    }
 }
 
 fn can_place_at(world: &World, position: &BlockPos) -> bool {
@@ -60,7 +63,6 @@ fn can_place_at(world: &World, position: &BlockPos) -> bool {
         let fence_gate_props =
             pumpkin_data::block_properties::OakFenceGateLikeProperties::from_state_id(
                 world.get_block_state_id(&position.down()),
-                world.get_block(&position.down()),
             );
 
         if fence_gate_props.open {

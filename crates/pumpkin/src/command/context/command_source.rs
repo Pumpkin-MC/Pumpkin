@@ -383,6 +383,12 @@ impl CommandSource {
         self.entity.as_ref().and_then(|entity| entity.get_player())
     }
 
+    /// Gets the player as an `Arc<Player>` from the underlying output sender.
+    #[must_use]
+    pub fn as_player(&self) -> Option<Arc<Player>> {
+        self.output.as_player()
+    }
+
     /// Gets the player as a result:
     ///
     /// - If this source actually contains a player, it returns that wrapped in an [`Ok`].
@@ -474,7 +480,15 @@ impl CommandSource {
     /// server (i.e. this is a dummy [`CommandSource`].)
     #[must_use]
     pub fn has_permission(&self, permission: &str) -> bool {
-        self.output.has_permission(self.server(), permission)
+        self.server.as_ref().map_or(
+            matches!(
+                self.output,
+                crate::command::CommandSender::Console
+                    | crate::command::CommandSender::Rcon(_)
+                    | crate::command::CommandSender::Dummy
+            ),
+            |server| self.output.has_permission(server, permission),
+        )
     }
 
     /// Returns whether this source has the permission provided.

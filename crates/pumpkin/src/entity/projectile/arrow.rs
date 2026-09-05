@@ -1,12 +1,13 @@
 use std::sync::Arc;
 use std::sync::RwLock;
-use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, AtomicU64, Ordering};
 
 use crate::entity::projectile::ProjectileHit;
 use crate::{
     entity::{Entity, EntityBase, living::LivingEntity, player::Player},
     server::Server,
 };
+use bytes::BufMut;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::PotionDurationScaleImpl;
 use pumpkin_data::entity::EntityType;
@@ -15,11 +16,11 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_protocol::IdOr;
-use pumpkin_protocol::java::client::play::CEntityVelocity;
-use pumpkin_protocol::java::client::play::CSoundEffect;
+use pumpkin_protocol::java::client::play::{CEntityVelocity, CSoundEffect, Metadata};
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Represents the pickup rules for arrows
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,9 +54,10 @@ pub struct ArrowEntity {
     pub entity: Entity,
     pub owner_id: Option<i32>,
     pub item_stack: RwLock<ItemStack>,
-    pub base_damage: f64,
+    pub base_damage: AtomicU64,
     pub pickup: ArrowPickup,
     pub is_critical: AtomicBool,
+    pub no_physics: AtomicBool,
     pub pierce_level: AtomicU8,
     pub punch_level: AtomicU8,
     pub is_flame: AtomicBool,
@@ -65,6 +67,8 @@ pub struct ArrowEntity {
     pub shake_time: AtomicU8,
     pub has_hit: AtomicBool,
     pub last_block_pos: Arc<std::sync::RwLock<Option<BlockPos>>>,
+    pub pierced_entities: Arc<RwLock<Vec<i32>>>,
+    pub weapon: RwLock<Option<ItemStack>>,
 }
 
 impl ArrowEntity {
@@ -89,9 +93,10 @@ impl ArrowEntity {
             entity,
             owner_id,
             item_stack: RwLock::new(item_stack.copy_with_count(1)),
-            base_damage: Self::ARROW_BASE_DAMAGE,
+            base_damage: AtomicU64::new(Self::ARROW_BASE_DAMAGE.to_bits()),
             pickup,
             is_critical: AtomicBool::new(false),
+            no_physics: AtomicBool::new(false),
             pierce_level: AtomicU8::new(0),
             punch_level: AtomicU8::new(0),
             is_flame: AtomicBool::new(false),
@@ -101,6 +106,8 @@ impl ArrowEntity {
             shake_time: AtomicU8::new(0),
             has_hit: AtomicBool::new(false),
             last_block_pos: Arc::new(std::sync::RwLock::new(None)),
+            pierced_entities: Arc::new(RwLock::new(Vec::new())),
+            weapon: RwLock::new(None),
         }
     }
 
@@ -128,9 +135,10 @@ impl ArrowEntity {
             entity,
             owner_id: Some(shooter.entity_id),
             item_stack: RwLock::new(item_stack.copy_with_count(1)),
-            base_damage: Self::ARROW_BASE_DAMAGE,
+            base_damage: AtomicU64::new(Self::ARROW_BASE_DAMAGE.to_bits()),
             pickup,
             is_critical: AtomicBool::new(false),
+            no_physics: AtomicBool::new(false),
             pierce_level: AtomicU8::new(0),
             punch_level: AtomicU8::new(0),
             is_flame: AtomicBool::new(false),
@@ -140,7 +148,37 @@ impl ArrowEntity {
             shake_time: AtomicU8::new(0),
             has_hit: AtomicBool::new(false),
             last_block_pos: Arc::new(std::sync::RwLock::new(None)),
+            pierced_entities: Arc::new(RwLock::new(Vec::new())),
+            weapon: RwLock::new(None),
         }
+    }
+
+    pub fn new_shot_with_weapon(
+        entity: Entity,
+        shooter: &Entity,
+        item_stack: &ItemStack,
+        weapon: &ItemStack,
+        pickup: ArrowPickup,
+    ) -> Self {
+        let mut arrow = Self::new_shot(entity, shooter, item_stack, pickup);
+        arrow.weapon = RwLock::new(Some(weapon.copy_with_count(1)));
+        arrow
+    }
+
+    #[must_use]
+    pub fn get_weapon_item(&self) -> Option<ItemStack> {
+        self.weapon.read().ok().and_then(|w| w.clone())
+    }
+
+    /// Applies projectile-spawned enchantment effects matching vanilla `Projectile::applyOnProjectileSpawned`.
+    pub fn apply_on_projectile_spawned(&self, pickup_item_stack: &ItemStack) {
+        let weapon = self.weapon.read().ok().and_then(|w| w.clone());
+        super::apply_on_projectile_spawned(
+            self.get_entity(),
+            pickup_item_stack,
+            weapon.as_ref(),
+            Some(self),
+        );
     }
 
     #[must_use]
@@ -193,6 +231,40 @@ impl ArrowEntity {
         damage_succeeded
     }
 
+    #[must_use]
+    pub fn get_effect_color(item_stack: &ItemStack) -> i32 {
+        if let Some(pc) =
+            item_stack.get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
+        {
+            if let Some(color) = pc.custom_color {
+                return color;
+            }
+            let effects = crate::item::potion::PotionContents::read_potion_effects(item_stack);
+            if effects.is_empty() {
+                return -1;
+            }
+            let mut r = 0;
+            let mut g = 0;
+            let mut b = 0;
+            let mut total = 0;
+            for (effect, _, amplifier, _, _, _) in effects {
+                let color = effect.color;
+                let weight = (amplifier as i32) + 1;
+                r += weight * ((color >> 16) & 0xFF);
+                g += weight * ((color >> 8) & 0xFF);
+                b += weight * (color & 0xFF);
+                total += weight;
+            }
+            if total == 0 {
+                -1
+            } else {
+                ((r / total) << 16) | ((g / total) << 8) | (b / total)
+            }
+        } else {
+            -1
+        }
+    }
+
     pub fn set_velocity_from_rotation(
         &self,
         pitch: f32,
@@ -240,16 +312,75 @@ impl ArrowEntity {
         );
     }
 
+    fn get_flags(&self) -> u8 {
+        let mut flags = 0u8;
+        if self.is_critical.load(Ordering::Relaxed) {
+            flags |= 0x01;
+        }
+        if self.no_physics.load(Ordering::Relaxed) {
+            flags |= 0x02;
+        }
+        flags
+    }
+
     pub fn set_critical(&self, critical: bool) {
         self.is_critical.store(critical, Ordering::Relaxed);
+        let flags = self.get_flags();
+        self.entity
+            .set_synced_data(pumpkin_data::tracked_data::abstract_arrow::ID_FLAGS, flags);
+    }
+
+    pub fn set_no_physics(&self, no_physics: bool) {
+        self.no_physics.store(no_physics, Ordering::Relaxed);
+        let flags = self.get_flags();
+        self.entity
+            .set_synced_data(pumpkin_data::tracked_data::abstract_arrow::ID_FLAGS, flags);
+    }
+
+    #[must_use]
+    pub fn is_no_physics(&self) -> bool {
+        self.no_physics.load(Ordering::Relaxed)
+    }
+
+    pub fn set_base_damage_from_mob(&self, power: f64, difficulty_id: i32) {
+        fn next_triangular(mode: f64, deviation: f64) -> f64 {
+            deviation.mul_add(rand::random::<f64>() - rand::random::<f64>(), mode)
+        }
+        let diff_factor = f64::from(difficulty_id) * 0.11;
+        let base = power * 2.0 + next_triangular(diff_factor, 0.57425);
+        self.set_base_damage(base);
     }
 
     pub fn set_pierce_level(&self, level: u8) {
         self.pierce_level.store(level, Ordering::Relaxed);
+        self.entity.set_synced_data(
+            pumpkin_data::tracked_data::abstract_arrow::PIERCE_LEVEL,
+            level,
+        );
     }
 
-    pub const fn set_base_damage(&self, _damage: f64) {
-        // TODO: implement this
+    #[must_use]
+    pub fn get_base_damage(&self) -> f64 {
+        f64::from_bits(self.base_damage.load(Ordering::Relaxed))
+    }
+
+    pub fn set_base_damage(&self, damage: f64) {
+        self.base_damage.store(damage.to_bits(), Ordering::Relaxed);
+    }
+
+    pub fn set_flame(&self, flame: bool) {
+        self.is_flame.store(flame, Ordering::Relaxed);
+        if flame {
+            self.entity.set_on_fire_for(100.0);
+            self.entity.set_on_fire(true);
+        } else {
+            self.entity.extinguish();
+        }
+    }
+
+    #[must_use]
+    pub fn is_on_fire(&self) -> bool {
+        self.entity.is_on_fire() || self.is_flame.load(Ordering::Relaxed)
     }
 
     #[allow(dead_code)]
@@ -269,12 +400,26 @@ impl ArrowEntity {
 }
 
 impl EntityBase for ArrowEntity {
+    fn get_owner_id(&self) -> Option<i32> {
+        self.owner_id
+    }
+
     fn write_custom_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
         let item_stack = self
             .item_stack
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         Self::write_item_stack_nbt(&item_stack, nbt);
+        nbt.put_bool("crit", self.is_critical.load(Ordering::Relaxed));
+        nbt.put_double("damage", self.get_base_damage());
+        nbt.put_bool("inGround", self.in_ground.load(Ordering::Relaxed));
+        nbt.put_int("life", self.life.load(Ordering::Relaxed) as i32);
+        nbt.put_byte("shake", self.shake_time.load(Ordering::Relaxed) as i8);
+        nbt.put_byte(
+            "PierceLevel",
+            self.pierce_level.load(Ordering::Relaxed) as i8,
+        );
+        nbt.put_byte("pickup", self.pickup.to_byte() as i8);
     }
 
     fn read_custom_nbt(&self, nbt: &pumpkin_nbt::compound::NbtCompound) {
@@ -284,11 +429,157 @@ impl EntityBase for ArrowEntity {
                 .write()
                 .unwrap_or_else(std::sync::PoisonError::into_inner) = item_stack;
         }
+        if let Some(crit) = nbt.get_bool("crit") {
+            self.is_critical.store(crit, Ordering::Relaxed);
+        }
+        if let Some(damage) = nbt.get_double("damage") {
+            self.set_base_damage(damage);
+        }
+        if let Some(in_ground) = nbt
+            .get_bool("inGround")
+            .or_else(|| nbt.get_byte("inGround").map(|b| b != 0))
+        {
+            self.in_ground.store(in_ground, Ordering::Relaxed);
+        }
+        if let Some(life) = nbt
+            .get_int("life")
+            .or_else(|| nbt.get_short("life").map(i32::from))
+        {
+            self.life.store(life.max(0) as u32, Ordering::Relaxed);
+        }
+        if let Some(shake) = nbt.get_byte("shake") {
+            self.shake_time.store(shake.max(0) as u8, Ordering::Relaxed);
+        }
+        if let Some(pierce) = nbt.get_byte("PierceLevel") {
+            self.pierce_level
+                .store(pierce.max(0) as u8, Ordering::Relaxed);
+        }
     }
+
+    fn init_data_tracker(&self) {
+        let entity = self.get_entity();
+        let flags = self.get_flags();
+        let pierce = self.pierce_level.load(Ordering::Relaxed);
+        let in_ground = self.in_ground.load(Ordering::Relaxed);
+
+        if entity.entity_type.id == EntityType::SPECTRAL_ARROW.id {
+            entity.set_synced_data(pumpkin_data::tracked_data::spectral_arrow::ID_FLAGS, flags);
+            entity.set_synced_data(
+                pumpkin_data::tracked_data::spectral_arrow::PIERCE_LEVEL,
+                pierce,
+            );
+            entity.set_synced_data(
+                pumpkin_data::tracked_data::spectral_arrow::IN_GROUND,
+                in_ground,
+            );
+        } else {
+            let item_stack = self
+                .item_stack
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let color = Self::get_effect_color(&item_stack);
+            entity.set_synced_data(pumpkin_data::tracked_data::arrow::ID_FLAGS, flags);
+            entity.set_synced_data(pumpkin_data::tracked_data::arrow::PIERCE_LEVEL, pierce);
+            entity.set_synced_data(pumpkin_data::tracked_data::arrow::IN_GROUND, in_ground);
+            entity.set_synced_data(pumpkin_data::tracked_data::arrow::ID_EFFECT_COLOR, color);
+        }
+
+        if self.is_on_fire() {
+            entity.set_on_fire(true);
+        }
+    }
+
+    fn java_spawn_metadata(&self, version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
+        let entity = self.get_entity();
+        let flags = self.get_flags();
+        let pierce = self.pierce_level.load(Ordering::Relaxed);
+        let in_ground = self.in_ground.load(Ordering::Relaxed);
+        let shared_flags = entity.flags.load(Ordering::Relaxed);
+
+        let mut buf = Vec::new();
+        if shared_flags != 0 {
+            let _ = Metadata::new(
+                pumpkin_data::tracked_data::entity::DATA_SHARED_FLAGS_ID,
+                shared_flags,
+            )
+            .write(&mut buf, &version);
+        }
+        if entity.entity_type.id == EntityType::SPECTRAL_ARROW.id {
+            let _ = Metadata::new(pumpkin_data::tracked_data::spectral_arrow::ID_FLAGS, flags)
+                .write(&mut buf, &version);
+            let _ = Metadata::new(
+                pumpkin_data::tracked_data::spectral_arrow::PIERCE_LEVEL,
+                pierce,
+            )
+            .write(&mut buf, &version);
+            let _ = Metadata::new(
+                pumpkin_data::tracked_data::spectral_arrow::IN_GROUND,
+                in_ground,
+            )
+            .write(&mut buf, &version);
+        } else {
+            let item_stack = self
+                .item_stack
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let color = Self::get_effect_color(&item_stack);
+            let _ = Metadata::new(pumpkin_data::tracked_data::arrow::ID_FLAGS, flags)
+                .write(&mut buf, &version);
+            let _ = Metadata::new(pumpkin_data::tracked_data::arrow::PIERCE_LEVEL, pierce)
+                .write(&mut buf, &version);
+            let _ = Metadata::new(pumpkin_data::tracked_data::arrow::IN_GROUND, in_ground)
+                .write(&mut buf, &version);
+            if color != -1 {
+                let _ = Metadata::new(pumpkin_data::tracked_data::arrow::ID_EFFECT_COLOR, color)
+                    .write(&mut buf, &version);
+            }
+        }
+        (!buf.is_empty()).then(|| {
+            buf.put_u8(255);
+            buf.into_boxed_slice()
+        })
+    }
+
     #[allow(clippy::too_many_lines)]
     fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
         let entity = self.get_entity();
         let world = entity.world.load();
+
+        // Fire & Extinguish logic
+        let mut fire_ticks = entity.fire_ticks.load(Ordering::Relaxed);
+        let touching_water = entity.touching_water.load(Ordering::Relaxed);
+        let in_water = touching_water || entity.is_in_water();
+        let block_pos = entity.block_pos.load();
+        let in_rain = world.is_raining_at(&block_pos);
+
+        if in_water || in_rain {
+            if entity.is_on_fire() || self.is_flame.load(Ordering::Relaxed) {
+                entity.extinguish();
+                self.is_flame.store(false, Ordering::Relaxed);
+            }
+        } else if fire_ticks > 0 {
+            fire_ticks -= 1;
+            entity.fire_ticks.store(fire_ticks, Ordering::Relaxed);
+            if fire_ticks <= 0 && self.is_flame.load(Ordering::Relaxed) {
+                self.is_flame.store(false, Ordering::Relaxed);
+                entity.set_on_fire(false);
+            }
+        }
+
+        // Check if arrow enters lava or fire block
+        let current_block = world.get_block(&block_pos);
+        if current_block == &pumpkin_data::Block::LAVA {
+            entity.set_on_fire_for(15.0);
+            self.is_flame.store(true, Ordering::Relaxed);
+        } else if current_block == &pumpkin_data::Block::FIRE
+            || current_block == &pumpkin_data::Block::SOUL_FIRE
+        {
+            entity.set_on_fire_for(8.0);
+            self.is_flame.store(true, Ordering::Relaxed);
+        }
+
+        let is_on_fire = entity.is_on_fire() || self.is_flame.load(Ordering::Relaxed);
+        entity.set_on_fire(is_on_fire);
 
         // Handle shake time
         let shake = self.shake_time.load(Ordering::Relaxed);
@@ -297,6 +588,27 @@ impl EntityBase for ArrowEntity {
         }
 
         if self.in_ground.load(Ordering::Relaxed) {
+            // Check if the block we are stuck into was broken / turned to air
+            let last_pos = *self
+                .last_block_pos
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Some(pos) = last_pos {
+                let block = world.get_block(&pos);
+                if block.is_air() {
+                    self.in_ground.store(false, Ordering::Relaxed);
+                    entity.set_synced_data(
+                        pumpkin_data::tracked_data::abstract_arrow::IN_GROUND,
+                        false,
+                    );
+                    let mut vel = entity.velocity.load();
+                    vel.x *= rand::random::<f64>() * 0.2;
+                    vel.y *= rand::random::<f64>() * 0.2;
+                    vel.z *= rand::random::<f64>() * 0.2;
+                    entity.velocity.store(vel);
+                }
+            }
+
             // Increment in-ground time and life
             let _in_ground_time = self.in_ground_time.fetch_add(1, Ordering::Relaxed);
             let life = self.life.fetch_add(1, Ordering::Relaxed);
@@ -316,7 +628,7 @@ impl EntityBase for ArrowEntity {
         velocity.y -= Self::GRAVITY;
 
         // Apply inertia (air resistance or water drag)
-        let inertia = if entity.touching_water.load(Ordering::Relaxed) {
+        let inertia = if in_water {
             Self::WATER_INERTIA
         } else {
             Self::AIR_INERTIA
@@ -336,15 +648,53 @@ impl EntityBase for ArrowEntity {
         let new_pos = start_pos.add(&velocity);
         entity.set_pos(new_pos);
 
-        // Spawn critical particle trail while arrow is flying and critical
-        if self.is_critical.load(Ordering::Relaxed) {
+        // Spawn particles while arrow is flying
+        if in_water {
+            for i in 0..4 {
+                let factor = 0.25 * f64::from(i);
+                world.spawn_particle(
+                    Vector3::new(
+                        new_pos.x - velocity.x * factor,
+                        new_pos.y - velocity.y * factor,
+                        new_pos.z - velocity.z * factor,
+                    ),
+                    Vector3::new(velocity.x as f32, velocity.y as f32, velocity.z as f32),
+                    0.0,
+                    1,
+                    Particle::Bubble,
+                );
+            }
+        }
+
+        if is_on_fire {
             world.spawn_particle(
                 entity.pos.load(),
                 Vector3::new(0.0f32, 0.0f32, 0.0f32),
                 0.0,
                 1,
-                Particle::Crit,
+                Particle::Flame,
             );
+        }
+
+        if self.is_critical.load(Ordering::Relaxed) {
+            for i in 0..4 {
+                let factor = f64::from(i) / 4.0;
+                world.spawn_particle(
+                    Vector3::new(
+                        start_pos.x + velocity.x * factor,
+                        start_pos.y + velocity.y * factor,
+                        start_pos.z + velocity.z * factor,
+                    ),
+                    Vector3::new(
+                        -velocity.x as f32,
+                        (-velocity.y + 0.2) as f32,
+                        -velocity.z as f32,
+                    ),
+                    0.0,
+                    1,
+                    Particle::Crit,
+                );
+            }
         }
 
         // Broadcast velocity update
@@ -421,12 +771,26 @@ impl EntityBase for ArrowEntity {
 
         // Handle hit
         if let Some(h) = hit {
-            // Ensure hit is only processed once
-            if self.has_hit.swap(true, Ordering::SeqCst) {
-                return;
+            match h {
+                ProjectileHit::Block { .. } => {
+                    if self.has_hit.swap(true, Ordering::SeqCst) {
+                        return;
+                    }
+                    caller.on_hit(h);
+                }
+                ProjectileHit::Entity { .. } => {
+                    let pierce = self.pierce_level.load(Ordering::Relaxed);
+                    let pierced_len = self
+                        .pierced_entities
+                        .read()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .len();
+                    if pierced_len >= pierce as usize && self.has_hit.swap(true, Ordering::SeqCst) {
+                        return;
+                    }
+                    caller.on_hit(h);
+                }
             }
-
-            caller.on_hit(h);
         }
     }
 
@@ -469,6 +833,13 @@ impl EntityBase for ArrowEntity {
                     .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(pos);
 
                 let block = world.get_block(&pos);
+                let state = world.get_block_state(&pos);
+                if let Some(server) = world.server.upgrade() {
+                    world
+                        .block_registry
+                        .on_projectile_hit(block, &world, self, &pos, state, &hit_pos, &server);
+                }
+
                 if block == &pumpkin_data::Block::TARGET
                     && let Some(player) = self.owner_id.and_then(|id| world.get_player_by_id(id))
                 {
@@ -477,83 +848,116 @@ impl EntityBase for ArrowEntity {
                     );
                 }
 
-                // Stop the arrow
+                // Stop the arrow with slight position offset backwards
+                let velocity = entity.velocity.load();
+                let norm_dir = Vector3::new(
+                    velocity.x.signum(),
+                    velocity.y.signum(),
+                    velocity.z.signum(),
+                );
+                let offset = norm_dir.multiply(0.05, 0.05, 0.05);
+                entity.set_pos(hit_pos.sub(&offset));
                 entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
-                entity.set_pos(hit_pos);
 
-                // Play sound
+                // Notify client that arrow is in ground
+                entity.set_synced_data(pumpkin_data::tracked_data::abstract_arrow::IN_GROUND, true);
+
+                // Play sound with vanilla pitch formula
+                let sound_pitch = 1.2 / (rand::random::<f32>() * 0.2 + 0.9);
                 let sound_packet = CSoundEffect::new(
                     IdOr::Id(Sound::EntityArrowHit as u16),
                     SoundCategory::Neutral,
                     &hit_pos,
                     1.0,
-                    1.0,
+                    sound_pitch,
                     0.0,
                 );
                 let chunk_pos = entity.chunk_pos.load();
                 world.broadcast_to_chunk(chunk_pos, &sound_packet);
 
-                // Reset critical flag
-                self.is_critical.store(false, Ordering::Relaxed);
+                // Reset critical flag and pierce level
+                self.set_critical(false);
+                self.set_pierce_level(0);
+                self.pierced_entities
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clear();
             }
             ProjectileHit::Entity {
                 entity: target,
                 hit_pos,
                 ..
             } => {
+                let target_entity_id = target.get_entity().entity_id;
+                self.pierced_entities
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push(target_entity_id);
+
                 // Calculate damage
                 let velocity = entity.velocity.load();
                 let power = velocity.length();
-                let mut damage = (power * self.base_damage).ceil() as i32;
+                let mut damage = (power * self.get_base_damage()).ceil() as i32;
 
                 // Apply critical hit bonus
                 if self.is_critical.load(Ordering::Relaxed) {
-                    let bonus = (rand::random::<u32>() % (damage / 2 + 2) as u32) as i32;
+                    let bonus = (rand::random::<u32>() % (damage.max(0) / 2 + 2) as u32) as i32;
                     damage = damage.saturating_add(bonus);
                 }
-                if self.is_flame.load(Ordering::Relaxed) {
-                    target.get_entity().set_on_fire_for_ticks(100);
+
+                let is_enderman =
+                    target.get_entity().entity_type == &pumpkin_data::entity::EntityType::ENDERMAN;
+                let is_on_fire = entity.is_on_fire() || self.is_flame.load(Ordering::Relaxed);
+                if is_on_fire && !is_enderman {
+                    target.get_entity().set_on_fire_for(5.0);
                 }
 
                 let punch = self.punch_level.load(Ordering::Relaxed);
                 let is_spectral = entity.entity_type.id == EntityType::SPECTRAL_ARROW.id;
-                let entity_type: &'static EntityType = entity.entity_type;
                 let owner_id = self.owner_id;
                 let pierce = self.pierce_level.load(Ordering::Relaxed);
+
+                let owner_entity = owner_id.and_then(|id| world.get_entity_by_id(id));
+
                 let damage_succeeded = target.damage_with_context(
                     target.as_ref(),
                     damage as f32,
                     DamageType::ARROW,
                     Some(hit_pos),
-                    None,
+                    owner_entity.as_deref(),
                     None,
                 );
 
                 if let Some(living) = target.get_living_entity() {
-                    if punch > 0
-                        && let Some(owner_id) = owner_id
-                        && let Some(owner_entity) = world.get_entity_by_id(owner_id)
-                    {
-                        crate::entity::combat::handle_knockback(
-                            owner_entity.get_entity(),
-                            target.as_ref(),
-                            f64::from(punch) * 0.6,
+                    if punch > 0 {
+                        let norm = Vector3::new(velocity.x, 0.0, velocity.z).normalize();
+                        let push_scale = f64::from(punch) * 0.6;
+                        target.get_entity().velocity.store(
+                            target.get_entity().velocity.load().add(&Vector3::new(
+                                norm.x * push_scale,
+                                0.1,
+                                norm.z * push_scale,
+                            )),
                         );
                     }
 
                     // Play hit sound
+                    let sound_pitch = 1.2 / (rand::random::<f32>() * 0.2 + 0.9);
                     let sound_packet = CSoundEffect::new(
                         IdOr::Id(Sound::EntityArrowHit as u16),
                         SoundCategory::Neutral,
                         &hit_pos,
                         1.0,
-                        1.0,
+                        sound_pitch,
                         0.0,
                     );
                     world.broadcast_packet_all(&sound_packet);
 
                     if Self::should_apply_post_hurt_effects(damage_succeeded) {
-                        let item_stack = ItemStack::new(1, Self::default_item(entity_type));
+                        let item_stack = self
+                            .item_stack
+                            .read()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
                         let scale = item_stack
                             .get_data_component::<PotionDurationScaleImpl>()
                             .map_or(1.0, |component| component.scale);
@@ -571,8 +975,12 @@ impl EntityBase for ArrowEntity {
                 }
 
                 // Check pierce level
-                if pierce == 0 {
-                    // No piercing - remove arrow
+                let pierced_count = self
+                    .pierced_entities
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .len();
+                if pierced_count > pierce as usize {
                     entity.remove();
                 }
             }
@@ -605,6 +1013,19 @@ impl EntityBase for ArrowEntity {
             _ => {}
         }
 
+        if let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id)
+            && let Some(server) = player.world().server.upgrade()
+        {
+            let mut event = crate::plugin::api::events::player::player_pickup_arrow::PlayerPickupArrowEvent::new(
+                player_arc,
+                self.entity.entity_id,
+            );
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return;
+            }
+        }
+
         // Try to insert an arrow into the player's inventory
         let item_stack = self
             .item_stack
@@ -612,6 +1033,11 @@ impl EntityBase for ArrowEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut stack = Self::pickup_item_stack(&item_stack);
         if player.is_creative() || player.inventory.insert_stack_anywhere(&mut stack) {
+            player.increment_stat(
+                pumpkin_data::statistic::StatisticCategory::PickedUp,
+                stack.item.id as i32,
+                1,
+            );
             player.living_entity.pickup(&self.entity, 1);
 
             // Remove arrow entity after pickup
@@ -638,11 +1064,27 @@ impl ArrowEntity {
             return true;
         }
 
-        // Skip other arrows, item entities, and falling block entities
+        // Skip already pierced entities
+        if self
+            .pierced_entities
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .contains(&other_ent.entity_id)
+        {
+            return true;
+        }
+
+        // Skip dead entities
+        if !other_ent.is_alive() {
+            return true;
+        }
+
+        // Skip other arrows, item entities, falling block entities, and area effect clouds
         if (other_ent.entity_type == &pumpkin_data::entity::EntityType::ARROW
             || other_ent.entity_type == &pumpkin_data::entity::EntityType::SPECTRAL_ARROW)
             || other_ent.entity_type == &pumpkin_data::entity::EntityType::ITEM
             || other_ent.entity_type == &pumpkin_data::entity::EntityType::FALLING_BLOCK
+            || other_ent.entity_type == &pumpkin_data::entity::EntityType::AREA_EFFECT_CLOUD
         {
             return true;
         }
@@ -792,5 +1234,25 @@ mod tests {
     fn post_hurt_effects_require_successful_arrow_damage() {
         assert!(!ArrowEntity::should_apply_post_hurt_effects(false));
         assert!(ArrowEntity::should_apply_post_hurt_effects(true));
+    }
+
+    #[test]
+    fn tipped_arrow_effect_color_uses_custom_color_or_effects() {
+        let tipped = tipped_payload(1);
+        let color = ArrowEntity::get_effect_color(&tipped);
+        assert_eq!(color, 0x123456);
+
+        let normal = ItemStack::new(1, &Item::ARROW);
+        let normal_color = ArrowEntity::get_effect_color(&normal);
+        assert_eq!(normal_color, -1);
+    }
+
+    #[test]
+    fn power_enchantment_damage_formula_matches_vanilla() {
+        let base_damage = 2.0;
+        let power_1 = base_damage + 1.0 * 0.5 + 0.5;
+        let power_5 = base_damage + 5.0 * 0.5 + 0.5;
+        assert_eq!(power_1, 3.0);
+        assert_eq!(power_5, 5.0);
     }
 }

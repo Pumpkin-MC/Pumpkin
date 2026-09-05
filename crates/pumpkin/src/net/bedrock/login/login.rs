@@ -3,6 +3,23 @@ use pumpkin_protocol::bedrock::client::PackIdVersion;
 #[allow(clippy::wildcard_imports)]
 use super::*;
 
+/// Builds the name a Bedrock player is known by on the server.
+///
+/// Bedrock gamertags may contain spaces, which cannot be typed as a command argument,
+/// and may collide with a Java account name on a cross-play server. `prefix` is
+/// prepended as-is (empty means no prefix) and, when `replace_spaces` is set, spaces
+/// become underscores.
+fn build_username(display_name: &str, prefix: &str, replace_spaces: bool) -> String {
+    let mut name = String::with_capacity(prefix.len() + display_name.len());
+    name.push_str(prefix);
+    if replace_spaces {
+        name.extend(display_name.chars().map(|c| if c == ' ' { '_' } else { c }));
+    } else {
+        name.push_str(display_name);
+    }
+    name
+}
+
 impl BedrockClient {
     pub async fn handle_login(
         self: &Arc<Self>,
@@ -58,13 +75,16 @@ impl BedrockClient {
             .map_err(|_| LoginError::DecodeExtraError)?;
         let client_data: ClientData = serde_json::from_slice(&payload_bytes)?;
 
-        let real_name = player_data.display_name;
-        // IMPORTANT: Bedrock allows spaces in names. While we could support this, it would significantly complicate parsing player arguments in commands, so we don't
-        let under_score_name = real_name.replace(' ', "_");
+        let bedrock_config = &server.advanced_config.networking.bedrock;
+        let name = build_username(
+            &player_data.display_name,
+            &bedrock_config.username_prefix,
+            bedrock_config.replace_username_spaces,
+        );
 
         let profile = GameProfile {
             id: Uuid::parse_str(&player_data.uuid).map_err(|_| LoginError::InvalidUuid)?,
-            name: under_score_name,
+            name,
             properties: ArcSwap::new(Arc::new(Vec::new())),
             profile_actions: None,
         };
@@ -121,5 +141,30 @@ impl BedrockClient {
             .store(std::sync::Arc::new(Some(std::sync::Arc::new(client_data))));
 
         Ok(PacketHandlerResult::ReadyToPlay(profile, new_config))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_username;
+
+    #[test]
+    fn spaces_become_underscores_by_default() {
+        assert_eq!(build_username("Some Player", "", true), "Some_Player");
+    }
+
+    #[test]
+    fn spaces_are_kept_when_replacement_is_disabled() {
+        assert_eq!(build_username("Some Player", "", false), "Some Player");
+    }
+
+    #[test]
+    fn prefix_is_prepended() {
+        assert_eq!(build_username("Some Player", ".", true), ".Some_Player");
+    }
+
+    #[test]
+    fn empty_prefix_leaves_the_name_unchanged() {
+        assert_eq!(build_username("Steve", "", true), "Steve");
     }
 }

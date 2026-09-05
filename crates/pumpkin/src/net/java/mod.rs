@@ -5,7 +5,7 @@ use pumpkin_world::level::SyncChunk;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
-use std::{io::Write, sync::Arc};
+use std::{collections::VecDeque, io::Write, sync::Arc};
 
 use bytes::Bytes;
 use crossbeam::atomic::AtomicCell;
@@ -28,7 +28,8 @@ use pumpkin_protocol::java::server::play::{
 };
 use pumpkin_protocol::packet::MultiVersionJavaPacket;
 use pumpkin_protocol::{
-    ClientPacket, ConnectionState, PacketDecodeError, RawPacket, ServerPacket,
+    ClientPacket, ConnectionState, MAX_PACKET_SIZE, PacketDecodeError, PacketEncodeError,
+    RawPacket, ServerPacket,
     codec::var_int::VarInt,
     java::{
         client::{config::CConfigDisconnect, login::CLoginDisconnect},
@@ -133,6 +134,73 @@ struct OutgoingPacket {
     completion: Option<oneshot::Sender<()>>,
 }
 
+const MAX_FRAME_BATCH_DATA_SIZE: usize = MAX_PACKET_SIZE as usize;
+
+fn take_frame_batch(packets: &mut VecDeque<OutgoingPacket>) -> Vec<OutgoingPacket> {
+    let mut batch = Vec::new();
+    let mut data_len = 0usize;
+
+    while let Some(packet) = packets.pop_front() {
+        let next_len = data_len.saturating_add(packet.data.len());
+        if !batch.is_empty() && next_len > MAX_FRAME_BATCH_DATA_SIZE {
+            packets.push_front(packet);
+            break;
+        }
+
+        data_len = next_len;
+        batch.push(packet);
+    }
+
+    batch
+}
+
+fn frame_packet_batch(
+    mut writer: TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>,
+    batch: &[OutgoingPacket],
+) -> (
+    TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>,
+    Vec<u8>,
+    Option<PacketEncodeError>,
+) {
+    let mut frame = Vec::new();
+    let mut frame_err = None;
+    for packet in batch {
+        if let Err(err) = writer.frame_packet(&packet.data, &mut frame) {
+            frame_err = Some(err);
+            break;
+        }
+    }
+    (writer, frame, frame_err)
+}
+
+async fn frame_batch_maybe_offload(
+    writer: TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>,
+    packet_batch: Vec<OutgoingPacket>,
+) -> Result<
+    (
+        TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>,
+        Vec<OutgoingPacket>,
+        Vec<u8>,
+        Option<PacketEncodeError>,
+    ),
+    tokio::task::JoinError,
+> {
+    let needs_offload = packet_batch
+        .iter()
+        .any(|packet| writer.is_compressing_packet(&packet.data));
+
+    if needs_offload {
+        tokio::task::spawn_blocking(move || {
+            let (writer, frame, frame_err) = frame_packet_batch(writer, &packet_batch);
+            (writer, packet_batch, frame, frame_err)
+        })
+        .await
+    } else {
+        let (writer, frame, frame_err) = frame_packet_batch(writer, &packet_batch);
+        Ok((writer, packet_batch, frame, frame_err))
+    }
+}
+
 impl OutgoingPacket {
     const fn normal(data: Bytes) -> Self {
         Self {
@@ -230,11 +298,12 @@ impl JavaClient {
                         break;
                     }
 
-                    // Generate a unique ID (current timestamp in ms)
-                    let keep_alive_id = SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_millis() as i64;
+                    let keep_alive_id = i64::from(
+                        SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_millis() as i32,
+                    );
 
                     self.keep_alive_id.store(keep_alive_id);
                     self.wait_for_keep_alive.store(true, Ordering::Relaxed);
@@ -387,20 +456,26 @@ impl JavaClient {
         let Ok(serialized) = rx.await else {
             return;
         };
+        let sent_count = serialized.len();
+        if sent_count == 0 {
+            return;
+        }
 
         if version >= JavaMinecraftVersion::V_1_20_2 {
             self.send_packet(&CChunkBatchStart).await;
         }
 
+        // Keep the whole batch on the priority queue. Otherwise the batch end can overtake chunk
+        // data queued on the normal channel, leaving the client unable to render those chunks.
         for (chunk_data, light_data) in serialized {
-            self.enqueue_packet(chunk_data).await;
+            self.send_packet_now_data(chunk_data).await;
             if let Some(light_data) = light_data {
-                self.enqueue_packet(light_data).await;
+                self.send_packet_now_data(light_data).await;
             }
         }
 
         if version >= JavaMinecraftVersion::V_1_20_2 {
-            self.send_packet(&CChunkBatchEnd::new(chunks.len() as u16))
+            self.send_packet(&CChunkBatchEnd::new(sent_count as u16))
                 .await;
         }
     }
@@ -676,27 +751,50 @@ impl JavaClient {
                     }
                 }
 
-                let send_failed = {
-                    let mut failed = false;
-                    for packet in &packet_batch {
-                        if let Err(err) = writer.write_packet(packet.data.clone()).await {
-                            failed = true;
-                            // It is expected that the packet will fail if we are closed
-                            if !close_token.is_cancelled() {
-                                warn!("Failed to send packet to client {id}: {err}");
+                let mut packets_to_frame = VecDeque::from(packet_batch);
+                let mut written_packets = Vec::with_capacity(packets_to_frame.len());
+                let mut send_failed = false;
+
+                while !packets_to_frame.is_empty() {
+                    let frame_batch = take_frame_batch(&mut packets_to_frame);
+                    let (returned_writer, returned_batch, frame, frame_err) =
+                        match frame_batch_maybe_offload(writer, frame_batch).await {
+                            Ok(result) => result,
+                            Err(err) => {
+                                if !close_token.is_cancelled() {
+                                    warn!("Packet framing task failed for client {id}: {err}");
+                                }
+                                close_token.cancel();
+                                return;
                             }
-                            break;
+                        };
+                    writer = returned_writer;
+
+                    if let Some(err) = frame_err {
+                        if !close_token.is_cancelled() {
+                            warn!("Failed to frame packet for client {id}: {err}");
                         }
+                        send_failed = true;
+                        break;
                     }
 
-                    if !failed && let Err(err) = writer.flush().await {
-                        failed = true;
+                    if let Err(err) = writer.write_frame(&frame).await {
                         if !close_token.is_cancelled() {
-                            warn!("Failed to flush packet batch for client {id}: {err}");
+                            warn!("Failed to send packet batch to client {id}: {err}");
                         }
+                        send_failed = true;
+                        break;
                     }
-                    failed
-                };
+
+                    written_packets.extend(returned_batch);
+                }
+
+                if !send_failed && let Err(err) = writer.flush().await {
+                    if !close_token.is_cancelled() {
+                        warn!("Failed to flush packet batch for client {id}: {err}");
+                    }
+                    send_failed = true;
+                }
 
                 if send_failed {
                     // We now need to close the connection to the client since the stream is in an unknown state.
@@ -704,7 +802,7 @@ impl JavaClient {
                     break;
                 }
 
-                for packet in packet_batch {
+                for packet in written_packets {
                     if let Some(completion) = packet.completion {
                         let _ = completion.send(());
                     }
@@ -1056,12 +1154,47 @@ impl JavaClient {
             }
             id if id == SCustomPayload::to_id(version) => {
                 let payload = SCustomPayload::read(&mut payload, &version)?;
+                let channel_str = payload.channel.to_string();
                 let mut event = PlayerCustomPayloadEvent::new(
                     player.clone(),
-                    payload.channel.to_string(),
+                    channel_str.clone(),
                     Bytes::copy_from_slice(payload.data),
                 );
                 server.plugin_manager.fire_blocking(server, &mut event);
+
+                if channel_str == "minecraft:register" {
+                    if let Ok(channels_data) = std::str::from_utf8(payload.data) {
+                        for ch in channels_data.split('\0') {
+                            if !ch.is_empty() {
+                                let mut reg_event = crate::plugin::api::events::player::player_register_channel::PlayerRegisterChannelEvent::new(
+                                    player.clone(),
+                                    ch.to_string(),
+                                );
+                                server.plugin_manager.fire_blocking(server, &mut reg_event);
+                                let mut ch_event = crate::plugin::api::events::player::player_channel::PlayerChannelEvent {
+                                    player: player.clone(),
+                                    channel: ch.to_string(),
+                                    cancelled: false,
+                                };
+                                server.plugin_manager.fire_blocking(server, &mut ch_event);
+                            }
+                        }
+                    }
+                } else if channel_str == "minecraft:unregister"
+                    && let Ok(channels_data) = std::str::from_utf8(payload.data)
+                {
+                    for ch in channels_data.split('\0') {
+                        if !ch.is_empty() {
+                            let mut unreg_event = crate::plugin::api::events::player::player_unregister_channel::PlayerUnregisterChannelEvent::new(
+                                player.clone(),
+                                ch.to_string(),
+                            );
+                            server
+                                .plugin_manager
+                                .fire_blocking(server, &mut unreg_event);
+                        }
+                    }
+                }
             }
             id if id == SRecipeBookChangeSettings::to_id(version) => {
                 self.handle_recipe_book_change_settings(

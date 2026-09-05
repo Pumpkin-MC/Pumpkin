@@ -16,15 +16,13 @@ impl ItemMetadata for WritableBookItem {
 }
 
 impl ItemBehaviour for WritableBookItem {
-    fn normal_use(&self, item: &Item, player: &Player) {
-        if item.id == Item::WRITTEN_BOOK.id {
-            player.try_send_client_packet(&COpenBook::new(VarInt(0))); // 0 = main hand
-            player.world().play_sound(
-                Sound::ItemBookPageTurn,
-                SoundCategory::Players,
-                &player.position(),
-            );
-        }
+    fn normal_use(&self, _item: &Item, player: &Player) {
+        player.try_send_client_packet(&COpenBook::new(VarInt(0)));
+        player.world().play_sound(
+            Sound::ItemBookPageTurn,
+            SoundCategory::Players,
+            &player.position(),
+        );
     }
 
     fn as_any(&self) -> &dyn Any {

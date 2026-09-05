@@ -40,8 +40,6 @@ pub struct Block {
     pub states: &'static [BlockState],
     /// Fire behavior settings. If `None`, the block is not flammable.
     pub flammable: Option<Flammable>,
-    /// Defines the items dropped when this block is destroyed.
-    pub loot_table: Option<LootTable>,
     /// Defines the amount of XP dropped when the block is mined (e.g., Coal or Diamond).
     pub experience: Option<Experience>,
 }
@@ -172,37 +170,49 @@ impl Block {
         })
     }
 
-    /// Returns a new [`BlockState`] reference for the given [`BlockStateId`] with the
-    /// `waterlogged` property forced to `true` if the block supports that
-    /// property.  If the state is already waterlogged or the block does not
-    /// expose a `waterlogged` property then `None` is returned.
     #[must_use]
-    pub fn with_waterlogged(&self, id: BlockStateId) -> Option<&'static BlockState> {
-        // Check if already waterlogged
-        if self.is_waterlogged(id) {
-            return Some(BlockState::from_id(id));
-        }
+    pub fn is_waterloggable(&self) -> bool {
+        self.properties(self.default_state.id)
+            .is_some_and(|props| props.to_props().iter().any(|p| p.0 == "waterlogged"))
+    }
 
-        // Modify the property list if available
-        if let Some(props_source) = self.properties(id) {
-            let mut props: Vec<(&str, &str)> = props_source
-                .to_props()
-                .iter()
-                .map(|(k, v)| (*k, *v))
-                .collect();
-
-            // Look for an existing waterlogged key or add one
-            if let Some(idx) = props.iter().position(|(k, _)| *k == "waterlogged") {
-                props[idx] = ("waterlogged", "true");
-            } else {
-                props.push(("waterlogged", "true"));
+    /// Returns a new [`BlockStateId`] for the given [`BlockStateId`] with the
+    /// `waterlogged` property forced to `value`. If the state already has
+    /// waterlogged set to `value` or the  block does not expose a `waterlogged`
+    /// property then `None` is returned.
+    #[must_use]
+    pub fn set_waterlogged(&self, id: BlockStateId, value: bool) -> Option<BlockStateId> {
+        self.properties(id).and_then(|props| {
+            let mut props = props.to_props();
+            let waterlogged = &mut props.iter_mut().find(|p| p.0 == "waterlogged")?.1;
+            let new_waterlogged = value.to_string();
+            if new_waterlogged.as_str() == *waterlogged {
+                return None;
             }
 
-            let new_state_id = self.from_properties(&props).to_state_id(self);
-            return Some(BlockState::from_id(new_state_id));
-        }
+            *waterlogged = &new_waterlogged;
+            Some(self.from_properties(&props).to_state_id(self))
+        })
+    }
 
-        None
+    #[must_use]
+    pub fn state_from_properties(
+        &'static self,
+        properties: &[(&str, &str)],
+    ) -> Option<&'static BlockState> {
+        self.states.iter().find(|state| {
+            let Some(state_properties) = self.properties(state.id) else {
+                return properties.is_empty();
+            };
+            let state_properties = state_properties.to_props();
+
+            state_properties.len() == properties.len()
+                && properties.iter().all(|(name, value)| {
+                    state_properties.iter().any(|(state_name, state_value)| {
+                        *state_name == *name && *state_value == *value
+                    })
+                })
+        })
     }
 
     /// Returns whether this block is solid (based on default state)
@@ -218,21 +228,61 @@ impl Block {
     }
 
     #[must_use]
-    pub const fn mirror(
+    pub fn mirror(
         &self,
         id: BlockStateId,
-        _mirror: crate::block_rotation::Mirror,
+        mirror: crate::block_rotation::Mirror,
     ) -> &'static BlockState {
-        BlockState::from_id(id)
+        if mirror == crate::block_rotation::Mirror::None || self.states.len() <= 1 {
+            return BlockState::from_id(id);
+        }
+        if let Some(props) = self.properties(id) {
+            let props_vec = props.to_props();
+            let transformed = crate::block_rotation::transform_block_properties(
+                self.name,
+                &props_vec,
+                crate::block_rotation::Rotation::None,
+                mirror,
+            );
+            let transformed_refs: Vec<(&str, &str)> = transformed
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.as_str()))
+                .collect();
+            let new_props = self.from_properties(&transformed_refs);
+            let new_state_id = new_props.to_state_id(self);
+            BlockState::from_id(new_state_id)
+        } else {
+            BlockState::from_id(id)
+        }
     }
 
     #[must_use]
-    pub const fn rotate(
+    pub fn rotate(
         &self,
         id: BlockStateId,
-        _rotation: crate::block_rotation::Rotation,
+        rotation: crate::block_rotation::Rotation,
     ) -> &'static BlockState {
-        BlockState::from_id(id)
+        if rotation == crate::block_rotation::Rotation::None || self.states.len() <= 1 {
+            return BlockState::from_id(id);
+        }
+        if let Some(props) = self.properties(id) {
+            let props_vec = props.to_props();
+            let transformed = crate::block_rotation::transform_block_properties(
+                self.name,
+                &props_vec,
+                rotation,
+                crate::block_rotation::Mirror::None,
+            );
+            let transformed_refs: Vec<(&str, &str)> = transformed
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.as_str()))
+                .collect();
+            let new_props = self.from_properties(&transformed_refs);
+            let new_state_id = new_props.to_state_id(self);
+            BlockState::from_id(new_state_id)
+        } else {
+            BlockState::from_id(id)
+        }
     }
 }
 

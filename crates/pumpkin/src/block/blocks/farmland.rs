@@ -1,19 +1,14 @@
 use std::sync::Arc;
 
-use crate::block::BlockBehaviour;
-use crate::block::CanPlaceAtArgs;
-use crate::block::GetStateForNeighborUpdateArgs;
-use crate::block::OnPlaceArgs;
-use crate::block::OnScheduledTickArgs;
-use crate::block::RandomTickArgs;
+use crate::block::{
+    BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
+    OnScheduledTickArgs, PathComputationType, RandomTickArgs,
+};
 use crate::world::World;
-use pumpkin_data::Block;
-use pumpkin_data::BlockDirection;
-use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::FarmlandLikeProperties;
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -62,7 +57,21 @@ impl BlockBehaviour for FarmlandBlock {
         // TODO: add rain check. Remember to check which one is most optimized.
         if is_water_nearby(args.world, args.position) {
             let mut props = FarmlandProperties::default(args.block);
-            props.moisture = 7;
+            let mut new_moisture = 7;
+            if let Some(server) = args.world.server.upgrade() {
+                let mut event =
+                    crate::plugin::api::events::block::moisture_change::MoistureChangeEvent::new(
+                        *args.position,
+                        args.world.clone(),
+                        new_moisture,
+                    );
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return;
+                }
+                new_moisture = event.new_moisture;
+            }
+            props.moisture = new_moisture.clamp(0, 7) as u8;
             args.world.set_block_state(
                 args.position,
                 props.to_state_id(args.block),
@@ -70,7 +79,7 @@ impl BlockBehaviour for FarmlandBlock {
             );
         } else {
             let state_id = args.world.get_block_state_id(args.position);
-            let mut props = FarmlandProperties::from_state_id(state_id, args.block);
+            let mut props = FarmlandProperties::from_state_id(state_id);
             if props.moisture == 0 {
                 if !args
                     .world
@@ -85,7 +94,20 @@ impl BlockBehaviour for FarmlandBlock {
                     );
                 }
             } else {
-                props.moisture = (props.moisture as i32 - 1).clamp(0, 7) as u8;
+                let mut new_moisture = (props.moisture as i32 - 1).clamp(0, 7);
+                if let Some(server) = args.world.server.upgrade() {
+                    let mut event = crate::plugin::api::events::block::moisture_change::MoistureChangeEvent::new(
+                        *args.position,
+                        args.world.clone(),
+                        new_moisture,
+                    );
+                    server.plugin_manager.fire_blocking(&server, &mut event);
+                    if event.cancelled {
+                        return;
+                    }
+                    new_moisture = event.new_moisture;
+                }
+                props.moisture = new_moisture.clamp(0, 7) as u8;
                 args.world.set_block_state(
                     args.position,
                     props.to_state_id(args.block),
@@ -93,6 +115,10 @@ impl BlockBehaviour for FarmlandBlock {
                 );
             }
         }
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
 

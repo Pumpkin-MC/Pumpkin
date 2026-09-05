@@ -174,13 +174,24 @@ impl ItemBehaviour for BoatItem {
         let boat_entity = Arc::new(BoatEntity::new(entity));
         world.spawn_entity(boat_entity);
 
-        // Decrement item unless in creative mode
-        let mut stack = player.inventory.held_item();
-        stack.decrement_unless_creative(player.gamemode.load(), 1);
-        player.inventory.set_held_item(stack);
+        let mut main_hand = player.inventory.held_item();
+        let consumed = if !main_hand.is_empty() && main_hand.item.id == item.id {
+            main_hand.decrement_unless_creative(player.gamemode.load(), 1);
+            player.inventory.set_held_item(main_hand);
+            true
+        } else {
+            false
+        };
 
-        // TODO: world.emitGameEvent(user, GameEvent.ENTITY_PLACE, hitResult.getPos())
-        // TODO: user.incrementStat(Stats.USED.getOrCreateStat(this))
+        if !consumed {
+            let mut off_hand = player.inventory.off_hand_item();
+            if !off_hand.is_empty() && off_hand.item.id == item.id {
+                off_hand.decrement_unless_creative(player.gamemode.load(), 1);
+                player
+                    .inventory
+                    .set_stack_in_hand(pumpkin_util::Hand::Left, off_hand);
+            }
+        }
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

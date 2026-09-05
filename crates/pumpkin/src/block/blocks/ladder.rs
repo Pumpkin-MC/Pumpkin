@@ -4,7 +4,7 @@ use crate::block::{
 use crate::entity::EntityBase;
 use crate::world::World;
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{BlockProperties, Facing, LadderLikeProperties};
+use pumpkin_data::block_properties::{Facing, LadderLikeProperties};
 use pumpkin_data::{Block, BlockDirection, FacingExt, HorizontalFacingExt};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -21,7 +21,7 @@ impl BlockBehaviour for LadderBlock {
             args.world.get_block_and_state_id(&clicked_pos);
         if clicked_block == &Block::LADDER {
             //you can't click on a ladder and place a ladder
-            let props = LadderLikeProperties::from_state_id(clicked_block_state_id, clicked_block);
+            let props = LadderLikeProperties::from_state_id(clicked_block_state_id);
             let sub = args.position.0.sub(&clicked_pos.0);
             if let Some(dir) = horizontal_facing_from_offset(sub)
                 && let Some(horizontal_facing) = dir.to_horizontal_facing()
@@ -63,7 +63,7 @@ impl BlockBehaviour for LadderBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        let props = LadderLikeProperties::from_state_id(args.state_id, args.block);
+        let props = LadderLikeProperties::from_state_id(args.state_id);
         if props.facing.to_block_direction().opposite() == args.direction
             && !can_place_ladder_at(
                 args.world,
@@ -81,7 +81,7 @@ impl BlockBehaviour for LadderBlock {
         if Block::from_state_id(state_id) != &Block::LADDER {
             return;
         }
-        let props = LadderLikeProperties::from_state_id(state_id, args.block);
+        let props = LadderLikeProperties::from_state_id(state_id);
         if !can_place_ladder_at(
             args.world,
             args.position,

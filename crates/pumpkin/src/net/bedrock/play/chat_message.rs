@@ -16,7 +16,7 @@ impl BedrockClient {
 
         send_cancellable! {{
             server;
-            PlayerChatEvent::new(player.clone(), packet.message.into_owned(), vec![]);
+            PlayerChatEvent::new(player.clone(), packet.message.into_owned(), vec![], None);
 
             'after: {
                 info!("<chat> {}: {}", gameprofile.name, event.message);

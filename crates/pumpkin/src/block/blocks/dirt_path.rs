@@ -1,11 +1,8 @@
-use crate::block::BlockBehaviour;
-use crate::block::CanPlaceAtArgs;
-use crate::block::GetStateForNeighborUpdateArgs;
-use crate::block::OnPlaceArgs;
-use crate::block::OnScheduledTickArgs;
-use pumpkin_data::Block;
-use pumpkin_data::BlockDirection;
-use pumpkin_data::BlockStateId;
+use crate::block::{
+    BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
+    OnScheduledTickArgs, PathComputationType,
+};
+use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
@@ -46,6 +43,10 @@ impl BlockBehaviour for DirtPathBlock {
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         can_place_at(args.block_accessor, args.position)
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
 

@@ -1278,6 +1278,12 @@ impl TextComponent {
         Self::text("")
     }
 
+    /// Parses a text component from its NBT representation
+    #[must_use]
+    pub fn from_nbt(tag: &pumpkin_nbt::tag::NbtTag) -> Self {
+        serde_json::from_value(nbt_tag_to_json(tag)).unwrap_or_else(|_| Self::empty())
+    }
+
     /// Creates a new text component with plain text content.
     ///
     /// # Arguments

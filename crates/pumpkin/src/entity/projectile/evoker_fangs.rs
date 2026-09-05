@@ -1,6 +1,7 @@
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
 use pumpkin_data::damage::DamageType;
+use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::sound::Sound;
 
 use crate::{
@@ -10,10 +11,10 @@ use crate::{
 
 pub struct EvokerFangsEntity {
     pub entity: Entity,
-    pub warmup_ticks: AtomicU32,
-    pub life_ticks: AtomicU32,
+    pub warmup_delay_ticks: AtomicI32,
+    pub life_ticks: AtomicI32,
     pub owner_id: Option<i32>,
-    pub has_bitten: AtomicBool,
+    pub sent_spike_event: AtomicBool,
 }
 
 impl EvokerFangsEntity {
@@ -22,22 +23,22 @@ impl EvokerFangsEntity {
         entity.set_rotation(yaw, 0.0);
         Self {
             entity,
-            warmup_ticks: AtomicU32::new(warmup_ticks),
-            life_ticks: AtomicU32::new(0),
+            warmup_delay_ticks: AtomicI32::new(warmup_ticks as i32),
+            life_ticks: AtomicI32::new(22),
             owner_id,
-            has_bitten: AtomicBool::new(false),
+            sent_spike_event: AtomicBool::new(false),
         }
     }
 }
 
 impl EntityBase for EvokerFangsEntity {
     fn write_custom_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
-        nbt.put_int("Warmup", self.warmup_ticks.load(Ordering::Relaxed) as i32);
+        nbt.put_int("Warmup", self.warmup_delay_ticks.load(Ordering::Relaxed));
     }
 
     fn read_custom_nbt(&self, nbt: &pumpkin_nbt::compound::NbtCompound) {
         if let Some(warmup) = nbt.get_int("Warmup") {
-            self.warmup_ticks.store(warmup as u32, Ordering::Relaxed);
+            self.warmup_delay_ticks.store(warmup, Ordering::Relaxed);
         }
     }
 
@@ -45,15 +46,13 @@ impl EntityBase for EvokerFangsEntity {
         let entity = &self.entity;
         let world = entity.world.load();
 
-        let warmup = self.warmup_ticks.load(Ordering::Relaxed);
-        let life = self.life_ticks.fetch_add(1, Ordering::Relaxed) + 1;
-
-        if life >= warmup {
-            if !self.has_bitten.swap(true, Ordering::SeqCst) {
-                entity.play_sound(Sound::EntityEvokerFangsAttack);
-
-                let bb = entity.bounding_box.load().expand(0.2, 0.2, 0.2);
+        let warmup = self.warmup_delay_ticks.fetch_sub(1, Ordering::Relaxed) - 1;
+        if warmup < 0 {
+            if warmup == -8 {
+                let bb = entity.bounding_box.load().expand(0.2, 0.0, 0.2);
                 let candidates = world.get_entities_at_box(&bb);
+
+                let owner = self.owner_id.and_then(|id| world.get_entity_by_id(id));
 
                 for cand in candidates {
                     let cand_ent = cand.get_entity();
@@ -61,13 +60,34 @@ impl EntityBase for EvokerFangsEntity {
                         continue;
                     }
 
-                    if cand_ent.entity_id != entity.entity_id {
-                        let _ = cand.damage(cand.as_ref(), 6.0, DamageType::MAGIC);
+                    if cand_ent.entity_id != entity.entity_id && cand.get_living_entity().is_some()
+                    {
+                        let damage_type = if owner.is_some() {
+                            DamageType::INDIRECT_MAGIC
+                        } else {
+                            DamageType::MAGIC
+                        };
+                        let _ = cand.damage_with_context(
+                            cand.as_ref(),
+                            6.0,
+                            damage_type,
+                            Some(entity.pos.load()),
+                            Some(entity),
+                            owner.as_deref(),
+                        );
                     }
                 }
             }
 
-            if life > warmup + 20 {
+            if !self.sent_spike_event.swap(true, Ordering::SeqCst) {
+                world.send_entity_status(entity, EntityStatus::StartAttacking, None);
+                if !entity.silent.load(Ordering::Relaxed) {
+                    entity.play_sound(Sound::EntityEvokerFangsAttack);
+                }
+            }
+
+            let life = self.life_ticks.fetch_sub(1, Ordering::Relaxed) - 1;
+            if life < 0 {
                 entity.remove();
             }
         }

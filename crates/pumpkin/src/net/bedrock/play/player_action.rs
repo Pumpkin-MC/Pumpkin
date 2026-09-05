@@ -78,6 +78,17 @@ impl BedrockClient {
                             if can_harvest {
                                 player.add_exhaustion(MINE_BLOCK_EXHAUSTION);
                             }
+                            let item_id = player.inventory().held_item().item.id;
+                            player.increment_stat(
+                                pumpkin_data::statistic::StatisticCategory::Used,
+                                item_id as i32,
+                                1,
+                            );
+                            player.increment_stat(
+                                pumpkin_data::statistic::StatisticCategory::Mined,
+                                block.id.as_u16() as i32,
+                                1,
+                            );
                         }
                     } else {
                         let mut mining_pos = player
@@ -102,6 +113,20 @@ impl BedrockClient {
                             .current_block_breaking_speed
                             .swap(speed.to_bits(), Ordering::Relaxed);
                         if starts_breaking {
+                            if block == &pumpkin_data::Block::NOTE_BLOCK {
+                                let props =
+                                    pumpkin_data::block_properties::NoteBlockLikeProperties::from_state_id(
+                                        state.id,
+                                    );
+                                crate::block::blocks::note::NoteBlock::play_note(
+                                    &props, &world, &location,
+                                );
+                                player.increment_stat(
+                                    pumpkin_data::statistic::StatisticCategory::Custom,
+                                    pumpkin_data::statistic::CustomStatistic::PlayNoteblock as i32,
+                                    1,
+                                );
+                            }
                             world.set_block_breaking(
                                 entity,
                                 location,
@@ -166,6 +191,17 @@ impl BedrockClient {
                             if can_harvest {
                                 player.add_exhaustion(MINE_BLOCK_EXHAUSTION);
                             }
+                            let item_id = player.inventory().held_item().item.id;
+                            player.increment_stat(
+                                pumpkin_data::statistic::StatisticCategory::Used,
+                                item_id as i32,
+                                1,
+                            );
+                            player.increment_stat(
+                                pumpkin_data::statistic::StatisticCategory::Mined,
+                                block.id.as_u16() as i32,
+                                1,
+                            );
                         }
                     } else {
                         let runtime_id = pumpkin_data::BlockState::to_be_network_id(state.id);

@@ -207,9 +207,77 @@ impl DataComponentImpl for LoreImpl {
     default_impl!(Lore);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct RarityImpl;
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
+pub enum Rarity {
+    #[default]
+    Common = 0,
+    Uncommon = 1,
+    Rare = 2,
+    Epic = 3,
+}
+
+impl Rarity {
+    #[must_use]
+    pub fn from_id(id: i32) -> Option<Self> {
+        match id {
+            0 => Some(Self::Common),
+            1 => Some(Self::Uncommon),
+            2 => Some(Self::Rare),
+            3 => Some(Self::Epic),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn to_id(self) -> i32 {
+        self as i32
+    }
+
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "common" => Some(Self::Common),
+            "uncommon" => Some(Self::Uncommon),
+            "rare" => Some(Self::Rare),
+            "epic" => Some(Self::Epic),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub fn to_name(self) -> &'static str {
+        match self {
+            Self::Common => "common",
+            Self::Uncommon => "uncommon",
+            Self::Rare => "rare",
+            Self::Epic => "epic",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub struct RarityImpl {
+    pub rarity: Rarity,
+}
+
+impl RarityImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let name = data.extract_string()?;
+        Some(Self {
+            rarity: Rarity::from_name(name)?,
+        })
+    }
+}
+
 impl DataComponentImpl for RarityImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::String(self.rarity.to_name().into())
+    }
+
+    fn get_hash(&self) -> i32 {
+        crate::data_component_impl::get_i32_hash(self.rarity.to_id()) as i32
+    }
+
     default_impl!(Rarity);
 }
 
@@ -284,18 +352,33 @@ impl DataComponentImpl for CustomModelDataImpl {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct TooltipDisplayImpl;
+impl TooltipDisplayImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for TooltipDisplayImpl {
     default_impl!(TooltipDisplay);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct CreativeSlotLockImpl;
+impl CreativeSlotLockImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for CreativeSlotLockImpl {
     default_impl!(CreativeSlotLock);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct EnchantmentGlintOverrideImpl;
+impl EnchantmentGlintOverrideImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for EnchantmentGlintOverrideImpl {
     default_impl!(EnchantmentGlintOverride);
 }
@@ -363,30 +446,90 @@ impl DataComponentImpl for BaseColorImpl {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct InstrumentImpl;
+impl InstrumentImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for InstrumentImpl {
     default_impl!(Instrument);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ProvidesTrimMaterialImpl;
+impl ProvidesTrimMaterialImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for ProvidesTrimMaterialImpl {
     default_impl!(ProvidesTrimMaterial);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ProvidesBannerPatternsImpl;
+impl ProvidesBannerPatternsImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for ProvidesBannerPatternsImpl {
     default_impl!(ProvidesBannerPatterns);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct BannerPatternsImpl;
+pub struct BannerPatternLayer {
+    pub pattern: String,
+    pub color: crate::dye_color::DyeColor,
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Default)]
+pub struct BannerPatternsImpl {
+    pub layers: Vec<BannerPatternLayer>,
+}
+
+impl BannerPatternsImpl {
+    pub const EMPTY: Self = Self { layers: Vec::new() };
+
+    #[must_use]
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let mut layers = Vec::new();
+        if let NbtTag::List(list) = data {
+            for tag in list {
+                if let Some(compound) = tag.extract_compound() {
+                    let pattern = compound.get_string("pattern")?.to_string();
+                    let color_str = compound.get_string("color")?;
+                    let color = crate::dye_color::DyeColor::by_name(color_str).unwrap_or_default();
+                    layers.push(BannerPatternLayer { pattern, color });
+                }
+            }
+        }
+        Some(Self { layers })
+    }
+}
+
 impl DataComponentImpl for BannerPatternsImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut list = Vec::new();
+        for layer in &self.layers {
+            let mut compound = NbtCompound::new();
+            compound.put_string("pattern", layer.pattern.clone());
+            compound.put_string("color", layer.color.name().to_string());
+            list.push(NbtTag::Compound(compound));
+        }
+        NbtTag::List(list)
+    }
+
     default_impl!(BannerPatterns);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct PotDecorationsImpl;
+impl PotDecorationsImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for PotDecorationsImpl {
     default_impl!(PotDecorations);
 }
@@ -414,6 +557,11 @@ impl DataComponentImpl for LockImpl {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BreakSoundImpl;
+impl BreakSoundImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for BreakSoundImpl {
     default_impl!(BreakSound);
 }

@@ -10,7 +10,6 @@ use pumpkin_util::PermissionLvl;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
-use pumpkin_util::text::color::{Color, NamedColor};
 
 const DESCRIPTION: &str = "Constantly load chunks in the world.";
 const PERMISSION: &str = "minecraft:command.forceload";
@@ -86,13 +85,15 @@ impl CommandExecutor for ForceloadAddExecutor {
 
         world.update_active_chunks();
 
+        let dimension_name = world.dimension.minecraft_name.to_string();
+
         let text = if total_chunks == 1 {
             TextComponent::translate_cross(
                 translation::java::COMMANDS_FORCELOAD_ADDED_SINGLE,
                 translation::java::COMMANDS_FORCELOAD_ADDED_SINGLE,
                 [
-                    TextComponent::text(min_x.to_string()),
-                    TextComponent::text(min_z.to_string()),
+                    TextComponent::text(format!("[{min_x}, {min_z}]")),
+                    TextComponent::text(dimension_name),
                 ],
             )
         } else {
@@ -101,16 +102,13 @@ impl CommandExecutor for ForceloadAddExecutor {
                 translation::java::COMMANDS_FORCELOAD_ADDED_MULTIPLE,
                 [
                     TextComponent::text(total_chunks.to_string()),
-                    TextComponent::text(min_x.to_string()),
-                    TextComponent::text(min_z.to_string()),
-                    TextComponent::text(max_x.to_string()),
-                    TextComponent::text(max_z.to_string()),
+                    TextComponent::text(dimension_name),
+                    TextComponent::text(format!("[{min_x}, {min_z}]")),
+                    TextComponent::text(format!("[{max_x}, {max_z}]")),
                 ],
             )
         };
-        context
-            .source
-            .send_feedback(text.color(Color::Named(NamedColor::Green)), false);
+        context.source.send_feedback(text, true);
 
         Ok(total_chunks)
     }
@@ -170,13 +168,15 @@ impl CommandExecutor for ForceloadRemoveExecutor {
 
         world.update_active_chunks();
 
+        let dimension_name = world.dimension.minecraft_name.to_string();
+
         let text = if total_chunks == 1 {
             TextComponent::translate_cross(
                 translation::java::COMMANDS_FORCELOAD_REMOVED_SINGLE,
                 translation::java::COMMANDS_FORCELOAD_REMOVED_SINGLE,
                 [
-                    TextComponent::text(min_x.to_string()),
-                    TextComponent::text(min_z.to_string()),
+                    TextComponent::text(format!("[{min_x}, {min_z}]")),
+                    TextComponent::text(dimension_name),
                 ],
             )
         } else {
@@ -185,16 +185,13 @@ impl CommandExecutor for ForceloadRemoveExecutor {
                 translation::java::COMMANDS_FORCELOAD_REMOVED_MULTIPLE,
                 [
                     TextComponent::text(total_chunks.to_string()),
-                    TextComponent::text(min_x.to_string()),
-                    TextComponent::text(min_z.to_string()),
-                    TextComponent::text(max_x.to_string()),
-                    TextComponent::text(max_z.to_string()),
+                    TextComponent::text(dimension_name),
+                    TextComponent::text(format!("[{min_x}, {min_z}]")),
+                    TextComponent::text(format!("[{max_x}, {max_z}]")),
                 ],
             )
         };
-        context
-            .source
-            .send_feedback(text.color(Color::Named(NamedColor::Green)), false);
+        context.source.send_feedback(text, true);
 
         Ok(total_chunks)
     }
@@ -222,14 +219,14 @@ impl CommandExecutor for ForceloadRemoveAllExecutor {
 
         world.update_active_chunks();
 
+        let dimension_name = world.dimension.minecraft_name.to_string();
+
         let text = TextComponent::translate_cross(
             translation::java::COMMANDS_FORCELOAD_REMOVED_ALL,
             translation::java::COMMANDS_FORCELOAD_REMOVED_ALL,
-            [],
+            [TextComponent::text(dimension_name)],
         );
-        context
-            .source
-            .send_feedback(text.color(Color::Named(NamedColor::Green)), false);
+        context.source.send_feedback(text, true);
 
         Ok(removed_count as i32)
     }
@@ -262,30 +259,28 @@ impl CommandExecutor for ForceloadQueryExecutor {
             forced.contains(&chunk_pos)
         };
 
+        let dimension_name = world.dimension.minecraft_name.to_string();
+
         if is_forced {
             let text = TextComponent::translate_cross(
                 translation::java::COMMANDS_FORCELOAD_QUERY_SUCCESS,
                 translation::java::COMMANDS_FORCELOAD_QUERY_SUCCESS,
                 [
-                    TextComponent::text(chunk_pos.x.to_string()),
-                    TextComponent::text(chunk_pos.y.to_string()),
+                    TextComponent::text(format!("[{}, {}]", chunk_pos.x, chunk_pos.y)),
+                    TextComponent::text(dimension_name),
                 ],
             );
-            context
-                .source
-                .send_feedback(text.color(Color::Named(NamedColor::Green)), false);
+            context.source.send_feedback(text, false);
         } else {
             let text = TextComponent::translate_cross(
                 translation::java::COMMANDS_FORCELOAD_QUERY_FAILURE,
                 translation::java::COMMANDS_FORCELOAD_QUERY_FAILURE,
                 [
-                    TextComponent::text(chunk_pos.x.to_string()),
-                    TextComponent::text(chunk_pos.y.to_string()),
+                    TextComponent::text(format!("[{}, {}]", chunk_pos.x, chunk_pos.y)),
+                    TextComponent::text(dimension_name),
                 ],
             );
-            context
-                .source
-                .send_feedback(text.color(Color::Named(NamedColor::Red)), false);
+            context.source.send_error(text);
         }
 
         let all_forced = {
@@ -303,29 +298,34 @@ impl CommandExecutor for ForceloadQueryExecutor {
             let text = TextComponent::translate_cross(
                 translation::java::COMMANDS_FORCELOAD_ADDED_NONE,
                 translation::java::COMMANDS_FORCELOAD_ADDED_NONE,
-                [],
+                [TextComponent::text(
+                    world.dimension.minecraft_name.to_string(),
+                )],
             );
-            context
-                .source
-                .send_feedback(text.color(Color::Named(NamedColor::Gray)), false);
+            context.source.send_error(text);
         } else {
             let list_str = all_forced.join(", ");
             let text = if all_forced.len() == 1 {
                 TextComponent::translate_cross(
                     translation::java::COMMANDS_FORCELOAD_LIST_SINGLE,
                     translation::java::COMMANDS_FORCELOAD_LIST_SINGLE,
-                    [TextComponent::text(list_str)],
+                    [
+                        TextComponent::text(world.dimension.minecraft_name.to_string()),
+                        TextComponent::text(list_str),
+                    ],
                 )
             } else {
                 TextComponent::translate_cross(
                     translation::java::COMMANDS_FORCELOAD_LIST_MULTIPLE,
                     translation::java::COMMANDS_FORCELOAD_LIST_MULTIPLE,
-                    [TextComponent::text(list_str)],
+                    [
+                        TextComponent::text(all_forced.len().to_string()),
+                        TextComponent::text(world.dimension.minecraft_name.to_string()),
+                        TextComponent::text(list_str),
+                    ],
                 )
             };
-            context
-                .source
-                .send_feedback(text.color(Color::Named(NamedColor::Gray)), false);
+            context.source.send_feedback(text, false);
         }
 
         Ok(i32::from(is_forced))

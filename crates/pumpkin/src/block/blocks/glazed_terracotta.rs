@@ -1,6 +1,6 @@
 use crate::block::{BlockBehaviour, OnPlaceArgs};
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{BlockProperties, WallTorchLikeProperties};
+use pumpkin_data::block_properties::WallTorchLikeProperties;
 use pumpkin_macros::pumpkin_block_from_tag;
 
 #[pumpkin_block_from_tag("minecraft:glazed_terracotta")]

@@ -1,24 +1,24 @@
-use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
-use crate::entity::ai::pathfinder::node::{Coordinate, Node};
+use crate::entity::ai::pathfinder::node::Node;
 
 #[derive(Debug, Clone)]
 pub struct Path {
     nodes: Vec<Node>,
     pub next_node_index: usize,
-    target: Vector3<i32>,
+    target: BlockPos,
     dist_to_target: f32,
     reached: bool,
 }
 
 impl Path {
     #[must_use]
-    pub fn new(nodes: Vec<Node>, target: Vector3<i32>, reached: bool) -> Self {
+    pub fn new(nodes: Vec<Node>, target: BlockPos, reached: bool) -> Self {
         let dist_to_target = if nodes.is_empty() {
             f32::MAX
         } else {
             let last_node = &nodes[nodes.len() - 1];
-            last_node.distance_manhattan(&target)
+            last_node.distance_manhattan_block_pos(target)
         };
 
         Self {
@@ -31,12 +31,12 @@ impl Path {
     }
 
     #[must_use]
-    pub fn empty(target: Vector3<i32>) -> Self {
+    pub fn empty(target: BlockPos) -> Self {
         Self::new(Vec::new(), target, false)
     }
 
-    pub fn advance(&mut self) {
-        self.next_node_index = (self.next_node_index + 1).min(self.nodes.len());
+    pub const fn advance(&mut self) {
+        self.next_node_index += 1;
     }
 
     #[must_use]
@@ -68,9 +68,9 @@ impl Path {
         }
     }
 
-    pub fn replace_node(&mut self, index: usize, new_node: Node) {
+    pub fn replace_node(&mut self, index: usize, replace_with: Node) {
         if index < self.nodes.len() {
-            self.nodes[index] = new_node;
+            self.nodes[index] = replace_with;
         }
     }
 
@@ -84,38 +84,34 @@ impl Path {
         self.next_node_index
     }
 
-    pub fn set_next_node_index(&mut self, index: usize) {
-        self.next_node_index = index.min(self.nodes.len());
+    pub const fn set_next_node_index(&mut self, index: usize) {
+        self.next_node_index = index;
     }
 
     #[must_use]
-    pub fn get_entity_pos_at_node(
-        &self,
-        index: usize,
-        entity_width: f32,
-    ) -> Option<(f32, f32, f32)> {
+    pub fn get_entity_pos_at_node(&self, entity_width: f32, index: usize) -> Option<Vector3<f64>> {
         self.nodes.get(index).map(|node| {
-            let offset = ((entity_width + 1.0) as i32 as f32) * 0.5;
-            (
-                node.pos.0.x as f32 + offset,
-                node.pos.0.y as f32,
-                node.pos.0.z as f32 + offset,
+            let offset = f64::from((entity_width + 1.0) as i32) * 0.5;
+            Vector3::new(
+                f64::from(node.pos.0.x) + offset,
+                f64::from(node.pos.0.y),
+                f64::from(node.pos.0.z) + offset,
             )
         })
     }
 
     #[must_use]
-    pub fn get_node_pos(&self, index: usize) -> Option<Vector3<i32>> {
-        self.nodes.get(index).map(Coordinate::as_vector3)
+    pub fn get_node_pos(&self, index: usize) -> Option<BlockPos> {
+        self.nodes.get(index).map(|node| node.pos)
     }
 
     #[must_use]
-    pub fn get_next_entity_pos(&self, entity_width: f32) -> Option<(f32, f32, f32)> {
-        self.get_entity_pos_at_node(self.next_node_index, entity_width)
+    pub fn get_next_entity_pos(&self, entity_width: f32) -> Option<Vector3<f64>> {
+        self.get_entity_pos_at_node(entity_width, self.next_node_index)
     }
 
     #[must_use]
-    pub fn get_next_node_pos(&self) -> Option<Vector3<i32>> {
+    pub fn get_next_node_pos(&self) -> Option<BlockPos> {
         self.get_node_pos(self.next_node_index)
     }
 
@@ -134,7 +130,12 @@ impl Path {
     }
 
     #[must_use]
-    pub fn same_as(&self, other: &Self) -> bool {
+    pub fn same_as(&self, other: Option<&Self>) -> bool {
+        other.is_some_and(|o| self.same_as_path(o))
+    }
+
+    #[must_use]
+    pub fn same_as_path(&self, other: &Self) -> bool {
         self.nodes.len() == other.nodes.len()
             && self.nodes.iter().zip(&other.nodes).all(|(a, b)| a == b)
     }
@@ -145,7 +146,7 @@ impl Path {
     }
 
     #[must_use]
-    pub const fn get_target(&self) -> Vector3<i32> {
+    pub const fn get_target(&self) -> BlockPos {
         self.target
     }
 
@@ -171,8 +172,17 @@ impl Path {
     }
 
     #[must_use]
+    pub fn get_nodes_mut(&mut self) -> &mut [Node] {
+        &mut self.nodes
+    }
+
+    #[must_use]
     pub fn get_remaining_nodes(&self) -> &[Node] {
-        &self.nodes[self.next_node_index..]
+        if self.next_node_index >= self.nodes.len() {
+            &[]
+        } else {
+            &self.nodes[self.next_node_index..]
+        }
     }
 
     #[must_use]
@@ -183,7 +193,7 @@ impl Path {
 
         let mut total_length = 0.0;
         for i in 1..self.nodes.len() {
-            total_length += self.nodes[i - 1].distance(&self.nodes[i]);
+            total_length += self.nodes[i - 1].distance_to_node(&self.nodes[i]);
         }
         total_length
     }
@@ -196,7 +206,7 @@ impl Path {
 
         let mut remaining = 0.0;
         for i in (self.next_node_index + 1)..self.nodes.len() {
-            remaining += self.nodes[i - 1].distance(&self.nodes[i]);
+            remaining += self.nodes[i - 1].distance_to_node(&self.nodes[i]);
         }
         remaining
     }
@@ -218,6 +228,6 @@ impl PartialEq for Path {
 
 impl Default for Path {
     fn default() -> Self {
-        Self::empty(Vector3::new(0, 0, 0))
+        Self::empty(BlockPos::new(0, 0, 0))
     }
 }

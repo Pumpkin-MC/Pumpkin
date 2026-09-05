@@ -1,6 +1,6 @@
 use pumpkin_data::{
     Block, BlockId, BlockStateId,
-    block_properties::{BlockProperties, WallTorchLikeProperties, WheatLikeProperties},
+    block_properties::{WallTorchLikeProperties, WheatLikeProperties},
     tag::{self, Taggable},
 };
 use pumpkin_util::math::position::BlockPos;
@@ -49,7 +49,7 @@ impl BlockBehaviour for AttachedStemBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        let props = AttachedStemProperties::from_state_id(args.state_id, args.block);
+        let props = AttachedStemProperties::from_state_id(args.state_id);
         if args.direction.to_horizontal_facing() == Some(props.facing)
             && args.neighbor_state_id != Self::get_gourd(args.block).default_state.id
         {
