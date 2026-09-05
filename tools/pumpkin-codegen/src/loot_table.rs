@@ -109,7 +109,6 @@ struct ConditionStruct {
     unenchanted_chance: Option<f32>,
     #[serde(default)]
     enchanted_chance: Option<EnchantedChanceStruct>,
-    #[allow(dead_code)]
     #[serde(default)]
     chances: Option<Vec<f32>>,
     #[serde(default)]
@@ -176,6 +175,14 @@ fn parse_condition(cond: &ConditionStruct) -> LootCondition {
                 predicate: LootEntityPredicate {
                     properties: Box::leak(properties.into_boxed_slice()),
                 },
+        "minecraft:table_bonus" => {
+            let chances = cond.chances.clone().unwrap_or_default();
+            if chances.is_empty() {
+                LootCondition::None
+            } else {
+                LootCondition::TableBonus {
+                    chances: Box::leak(chances.into_boxed_slice()),
+                }
             }
         }
         "minecraft:all_of" => {
@@ -393,18 +400,11 @@ fn extract_entries_with_depth(
         return;
     }
 
-    let mut entry_cond = inherited_condition;
-    for c in &entry.conditions {
-        let parsed = parse_condition(c);
-        if parsed != LootCondition::None {
-            if entry_cond == LootCondition::NoSilkTouch
-                || entry_cond == LootCondition::NoSilkTouchOrShears
-            {
-            } else {
-                entry_cond = parsed;
-            }
-        }
-    }
+    let entry_cond = match (inherited_condition, combine_conditions(&entry.conditions)) {
+        (LootCondition::None, cond) | (cond, LootCondition::None) => cond,
+        (first, second) if first == second => first,
+        (first, second) => LootCondition::AllOf(Box::leak(vec![first, second].into_boxed_slice())),
+    };
 
     match entry.entry_type.as_str() {
         "minecraft:empty" => {
@@ -580,13 +580,7 @@ fn extract_entries_with_depth(
             let mut saw_shears = false;
 
             for child in &entry.children {
-                let mut child_cond = LootCondition::None;
-                for c in &child.conditions {
-                    let parsed = parse_condition(c);
-                    if parsed != LootCondition::None {
-                        child_cond = parsed;
-                    }
-                }
+                let child_cond = combine_conditions(&child.conditions);
 
                 let effective_cond = if child_cond == LootCondition::SilkTouch {
                     saw_silk = true;
@@ -678,6 +672,9 @@ fn condition_to_tokens(cond: LootCondition) -> TokenStream {
                     },
                 }
             }
+        LootCondition::TableBonus { chances } => {
+            let values = chances.iter();
+            quote! { LootCondition::TableBonus { chances: &[#(#values),*] } }
         }
         LootCondition::AllOf(list) => {
             let tokens: Vec<TokenStream> = list.iter().copied().map(condition_to_tokens).collect();

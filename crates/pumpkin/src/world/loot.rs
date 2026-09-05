@@ -97,6 +97,12 @@ fn check_condition(
             .find(|(candidate, _)| *candidate == target)
             // Entities opt into property predicates by publishing a snapshot.
             .is_none_or(|(_, properties)| properties.matches(predicate)),
+        LootCondition::TableBonus { chances } => {
+            let index = (fortune_level.max(0) as usize).min(chances.len().saturating_sub(1));
+            chances
+                .get(index)
+                .is_some_and(|chance| rng.next_f32() < *chance)
+        }
         LootCondition::AllOf(conditions) => conditions
             .iter()
             .all(|c| check_condition(*c, has_silk_touch, has_shears, fortune_level, params, rng)),
