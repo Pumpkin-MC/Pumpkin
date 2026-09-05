@@ -1520,6 +1520,7 @@ impl ProtoChunk {
                                     ),
                                     sea_level: settings.sea_level,
                                     min_y: chunk_min_y,
+                                    height: self.generation_height(),
                                     height_sampler: Some(&mut height_sampler),
                                     structure_key: Some(entry.structure),
                                 };

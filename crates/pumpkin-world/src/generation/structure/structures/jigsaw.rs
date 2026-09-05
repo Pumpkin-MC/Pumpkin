@@ -823,10 +823,9 @@ impl StructureGenerator for JigsawGenerator {
             .structure_key
             .map(|key| pumpkin_data::structures::Structure::get(&key));
 
-        let height = if context.min_y < 0 { 384 } else { 256 };
         let start_y = if let Some(s) = structure {
             s.start_height.map_or(context.sea_level, |hp| {
-                hp.get(&mut context.random, context.min_y as i8, height)
+                hp.get(&mut context.random, context.min_y as i8, context.height)
             })
         } else {
             context.sea_level
@@ -1012,6 +1011,7 @@ mod tests {
             random: super::super::create_chunk_random(0, 0, 0),
             sea_level: 63,
             min_y: -64,
+            height: 384,
             height_sampler: None,
             structure_key: Some(pumpkin_data::structures::StructureKeys::AncientCity),
         };
@@ -1123,6 +1123,7 @@ mod tests {
             random: super::super::create_chunk_random(SEED, 75, -82),
             sea_level: 63,
             min_y: -64,
+            height: 384,
             height_sampler: Some(&mut height_sampler),
             structure_key: Some(pumpkin_data::structures::StructureKeys::PillagerOutpost),
         };

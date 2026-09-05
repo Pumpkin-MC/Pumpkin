@@ -43,12 +43,6 @@ pub const FOSSILS: [&str; 14] = [
     "nether_fossils/fossil_14",
 ];
 
-/// Vanilla height provider bounds for nether fossils.
-/// From `nether_fossil.json`: uniform(absolute=32, `below_top=2`).
-/// Vanilla `BelowTop`: height - 1 + `min_y` - offset = 256 - 1 + 0 - 2 = 253.
-const HEIGHT_MIN: i32 = 32;
-const HEIGHT_MAX: i32 = 253;
-
 pub struct NetherFossilGenerator;
 
 impl StructureGenerator for NetherFossilGenerator {
@@ -59,7 +53,7 @@ impl StructureGenerator for NetherFossilGenerator {
         // Vanilla random call order:
         // 1. nextInt(16) for X offset within chunk
         // 2. nextInt(16) for Z offset within chunk
-        // 3. height.get(random) for initial Y (uniform 32..254)
+        // 3. height.get(random) for initial Y (uniform 32..below_top 2)
         // 4. Column scan (no random calls)
         // 5. Rotation.getRandom(random) - nextInt(4)
         // 6. Util.getRandom(FOSSILS, random) - nextInt(14)
@@ -67,16 +61,13 @@ impl StructureGenerator for NetherFossilGenerator {
         let x = start_block_x(context.chunk_x) + context.random.next_bounded_i32(16);
         let z = start_block_z(context.chunk_z) + context.random.next_bounded_i32(16);
 
-        let structure = context
+        let height_provider = context
             .structure_key
-            .map(|key| pumpkin_data::structures::Structure::get(&key));
+            .map(|key| pumpkin_data::structures::Structure::get(&key))
+            .and_then(|structure| structure.start_height)?;
 
-        let initial_y = if let Some(hp) = structure.and_then(|s| s.start_height) {
-            hp.get(&mut context.random, context.min_y as i8, 256)
-        } else {
-            let height_range = HEIGHT_MAX - HEIGHT_MIN + 1;
-            HEIGHT_MIN + context.random.next_bounded_i32(height_range)
-        };
+        let initial_y =
+            height_provider.get(&mut context.random, context.min_y as i8, context.height);
 
         let rotation_index = context.random.next_bounded_i32(4) as u8;
         let rotation = Rotation::from_index(rotation_index);

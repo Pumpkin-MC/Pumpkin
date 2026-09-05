@@ -195,6 +195,7 @@ pub fn find_nearest_structure_start(
                                 random: create_chunk_random(world_seed, chunk_x, chunk_z),
                                 sea_level: settings.sea_level,
                                 min_y: noise_generator.dimension.min_y,
+                                height: placement_chunk.generation_height(),
                                 height_sampler: Some(&mut height_sampler),
                                 structure_key: Some(key),
                             };

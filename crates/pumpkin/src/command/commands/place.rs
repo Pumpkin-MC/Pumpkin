@@ -194,6 +194,13 @@ impl CommandExecutor for PlaceJigsawExecutor {
             let random = RandomGenerator::Legacy(LegacyRand::from_seed(seed));
             let world_gen = context.world().level.world_gen();
             let settings = NoiseSettings::from_dimension(world_gen.dimension());
+            let generation_height = settings
+                .shape
+                .trim_height(
+                    world_gen.dimension().min_y as i8,
+                    (world_gen.dimension().min_y + world_gen.dimension().height) as u16,
+                )
+                .height;
             let mut structure_context = StructureGeneratorContext {
                 seed: seed as i64,
                 chunk_x: 0,
@@ -201,6 +208,7 @@ impl CommandExecutor for PlaceJigsawExecutor {
                 random,
                 sea_level: settings.sea_level,
                 min_y: world_gen.dimension().min_y,
+                height: generation_height,
                 height_sampler: None,
                 structure_key: None,
             };
@@ -285,6 +293,13 @@ impl CommandExecutor for PlaceStructureExecutor {
         let (_piece_count, placer) = {
             let world_gen = context.world().level.world_gen();
             let settings = NoiseSettings::from_dimension(world_gen.dimension());
+            let generation_height = settings
+                .shape
+                .trim_height(
+                    world_gen.dimension().min_y as i8,
+                    (world_gen.dimension().min_y + world_gen.dimension().height) as u16,
+                )
+                .height;
 
             if structure.structure_type == StructureType::Jigsaw {
                 let pool = structure.start_pool.ok_or_else(|| {
@@ -308,6 +323,7 @@ impl CommandExecutor for PlaceStructureExecutor {
                         random,
                         sea_level: settings.sea_level,
                         min_y: world_gen.dimension().min_y,
+                        height: generation_height,
                         height_sampler: None,
                         structure_key: Some(key),
                     },
@@ -356,6 +372,7 @@ impl CommandExecutor for PlaceStructureExecutor {
                         random,
                         sea_level: settings.sea_level,
                         min_y: world_gen.dimension().min_y,
+                        height: generation_height,
                         height_sampler: None,
                         structure_key: Some(key),
                     },
