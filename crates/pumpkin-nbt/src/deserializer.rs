@@ -24,6 +24,97 @@ pub trait NbtDataSource<'a> {
     fn read_string(&mut self, len: usize) -> Result<Cow<'a, str>>;
     /// Reads a byte-array payload of `len` elements.
     fn read_byte_array(&mut self, len: usize) -> Result<Cow<'a, [i8]>>;
+    /// Reads `len` ZigZag-encoded LEB128 32-bit signed integers.
+    fn read_var_i32_array(&mut self, len: usize) -> Result<Vec<i32>> {
+        let mut values = Vec::with_capacity(len.min(4096));
+        for _ in 0..len {
+            let value = read_var_u32(|| self.read_u8())?;
+            values.push(decode_zigzag_i32(value));
+        }
+        Ok(values)
+    }
+    /// Reads `len` ZigZag-encoded LEB128 64-bit signed integers.
+    fn read_var_i64_array(&mut self, len: usize) -> Result<Vec<i64>> {
+        let mut values = Vec::with_capacity(len.min(4096));
+        for _ in 0..len {
+            let value = read_var_u64(|| self.read_u8())?;
+            values.push(decode_zigzag_i64(value));
+        }
+        Ok(values)
+    }
+}
+
+fn read_var_u32(mut read_byte: impl FnMut() -> Result<u8>) -> Result<u32> {
+    let mut value = 0;
+    for i in 0..5 {
+        let byte = read_byte()?;
+        value |= (u32::from(byte) & 0x7F) << (i * 7);
+        if byte & 0x80 == 0 {
+            return Ok(value);
+        }
+    }
+    Err(Error::VarIntTooLarge)
+}
+
+fn read_var_u64(mut read_byte: impl FnMut() -> Result<u8>) -> Result<u64> {
+    let mut value = 0;
+    for i in 0..10 {
+        let byte = read_byte()?;
+        value |= (u64::from(byte) & 0x7F) << (i * 7);
+        if byte & 0x80 == 0 {
+            return Ok(value);
+        }
+    }
+    Err(Error::VarLongTooLarge)
+}
+
+const fn decode_zigzag_i32(value: u32) -> i32 {
+    ((value >> 1) as i32) ^ -((value as i32) & 1)
+}
+
+const fn decode_zigzag_i64(value: u64) -> i64 {
+    ((value >> 1) as i64) ^ -((value as i64) & 1)
+}
+
+fn unexpected_eof() -> Error {
+    Error::Incomplete(std::io::Error::new(
+        std::io::ErrorKind::UnexpectedEof,
+        "unexpected EOF",
+    ))
+}
+
+fn read_var_i32_array_from_slice(
+    data: &[u8],
+    position: &mut usize,
+    len: usize,
+) -> Result<Vec<i32>> {
+    let mut values = Vec::with_capacity(len);
+    for _ in 0..len {
+        let value = read_var_u32(|| {
+            let byte = data.get(*position).copied().ok_or_else(unexpected_eof)?;
+            *position += 1;
+            Ok(byte)
+        })?;
+        values.push(decode_zigzag_i32(value));
+    }
+    Ok(values)
+}
+
+fn read_var_i64_array_from_slice(
+    data: &[u8],
+    position: &mut usize,
+    len: usize,
+) -> Result<Vec<i64>> {
+    let mut values = Vec::with_capacity(len);
+    for _ in 0..len {
+        let value = read_var_u64(|| {
+            let byte = data.get(*position).copied().ok_or_else(unexpected_eof)?;
+            *position += 1;
+            Ok(byte)
+        })?;
+        values.push(decode_zigzag_i64(value));
+    }
+    Ok(values)
 }
 
 /// Adapts a [`Read`] and [`Seek`] stream into an [`NbtDataSource`].
@@ -118,6 +209,20 @@ impl<'a> NbtDataSource<'a> for Cursor<&'a [u8]> {
         let i8_slice = unsafe { std::slice::from_raw_parts(slice.as_ptr().cast::<i8>(), len) };
         Ok(Cow::Borrowed(i8_slice))
     }
+
+    fn read_var_i32_array(&mut self, len: usize) -> Result<Vec<i32>> {
+        let mut position = self.position() as usize;
+        let result = read_var_i32_array_from_slice(self.get_ref(), &mut position, len);
+        self.set_position(position as u64);
+        result
+    }
+
+    fn read_var_i64_array(&mut self, len: usize) -> Result<Vec<i64>> {
+        let mut position = self.position() as usize;
+        let result = read_var_i64_array_from_slice(self.get_ref(), &mut position, len);
+        self.set_position(position as u64);
+        result
+    }
 }
 
 impl<'a, S: NbtDataSource<'a> + ?Sized> NbtDataSource<'a> for &mut S {
@@ -135,6 +240,12 @@ impl<'a, S: NbtDataSource<'a> + ?Sized> NbtDataSource<'a> for &mut S {
     }
     fn read_byte_array(&mut self, len: usize) -> Result<Cow<'a, [i8]>> {
         (**self).read_byte_array(len)
+    }
+    fn read_var_i32_array(&mut self, len: usize) -> Result<Vec<i32>> {
+        (**self).read_var_i32_array(len)
+    }
+    fn read_var_i64_array(&mut self, len: usize) -> Result<Vec<i64>> {
+        (**self).read_var_i64_array(len)
     }
 }
 
@@ -186,6 +297,20 @@ impl<'a> NbtDataSource<'a> for Cursor<Vec<u8>> {
         // SAFETY: `slice` is a valid byte slice of length `len`. `u8` and `i8` have identical size, alignment (1 byte), and valid value representations.
         let i8_slice = unsafe { std::slice::from_raw_parts(slice.as_ptr().cast::<i8>(), len) };
         Ok(Cow::Owned(i8_slice.to_vec()))
+    }
+
+    fn read_var_i32_array(&mut self, len: usize) -> Result<Vec<i32>> {
+        let mut position = self.position() as usize;
+        let result = read_var_i32_array_from_slice(self.get_ref(), &mut position, len);
+        self.set_position(position as u64);
+        result
+    }
+
+    fn read_var_i64_array(&mut self, len: usize) -> Result<Vec<i64>> {
+        let mut position = self.position() as usize;
+        let result = read_var_i64_array_from_slice(self.get_ref(), &mut position, len);
+        self.set_position(position as u64);
+        result
     }
 }
 
@@ -396,37 +521,19 @@ impl<'a, D: NbtDataSource<'a>> NbtReadHelperBedrock<D> {
     }
 
     fn get_var_u32(&mut self) -> Result<u32> {
-        let mut val = 0;
-        for i in 0..5 {
-            let byte = self.get_u8()?;
-            val |= (u32::from(byte) & 0x7F) << (i * 7);
-            if byte & 0x80 == 0 {
-                return Ok(val);
-            }
-        }
-        Err(Error::VarIntTooLarge)
+        read_var_u32(|| self.get_u8())
     }
 
     fn get_var_i32(&mut self) -> Result<i32> {
-        let val = self.get_var_u32()?;
-        Ok(((val >> 1) as i32) ^ -((val as i32) & 1))
+        Ok(decode_zigzag_i32(self.get_var_u32()?))
     }
 
     fn get_var_u64(&mut self) -> Result<u64> {
-        let mut val = 0;
-        for i in 0..10 {
-            let byte = self.get_u8()?;
-            val |= (u64::from(byte) & 0x7F) << (i * 7);
-            if byte & 0x80 == 0 {
-                return Ok(val);
-            }
-        }
-        Err(Error::VarLongTooLarge)
+        read_var_u64(|| self.get_u8())
     }
 
     fn get_var_i64(&mut self) -> Result<i64> {
-        let val = self.get_var_u64()?;
-        Ok(((val >> 1) as i64) ^ -((val as i64) & 1))
+        Ok(decode_zigzag_i64(self.get_var_u64()?))
     }
 
     fn get_string_len(&mut self) -> Result<u32> {
@@ -463,6 +570,12 @@ impl<'a, D: NbtDataSource<'a>> NbtReadHelper<'a> for NbtReadHelperBedrock<D> {
     fn get_i64(&mut self) -> Result<i64> {
         self.get_var_i64()
     }
+    fn get_i32_array(&mut self, len: usize) -> Result<Vec<i32>> {
+        self.reader.read_var_i32_array(len)
+    }
+    fn get_i64_array(&mut self, len: usize) -> Result<Vec<i64>> {
+        self.reader.read_var_i64_array(len)
+    }
     fn get_f32(&mut self) -> Result<f32> {
         let mut buf = [0u8; 4];
         self.reader.read_bytes(&mut buf)?;
@@ -488,7 +601,9 @@ impl<'a, D: NbtDataSource<'a>> NbtReadHelper<'a> for NbtReadHelperBedrock<D> {
 mod tests {
     use std::io::Cursor;
 
-    use super::{NbtReadHelper, NbtReadHelperJava};
+    use crate::serializer::{NbtWriteHelper, NbtWriteHelperBedrock};
+
+    use super::{NbtReadHelper, NbtReadHelperBedrock, NbtReadHelperJava};
 
     #[test]
     fn java_numeric_arrays_decode_big_endian_values() {
@@ -501,5 +616,25 @@ mod tests {
         let long_bytes: Vec<u8> = longs.iter().flat_map(|value| value.to_be_bytes()).collect();
         let mut reader = NbtReadHelperJava::new(Cursor::new(long_bytes.as_slice()));
         assert_eq!(reader.get_i64_array(longs.len()).unwrap(), longs);
+    }
+
+    #[test]
+    fn bedrock_numeric_arrays_decode_zigzag_varints() {
+        let ints = [i32::MIN, -1, 0, 1, i32::MAX];
+        let longs = [i64::MIN, -1, 0, 1, i64::MAX];
+        let mut bytes = Vec::new();
+        let mut writer = NbtWriteHelperBedrock::new(&mut bytes);
+        for value in ints {
+            writer.write_i32(value).unwrap();
+        }
+        for value in longs {
+            writer.write_i64(value).unwrap();
+        }
+        writer.write_u8(123).unwrap();
+
+        let mut reader = NbtReadHelperBedrock::new(Cursor::new(bytes.as_slice()));
+        assert_eq!(reader.get_i32_array(ints.len()).unwrap(), ints);
+        assert_eq!(reader.get_i64_array(longs.len()).unwrap(), longs);
+        assert_eq!(reader.get_u8().unwrap(), 123);
     }
 }
