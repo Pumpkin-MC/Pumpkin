@@ -5966,6 +5966,10 @@ impl World {
         );
     }
 
+    pub fn sync_global_world_event(&self, world_event: WorldEvent, position: BlockPos, data: i32) {
+        self.broadcast_packet_all(&CWorldEvent::new(world_event as i32, position, data, true));
+    }
+
     pub fn set_block_destroy_stage(&self, entity_id: i32, location: BlockPos, stage: i8) {
         let chunk_pos = location.chunk_position();
         let packet = CSetBlockDestroyStage::new(entity_id.into(), location, stage);
