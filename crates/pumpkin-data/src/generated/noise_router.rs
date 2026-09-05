@@ -1867,7 +1867,7 @@ pub mod overworld_compiled {
         ctx: &mut C,
     ) -> f32 {
         let val = eval_overworld_170(pos, ctx);
-        if val >= -64f32 && val < 57f32 {
+        if val >= -60f32 && val < 51f32 {
             eval_overworld_200(pos, ctx)
         } else {
             eval_overworld_10(pos, ctx)
@@ -1893,21 +1893,6 @@ pub mod overworld_compiled {
         pos: &pumpkin_util::math::vector3::Vector3<i32>,
         ctx: &mut C,
     ) -> f32 {
-        ctx.sample_wrapper(203usize, WrapperType::Cache, pos, &eval_overworld_202)
-    }
-    #[inline(always)]
-    pub fn eval_overworld_204<C: NoiseEvaluationContext>(
-        pos: &pumpkin_util::math::vector3::Vector3<i32>,
-        ctx: &mut C,
-    ) -> f32 {
-        let _ = (pos, ctx);
-        0.08f32
-    }
-    #[inline(always)]
-    pub fn eval_overworld_205<C: NoiseEvaluationContext>(
-        pos: &pumpkin_util::math::vector3::Vector3<i32>,
-        ctx: &mut C,
-    ) -> f32 {
         ctx.sample_noise(
             DoublePerlinNoiseParameters::ORE_VEIN_A,
             f64::from(pos.x) * 4f64,
@@ -1916,49 +1901,41 @@ pub mod overworld_compiled {
         )
     }
     #[inline(always)]
-    pub fn eval_overworld_206<C: NoiseEvaluationContext>(
-        pos: &pumpkin_util::math::vector3::Vector3<i32>,
-        ctx: &mut C,
-    ) -> f32 {
-        let _ = (pos, ctx);
-        1f32
-    }
-    #[inline(always)]
-    pub fn eval_overworld_207<C: NoiseEvaluationContext>(
+    pub fn eval_overworld_204<C: NoiseEvaluationContext>(
         pos: &pumpkin_util::math::vector3::Vector3<i32>,
         ctx: &mut C,
     ) -> f32 {
         let val = eval_overworld_170(pos, ctx);
-        if val >= -64f32 && val < 57f32 {
-            eval_overworld_205(pos, ctx)
+        if val >= -60f32 && val < 51f32 {
+            eval_overworld_203(pos, ctx)
         } else {
-            eval_overworld_206(pos, ctx)
+            eval_overworld_10(pos, ctx)
         }
     }
     #[inline(always)]
-    pub fn eval_overworld_208<C: NoiseEvaluationContext>(
+    pub fn eval_overworld_205<C: NoiseEvaluationContext>(
         pos: &pumpkin_util::math::vector3::Vector3<i32>,
         ctx: &mut C,
     ) -> f32 {
         ctx.sample_wrapper(
-            208usize,
+            205usize,
             WrapperType::Interpolated {
                 cell_size_xz: 4i32,
                 cell_size_y: 8i32,
             },
             pos,
-            &eval_overworld_207,
+            &eval_overworld_204,
         )
     }
     #[inline(always)]
-    pub fn eval_overworld_209<C: NoiseEvaluationContext>(
+    pub fn eval_overworld_206<C: NoiseEvaluationContext>(
         pos: &pumpkin_util::math::vector3::Vector3<i32>,
         ctx: &mut C,
     ) -> f32 {
-        eval_overworld_208(pos, ctx).abs()
+        eval_overworld_205(pos, ctx).abs()
     }
     #[inline(always)]
-    pub fn eval_overworld_210<C: NoiseEvaluationContext>(
+    pub fn eval_overworld_207<C: NoiseEvaluationContext>(
         pos: &pumpkin_util::math::vector3::Vector3<i32>,
         ctx: &mut C,
     ) -> f32 {
@@ -1970,82 +1947,55 @@ pub mod overworld_compiled {
         )
     }
     #[inline(always)]
-    pub fn eval_overworld_211<C: NoiseEvaluationContext>(
+    pub fn eval_overworld_208<C: NoiseEvaluationContext>(
         pos: &pumpkin_util::math::vector3::Vector3<i32>,
         ctx: &mut C,
     ) -> f32 {
         let val = eval_overworld_170(pos, ctx);
-        if val >= -64f32 && val < 57f32 {
-            eval_overworld_210(pos, ctx)
+        if val >= -60f32 && val < 51f32 {
+            eval_overworld_207(pos, ctx)
         } else {
-            eval_overworld_206(pos, ctx)
+            eval_overworld_10(pos, ctx)
         }
+    }
+    #[inline(always)]
+    pub fn eval_overworld_209<C: NoiseEvaluationContext>(
+        pos: &pumpkin_util::math::vector3::Vector3<i32>,
+        ctx: &mut C,
+    ) -> f32 {
+        ctx.sample_wrapper(
+            209usize,
+            WrapperType::Interpolated {
+                cell_size_xz: 4i32,
+                cell_size_y: 8i32,
+            },
+            pos,
+            &eval_overworld_208,
+        )
+    }
+    #[inline(always)]
+    pub fn eval_overworld_210<C: NoiseEvaluationContext>(
+        pos: &pumpkin_util::math::vector3::Vector3<i32>,
+        ctx: &mut C,
+    ) -> f32 {
+        eval_overworld_209(pos, ctx).abs()
+    }
+    #[inline(always)]
+    pub fn eval_overworld_211<C: NoiseEvaluationContext>(
+        pos: &pumpkin_util::math::vector3::Vector3<i32>,
+        ctx: &mut C,
+    ) -> f32 {
+        eval_overworld_206(pos, ctx).max(eval_overworld_210(pos, ctx))
     }
     #[inline(always)]
     pub fn eval_overworld_212<C: NoiseEvaluationContext>(
         pos: &pumpkin_util::math::vector3::Vector3<i32>,
         ctx: &mut C,
     ) -> f32 {
-        ctx.sample_wrapper(
-            212usize,
-            WrapperType::Interpolated {
-                cell_size_xz: 4i32,
-                cell_size_y: 8i32,
-            },
-            pos,
-            &eval_overworld_211,
-        )
+        eval_overworld_211(pos, ctx) + -0.08f32
     }
     #[inline(always)]
     pub fn eval_overworld_213<C: NoiseEvaluationContext>(
-        pos: &pumpkin_util::math::vector3::Vector3<i32>,
-        ctx: &mut C,
-    ) -> f32 {
-        eval_overworld_212(pos, ctx).abs()
-    }
-    #[inline(always)]
-    pub fn eval_overworld_214<C: NoiseEvaluationContext>(
-        pos: &pumpkin_util::math::vector3::Vector3<i32>,
-        ctx: &mut C,
-    ) -> f32 {
-        eval_overworld_209(pos, ctx).max(eval_overworld_213(pos, ctx))
-    }
-    #[inline(always)]
-    pub fn eval_overworld_215<C: NoiseEvaluationContext>(
-        pos: &pumpkin_util::math::vector3::Vector3<i32>,
-        ctx: &mut C,
-    ) -> f32 {
-        eval_overworld_204(pos, ctx) - eval_overworld_214(pos, ctx)
-    }
-    #[inline(always)]
-    pub fn eval_overworld_216<C: NoiseEvaluationContext>(
-        pos: &pumpkin_util::math::vector3::Vector3<i32>,
-        ctx: &mut C,
-    ) -> f32 {
-        let val = eval_overworld_203(pos, ctx);
-        if val >= -0.4f32 && val < 0.4f32 {
-            eval_overworld_172(pos, ctx)
-        } else {
-            eval_overworld_215(pos, ctx)
-        }
-    }
-    #[inline(always)]
-    pub fn eval_overworld_217<C: NoiseEvaluationContext>(
-        pos: &pumpkin_util::math::vector3::Vector3<i32>,
-        ctx: &mut C,
-    ) -> f32 {
-        ctx.sample_wrapper(217usize, WrapperType::Cache, pos, &eval_overworld_216)
-    }
-    #[inline(always)]
-    pub fn eval_overworld_218<C: NoiseEvaluationContext>(
-        pos: &pumpkin_util::math::vector3::Vector3<i32>,
-        ctx: &mut C,
-    ) -> f32 {
-        let _ = (pos, ctx);
-        -0.3f32
-    }
-    #[inline(always)]
-    pub fn eval_overworld_219<C: NoiseEvaluationContext>(
         pos: &pumpkin_util::math::vector3::Vector3<i32>,
         ctx: &mut C,
     ) -> f32 {
@@ -2057,14 +2007,7 @@ pub mod overworld_compiled {
         )
     }
     #[inline(always)]
-    pub fn eval_overworld_220<C: NoiseEvaluationContext>(
-        pos: &pumpkin_util::math::vector3::Vector3<i32>,
-        ctx: &mut C,
-    ) -> f32 {
-        eval_overworld_218(pos, ctx) - eval_overworld_219(pos, ctx)
-    }
-    #[inline(always)]
-    pub fn eval_overworld_221<C: NoiseEvaluationContext>(
+    pub fn eval_overworld_214<C: NoiseEvaluationContext>(
         pos: &pumpkin_util::math::vector3::Vector3<i32>,
         ctx: &mut C,
     ) -> f32 {
@@ -6854,8 +6797,8 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                 when_in_range_index: 200usize,
                 when_out_range_index: 10usize,
                 data: &RangeChoiceData {
-                    min_inclusive: -64f32,
-                    max_exclusive: 57f32,
+                    min_inclusive: -60f32,
+                    max_exclusive: 51f32,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
@@ -6865,11 +6808,6 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     cell_size_y: 8i32,
                 },
             },
-            BaseNoiseFunctionComponent::Wrapper {
-                input_index: 202usize,
-                wrapper: WrapperType::Cache,
-            },
-            BaseNoiseFunctionComponent::Constant { value: 0.08f32 },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::ORE_VEIN_A,
@@ -6877,25 +6815,24 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
                     y_scale: 4f64,
                 },
             },
-            BaseNoiseFunctionComponent::Constant { value: 1f32 },
             BaseNoiseFunctionComponent::RangeChoice {
                 input_index: 170usize,
-                when_in_range_index: 205usize,
-                when_out_range_index: 206usize,
+                when_in_range_index: 203usize,
+                when_out_range_index: 10usize,
                 data: &RangeChoiceData {
-                    min_inclusive: -64f32,
-                    max_exclusive: 57f32,
+                    min_inclusive: -60f32,
+                    max_exclusive: 51f32,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 207usize,
+                input_index: 204usize,
                 wrapper: WrapperType::Interpolated {
                     cell_size_xz: 4i32,
                     cell_size_y: 8i32,
                 },
             },
             BaseNoiseFunctionComponent::Unary {
-                input_index: 208usize,
+                input_index: 205usize,
                 data: &UnaryData {
                     operation: UnaryOperation::Abs,
                 },
@@ -6909,66 +6846,45 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
             },
             BaseNoiseFunctionComponent::RangeChoice {
                 input_index: 170usize,
-                when_in_range_index: 210usize,
-                when_out_range_index: 206usize,
+                when_in_range_index: 207usize,
+                when_out_range_index: 10usize,
                 data: &RangeChoiceData {
-                    min_inclusive: -64f32,
-                    max_exclusive: 57f32,
+                    min_inclusive: -60f32,
+                    max_exclusive: 51f32,
                 },
             },
             BaseNoiseFunctionComponent::Wrapper {
-                input_index: 211usize,
+                input_index: 208usize,
                 wrapper: WrapperType::Interpolated {
                     cell_size_xz: 4i32,
                     cell_size_y: 8i32,
                 },
             },
             BaseNoiseFunctionComponent::Unary {
-                input_index: 212usize,
+                input_index: 209usize,
                 data: &UnaryData {
                     operation: UnaryOperation::Abs,
                 },
             },
             BaseNoiseFunctionComponent::Binary {
-                argument1_index: 209usize,
-                argument2_index: 213usize,
+                argument1_index: 206usize,
+                argument2_index: 210usize,
                 data: &BinaryData {
                     operation: BinaryOperation::Max,
                 },
             },
-            BaseNoiseFunctionComponent::Binary {
-                argument1_index: 204usize,
-                argument2_index: 214usize,
-                data: &BinaryData {
-                    operation: BinaryOperation::Sub,
+            BaseNoiseFunctionComponent::Linear {
+                input_index: 211usize,
+                data: &LinearData {
+                    operation: LinearOperation::Add,
+                    argument: -0.08f32,
                 },
             },
-            BaseNoiseFunctionComponent::RangeChoice {
-                input_index: 203usize,
-                when_in_range_index: 172usize,
-                when_out_range_index: 215usize,
-                data: &RangeChoiceData {
-                    min_inclusive: -0.4f32,
-                    max_exclusive: 0.4f32,
-                },
-            },
-            BaseNoiseFunctionComponent::Wrapper {
-                input_index: 216usize,
-                wrapper: WrapperType::Cache,
-            },
-            BaseNoiseFunctionComponent::Constant { value: -0.3f32 },
             BaseNoiseFunctionComponent::Noise {
                 data: &NoiseData {
                     noise_id: DoublePerlinNoiseParameters::ORE_GAP,
                     xz_scale: 1f64,
                     y_scale: 1f64,
-                },
-            },
-            BaseNoiseFunctionComponent::Binary {
-                argument1_index: 218usize,
-                argument2_index: 219usize,
-                data: &BinaryData {
-                    operation: BinaryOperation::Sub,
                 },
             },
             BaseNoiseFunctionComponent::Slice {
@@ -6981,12 +6897,12 @@ pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = BaseNoiseRouters {
         fluid_level_floodedness_noise: 197usize,
         fluid_level_spread_noise: 198usize,
         lava_noise: 199usize,
-        erosion: 221usize,
+        erosion: 214usize,
         depth: 34usize,
         final_density: 195usize,
-        vein_toggle: 203usize,
-        vein_ridged: 217usize,
-        vein_gap: 220usize,
+        vein_toggle: 202usize,
+        vein_ridged: 212usize,
+        vein_gap: 213usize,
     },
     surface_estimator: BaseSurfaceEstimator {
         full_component_stack: &[
