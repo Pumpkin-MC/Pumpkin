@@ -75,7 +75,7 @@ impl MobCounts {
 
 pub struct LocalMobCapCalculator {
     player_mob_counts: DashMap<i32, MobCounts>,
-    players_near_chunk: DashMap<Vector2<i32>, Vec<i32>>,
+    players_near_chunk: DashMap<Vector2<i32>, Arc<[i32]>>,
 }
 
 impl Clone for LocalMobCapCalculator {
@@ -119,7 +119,7 @@ impl LocalMobCapCalculator {
         dx * dx + dy * dy
     }
 
-    fn get_players_near(&self, world: &World, chunk_pos: Vector2<i32>) -> Vec<i32> {
+    fn get_players_near(&self, world: &World, chunk_pos: Vector2<i32>) -> Arc<[i32]> {
         if let Some(players) = self.players_near_chunk.get(&chunk_pos) {
             return players.value().clone();
         }
@@ -133,13 +133,14 @@ impl LocalMobCapCalculator {
                 players.push(player.entity_id());
             }
         }
+        let players: Arc<[i32]> = players.into();
         self.players_near_chunk.insert(chunk_pos, players.clone());
         players
     }
 
     pub fn add_mob(&self, chunk_pos: Vector2<i32>, world: &World, category: &'static MobCategory) {
         let players = self.get_players_near(world, chunk_pos);
-        for player in players {
+        for &player in players.iter() {
             self.player_mob_counts
                 .entry(player)
                 .or_default()
@@ -154,7 +155,7 @@ impl LocalMobCapCalculator {
         category: &'static MobCategory,
     ) {
         let players = self.get_players_near(world, chunk_pos);
-        for player in players {
+        for &player in players.iter() {
             if let Some(count) = self.player_mob_counts.get(&player) {
                 count.remove(category);
             }
@@ -168,7 +169,7 @@ impl LocalMobCapCalculator {
         chunk_pos: Vector2<i32>,
     ) -> bool {
         let players = self.get_players_near(world, chunk_pos);
-        for player in players {
+        for &player in players.iter() {
             if let Some(count) = self.player_mob_counts.get(&player) {
                 if count.can_spawn(category) {
                     return true;
@@ -360,7 +361,10 @@ impl SpawnState {
         let potential = PotentialCalculator::default();
         let local_mob_cap = LocalMobCapCalculator::default();
         let counter = MobCounts::default();
-        let active_chunks = world.active_chunks.load();
+        let active_chunks = world
+            .active_chunks
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         for entity in entities.load().iter() {
             if let Some(mob) = entity.get_mob()
                 && (mob.get_mob_entity().persistence_required.load(Relaxed)
@@ -873,7 +877,11 @@ pub fn is_right_distance_to_player_and_spawn_point(
     let chunk_z = get_section_cord(pos.0.z);
     let target_chunk = Vector2::new(chunk_x, chunk_z);
     target_chunk == *chunk_pos
-        || (world.active_chunks.load().contains(&target_chunk)
+        || (world
+            .active_chunks
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .contains(&target_chunk)
             && world
                 .worldborder
                 .lock()

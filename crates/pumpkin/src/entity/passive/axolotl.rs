@@ -296,9 +296,21 @@ impl Mob for AxolotlEntity {
         let item = item_stack.get_item();
 
         if item == &Item::WATER_BUCKET {
-            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
             let entity = self.get_entity();
             let world = entity.world.load();
+            if let Some(server) = world.server.upgrade() {
+                let mut event = crate::plugin::api::events::player::player_bucket_entity::PlayerBucketEntityEvent {
+                    player: player.clone(),
+                    entity_id: entity.entity_id,
+                    bucket_item: "axolotl_bucket".to_string(),
+                    cancelled: false,
+                };
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return false;
+                }
+            }
+            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
             let pos = entity.pos.load();
             world.play_sound(Sound::ItemBucketFillAxolotl, SoundCategory::Neutral, &pos);
             entity.remove();

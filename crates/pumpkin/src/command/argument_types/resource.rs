@@ -8,6 +8,7 @@ use crate::command::string_reader::StringReader;
 use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::translation;
+use pumpkin_protocol::java::client::play::SuggestionProviders;
 use pumpkin_util::identifier::Identifier;
 use pumpkin_util::text::TextComponent;
 use std::any::Any;
@@ -144,6 +145,7 @@ impl ArgumentType for ResourceArgument {
         if self.0 == ENTITY_TYPE_REGISTRY {
             let entity_types = EntityType::ALL
                 .iter()
+                .filter(|entity_type| entity_type.summonable)
                 .map(|entity_type| format!("minecraft:{}", entity_type.resource_name));
             suggestions_builder
                 .filter_and_suggest_iter(entity_types)
@@ -216,6 +218,10 @@ impl ArgumentType for ResourceArgument {
             identifier: self.0.clone(),
         }
     }
+
+    fn override_suggestion_providers(&self) -> Option<SuggestionProviders> {
+        (self.0 == ENTITY_TYPE_REGISTRY).then_some(SuggestionProviders::SummonableEntities)
+    }
 }
 
 impl ResourceArgument {
@@ -228,16 +234,28 @@ impl ResourceArgument {
             TextComponent::text(format!("Could not find argument with name '{name}'")),
         );
         let node = context
-            .tree
+            .nodes
             .iter()
-            .find_map(|node| {
-                if let AttachedNode::Argument(cur) = node
+            .rev()
+            .find_map(|parsed| {
+                if let AttachedNode::Argument(cur) = &context.tree[parsed.node]
                     && cur.meta.name == name
                 {
                     Some(cur)
                 } else {
                     None
                 }
+            })
+            .or_else(|| {
+                context.tree.iter().find_map(|node| {
+                    if let AttachedNode::Argument(cur) = node
+                        && cur.meta.name == name
+                    {
+                        Some(cur)
+                    } else {
+                        None
+                    }
+                })
             })
             .ok_or(missing_argument.clone())?;
         let invalid_argument =

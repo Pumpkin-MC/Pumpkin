@@ -117,6 +117,22 @@ impl ItemBehaviour for BrushItem {
         );
 
         if is_sand || is_gravel {
+            if let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id)
+                && let Some(server) = player.world().server.upgrade()
+            {
+                let mut event =
+                    crate::plugin::api::events::block::block_brush::BlockBrushEvent::new(
+                        location,
+                        world.clone(),
+                        player_arc,
+                        player.inventory().held_item(),
+                    );
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return;
+                }
+            }
+
             let current_state_id = world.get_block_state_id(&location);
             let current_stage = get_dusted_stage(block, current_state_id);
 

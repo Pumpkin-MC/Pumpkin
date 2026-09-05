@@ -480,7 +480,15 @@ impl CommandSource {
     /// server (i.e. this is a dummy [`CommandSource`].)
     #[must_use]
     pub fn has_permission(&self, permission: &str) -> bool {
-        self.output.has_permission(self.server(), permission)
+        self.server.as_ref().map_or(
+            matches!(
+                self.output,
+                crate::command::CommandSender::Console
+                    | crate::command::CommandSender::Rcon(_)
+                    | crate::command::CommandSender::Dummy
+            ),
+            |server| self.output.has_permission(server, permission),
+        )
     }
 
     /// Returns whether this source has the permission provided.

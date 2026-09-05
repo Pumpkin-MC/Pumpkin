@@ -106,6 +106,20 @@ impl BrewingStandBlockEntity {
 
         let ingredient_id = ingredient.get_item().id;
 
+        // Fire BrewEvent before mutating items
+        if let Some(server) = world.server.upgrade() {
+            let mut brew_event = crate::plugin::api::events::inventory::brew::BrewEvent::new(
+                self.position,
+                self.fuel.load(Ordering::Relaxed) as u8,
+            );
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut brew_event);
+            if brew_event.cancelled {
+                return;
+            }
+        }
+
         // Brew potion slots
         let mut ingredient_used = false;
         {
@@ -171,17 +185,6 @@ impl BrewingStandBlockEntity {
             return;
         }
 
-        // Fire BrewEvent
-        if let Some(server) = world.server.upgrade() {
-            let mut brew_event = crate::plugin::api::events::inventory::brew::BrewEvent::new(
-                self.position,
-                self.fuel.load(Ordering::Relaxed) as u8,
-            );
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut brew_event);
-        }
-
         // Check if remaining ingredient matches or clear it
         if let Ok(items) = self.items.read() {
             let remaining = &items[3];
@@ -226,6 +229,50 @@ impl BrewingStandBlockEntity {
 
         // Mark dirty to trigger update
         self.mark_dirty();
+    }
+
+    fn try_refill_fuel(&self, world: &Arc<crate::world::World>) -> bool {
+        let expected_fuel = if self.fuel.load(Ordering::Relaxed) <= 0
+            && let Ok(items) = self.items.try_read()
+            && !items[4].is_empty()
+            && items[4]
+                .get_item()
+                .has_tag(&tag::Item::MINECRAFT_BREWING_FUEL)
+        {
+            items[4].clone()
+        } else {
+            return false;
+        };
+
+        let fuel_power = if let Some(server) = world.server.upgrade() {
+            let mut fuel_event = crate::plugin::api::events::inventory::brewing_stand_fuel::BrewingStandFuelEvent::new(
+                self.position,
+                20,
+            );
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut fuel_event);
+
+            if fuel_event.cancelled {
+                return false;
+            }
+
+            fuel_event.fuel_power
+        } else {
+            20
+        };
+
+        if self.fuel.load(Ordering::Relaxed) <= 0
+            && let Ok(mut items) = self.items.try_write()
+            && !items[4].is_empty()
+            && items[4].are_equal(&expected_fuel)
+        {
+            self.fuel.store(i32::from(fuel_power), Ordering::Relaxed);
+            items[4].decrement(1);
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -441,30 +488,10 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
         self
     }
 
+    #[allow(clippy::too_many_lines)]
     fn tick(&self, world: &Arc<crate::world::World>) {
         // Refill fuel counter from fuel item if needed
-        let fuel_refilled = self.fuel.load(Ordering::Relaxed) <= 0
-            && if let Ok(mut items) = self.items.try_write()
-                && !items[4].is_empty()
-                && items[4]
-                    .get_item()
-                    .has_tag(&tag::Item::MINECRAFT_BREWING_FUEL)
-            {
-                if let Some(server) = world.server.upgrade() {
-                    let mut fuel_event = crate::plugin::api::events::inventory::brewing_stand_fuel::BrewingStandFuelEvent::new(
-                            self.position,
-                            20,
-                        );
-                    server
-                        .plugin_manager
-                        .fire_blocking(&server, &mut fuel_event);
-                }
-                self.fuel.store(20, Ordering::Relaxed);
-                items[4].decrement(1);
-                true
-            } else {
-                false
-            };
+        let fuel_refilled = self.try_refill_fuel(world);
 
         // Get current ingredient and check brewing state
         let Ok(items) = self.items.try_read() else {
@@ -493,9 +520,27 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
                 self.mark_dirty();
             }
         } else if brewable && self.fuel.load(Ordering::Relaxed) > 0 {
+            let brew_time = if let Some(server) = world.server.upgrade() {
+                let mut start_event =
+                    crate::plugin::api::events::block::brewing_start::BrewingStartEvent::new(
+                        self.position,
+                        world.clone(),
+                        400,
+                    );
+                server
+                    .plugin_manager
+                    .fire_blocking(&server, &mut start_event);
+                if start_event.cancelled {
+                    return;
+                }
+                start_event.brewing_time
+            } else {
+                400
+            };
+
             // Start new brewing cycle
             self.fuel.fetch_sub(1, Ordering::Relaxed);
-            self.brew_time.store(400, Ordering::Relaxed);
+            self.brew_time.store(brew_time, Ordering::Relaxed);
             *self
                 .ingredient_item
                 .lock()

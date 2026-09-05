@@ -30,6 +30,8 @@ pumpkin-data = { workspace = true, features = ["default"] }
 pumpkin-protocol = { workspace = true, features = ["default"] }
 pumpkin-macros.workspace = true
 pumpkin-codecs.workspace = true
+pumpkin-plugin-runtime.workspace = true
+pumpkin-gametest = { path = "../pumpkin-gametest" }
 
 dashmap.workspace = true
 crossbeam.workspace = true
@@ -73,10 +75,11 @@ rsa.workspace = true
 ed25519-dalek.workspace = true
 hex.workspace = true
 wasmparser.workspace = true
-wasm-encoder = "0.258"
+wasm-encoder.workspace = true
 
 # authentication
 reqwest = { workspace = true, features = ["json"] }
+rustls.workspace = true
 
 sha1.workspace = true
 
@@ -100,6 +103,7 @@ rustc-hash.workspace = true
 tokio-util = { workspace = true, features = ["rt"] }
 
 # System details & Rustc version
+libc = { workspace = true }
 sysinfo.workspace = true
 rustc_version_runtime.workspace = true
 

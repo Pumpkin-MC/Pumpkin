@@ -1,5 +1,6 @@
 pub mod function_loader;
 pub mod recipe_loader;
+pub mod test_loader;
 
 use std::collections::HashMap;
 use std::fs;
@@ -7,11 +8,17 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use tracing::{info, warn};
 
+use pumpkin_data::registry::RegistryEntryData;
+use pumpkin_nbt::{NbtCompound, nbt_compress::read_gzip_compound_tag};
 use pumpkin_protocol::codec::recipe::DynamicRecipe;
 
 use crate::command::context::command_source::CommandSource;
 use crate::server::Server;
 use crate::server::recipe::RecipeManager;
+
+use self::test_loader::{
+    TestInstance, TestInstanceRegistry, load_test_instances_from_dir, to_registry_entry,
+};
 
 #[derive(Clone, Debug)]
 pub struct LoadedDatapack {
@@ -45,8 +52,18 @@ pub enum DatapackEnablePosition {
 
 pub struct DatapackManager {
     loaded_packs: RwLock<Vec<LoadedDatapack>>,
-    functions: RwLock<HashMap<String, Vec<String>>>,
+    functions: RwLock<HashMap<String, Arc<[String]>>>,
     function_tags: RwLock<HashMap<String, Vec<String>>>,
+    test_instances: RwLock<TestInstanceRegistry>,
+}
+
+fn share_function_bodies(
+    functions: HashMap<String, Vec<String>>,
+) -> HashMap<String, Arc<[String]>> {
+    functions
+        .into_iter()
+        .map(|(name, lines)| (name, lines.into()))
+        .collect()
 }
 
 impl Default for DatapackManager {
@@ -62,6 +79,7 @@ impl DatapackManager {
             loaded_packs: RwLock::new(Vec::new()),
             functions: RwLock::new(HashMap::new()),
             function_tags: RwLock::new(HashMap::new()),
+            test_instances: RwLock::new(HashMap::new()),
         }
     }
 
@@ -76,100 +94,65 @@ impl DatapackManager {
         let mut all_recipes: Vec<DynamicRecipe> = Vec::new();
         let mut all_functions: HashMap<String, Vec<String>> = HashMap::new();
         let mut all_function_tags: HashMap<String, Vec<String>> = HashMap::new();
+        let mut all_test_instances: TestInstanceRegistry = HashMap::new();
 
+        // Embedded test instances are compile-time constants and always load,
+        // so on-disk packs can override them by id.
+        let embedded_count = test_loader::load_embedded_test_instances(&mut all_test_instances);
+        if embedded_count > 0 {
+            info!("Loaded {embedded_count} embedded test instance(s)");
+        }
         if datapacks_dir.is_dir() {
-            let Ok(entries) = fs::read_dir(&datapacks_dir) else {
-                warn!(
-                    "Failed to read datapacks directory: {}",
-                    datapacks_dir.display()
-                );
-                return;
-            };
+            match fs::read_dir(&datapacks_dir) {
+                Ok(entries) => {
+                    for entry in entries.flatten() {
+                        let pack_path = entry.path();
+                        let file_name = entry.file_name().to_string_lossy().to_string();
 
-            for entry in entries.flatten() {
-                let pack_path = entry.path();
-                let file_name = entry.file_name().to_string_lossy().to_string();
-
-                if file_name.starts_with('.') || !pack_path.is_dir() {
-                    continue;
-                }
-
-                let pack_id = format!("file/{file_name}");
-                let is_enabled = enabled_packs
-                    .iter()
-                    .any(|p| p == &pack_id || p == &file_name);
-                if !is_enabled {
-                    continue;
-                }
-
-                let (description, pack_format) = read_pack_mcmeta(&pack_path);
-
-                let data_dir = pack_path.join("data");
-                let mut pack_recipe_count = 0;
-                let mut pack_function_count = 0;
-
-                if data_dir.is_dir()
-                    && let Ok(ns_entries) = fs::read_dir(&data_dir)
-                {
-                    for ns_entry in ns_entries.flatten() {
-                        let ns_path = ns_entry.path();
-                        if !ns_path.is_dir() {
+                        if file_name.starts_with('.') || !pack_path.is_dir() {
                             continue;
                         }
-                        let namespace = ns_entry.file_name().to_string_lossy().to_string();
 
-                        // Load recipes
-                        for recipe_sub in ["recipe", "recipes"] {
-                            let recipe_dir = ns_path.join(recipe_sub);
-                            if recipe_dir.is_dir() {
-                                load_recipes_from_dir(
-                                    &namespace,
-                                    &recipe_dir,
-                                    &mut all_recipes,
-                                    &mut pack_recipe_count,
-                                );
-                            }
+                        let pack_id = format!("file/{file_name}");
+                        let is_enabled = enabled_packs
+                            .iter()
+                            .any(|p| p == &pack_id || p == &file_name);
+                        if !is_enabled {
+                            continue;
                         }
 
-                        // Load functions
-                        for fn_sub in ["function", "functions"] {
-                            let fn_dir = ns_path.join(fn_sub);
-                            if fn_dir.is_dir() {
-                                let before = all_functions.len();
-                                function_loader::load_functions_from_dir(
-                                    &namespace,
-                                    &fn_dir,
-                                    &mut all_functions,
-                                );
-                                pack_function_count += all_functions.len() - before;
-                            }
-                        }
+                        let (description, pack_format) = read_pack_mcmeta(&pack_path);
 
-                        // Load tags
-                        let tags_dir = ns_path.join("tags");
-                        if tags_dir.is_dir() {
-                            function_loader::load_function_tags_from_dir(
-                                &namespace,
-                                &tags_dir,
+                        let (pack_recipe_count, pack_function_count, pack_test_instance_count) =
+                            load_pack_contents(
+                                &pack_path,
+                                &mut all_recipes,
+                                &mut all_functions,
                                 &mut all_function_tags,
+                                &mut all_test_instances,
                             );
-                        }
+
+                        info!(
+                            "Loaded datapack '{file_name}': {pack_recipe_count} recipe(s), {pack_function_count} function(s), {pack_test_instance_count} test instance(s)"
+                        );
+
+                        loaded_packs_vec.push(LoadedDatapack {
+                            id: pack_id,
+                            name: file_name,
+                            description,
+                            pack_format,
+                            root_path: pack_path,
+                            recipe_count: pack_recipe_count,
+                            function_count: pack_function_count,
+                        });
                     }
                 }
-
-                info!(
-                    "Loaded datapack '{file_name}': {pack_recipe_count} recipe(s), {pack_function_count} function(s)"
-                );
-
-                loaded_packs_vec.push(LoadedDatapack {
-                    id: pack_id,
-                    name: file_name,
-                    description,
-                    pack_format,
-                    root_path: pack_path,
-                    recipe_count: pack_recipe_count,
-                    function_count: pack_function_count,
-                });
+                Err(error) => {
+                    warn!(
+                        "Failed to read datapacks directory '{}': {error}",
+                        datapacks_dir.display()
+                    );
+                }
             }
         }
 
@@ -178,6 +161,7 @@ impl DatapackManager {
             .loaded_packs
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = loaded_packs_vec;
+        let all_functions = share_function_bodies(all_functions);
         *self
             .functions
             .write()
@@ -186,6 +170,10 @@ impl DatapackManager {
             .function_tags
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = all_function_tags;
+        *self
+            .test_instances
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = all_test_instances;
     }
 
     pub fn get_loaded_packs(&self) -> Vec<LoadedDatapack> {
@@ -199,7 +187,110 @@ impl DatapackManager {
         self.functions
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone()
+            .iter()
+            .map(|(name, lines)| (name.clone(), lines.to_vec()))
+            .collect()
+    }
+
+    pub fn get_test_instance(&self, name: &str) -> Option<TestInstance> {
+        self.test_instances
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(name)
+            .cloned()
+    }
+
+    pub fn get_test_instance_names(&self) -> Vec<String> {
+        let test_instances = self
+            .test_instances
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut names: Vec<_> = test_instances.keys().cloned().collect();
+        names.sort_unstable();
+        names
+    }
+
+    /// Returns datapack test instances in the protocol's synced-registry entry format.
+    /// The vanilla Test Instance Block renderer resolves required/padding/base rotation
+    /// through this registry using the controller's `data.test` resource key.
+    pub fn get_test_instance_registry_entries(&self) -> Vec<RegistryEntryData> {
+        let test_instances = self
+            .test_instances
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut entries: Vec<_> = test_instances
+            .iter()
+            .map(|(id, instance)| to_registry_entry(id.clone(), instance))
+            .collect();
+        entries.sort_unstable_by(|left, right| left.entry_id.cmp(&right.entry_id));
+        entries
+    }
+
+    /// Loads a Java Edition structure NBT from the currently enabled datapacks.
+    ///
+    /// Structure identifiers are resource locations such as
+    /// `minecraft:village/plains/houses/plains_small_house_1`. Both the current
+    /// `structure` directory and the legacy `structures` directory are checked.
+    pub async fn load_structure(&self, resource_location: &str) -> Result<NbtCompound, String> {
+        let (namespace, path) = parse_structure_resource_location(resource_location)?;
+
+        let nbt_path = {
+            let loaded_packs = self
+                .loaded_packs
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+            let mut nbt_path = None;
+
+            // Runtime datapacks override embedded resources.
+            'packs: for pack in loaded_packs.iter().rev() {
+                for structure_dir in ["structure", "structures"] {
+                    let candidate = pack
+                        .root_path
+                        .join("data")
+                        .join(namespace)
+                        .join(structure_dir)
+                        .join(format!("{path}.nbt"));
+
+                    if candidate.is_file() {
+                        nbt_path = Some(candidate);
+                        break 'packs;
+                    }
+                }
+            }
+
+            nbt_path
+        };
+
+        if let Some(nbt_path) = nbt_path {
+            let display_path = nbt_path.display().to_string();
+
+            return tokio::task::spawn_blocking(move || {
+                let file = fs::File::open(&nbt_path).map_err(|error| {
+                    format!("Failed to open structure '{display_path}': {error}")
+                })?;
+
+                read_gzip_compound_tag(file)
+                    .map_err(|error| format!("Failed to parse structure '{display_path}': {error}"))
+            })
+            .await
+            .map_err(|error| format!("Structure loader task failed: {error}"))?;
+        }
+
+        // Fall back to compile-time embedded structures.
+        let structure_id = format!("{namespace}:{path}");
+
+        if let Some(bytes) =
+            pumpkin_world::generation::structure::template::template_bytes(&structure_id)
+        {
+            return read_gzip_compound_tag(std::io::Cursor::new(bytes)).map_err(|error| {
+                format!("Failed to parse embedded structure '{structure_id}': {error}")
+            });
+        }
+
+        Err(format!(
+            "Structure '{resource_location}' was not found in any enabled datapack or embedded resources"
+        ))
     }
 
     pub fn get_function_names(&self) -> Vec<String> {
@@ -225,6 +316,19 @@ impl DatapackManager {
         source: &CommandSource,
         name: &str,
     ) -> Result<usize, String> {
+        self.visit_function_lines(name, |line| {
+            server
+                .command_dispatcher
+                .load()
+                .handle_command(source, line);
+        })
+    }
+
+    fn visit_function_lines(
+        &self,
+        name: &str,
+        mut visit: impl FnMut(&str),
+    ) -> Result<usize, String> {
         let (functions_to_run, is_tag) = if let Some(tag_name) = name.strip_prefix('#') {
             let tags = self
                 .function_tags
@@ -238,25 +342,28 @@ impl DatapackManager {
             (vec![name.to_string()], false)
         };
 
-        let all_fns = self
-            .functions
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let functions = {
+            let all_fns = self
+                .functions
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut functions = Vec::with_capacity(functions_to_run.len());
+            for fn_id in functions_to_run {
+                let Some(lines) = all_fns.get(&fn_id) else {
+                    if !is_tag {
+                        return Err(format!("Unknown function: {fn_id}"));
+                    }
+                    continue;
+                };
+                functions.push(Arc::clone(lines));
+            }
+            functions
+        };
+
         let mut total_executed = 0;
-
-        for fn_id in functions_to_run {
-            let Some(lines) = all_fns.get(&fn_id) else {
-                if !is_tag {
-                    return Err(format!("Unknown function: {fn_id}"));
-                }
-                continue;
-            };
-
-            for line in lines {
-                server
-                    .command_dispatcher
-                    .load()
-                    .handle_command(source, line);
+        for lines in functions {
+            for line in lines.iter() {
+                visit(line);
                 total_executed += 1;
             }
         }
@@ -264,11 +371,21 @@ impl DatapackManager {
         Ok(total_executed)
     }
 
-    pub fn get_all_known_packs(server: &Server) -> Vec<String> {
-        let mut packs = Vec::new();
-        packs.push("vanilla".to_string());
+    #[must_use]
+    pub fn is_embedded_pack(name: &str) -> bool {
+        pumpkin_world::generation::structure::template::all_embedded_datapack_names()
+            .contains(&name)
+    }
 
-        // Bundled feature packs
+    pub fn get_all_known_packs(server: &Server) -> Vec<String> {
+        let mut packs: Vec<String> =
+            pumpkin_world::generation::structure::template::all_embedded_datapack_names()
+                .iter()
+                .map(|name| (*name).to_owned())
+                .collect();
+
+        // Bundled feature packs that are known to the server independently of
+        // the compile-time structure/test resource embeddings.
         for bundled in [
             "trade_rebalance",
             "minecart_improvements",
@@ -279,15 +396,17 @@ impl DatapackManager {
             }
         }
 
-        // World datapacks directory
+        // World datapacks directory.
         let datapacks_dir = server.basic_config.get_world_path().join("datapacks");
         if let Ok(entries) = fs::read_dir(datapacks_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
                 let file_name = entry.file_name().to_string_lossy().to_string();
+
                 if file_name.starts_with('.') {
                     continue;
                 }
+
                 if path.is_dir()
                     || path
                         .extension()
@@ -302,11 +421,13 @@ impl DatapackManager {
         }
 
         let level_info = server.level_info.load();
+
         for pack in &level_info.data_packs.enabled {
             if !packs.iter().any(|p| p == pack) {
                 packs.push(pack.clone());
             }
         }
+
         for pack in &level_info.data_packs.disabled {
             if !packs.iter().any(|p| p == pack) {
                 packs.push(pack.clone());
@@ -317,7 +438,21 @@ impl DatapackManager {
     }
 
     pub fn get_enabled_packs(server: &Server) -> Vec<String> {
-        server.level_info.load().data_packs.enabled.clone()
+        // Compile-time embedded datapacks cannot be disabled at runtime, so
+        // expose them as permanently enabled.
+        let mut packs: Vec<String> =
+            pumpkin_world::generation::structure::template::all_embedded_datapack_names()
+                .iter()
+                .map(|name| (*name).to_owned())
+                .collect();
+
+        for pack in &server.level_info.load().data_packs.enabled {
+            if !packs.iter().any(|existing| existing == pack) {
+                packs.push(pack.clone());
+            }
+        }
+
+        packs
     }
 
     pub fn get_available_packs(server: &Server) -> Vec<String> {
@@ -370,6 +505,13 @@ impl DatapackManager {
                 "vanilla".to_string(),
                 "vanilla".to_string(),
                 "The default data pack".to_string(),
+                61,
+            )
+        } else if Self::is_embedded_pack(&resolved_name) {
+            (
+                resolved_name.clone(),
+                resolved_name.clone(),
+                format!("Embedded datapack: {resolved_name}"),
                 61,
             )
         } else if let Some(stripped) = resolved_name.strip_prefix("file/") {
@@ -532,8 +674,10 @@ impl DatapackManager {
             return Err(format!("Datapack '{target_pack}' is not enabled"));
         }
 
-        if target_pack == "vanilla" {
-            return Err("Cannot disable the default vanilla datapack".to_string());
+        if Self::is_embedded_pack(&target_pack) {
+            return Err(format!(
+                "Cannot disable embedded datapack '{target_pack}' because it is compiled into the server"
+            ));
         }
 
         let target = target_pack;
@@ -570,7 +714,114 @@ impl DatapackManager {
     }
 }
 
-pub fn read_pack_mcmeta(pack_path: &Path) -> (String, u32) {
+fn parse_structure_resource_location(resource_location: &str) -> Result<(&str, &str), String> {
+    let (namespace, raw_path) = resource_location
+        .split_once(':')
+        .unwrap_or(("minecraft", resource_location));
+
+    if namespace.is_empty()
+        || !namespace.bytes().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'_' | b'-' | b'.')
+        })
+    {
+        return Err(format!(
+            "Invalid structure namespace in '{resource_location}'"
+        ));
+    }
+
+    let path = raw_path.strip_suffix(".nbt").unwrap_or(raw_path);
+    if path.is_empty()
+        || path
+            .split('/')
+            .any(|segment| segment.is_empty() || segment == "." || segment == "..")
+        || !path.bytes().all(|byte| {
+            byte.is_ascii_lowercase()
+                || byte.is_ascii_digit()
+                || matches!(byte, b'_' | b'-' | b'.' | b'/')
+        })
+    {
+        return Err(format!("Invalid structure path in '{resource_location}'"));
+    }
+
+    Ok((namespace, path))
+}
+
+/// Loads recipes, functions, function tags, and test instances from a single
+/// datapack directory, returning per-pack counts as `(recipes, functions, test_instances)`.
+fn load_pack_contents(
+    pack_path: &Path,
+    all_recipes: &mut Vec<DynamicRecipe>,
+    all_functions: &mut HashMap<String, Vec<String>>,
+    all_function_tags: &mut HashMap<String, Vec<String>>,
+    all_test_instances: &mut TestInstanceRegistry,
+) -> (usize, usize, usize) {
+    let data_dir = pack_path.join("data");
+    let mut pack_recipe_count = 0;
+    let mut pack_function_count = 0;
+    let mut pack_test_instance_count = 0;
+
+    if data_dir.is_dir()
+        && let Ok(ns_entries) = fs::read_dir(&data_dir)
+    {
+        for ns_entry in ns_entries.flatten() {
+            let ns_path = ns_entry.path();
+            if !ns_path.is_dir() {
+                continue;
+            }
+            let namespace = ns_entry.file_name().to_string_lossy().to_string();
+
+            // Load recipes
+            for recipe_sub in ["recipe", "recipes"] {
+                let recipe_dir = ns_path.join(recipe_sub);
+                if recipe_dir.is_dir() {
+                    load_recipes_from_dir(
+                        &namespace,
+                        &recipe_dir,
+                        all_recipes,
+                        &mut pack_recipe_count,
+                    );
+                }
+            }
+
+            // Load functions
+            for fn_sub in ["function", "functions"] {
+                let fn_dir = ns_path.join(fn_sub);
+                if fn_dir.is_dir() {
+                    let before = all_functions.len();
+                    function_loader::load_functions_from_dir(&namespace, &fn_dir, all_functions);
+                    pack_function_count += all_functions.len() - before;
+                }
+            }
+
+            // Load tags
+            let tags_dir = ns_path.join("tags");
+            if tags_dir.is_dir() {
+                function_loader::load_function_tags_from_dir(
+                    &namespace,
+                    &tags_dir,
+                    all_function_tags,
+                );
+            }
+            // Load game test instances
+            let test_instance_dir = ns_path.join("test_instance");
+            if test_instance_dir.is_dir() {
+                pack_test_instance_count += load_test_instances_from_dir(
+                    &namespace,
+                    &test_instance_dir,
+                    all_test_instances,
+                );
+            }
+        }
+    }
+
+    (
+        pack_recipe_count,
+        pack_function_count,
+        pack_test_instance_count,
+    )
+}
+
+fn read_pack_mcmeta(pack_path: &Path) -> (String, u32) {
     let mcmeta_path = pack_path.join("pack.mcmeta");
     if let Ok(content) = fs::read_to_string(mcmeta_path)
         && let Ok(val) = serde_json::from_str::<serde_json::Value>(&content)
@@ -620,5 +871,79 @@ fn load_recipes_from_dir(
                 *count += 1;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DatapackManager;
+
+    #[test]
+    fn function_dispatch_releases_the_functions_lock() {
+        let manager = DatapackManager::new();
+        manager
+            .functions
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(
+                "test:reentrant".to_string(),
+                vec!["first command".to_string(), "second command".to_string()].into(),
+            );
+
+        let mut visited = Vec::new();
+        let executed = manager
+            .visit_function_lines("test:reentrant", |line| {
+                let functions = manager
+                    .functions
+                    .try_write()
+                    .expect("function dispatch must not hold the functions read lock");
+                drop(functions);
+                visited.push(line.to_string());
+            })
+            .expect("execute function lines");
+
+        assert_eq!(executed, 2);
+        assert_eq!(visited, ["first command", "second command"]);
+    }
+
+    #[test]
+    fn function_resolution_preserves_unknown_errors_and_skips_missing_tag_entries() {
+        let manager = DatapackManager::new();
+        manager
+            .functions
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(
+                "test:known".to_string(),
+                vec!["known command".to_string()].into(),
+            );
+        manager
+            .function_tags
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(
+                "test:mixed".to_string(),
+                vec!["test:missing".to_string(), "test:known".to_string()],
+            );
+
+        let mut visited = Vec::new();
+        let executed = manager
+            .visit_function_lines("#test:mixed", |line| visited.push(line.to_string()))
+            .expect("execute function tag");
+        assert_eq!(executed, 1);
+        assert_eq!(visited, ["known command"]);
+
+        assert_eq!(
+            manager
+                .visit_function_lines("test:missing", |_| {})
+                .expect_err("unknown function must fail"),
+            "Unknown function: test:missing"
+        );
+        assert_eq!(
+            manager
+                .visit_function_lines("#test:missing", |_| {})
+                .expect_err("unknown function tag must fail"),
+            "Unknown function tag: #test:missing"
+        );
     }
 }

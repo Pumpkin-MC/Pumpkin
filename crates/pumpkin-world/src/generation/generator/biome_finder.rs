@@ -259,12 +259,12 @@ mod test {
 
     #[test]
     fn flat_world_has_a_single_fixed_biome() {
-        let world_gen = WorldGenerator::Flat(FlatGenerator::new(
+        let world_gen = WorldGenerator::Flat(Box::new(FlatGenerator::new(
             Seed(0),
             Dimension::OVERWORLD,
             Vec::new(),
             "minecraft:plains".to_string(),
-        ));
+        )));
 
         let origin = BlockPos::new(17, 64, -3);
         let (pos, biome) = find_closest_biome_3d(

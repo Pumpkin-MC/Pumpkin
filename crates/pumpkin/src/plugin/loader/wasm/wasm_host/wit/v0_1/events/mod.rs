@@ -230,37 +230,47 @@ pub(super) fn consume_world(
         .provider
 }
 
-impl<E: Payload + ToFromWasmEvent> EventHandler<E> for WasmPluginEventHandler {
+impl<E: Payload + ToFromWasmEvent + Clone + 'static> EventHandler<E> for WasmPluginEventHandler {
     fn handle<'a>(&'a self, server: &'a Arc<Server>, event: &'a E) -> BoxFuture<'a, ()> {
         Box::pin(async {
-            let mut store = self.plugin.store.lock().await;
-            let wasm_event = event.to_wasm_event(store.data_mut());
-            match self.plugin.plugin_instance {
-                PluginInstance::V0_1(ref plugin) => {
-                    let Ok(server_res) = store.data_mut().add_server(server.clone()) else {
-                        cleanup_event(&wasm_event, store.data_mut());
-                        return;
-                    };
-                    let server_rep = server_res.rep();
-                    let result = plugin
-                        .call_handle_event(&mut *store, self.handler_id, server_res, &wasm_event)
-                        .await;
-                    match result {
-                        Ok(returned_event) => {
-                            cleanup_event(&returned_event, store.data_mut());
-                            cleanup_event(&wasm_event, store.data_mut());
+            let event = event.clone();
+            let server = server.clone();
+            let handler_id = self.handler_id;
+            let function = match self.plugin.plugin_instance.as_ref() {
+                PluginInstance::V0_1(plugin) => plugin.func_handle_event(),
+            };
+            if let Err(error) = self
+                .plugin
+                .store
+                .call_guest(move |mut guest| {
+                    Box::pin(async move {
+                        let (wasm_event, server_res) = guest.with(|mut store| {
+                            let wasm_event = event.to_wasm_event(store.data_mut());
+                            match store.data_mut().add_server(server) {
+                                Ok(resource) => Ok((wasm_event, resource)),
+                                Err(error) => {
+                                    cleanup_event(&wasm_event, store.data_mut());
+                                    Err(error)
+                                }
+                            }
+                        })?;
+                        // Lowering transfers these resources to the guest. Only a
+                        // successfully returned event is owned by the host again.
+                        let result = guest
+                            .call(function, (handler_id, server_res, wasm_event))
+                            .await
+                            .map(|(returned_event,)| returned_event);
+                        if let Ok(returned_event) = &result {
+                            guest.with(|mut store| {
+                                cleanup_event(returned_event, store.data_mut());
+                            });
                         }
-                        Err(_) => {
-                            cleanup_event(&wasm_event, store.data_mut());
-                        }
-                    }
-                    let _ = store
-                        .data_mut()
-                        .resource_table
-                        .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
-                        wasmtime::component::Resource::new_own(server_rep),
-                    );
-                }
+                        result.map(|_| ())
+                    })
+                })
+                .await
+            {
+                tracing::error!(handler_id, %error, "Wasm event handler failed");
             }
         })
     }
@@ -271,33 +281,48 @@ impl<E: Payload + ToFromWasmEvent> EventHandler<E> for WasmPluginEventHandler {
         event: &'a mut E,
     ) -> BoxFuture<'a, ()> {
         Box::pin(async {
-            let mut store = self.plugin.store.lock().await;
-            let wasm_event = event.to_wasm_event(store.data_mut());
-            match self.plugin.plugin_instance {
-                PluginInstance::V0_1(ref plugin) => {
-                    let Ok(server_res) = store.data_mut().add_server(server.clone()) else {
-                        cleanup_event(&wasm_event, store.data_mut());
-                        return;
-                    };
-                    let server_rep = server_res.rep();
-                    let result = plugin
-                        .call_handle_event(&mut *store, self.handler_id, server_res, &wasm_event)
-                        .await;
-                    match result {
-                        Ok(returned_event) => {
-                            event.apply_wasm_event(returned_event, store.data_mut());
-                            cleanup_event(&wasm_event, store.data_mut());
+            let owned_event = event.clone();
+            let server = server.clone();
+            let handler_id = self.handler_id;
+            let function = match self.plugin.plugin_instance.as_ref() {
+                PluginInstance::V0_1(plugin) => plugin.func_handle_event(),
+            };
+            let result = self
+                .plugin
+                .store
+                .call_guest(move |mut guest| {
+                    Box::pin(async move {
+                        let (wasm_event, server_res) = guest.with(|mut store| {
+                            let wasm_event = owned_event.to_wasm_event(store.data_mut());
+                            match store.data_mut().add_server(server) {
+                                Ok(resource) => Ok((wasm_event, resource)),
+                                Err(error) => {
+                                    cleanup_event(&wasm_event, store.data_mut());
+                                    Err(error)
+                                }
+                            }
+                        })?;
+                        // Lowering transfers these resources to the guest. Only a
+                        // successfully returned event is owned by the host again.
+                        let result = guest
+                            .call(function, (handler_id, server_res, wasm_event))
+                            .await
+                            .map(|(returned_event,)| returned_event);
+                        match result {
+                            Ok(returned_event) => Ok(guest.with(|mut store| {
+                                let mut updated_event = owned_event;
+                                updated_event.apply_wasm_event(returned_event, store.data_mut());
+                                updated_event
+                            })),
+                            Err(error) => Err(error),
                         }
-                        Err(_) => {
-                            cleanup_event(&wasm_event, store.data_mut());
-                        }
-                    }
-                    let _ = store
-                        .data_mut()
-                        .resource_table
-                        .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
-                        wasmtime::component::Resource::new_own(server_rep),
-                    );
+                    })
+                })
+                .await;
+            match result {
+                Ok(returned_event) => *event = returned_event,
+                Err(error) => {
+                    tracing::error!(handler_id, %error, "Blocking Wasm event handler failed");
                 }
             }
         })
