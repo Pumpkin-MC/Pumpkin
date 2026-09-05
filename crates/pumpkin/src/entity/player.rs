@@ -3667,8 +3667,14 @@ impl Player {
         res.map(|(pos, _)| pos)
     }
 
-    pub async fn unload_watched_chunks(&self, world: &World) {
-        let radial_chunks = self.watched_section.load().all_chunks_within();
+    pub async fn unload_watched_chunks(self: &Arc<Self>, world: &World) {
+        let radial_chunks: Vec<_> = self.watched_section.load().all_chunks_within().collect();
+        // Forget these chunks' entities while the client is still a watcher. Otherwise it
+        // keeps ghosts whose ids the server no longer knows (`invalid_entity_attacked`), and
+        // returning to this world later leaves everything invisible: `seen_by` still has our
+        // uuid, so `update_player` skips `add_pairing` (no spawn packet) even though the
+        // client's own entity list was cleared by the dimension change.
+        world.entity_tracker.drop_player_pairings(self);
         let level = &world.level;
         let chunks_to_clean = level.mark_chunks_as_not_watched(radial_chunks).await;
         if !chunks_to_clean.is_empty() {

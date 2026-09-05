@@ -35,7 +35,7 @@ use pumpkin_protocol::bedrock::client::{CAddActor, CSetActorMotion};
 use pumpkin_protocol::codec::var_long::VarLong;
 use pumpkin_protocol::java::client::play::{CUpdateEntityPos, CUpdateEntityPosRot};
 use pumpkin_protocol::{
-    PositionFlag,
+    BClientPacket, ClientPacket, PositionFlag,
     bedrock::client::{
         move_actor_delta::{
             CMoveActorDelta, MOVE_ACTOR_DELTA_FLAG_HAS_HEAD_YAW, MOVE_ACTOR_DELTA_FLAG_HAS_PITCH,
@@ -892,6 +892,12 @@ pub struct Entity {
     pub movement_multiplier: AtomicCell<Vector3<f64>>,
     /// Determines whether the entity's velocity needs to be sent
     pub velocity_dirty: AtomicBool,
+    /// Set whenever [`Entity::set_synced_data`] pushes a tracked-data change, mirroring vanilla's
+    /// `SynchedEntityData.isDirty()`. `ServerEntity.sendChanges` ORs this into its periodic
+    /// resync gate, so an entity whose tracked data changes every tick (`PrimedTnt`'s fuse)
+    /// gets position and velocity re-verified every tick too, not just on the `updateInterval`
+    /// cadence. See [`Entity::send_tracked_position`].
+    pub entity_data_dirty: AtomicBool,
     /// Set when an Entity is to be removed but could still be referenced
     pub removed: AtomicBool,
     /// The last sent yaw value (encoded as u8) for change detection
@@ -902,6 +908,9 @@ pub struct Entity {
     pub last_sent_pos: AtomicCell<Vector3<f64>>,
     /// Cache for the last sent head yaw byte
     pub last_sent_head_yaw: AtomicU8,
+    /// Cache for the velocity last put on the wire, so [`Entity::send_velocity`] can skip a
+    /// packet when nothing actually changed. Vanilla: `ServerEntity.lastSentMovement`.
+    pub last_sent_velocity: AtomicCell<Vector3<f64>>,
     /// Persistent custom data container for plugins (matching Bukkit's `PersistentDataHolder`)
     pub custom_data: std::sync::Mutex<NbtCompound>,
 }
@@ -1026,11 +1035,13 @@ impl Entity {
             synched_data: synched_entity_data::SynchedEntityData::new(),
             movement_multiplier: AtomicCell::new(Vector3::default()),
             velocity_dirty: AtomicBool::new(true),
+            entity_data_dirty: AtomicBool::new(false),
             removed: AtomicBool::new(false),
             last_sent_yaw: AtomicU8::new(0),
             last_sent_pitch: AtomicU8::new(0),
             last_sent_head_yaw: AtomicU8::new(0),
             last_sent_pos: AtomicCell::new(position),
+            last_sent_velocity: AtomicCell::new(Vector3::new(0.0, 0.0, 0.0)),
             custom_data: std::sync::Mutex::new(NbtCompound::new()),
         }
     }
@@ -1198,11 +1209,21 @@ impl Entity {
         self.set_synced_data(tracked_data::entity::DATA_NO_GRAVITY, no_gravity);
     }
 
+    /// Vanilla only puts a motion packet on the wire when `getDeltaMovement()` has actually
+    /// moved since `lastSentMovement` (`ServerEntity.sendChanges`'s `diff > 1.0E-7` check),
+    /// with one exception: a delta that lands exactly on zero is always reported, even if the
+    /// step that got it there was tiny, so the client is told a client-simulated entity (TNT, a
+    /// falling block, a thrown item) has come to rest instead of coasting on stale momentum.
     pub fn send_velocity(&self) {
         let velocity = self.velocity.load();
-        let chunk_pos = self.chunk_pos.load();
-        self.world.load().broadcast_to_chunk_editioned(
-            chunk_pos,
+        let last_sent = self.last_sent_velocity.load();
+        let diff = (velocity - last_sent).length_squared();
+        if diff <= 1.0e-7 && !(diff > 0.0 && velocity.length_squared() == 0.0) {
+            return;
+        }
+        self.last_sent_velocity.store(velocity);
+
+        self.send_to_watchers_editioned(
             &CEntityVelocity::new(self.entity_id.into(), velocity),
             &CSetActorMotion {
                 target_runtime_id: VarULong(self.entity_id as u64),
@@ -1210,6 +1231,26 @@ impl Entity {
                 tick: VarULong(0),
             },
         );
+    }
+
+    pub(crate) fn send_to_watchers<P: ClientPacket + Sync>(&self, packet: &P) {
+        self.world.load().send_to_tracking_players(self, packet);
+    }
+
+    pub(crate) fn send_to_watchers_editioned<J: ClientPacket + Sync, B: BClientPacket + Sync>(
+        &self,
+        je_packet: &J,
+        be_packet: &B,
+    ) {
+        self.world
+            .load()
+            .send_to_tracking_players_editioned(self, je_packet, be_packet);
+    }
+
+    fn send_to_watchers_bedrock<P: BClientPacket + Sync>(&self, packet: &P) {
+        self.world
+            .load()
+            .send_to_tracking_players_bedrock(self, packet);
     }
 
     #[must_use]
@@ -1302,9 +1343,6 @@ impl Entity {
     pub fn send_rotation(&self) {
         let yaw = self.yaw.load();
         let pitch = self.pitch.load();
-        let chunk_pos = self.chunk_pos.load();
-
-        // Broadcast the update packet.
 
         let yaw = (yaw * 256.0 / 360.0).rem_euclid(256.0) as u8;
         let pitch = (pitch * 256.0 / 360.0).rem_euclid(256.0) as u8;
@@ -1316,29 +1354,23 @@ impl Entity {
         self.last_sent_yaw.store(yaw, Relaxed);
         self.last_sent_pitch.store(pitch, Relaxed);
 
-        self.world.load().broadcast_to_chunk(
-            chunk_pos,
-            &CUpdateEntityRot::new(
-                self.entity_id.into(),
-                yaw,
-                pitch,
-                self.on_ground.load(Relaxed),
-            ),
-        );
+        self.send_to_watchers(&CUpdateEntityRot::new(
+            self.entity_id.into(),
+            yaw,
+            pitch,
+            self.on_ground.load(Relaxed),
+        ));
 
         self.send_head_rot(yaw);
     }
 
     pub fn send_head_rot(&self, head_yaw: u8) {
-        let chunk_pos = self.chunk_pos.load();
         if head_yaw == self.last_sent_head_yaw.load(Relaxed) {
             return;
         }
         self.last_sent_head_yaw.store(head_yaw, Relaxed);
 
-        self.world
-            .load()
-            .broadcast_to_chunk(chunk_pos, &CHeadRot::new(self.entity_id.into(), head_yaw));
+        self.send_to_watchers(&CHeadRot::new(self.entity_id.into(), head_yaw));
     }
 
     fn default_portal_cooldown(&self) -> u32 {
@@ -1386,6 +1418,13 @@ impl Entity {
 
         let mut adjusted_movement = movement;
 
+        // The box each axis sweeps from, matching vanilla `Entity.collideWithShapes`'
+        // `boundingBox.move(resolvedMovement)`: it accumulates only the FULL, already-resolved
+        // offset of axes processed so far. The axis currently being solved is swept forward
+        // from here by `calculate_collision_time`; the other two axes must stay fixed at this
+        // box's position for that sweep, not drift with the sweep's own time fraction.
+        let mut resolved_box = bounding_box;
+
         // Y-Axis adjustment
         if movement.get_axis(Axis::Y) != 0.0 {
             let mut max_time = 1.0;
@@ -1402,9 +1441,9 @@ impl Entity {
                         position = next_pos;
                     }
 
-                    if let Some(collision_time) = bounding_box.calculate_collision_time(
+                    if let Some(collision_time) = resolved_box.calculate_collision_time(
                         inert_box,
-                        adjusted_movement,
+                        adjusted_movement.get_axis(Axis::Y),
                         Axis::Y,
                         max_time,
                     ) {
@@ -1428,9 +1467,24 @@ impl Entity {
             }
         }
 
+        let mut y_only = Vector3::default();
+        y_only.set_axis(Axis::Y, adjusted_movement.get_axis(Axis::Y));
+        resolved_box = resolved_box.shift(y_only);
+
         let mut horizontal_collision = false;
 
-        for axis in Axis::horizontal() {
+        // Vanilla `Direction.axisStepOrder`: the horizontal axis with the LARGER movement
+        // magnitude is resolved first (right after Y), the smaller one last. A fixed X-then-Z
+        // order (as opposed to this magnitude-dependent order) lets a corner clip incorrectly
+        // when movement is dominated by one axis, since the resolution order determines which
+        // shape "wins" the corner.
+        let horizontal_order = if movement.x.abs() < movement.z.abs() {
+            [Axis::Z, Axis::X]
+        } else {
+            [Axis::X, Axis::Z]
+        };
+
+        for axis in horizontal_order {
             if movement.get_axis(axis) == 0.0 {
                 continue;
             }
@@ -1438,9 +1492,9 @@ impl Entity {
             let mut max_time = 1.0;
 
             for inert_box in &collisions {
-                if let Some(collision_time) = bounding_box.calculate_collision_time(
+                if let Some(collision_time) = resolved_box.calculate_collision_time(
                     inert_box,
-                    adjusted_movement,
+                    adjusted_movement.get_axis(axis),
                     axis,
                     max_time,
                 ) {
@@ -1453,6 +1507,10 @@ impl Entity {
                 adjusted_movement.set_axis(axis, changed_component);
                 horizontal_collision = true;
             }
+
+            let mut axis_only = Vector3::default();
+            axis_only.set_axis(axis, adjusted_movement.get_axis(axis));
+            resolved_box = resolved_box.shift(axis_only);
         }
 
         self.horizontal_collision
@@ -1669,16 +1727,39 @@ impl Entity {
         suffocating
     }
 
+    /// Periodic leg of vanilla's `ServerEntity.sendChanges`: every `update_interval` ticks the
+    /// tracker resends where the entity is and how fast it is moving.
+    ///
+    /// A correction channel. The client simulates TNT, falling blocks and items itself, so an
+    /// entity only broadcast when its velocity is explicitly changed has nothing to correct
+    /// against. Gravity and drag update velocity every tick, so vanilla resends both
+    /// `getDeltaMovement()` and position from the same gated block. See
+    /// [`Entity::send_velocity`] for the unchanged-velocity guard.
+    ///
+    /// `update_interval` is vanilla's per-type `EntityType.Builder.updateInterval` (10 for TNT,
+    /// 20 for items and falling blocks), keyed off the entity's own age like vanilla's per
+    /// tracker `tickCount`. `sendChanges` also fires on `entityData.isDirty()`, so an entity
+    /// whose tracked data changes every tick (TNT fuse) rides that instead of waiting for its
+    /// interval. See [`Entity::entity_data_dirty`].
+    pub fn send_tracked_position(&self, update_interval: i32) {
+        let on_interval = update_interval > 0
+            && self.age.load(Ordering::Relaxed).rem_euclid(update_interval) == 0;
+        let data_dirty = self.entity_data_dirty.swap(false, Ordering::Relaxed);
+        if on_interval || data_dirty {
+            self.send_pos_rot();
+            self.send_velocity();
+        }
+    }
+
     #[expect(clippy::too_many_lines)]
     pub fn send_pos_rot(&self) {
         let old = self.last_sent_pos.load();
         let new = self.pos.load();
-        let chunk_pos = self.chunk_pos.load();
 
-        let converted = Vector3::new(
-            new.x.mul_add(4096.0, -(old.x * 4096.0)) as i16,
-            new.y.mul_add(4096.0, -(old.y * 4096.0)) as i16,
-            new.z.mul_add(4096.0, -(old.z * 4096.0)) as i16,
+        let raw_delta = Vector3::new(
+            new.x.mul_add(4096.0, -(old.x * 4096.0)),
+            new.y.mul_add(4096.0, -(old.y * 4096.0)),
+            new.z.mul_add(4096.0, -(old.z * 4096.0)),
         );
 
         let yaw = self.yaw.load();
@@ -1688,7 +1769,7 @@ impl Entity {
         let pitch = (pitch * 256.0 / 360.0).rem_euclid(256.0) as u8;
 
         // Only broadcast when position or rotation has actually changed.
-        let pos_changed = converted.x != 0 || converted.y != 0 || converted.z != 0;
+        let pos_changed = raw_delta.x != 0.0 || raw_delta.y != 0.0 || raw_delta.z != 0.0;
         let rot_changed =
             yaw != self.last_sent_yaw.load(Relaxed) || pitch != self.last_sent_pitch.load(Relaxed);
 
@@ -1700,6 +1781,52 @@ impl Entity {
         self.last_sent_yaw.store(yaw, Relaxed);
         self.last_sent_pitch.store(pitch, Relaxed);
 
+        // The relative-move packets below encode the delta as an i16 (vanilla's
+        // `ClientboundMoveEntityPacket`, `VecDeltaCodec` at 4096 units/block, about 8 blocks of
+        // range). A bigger jump between two resyncs (explosion, a long fall) does not fit, and
+        // truncating it would tell the client the entity moved less far than it did. Vanilla's
+        // `ServerEntity.sendChanges` checks this (`deltaTooBig`) and substitutes an absolute
+        // `ClientboundEntityPositionSyncPacket`.
+        let delta_too_big = !(-32768.0..=32767.0).contains(&raw_delta.x)
+            || !(-32768.0..=32767.0).contains(&raw_delta.y)
+            || !(-32768.0..=32767.0).contains(&raw_delta.z);
+        if delta_too_big {
+            self.send_to_watchers(&CEntityPositionSync::new(
+                self.entity_id.into(),
+                new,
+                self.velocity.load(),
+                self.yaw.load(),
+                self.pitch.load(),
+                self.on_ground.load(Relaxed),
+            ));
+            if self.entity_type != &EntityType::PLAYER {
+                self.send_to_watchers_bedrock(&CMoveActorDelta::new(
+                    VarULong(self.entity_id as u64),
+                    MOVE_ACTOR_DELTA_FLAG_HAS_X
+                        | MOVE_ACTOR_DELTA_FLAG_HAS_Y
+                        | MOVE_ACTOR_DELTA_FLAG_HAS_Z
+                        | MOVE_ACTOR_DELTA_FLAG_HAS_PITCH
+                        | MOVE_ACTOR_DELTA_FLAG_HAS_YAW
+                        | MOVE_ACTOR_DELTA_FLAG_HAS_HEAD_YAW
+                        | if self.on_ground.load(Relaxed) {
+                            MOVE_ACTOR_DELTA_FLAG_ON_GROUND
+                        } else {
+                            0
+                        },
+                    new.x as f32,
+                    new.y as f32,
+                    new.z as f32,
+                    pitch,
+                    yaw,
+                    yaw,
+                ));
+            }
+            self.send_head_rot(yaw);
+            return;
+        }
+
+        let converted = Vector3::new(raw_delta.x as i16, raw_delta.y as i16, raw_delta.z as i16);
+
         // Dynamically pick the most efficient packet
         if pos_changed && rot_changed {
             let je_packet = CUpdateEntityPosRot::new(
@@ -1710,8 +1837,7 @@ impl Entity {
                 self.on_ground.load(Relaxed),
             );
             if self.entity_type == &EntityType::PLAYER {
-                self.world.load().broadcast_to_chunk_editioned(
-                    chunk_pos,
+                self.send_to_watchers_editioned(
                     &je_packet,
                     &CMovePlayer::new(
                         VarULong(self.entity_id as u64),
@@ -1737,8 +1863,7 @@ impl Entity {
                 if self.on_ground.load(Relaxed) {
                     flags |= MOVE_ACTOR_DELTA_FLAG_ON_GROUND;
                 }
-                self.world.load().broadcast_to_chunk_editioned(
-                    chunk_pos,
+                self.send_to_watchers_editioned(
                     &je_packet,
                     &CMoveActorDelta::new(
                         VarULong(self.entity_id as u64),
@@ -1759,8 +1884,7 @@ impl Entity {
                 self.on_ground.load(Relaxed),
             );
             if self.entity_type == &EntityType::PLAYER {
-                self.world.load().broadcast_to_chunk_editioned(
-                    chunk_pos,
+                self.send_to_watchers_editioned(
                     &je_packet,
                     &CMovePlayer::new(
                         VarULong(self.entity_id as u64),
@@ -1784,8 +1908,7 @@ impl Entity {
                     flags |= MOVE_ACTOR_DELTA_FLAG_ON_GROUND;
                 }
 
-                self.world.load().broadcast_to_chunk_editioned(
-                    chunk_pos,
+                self.send_to_watchers_editioned(
                     &je_packet,
                     &CMoveActorDelta::new(
                         VarULong(self.entity_id as u64),
@@ -1807,8 +1930,7 @@ impl Entity {
                 self.on_ground.load(Relaxed),
             );
             if self.entity_type == &EntityType::PLAYER {
-                self.world.load().broadcast_to_chunk_editioned(
-                    chunk_pos,
+                self.send_to_watchers_editioned(
                     &je_packet,
                     &CMovePlayer::new(
                         VarULong(self.entity_id as u64),
@@ -1831,8 +1953,7 @@ impl Entity {
                 if self.on_ground.load(Relaxed) {
                     flags |= MOVE_ACTOR_DELTA_FLAG_ON_GROUND;
                 }
-                self.world.load().broadcast_to_chunk_editioned(
-                    chunk_pos,
+                self.send_to_watchers_editioned(
                     &je_packet,
                     &CMoveActorDelta::new(
                         VarULong(self.entity_id as u64),
@@ -1852,13 +1973,12 @@ impl Entity {
 
     pub fn send_bedrock_pos(&self) {
         let position = self.pos.load();
-        let chunk_pos = self.chunk_pos.load();
         let mut flags =
             MOVE_ACTOR_DELTA_FLAG_HAS_X | MOVE_ACTOR_DELTA_FLAG_HAS_Y | MOVE_ACTOR_DELTA_FLAG_HAS_Z;
         if self.on_ground.load(Relaxed) {
             flags |= MOVE_ACTOR_DELTA_FLAG_ON_GROUND;
         }
-        let packet = CMoveActorDelta::new(
+        self.send_to_watchers_bedrock(&CMoveActorDelta::new(
             VarULong(self.entity_id as u64),
             flags,
             position.x as f32,
@@ -1867,9 +1987,7 @@ impl Entity {
             0,
             0,
             0,
-        );
-        let world = self.world.load();
-        world.broadcast_to_chunk_bedrock(chunk_pos, &packet);
+        ));
     }
 
     pub fn update_last_pos(&self) -> Vector3<f64> {
@@ -1883,7 +2001,6 @@ impl Entity {
     pub fn send_pos(&self) {
         let old = self.last_sent_pos.load();
         let new = self.pos.load();
-        let chunk_pos = self.chunk_pos.load();
 
         let converted = Vector3::new(
             new.x.mul_add(4096.0, -(old.x * 4096.0)) as i16,
@@ -1905,8 +2022,7 @@ impl Entity {
         );
 
         if self.entity_type == &EntityType::PLAYER {
-            self.world.load().broadcast_to_chunk_editioned(
-                chunk_pos,
+            self.send_to_watchers_editioned(
                 &je_packet,
                 &CMovePlayer::new(
                     VarULong(self.entity_id as u64),
@@ -1930,8 +2046,7 @@ impl Entity {
                 flags |= MOVE_ACTOR_DELTA_FLAG_ON_GROUND;
             }
 
-            self.world.load().broadcast_to_chunk_editioned(
-                chunk_pos,
+            self.send_to_watchers_editioned(
                 &je_packet,
                 &CMoveActorDelta::new(
                     VarULong(self.entity_id as u64),
@@ -3019,6 +3134,7 @@ impl Entity {
         value: T,
     ) -> bool {
         if self.synched_data.set(tracked, value) {
+            self.entity_data_dirty.store(true, Ordering::Relaxed);
             self.send_dirty_entity_data();
             true
         } else {

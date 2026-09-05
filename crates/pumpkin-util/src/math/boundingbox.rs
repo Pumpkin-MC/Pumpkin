@@ -246,11 +246,19 @@ impl BoundingBox {
         if max { self.max } else { self.min }
     }
 
-    /// Calculates the collision time with another bounding box along a movement vector.
+    /// Calculates the collision time with another bounding box along a single axis.
+    ///
+    /// `self` must already sit at the offset resolved by any axes processed before this one
+    /// (vanilla `Entity.collideWithShapes`: `boundingBox.move(resolvedMovement)` before each
+    /// axis' `Shapes.collide`). Only `axis` itself is swept; the other two stay fixed at
+    /// `self`'s current position for the whole sweep. The perpendicular axes stay unscaled so
+    /// a corner overlap is measured against the already-decided offset, not a blend of it.
     ///
     /// # Arguments
     /// * `other` – The bounding box to test collision against.
-    /// * `movement` – Movement vector of this box.
+    /// * `movement_on_axis`: This box's movement along `axis` (the other two axes are not
+    ///   part of this sweep; the caller resolves them via separate calls with `self` shifted
+    ///   in between).
     /// * `axis` – Axis along which to calculate collision.
     /// * `max_time` – Maximum allowed collision time.
     ///
@@ -260,12 +268,10 @@ impl BoundingBox {
     pub fn calculate_collision_time(
         &self,
         other: &Self,
-        movement: Vector3<f64>,
+        movement_on_axis: f64,
         axis: Axis,
         max_time: f64, // NOTE: Start with 1.0
     ) -> Option<f64> {
-        let movement_on_axis = movement.get_axis(axis);
-
         if movement_on_axis == 0.0 {
             return None;
         }
@@ -279,7 +285,9 @@ impl BoundingBox {
             return None;
         }
 
-        let self_moved = self.shift(movement * collision_time);
+        let mut axis_delta = Vector3::default();
+        axis_delta.set_axis(axis, movement_on_axis * collision_time);
+        let self_moved = self.shift(axis_delta);
         let self_plane_moved = BoundingPlane::from_box(&self_moved, axis);
         let other_plane = BoundingPlane::from_box(other, axis);
 

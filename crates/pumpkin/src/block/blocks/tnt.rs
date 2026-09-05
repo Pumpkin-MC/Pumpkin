@@ -36,6 +36,17 @@ impl TNTBlock {
             return false;
         }
 
+        // Vanilla's `TntBlock` removes the block synchronously as the first step of priming.
+        // `use_with_item`, `placed` and `on_neighbor_update` can all reach `prime()` for the
+        // same position from independent tasks (a player's flint-and-steel click racing a
+        // redstone neighbor update). Swap first and inspect what was actually replaced:
+        // `set_block_state` serializes on the chunk section lock, so only the caller that
+        // swapped away a TNT state owns the ignition.
+        let old_state = world.set_block_state(location, BlockStateId::AIR, BlockFlags::NOTIFY_ALL);
+        if old_state.to_block() != &Block::TNT {
+            return false;
+        }
+
         let mut event = crate::plugin::api::events::block::tnt_prime::TNTPrimeEvent::new(
             *location,
             "REDSTONE".to_string(),
@@ -44,6 +55,7 @@ impl TNTBlock {
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
         if event.cancelled {
+            world.set_block_state(location, old_state, BlockFlags::NOTIFY_ALL);
             return false;
         }
 
@@ -65,17 +77,18 @@ impl TNTBlock {
                 .fire_blocking(&server, &mut prime_event);
         }
         if prime_event.cancelled {
+            world.set_block_state(location, old_state, BlockFlags::NOTIFY_ALL);
             return false;
         }
 
         let tnt = Arc::new(TNTEntity::new(entity, DEFAULT_POWER, DEFAULT_FUSE));
+        tnt.apply_prime_impulse();
         world.spawn_entity(tnt);
         world.play_sound(
             pumpkin_data::sound::Sound::EntityTntPrimed,
             SoundCategory::Blocks,
             &spawn_pos,
         );
-        world.set_block_state(location, BlockStateId::AIR, BlockFlags::NOTIFY_ALL);
         true
     }
 }
@@ -137,6 +150,7 @@ impl BlockBehaviour for TNTBlock {
     }
 
     fn explode(&self, args: ExplodeArgs<'_>) {
+        // Vanilla `TntBlock.wasExploded`: gated on `GameRules.TNT_EXPLODES`.
         if !args.world.level_info.load().game_rules.tnt_explodes {
             return;
         }
@@ -148,6 +162,7 @@ impl BlockBehaviour for TNTBlock {
         let entity = Entity::new(args.world.clone(), spawn_pos, &EntityType::TNT);
         let fuse = rand::rng().random_range(0..DEFAULT_FUSE / 4) + DEFAULT_FUSE / 8;
         let tnt = Arc::new(TNTEntity::new(entity, DEFAULT_POWER, fuse));
+        tnt.apply_prime_impulse();
         args.world.spawn_entity(tnt);
     }
 

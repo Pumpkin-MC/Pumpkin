@@ -136,6 +136,7 @@ impl TrackedEntity {
     #[allow(clippy::too_many_lines)]
     pub fn add_pairing(&self, player: &Arc<Player>) {
         player.client.try_enqueue_spawn_packet(&self.entity);
+        player.try_restore_vehicle(&self.entity);
 
         if let Some(target_player) = self.entity.get_player() {
             let skin_parts = target_player.config.load().skin_parts;
@@ -567,6 +568,24 @@ impl EntityTracker {
             tracked.last_section_pos.store(new_pos);
             let players = world.players.load();
             tracked.update_players(players.as_ref(), world);
+        }
+    }
+
+    /// Drop this player's pairings and send despawn. Dimension leave: the client is still
+    /// connected. Disconnect uses `remove_player` (strips `seen_by`, no packet).
+    ///
+    /// Without this, a player's UUID sticks in every `TrackedEntity::seen_by` they were
+    /// watching when they left, since `update_all`/`update_player` only ever iterate the
+    /// players currently in `world.players` for *this* world. On return to the same world,
+    /// `update_player`'s `seen_by.insert` sees the stale entry and skips `add_pairing`
+    /// (no spawn packet), even though the client's own state was cleared by the dimension
+    /// change - leaving an entity that's alive and in range permanently invisible to them.
+    pub fn drop_player_pairings(&self, player: &Arc<Player>) {
+        let uuid = player.gameprofile.id;
+        for entry in &self.entity_map {
+            if entry.value().seen_by.remove(&uuid).is_some() {
+                entry.value().remove_pairing(player);
+            }
         }
     }
 

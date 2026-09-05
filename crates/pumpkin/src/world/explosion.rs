@@ -1,11 +1,12 @@
-use std::sync::Arc;
+use std::sync::{Arc, atomic::Ordering};
 
 use pumpkin_data::{
     Block, BlockState, BlockStateId,
+    attributes::Attributes,
     damage::DamageType,
     entity::EntityType,
     fluid::Fluid,
-    tag::{Tag, Taggable},
+    tag::{self, Tag, Taggable},
 };
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use pumpkin_world::chunk::ChunkData;
@@ -13,7 +14,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     block::{ExplodeArgs, drop_loot},
-    entity::{Entity, EntityBase},
+    entity::{Entity, EntityBase, player::Player},
     world::loot::LootContextParameters,
 };
 
@@ -89,20 +90,26 @@ pub trait ExplosionDamageCalculator: Send + Sync {
         entity: &dyn EntityBase,
         exposure: f32,
     ) -> f32 {
-        let radius = explosion.power as f64 * 2.0;
-        let distance = (entity
+        let distance = entity
             .get_entity()
             .pos
             .load()
-            .squared_distance_to_vec(&explosion.pos))
-        .sqrt()
-            / radius;
-        let damage_multiplier = (1.0 - distance) * exposure as f64;
-        (f64::midpoint(damage_multiplier * damage_multiplier, damage_multiplier)
-            * 7.0
-            * explosion.power as f64
-            + 1.0) as f32
+            .squared_distance_to_vec(&explosion.pos)
+            .sqrt();
+        entity_explosion_damage(explosion.power, distance, exposure)
     }
+}
+
+/// Vanilla `ExplosionDamageCalculator.getEntityDamageAmount`.
+/// `doubleRadius = 2 * power`; impact `(1 - dist/doubleRadius) * exposure`;
+/// damage `(impact^2 + impact) / 2 * 7 * doubleRadius + 1`.
+fn entity_explosion_damage(power: f32, distance: f64, exposure: f32) -> f32 {
+    let double_radius = f64::from(power) * 2.0;
+    if double_radius <= 0.0 {
+        return 1.0;
+    }
+    let impact = (1.0 - distance / double_radius) * f64::from(exposure);
+    (f64::midpoint(impact * impact, impact) * 7.0 * double_radius + 1.0) as f32
 }
 
 /// Default explosion damage calculator implementing vanilla standard explosion rules.
@@ -220,14 +227,11 @@ impl Explosion {
     }
 
     fn protects_rail(&self, world: &World, pos: &BlockPos, block: &Block) -> bool {
-        self.preserve_rails && (Self::is_rail(block) || Self::is_rail(world.get_block(&pos.up())))
-    }
-
-    fn is_rail(block: &Block) -> bool {
-        block.id == Block::RAIL.id
-            || block.id == Block::POWERED_RAIL.id
-            || block.id == Block::DETECTOR_RAIL.id
-            || block.id == Block::ACTIVATOR_RAIL.id
+        self.preserve_rails
+            && (block.has_tag(&tag::Block::MINECRAFT_RAILS)
+                || world
+                    .get_block(&pos.up())
+                    .has_tag(&tag::Block::MINECRAFT_RAILS))
     }
 
     #[allow(clippy::too_many_lines)]
@@ -352,10 +356,11 @@ impl Explosion {
         map
     }
 
-    fn damage_entities(&self, world: &Arc<World>) {
+    fn damage_entities(&self, world: &Arc<World>) -> FxHashMap<i32, Vector3<f64>> {
+        let mut hit_players = FxHashMap::default();
         // Explosion is too small
         if self.power < 1.0e-5 {
-            return;
+            return hit_players;
         }
 
         let radius = self.power as f64 * 2.0;
@@ -390,6 +395,9 @@ impl Explosion {
             }
 
             let entity = entity_base.get_entity();
+            if entity.removed.load(Ordering::Relaxed) {
+                continue;
+            }
 
             let distance = (entity.pos.load().squared_distance_to_vec(&self.pos)).sqrt() / radius;
             if distance > 1.0 {
@@ -412,24 +420,44 @@ impl Explosion {
             if should_damage {
                 let damage =
                     calc.get_entity_damage_amount(self, entity_base.as_ref(), exposure as f32);
-                entity.damage(entity_base.as_ref(), damage, DamageType::EXPLOSION);
+                entity_base.damage_with_context(
+                    entity_base.as_ref(),
+                    damage,
+                    DamageType::EXPLOSION,
+                    Some(self.pos),
+                    None,
+                    None,
+                );
             }
 
-            // Calculate and apply knockback
+            // Vanilla: primed TNT uses `position()`, everyone else `getEyePosition()`.
             let dir_pos = if entity.entity_type == &EntityType::TNT {
                 entity.pos.load()
             } else {
                 entity.get_eye_pos()
             };
             let direction = (dir_pos - self.pos).normalize();
-            // TODO: entity explosion knockback resistance attribute
-            let knockback_resistance = 0.0;
+            let knockback_resistance = entity_base.get_living_entity().map_or(0.0, |living| {
+                living.get_attribute_value(&Attributes::EXPLOSION_KNOCKBACK_RESISTANCE)
+            });
 
             let knockback_power =
                 (1.0 - distance) * exposure * knockback_multiplier * (1.0 - knockback_resistance);
             let knockback = direction * knockback_power;
+
+            // Spectator: ignored above. Creative: no `push` and no `CExplosion` impulse
+            // (`Player.hurtServer` already skips damage via invulnerable).
+            if entity_base.get_player().is_some_and(Player::is_creative) {
+                continue;
+            }
+
             entity.add_velocity(knockback);
+
+            if let Some(player) = entity_base.get_player() {
+                hit_players.insert(player.entity_id(), knockback);
+            }
         }
+        hit_players
     }
 
     fn calculate_exposure(
@@ -490,12 +518,12 @@ impl Explosion {
         visible_points as f32 / total_points as f32
     }
 
-    /// Returns the removed block count
-    pub fn explode(&self, world: &Arc<World>) -> u32 {
-        self.damage_entities(world);
+    /// Returns the removed block count and per-player knockback for `CExplosion`.
+    pub fn explode(&self, world: &Arc<World>) -> (u32, FxHashMap<i32, Vector3<f64>>) {
+        let hit_players = self.damage_entities(world);
 
         match self.block_interaction {
-            BlockInteraction::Keep => 0,
+            BlockInteraction::Keep => (0, hit_players),
             BlockInteraction::TriggerBlock => {
                 let blocks = self.get_blocks_to_destroy(world);
                 for (pos, (block, _state)) in &blocks {
@@ -508,7 +536,7 @@ impl Explosion {
                         });
                     }
                 }
-                0
+                (0, hit_players)
             }
             BlockInteraction::Destroy | BlockInteraction::DestroyWithDecay => {
                 let center_pos = BlockPos::floored(self.pos.x, self.pos.y, self.pos.z);
@@ -525,7 +553,7 @@ impl Explosion {
                     server.plugin_manager.fire_blocking(&server, &mut event);
                 }
                 if event.cancelled {
-                    return 0;
+                    return (0, hit_players);
                 }
 
                 let blocks = self.get_blocks_to_destroy(world);
@@ -565,7 +593,7 @@ impl Explosion {
                     }
                 }
                 // TODO: fire
-                blocks.len() as u32
+                (blocks.len() as u32, hit_players)
             }
         }
     }
@@ -573,8 +601,18 @@ impl Explosion {
 
 #[cfg(test)]
 mod tests {
-    use super::Explosion;
-    use pumpkin_data::Block;
+    use pumpkin_data::{
+        Block,
+        tag::{self, Taggable},
+    };
+
+    #[test]
+    fn tnt_point_blank_damage_matches_vanilla() {
+        // power 4, dist 0, exposure 1: (1+1)/2 * 7 * 8 + 1 = 57
+        assert!((super::entity_explosion_damage(4.0, 0.0, 1.0) - 57.0).abs() < f32::EPSILON);
+        // dist 4 of 8: impact 0.5 -> 0.375 * 56 + 1 = 22
+        assert!((super::entity_explosion_damage(4.0, 4.0, 1.0) - 22.0).abs() < f32::EPSILON);
+    }
 
     #[test]
     fn tnt_minecart_rail_protection_covers_every_rail_type() {
@@ -584,8 +622,8 @@ mod tests {
             &Block::DETECTOR_RAIL,
             &Block::ACTIVATOR_RAIL,
         ] {
-            assert!(Explosion::is_rail(rail));
+            assert!(rail.has_tag(&tag::Block::MINECRAFT_RAILS));
         }
-        assert!(!Explosion::is_rail(&Block::STONE));
+        assert!(!Block::STONE.has_tag(&tag::Block::MINECRAFT_RAILS));
     }
 }
