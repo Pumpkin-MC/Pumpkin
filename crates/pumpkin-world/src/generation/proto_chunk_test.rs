@@ -172,6 +172,35 @@ mod test {
         }
     }
 
+    /// Vanilla `ChunkGenerator.createReferences` scans the starts of every chunk within 8
+    /// chunks. In the saved vanilla world for seed 13579, chunk (-6, 8) carries a
+    /// `minecraft:mineshaft_mesa` reference to the start in (-11, 11) (five chunks away).
+    #[test]
+    fn structure_references_reach_eight_chunks_seed_13579() {
+        use pumpkin_data::structures::StructureKeys;
+
+        let world_gen = get_world_gen(
+            Seed(13579),
+            Dimension::OVERWORLD,
+            false,
+            Vec::new(),
+            String::new(),
+        );
+        let WorldGenerator::Noise(generator) = &*world_gen else {
+            unreachable!()
+        };
+
+        // Only the positive case is asserted here: the exact extent of the start (vanilla
+        // references it from x -15..-6, z 8..15 and *not* from (-5, 8) or (-6, 7)) also
+        // depends on the pieces being generated depth-first, which is fixed in the mineshaft
+        // series; the negative cases are asserted there.
+        let mut proto = ProtoChunk::new(-6, 8, &world_gen);
+        proto.step_to_biomes(generator);
+        proto.set_structure_starts(generator);
+        proto.set_structure_references(generator);
+        assert!(proto.has_structure(StructureKeys::MineshaftMesa), "(-6, 8)");
+    }
+
     // Regression test for transposed heightmaps during Noise-stage chunk resume.
     // Flat terrain cannot expose this bug, so use a sloped chunk.
     #[test]
