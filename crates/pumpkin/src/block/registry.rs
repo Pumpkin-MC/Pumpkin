@@ -182,7 +182,7 @@ use crate::server::Server;
 use crate::world::World;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_rotation::{Mirror, Rotation};
-use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::data_component_impl::{BlockStateImpl, EquipmentSlot};
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -509,6 +509,68 @@ pub enum BlockPlacingError {
     BlockOutOfWorld,
 }
 
+fn apply_block_state_component(
+    block: &Block,
+    state_id: BlockStateId,
+    item_stack: &ItemStack,
+) -> BlockStateId {
+    let Some(component) = item_stack.get_data_component::<BlockStateImpl>() else {
+        return state_id;
+    };
+
+    apply_block_state_properties(block, state_id, component)
+}
+
+fn apply_block_state_properties(
+    block: &Block,
+    mut state_id: BlockStateId,
+    component: &BlockStateImpl,
+) -> BlockStateId {
+    for (name, value) in component.properties.iter() {
+        let Some(current_properties) = block.properties(state_id) else {
+            break;
+        };
+        let current_properties = current_properties.to_props();
+
+        if !current_properties
+            .iter()
+            .any(|(current_name, _)| *current_name == name.as_ref())
+        {
+            continue;
+        }
+
+        let matching_state = block.states.iter().find(|candidate| {
+            let Some(candidate_properties) = block.properties(candidate.id) else {
+                return false;
+            };
+            let candidate_properties = candidate_properties.to_props();
+
+            candidate_properties
+                .iter()
+                .any(|(candidate_name, candidate_value)| {
+                    *candidate_name == name.as_ref() && *candidate_value == value.as_ref()
+                })
+                && current_properties
+                    .iter()
+                    .all(|(current_name, current_value)| {
+                        *current_name == name.as_ref()
+                            || candidate_properties.iter().any(
+                                |(candidate_name, candidate_value)| {
+                                    candidate_name == current_name
+                                        && candidate_value == current_value
+                                },
+                            )
+                    })
+        });
+
+        if let Some(matching_state) = matching_state {
+            state_id = matching_state.id;
+        }
+    }
+
+    state_id
+}
+
 impl BlockRegistry {
     pub fn bone_meal(
         &self,
@@ -601,12 +663,13 @@ impl BlockRegistry {
         &self,
         player: &Arc<Player>,
         placed_block: &'static Block,
+        item_stack: &ItemStack,
         server: &Arc<Server>,
         use_item_on: &SUseItemOn,
-        location: BlockPos,
         face: BlockDirection,
     ) -> Result<Option<(BlockPos, BlockStateId)>, BlockPlacingError> {
         let entity = &player.get_entity();
+        let location = use_item_on.position;
 
         match player.gamemode.load() {
             pumpkin_util::GameMode::Spectator | pumpkin_util::GameMode::Adventure => {
@@ -725,6 +788,7 @@ impl BlockRegistry {
             replacing,
             use_item_on,
         );
+        let new_state = apply_block_state_component(placed_block, new_state, item_stack);
 
         // Mirror vanilla obstruction checks: only entities that block building should prevent
         // placement. (e.g. arrows/xp orbs/displays/markers should not)
@@ -1469,5 +1533,40 @@ impl BlockRegistry {
             },
             |pumpkin_block| pumpkin_block.is_pathfindable(state, computation_type),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::borrow::Cow;
+
+    use pumpkin_data::block_properties::LightLikeProperties;
+
+    use super::*;
+
+    #[test]
+    fn block_state_component_changes_light_level() {
+        let component = BlockStateImpl {
+            properties: Cow::Owned(vec![(Cow::Borrowed("level"), Cow::Borrowed("7"))]),
+        };
+
+        let state_id =
+            apply_block_state_properties(&Block::LIGHT, Block::LIGHT.default_state.id, &component);
+        let properties = LightLikeProperties::from_state_id(state_id);
+
+        assert_eq!(properties.level, 7);
+        assert!(!properties.waterlogged);
+    }
+
+    #[test]
+    fn block_state_component_ignores_invalid_light_level() {
+        let component = BlockStateImpl {
+            properties: Cow::Owned(vec![(Cow::Borrowed("level"), Cow::Borrowed("16"))]),
+        };
+
+        let state_id =
+            apply_block_state_properties(&Block::LIGHT, Block::LIGHT.default_state.id, &component);
+
+        assert_eq!(state_id, Block::LIGHT.default_state.id);
     }
 }
