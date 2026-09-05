@@ -69,6 +69,7 @@ pub enum LootCondition {
     EntityProperties {
         target: LootEntityTarget,
         predicate: LootEntityPredicate,
+    },
     TableBonus {
         chances: &'static [f32],
     },

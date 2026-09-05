@@ -175,6 +175,8 @@ fn parse_condition(cond: &ConditionStruct) -> LootCondition {
                 predicate: LootEntityPredicate {
                     properties: Box::leak(properties.into_boxed_slice()),
                 },
+            }
+        }
         "minecraft:table_bonus" => {
             let chances = cond.chances.clone().unwrap_or_default();
             if chances.is_empty() {
@@ -672,6 +674,7 @@ fn condition_to_tokens(cond: LootCondition) -> TokenStream {
                     },
                 }
             }
+        }
         LootCondition::TableBonus { chances } => {
             let values = chances.iter();
             quote! { LootCondition::TableBonus { chances: &[#(#values),*] } }
