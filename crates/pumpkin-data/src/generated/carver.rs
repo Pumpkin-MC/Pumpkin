@@ -74,6 +74,8 @@ pub struct CarverConfig {
     pub y: HeightProvider,
     #[doc = r" Vanilla `CarverConfiguration.replaceable`: blocks this carver may replace."]
     pub replaceable: crate::tag::Tag,
+    #[doc = r" Vanilla `CarverConfiguration.lavaLevel`: below this anchor the carver emits lava."]
+    pub lava_level: YOffset,
     pub additional: CarverAdditionalConfig,
 }
 use super::*;
@@ -84,6 +86,7 @@ pub const CANYON: CarverConfig = CarverConfig {
         max_inclusive: YOffset::Absolute(Absolute { absolute: 67i16 }),
     }),
     replaceable: crate::tag::Block::MINECRAFT_OVERWORLD_CARVER_REPLACEABLES,
+    lava_level: YOffset::AboveBottom(AboveBottom { above_bottom: 8i8 }),
     additional: CarverAdditionalConfig::Canyon(CanyonCarverConfig {
         vertical_rotation: FloatProvider::Object(NormalFloatProvider::Uniform(
             UniformFloatProvider::new(-0.125f32, 0.125f32),
@@ -112,6 +115,7 @@ pub const CAVE: CarverConfig = CarverConfig {
         max_inclusive: YOffset::Absolute(Absolute { absolute: 180i16 }),
     }),
     replaceable: crate::tag::Block::MINECRAFT_OVERWORLD_CARVER_REPLACEABLES,
+    lava_level: YOffset::AboveBottom(AboveBottom { above_bottom: 8i8 }),
     additional: CarverAdditionalConfig::Cave(CaveCarverConfig {
         count: IntProvider::Object(NormalIntProvider::VeryBiasedToBottom(
             VeryBiasedToBottomIntProvider::new(0i32, 14i32, 1i32),
@@ -142,6 +146,7 @@ pub const CAVE_EXTRA_UNDERGROUND: CarverConfig = CarverConfig {
         max_inclusive: YOffset::Absolute(Absolute { absolute: 47i16 }),
     }),
     replaceable: crate::tag::Block::MINECRAFT_OVERWORLD_CARVER_REPLACEABLES,
+    lava_level: YOffset::AboveBottom(AboveBottom { above_bottom: 8i8 }),
     additional: CarverAdditionalConfig::Cave(CaveCarverConfig {
         count: IntProvider::Object(NormalIntProvider::VeryBiasedToBottom(
             VeryBiasedToBottomIntProvider::new(0i32, 14i32, 1i32),
@@ -172,6 +177,7 @@ pub const NETHER_CAVE: CarverConfig = CarverConfig {
         max_inclusive: YOffset::BelowTop(BelowTop { below_top: 1i8 }),
     }),
     replaceable: crate::tag::Block::MINECRAFT_NETHER_CARVER_REPLACEABLES,
+    lava_level: YOffset::AboveBottom(AboveBottom { above_bottom: 10i8 }),
     additional: CarverAdditionalConfig::Cave(CaveCarverConfig {
         count: IntProvider::Object(NormalIntProvider::VeryBiasedToBottom(
             VeryBiasedToBottomIntProvider::new(0i32, 9i32, 1i32),

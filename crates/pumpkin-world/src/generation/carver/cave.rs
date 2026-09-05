@@ -352,7 +352,8 @@ impl CaveCarver {
             return false;
         }
 
-        let Some((state, should_schedule_fluid_update)) = overworld_carve_state(run, x, y, z)
+        let Some((state, should_schedule_fluid_update)) =
+            overworld_carve_state(run, config, x, y, z)
         else {
             return false;
         };
@@ -439,7 +440,7 @@ mod tests {
     #[test]
     fn carves_at_world_y() {
         super::super::with_carve_run(Dimension::OVERWORLD, |run| {
-            let expected = super::super::overworld_carve_state(run, 5, 20, 6)
+            let expected = super::super::overworld_carve_state(run, &CAVE, 5, 20, 6)
                 .expect("test position should carve")
                 .0
                 .id;
@@ -528,7 +529,7 @@ mod tests {
             for x in 0..16 {
                 for z in 0..16 {
                     let Some((state, should_schedule)) =
-                        super::super::overworld_carve_state(run, x, y, z)
+                        super::super::overworld_carve_state(run, &CAVE, x, y, z)
                     else {
                         continue;
                     };

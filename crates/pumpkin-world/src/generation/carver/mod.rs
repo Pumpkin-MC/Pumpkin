@@ -284,10 +284,19 @@ fn carve_top_material(
 
 fn overworld_carve_state(
     run: &mut CarveRun,
+    config: &CarverConfig,
     x: i32,
     y: i32,
     z: i32,
 ) -> Option<(&'static BlockState, bool)> {
+    // Vanilla `WorldCarver.getCarveState`: below the config's `lavaLevel` anchor the
+    // carver always emits lava, before consulting the aquifer.
+    let lava_level = config
+        .lava_level
+        .get_y(run.ctx.min_y as i16, run.ctx.height);
+    if y <= lava_level {
+        return Some((run.ids.lava, false));
+    }
     if let Some(aquifer) = run.ctx.carver_aquifer.as_mut() {
         let result = aquifer.compute(&Vector3::new(x, y, z), 0.0);
         result

@@ -1,5 +1,8 @@
 {
   "type": "minecraft:canyon",
+  "lava_level": {
+    "above_bottom": 8
+  },
   "probability": 0.01,
   "replaceable": "#minecraft:overworld_carver_replaceables",
   "shape": {

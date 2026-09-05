@@ -308,7 +308,8 @@ impl CanyonCarver {
             return false;
         }
 
-        let Some((state, should_schedule_fluid_update)) = overworld_carve_state(run, x, y, z)
+        let Some((state, should_schedule_fluid_update)) =
+            overworld_carve_state(run, config, x, y, z)
         else {
             return false;
         };

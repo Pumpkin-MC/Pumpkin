@@ -31,6 +31,7 @@ pub fn build() -> TokenStream {
         let prob = data["probability"].as_f64().unwrap_or(0.0) as f32;
         let y = value_to_height_provider(&data["y"]);
         let replaceable = value_to_block_tag(&data["replaceable"]);
+        let lava_level = value_to_y_offset(&data["lava_level"]);
 
         let additional = match carver_type {
             "minecraft:cave" => {
@@ -103,6 +104,7 @@ pub fn build() -> TokenStream {
                 probability: #prob,
                 y: #y,
                 replaceable: #replaceable,
+                lava_level: #lava_level,
                 additional: #additional,
             };
         });
@@ -194,6 +196,8 @@ pub fn build() -> TokenStream {
             pub y: HeightProvider,
             /// Vanilla `CarverConfiguration.replaceable`: blocks this carver may replace.
             pub replaceable: crate::tag::Tag,
+            /// Vanilla `CarverConfiguration.lavaLevel`: below this anchor the carver emits lava.
+            pub lava_level: YOffset,
             pub additional: CarverAdditionalConfig,
         }
 

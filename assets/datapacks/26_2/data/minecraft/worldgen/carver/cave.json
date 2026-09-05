@@ -15,6 +15,9 @@
     "max_exclusive": 1.4,
     "min_inclusive": 0.7
   },
+  "lava_level": {
+    "above_bottom": 8
+  },
   "probability": 0.15,
   "replaceable": "#minecraft:overworld_carver_replaceables",
   "room_vertical_radius_multiplier": {

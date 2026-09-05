@@ -7,6 +7,9 @@
   },
   "floor_level": -0.7,
   "horizontal_radius_multiplier": 1.0,
+  "lava_level": {
+    "above_bottom": 10
+  },
   "probability": 0.2,
   "replaceable": "#minecraft:nether_carver_replaceables",
   "room_vertical_radius_multiplier": 0.5,
