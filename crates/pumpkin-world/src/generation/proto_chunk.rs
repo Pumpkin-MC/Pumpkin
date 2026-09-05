@@ -197,6 +197,36 @@ impl ProtoChunk {
         self.structure_starts.contains_key(&key)
     }
 
+    /// The pieces (type, bounding box) of the structure start owned by this chunk, in
+    /// generation order.
+    #[cfg(test)]
+    pub(crate) fn structure_start_pieces(
+        &self,
+        key: StructureKeys,
+    ) -> Option<
+        Vec<(
+            crate::generation::structure::piece::StructurePieceType,
+            BlockBox,
+        )>,
+    > {
+        match self.structure_starts.get(&key)? {
+            StructureInstance::Start(position) => Some(
+                position
+                    .collector
+                    .lock()
+                    .unwrap()
+                    .pieces
+                    .iter()
+                    .map(|piece| {
+                        let piece = piece.get_structure_piece();
+                        (piece.r#type, piece.bounding_box)
+                    })
+                    .collect(),
+            ),
+            StructureInstance::Reference(_) => None,
+        }
+    }
+
     #[must_use]
     pub fn new(x: i32, z: i32, generator: &super::generator::WorldGenerator) -> Self {
         let dimension = generator.dimension();

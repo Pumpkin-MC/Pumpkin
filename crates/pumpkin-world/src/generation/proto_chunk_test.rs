@@ -172,9 +172,61 @@ mod test {
         }
     }
 
+    /// The same vanilla start has 180 pieces; vanilla `generateAndAddPiece` adds each piece
+    /// and generates its children immediately (depth-first), which fixes both the piece
+    /// order and every random draw / collision check after it. Bounding boxes are the
+    /// `BB` tags of the first pieces in vanilla's `structures.starts` for chunk (-11, 11).
+    #[test]
+    fn mineshaft_mesa_pieces_match_vanilla_seed_13579() {
+        use crate::generation::structure::piece::StructurePieceType as T;
+        use pumpkin_data::structures::StructureKeys;
+        use pumpkin_util::math::block_box::BlockBox;
+
+        let world_gen = get_world_gen(
+            Seed(13579),
+            Dimension::OVERWORLD,
+            false,
+            Vec::new(),
+            String::new(),
+        );
+        let WorldGenerator::Noise(generator) = &*world_gen else {
+            unreachable!()
+        };
+        let mut proto = ProtoChunk::new(-11, 11, &world_gen);
+        proto.step_to_biomes(generator);
+        proto.set_structure_starts(generator);
+        let pieces = proto
+            .structure_start_pieces(StructureKeys::MineshaftMesa)
+            .expect("mineshaft_mesa start in chunk (-11, 11)");
+
+        assert_eq!(pieces.len(), 180);
+        let expected = [
+            (T::MineshaftRoom, [-174, 59, 178, -165, 66, 189]),
+            (T::MineshaftCorridor, [-171, 63, 168, -169, 65, 177]),
+            (T::MineshaftCorridor, [-168, 64, 168, -149, 66, 170]),
+            (T::MineshaftCorridor, [-152, 65, 148, -150, 67, 167]),
+            (T::MineshaftCorridor, [-162, 64, 148, -153, 66, 150]),
+            (T::MineshaftStairs, [-171, 58, 148, -163, 65, 150]),
+            (T::MineshaftCorridor, [-186, 58, 148, -172, 60, 150]),
+            (T::MineshaftCorridor, [-196, 58, 148, -187, 60, 150]),
+            (T::MineshaftCorridor, [-211, 58, 148, -197, 60, 150]),
+            (T::MineshaftCorridor, [-211, 58, 138, -209, 60, 147]),
+            (T::MineshaftCorridor, [-193, 58, 128, -191, 60, 147]),
+        ];
+        for (i, (piece_type, [x0, y0, z0, x1, y1, z1])) in expected.into_iter().enumerate() {
+            assert_eq!(pieces[i].0, piece_type, "piece {i}");
+            assert_eq!(
+                pieces[i].1,
+                BlockBox::new(x0, y0, z0, x1, y1, z1),
+                "piece {i}"
+            );
+        }
+    }
+
     /// Vanilla `ChunkGenerator.createReferences` scans the starts of every chunk within 8
     /// chunks. In the saved vanilla world for seed 13579, chunk (-6, 8) carries a
-    /// `minecraft:mineshaft_mesa` reference to the start in (-11, 11) (five chunks away).
+    /// `minecraft:mineshaft_mesa` reference to the start in (-11, 11) (five chunks away),
+    /// while (-5, 8) and (-6, 7) carry none.
     #[test]
     fn structure_references_reach_eight_chunks_seed_13579() {
         use pumpkin_data::structures::StructureKeys;
@@ -190,15 +242,17 @@ mod test {
             unreachable!()
         };
 
-        // Only the positive case is asserted here: the exact extent of the start (vanilla
-        // references it from x -15..-6, z 8..15 and *not* from (-5, 8) or (-6, 7)) also
-        // depends on the pieces being generated depth-first, which is fixed in the mineshaft
-        // series; the negative cases are asserted there.
-        let mut proto = ProtoChunk::new(-6, 8, &world_gen);
-        proto.step_to_biomes(generator);
-        proto.set_structure_starts(generator);
-        proto.set_structure_references(generator);
-        assert!(proto.has_structure(StructureKeys::MineshaftMesa), "(-6, 8)");
+        for ((cx, cz), expected) in [((-6, 8), true), ((-5, 8), false), ((-6, 7), false)] {
+            let mut proto = ProtoChunk::new(cx, cz, &world_gen);
+            proto.step_to_biomes(generator);
+            proto.set_structure_starts(generator);
+            proto.set_structure_references(generator);
+            assert_eq!(
+                proto.has_structure(StructureKeys::MineshaftMesa),
+                expected,
+                "({cx}, {cz})"
+            );
+        }
     }
 
     // Regression test for transposed heightmaps during Noise-stage chunk resume.
