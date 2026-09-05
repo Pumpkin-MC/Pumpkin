@@ -8,6 +8,7 @@ use pumpkin_data::{
     Block, BlockDirection, BlockState, BlockStateId,
     damage::DamageType,
     fluid::{Falling, Fluid, FluidProperties, Level},
+    tag::Taggable,
     world::WorldEvent,
 };
 use pumpkin_util::math::position::BlockPos;
@@ -95,21 +96,25 @@ impl FlowingLava {
         let is_still = world.get_block_state_id(block_pos) == Block::LAVA.default_state.id;
 
         for dir in BlockDirection::all() {
+            // Vanilla tests every direction but Down here. Lava landing in water
+            // below is turned to stone by `spread_to`, not by this scan, so Down
+            // is skipped rather than ending it - a lava block with water beneath
+            // *and* water beside it still forms cobblestone.
+            if dir == BlockDirection::Down {
+                continue;
+            }
+
             let neighbor_pos = block_pos.offset(dir.to_offset());
-            if world.get_block(&neighbor_pos) == &Block::WATER {
-                if dir == BlockDirection::Down {
-                    return true;
-                }
+            if world
+                .get_fluid(&neighbor_pos)
+                .has_tag(&pumpkin_data::tag::Fluid::MINECRAFT_WATER)
+            {
                 let block = if is_still {
                     Block::OBSIDIAN
                 } else {
                     Block::COBBLESTONE
                 };
-                world.set_block_state(
-                    block_pos,
-                    block.default_state.id,
-                    BlockFlags::NOTIFY_NEIGHBORS,
-                );
+                world.set_block_state(block_pos, block.default_state.id, BlockFlags::NOTIFY_ALL);
                 world.sync_world_event(WorldEvent::LavaFizz, *block_pos, 0);
                 return false;
             }
@@ -128,7 +133,7 @@ impl FlowingLava {
                 world.set_block_state(
                     block_pos,
                     Block::BASALT.default_state.id,
-                    BlockFlags::NOTIFY_NEIGHBORS,
+                    BlockFlags::NOTIFY_ALL,
                 );
                 world.sync_world_event(WorldEvent::LavaFizz, *block_pos, 0);
                 return false;
