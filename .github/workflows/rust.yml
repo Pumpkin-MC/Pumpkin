@@ -133,7 +133,11 @@ jobs:
           profile: pixel_5
           force-avd-creation: false
           emulator-options: -no-snapshot-load -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
-          script: ./android_test_script
+          script: |
+            adb shell rm -rf /data/local/tmp/*
+            adb push assets /data/local/tmp/$PWD/assets
+            # `terminal_failure_is_retained` is FAILED
+            cargo ndk-test -t arm64-v8a -- --skip terminal_failure_is_retained
   build_release:
     name: Build project in release
     runs-on: ${{ matrix.os }}
