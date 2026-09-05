@@ -357,7 +357,9 @@ pub struct TrapezoidFloatProvider {
     min: f32,
     /// The maximum value (inclusive) that can be generated.
     max: f32,
-    /// The width of the flat plateau as a fraction of the total range (0.0 to 1.0).
+    /// The absolute width of the flat plateau, in the same units as `min`/`max`.
+    /// Must not exceed `max - min`; a plateau of `0.0` yields a triangular
+    /// distribution, a plateau of `max - min` a uniform one.
     plateau: f32,
 }
 
@@ -383,7 +385,8 @@ impl TrapezoidFloatProvider {
     /// # Arguments
     /// - `min` – The minimum value (inclusive).
     /// - `max` – The maximum value (inclusive).
-    /// - `plateau` – The width of the flat plateau as a fraction of the total range (0.0 to 1.0).
+    /// - `plateau` – The absolute width of the flat plateau, in the same units as
+    ///   `min`/`max` (not a fraction of the range). Must not exceed `max - min`.
     ///
     /// # Returns
     /// A new `TrapezoidFloatProvider` instance.
@@ -409,29 +412,18 @@ impl TrapezoidFloatProvider {
     /// # Returns
     /// A random float from the trapezoidal distribution in the range [min, max].
     pub fn get(&self, random: &mut impl RandomImpl) -> f32 {
-        // NOTE: Trapezoid distribution: flat plateau in the middle, linear ramps on the sides.
+        // NOTE: A trapezoid is the sum of two uniform variables of differing width, mirroring
+        // `TrapezoidIntProvider::get`. Both draws are mandatory: the RNG stream is shared
+        // with the rest of the carver, so consuming a different amount desyncs everything
+        // drawn afterwards. Kept as plain adds and multiplies rather than `mul_add`, since
+        // each intermediate product has to round to f32 the way the vanilla expression does.
         let range = self.max - self.min;
-        let plateau_range = range * self.plateau;
-        let ramp_range = (range - plateau_range) * 0.5;
+        // NOTE: `max(0.0)` only guards a malformed `plateau > range`, which vanilla rejects
+        // while decoding; for valid inputs this is the plain half-difference.
+        let plateau_start = ((range - self.plateau) * 0.5).max(0.0);
+        let plateau_end = range - plateau_start;
 
-        let random_value = random.next_f32();
-
-        if random_value < self.plateau.mul_add(-0.5, 0.5) {
-            // NOTE: Left ramp: quadratic distribution biased toward plateau
-            let scaled = random_value / self.plateau.mul_add(-0.5, 0.5);
-            let sqrt_scaled = scaled.sqrt();
-            self.min + ramp_range * sqrt_scaled
-        } else if random_value > self.plateau.mul_add(0.5, 0.5) {
-            // NOTE: Right ramp: quadratic distribution biased toward plateau
-            let scaled =
-                (random_value - self.plateau.mul_add(0.5, 0.5)) / self.plateau.mul_add(-0.5, 0.5);
-            let sqrt_scaled = (1.0 - scaled).sqrt();
-            self.max - ramp_range * sqrt_scaled
-        } else {
-            // NOTE: Plateau: uniform distribution
-            let plateau_pos = (random_value - self.plateau.mul_add(-0.5, 0.5)) / self.plateau;
-            self.min + ramp_range + plateau_pos * plateau_range
-        }
+        self.min + random.next_f32() * plateau_end + random.next_f32() * plateau_start
     }
 
     /// Returns the maximum inclusive value.
@@ -508,7 +500,7 @@ mod tests {
         let mut random = RandomGenerator::Xoroshiro(
             crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
         );
-        let provider = TrapezoidFloatProvider::new(0.0, 10.0, 0.5);
+        let provider = TrapezoidFloatProvider::new(0.0, 10.0, 4.0);
 
         assert_eq!(provider.get_min(), 0.0);
         assert_eq!(provider.get_max(), 10.0);
@@ -521,6 +513,66 @@ mod tests {
                 "Value {value} is outside range [0.0, 10.0]"
             );
         }
+    }
+
+    /// `plateau` is an absolute width, not a fraction of the range, and the distribution is
+    /// the sum of two uniform draws. Expected values come from vanilla's `TrapezoidFloat`
+    /// (`min + nextFloat() * h + nextFloat() * g`) on the same seed, for the two shapes the
+    /// carvers actually use: canyon/nether cave `0..6` plateau `2`, and cave `0..3` plateau `1`.
+    #[test]
+    fn trapezoid_float_provider_matches_vanilla() {
+        let mut random =
+            RandomGenerator::Xoroshiro(crate::random::xoroshiro128::Xoroshiro::from_seed(1));
+        assert_eq!(
+            TrapezoidFloatProvider::new(0.0, 6.0, 2.0).get(&mut random),
+            4.475_350_4
+        );
+
+        let mut random =
+            RandomGenerator::Xoroshiro(crate::random::xoroshiro128::Xoroshiro::from_seed(1));
+        assert_eq!(
+            TrapezoidFloatProvider::new(0.0, 3.0, 1.0).get(&mut random),
+            2.237_675_2
+        );
+    }
+
+    /// The carvers draw the trapezoid from the middle of a shared per-chunk stream, so
+    /// consuming the wrong number of floats desyncs every value drawn after it.
+    #[test]
+    fn trapezoid_float_provider_consumes_two_floats() {
+        let mut provider_random =
+            RandomGenerator::Xoroshiro(crate::random::xoroshiro128::Xoroshiro::from_seed(1));
+        TrapezoidFloatProvider::new(0.0, 6.0, 2.0).get(&mut provider_random);
+
+        let mut reference =
+            RandomGenerator::Xoroshiro(crate::random::xoroshiro128::Xoroshiro::from_seed(1));
+        reference.next_f32();
+        reference.next_f32();
+
+        assert_eq!(provider_random.next_f32(), reference.next_f32());
+    }
+
+    /// A zero plateau degenerates to a triangular distribution, a full-range plateau to a
+    /// uniform one. Both still take two draws, matching vanilla.
+    #[test]
+    fn trapezoid_float_provider_degenerate_plateaus() {
+        let mut random =
+            RandomGenerator::Xoroshiro(crate::random::xoroshiro128::Xoroshiro::from_seed(1));
+        let triangular = TrapezoidFloatProvider::new(-6.0, 6.0, 0.0).get(&mut random);
+        assert!(
+            (-6.0..=6.0).contains(&triangular),
+            "Value {triangular} is outside range [-6.0, 6.0]"
+        );
+
+        let mut random =
+            RandomGenerator::Xoroshiro(crate::random::xoroshiro128::Xoroshiro::from_seed(1));
+        let uniform = TrapezoidFloatProvider::new(0.0, 6.0, 6.0).get(&mut random);
+        let mut reference =
+            RandomGenerator::Xoroshiro(crate::random::xoroshiro128::Xoroshiro::from_seed(1));
+        assert_eq!(uniform, reference.next_f32() * 6.0);
+        // NOTE: the second draw is scaled by a zero-width ramp, but is still consumed.
+        reference.next_f32();
+        assert_eq!(reference.next_f32(), random.next_f32());
     }
 
     #[test]
