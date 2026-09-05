@@ -122,6 +122,22 @@ impl Animal for SheepEntity {
 }
 
 impl Mob for SheepEntity {
+    fn populate_loot_context(&self, params: &mut crate::world::loot::LootContextParameters) {
+        use pumpkin_data::dye_color::DyeColor;
+        use pumpkin_util::loot_table::{LootEntityPropertyValue, LootEntityTarget};
+
+        params.add_entity_property(
+            LootEntityTarget::This,
+            "minecraft:components/minecraft:sheep/color",
+            LootEntityPropertyValue::String(DyeColor::from(self.get_color()).name()),
+        );
+        params.add_entity_property(
+            LootEntityTarget::This,
+            "minecraft:type_specific/sheep/sheared",
+            LootEntityPropertyValue::Bool(self.is_sheared()),
+        );
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
@@ -190,5 +206,63 @@ impl Mob for SheepEntity {
         }
 
         self.animal_interact(player, item_stack, Sound::EntitySheepAmbient)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_util::loot_table::{
+        LootCondition, LootEntityProperties, LootEntityProperty, LootEntityPropertyValue,
+        LootEntityTarget,
+    };
+
+    const COLORS: [&str; 16] = [
+        "white",
+        "orange",
+        "magenta",
+        "light_blue",
+        "yellow",
+        "lime",
+        "pink",
+        "gray",
+        "light_gray",
+        "cyan",
+        "purple",
+        "blue",
+        "brown",
+        "green",
+        "red",
+        "black",
+    ];
+
+    fn properties(color: &'static str, sheared: bool) -> LootEntityProperties {
+        LootEntityProperties {
+            values: vec![
+                LootEntityProperty {
+                    key: "minecraft:components/minecraft:sheep/color",
+                    value: LootEntityPropertyValue::String(color),
+                },
+                LootEntityProperty {
+                    key: "minecraft:type_specific/sheep/sheared",
+                    value: LootEntityPropertyValue::Bool(sheared),
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn generated_loot_matches_only_unsheared_sheep_of_the_right_color() {
+        let wool_entries = pumpkin_data::loot_table::ENTITIES_SHEEP.pools[1].entries;
+        assert_eq!(wool_entries.len(), COLORS.len());
+
+        for (index, entry) in wool_entries.iter().enumerate() {
+            let LootCondition::EntityProperties { target, predicate } = entry.condition else {
+                panic!("sheep wool entry must have an entity-properties condition");
+            };
+            assert_eq!(target, LootEntityTarget::This);
+            assert!(properties(COLORS[index], false).matches(predicate));
+            assert!(!properties(COLORS[(index + 1) % COLORS.len()], false).matches(predicate));
+            assert!(!properties(COLORS[index], true).matches(predicate));
+        }
     }
 }
