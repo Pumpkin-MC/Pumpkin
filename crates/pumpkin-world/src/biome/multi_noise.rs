@@ -22,9 +22,8 @@ mod test {
         use crate::generation::noise::router::multi_noise_sampler::MultiNoiseSampler;
         use pumpkin_util::world_seed::Seed;
         type PosToPoint = (i32, i32, i32, i64, i64, i64, i64, i64, i64);
-        let expected_data: Vec<PosToPoint> = read_data_from_file!(
-            "../../assets/multi_noise_sample_no_blend_no_beard_0_0_0.json"
-        );
+        let expected_data: Vec<PosToPoint> =
+            read_data_from_file!("../../assets/multi_noise_sample_no_blend_no_beard_0_0_0.json");
 
         let seed = 0;
         let chunk_x = 0;

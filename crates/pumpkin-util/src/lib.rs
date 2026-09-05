@@ -63,9 +63,9 @@ pub enum HeightMap {
 macro_rules! path_wrapper {
     ($path:expr) => {{
         use std::path::{Path, PathBuf};
-        if cfg!(target_os = "android"){
+        if cfg!(target_os = "android") {
             PathBuf::from($path)
-        }else{
+        } else {
             Path::new(env!("CARGO_MANIFEST_DIR")).join($path)
         }
     }};
