@@ -22,6 +22,15 @@ pub trait ItemMetadata {
 pub trait ItemBehaviour: Send + Sync {
     fn normal_use(&self, _item: &Item, _player: &Player) {}
 
+    /// Handles an item use with the rotation reported for that action.
+    ///
+    /// Java clients include this rotation in the use-item packet. Item behaviours
+    /// that perform a raycast should override this method instead of relying on
+    /// the player's potentially stale entity rotation.
+    fn normal_use_with_rotation(&self, item: &Item, player: &Player, _yaw: f32, _pitch: f32) {
+        self.normal_use(item, player);
+    }
+
     #[expect(clippy::too_many_arguments)]
     fn use_on_block(
         &self,

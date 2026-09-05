@@ -27,6 +27,11 @@ impl ItemRegistry {
     }
 
     pub fn on_use(&self, stack: &ItemStack, player: &Player) {
+        let (yaw, pitch) = player.rotation();
+        self.on_use_with_rotation(stack, player, yaw, pitch);
+    }
+
+    pub fn on_use_with_rotation(&self, stack: &ItemStack, player: &Player, yaw: f32, pitch: f32) {
         let item = stack.item;
         let cooldown = stack.get_use_cooldown();
         let cooldown_group = cooldown
@@ -39,7 +44,7 @@ impl ItemRegistry {
 
         let pumpkin_item = self.get_pumpkin_item(item.id);
         if let Some(pumpkin_item) = pumpkin_item {
-            pumpkin_item.normal_use(item, player);
+            pumpkin_item.normal_use_with_rotation(item, player, yaw, pitch);
         }
 
         if let Some(cooldown) = cooldown {
