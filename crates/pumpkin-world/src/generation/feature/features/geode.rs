@@ -115,6 +115,27 @@ impl GeodeFeature {
         }
     }
 
+    /// Vanilla compares `(double)random.nextFloat() < chance` (the float draw is widened to a
+    /// double, the double chance is never narrowed to a float).
+    fn chance_hit(draw: f32, chance: f64) -> bool {
+        f64::from(draw) < chance
+    }
+
+    /// The `level` property of a water block state, if `state` is water.
+    fn water_level(state: BlockStateId) -> Option<&'static str> {
+        let block = Block::from_state_id(state);
+        if block.id != Block::WATER.id {
+            return None;
+        }
+        block.properties(state).and_then(|props| {
+            props
+                .to_props()
+                .iter()
+                .find(|(k, _)| *k == "level")
+                .map(|(_, v)| *v)
+        })
+    }
+
     fn has_property(codec: &BlockStateCodec, property: &str) -> bool {
         let state = codec.get_state();
         // Obtain the block corresponding to this state id
@@ -160,7 +181,7 @@ impl GeodeFeature {
                     0.0
                 })
             .sqrt();
-        let should_generate_crack = random.next_f32() < self.generate_crack_chance as f32;
+        let should_generate_crack = Self::chance_hit(random.next_f32(), self.generate_crack_chance);
         let mut num_invalid_points = 0;
 
         // Sample distribution points; bail out early if too many fall into invalid blocks
@@ -274,7 +295,8 @@ impl GeodeFeature {
                             .get(random, point_inside, chunk, block_registry);
                     Self::safe_set_block(chunk, point_inside, state, &can_replace_pred);
                 } else if dist_sum_shell >= innermost_block_layer {
-                    let use_alternate = random.next_f32() < self.use_alternate_layer0_chance as f32;
+                    let use_alternate =
+                        Self::chance_hit(random.next_f32(), self.use_alternate_layer0_chance);
                     if use_alternate {
                         let state = self.alternate_inner_layer_provider.get(
                             random,
@@ -293,7 +315,7 @@ impl GeodeFeature {
                         Self::safe_set_block(chunk, point_inside, state, &can_replace_pred);
                     }
                     if (!self.placements_require_layer0_alternate || use_alternate)
-                        && random.next_f32() < self.use_potential_placements_chance as f32
+                        && Self::chance_hit(random.next_f32(), self.use_potential_placements_chance)
                     {
                         potential_crystal_placements.push(point_inside);
                     }
@@ -324,11 +346,13 @@ impl GeodeFeature {
                     let place_raw = GenerationCache::get_block_state(chunk, &place_pos.0);
                     let place_state = place_raw.to_state();
 
-                    // Only place if the target block is replaceable (air/water)
+                    // `BuddingAmethystBlock.canClusterGrowAtState`: air, or water whose fluid
+                    // amount is 8 (`FluidState.isFull()`: a source, or a falling column).
                     let is_air = place_state.is_air();
-                    let is_water = place_raw.to_block_id() == BlockId::WATER;
+                    let water_level = Self::water_level(place_raw);
+                    let is_full_water = matches!(water_level, Some("0" | "8"));
 
-                    if is_air || is_water {
+                    if is_air || is_full_water {
                         let mut final_codec = base_codec.clone();
 
                         // Set facing based on direction
@@ -348,12 +372,13 @@ impl GeodeFeature {
                                 .insert("facing".to_string(), dir_name.to_string());
                         }
 
-                        // Handle waterlogging dynamically based on the block we are replacing
+                        // Waterlogged iff the replaced fluid is a source (`FluidState.isSource`).
                         if Self::has_property(&final_codec, "waterlogged") {
+                            let is_source = water_level == Some("0");
                             final_codec
                                 .properties
                                 .get_or_insert_with(HashMap::new)
-                                .insert("waterlogged".to_string(), is_water.to_string());
+                                .insert("waterlogged".to_string(), is_source.to_string());
                         }
 
                         let final_state = final_codec.get_state();
@@ -441,5 +466,45 @@ mod tests {
         let cannot_replace = GeodeFeature::resolve_block_set(&geode.cannot_replace);
         assert!(cannot_replace.contains(&Block::BEDROCK.id));
         assert!(!cannot_replace.contains(&Block::DEEPSLATE.id));
+    }
+
+    /// Vanilla: `(double)random.nextFloat() < config.generateCrackChance` (`f2d; dcmpg`).
+    /// The largest float below 0.95 is 0.94999998807907104, which is below the double 0.95
+    /// but *not* below `0.95 as f32` (they are the same float), so narrowing the chance to a
+    /// float flips that draw.
+    #[test]
+    fn chance_draws_are_compared_as_doubles() {
+        let draw = 0.95f32; // == 0.949_999_988_079_071_04
+        assert!(f64::from(draw) < 0.95);
+        assert!(GeodeFeature::chance_hit(draw, 0.95));
+        // Narrowing the chance instead makes the draw equal to it, i.e. not below it.
+        assert_eq!(draw.partial_cmp(&(0.95f64 as f32)), Some(Ordering::Equal));
+        let just_above = f32::from_bits(0.083f32.to_bits() + 1);
+        assert!(!GeodeFeature::chance_hit(just_above, 0.083));
+    }
+
+    /// `BuddingAmethystBlock.canClusterGrowAtState`: air, or water with `FluidState.isFull()`
+    /// (amount 8: `level=0` source or `level=8` falling); `waterlogged` follows `isSource()`.
+    #[test]
+    fn cluster_placement_water_levels_follow_vanilla() {
+        assert_eq!(
+            GeodeFeature::water_level(Block::WATER.default_state.id),
+            Some("0")
+        );
+        assert_eq!(
+            GeodeFeature::water_level(Block::STONE.default_state.id),
+            None
+        );
+        let flowing = BlockStateCodec {
+            name: &Block::WATER,
+            properties: Some(HashMap::from([("level".to_string(), "3".to_string())])),
+        }
+        .get_state()
+        .id;
+        assert_eq!(GeodeFeature::water_level(flowing), Some("3"));
+        assert!(!matches!(
+            GeodeFeature::water_level(flowing),
+            Some("0" | "8")
+        ));
     }
 }
