@@ -30,8 +30,8 @@ pub fn to_wasm_advancement_info(
     advancement: &'static Advancement,
 ) -> wasmtime::Result<WitAdvancementInfo> {
     let display = if let Some(disp) = advancement.display {
-        let title = state.add_text_component(disp.get_title())?;
-        let description = state.add_text_component(disp.get_description())?;
+        let title = state.add(disp.get_title())?;
+        let description = state.add(disp.get_description())?;
         Some(WitAdvancementDisplay {
             title,
             description,
