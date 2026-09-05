@@ -105,7 +105,7 @@ impl Xoroshiro {
     ///
     /// # Returns
     /// A random value with the given number of bits.
-    const fn next(&mut self, bits: u64) -> u64 {
+    pub(super) const fn next(&mut self, bits: u64) -> u64 {
         self.next_random() >> (64 - bits)
     }
 

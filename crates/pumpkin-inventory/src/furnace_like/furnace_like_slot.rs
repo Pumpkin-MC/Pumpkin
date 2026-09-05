@@ -78,6 +78,13 @@ impl Slot for FurnaceLikeSlot {
         }
     }
 
+    fn get_max_item_count_for_stack(&self, stack: &pumpkin_data::item_stack::ItemStack) -> u8 {
+        match self.slot_type {
+            FurnaceLikeSlotType::Bottom if stack.item.id == Item::BUCKET.id => 1,
+            _ => self.get_max_item_count().min(stack.get_max_stack_size()),
+        }
+    }
+
     fn mark_dirty(&self) {
         self.inventory.mark_dirty();
     }

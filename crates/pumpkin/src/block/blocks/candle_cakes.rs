@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_data::{Block, BlockStateId, item::Item, item_stack::ItemStack};
+use pumpkin_data::{Block, BlockState, BlockStateId, item::Item, item_stack::ItemStack};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::{GameMode, math::position::BlockPos};
 use pumpkin_world::{
@@ -11,7 +11,7 @@ use pumpkin_world::{
 use crate::{
     block::{
         BlockBehaviour, GetStateForNeighborUpdateArgs, NormalUseArgs, OnScheduledTickArgs,
-        UseWithItemArgs, blocks::cake::CakeBlock, registry::BlockActionResult,
+        PathComputationType, UseWithItemArgs, blocks::cake::CakeBlock, registry::BlockActionResult,
     },
     entity::player::Player,
     world::World,
@@ -120,6 +120,10 @@ impl BlockBehaviour for CandleCakeBlock {
                 .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
         }
         args.state_id
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
 

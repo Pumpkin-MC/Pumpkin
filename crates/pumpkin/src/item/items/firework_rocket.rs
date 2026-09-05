@@ -24,7 +24,7 @@ impl ItemMetadata for FireworkRocketItem {
 impl ItemBehaviour for FireworkRocketItem {
     fn use_on_block(
         &self,
-        _item: &mut ItemStack,
+        item: &mut ItemStack,
         player: &Player,
         location: BlockPos,
         _face: BlockDirection,
@@ -44,6 +44,7 @@ impl ItemBehaviour for FireworkRocketItem {
         );
         let entity = FireworkRocketEntity::new(entity);
         world.spawn_entity(Arc::new(entity));
+        item.decrement_unless_creative(player.gamemode.load(), 1);
     }
 
     fn normal_use(&self, _item: &Item, player: &Player) {
@@ -56,6 +57,24 @@ impl ItemBehaviour for FireworkRocketItem {
             );
             let entity = FireworkRocketEntity::new_shot(entity, player.get_entity());
             world.spawn_entity(Arc::new(entity));
+
+            let mut held = player.inventory().held_item();
+            let mut is_main = true;
+            if held.is_empty() || held.item.id != Item::FIREWORK_ROCKET.id {
+                held = player.inventory().off_hand_item();
+                is_main = false;
+                if held.is_empty() || held.item.id != Item::FIREWORK_ROCKET.id {
+                    return;
+                }
+            }
+            held.decrement_unless_creative(player.gamemode.load(), 1);
+            if is_main {
+                player.inventory().set_held_item(held);
+            } else {
+                player
+                    .inventory()
+                    .set_stack_in_hand(pumpkin_util::Hand::Left, held);
+            }
         }
     }
 

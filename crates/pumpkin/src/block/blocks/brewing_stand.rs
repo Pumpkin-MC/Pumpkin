@@ -1,13 +1,16 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use crate::block::{GetComparatorOutputArgs, PlacedArgs};
+use crate::block::{
+    GetComparatorOutputArgs, GetScreenHandlerFactoryArgs, PathComputationType, PlacedArgs,
+};
 use crate::block::{
     registry::BlockActionResult,
     {BlockBehaviour, NormalUseArgs},
 };
 
 use crate::block::entities::brewing_stand::BrewingStandBlockEntity;
+use pumpkin_data::BlockState;
 use pumpkin_data::translation;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
@@ -47,20 +50,33 @@ pub struct BrewingStandBlock;
 
 impl BlockBehaviour for BrewingStandBlock {
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        if let Some(block_entity) = args.world.get_block_entity(args.position)
-            && let Some(inventory) = block_entity.clone().get_inventory()
-            && let Some(pd) = block_entity.clone().to_property_delegate()
-        {
+        if let Some(factory) = self.get_screen_handler_factory(GetScreenHandlerFactoryArgs {
+            server: args.server,
+            world: args.world,
+            block: args.block,
+            position: args.position,
+            player: args.player,
+        }) {
             args.player.increment_stat(
                 pumpkin_data::statistic::StatisticCategory::Custom,
                 pumpkin_data::statistic::CustomStatistic::InteractWithBrewingstand as i32,
                 1,
             );
             args.player
-                .open_handled_screen(&BrewingScreenFactory(inventory, pd), Some(*args.position));
+                .open_handled_screen(factory.as_ref(), Some(*args.position));
         }
 
         BlockActionResult::Success
+    }
+
+    fn get_screen_handler_factory(
+        &self,
+        args: GetScreenHandlerFactoryArgs<'_>,
+    ) -> Option<Box<dyn ScreenHandlerFactory>> {
+        let block_entity = args.world.get_block_entity(args.position)?;
+        let inventory = block_entity.clone().get_inventory()?;
+        let pd = block_entity.to_property_delegate()?;
+        Some(Box::new(BrewingScreenFactory(inventory, pd)))
     }
 
     fn placed(&self, args: PlacedArgs<'_>) {
@@ -84,5 +100,9 @@ impl BlockBehaviour for BrewingStandBlock {
         } else {
             None
         }
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }

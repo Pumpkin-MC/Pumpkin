@@ -1,6 +1,6 @@
 use crate::block::{BlockBehaviour, BlockMetadata, GetComparatorOutputArgs};
 use pumpkin_data::BlockId;
-use pumpkin_data::block_properties::{BeeNestLikeProperties, BlockProperties};
+use pumpkin_data::block_properties::BeeNestLikeProperties;
 
 pub struct BeehiveBlock;
 
@@ -14,7 +14,7 @@ impl BlockBehaviour for BeehiveBlock {
     fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
         {
             let state_id = args.world.get_block_state_id(args.position);
-            let props = BeeNestLikeProperties::from_state_id(state_id, args.block);
+            let props = BeeNestLikeProperties::from_state_id(state_id);
             Some(props.honey_level)
         }
     }

@@ -1,204 +1,337 @@
 use std::sync::Arc;
 
-use pumpkin_data::sound::SoundCategory;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::translation;
+use pumpkin_protocol::IdOr;
+use pumpkin_protocol::java::client::play::CSoundEffect;
+use pumpkin_util::PermissionLvl;
+use pumpkin_util::identifier::Identifier;
+use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
-use rand::{RngExt, rng};
 
-use crate::entity::EntityBase;
-use crate::{
-    command::{
-        CommandExecutor, CommandResult, CommandSender,
-        args::{
-            Arg, ConsumedArgs, FindArg, bounded_num::BoundedNumArgumentConsumer,
-            players::PlayersArgumentConsumer, position_3d::Position3DArgumentConsumer,
-            sound::SoundArgumentConsumer, sound_category::SoundCategoryArgumentConsumer,
-        },
-        dispatcher::CommandError,
-        tree::{CommandTree, builder::argument},
-    },
-    entity::player::Player,
+use crate::command::argument_builder::{
+    ArgumentBuilder, LiteralArgumentBuilder, argument, command, literal,
 };
+use crate::command::argument_types::coordinates::vec3::Vec3ArgumentType;
+use crate::command::argument_types::core::float::FloatArgumentType;
+use crate::command::argument_types::entity::EntityArgumentType;
+use crate::command::argument_types::identifier::IdentifierArgumentType;
+use crate::command::context::command_context::CommandContext;
+use crate::command::context::command_source::CommandSource;
+use crate::command::errors::command_syntax_error::CommandSyntaxError;
+use crate::command::errors::error_types::CommandErrorType;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
+use crate::entity::player::Player;
 
-/// Command: playsound <sound> [<source>] [<targets>] [<pos>] [<volume>] [<pitch>] [<minVolume>]
-///
-/// Plays a sound at specified position for target players.
-/// - sound: The sound resource location to play
-/// - source: Sound category (master, music, record, etc.)
-/// - targets: Players who will hear the sound
-/// - pos: Position to play the sound from
-/// - volume: Sound volume (>=0, default: 1.0)
-/// - pitch: Sound pitch (0.5-2.0, default: 1.0)
-/// - minVolume: Minimum volume for distant players (0.0-1.0, default: 0.0)
-const NAMES: [&str; 1] = ["playsound"];
 const DESCRIPTION: &str = "Plays a sound at a position.";
-const ARG_SOUND: &str = "sound";
-const ARG_SOURCE: &str = "source";
-const ARG_TARGETS: &str = "targets";
-const ARG_POS: &str = "pos";
-const ARG_VOLUME: &str = "volume";
-const ARG_PITCH: &str = "pitch";
-const ARG_MIN_VOLUME: &str = "minVolume";
+const PERMISSION: &str = "minecraft:command.playsound";
 
-// Volume must be >= 0, no upper limit
-const fn volume_consumer() -> BoundedNumArgumentConsumer<f32> {
-    BoundedNumArgumentConsumer::new().name(ARG_VOLUME).min(0.0)
-}
+const ERROR_TOO_FAR: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::COMMANDS_PLAYSOUND_FAILED,
+    translation::java::COMMANDS_PLAYSOUND_FAILED,
+);
 
-// Pitch must be between 0.0 and 2.0
-// Values below 0.5 are treated as 0.5
-const fn pitch_consumer() -> BoundedNumArgumentConsumer<f32> {
-    BoundedNumArgumentConsumer::new()
-        .name(ARG_PITCH)
-        .min(0.0)
-        .max(2.0)
-}
+const SOUND_SOURCES: [(&str, SoundCategory); 10] = [
+    ("master", SoundCategory::Master),
+    ("music", SoundCategory::Music),
+    ("record", SoundCategory::Records),
+    ("weather", SoundCategory::Weather),
+    ("block", SoundCategory::Blocks),
+    ("hostile", SoundCategory::Hostile),
+    ("neutral", SoundCategory::Neutral),
+    ("player", SoundCategory::Players),
+    ("ambient", SoundCategory::Ambient),
+    ("voice", SoundCategory::Voice),
+];
 
-// Minimum volume must be between 0.0 and 1.0
-// Controls the volume for players outside normal hearing range
-const fn min_volume_consumer() -> BoundedNumArgumentConsumer<f32> {
-    BoundedNumArgumentConsumer::new()
-        .name(ARG_MIN_VOLUME)
-        .min(0.0)
-        .max(1.0)
-}
+#[allow(clippy::too_many_arguments)]
+fn play_sound(
+    source: &CommandSource,
+    players: &[Arc<Player>],
+    sound: &Identifier,
+    sound_source: SoundCategory,
+    position: Vector3<f64>,
+    volume: f32,
+    pitch: f32,
+    min_volume: f32,
+) -> Result<i32, CommandSyntaxError> {
+    let range = 16.0 * if volume > 1.0 { volume } else { 1.0 };
+    let max_dist_sq = f64::from(range * range);
+    let world = source.world().clone();
+    let seed = rand::random::<f64>();
+    let mut played_for = Vec::new();
 
-struct Executor;
+    let sound_event = Sound::from_name(sound.path())
+        .or_else(|| Sound::from_name(&sound.to_string()))
+        .map_or_else(
+            || {
+                IdOr::Value(pumpkin_protocol::SoundEvent {
+                    sound_name: sound.to_string(),
+                    range: None,
+                })
+            },
+            |sound_enum| IdOr::Id(sound_enum as u16),
+        );
 
-impl CommandExecutor for Executor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        _server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        // Get required sound argument
-        let sound = SoundArgumentConsumer::find_arg(args, ARG_SOUND)?;
-
-        // Get optional sound category, defaults to Master
-        let source = args
-            .get(ARG_SOURCE)
-            .map_or(SoundCategory::Master, |arg| match arg {
-                Arg::SoundCategory(category) => *category,
-                _ => SoundCategory::Master,
-            });
-
-        // Get target players, defaults to sender if not specified
-        let targets: &[Arc<Player>] = match (
-            PlayersArgumentConsumer::find_arg(args, ARG_TARGETS),
-            sender.as_player(),
-        ) {
-            (Ok(players), _) => players,
-            (_, Some(player)) => &[player],
-            (_, _) => &[],
-        };
-
-        // Get optional position, defaults to target's position
-        let position = Position3DArgumentConsumer::find_arg(args, ARG_POS).ok();
-
-        // Get optional volume parameter
-        let volume = match BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_VOLUME) {
-            Ok(Ok(v)) => v,
-            _ => 1.0, // Default volume
-        };
-
-        // Get optional pitch parameter
-        let pitch = match BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_PITCH) {
-            Ok(Ok(p)) => p.max(0.5), // Values below 0.5 are clamped
-            _ => 1.0,                // Default pitch
-        };
-
-        // Get optional minimum volume (currently unused in implementation)
-        let min_volume = match BoundedNumArgumentConsumer::<f32>::find_arg(args, ARG_MIN_VOLUME) {
-            Ok(Ok(v)) => v,
-            _ => 0.0, // Default minimum volume
-        };
-
-        // Use same random seed for all targets to ensure sound synchronization
-        let seed = rng().random::<f64>();
-
-        // Track how many players actually received the sound
-        let mut players_who_heard = 0;
-
-        // Play sound for each target player
-        for target in targets {
-            let pos = position.unwrap_or(target.living_entity.entity.pos.load());
-
-            // Check if player can hear the sound based on volume and distance
-            let player_pos = target.living_entity.entity.pos.load();
-            let distance = player_pos.squared_distance_to_vec(&pos);
-            let max_distance: f64 = (16.0 * volume).into(); // 16 blocks is base distance at volume 1.0
-
-            if distance <= max_distance || min_volume > 0.0 {
-                target.play_sound(sound as u16, source, &pos, volume, pitch, seed);
-                players_who_heard += 1;
-            }
+    for player in players {
+        if !Arc::ptr_eq(&player.world(), &world) {
+            continue;
         }
 
-        // Send appropriate message based on results
-        if players_who_heard == 0 {
-            Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                translation::java::COMMANDS_PLAYSOUND_FAILED,
-                translation::java::COMMANDS_PLAYSOUND_FAILED,
-                [],
-            )))
-        } else {
-            let sound_name = sound.to_name();
-            if players_who_heard == 1 {
-                sender.send_message(TextComponent::translate_cross(
-                    translation::java::COMMANDS_PLAYSOUND_SUCCESS_SINGLE,
-                    translation::bedrock::COMMANDS_PLAYSOUND_SUCCESS,
-                    [
-                        TextComponent::text(sound_name),
-                        targets[0].get_display_name(),
-                    ],
-                ));
-            } else {
-                sender.send_message(TextComponent::translate_cross(
-                    translation::java::COMMANDS_PLAYSOUND_SUCCESS_MULTIPLE,
-                    translation::bedrock::COMMANDS_PLAYSOUND_SUCCESS,
-                    [
-                        TextComponent::text(sound_name),
-                        TextComponent::text(players_who_heard.to_string()),
-                    ],
-                ));
+        let player_pos = player.position();
+        let delta_x = position.x - player_pos.x;
+        let delta_y = position.y - player_pos.y;
+        let delta_z = position.z - player_pos.z;
+        let dist_sq = delta_x * delta_x + delta_y * delta_y + delta_z * delta_z;
+
+        let (local_position, local_volume) = if dist_sq > max_dist_sq {
+            if min_volume <= 0.0 {
+                continue;
             }
 
-            Ok(players_who_heard)
+            let distance = dist_sq.sqrt();
+            (
+                Vector3::new(
+                    player_pos.x + delta_x / distance * 2.0,
+                    player_pos.y + delta_y / distance * 2.0,
+                    player_pos.z + delta_z / distance * 2.0,
+                ),
+                min_volume,
+            )
+        } else {
+            (position, volume)
+        };
+
+        let packet = CSoundEffect::new(
+            sound_event.clone(),
+            sound_source,
+            &local_position,
+            local_volume,
+            pitch,
+            seed,
+        );
+        player.try_send_client_packet(&packet);
+        played_for.push(player.clone());
+    }
+
+    let count = played_for.len();
+    if count == 0 {
+        return Err(ERROR_TOO_FAR.create_without_context());
+    }
+
+    let sound_str = sound.to_string();
+    if count == 1 {
+        let player_name = played_for[0].gameprofile.name.clone();
+        source.send_feedback(
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_PLAYSOUND_SUCCESS_SINGLE,
+                translation::java::COMMANDS_PLAYSOUND_SUCCESS_SINGLE,
+                [
+                    TextComponent::text(sound_str),
+                    TextComponent::text(player_name),
+                ],
+            ),
+            true,
+        );
+    } else {
+        source.send_feedback(
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_PLAYSOUND_SUCCESS_MULTIPLE,
+                translation::java::COMMANDS_PLAYSOUND_SUCCESS_MULTIPLE,
+                [
+                    TextComponent::text(sound_str),
+                    TextComponent::text(count.to_string()),
+                ],
+            ),
+            true,
+        );
+    }
+
+    Ok(count as i32)
+}
+
+#[derive(Clone, Copy)]
+enum PlaySoundStep {
+    SoundOnly,
+    SourceOnly { source: SoundCategory },
+    WithTargets { source: SoundCategory },
+    WithPos { source: SoundCategory },
+    WithVolume { source: SoundCategory },
+    WithPitch { source: SoundCategory },
+    WithMinVolume { source: SoundCategory },
+}
+
+struct PlaySoundExecutor {
+    step: PlaySoundStep,
+}
+
+impl CommandExecutor for PlaySoundExecutor {
+    #[allow(clippy::too_many_lines)]
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let sound = IdentifierArgumentType::get(context, "sound")?;
+        let caller_players = context
+            .source
+            .output
+            .as_player()
+            .map_or_else(Vec::new, |p| vec![p]);
+
+        match self.step {
+            PlaySoundStep::SoundOnly => play_sound(
+                &context.source,
+                &caller_players,
+                &sound,
+                SoundCategory::Master,
+                context.source.position,
+                1.0,
+                1.0,
+                0.0,
+            ),
+            PlaySoundStep::SourceOnly { source } => play_sound(
+                &context.source,
+                &caller_players,
+                &sound,
+                source,
+                context.source.position,
+                1.0,
+                1.0,
+                0.0,
+            ),
+            PlaySoundStep::WithTargets { source } => {
+                let targets = EntityArgumentType::get_players(context, "targets")?;
+                play_sound(
+                    &context.source,
+                    &targets,
+                    &sound,
+                    source,
+                    context.source.position,
+                    1.0,
+                    1.0,
+                    0.0,
+                )
+            }
+            PlaySoundStep::WithPos { source } => {
+                let targets = EntityArgumentType::get_players(context, "targets")?;
+                let pos = Vec3ArgumentType::get_vector3(context, "pos")?;
+                play_sound(
+                    &context.source,
+                    &targets,
+                    &sound,
+                    source,
+                    pos,
+                    1.0,
+                    1.0,
+                    0.0,
+                )
+            }
+            PlaySoundStep::WithVolume { source } => {
+                let targets = EntityArgumentType::get_players(context, "targets")?;
+                let pos = Vec3ArgumentType::get_vector3(context, "pos")?;
+                let volume = FloatArgumentType::get(context, "volume")?;
+                play_sound(
+                    &context.source,
+                    &targets,
+                    &sound,
+                    source,
+                    pos,
+                    volume,
+                    1.0,
+                    0.0,
+                )
+            }
+            PlaySoundStep::WithPitch { source } => {
+                let targets = EntityArgumentType::get_players(context, "targets")?;
+                let pos = Vec3ArgumentType::get_vector3(context, "pos")?;
+                let volume = FloatArgumentType::get(context, "volume")?;
+                let pitch = FloatArgumentType::get(context, "pitch")?;
+                play_sound(
+                    &context.source,
+                    &targets,
+                    &sound,
+                    source,
+                    pos,
+                    volume,
+                    pitch,
+                    0.0,
+                )
+            }
+            PlaySoundStep::WithMinVolume { source } => {
+                let targets = EntityArgumentType::get_players(context, "targets")?;
+                let pos = Vec3ArgumentType::get_vector3(context, "pos")?;
+                let volume = FloatArgumentType::get(context, "volume")?;
+                let pitch = FloatArgumentType::get(context, "pitch")?;
+                let min_volume = FloatArgumentType::get(context, "minVolume")?;
+                play_sound(
+                    &context.source,
+                    &targets,
+                    &sound,
+                    source,
+                    pos,
+                    volume,
+                    pitch,
+                    min_volume,
+                )
+            }
         }
     }
 }
 
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).then(
-        argument(ARG_SOUND, SoundArgumentConsumer)
-            .then(
-                argument(ARG_SOURCE, SoundCategoryArgumentConsumer)
-                    .then(
-                        argument(ARG_TARGETS, PlayersArgumentConsumer)
-                            .then(
-                                argument(ARG_POS, Position3DArgumentConsumer)
-                                    .then(
-                                        argument(ARG_VOLUME, volume_consumer())
-                                            .then(
-                                                argument(ARG_PITCH, pitch_consumer())
-                                                    .then(
-                                                        argument(
-                                                            ARG_MIN_VOLUME,
-                                                            min_volume_consumer(),
-                                                        )
-                                                        .execute(Executor),
-                                                    )
-                                                    .execute(Executor),
-                                            )
-                                            .execute(Executor),
-                                    )
-                                    .execute(Executor),
-                            )
-                            .execute(Executor),
-                    )
-                    .execute(Executor),
-            )
-            .execute(Executor),
-    )
+fn build_source_branch(name: &'static str, source: SoundCategory) -> LiteralArgumentBuilder {
+    literal(name)
+        .executes(PlaySoundExecutor {
+            step: PlaySoundStep::SourceOnly { source },
+        })
+        .then(
+            argument("targets", EntityArgumentType::Players)
+                .executes(PlaySoundExecutor {
+                    step: PlaySoundStep::WithTargets { source },
+                })
+                .then(
+                    argument("pos", Vec3ArgumentType::Default)
+                        .executes(PlaySoundExecutor {
+                            step: PlaySoundStep::WithPos { source },
+                        })
+                        .then(
+                            argument("volume", FloatArgumentType::with_min(0.0))
+                                .executes(PlaySoundExecutor {
+                                    step: PlaySoundStep::WithVolume { source },
+                                })
+                                .then(
+                                    argument("pitch", FloatArgumentType::new(0.0, 2.0))
+                                        .executes(PlaySoundExecutor {
+                                            step: PlaySoundStep::WithPitch { source },
+                                        })
+                                        .then(
+                                            argument("minVolume", FloatArgumentType::new(0.0, 1.0))
+                                                .executes(PlaySoundExecutor {
+                                                    step: PlaySoundStep::WithMinVolume { source },
+                                                }),
+                                        ),
+                                ),
+                        ),
+                ),
+        )
+}
+
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Two),
+    ));
+
+    let mut sound_arg = argument("sound", IdentifierArgumentType).executes(PlaySoundExecutor {
+        step: PlaySoundStep::SoundOnly,
+    });
+
+    for (name, source) in SOUND_SOURCES {
+        sound_arg = sound_arg.then(build_source_branch(name, source));
+    }
+
+    dispatcher.register(
+        command("playsound", DESCRIPTION)
+            .requires(PERMISSION)
+            .then(sound_arg),
+    );
 }

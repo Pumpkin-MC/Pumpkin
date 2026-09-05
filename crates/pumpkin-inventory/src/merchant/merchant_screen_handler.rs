@@ -492,7 +492,6 @@ impl Slot for MerchantResultSlot {
 mod tests {
     use std::{
         borrow::Cow,
-        collections::HashMap,
         sync::atomic::{AtomicI32, AtomicUsize, Ordering},
     };
 
@@ -627,7 +626,7 @@ mod tests {
         (
             Arc::new(PlayerInventory::new(
                 Arc::new(Mutex::new(EntityEquipment::new())),
-                Arc::new(HashMap::new()),
+                Arc::new(rustc_hash::FxHashMap::default()),
             )),
             Arc::new(SimpleInventory::new(3)),
         )

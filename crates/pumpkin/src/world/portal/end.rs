@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_data::{Block, BlockDirection, BlockId, block_properties::BlockProperties};
+use pumpkin_data::{Block, BlockDirection, BlockId};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::world::BlockFlags;
 
@@ -29,7 +29,7 @@ impl EndPortal {
             return None;
         }
 
-        let properties = EndPortalFrameProperties::from_state_id(state, block);
+        let properties = EndPortalFrameProperties::from_state_id(state);
         let facing_dir = properties.facing;
         let left_pos = pos.offset_dir(facing_dir.rotate_clockwise().to_offset(), 1);
         let right_pos = pos.offset_dir(facing_dir.rotate_counter_clockwise().to_offset(), 1);
@@ -67,10 +67,9 @@ impl EndPortal {
                 return false;
             }
 
-            let mid_properties = EndPortalFrameProperties::from_state_id(mid_state, mid_block);
-            let left_properties = EndPortalFrameProperties::from_state_id(left_state, left_block);
-            let right_properties =
-                EndPortalFrameProperties::from_state_id(right_state, right_block);
+            let mid_properties = EndPortalFrameProperties::from_state_id(mid_state);
+            let left_properties = EndPortalFrameProperties::from_state_id(left_state);
+            let right_properties = EndPortalFrameProperties::from_state_id(right_state);
 
             let facing = dir.to_facing();
 

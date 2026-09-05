@@ -1,4 +1,4 @@
-use pumpkin_data::{block_properties::BlockProperties, item_stack::ItemStack};
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_world::inventory::Inventory;
 
 use std::{

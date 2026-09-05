@@ -319,10 +319,9 @@ macro_rules! impl_chest_helper_methods {
                     pumpkin_util::random::get_seed(),
                 );
 
-                let (block, state) = world.get_block_and_state(&self.position);
-                let properties = pumpkin_data::block_properties::ChestLikeProperties::from_state_id(
-                    state.id, block,
-                );
+                let state = world.get_block_state(&self.position);
+                let properties =
+                    pumpkin_data::block_properties::ChestLikeProperties::from_state_id(state.id);
                 let position = match properties.r#type {
                     pumpkin_data::block_properties::ChestType::Left => return,
                     pumpkin_data::block_properties::ChestType::Single => {

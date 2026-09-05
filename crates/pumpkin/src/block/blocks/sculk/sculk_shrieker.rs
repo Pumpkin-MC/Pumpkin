@@ -6,7 +6,7 @@ use crate::world::World;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::{
     BlockId, BlockStateId,
-    block_properties::{BlockProperties, SculkShriekerLikeProperties},
+    block_properties::SculkShriekerLikeProperties,
     effect::StatusEffect,
     sound::{Sound, SoundCategory},
 };
@@ -33,7 +33,7 @@ impl SculkShriekerBlock {
             return false;
         }
         let state = world.get_block_state(pos);
-        let mut props = SculkShriekerLikeProperties::from_state_id(state.id, block);
+        let mut props = SculkShriekerLikeProperties::from_state_id(state.id);
 
         if props.shrieking {
             return false;
@@ -92,7 +92,7 @@ impl BlockBehaviour for SculkShriekerBlock {
 
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         let state = args.world.get_block_state(args.position);
-        let mut props = SculkShriekerLikeProperties::from_state_id(state.id, args.block);
+        let mut props = SculkShriekerLikeProperties::from_state_id(state.id);
         if props.shrieking {
             props.shrieking = false;
             args.world.set_block_state(

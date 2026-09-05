@@ -1,8 +1,6 @@
 use pumpkin_data::{
     Block,
-    block_properties::{
-        BlockProperties, HorizontalFacing, OakFenceLikeProperties, OakStairsLikeProperties,
-    },
+    block_properties::{HorizontalFacing, OakFenceLikeProperties, OakStairsLikeProperties},
 };
 use pumpkin_util::{BlockDirection, math::block_box::BlockBox, random::RandomGenerator};
 

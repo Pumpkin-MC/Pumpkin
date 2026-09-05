@@ -7,7 +7,6 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::chunk::ChunkHeightmapType;
@@ -71,10 +70,10 @@ impl BatEntity {
     pub fn set_roosting(&self, roosting: bool) {
         self.roosting.store(roosting, Relaxed);
         let flags: u8 = if roosting { ROOSTING_FLAG } else { 0 };
-        self.mob_entity.living_entity.entity.send_meta_data(
-            &[Metadata::new(tracked_data::bat::DATA_ID_FLAGS, flags)],
-            None,
-        );
+        self.mob_entity
+            .living_entity
+            .entity
+            .set_synced_data(tracked_data::bat::DATA_ID_FLAGS, flags);
     }
 
     fn tick_ambient_sound(&self, world: &World, pos: &Vector3<f64>) {
@@ -211,10 +210,7 @@ impl Mob for BatEntity {
     fn mob_init_data_tracker(&self) {
         let entity = self.get_entity();
         let flags: u8 = if self.is_roosting() { ROOSTING_FLAG } else { 0 };
-        entity.send_meta_data(
-            &[Metadata::new(tracked_data::bat::DATA_ID_FLAGS, flags)],
-            None,
-        );
+        entity.set_synced_data(tracked_data::bat::DATA_ID_FLAGS, flags);
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {

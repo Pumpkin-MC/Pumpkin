@@ -1,24 +1,10 @@
-//! Furnace-like screen handler.
-//!
-//! This module implements the screen handler for furnace-like blocks:
-//! - Furnace
-//! - Smoker
-//! - Blast Furnace
-//!
-//! All three share the same 3-slot layout:
-//! - Slot 0: Input (item to smelt/cook)
-//! - Slot 1: Fuel (coal, charcoal, etc.)
-//! - Slot 2: Output (smelted result)
-//!
-//! The screen handler tracks 4 properties:
-//! - Property 0: Fire icon animation (fuel burn time remaining)
-//! - Property 1: Maximum fuel burn time
-//! - Property 2: Progress arrow (cooking/smelt time)
-//! - Property 3: Maximum progress (typically 200 ticks for furnace)
+use std::any::Any;
+use std::sync::Arc;
 
-use std::{any::Any, sync::Arc};
-
-use pumpkin_data::{fuels::is_fuel, item_stack::ItemStack, screen::WindowType};
+use pumpkin_data::fuels::is_fuel;
+use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::recipes::{CookingRecipeKind, CookingRecipeType};
+use pumpkin_data::screen::WindowType;
 use pumpkin_world::{
     block::entities::{ExperienceContainer, PropertyDelegate},
     inventory::Inventory,
@@ -31,35 +17,49 @@ use crate::{
         ScreenProperty,
     },
 };
-use tracing::debug;
 
 use super::furnace_like_slot::{FurnaceLikeSlot, FurnaceLikeSlotType, FurnaceOutputSlot};
 
-/// Screen handler for furnace-like containers.
-///
-/// Handles the UI for furnaces, smokers, and blast furnaces.
-/// These all share the same slot layout and quick-move behavior.
+#[must_use]
+pub fn can_smelt_item(item: &pumpkin_data::item::Item, window_type: WindowType) -> bool {
+    let kind = match window_type {
+        WindowType::Furnace => CookingRecipeKind::Smelting,
+        WindowType::BlastFurnace => CookingRecipeKind::Blasting,
+        WindowType::Smoker => CookingRecipeKind::Smoking,
+        _ => return false,
+    };
+
+    pumpkin_data::recipes::RECIPES_COOKING
+        .iter()
+        .any(|recipe| match (recipe, &kind) {
+            (CookingRecipeType::Smelting(r), CookingRecipeKind::Smelting)
+            | (CookingRecipeType::Blasting(r), CookingRecipeKind::Blasting)
+            | (CookingRecipeType::Smoking(r), CookingRecipeKind::Smoking) => {
+                r.ingredient.match_item(item)
+            }
+            _ => false,
+        })
+}
+
 pub struct FurnaceLikeScreenHandler {
-    /// The furnace's inventory (3 slots: 0 input, 1 fuel, 2 output).
     pub inventory: Arc<dyn Inventory>,
-    /// Container that tracks accumulated smelting experience.
-    ///
-    /// Experience is awarded to the player when they take items from the output slot.
-    experience_container: Arc<dyn ExperienceContainer>,
-    /// Core screen handler behavior (slots, sync ID, properties, listeners).
-    behaviour: ScreenHandlerBehaviour,
+    pub property_delegate: Arc<dyn PropertyDelegate>,
+    pub experience_container: Arc<dyn ExperienceContainer>,
+    pub window_type: WindowType,
+    pub behaviour: ScreenHandlerBehaviour,
 }
 
 impl FurnaceLikeScreenHandler {
-    /// Creates a new furnace-like screen handler.
-    ///
-    /// # Arguments
-    /// - `sync_id` - The sync ID for client-server matching
-    /// - `player_inventory` - The player's inventory
-    /// - `inventory` - The furnace's inventory (3 slots)
-    /// - `property_delegate` - Delegate for accessing furnace properties
-    /// - `experience_container` - Container that tracks smelting experience
-    /// - `window_type` - The window type (Furnace, Smoker, or `BlastFurnace`)
+    pub const INGREDIENT_SLOT: usize = 0;
+    pub const FUEL_SLOT: usize = 1;
+    pub const RESULT_SLOT: usize = 2;
+    pub const SLOT_COUNT: usize = 3;
+    pub const DATA_COUNT: usize = 4;
+    pub const INV_SLOT_START: usize = 3;
+    pub const INV_SLOT_END: usize = 30;
+    pub const USE_ROW_SLOT_START: usize = 30;
+    pub const USE_ROW_SLOT_END: usize = 39;
+
     pub fn new(
         sync_id: u8,
         player_inventory: &Arc<PlayerInventory>,
@@ -81,16 +81,15 @@ impl FurnaceLikeScreenHandler {
                 }
             }
         }
+
         let mut handler = Self {
             inventory,
+            property_delegate: property_delegate.clone(),
             experience_container,
+            window_type,
             behaviour: ScreenHandlerBehaviour::new(sync_id, Some(window_type)),
         };
 
-        // 0: Fire icon (fuel left) counting from fuel burn time down to 0 (in-game ticks)
-        // 1: Maximum fuel burn time fuel burn time or 0 (in-game ticks)
-        // 2: Progress arrow counting from 0 to maximum progress (in-game ticks)
-        // 3: Maximum progress always 200 on the vanilla server
         for i in 0..4 {
             handler.add_property(ScreenProperty::new(property_delegate.clone(), i));
         }
@@ -103,11 +102,6 @@ impl FurnaceLikeScreenHandler {
         handler
     }
 
-    /// Adds the 3 furnace inventory slots.
-    ///
-    /// - Slot 0: Input (top)
-    /// - Slot 1: Fuel (bottom)
-    /// - Slot 2: Output
     fn add_inventory_slots(&mut self) {
         self.add_slot(Arc::new(FurnaceLikeSlot::new(
             self.inventory.clone(),
@@ -117,11 +111,45 @@ impl FurnaceLikeScreenHandler {
             self.inventory.clone(),
             FurnaceLikeSlotType::Bottom,
         )));
-        // Output slot awards experience when items are taken
         self.add_slot(Arc::new(FurnaceOutputSlot::new(
             self.inventory.clone(),
             self.experience_container.clone(),
         )));
+    }
+
+    #[must_use]
+    pub fn can_smelt(&self, item_stack: &ItemStack) -> bool {
+        can_smelt_item(item_stack.item, self.window_type)
+    }
+
+    #[must_use]
+    pub const fn is_fuel(&self, item_stack: &ItemStack) -> bool {
+        is_fuel(item_stack.item.id)
+    }
+
+    #[must_use]
+    pub fn get_burn_progress(&self) -> f32 {
+        let current = self.property_delegate.get_property(2);
+        let total = self.property_delegate.get_property(3);
+        if total != 0 && current != 0 {
+            ((current as f32) / (total as f32)).clamp(0.0, 1.0)
+        } else {
+            0.0
+        }
+    }
+
+    #[must_use]
+    pub fn get_lit_progress(&self) -> f32 {
+        let mut lit_duration = self.property_delegate.get_property(1);
+        if lit_duration == 0 {
+            lit_duration = 200;
+        }
+        ((self.property_delegate.get_property(0) as f32) / (lit_duration as f32)).clamp(0.0, 1.0)
+    }
+
+    #[must_use]
+    pub fn is_lit(&self) -> bool {
+        self.property_delegate.get_property(0) > 0
     }
 }
 
@@ -144,61 +172,67 @@ impl ScreenHandler for FurnaceLikeScreenHandler {
 
     fn on_closed(&mut self, player: &dyn InventoryPlayer) {
         self.default_on_closed(player);
-        // TODO: self.inventory.on_closed(player);
     }
 
-    /// Quick move logic for furnace-like containers.
-    ///
-    /// - From furnace slots (0-2): Move to player inventory
-    /// - Fuel items: Move to fuel slot (1)
-    /// - Other items: Move to input slot (0)
     fn quick_move(&mut self, player: &dyn InventoryPlayer, slot_index: i32) -> ItemStack {
-        const FUEL_SLOT: i32 = 1; // Note: Slots 0, 1, 2 are Furnace slots.
-        const OUTPUT_SLOT: i32 = 2;
+        let mut clicked = ItemStack::EMPTY.clone();
+        let slot = self.get_behaviour().slots.get(slot_index as usize).cloned();
 
-        debug!("FurnaceLikeScreenHandler::quick_move slot_index={slot_index}");
+        if let Some(slot) = slot {
+            if !slot.has_stack() {
+                return clicked;
+            }
 
-        let mut stack_left = ItemStack::EMPTY.clone();
+            let mut stack = slot.get_stack();
+            clicked = stack.clone();
 
-        let slot = self.get_behaviour().slots[slot_index as usize].clone();
+            if slot_index == 2 {
+                if !self.insert_item(&mut stack, 3, 39, true) {
+                    return ItemStack::EMPTY.clone();
+                }
 
-        if !slot.has_stack() {
-            return stack_left;
+                slot.on_quick_move_crafted(stack.clone(), clicked.clone());
+            } else if slot_index != 1 && slot_index != 0 {
+                if self.can_smelt(&stack) {
+                    if !self.insert_item(&mut stack, 0, 1, false) {
+                        return ItemStack::EMPTY.clone();
+                    }
+                } else if self.is_fuel(&stack) {
+                    if !self.insert_item(&mut stack, 1, 2, false) {
+                        return ItemStack::EMPTY.clone();
+                    }
+                } else if (3..30).contains(&slot_index) {
+                    if !self.insert_item(&mut stack, 30, 39, false) {
+                        return ItemStack::EMPTY.clone();
+                    }
+                } else if (30..39).contains(&slot_index)
+                    && !self.insert_item(&mut stack, 3, 30, false)
+                {
+                    return ItemStack::EMPTY.clone();
+                }
+            } else if !self.insert_item(&mut stack, 3, 39, false) {
+                return ItemStack::EMPTY.clone();
+            }
+
+            if stack.is_empty() {
+                slot.set_stack(ItemStack::EMPTY.clone());
+            } else {
+                slot.set_stack(stack.clone());
+            }
+
+            if stack.item_count == clicked.item_count {
+                return ItemStack::EMPTY.clone();
+            }
+
+            let mut taken_stack = clicked.clone();
+            taken_stack.set_count(clicked.item_count - stack.item_count);
+            slot.on_take_item(player, &taken_stack);
         }
 
-        let mut stack = slot.get_stack();
-        stack_left = stack.clone();
-
-        let success = if slot_index < 3 {
-            // If clicked slot is one of the Furnace slots (0, 1, 2):
-            // Try to move to player inventory (slots 3 onwards, starting from the end)
-            self.insert_item(&mut stack, 3, self.get_behaviour().slots.len() as i32, true)
-        } else if is_fuel(stack.item.id) {
-            // If clicked slot is in the player inventory (3+) and contains fuel:
-            // Try to move to the Furnace's Fuel slot (slot 1)
-            self.insert_item(&mut stack, FUEL_SLOT, 3, false)
-        } else {
-            // If clicked slot is in the player inventory (3+) and NOT fuel (must be a smeltable item):
-            // Try to move to the Furnace's Input/Smelting slot (slot 0)
-            self.insert_item(&mut stack, 0, 3, false)
-        };
-
-        if !success {
-            return ItemStack::EMPTY.clone();
-        }
-
-        if stack.is_empty() {
-            slot.set_stack(ItemStack::EMPTY.clone());
-        } else {
-            slot.set_stack(stack);
-        }
-
-        // Award XP when taking from output slot (slot 2)
-        if slot_index == OUTPUT_SLOT {
-            debug!("quick_move: taking from output slot, calling on_take_item");
-            slot.on_take_item(player, &stack_left);
-        }
-
-        stack_left
+        clicked
     }
 }
+
+pub type FurnaceScreenHandler = FurnaceLikeScreenHandler;
+pub type SmokerScreenHandler = FurnaceLikeScreenHandler;
+pub type BlastFurnaceScreenHandler = FurnaceLikeScreenHandler;

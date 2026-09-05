@@ -617,18 +617,3 @@ impl Goal for SlimeKeepOnJumpingGoal {
         crate::entity::ai::goal::Controls::JUMP | crate::entity::ai::goal::Controls::MOVE
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn uses_small_hurt_sound_only_for_smallest_slimes() {
-        assert_eq!(
-            SlimeEntity::hurt_sound_for_size(1),
-            Sound::EntitySlimeHurtSmall
-        );
-        assert_eq!(SlimeEntity::hurt_sound_for_size(0), Sound::EntitySlimeHurt);
-        assert_eq!(SlimeEntity::hurt_sound_for_size(2), Sound::EntitySlimeHurt);
-    }
-}

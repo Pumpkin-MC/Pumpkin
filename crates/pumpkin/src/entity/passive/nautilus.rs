@@ -14,7 +14,6 @@ use pumpkin_data::{
     sound::{Sound, SoundCategory},
 };
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
@@ -56,13 +55,10 @@ impl NautilusEntity {
 
     pub fn set_dashing(&self, dashing: bool) {
         self.is_dashing.store(dashing, Ordering::Relaxed);
-        self.mob_entity.living_entity.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::nautilus::DASH,
-                dashing,
-            )],
-            None,
-        );
+        self.mob_entity
+            .living_entity
+            .entity
+            .set_synced_data(pumpkin_data::tracked_data::nautilus::DASH, dashing);
     }
 
     pub fn is_tame(&self) -> bool {
@@ -258,12 +254,9 @@ impl Mob for NautilusEntity {
     }
 
     fn mob_init_data_tracker(&self) {
-        self.mob_entity.living_entity.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::nautilus::DASH,
-                self.is_dashing(),
-            )],
-            None,
+        self.mob_entity.living_entity.entity.set_synced_data(
+            pumpkin_data::tracked_data::nautilus::DASH,
+            self.is_dashing(),
         );
     }
 

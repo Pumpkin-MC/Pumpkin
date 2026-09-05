@@ -6,11 +6,7 @@ use std::sync::{
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::{entity::EntityType, world::WorldEvent};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_util::math::{
-    boundingbox::{BoundingBox, EntityDimensions},
-    position::BlockPos,
-    vector3::Vector3,
-};
+use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
 use crate::{block::entities::BlockEntity, entity::EntityBase, world::World};
 
@@ -161,16 +157,10 @@ impl BlockEntity for MobSpawnerBlockEntity {
                         + (rand::random::<f64>() - rand::random::<f64>()) * spawn_range as f64
                         + 0.5,
                 );
-                // TODO: we should use getSpawnBox, but this is only modified for slimes and magma slimes
-                if !world.is_space_empty(BoundingBox::new_from_pos(
+                if !world.is_space_empty(entity_type.get_spawn_bounding_box(
                     spawn_pos.x,
                     spawn_pos.y,
                     spawn_pos.z,
-                    &EntityDimensions {
-                        width: entity_type.dimension[0],
-                        height: entity_type.dimension[1],
-                        eye_height: entity_type.eye_height,
-                    },
                 )) {
                     continue;
                 }

@@ -14,7 +14,6 @@ use crate::command::node::detached::CommandDetachedNode;
 use crate::command::node::tree::{NodeIdClassification, ROOT_NODE_ID, Tree};
 use crate::command::string_reader::StringReader;
 use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
-use crate::command::tree::Command;
 use pumpkin_data::translation::java::COMMAND_CONTEXT_HERE;
 use pumpkin_protocol::java::client::play::CommandSuggestion;
 use pumpkin_util::text::TextComponent;
@@ -23,7 +22,6 @@ use pumpkin_util::text::color::{Color, NamedColor};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::BTreeMap;
 use std::sync::{Arc, LazyLock};
-use tracing::warn;
 
 pub const ARG_SEPARATOR: &str = " ";
 pub const ARG_SEPARATOR_CHAR: char = ' ';
@@ -82,15 +80,15 @@ pub struct CommandDispatcher {
     pub tree: Tree,
     pub consumer: Arc<dyn ResultConsumer>,
 
-    // Temporary setup:
-    // We add this because we have a lot of commands
-    // still dependent on this dispatcher.
-    pub fallback_dispatcher: crate::command::dispatcher::CommandDispatcher,
-
     /// Primary names of commands that have been turned off through the server
     /// configuration. A disabled command behaves as if it does not exist: it
     /// cannot be executed and is left out of listings and suggestions.
     disabled: FxHashSet<String>,
+
+    /// Commands whose plugin source is currently unloaded. These are kept
+    /// separate from configuration disables so loading the plugin again can
+    /// make its commands available without overriding server configuration.
+    inactive_plugin_commands: FxHashSet<String>,
 }
 
 impl Default for CommandDispatcher {
@@ -111,43 +109,90 @@ impl CommandDispatcher {
         Self {
             tree,
             consumer: RESULT_DEFERRER.clone(),
-            fallback_dispatcher: crate::command::dispatcher::CommandDispatcher::default(),
             disabled: FxHashSet::default(),
+            inactive_plugin_commands: FxHashSet::default(),
         }
+    }
+
+    fn normalize_command_name(name: &str) -> String {
+        name.to_ascii_lowercase()
     }
 
     /// Turns a command off. A disabled command's primary name is recorded here
     /// so that it can no longer be executed, listed, or suggested, regardless of
     /// which internal dispatcher it lives on.
     pub fn disable_command(&mut self, name: impl Into<String>) {
-        self.disabled.insert(name.into());
+        let name = name.into();
+        self.disabled.insert(Self::normalize_command_name(&name));
     }
 
-    /// Returns `true` if the command with the given primary name has been turned
-    /// off through the server configuration.
+    /// Makes a plugin command unavailable until it is registered again.
+    fn deactivate_plugin_command(&mut self, name: impl AsRef<str>) {
+        self.inactive_plugin_commands
+            .insert(Self::normalize_command_name(name.as_ref()));
+    }
+
+    /// Makes a plugin command and its aliases unavailable until registration.
+    pub(crate) fn deactivate_plugin_command_and_aliases(&mut self, name: &str) {
+        let primary_name = self.primary_command_name(name);
+        for alias in self.tree_alias_names(&primary_name) {
+            self.deactivate_plugin_command(alias);
+        }
+        self.deactivate_plugin_command(primary_name);
+    }
+
+    /// Makes every root command registered by a plugin source unavailable.
+    pub(crate) fn deactivate_commands_from_source(&mut self, source: &str) {
+        let primary_names = self
+            .tree
+            .get_root_children()
+            .into_iter()
+            .filter_map(|node_id| {
+                let metadata = &self.tree[node_id].meta;
+                (metadata.source.as_deref() == Some(source)).then(|| metadata.literal.to_string())
+            })
+            .collect::<Vec<_>>();
+
+        for primary_name in primary_names {
+            self.deactivate_plugin_command_and_aliases(&primary_name);
+        }
+    }
+
+    /// Returns `true` if a command is disabled or its plugin is inactive.
     #[must_use]
     pub fn is_disabled(&self, name: &str) -> bool {
-        if self.disabled.contains(name) {
+        Self::contains_command_name(&self.disabled, name)
+            || Self::contains_command_name(&self.inactive_plugin_commands, name)
+    }
+
+    fn contains_command_name(commands: &FxHashSet<String>, name: &str) -> bool {
+        let name = Self::normalize_command_name(name);
+        if commands.contains(&name) {
             return true;
         }
-        if name.starts_with('/') && self.disabled.contains(name.trim_start_matches('/')) {
-            return true;
-        }
-        if !name.starts_with('/') {
-            let single = format!("/{name}");
-            let double = format!("//{name}");
-            if self.disabled.contains(&single) || self.disabled.contains(&double) {
-                return true;
-            }
-        }
-        false
+
+        let base_name = name.trim_start_matches('/');
+        commands.contains(base_name)
+            || commands.contains(&format!("/{base_name}"))
+            || commands.contains(&format!("//{base_name}"))
+    }
+
+    fn reactivate_plugin_command(&mut self, name: &str) {
+        let name = Self::normalize_command_name(name);
+        let base_name = name.trim_start_matches('/');
+        self.inactive_plugin_commands.remove(&name);
+        self.inactive_plugin_commands.remove(base_name);
+        self.inactive_plugin_commands
+            .remove(&format!("/{base_name}"));
+        self.inactive_plugin_commands
+            .remove(&format!("//{base_name}"));
     }
 
     /// Returns `true` if a command (or alias) with the given name is registered
-    /// on either the node-based tree or the legacy dispatcher.
+    /// on the node-based tree.
     #[must_use]
     pub fn has_command(&self, name: &str) -> bool {
-        self.tree.get(name).is_some() || self.fallback_dispatcher.commands.contains_key(name)
+        self.tree.get(name).is_some()
     }
 
     /// Collects the names of every root-level alias that redirects to the command
@@ -159,7 +204,8 @@ impl CommandDispatcher {
     /// could still reach the live executor through one of them.
     #[must_use]
     pub fn tree_alias_names(&self, primary: &str) -> Vec<String> {
-        let Some(primary_id) = self.tree.get(primary) else {
+        let primary = Self::normalize_command_name(primary);
+        let Some(primary_id) = self.tree.get(&primary) else {
             return Vec::new();
         };
         let primary_node: NodeId = primary_id.into();
@@ -179,6 +225,22 @@ impl CommandDispatcher {
         names
     }
 
+    /// Resolves the primary name of a command from either an alias or a primary name.
+    #[must_use]
+    pub fn primary_command_name(&self, name: &str) -> String {
+        let name = Self::normalize_command_name(name);
+        if let Some(node_id) = self.tree.get(&name) {
+            let node = &self.tree[NodeId::from(node_id)];
+            if let Some(redirect) = node.redirect()
+                && let Some(resolved) = self.tree.resolve(redirect)
+            {
+                return self.tree[resolved].name().to_ascii_lowercase();
+            }
+            return node.name().to_ascii_lowercase();
+        }
+        name
+    }
+
     /// Extracts the command name (the first whitespace-separated token) from a
     /// raw input string.
     fn command_name(input: &str) -> &str {
@@ -192,8 +254,11 @@ impl CommandDispatcher {
     /// unregister a command. This is due to redirection to
     /// potentially unregistered (freed) nodes.
     pub fn register(&mut self, command_node: impl Into<CommandDetachedNode>) -> CommandNodeId {
-        let node = command_node.into();
-        let name = node.meta.literal.to_string();
+        let mut node = command_node.into();
+        let name = Self::normalize_command_name(&node.meta.literal);
+        node.meta.literal = name.clone().into();
+        node.meta.literal_lowercase.clone_from(&name);
+        self.reactivate_plugin_command(&name);
         let main_node_id = self.tree.add_child_to_root(node);
 
         // For double-slash or slash-prefixed commands (e.g. //set or /set),
@@ -511,21 +576,7 @@ impl CommandDispatcher {
         let output = self.execute_input(input, source);
 
         if let Err(error) = output {
-            // We check if the error came because a command could not be found.
-            // Note: 'Permission denied' also falls under this error as
-            //       no executable node could be found.
-            if error.is(&DISPATCHER_UNKNOWN_COMMAND) {
-                // Run the fallback dispatcher instead.
-                // It might have the command we're looking for.
-                self.fallback_dispatcher.handle_command(
-                    &source.output,
-                    source.server().as_ref(),
-                    input,
-                );
-            } else {
-                // Print the error to the output.
-                Self::send_error_to_source(source, error, input);
-            }
+            Self::send_error_to_source(source, error, input);
         }
     }
 
@@ -679,12 +730,7 @@ impl CommandDispatcher {
         }
 
         let parsed = self.parse_input(input, source);
-        let s1 = self.get_completion_suggestions_at_end(parsed);
-        let s2 = self
-            .fallback_dispatcher
-            .find_suggestions(&source.output, source.server(), input);
-
-        Suggestions::merge(input, vec![s1, s2])
+        self.get_completion_suggestions_at_end(parsed)
     }
 
     /// Gets all the commands usable in this dispatcher, sorted.
@@ -700,17 +746,6 @@ impl CommandDispatcher {
                 continue;
             }
             commands.insert(&meta.literal_lowercase, &meta.description);
-        }
-
-        for fallback_command in self.fallback_dispatcher.commands.values() {
-            if let Command::Tree(command_tree) = fallback_command {
-                if self.is_disabled(&command_tree.names[0]) {
-                    continue;
-                }
-                for name in &command_tree.names {
-                    commands.insert(name, &command_tree.description);
-                }
-            }
         }
 
         commands
@@ -731,29 +766,6 @@ impl CommandDispatcher {
                     continue;
                 }
                 commands.insert(&meta.literal_lowercase, &meta.description);
-            }
-        }
-
-        for fallback_command in self.fallback_dispatcher.commands.values() {
-            if let Command::Tree(command_tree) = fallback_command {
-                if self.is_disabled(&command_tree.names[0]) {
-                    continue;
-                }
-                if let Some(permission) = self
-                    .fallback_dispatcher
-                    .permissions
-                    .get(&command_tree.names[0])
-                    && source.has_permission(permission)
-                {
-                    for name in &command_tree.names {
-                        commands.insert(name, &command_tree.description);
-                    }
-                } else {
-                    warn!(
-                        "Command /{} does not have a permission set up",
-                        &command_tree.names[0]
-                    );
-                }
             }
         }
 
@@ -781,28 +793,6 @@ impl CommandDispatcher {
             commands.insert(command_name, (command_description, usage.into_boxed_str()));
         }
 
-        for fallback_command in self.fallback_dispatcher.commands.values() {
-            if let Command::Tree(command_tree) = fallback_command
-                && !self.is_disabled(&command_tree.names[0])
-                && let Some(permission) = self
-                    .fallback_dispatcher
-                    .permissions
-                    .get(&command_tree.names[0])
-                && source.has_permission(permission)
-            {
-                let usage = command_tree.to_string();
-                for name in &command_tree.names {
-                    commands.insert(
-                        name,
-                        (
-                            command_tree.description.as_ref(),
-                            usage.clone().into_boxed_str(),
-                        ),
-                    );
-                }
-            }
-        }
-
         commands
     }
 
@@ -816,26 +806,17 @@ impl CommandDispatcher {
     ) -> BTreeMap<&str, (&str, Box<str>)> {
         let mut commands: BTreeMap<&str, (&str, Box<str>)> = BTreeMap::new();
 
-        for fallback_command in self.fallback_dispatcher.commands.values() {
-            if let Command::Tree(command_tree) = fallback_command
-                && let Some(source_name) = &command_tree.source
-                && source_name == plugin_name
-                && let Some(permission) = self
-                    .fallback_dispatcher
-                    .permissions
-                    .get(&command_tree.names[0])
-                && source.has_permission(permission)
+        for (command_node_id, usage) in self.get_usage_of_commands(source) {
+            let meta = &self.tree[command_node_id].meta;
+            if self.is_disabled(&meta.literal_lowercase) {
+                continue;
+            }
+            if let Some(src) = &meta.source
+                && src == plugin_name
             {
-                let usage = command_tree.to_string();
-                for name in &command_tree.names {
-                    commands.insert(
-                        name,
-                        (
-                            command_tree.description.as_ref(),
-                            usage.clone().into_boxed_str(),
-                        ),
-                    );
-                }
+                let command_name = meta.literal.as_ref();
+                let command_description = meta.description.as_ref();
+                commands.insert(command_name, (command_description, usage.into_boxed_str()));
             }
         }
 
@@ -849,25 +830,6 @@ impl CommandDispatcher {
     /// and the value is a tuple of `(description, usage)`.
     #[must_use]
     pub fn get_permitted_command_usage(
-        &self,
-        source: &CommandSource,
-        command: &str,
-    ) -> Option<(&str, Box<str>)> {
-        if let Some(output) = self.get_permitted_command_usage_non_fallback(source, command) {
-            Some(output)
-        } else {
-            let tree = self.fallback_dispatcher.get_tree(command).ok()?;
-            if let Some(permission) = self.fallback_dispatcher.permissions.get(&tree.names[0])
-                && source.has_permission(permission)
-            {
-                Some((tree.description.as_ref(), tree.to_string().into_boxed_str()))
-            } else {
-                None
-            }
-        }
-    }
-
-    fn get_permitted_command_usage_non_fallback(
         &self,
         source: &CommandSource,
         command: &str,
@@ -1091,6 +1053,64 @@ mod test {
         let source = CommandSource::dummy();
         let result = dispatcher.execute_input("simple", &source);
         assert!(result.is_err_and(|error| error.error_type == &DISPATCHER_UNKNOWN_COMMAND));
+    }
+
+    #[test]
+    fn plugin_commands_follow_unload_and_reload_lifecycle() {
+        let mut dispatcher = CommandDispatcher::new();
+        let executor: fn(&CommandContext) -> CommandExecutorResult = |_| Ok(1);
+        let command = || {
+            CommandArgumentBuilder::new("Plugin-Command", "A plugin command")
+                .with_source("test-plugin")
+                .executes(executor)
+        };
+
+        dispatcher.register_with_aliases(command(), &["Plugin-Alias"]);
+        let source = CommandSource::dummy();
+        assert_eq!(dispatcher.execute_input("plugin-command", &source), Ok(1));
+        assert_eq!(dispatcher.execute_input("plugin-alias", &source), Ok(1));
+
+        dispatcher.deactivate_commands_from_source("test-plugin");
+        assert!(
+            dispatcher
+                .execute_input("plugin-command", &source)
+                .is_err_and(|error| error.error_type == &DISPATCHER_UNKNOWN_COMMAND)
+        );
+        assert!(
+            dispatcher
+                .execute_input("plugin-alias", &source)
+                .is_err_and(|error| error.error_type == &DISPATCHER_UNKNOWN_COMMAND)
+        );
+
+        dispatcher.register_with_aliases(command(), &["Plugin-Alias"]);
+        assert_eq!(dispatcher.execute_input("plugin-command", &source), Ok(1));
+        assert_eq!(dispatcher.execute_input("plugin-alias", &source), Ok(1));
+        assert_eq!(
+            dispatcher.tree_alias_names("PLUGIN-COMMAND"),
+            vec!["plugin-alias"]
+        );
+
+        dispatcher.deactivate_plugin_command_and_aliases("PLUGIN-ALIAS");
+        assert!(
+            dispatcher
+                .execute_input("plugin-command", &source)
+                .is_err_and(|error| error.error_type == &DISPATCHER_UNKNOWN_COMMAND)
+        );
+        assert!(
+            dispatcher
+                .execute_input("plugin-alias", &source)
+                .is_err_and(|error| error.error_type == &DISPATCHER_UNKNOWN_COMMAND)
+        );
+
+        dispatcher.register_with_aliases(command(), &["Plugin-Alias"]);
+        dispatcher.disable_command("PLUGIN-COMMAND");
+        dispatcher.deactivate_commands_from_source("test-plugin");
+        dispatcher.register_with_aliases(command(), &["Plugin-Alias"]);
+        assert!(
+            dispatcher
+                .execute_input("plugin-command", &source)
+                .is_err_and(|error| error.error_type == &DISPATCHER_UNKNOWN_COMMAND)
+        );
     }
 
     #[test]

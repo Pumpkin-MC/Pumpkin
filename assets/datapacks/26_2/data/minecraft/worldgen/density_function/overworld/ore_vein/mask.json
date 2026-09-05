@@ -1,0 +1,59 @@
+{
+  "type": "minecraft:cache",
+  "input": {
+    "type": "minecraft:range_choice",
+    "input": "minecraft:overworld/ore_vein/toggle",
+    "max_exclusive": 0.4,
+    "min_inclusive": -0.4,
+    "when_in_range": -1.0,
+    "when_out_of_range": {
+      "type": "minecraft:sub",
+      "left": 0.08,
+      "right": {
+        "type": "minecraft:max",
+        "left": {
+          "type": "minecraft:abs",
+          "input": {
+            "type": "minecraft:interpolated",
+            "cell_size_xz": 4,
+            "cell_size_y": 8,
+            "input": {
+              "type": "minecraft:range_choice",
+              "input": "minecraft:y",
+              "max_exclusive": 57.0,
+              "min_inclusive": -64.0,
+              "when_in_range": {
+                "type": "minecraft:noise",
+                "noise": "minecraft:ore_vein_a",
+                "xz_scale": 4.0,
+                "y_scale": 4.0
+              },
+              "when_out_of_range": 1.0
+            }
+          }
+        },
+        "right": {
+          "type": "minecraft:abs",
+          "input": {
+            "type": "minecraft:interpolated",
+            "cell_size_xz": 4,
+            "cell_size_y": 8,
+            "input": {
+              "type": "minecraft:range_choice",
+              "input": "minecraft:y",
+              "max_exclusive": 57.0,
+              "min_inclusive": -64.0,
+              "when_in_range": {
+                "type": "minecraft:noise",
+                "noise": "minecraft:ore_vein_b",
+                "xz_scale": 4.0,
+                "y_scale": 4.0
+              },
+              "when_out_of_range": 1.0
+            }
+          }
+        }
+      }
+    }
+  }
+}

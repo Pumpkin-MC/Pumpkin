@@ -1,5 +1,6 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use pumpkin_data::world::RAW;
 
 impl JavaClient {
     pub async fn handle_chat_message(
@@ -41,7 +42,12 @@ impl JavaClient {
 
         send_cancellable! {{
             server;
-            PlayerChatEvent::new(player.clone(), chat_message.message.to_string(), vec![]);
+            PlayerChatEvent::new(
+                player.clone(),
+                chat_message.message.to_string(),
+                vec![],
+                chat_message.signature.map(<[u8]>::to_vec),
+            );
 
             'after: {
                 info!("<chat> {}: {}", gameprofile.name, event.message);
@@ -62,17 +68,17 @@ impl JavaClient {
                 let entity = &player.get_entity();
                 let world = entity.world.load_full();
                 if server.basic_config.allow_chat_reports {
-                    world.broadcast_secure_player_chat(player, &chat_message, &decorated_message).await;
+                    world.broadcast_secure_player_chat(player, &chat_message, &decorated_message);
                 } else {
-                    let je_packet = CSystemChatMessage::new(
-                        &decorated_message,
-                        false,
+                    let outgoing = crate::net::chat::PlayerChatMessage::system(message).with_unsigned_content(decorated_message);
+                    world.broadcast_chat_message(
+                        &outgoing,
+                        Player::is_text_filtering_enabled,
+                        Some(player),
+                        (RAW + 1).into(),
+                        &TextComponent::empty(),
+                        None,
                     );
-                    let be_packet = SText::new(
-                        message, player.gameprofile.name.clone()
-                    );
-
-                    world.broadcast_editioned(&je_packet, &be_packet);
                 }
             }
         }}

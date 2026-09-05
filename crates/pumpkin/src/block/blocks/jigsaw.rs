@@ -4,9 +4,7 @@ use crate::block::entities::jigsaw_block::JigsawBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::block::{BlockBehaviour, NormalUseArgs, OnPlaceArgs, PlacedArgs};
 use crate::entity::EntityBase;
-use pumpkin_data::block_properties::{
-    BlockProperties, HorizontalFacing, JigsawLikeProperties, Orientation,
-};
+use pumpkin_data::block_properties::{HorizontalFacing, JigsawLikeProperties, Orientation};
 use pumpkin_data::block_rotation::{Mirror, Rotation};
 use pumpkin_data::{BlockDirection, BlockStateId};
 use pumpkin_macros::pumpkin_block;
@@ -66,19 +64,19 @@ impl JigsawBlock {
 
     #[must_use]
     pub fn get_front_facing_from_state(
-        block: &pumpkin_data::Block,
+        _block: &pumpkin_data::Block,
         state_id: BlockStateId,
     ) -> BlockDirection {
-        let props = JigsawLikeProperties::from_state_id(state_id, block);
+        let props = JigsawLikeProperties::from_state_id(state_id);
         Self::get_front_facing(props.r#orientation)
     }
 
     #[must_use]
     pub fn get_top_facing_from_state(
-        block: &pumpkin_data::Block,
+        _block: &pumpkin_data::Block,
         state_id: BlockStateId,
     ) -> BlockDirection {
-        let props = JigsawLikeProperties::from_state_id(state_id, block);
+        let props = JigsawLikeProperties::from_state_id(state_id);
         Self::get_top_facing(props.r#orientation)
     }
 
@@ -145,7 +143,7 @@ impl BlockBehaviour for JigsawBlock {
         if mirror == Mirror::None {
             return pumpkin_data::BlockState::from_id(state_id);
         }
-        let mut props = JigsawLikeProperties::from_state_id(state_id, block);
+        let mut props = JigsawLikeProperties::from_state_id(state_id);
         let (front, top) = Self::to_front_top(props.r#orientation);
 
         let new_front = mirror_direction(front, mirror);
@@ -164,7 +162,7 @@ impl BlockBehaviour for JigsawBlock {
         if rotation == Rotation::None {
             return pumpkin_data::BlockState::from_id(state_id);
         }
-        let mut props = JigsawLikeProperties::from_state_id(state_id, block);
+        let mut props = JigsawLikeProperties::from_state_id(state_id);
         let (front, top) = Self::to_front_top(props.r#orientation);
 
         let new_front = rotate_direction(front, rotation);

@@ -1,6 +1,6 @@
 use pumpkin_data::Block;
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{BlockProperties, TorchflowerCropLikeProperties};
+use pumpkin_data::block_properties::TorchflowerCropLikeProperties;
 use pumpkin_macros::pumpkin_block;
 use rand::RngExt;
 
@@ -56,14 +56,14 @@ impl CropBlockBase for TorchFlowerBlock {
         2
     }
 
-    fn get_age(&self, state: BlockStateId, block: &Block) -> i32 {
-        let props = TorchFlowerProperties::from_state_id(state, block);
+    fn get_age(&self, state: BlockStateId, _block: &Block) -> i32 {
+        let props = TorchFlowerProperties::from_state_id(state);
         i32::from(props.age)
     }
 
     fn state_with_age(&self, block: &Block, state: BlockStateId, age: i32) -> BlockStateId {
         if age == 1 {
-            let mut properties = TorchFlowerProperties::from_state_id(state, block);
+            let mut properties = TorchFlowerProperties::from_state_id(state);
             properties.age = 1;
             properties.to_state_id(block)
         } else {

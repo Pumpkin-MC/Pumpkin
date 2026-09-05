@@ -66,18 +66,16 @@ impl PlaceOnGroundTreeDecorator {
         random: &mut RandomGenerator,
     ) {
         let state = GenerationCache::get_block_state(chunk, &pos.0);
-        let up_pos = pos.up();
-        let up_state = GenerationCache::get_block_state(chunk, &up_pos.0);
-        // TODO
-        if (up_state.to_state().is_air() || up_state.to_block_id() == Block::VINE)
-            && state.to_state().is_full_cube()
-            && !state.to_block_id().has_tag(MINECRAFT_LEAVES)
-        // TODO: using heightmap seems not to work
+        let ground_pos = pos.down();
+        let ground_state = GenerationCache::get_block_state(chunk, &ground_pos.0);
+        if (state.to_state().is_air() || state.to_block_id() == Block::VINE)
+            && ground_state.to_state().is_full_cube()
+            && !ground_state.to_block_id().has_tag(MINECRAFT_LEAVES)
         {
             chunk.set_block_state(
-                &up_pos.0,
+                &pos.0,
                 self.block_state_provider
-                    .get(random, up_pos, chunk, block_registry),
+                    .get(random, pos, chunk, block_registry),
             );
         }
     }

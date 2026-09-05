@@ -17,7 +17,7 @@ use crate::{
     level::LevelFolder,
 };
 
-use super::{ChunkSerializer, FileIO, LoadedData};
+use super::{ChunkSerializer, FileIO, LoadedData, run_blocking};
 
 /// A simple implementation of the `ChunkSerializer` trait that loads and saves data
 /// to disk using parallelism and a lazy-loading cache keyed by file path.
@@ -105,7 +105,13 @@ impl<S: ChunkSerializer<WriteBackend = PathBuf> + 'static> ChunkSerializerLazyLo
                     );
                     return Ok(S::default());
                 }
-                let value = S::read(bytes.into())?;
+                let value = run_blocking(move || S::read(bytes.into()))
+                    .await
+                    .map_err(|_| {
+                        ChunkReadingError::IoError(std::io::Error::other(
+                            "chunk deserialization task failed",
+                        ))
+                    })??;
                 trace!("Successfully read file from disk: {}", self.path.display());
                 Ok(value)
             }
@@ -360,7 +366,9 @@ where
                         chunk.mark_dirty(false);
 
                         if was_dirty {
-                            writer.update_chunk(&**chunk, &self.chunk_config).await?;
+                            writer
+                                .update_chunk(chunk.clone(), &self.chunk_config)
+                                .await?;
                         }
                     }
                     // Write-lock released here — flush can proceed under a read-lock.

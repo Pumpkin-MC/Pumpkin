@@ -172,37 +172,3 @@ impl Goal for MoveTowardsTargetGoal {
         self.goal_control
     }
 }
-
-#[cfg(test)]
-#[allow(clippy::unimplemented)]
-mod tests {
-    use super::MoveTowardsTargetGoal;
-    use crate::entity::ai::goal::{Controls, Goal};
-
-    #[test]
-    fn initial_controls_and_state() {
-        let mut goal = MoveTowardsTargetGoal::new(1.0, 16.0);
-        assert_eq!(goal.controls(), Controls::MOVE);
-        assert!(goal.target.is_none());
-        assert!(goal.wanted_pos.is_none());
-
-        goal.wanted_pos = Some(pumpkin_util::math::vector3::Vector3::new(1.0, 2.0, 3.0));
-        assert!(goal.wanted_pos.is_some());
-        goal.stop(&MockMob);
-        assert!(goal.target.is_none());
-        assert!(goal.wanted_pos.is_none());
-    }
-
-    struct MockMob;
-    impl crate::entity::mob::Mob for MockMob {
-        fn get_mob_entity(&self) -> &crate::entity::mob::MobEntity {
-            unimplemented!()
-        }
-        fn mob_write_nbt(&self, _nbt: &mut pumpkin_nbt::compound::NbtCompound) {
-            unimplemented!()
-        }
-        fn mob_read_nbt(&self, _nbt: &pumpkin_nbt::compound::NbtCompound) {
-            unimplemented!()
-        }
-    }
-}

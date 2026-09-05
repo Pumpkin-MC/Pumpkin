@@ -1,39 +1,25 @@
 use std::path::Path;
 
+use pumpkin_util::PermissionLvl;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
+use pumpkin_util::text::TextComponent;
+use pumpkin_util::text::color::NamedColor;
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_util::text::{TextComponent, color::NamedColor};
 
-use crate::command::args::simple::SimpleArgConsumer;
-use crate::command::args::{Arg, ConsumedArgs};
-use crate::command::dispatcher::CommandError::{self, InvalidConsumption};
-use crate::command::tree::CommandTree;
-use crate::command::tree::builder::{argument, literal};
-use crate::command::{CommandExecutor, CommandResult, CommandSender};
-
-const NAMES: [&str; 1] = ["plugin"];
+use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
+use crate::command::argument_types::core::string::StringArgumentType;
+use crate::command::context::command_context::CommandContext;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
 
 const DESCRIPTION: &str = "Manage server plugins.";
-
-const PLUGIN_NAME: &str = "plugin";
+const PERMISSION: &str = "pumpkin:command.plugin";
 
 struct ListExecutor;
 
 impl CommandExecutor for ListExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        _args: &ConsumedArgs,
-    ) -> CommandResult {
-        let Some(server_arc) = sender
-            .world_or_first(server)
-            .and_then(|w| w.server.upgrade())
-        else {
-            return Err(CommandError::CommandFailed(TextComponent::text(
-                "Failed to get server instance",
-            )));
-        };
-
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let server_arc = context.server().clone();
         let plugins = server_arc.plugin_manager.active_plugins();
         let loaded_plugins = server_arc.plugin_manager.loaded_plugins();
 
@@ -72,7 +58,7 @@ impl CommandExecutor for ListExecutor {
             message = message.add_child(plugin_component);
         }
 
-        sender.send_message(message);
+        context.source.send_feedback(message, false);
 
         Ok(1)
     }
@@ -81,34 +67,19 @@ impl CommandExecutor for ListExecutor {
 struct LoadExecutor;
 
 impl CommandExecutor for LoadExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        let Some(Arg::Simple(plugin_name)) = args.get(PLUGIN_NAME) else {
-            return Err(InvalidConsumption(Some(PLUGIN_NAME.into())));
-        };
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let plugin_name = StringArgumentType::get(context, "plugin")?.to_string();
+        let server_arc = context.server().clone();
 
-        let Some(server_arc) = sender
-            .world_or_first(server)
-            .and_then(|w| w.server.upgrade())
-        else {
-            return Err(CommandError::CommandFailed(TextComponent::text(
-                "Failed to get server instance",
-            )));
-        };
-
-        let plugin_name = plugin_name.to_string();
         if server_arc.plugin_manager.is_plugin_active(&plugin_name) {
-            sender.send_message(TextComponent::text(format!(
-                "Plugin {plugin_name} is already loaded"
-            )));
+            context.source.send_feedback(
+                TextComponent::text(format!("Plugin {plugin_name} is already loaded")),
+                false,
+            );
             return Ok(1);
         }
 
-        let sender_clone = sender.clone();
+        let source_clone = context.source.clone();
         let plugin_name_clone = plugin_name;
         let server_clone = server_arc.clone();
         server_arc.spawn_task(async move {
@@ -119,17 +90,21 @@ impl CommandExecutor for LoadExecutor {
 
             match result {
                 Ok(()) => {
-                    sender_clone.send_message(
+                    source_clone.send_feedback(
                         TextComponent::text(format!(
                             "Plugin {plugin_name_clone} loaded successfully"
                         ))
                         .color_named(NamedColor::Green),
+                        true,
                     );
                 }
                 Err(e) => {
-                    sender_clone.send_message(TextComponent::text(format!(
-                        "Failed to load plugin {plugin_name_clone}: {e}"
-                    )));
+                    source_clone.send_feedback(
+                        TextComponent::text(format!(
+                            "Failed to load plugin {plugin_name_clone}: {e}"
+                        )),
+                        false,
+                    );
                 }
             }
         });
@@ -141,34 +116,19 @@ impl CommandExecutor for LoadExecutor {
 struct UnloadExecutor;
 
 impl CommandExecutor for UnloadExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        let Some(Arg::Simple(plugin_name)) = args.get(PLUGIN_NAME) else {
-            return Err(InvalidConsumption(Some(PLUGIN_NAME.into())));
-        };
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let plugin_name = StringArgumentType::get(context, "plugin")?.to_string();
+        let server_arc = context.server().clone();
 
-        let Some(server_arc) = sender
-            .world_or_first(server)
-            .and_then(|w| w.server.upgrade())
-        else {
-            return Err(CommandError::CommandFailed(TextComponent::text(
-                "Failed to get server instance",
-            )));
-        };
-
-        let plugin_name = plugin_name.to_string();
         if !server_arc.plugin_manager.is_plugin_active(&plugin_name) {
-            sender.send_message(TextComponent::text(format!(
-                "Plugin {plugin_name} is not loaded"
-            )));
+            context.source.send_feedback(
+                TextComponent::text(format!("Plugin {plugin_name} is not loaded")),
+                false,
+            );
             return Ok(1);
         }
 
-        let sender_clone = sender.clone();
+        let source_clone = context.source.clone();
         let plugin_name_clone = plugin_name;
         let server_clone = server_arc.clone();
         server_arc.spawn_task(async move {
@@ -179,17 +139,21 @@ impl CommandExecutor for UnloadExecutor {
 
             match result {
                 Ok(()) => {
-                    sender_clone.send_message(
+                    source_clone.send_feedback(
                         TextComponent::text(format!(
                             "Plugin {plugin_name_clone} unloaded successfully"
                         ))
                         .color_named(NamedColor::Green),
+                        true,
                     );
                 }
                 Err(e) => {
-                    sender_clone.send_message(TextComponent::text(format!(
-                        "Failed to unload plugin {plugin_name_clone}: {e}"
-                    )));
+                    source_clone.send_feedback(
+                        TextComponent::text(format!(
+                            "Failed to unload plugin {plugin_name_clone}: {e}"
+                        )),
+                        false,
+                    );
                 }
             }
         });
@@ -201,51 +165,42 @@ impl CommandExecutor for UnloadExecutor {
 struct HotReloadExecutor(bool);
 
 impl CommandExecutor for HotReloadExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        _args: &ConsumedArgs,
-    ) -> CommandResult {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let enabled = self.0;
-
-        let Some(server_arc) = sender
-            .world_or_first(server)
-            .and_then(|w| w.server.upgrade())
-        else {
-            return Err(CommandError::CommandFailed(TextComponent::text(
-                "Failed to get server instance",
-            )));
-        };
-
-        let sender_clone = sender.clone();
+        let server_arc = context.server().clone();
+        let source_clone = context.source.clone();
         let server_clone = server_arc.clone();
+
         if enabled {
             server_arc.spawn_task(async move {
                 if let Err(e) = server_clone.plugin_manager.start_watcher(&server_clone).await {
-                    sender_clone.send_message(TextComponent::text(format!(
-                        "Failed to start plugin watcher: {e}"
-                    )));
+                    source_clone.send_feedback(
+                        TextComponent::text(format!("Failed to start plugin watcher: {e}")),
+                        false,
+                    );
                     return;
                 }
 
-                sender_clone.send_message(
+                source_clone.send_feedback(
                     TextComponent::text("Hot reloading has been enabled.")
                         .color_named(NamedColor::Green),
+                    true,
                 );
-                sender_clone.send_message(
+                source_clone.send_feedback(
                     TextComponent::text(
                         "WARNING: Hot reloading can impact performance and should only be enabled during plugin development.",
                     )
                     .color_named(NamedColor::Red),
+                    false,
                 );
             });
         } else {
             server_arc.spawn_task(async move {
                 server_clone.plugin_manager.stop_watcher().await;
-                sender_clone.send_message(
+                source_clone.send_feedback(
                     TextComponent::text("Hot reloading has been disabled.")
                         .color_named(NamedColor::Yellow),
+                    true,
                 );
             });
         }
@@ -254,17 +209,31 @@ impl CommandExecutor for HotReloadExecutor {
     }
 }
 
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION)
-        .then(literal("list").execute(ListExecutor))
-        .then(literal("load").then(argument(PLUGIN_NAME, SimpleArgConsumer).execute(LoadExecutor)))
-        .then(
-            literal("unload")
-                .then(argument(PLUGIN_NAME, SimpleArgConsumer).execute(UnloadExecutor)),
-        )
-        .then(
-            literal("hotreload")
-                .then(literal("enable").execute(HotReloadExecutor(true)))
-                .then(literal("disable").execute(HotReloadExecutor(false))),
-        )
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Three),
+    ));
+
+    dispatcher.register(
+        command("plugin", DESCRIPTION)
+            .requires(PERMISSION)
+            .then(literal("list").executes(ListExecutor))
+            .then(
+                literal("load").then(
+                    argument("plugin", StringArgumentType::SingleWord).executes(LoadExecutor),
+                ),
+            )
+            .then(
+                literal("unload").then(
+                    argument("plugin", StringArgumentType::SingleWord).executes(UnloadExecutor),
+                ),
+            )
+            .then(
+                literal("hotreload")
+                    .then(literal("enable").executes(HotReloadExecutor(true)))
+                    .then(literal("disable").executes(HotReloadExecutor(false))),
+            ),
+    );
 }

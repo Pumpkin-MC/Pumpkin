@@ -3,7 +3,7 @@ use crate::block::{
     RandomTickArgs, registry::BlockActionResult,
 };
 use crate::world::World;
-use pumpkin_data::block_properties::{BlockProperties, RedstoneOreLikeProperties};
+use pumpkin_data::block_properties::RedstoneOreLikeProperties;
 use pumpkin_data::{Block, BlockId, BlockState};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
@@ -19,7 +19,7 @@ impl BlockMetadata for RedstoneOreBlock {
 
 impl RedstoneOreBlock {
     fn light_up(world: &Arc<World>, pos: &BlockPos, block: &Block, state: &BlockState) {
-        let mut props = RedstoneOreLikeProperties::from_state_id(state.id, block);
+        let mut props = RedstoneOreLikeProperties::from_state_id(state.id);
         if !props.lit {
             props.lit = true;
             world.set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL);
@@ -46,7 +46,7 @@ impl BlockBehaviour for RedstoneOreBlock {
 
     fn random_tick(&self, args: RandomTickArgs<'_>) {
         let state = args.world.get_block_state(args.position);
-        let mut props = RedstoneOreLikeProperties::from_state_id(state.id, args.block);
+        let mut props = RedstoneOreLikeProperties::from_state_id(state.id);
 
         if props.lit {
             props.lit = false;

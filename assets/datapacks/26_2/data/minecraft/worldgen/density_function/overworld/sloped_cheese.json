@@ -1,35 +1,38 @@
 {
-  "type": "minecraft:add",
-  "argument1": {
-    "type": "minecraft:mul",
-    "argument1": 4.0,
-    "argument2": {
-      "type": "minecraft:quarter_negative",
-      "argument": {
-        "type": "minecraft:mul",
-        "argument1": {
-          "type": "minecraft:add",
-          "argument1": "minecraft:overworld/depth",
-          "argument2": {
-            "type": "minecraft:flat_cache",
-            "argument": {
-              "type": "minecraft:mul",
-              "argument1": "minecraft:overworld/jaggedness",
-              "argument2": {
-                "type": "minecraft:half_negative",
-                "argument": {
-                  "type": "minecraft:noise",
-                  "noise": "minecraft:jagged",
-                  "xz_scale": 1500.0,
-                  "y_scale": 0.0
+  "type": "minecraft:cache",
+  "input": {
+    "type": "minecraft:add",
+    "left": {
+      "type": "minecraft:mul",
+      "left": {
+        "type": "minecraft:quarter_negative",
+        "input": {
+          "type": "minecraft:mul",
+          "left": {
+            "type": "minecraft:add",
+            "left": "minecraft:overworld/depth",
+            "right": {
+              "type": "minecraft:cache",
+              "input": {
+                "type": "minecraft:mul",
+                "left": "minecraft:overworld/jaggedness",
+                "right": {
+                  "type": "minecraft:half_negative",
+                  "input": {
+                    "type": "minecraft:noise",
+                    "noise": "minecraft:jagged",
+                    "xz_scale": 1500.0,
+                    "y_scale": 0.0
+                  }
                 }
               }
             }
-          }
-        },
-        "argument2": "minecraft:overworld/factor"
-      }
-    }
-  },
-  "argument2": "minecraft:overworld/base_3d_noise"
+          },
+          "right": "minecraft:overworld/factor"
+        }
+      },
+      "right": 4.0
+    },
+    "right": "minecraft:overworld/base_3d_noise"
+  }
 }

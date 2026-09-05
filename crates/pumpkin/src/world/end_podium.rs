@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use pumpkin_data::{
     Block,
-    block_properties::{BlockProperties, HorizontalFacing, WallTorchLikeProperties},
+    block_properties::{HorizontalFacing, WallTorchLikeProperties},
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;

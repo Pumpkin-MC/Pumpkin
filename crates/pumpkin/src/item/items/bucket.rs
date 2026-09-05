@@ -1,12 +1,13 @@
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use crate::{
-    entity::player::Player,
+    entity::{EntityBase, player::Player, r#type::from_type},
     item::{ItemBehaviour, ItemMetadata},
 };
 use pumpkin_data::{
-    Block, BlockDirection, BlockStateId,
-    dimension::Dimension,
+    Block, BlockDirection,
+    entity::EntityType,
     fluid::Fluid,
     item::Item,
     item_stack::ItemStack,
@@ -17,6 +18,7 @@ use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
 };
 use pumpkin_world::{tick::TickPriority, world::BlockFlags};
+use uuid::Uuid;
 
 use crate::world::World;
 
@@ -57,8 +59,7 @@ fn get_start_and_end_pos(player: &Player) -> (Vector3<f64>, Vector3<f64>) {
     let start_pos = player.eye_position();
     let (yaw, pitch) = player.rotation();
     let (yaw_rad, pitch_rad) = (f64::from(yaw.to_radians()), f64::from(pitch.to_radians()));
-    let block_interaction_range = 4.5; // This is not the same as the block_interaction_range in the
-    // player entity.
+    let block_interaction_range = 4.5;
     let direction = Vector3::new(
         -yaw_rad.sin() * pitch_rad.cos() * block_interaction_range,
         -pitch_rad.sin() * block_interaction_range,
@@ -69,37 +70,44 @@ fn get_start_and_end_pos(player: &Player) -> (Vector3<f64>, Vector3<f64>) {
     (start_pos, end_pos)
 }
 
-fn waterlogged_check(block: &Block, state: BlockStateId) -> Option<bool> {
-    block.properties(state).and_then(|properties| {
-        properties
-            .to_props()
-            .into_iter()
-            .find(|p| p.0 == "waterlogged")
-            .map(|(_, value)| value == "true")
-    })
+const fn get_mob_for_bucket(item: &Item) -> Option<(&'static EntityType, Sound)> {
+    if item.id == Item::AXOLOTL_BUCKET.id {
+        Some((&EntityType::AXOLOTL, Sound::ItemBucketEmptyAxolotl))
+    } else if item.id == Item::COD_BUCKET.id {
+        Some((&EntityType::COD, Sound::ItemBucketEmptyFish))
+    } else if item.id == Item::SALMON_BUCKET.id {
+        Some((&EntityType::SALMON, Sound::ItemBucketEmptyFish))
+    } else if item.id == Item::TROPICAL_FISH_BUCKET.id {
+        Some((&EntityType::TROPICAL_FISH, Sound::ItemBucketEmptyFish))
+    } else if item.id == Item::PUFFERFISH_BUCKET.id {
+        Some((&EntityType::PUFFERFISH, Sound::ItemBucketEmptyFish))
+    } else if item.id == Item::TADPOLE_BUCKET.id {
+        Some((&EntityType::TADPOLE, Sound::ItemBucketEmptyTadpole))
+    } else {
+        None
+    }
 }
 
-fn is_waterlogged(block: &Block, state: BlockStateId) -> bool {
-    waterlogged_check(block, state).unwrap_or(false)
+const fn get_empty_sound(item: &Item) -> Sound {
+    if let Some((_, sound)) = get_mob_for_bucket(item) {
+        sound
+    } else if item.id == Item::LAVA_BUCKET.id {
+        Sound::ItemBucketEmptyLava
+    } else if item.id == Item::POWDER_SNOW_BUCKET.id {
+        Sound::ItemBucketEmptyPowderSnow
+    } else {
+        Sound::ItemBucketEmpty
+    }
 }
 
-fn set_waterlogged(block: &Block, state: BlockStateId, waterlogged: bool) -> BlockStateId {
-    let Some(props) = block.properties(state) else {
-        return state;
-    };
-    let original_props = &props.to_props();
-    let waterlogged = waterlogged.to_string();
-    let props: Vec<(&str, &str)> = original_props
-        .iter()
-        .map(|(key, value)| {
-            if *key == "waterlogged" {
-                ("waterlogged", waterlogged.as_str())
-            } else {
-                (*key, *value)
-            }
-        })
-        .collect();
-    block.from_properties(&props).to_state_id(block)
+const fn get_fill_sound(item: &Item) -> Sound {
+    if item.id == Item::LAVA_BUCKET.id {
+        Sound::ItemBucketFillLava
+    } else if item.id == Item::POWDER_SNOW_BUCKET.id {
+        Sound::ItemBucketFillPowderSnow
+    } else {
+        Sound::ItemBucketFill
+    }
 }
 
 fn give_player_bucket_item(player: &Player, item: &'static Item) {
@@ -137,8 +145,6 @@ fn give_player_bucket_item(player: &Player, item: &'static Item) {
     }
 }
 
-/// Tries to pick up powder snow, a waterlogged block, or a fluid source block at `block_pos`,
-/// returning the matching filled bucket item on success.
 pub(crate) fn try_pickup_fluid_at(
     world: &Arc<World>,
     block_pos: BlockPos,
@@ -154,19 +160,19 @@ pub(crate) fn try_pickup_fluid_at(
         return Some(&Item::POWDER_SNOW_BUCKET);
     }
 
-    if is_waterlogged(block, state) {
-        let state_id = set_waterlogged(block, state, false);
-        world.set_block_state(&block_pos, state_id, BlockFlags::NOTIFY_NEIGHBORS);
+    if block.is_waterlogged(state) {
+        let state_id = block.set_waterlogged(state, false).unwrap_or(state);
+        world.set_block_state(&block_pos, state_id, BlockFlags::NOTIFY_ALL);
         world.schedule_fluid_tick(&Fluid::WATER, block_pos, 5, TickPriority::Normal);
         return Some(&Item::WATER_BUCKET);
     }
 
     if state == Block::LAVA.default_state.id || state == Block::WATER.default_state.id {
-        world.break_block(&block_pos, None, BlockFlags::NOTIFY_NEIGHBORS);
+        world.break_block(&block_pos, None, BlockFlags::NOTIFY_ALL);
         world.set_block_state(
             &block_pos,
             Block::AIR.default_state.id,
-            BlockFlags::NOTIFY_NEIGHBORS,
+            BlockFlags::NOTIFY_ALL,
         );
         return Some(if state == Block::LAVA.default_state.id {
             &Item::LAVA_BUCKET
@@ -189,20 +195,18 @@ fn try_pickup_bucket_item(
 
     let target_pos = block_pos.offset(direction.to_offset());
     let (block, state) = world.get_block_and_state_id(&target_pos);
-    if waterlogged_check(block, state).is_some() {
-        let state_id = set_waterlogged(block, state, false);
-        world.set_block_state(&target_pos, state_id, BlockFlags::NOTIFY_NEIGHBORS);
-        world.schedule_fluid_tick(&Fluid::WATER, target_pos, 5, TickPriority::Normal);
-        return Some(&Item::WATER_BUCKET);
-    }
 
-    None
+    let unwaterlogged = block.set_waterlogged(state, false)?;
+
+    world.set_block_state(&target_pos, unwaterlogged, BlockFlags::NOTIFY_ALL);
+    world.schedule_fluid_tick(&Fluid::WATER, target_pos, 5, TickPriority::Normal);
+    Some(&Item::WATER_BUCKET)
 }
 
-pub(crate) fn should_evaporate_in_nether(item: &Item, world: &World) -> bool {
+pub(crate) const fn should_evaporate_in_nether(item: &Item, world: &World) -> bool {
     item.id != Item::LAVA_BUCKET.id
         && item.id != Item::POWDER_SNOW_BUCKET.id
-        && world.dimension == Dimension::THE_NETHER
+        && world.dimension.water_evaporates
 }
 
 pub(crate) fn play_bucket_evaporation(world: &Arc<World>, position: &Vector3<f64>) {
@@ -245,9 +249,9 @@ pub(crate) fn try_place_filled_bucket(
         return try_place_powder_snow(world, pos, direction);
     }
 
-    if is_waterlogged(block, state.id) && item.id == Item::WATER_BUCKET.id {
-        let state_id = set_waterlogged(block, state.id, true);
-        world.set_block_state(&pos, state_id, BlockFlags::NOTIFY_NEIGHBORS);
+    if item.id == Item::WATER_BUCKET.id && block.is_waterlogged(state.id) {
+        let state_id = block.set_waterlogged(state.id, true).unwrap_or(state.id);
+        world.set_block_state(&pos, state_id, BlockFlags::NOTIFY_ALL);
         world.schedule_fluid_tick(&Fluid::WATER, pos, 5, TickPriority::Normal);
         return true;
     }
@@ -255,12 +259,12 @@ pub(crate) fn try_place_filled_bucket(
     let target_pos = pos.offset(direction.to_offset());
     let (block, state) = world.get_block_and_state(&target_pos);
 
-    if waterlogged_check(block, state.id).is_some() {
+    if block.is_waterloggable() {
         if item.id == Item::LAVA_BUCKET.id {
             return false;
         }
-        let state_id = set_waterlogged(block, state.id, true);
-        world.set_block_state(&target_pos, state_id, BlockFlags::NOTIFY_NEIGHBORS);
+        let state_id = block.set_waterlogged(state.id, true).unwrap_or(state.id);
+        world.set_block_state(&target_pos, state_id, BlockFlags::NOTIFY_ALL);
         world.schedule_fluid_tick(&Fluid::WATER, target_pos, 5, TickPriority::Normal);
         return true;
     }
@@ -273,7 +277,7 @@ pub(crate) fn try_place_filled_bucket(
             } else {
                 Block::WATER.default_state.id
             },
-            BlockFlags::NOTIFY_NEIGHBORS,
+            BlockFlags::NOTIFY_ALL,
         );
         return true;
     }
@@ -323,7 +327,40 @@ impl ItemBehaviour for EmptyBucketItem {
             }
         }
 
+        world.play_sound(
+            get_fill_sound(item),
+            SoundCategory::Blocks,
+            &block_pos.to_f64(),
+        );
+
         give_player_bucket_item(player, item);
+    }
+
+    fn use_on_entity(&self, _item: &mut ItemStack, player: &Player, entity: Arc<dyn EntityBase>) {
+        let ent = entity.get_entity();
+        let entity_type = ent.entity_type;
+        if (entity_type == &EntityType::COW
+            || entity_type == &EntityType::MOOSHROOM
+            || entity_type == &EntityType::GOAT)
+            && ent.age.load(Ordering::Relaxed) >= 0
+        {
+            let world = ent.world.load();
+            let sound = if entity_type == &EntityType::GOAT {
+                if let Some(goat) = entity
+                    .cast_any()
+                    .downcast_ref::<crate::entity::passive::goat::GoatEntity>()
+                    && goat.is_screaming()
+                {
+                    Sound::EntityGoatScreamingMilk
+                } else {
+                    Sound::EntityGoatMilk
+                }
+            } else {
+                Sound::EntityCowMilk
+            };
+            world.play_sound(sound, SoundCategory::Neutral, &ent.pos.load());
+            give_player_bucket_item(player, &Item::MILK_BUCKET);
+        }
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -367,12 +404,66 @@ impl ItemBehaviour for FilledBucketItem {
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
 
-        //TODO: Spawn entity if applicable
+        let place_pos = if world
+            .get_block_and_state(&pos)
+            .0
+            .is_waterlogged(world.get_block_state_id(&pos))
+        {
+            pos
+        } else {
+            pos.offset(direction.to_offset())
+        };
+
+        world.play_sound(
+            get_empty_sound(item),
+            SoundCategory::Blocks,
+            &place_pos.to_f64(),
+        );
+
+        if let Some((entity_type, _)) = get_mob_for_bucket(item) {
+            let spawn_coord = Vector3::new(
+                f64::from(place_pos.0.x) + 0.5,
+                f64::from(place_pos.0.y),
+                f64::from(place_pos.0.z) + 0.5,
+            );
+            let mob = from_type(entity_type, spawn_coord, &world, Uuid::new_v4());
+            world.spawn_entity(mob);
+        }
+
         if player.gamemode.load() != GameMode::Creative {
             let item_stack = ItemStack::new(1, &Item::BUCKET);
             player
                 .inventory
                 .set_slot(player.inventory.get_selected_slot() as usize, item_stack);
+        }
+    }
+
+    fn use_on_entity(&self, item: &mut ItemStack, player: &Player, entity: Arc<dyn EntityBase>) {
+        if item.item.id == Item::WATER_BUCKET.id {
+            let entity_type = entity.get_entity().entity_type;
+            let result_item = if entity_type == &EntityType::AXOLOTL {
+                Some((&Item::AXOLOTL_BUCKET, Sound::ItemBucketFillAxolotl))
+            } else if entity_type == &EntityType::COD {
+                Some((&Item::COD_BUCKET, Sound::ItemBucketFillFish))
+            } else if entity_type == &EntityType::SALMON {
+                Some((&Item::SALMON_BUCKET, Sound::ItemBucketFillFish))
+            } else if entity_type == &EntityType::TROPICAL_FISH {
+                Some((&Item::TROPICAL_FISH_BUCKET, Sound::ItemBucketFillFish))
+            } else if entity_type == &EntityType::PUFFERFISH {
+                Some((&Item::PUFFERFISH_BUCKET, Sound::ItemBucketFillFish))
+            } else if entity_type == &EntityType::TADPOLE {
+                Some((&Item::TADPOLE_BUCKET, Sound::ItemBucketFillTadpole))
+            } else {
+                None
+            };
+
+            if let Some((mob_bucket, sound)) = result_item {
+                let ent = entity.get_entity();
+                let world = ent.world.load();
+                world.play_sound(sound, SoundCategory::Neutral, &ent.pos.load());
+                give_player_bucket_item(player, mob_bucket);
+                ent.remove();
+            }
         }
     }
 

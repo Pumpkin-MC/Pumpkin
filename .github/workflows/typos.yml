@@ -21,4 +21,4 @@ jobs:
       with:
         submodules: recursive
     - name: Spell Check Repo
-      uses: crate-ci/typos@v1.49.0
+      uses: crate-ci/typos@v1.50.0

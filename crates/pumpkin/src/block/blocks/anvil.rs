@@ -1,13 +1,13 @@
 use crate::block::blocks::falling::FallingBlock;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, GetStateForNeighborUpdateArgs, NormalUseArgs, OnPlaceArgs, OnScheduledTickArgs,
-    PlacedArgs,
+    BlockBehaviour, GetScreenHandlerFactoryArgs, GetStateForNeighborUpdateArgs, NormalUseArgs,
+    OnPlaceArgs, OnScheduledTickArgs, PathComputationType, PlacedArgs,
 };
 
-use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{BlockProperties, WallTorchLikeProperties};
+use pumpkin_data::block_properties::WallTorchLikeProperties;
 use pumpkin_data::translation;
+use pumpkin_data::{Block, BlockState, BlockStateId};
 use pumpkin_inventory::anvil::AnvilScreenHandler;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
@@ -22,17 +22,48 @@ use std::sync::Mutex;
 #[pumpkin_block_from_tag("minecraft:anvil")]
 pub struct AnvilBlock;
 
+impl AnvilBlock {
+    #[must_use]
+    pub fn damage(state_id: BlockStateId) -> Option<BlockStateId> {
+        let block = Block::from_state_id(state_id);
+        let next_block = if block == &Block::ANVIL {
+            &Block::CHIPPED_ANVIL
+        } else if block == &Block::CHIPPED_ANVIL {
+            &Block::DAMAGED_ANVIL
+        } else {
+            return None;
+        };
+        let props = WallTorchLikeProperties::from_state_id(state_id);
+        Some(props.to_state_id(next_block))
+    }
+}
+
 impl BlockBehaviour for AnvilBlock {
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        args.player.increment_stat(
-            pumpkin_data::statistic::StatisticCategory::Custom,
-            pumpkin_data::statistic::CustomStatistic::InteractWithAnvil as i32,
-            1,
-        );
-        args.player
-            .open_handled_screen(&AnvilScreenFactory, Some(*args.position));
+        if let Some(factory) = self.get_screen_handler_factory(GetScreenHandlerFactoryArgs {
+            server: args.server,
+            world: args.world,
+            block: args.block,
+            position: args.position,
+            player: args.player,
+        }) {
+            args.player.increment_stat(
+                pumpkin_data::statistic::StatisticCategory::Custom,
+                pumpkin_data::statistic::CustomStatistic::InteractWithAnvil as i32,
+                1,
+            );
+            args.player
+                .open_handled_screen(factory.as_ref(), Some(*args.position));
+        }
 
         BlockActionResult::Success
+    }
+
+    fn get_screen_handler_factory(
+        &self,
+        _args: GetScreenHandlerFactoryArgs<'_>,
+    ) -> Option<Box<dyn ScreenHandlerFactory>> {
+        Some(Box::new(AnvilScreenFactory))
     }
 
     fn placed(&self, args: PlacedArgs<'_>) {
@@ -62,6 +93,10 @@ impl BlockBehaviour for AnvilBlock {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         FallingBlock::get_state_for_neighbor_update(&FallingBlock, args)
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
 

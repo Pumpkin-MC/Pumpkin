@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_data::block_properties::{BlockProperties, TurtleEggLikeProperties};
+use pumpkin_data::block_properties::TurtleEggLikeProperties;
 use pumpkin_data::entity::{EntityPose, EntityType};
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
@@ -64,7 +64,7 @@ impl TurtleEggBlock {
             &pos.to_f64(),
         );
 
-        let props = TurtleEggProperties::from_state_id(state_id, block);
+        let props = TurtleEggProperties::from_state_id(state_id);
         if props.eggs <= 1 {
             world.break_block(pos, None, BlockFlags::empty());
         } else {
@@ -95,7 +95,7 @@ impl BlockBehaviour for TurtleEggBlock {
         if args.player.get_entity().pose.load() != EntityPose::Crouching
             && let BlockIsReplacing::Itself(state_id) = args.replacing
         {
-            let mut properties = TurtleEggProperties::from_state_id(state_id, args.block);
+            let mut properties = TurtleEggProperties::from_state_id(state_id);
             if properties.eggs < 4 {
                 properties.eggs += 1;
             }
@@ -113,7 +113,7 @@ impl BlockBehaviour for TurtleEggBlock {
     fn can_update_at(&self, args: CanUpdateAtArgs<'_>) -> bool {
         let b = BlockAccessor::get_block(args.world, args.position);
         args.player.get_entity().pose.load() != EntityPose::Crouching
-            && TurtleEggProperties::from_state_id(args.state_id, args.block).eggs < 4
+            && TurtleEggProperties::from_state_id(args.state_id).eggs < 4
             && args.block.id == b.id
     }
 
@@ -173,7 +173,7 @@ impl BlockBehaviour for TurtleEggBlock {
         }
 
         let state_id = args.world.get_block_state_id(args.position);
-        let mut props = TurtleEggProperties::from_state_id(state_id, args.block);
+        let mut props = TurtleEggProperties::from_state_id(state_id);
 
         if props.hatch < 2 {
             props.hatch += 1;

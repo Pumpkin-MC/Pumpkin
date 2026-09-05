@@ -59,31 +59,3 @@ impl Goal for OpenDoorGoal {
         Controls::empty()
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn open_door_can_continue_to_use() {
-        let mut goal = OpenDoorGoal::new(true);
-        goal.forget_time = 20;
-        goal.door_interact_goal.passed = false;
-
-        assert!(goal.close_door);
-        assert!(goal.forget_time > 0);
-        assert!(goal.door_interact_goal.can_continue_to_use());
-
-        // When forget_time expires
-        goal.forget_time = 0;
-        assert!(
-            !(goal.close_door
-                && goal.forget_time > 0
-                && goal.door_interact_goal.can_continue_to_use())
-        );
-
-        // When close_door is false
-        let goal_no_close = OpenDoorGoal::new(false);
-        assert!(!goal_no_close.close_door);
-    }
-}

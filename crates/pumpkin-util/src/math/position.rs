@@ -223,14 +223,27 @@ impl BlockPos {
         Self(Vector3::new(x, y, z))
     }
 
+    #[must_use]
+    pub const fn containing(x: f64, y: f64, z: f64) -> Self {
+        Self::floored(x, y, z)
+    }
+
+    #[must_use]
+    pub const fn containing_vec(pos: Vector3<f64>) -> Self {
+        Self::floored_v(pos)
+    }
+
+    #[must_use]
+    pub fn min(a: Self, b: Self) -> Self {
+        Self::new(a.0.x.min(b.0.x), a.0.y.min(b.0.y), a.0.z.min(b.0.z))
+    }
+
+    #[must_use]
+    pub fn max(a: Self, b: Self) -> Self {
+        Self::new(a.0.x.max(b.0.x), a.0.y.max(b.0.y), a.0.z.max(b.0.z))
+    }
+
     /// Iterates through all `BlockPos` within a cuboid region defined by two corner points.
-    ///
-    /// # Arguments
-    /// - `start` – One corner of the cuboid region.
-    /// - `end` – The opposite corner of the cuboid region.
-    ///
-    /// # Returns
-    /// A `BlockPosIterator` that yields each `BlockPos` within the defined cuboid.
     #[must_use]
     pub fn iterate(start: Self, end: Self) -> BlockPosIterator {
         BlockPosIterator::new(
@@ -240,6 +253,30 @@ impl BlockPos {
             start.0.x.max(end.0.x),
             start.0.y.max(end.0.y),
             start.0.z.max(end.0.z),
+        )
+    }
+
+    #[must_use]
+    pub fn between_closed(start: Self, end: Self) -> BlockPosIterator {
+        Self::iterate(start, end)
+    }
+
+    #[must_use]
+    pub fn between_closed_coords(
+        min_x: i32,
+        min_y: i32,
+        min_z: i32,
+        max_x: i32,
+        max_y: i32,
+        max_z: i32,
+    ) -> BlockPosIterator {
+        BlockPosIterator::new(
+            min_x.min(max_x),
+            min_y.min(max_y),
+            min_z.min(max_z),
+            min_x.max(max_x),
+            min_y.max(max_y),
+            min_z.max(max_z),
         )
     }
 
@@ -594,6 +631,15 @@ impl BlockPos {
         self.0.squared_distance_to_vec(&other.0)
     }
 
+    /// Calculates the squared distance from this block's center `(x + 0.5, y + 0.5, z + 0.5)` to `(x, y, z)`.
+    #[must_use]
+    pub fn dist_to_center_sqr(&self, x: f64, y: f64, z: f64) -> f64 {
+        let dx = f64::from(self.0.x) + 0.5 - x;
+        let dy = f64::from(self.0.y) + 0.5 - y;
+        let dz = f64::from(self.0.z) + 0.5 - z;
+        dx * dx + dy * dy + dz * dz
+    }
+
     /// Packs this block position into a 64-bit integer.
     ///
     /// The packing format is:
@@ -746,8 +792,8 @@ pub const fn get_local_cord(cord: i32) -> i32 {
 #[must_use]
 pub const fn pack_local_chunk_section(block_pos: &BlockPos) -> i16 {
     let x = get_local_cord(block_pos.0.x);
-    let z = get_local_cord(block_pos.0.z);
     let y = get_local_cord(block_pos.0.y);
+    let z = get_local_cord(block_pos.0.z);
     vector3::packed_local(&Vector3::new(x, y, z))
 }
 

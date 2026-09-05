@@ -103,3 +103,71 @@ pub trait Animal: Mob {
         mob_entity.mob_interact(player, item_stack)
     }
 }
+
+#[must_use]
+pub fn get_dye_color_from_item(item: &pumpkin_data::item::Item) -> Option<u8> {
+    match item.registry_key {
+        "white_dye" => Some(0),
+        "orange_dye" => Some(1),
+        "magenta_dye" => Some(2),
+        "light_blue_dye" => Some(3),
+        "yellow_dye" => Some(4),
+        "lime_dye" => Some(5),
+        "pink_dye" => Some(6),
+        "gray_dye" => Some(7),
+        "light_gray_dye" => Some(8),
+        "cyan_dye" => Some(9),
+        "purple_dye" => Some(10),
+        "blue_dye" => Some(11),
+        "brown_dye" => Some(12),
+        "green_dye" => Some(13),
+        "red_dye" => Some(14),
+        "black_dye" => Some(15),
+        _ => None,
+    }
+}
+
+#[must_use]
+pub const fn get_wool_item_for_color(color: u8) -> &'static pumpkin_data::item::Item {
+    match color {
+        0 => &pumpkin_data::item::Item::WHITE_WOOL,
+        1 => &pumpkin_data::item::Item::ORANGE_WOOL,
+        2 => &pumpkin_data::item::Item::MAGENTA_WOOL,
+        3 => &pumpkin_data::item::Item::LIGHT_BLUE_WOOL,
+        4 => &pumpkin_data::item::Item::YELLOW_WOOL,
+        5 => &pumpkin_data::item::Item::LIME_WOOL,
+        6 => &pumpkin_data::item::Item::PINK_WOOL,
+        7 => &pumpkin_data::item::Item::GRAY_WOOL,
+        8 => &pumpkin_data::item::Item::LIGHT_GRAY_WOOL,
+        9 => &pumpkin_data::item::Item::CYAN_WOOL,
+        10 => &pumpkin_data::item::Item::PURPLE_WOOL,
+        11 => &pumpkin_data::item::Item::BLUE_WOOL,
+        12 => &pumpkin_data::item::Item::BROWN_WOOL,
+        13 => &pumpkin_data::item::Item::GREEN_WOOL,
+        14 => &pumpkin_data::item::Item::RED_WOOL,
+        _ => &pumpkin_data::item::Item::BLACK_WOOL,
+    }
+}
+
+#[must_use]
+pub fn get_carpet_color_from_item(item: &pumpkin_data::item::Item) -> Option<u8> {
+    match item.registry_key {
+        "white_carpet" => Some(0),
+        "orange_carpet" => Some(1),
+        "magenta_carpet" => Some(2),
+        "light_blue_carpet" => Some(3),
+        "yellow_carpet" => Some(4),
+        "lime_carpet" => Some(5),
+        "pink_carpet" => Some(6),
+        "gray_carpet" => Some(7),
+        "light_gray_carpet" => Some(8),
+        "cyan_carpet" => Some(9),
+        "purple_carpet" => Some(10),
+        "blue_carpet" => Some(11),
+        "brown_carpet" => Some(12),
+        "green_carpet" => Some(13),
+        "red_carpet" => Some(14),
+        "black_carpet" => Some(15),
+        _ => None,
+    }
+}

@@ -3,7 +3,7 @@ use crate::block::{
 };
 use crate::entity::EntityBase;
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{BlockProperties, WhiteBannerLikeProperties};
+use pumpkin_data::block_properties::WhiteBannerLikeProperties;
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;

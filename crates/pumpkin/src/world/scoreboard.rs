@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 use pumpkin_data::scoreboard::ScoreboardDisplaySlot;
 use pumpkin_protocol::{
@@ -114,10 +114,10 @@ impl ScoreboardTarget for NoTarget {
 
 #[derive(Clone, Debug, Default)]
 pub struct Scoreboard {
-    objectives: HashMap<String, ScoreboardObjective>,
-    display_slots: HashMap<ScoreboardDisplaySlot, String>,
-    scores: HashMap<String, HashMap<String, ScoreboardScore>>,
-    teams: HashMap<String, Team>,
+    objectives: FxHashMap<String, ScoreboardObjective>,
+    display_slots: FxHashMap<ScoreboardDisplaySlot, String>,
+    scores: FxHashMap<String, FxHashMap<String, ScoreboardScore>>,
+    teams: FxHashMap<String, Team>,
 }
 
 impl Scoreboard {
@@ -127,7 +127,7 @@ impl Scoreboard {
     }
 
     #[must_use]
-    pub const fn get_objectives(&self) -> &HashMap<String, ScoreboardObjective> {
+    pub const fn get_objectives(&self) -> &FxHashMap<String, ScoreboardObjective> {
         &self.objectives
     }
 
@@ -141,7 +141,7 @@ impl Scoreboard {
     }
 
     #[must_use]
-    pub const fn get_display_slots(&self) -> &HashMap<ScoreboardDisplaySlot, String> {
+    pub const fn get_display_slots(&self) -> &FxHashMap<ScoreboardDisplaySlot, String> {
         &self.display_slots
     }
 
@@ -151,7 +151,7 @@ impl Scoreboard {
     }
 
     #[must_use]
-    pub const fn get_scores(&self) -> &HashMap<String, HashMap<String, ScoreboardScore>> {
+    pub const fn get_scores(&self) -> &FxHashMap<String, FxHashMap<String, ScoreboardScore>> {
         &self.scores
     }
 
@@ -170,13 +170,13 @@ impl Scoreboard {
     pub fn get_scores_for_objective(
         &self,
         objective_name: &str,
-    ) -> Option<&HashMap<String, ScoreboardScore>> {
+    ) -> Option<&FxHashMap<String, ScoreboardScore>> {
         self.scores.get(objective_name)
     }
 
     #[must_use]
-    pub fn get_scores_for_entity(&self, entity_name: &str) -> HashMap<String, &ScoreboardScore> {
-        let mut entity_scores = HashMap::new();
+    pub fn get_scores_for_entity(&self, entity_name: &str) -> FxHashMap<String, &ScoreboardScore> {
+        let mut entity_scores = FxHashMap::default();
         for (obj_name, obj_scores) in &self.scores {
             if let Some(score) = obj_scores.get(entity_name) {
                 entity_scores.insert(obj_name.clone(), score);
@@ -186,7 +186,7 @@ impl Scoreboard {
     }
 
     #[must_use]
-    pub const fn get_teams(&self) -> &HashMap<String, Team> {
+    pub const fn get_teams(&self) -> &FxHashMap<String, Team> {
         &self.teams
     }
 
@@ -859,9 +859,9 @@ pub struct BedrockObjective {
 
 #[derive(Clone, Debug, Default)]
 pub struct BedrockScoreboard {
-    pub objectives: HashMap<String, BedrockObjective>,
-    pub display_slots: HashMap<BedrockDisplaySlot, String>,
-    pub scores: HashMap<(String, String), i32>,
+    pub objectives: FxHashMap<String, BedrockObjective>,
+    pub display_slots: FxHashMap<BedrockDisplaySlot, String>,
+    pub scores: FxHashMap<(String, String), i32>,
 }
 
 impl BedrockScoreboard {

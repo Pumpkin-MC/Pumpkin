@@ -3,7 +3,7 @@ use crate::command::commands::default_dispatcher;
 use crate::command::commands::defaultgamemode::DefaultGamemode;
 use crate::data::VanillaData;
 use crate::data::player_server::ServerPlayerData;
-use crate::entity::{EntityBase, NBTStorage};
+use crate::entity::NBTStorage;
 use crate::item::registry::ItemRegistry;
 use crate::net::authentication::fetch_mojang_public_keys;
 use crate::net::{ClientPlatform, DisconnectReason, EncryptionError, GameProfile, PlayerConfig};
@@ -22,7 +22,6 @@ use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_data::dimension::Dimension;
-use pumpkin_data::entity::EntityType;
 use pumpkin_util::permission::PermissionManager;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_world::dimension::into_level;
@@ -30,7 +29,6 @@ use pumpkin_world::generation::generator::GeneratorInit;
 use pumpkin_world::world::WorldPortalExt;
 use tracing::{debug, error, info, warn};
 
-use crate::command::CommandSender;
 use pumpkin_protocol::java::client::login::CEncryptionRequest;
 use pumpkin_protocol::java::client::play::{CChangeDifficulty, CTabList};
 use pumpkin_protocol::{ClientPacket, java::client::config::CPluginMessage};
@@ -40,10 +38,9 @@ use pumpkin_world::world_info::anvil::{
     AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME,
 };
 use pumpkin_world::world_info::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
-use rand::seq::{IndexedRandom, SliceRandom};
+use rand::seq::IndexedRandom;
 use rayon::prelude::*;
 use rsa::RsaPublicKey;
-use std::collections::HashSet;
 use std::fs;
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -60,14 +57,12 @@ mod key_store;
 pub mod recipe;
 pub mod scheduler;
 pub mod seasonal_events;
+pub mod server_test_manager;
 pub mod tick_rate_manager;
 pub mod ticker;
 
 pub use recipe::RecipeManager;
 
-use crate::command::args::entities::{
-    EntityFilter, EntityFilterSort, EntitySelectorType, TargetSelector, ValueCondition,
-};
 use crate::data::advancement_data::AdvancementManager;
 use crate::server::scheduler::TaskScheduler;
 
@@ -122,6 +117,13 @@ pub struct Server {
     pub defaultgamemode: std::sync::Mutex<DefaultGamemode>,
     /// Manages player data storage
     pub player_data_storage: ServerPlayerData,
+    /// Command storage for `/data` command
+    pub command_storage:
+        std::sync::Mutex<std::collections::HashMap<String, pumpkin_nbt::compound::NbtCompound>>,
+    /// Global server stopwatches
+    pub stopwatches: std::sync::Mutex<crate::world::stopwatches::Stopwatches>,
+    /// Global server random sequences
+    pub random_sequences: std::sync::Mutex<crate::world::random_sequences::RandomSequences>,
     // Manages player advancement
     pub advancement_manager: Arc<AdvancementManager>,
     // Whether the server whitelist is on or off
@@ -142,6 +144,8 @@ pub struct Server {
     pub player_idle_timeout: AtomicI32,
     /// Manages scheduled tasks (e.g. from plugins)
     pub task_scheduler: Arc<TaskScheduler>,
+    /// Manages scheduled datapack functions (`/schedule`)
+    pub scheduled_functions: Arc<crate::server::scheduler::ScheduledFunctionQueue>,
     tasks: TaskTracker,
     pub runtime: tokio::runtime::Handle,
 
@@ -296,6 +300,11 @@ impl Server {
             map_manager: MapManager::new(),
             defaultgamemode,
             player_data_storage,
+            command_storage: std::sync::Mutex::new(std::collections::HashMap::new()),
+            stopwatches: std::sync::Mutex::new(crate::world::stopwatches::Stopwatches::new()),
+            random_sequences: std::sync::Mutex::new(
+                crate::world::random_sequences::RandomSequences::new(),
+            ),
             advancement_manager,
             white_list,
             tick_rate_manager,
@@ -306,6 +315,7 @@ impl Server {
             tasks: TaskTracker::new(),
             runtime: tokio::runtime::Handle::current(),
             task_scheduler: Arc::new(TaskScheduler::new()),
+            scheduled_functions: Arc::new(crate::server::scheduler::ScheduledFunctionQueue::new()),
             server_guid: rand::random(),
             player_idle_timeout: AtomicI32::new(0),
             mojang_public_keys: ArcSwap::from_pointee(Vec::new()),
@@ -330,10 +340,12 @@ impl Server {
                     .java
                     .authentication
                     .clone();
-                let keys = fetch_mojang_public_keys(&auth_config).unwrap_or_else(|e| {
-                    error!("Failed to fetch Mojang keys: {e}");
-                    Vec::new()
-                });
+                let keys = fetch_mojang_public_keys(&auth_config)
+                    .await
+                    .unwrap_or_else(|e| {
+                        error!("Failed to fetch Mojang keys: {e}");
+                        Vec::new()
+                    });
                 server_clone.mojang_public_keys.store(Arc::new(keys));
             });
         }
@@ -358,7 +370,9 @@ impl Server {
                     auth.url.as_deref(),
                     auth.connect_timeout,
                     auth.read_timeout,
-                ) {
+                )
+                .await
+                {
                     Ok(keys) => keys,
                     Err(error) => {
                         error!("Failed to fetch Bedrock OIDC keys: {error}");
@@ -744,6 +758,12 @@ impl Server {
         }
     }
 
+    /// Broadcasts custom server links to all players on the server.
+    pub fn broadcast_server_links(&self, links: &[pumpkin_protocol::Link<'_>]) {
+        let packet = pumpkin_protocol::java::client::play::CPlayServerLinks::new(links);
+        self.broadcast_packet_all(&packet);
+    }
+
     pub fn broadcast_tab_list_header_footer(&self, header: &TextComponent, footer: &TextComponent) {
         let packet = CTabList::new(header, footer);
         for world in self.worlds.load().iter() {
@@ -774,6 +794,27 @@ impl Server {
             for world in self.worlds.load().iter() {
                 world.broadcast_message(&event.message, &event.sender, chat_type, target_name);
             }
+        }
+    }
+
+    pub fn broadcast_chat_message(
+        self: &Arc<Self>,
+        message: &crate::net::chat::PlayerChatMessage,
+        is_filtered: impl Fn(&crate::entity::player::Player) -> bool,
+        sender_player: Option<&Arc<crate::entity::player::Player>>,
+        chat_type: pumpkin_protocol::codec::var_int::VarInt,
+        sender_name: &TextComponent,
+        target_name: Option<&TextComponent>,
+    ) {
+        for world in self.worlds.load().iter() {
+            world.broadcast_chat_message(
+                message,
+                &is_filtered,
+                sender_player,
+                chat_type,
+                sender_name,
+                target_name,
+            );
         }
     }
 
@@ -1056,6 +1097,10 @@ impl Server {
     /// Ticks the game logic for all worlds. This is the part that is affected by `/tick freeze`.
     pub fn tick_worlds(self: &Arc<Self>) {
         self.task_scheduler.tick(self);
+        self.scheduled_functions.tick(
+            self,
+            self.tick_count.load(std::sync::atomic::Ordering::Relaxed) as u64,
+        );
 
         let worlds = self.worlds.load();
         let handle = self.runtime.clone();
@@ -1143,207 +1188,6 @@ impl Server {
             .tick_times_nanos
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-    }
-
-    #[allow(clippy::too_many_lines, clippy::option_if_let_else)]
-    pub fn select_players(
-        &self,
-        target_selector: &TargetSelector,
-        source: Option<&CommandSender>,
-    ) -> Vec<Arc<Player>> {
-        let mut players = match &target_selector.selector_type {
-            EntitySelectorType::Source => source
-                .and_then(CommandSender::as_player)
-                .map_or_else(Vec::new, |player| vec![player]),
-            EntitySelectorType::NearestPlayer
-            | EntitySelectorType::NearestEntity
-            | EntitySelectorType::RandomPlayer
-            | EntitySelectorType::AllPlayers
-            | EntitySelectorType::AllEntities => self.get_all_players(),
-            EntitySelectorType::NamedPlayer(name) => self
-                .get_player_by_name(name)
-                .map_or_else(Vec::new, |player| vec![player]),
-            EntitySelectorType::Uuid(uuid) => self
-                .get_player_by_uuid(*uuid)
-                .map_or_else(Vec::new, |player| vec![player]),
-        };
-
-        let player_type = &EntityType::PLAYER;
-        let type_included = target_selector
-            .conditions
-            .iter()
-            .filter_map(|f| {
-                if let EntityFilter::Type(ValueCondition::Equals(entity_type)) = f {
-                    Some(*entity_type)
-                } else {
-                    None
-                }
-            })
-            .collect::<HashSet<_>>();
-        let type_excluded = target_selector
-            .conditions
-            .iter()
-            .filter_map(|f| {
-                if let EntityFilter::Type(ValueCondition::NotEquals(entity_type)) = f {
-                    Some(*entity_type)
-                } else {
-                    None
-                }
-            })
-            .collect::<HashSet<_>>();
-
-        players.retain(|_| {
-            (type_excluded.is_empty() || !type_excluded.contains(player_type))
-                && (type_included.is_empty() || type_included.contains(player_type))
-        });
-
-        let limit = target_selector.get_limit();
-        if limit == 0 {
-            return Vec::new();
-        }
-
-        match target_selector
-            .get_sort()
-            .unwrap_or(EntityFilterSort::Arbitrary)
-        {
-            EntityFilterSort::Arbitrary => players.into_iter().take(limit).collect(),
-            EntityFilterSort::Random => {
-                players.shuffle(&mut rand::rng());
-                players.into_iter().take(limit).collect()
-            }
-            EntityFilterSort::Nearest | EntityFilterSort::Furthest => {
-                let center = source.and_then(CommandSender::position).unwrap_or_default();
-                let nearest_first = target_selector
-                    .get_sort()
-                    .is_none_or(|sort| sort == EntityFilterSort::Nearest);
-                players.sort_by(|a, b| {
-                    let a_distance = a.get_entity().pos.load().squared_distance_to_vec(&center);
-                    let b_distance = b.get_entity().pos.load().squared_distance_to_vec(&center);
-                    if nearest_first {
-                        a_distance
-                            .partial_cmp(&b_distance)
-                            .unwrap_or(core::cmp::Ordering::Equal)
-                    } else {
-                        b_distance
-                            .partial_cmp(&a_distance)
-                            .unwrap_or(core::cmp::Ordering::Equal)
-                    }
-                });
-                players.into_iter().take(limit).collect()
-            }
-        }
-    }
-
-    #[allow(clippy::too_many_lines, clippy::option_if_let_else)]
-    pub fn select_entities(
-        &self,
-        target_selector: &TargetSelector,
-        source: Option<&CommandSender>,
-    ) -> Vec<Arc<dyn EntityBase>> {
-        let all_entities_and_players = || {
-            let mut entities = Vec::new();
-            for world in self.worlds.load().iter() {
-                entities.extend(world.entities.load().iter().cloned());
-                entities.extend(
-                    world
-                        .players
-                        .load()
-                        .iter()
-                        .cloned()
-                        .map(|player| player as Arc<dyn EntityBase>),
-                );
-            }
-            entities
-        };
-        let all_players_as_entities = || {
-            self.get_all_players()
-                .into_iter()
-                .map(|player| player as Arc<dyn EntityBase>)
-                .collect::<Vec<_>>()
-        };
-
-        let mut entities = match &target_selector.selector_type {
-            EntitySelectorType::Source => source
-                .and_then(CommandSender::as_player)
-                .map_or_else(Vec::new, |player| vec![player as Arc<dyn EntityBase>]),
-            EntitySelectorType::NearestPlayer
-            | EntitySelectorType::RandomPlayer
-            | EntitySelectorType::AllPlayers => all_players_as_entities(),
-            EntitySelectorType::NearestEntity | EntitySelectorType::AllEntities => {
-                all_entities_and_players()
-            }
-            EntitySelectorType::NamedPlayer(name) => self
-                .get_player_by_name(name)
-                .map_or_else(Vec::new, |player| vec![player as Arc<dyn EntityBase>]),
-            EntitySelectorType::Uuid(uuid) => self
-                .get_player_by_uuid(*uuid)
-                .map_or_else(Vec::new, |player| vec![player as Arc<dyn EntityBase>]),
-        };
-
-        let type_included = target_selector
-            .conditions
-            .iter()
-            .filter_map(|f| {
-                if let EntityFilter::Type(ValueCondition::Equals(entity_type)) = f {
-                    Some(*entity_type)
-                } else {
-                    None
-                }
-            })
-            .collect::<HashSet<_>>();
-        let type_excluded = target_selector
-            .conditions
-            .iter()
-            .filter_map(|f| {
-                if let EntityFilter::Type(ValueCondition::NotEquals(entity_type)) = f {
-                    Some(*entity_type)
-                } else {
-                    None
-                }
-            })
-            .collect::<HashSet<_>>();
-        entities.retain(|entity| {
-            // Filter by entity type
-            (type_excluded.is_empty() || !type_excluded.contains(&entity.get_entity().entity_type))
-                && (type_included.is_empty()
-                    || type_included.contains(&entity.get_entity().entity_type))
-        });
-
-        let limit = target_selector.get_limit();
-        if limit == 0 {
-            return vec![];
-        }
-
-        match target_selector
-            .get_sort()
-            .unwrap_or(EntityFilterSort::Arbitrary)
-        {
-            EntityFilterSort::Arbitrary => entities.into_iter().take(limit).collect(),
-            EntityFilterSort::Random => {
-                entities.shuffle(&mut rand::rng());
-                entities.into_iter().take(limit).collect()
-            }
-            EntityFilterSort::Nearest | EntityFilterSort::Furthest => {
-                let center = source.and_then(CommandSender::position).unwrap_or_default();
-                let nearest_first = target_selector
-                    .get_sort()
-                    .is_none_or(|sort| sort == EntityFilterSort::Nearest);
-                entities.sort_by(|a, b| {
-                    let a_distance = a.get_entity().pos.load().squared_distance_to_vec(&center);
-                    let b_distance = b.get_entity().pos.load().squared_distance_to_vec(&center);
-                    if nearest_first {
-                        a_distance
-                            .partial_cmp(&b_distance)
-                            .unwrap_or(core::cmp::Ordering::Equal)
-                    } else {
-                        b_distance
-                            .partial_cmp(&a_distance)
-                            .unwrap_or(core::cmp::Ordering::Equal)
-                    }
-                });
-                entities.into_iter().take(limit).collect()
-            }
-        }
     }
 
     pub async fn execute_remote_command(self: &Arc<Self>, command: String) {

@@ -3,9 +3,7 @@ use crate::block::{
     BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs, PlacedArgs,
 };
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{
-    BlockProperties, DoubleBlockHalf, SmallDripleafLikeProperties,
-};
+use pumpkin_data::block_properties::{DoubleBlockHalf, SmallDripleafLikeProperties};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
 use pumpkin_macros::pumpkin_block;
@@ -49,7 +47,7 @@ impl BlockBehaviour for SmallDripleafBlock {
     fn placed(&self, args: PlacedArgs<'_>) {
         {
             let lower_small_dripleaf_props =
-                SmallDripleafLikeProperties::from_state_id(args.state_id, args.block);
+                SmallDripleafLikeProperties::from_state_id(args.state_id);
             if lower_small_dripleaf_props.half != DoubleBlockHalf::Lower {
                 return;
             }
@@ -71,8 +69,7 @@ impl BlockBehaviour for SmallDripleafBlock {
     }
 }
 fn is_small_dripleaf_waterlogged(state_id: BlockStateId) -> bool {
-    let dripleaf_props =
-        SmallDripleafLikeProperties::from_state_id(state_id, &Block::SMALL_DRIPLEAF);
+    let dripleaf_props = SmallDripleafLikeProperties::from_state_id(state_id);
     dripleaf_props.waterlogged
 }
 impl PlantBlockBase for SmallDripleafBlock {

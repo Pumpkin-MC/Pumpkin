@@ -12,21 +12,27 @@ use std::sync::atomic::{AtomicBool, Ordering};
 pub struct ShelfBlockEntity {
     pub position: BlockPos,
     pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
+    pub align_items_to_bottom: AtomicBool,
     pub dirty: AtomicBool,
 }
 
 impl BlockEntity for ShelfBlockEntity {
     fn write_nbt(&self, nbt: &mut NbtCompound) {
         self.write_inventory_nbt(nbt, true);
+        if self.align_items_to_bottom.load(Ordering::Relaxed) {
+            nbt.put_bool("align_items_to_bottom", true);
+        }
     }
 
     fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
     where
         Self: Sized,
     {
+        let align_items_to_bottom = nbt.get_bool("align_items_to_bottom").unwrap_or(false);
         let mut shelf = Self {
             position,
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
+            align_items_to_bottom: AtomicBool::new(align_items_to_bottom),
             dirty: AtomicBool::new(false),
         };
 
@@ -66,6 +72,9 @@ impl BlockEntity for ShelfBlockEntity {
         if let Ok(items) = self.items.try_read() {
             sync_write_items_to_nbt(items.as_slice(), &mut nbt);
         }
+        if self.align_items_to_bottom.load(Ordering::Relaxed) {
+            nbt.put_bool("align_items_to_bottom", true);
+        }
         Some(nbt)
     }
 
@@ -83,6 +92,7 @@ impl ShelfBlockEntity {
         Self {
             position,
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
+            align_items_to_bottom: AtomicBool::new(false),
             dirty: AtomicBool::new(false),
         }
     }

@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_data::block_properties::{
-    Axis, BlockProperties, CreakingHeartLikeProperties, CreakingHeartState,
-};
+use pumpkin_data::block_properties::{Axis, CreakingHeartLikeProperties, CreakingHeartState};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -41,8 +39,7 @@ impl CreakingHeartBlock {
 
 impl BlockBehaviour for CreakingHeartBlock {
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let mut props =
-            CreakingHeartLikeProperties::from_state_id(args.block.default_state.id, args.block);
+        let mut props = CreakingHeartLikeProperties::from_state_id(args.block.default_state.id);
         props.axis = match args.direction {
             pumpkin_data::BlockDirection::North | pumpkin_data::BlockDirection::South => Axis::Z,
             pumpkin_data::BlockDirection::East | pumpkin_data::BlockDirection::West => Axis::X,
@@ -58,7 +55,7 @@ impl BlockBehaviour for CreakingHeartBlock {
             args.world.add_block_entity(Arc::new(entity));
 
             let state_id = args.world.get_block_state_id(args.position);
-            let mut props = CreakingHeartLikeProperties::from_state_id(state_id, args.block);
+            let mut props = CreakingHeartLikeProperties::from_state_id(state_id);
 
             if Self::check_active_logs(args.world.as_ref(), args.position, props.axis) {
                 props.creaking_heart_state = CreakingHeartState::Dormant;
@@ -80,7 +77,7 @@ impl BlockBehaviour for CreakingHeartBlock {
     fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
         {
             let state_id = args.world.get_block_state_id(args.position);
-            let mut props = CreakingHeartLikeProperties::from_state_id(state_id, args.block);
+            let mut props = CreakingHeartLikeProperties::from_state_id(state_id);
 
             let active_logs =
                 Self::check_active_logs(args.world.as_ref(), args.position, props.axis);

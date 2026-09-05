@@ -75,7 +75,31 @@ impl BowAttackGoal {
 
         let arrow_entity = Entity::new(world.clone(), entity.pos.load(), &EntityType::ARROW);
         let projectile = ItemStack::new(1, &Item::ARROW);
-        let arrow = ArrowEntity::new_shot(arrow_entity, entity, &projectile, ArrowPickup::Allowed);
+        let bow_item = Self::main_hand_item(mob);
+        let arrow = ArrowEntity::new_shot_with_weapon(
+            arrow_entity,
+            entity,
+            &projectile,
+            &bow_item,
+            ArrowPickup::Disallowed,
+        );
+
+        // Vanilla scales base damage with power and world difficulty
+        let difficulty = world.level_info.load().difficulty as i32;
+        arrow.set_base_damage_from_mob(Self::ARROW_SPEED, difficulty);
+
+        arrow.set_base_damage(crate::enchantment::EnchantmentHelper::modify_damage(
+            &bow_item,
+            arrow.get_base_damage(),
+        ));
+        arrow.punch_level.store(
+            crate::enchantment::EnchantmentHelper::modify_knockback(&bow_item, 0.0) as u8,
+            std::sync::atomic::Ordering::Relaxed,
+        );
+        arrow.apply_on_projectile_spawned(&projectile);
+        if entity.is_on_fire() {
+            arrow.set_flame(true);
+        }
 
         let mob_pos = entity.pos.load();
         let target_entity = target.get_entity();
@@ -88,7 +112,6 @@ impl BowAttackGoal {
         let horizontal_distance = dx.hypot(dz);
 
         // Vanilla scales the spread with the world difficulty: 14 - difficulty * 4.
-        let difficulty = world.level_info.load().difficulty as i32;
         let divergence = f64::from(14 - difficulty * 4);
 
         arrow.set_velocity(

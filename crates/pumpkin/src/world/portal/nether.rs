@@ -1,7 +1,7 @@
 use super::poi;
 use pumpkin_data::{
     Block, BlockDirection, BlockState,
-    block_properties::{BlockProperties, HorizontalAxis, NetherPortalLikeProperties},
+    block_properties::{HorizontalAxis, NetherPortalLikeProperties},
     tag,
     tag::Taggable,
 };
@@ -318,7 +318,7 @@ impl NetherPortal {
     pub fn get_on_axis(world: &World, pos: &BlockPos, axis: HorizontalAxis) -> Option<Self> {
         let (block, state) = world.get_block_and_state(pos);
         if block == &Block::NETHER_PORTAL {
-            let props = NetherPortalLikeProperties::from_state_id(state.id, block);
+            let props = NetherPortalLikeProperties::from_state_id(state.id);
             if props.axis != axis {
                 return None;
             }
@@ -483,7 +483,7 @@ impl NetherPortal {
 
     fn valid_state_inside_portal(block: &Block, state: &BlockState, axis: HorizontalAxis) -> bool {
         if block == &Block::NETHER_PORTAL {
-            let props = NetherPortalLikeProperties::from_state_id(state.id, block);
+            let props = NetherPortalLikeProperties::from_state_id(state.id);
             props.axis == axis
         } else {
             state.is_air() || block.has_tag(&tag::Block::MINECRAFT_FIRE)
@@ -541,7 +541,7 @@ impl NetherPortal {
             if block != &Block::NETHER_PORTAL {
                 continue;
             }
-            let props = NetherPortalLikeProperties::from_state_id(state.id, block);
+            let props = NetherPortalLikeProperties::from_state_id(state.id);
             let axis = props.axis;
 
             if let Some(portal) = Self::get_on_axis(world, &pos, axis)

@@ -1,8 +1,5 @@
 use crate::block::{BlockBehaviour, BlockMetadata, OnPlaceArgs};
-use pumpkin_data::{
-    BlockId, BlockStateId,
-    block_properties::{BlockProperties, SculkCatalystLikeProperties},
-};
+use pumpkin_data::{BlockId, BlockStateId, block_properties::SculkCatalystLikeProperties};
 
 pub struct SculkCatalystBlock;
 

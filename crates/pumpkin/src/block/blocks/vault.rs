@@ -1,9 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{
-    BlockProperties, LadderLikeProperties, VaultLikeProperties, VaultState,
-};
+use pumpkin_data::block_properties::{LadderLikeProperties, VaultLikeProperties, VaultState};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -80,7 +78,7 @@ impl BlockBehaviour for VaultBlock {
             );
 
             let state_id = args.world.get_block_state_id(args.position);
-            let mut props = VaultLikeProperties::from_state_id(state_id, args.block);
+            let mut props = VaultLikeProperties::from_state_id(state_id);
             props.vault_state = VaultState::Ejecting;
             args.world.set_block_state(
                 args.position,

@@ -1,6 +1,5 @@
 use std::sync::{Arc, Mutex as StdMutex, RwLock, atomic::AtomicBool};
 
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_util::math::position::BlockPos;
 

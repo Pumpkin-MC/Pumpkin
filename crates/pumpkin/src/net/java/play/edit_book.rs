@@ -8,12 +8,35 @@ impl JavaClient {
             return;
         }
 
-        let pages: Vec<String> = packet.pages.iter().map(|p| (*p).to_string()).collect();
+        let mut pages: Vec<String> = packet.pages.iter().map(|p| (*p).to_string()).collect();
+        let mut title = packet.title.map(std::string::ToString::to_string);
+        let signing = title.is_some();
+        let slot = player.inventory().get_selected_slot() as u32;
 
-        if let Some(title) = packet.title {
+        if let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id)
+            && let Some(server) = player.world().server.upgrade()
+        {
+            let mut event =
+                crate::plugin::api::events::player::player_edit_book::PlayerEditBookEvent {
+                    player: player_arc,
+                    slot,
+                    pages: pages.clone(),
+                    title: title.clone(),
+                    signing,
+                    cancelled: false,
+                };
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return;
+            }
+            pages = event.pages;
+            title = event.title;
+        }
+
+        if let Some(title) = title {
             let mut written_book = ItemStack::new(1, &Item::WRITTEN_BOOK);
             let content = WrittenBookContentImpl {
-                title: title.to_string(),
+                title,
                 author: player.gameprofile.name.clone(),
                 pages,
             };
