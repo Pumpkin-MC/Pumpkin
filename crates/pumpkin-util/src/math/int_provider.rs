@@ -360,6 +360,12 @@ impl VeryBiasedToBottomIntProvider {
         self.min_inclusive
     }
 
+    /// Samples the provider, matching vanilla's nested `nextInt` expression.
+    ///
+    /// Vanilla's cave carver picks its count with
+    /// `random.nextInt(random.nextInt(random.nextInt(bound) + 1) + 1)`, i.e. `inner + 2`
+    /// draws in total, returning the innermost-last one. The loop performs the `inner + 1`
+    /// draws that narrow the bound, and the final draw produces the value itself.
     pub fn get(&self, random: &mut impl RandomImpl) -> i32 {
         if self.min_inclusive >= self.max_inclusive {
             return self.min_inclusive;
@@ -369,7 +375,7 @@ impl VeryBiasedToBottomIntProvider {
         for _ in 0..=self.inner {
             bound = random.next_bounded_i32(bound) + 1;
         }
-        self.min_inclusive + bound - 1
+        self.min_inclusive + random.next_bounded_i32(bound)
     }
 
     #[must_use]
@@ -862,6 +868,75 @@ mod tests {
             assert!(
                 (1..=20).contains(&value),
                 "Value {value} is outside range [1, 20]"
+            );
+        }
+    }
+
+    /// Vanilla's `CaveWorldCarver.carve` picks its cave count with
+    /// `random.nextInt(random.nextInt(random.nextInt(getCaveBound()) + 1) + 1)` —
+    /// three nested draws returning the innermost-last one, where `getCaveBound()` is
+    /// `15` in the overworld (`(0, 14, 1)`) and `10` in the nether (`(0, 9, 1)`).
+    #[test]
+    fn very_biased_to_bottom_int_provider_matches_vanilla() {
+        for bound in [15, 10] {
+            let provider = VeryBiasedToBottomIntProvider::new(0, bound - 1, 1);
+
+            let mut random =
+                RandomGenerator::Xoroshiro(crate::random::xoroshiro128::Xoroshiro::from_seed(2));
+            let mut reference =
+                RandomGenerator::Xoroshiro(crate::random::xoroshiro128::Xoroshiro::from_seed(2));
+            // Java evaluates the nested `nextInt` calls inside out.
+            let inner = reference.next_bounded_i32(bound);
+            let middle = reference.next_bounded_i32(inner + 1);
+            let expected = reference.next_bounded_i32(middle + 1);
+            assert_eq!(provider.get(&mut random), expected);
+
+            // The carvers use the legacy random source, so check that stream too.
+            let mut random =
+                RandomGenerator::Legacy(crate::random::legacy_rand::LegacyRand::from_seed(2));
+            let mut reference =
+                RandomGenerator::Legacy(crate::random::legacy_rand::LegacyRand::from_seed(2));
+            let inner = reference.next_bounded_i32(bound);
+            let middle = reference.next_bounded_i32(inner + 1);
+            let expected = reference.next_bounded_i32(middle + 1);
+            assert_eq!(provider.get(&mut random), expected);
+        }
+    }
+
+    /// The cave count is the first value drawn from every chunk's carver stream, so
+    /// consuming the wrong number of ints desyncs everything carved after it.
+    #[test]
+    fn very_biased_to_bottom_int_provider_consumes_three_ints() {
+        for bound in [15, 10] {
+            let mut provider_random =
+                RandomGenerator::Legacy(crate::random::legacy_rand::LegacyRand::from_seed(2));
+            VeryBiasedToBottomIntProvider::new(0, bound - 1, 1).get(&mut provider_random);
+
+            let mut reference =
+                RandomGenerator::Legacy(crate::random::legacy_rand::LegacyRand::from_seed(2));
+            let first = reference.next_bounded_i32(bound);
+            let second = reference.next_bounded_i32(first + 1);
+            reference.next_bounded_i32(second + 1);
+
+            assert_eq!(provider_random.next_i32(), reference.next_i32());
+        }
+    }
+
+    #[test]
+    fn very_biased_to_bottom_int_provider() {
+        let mut random = RandomGenerator::Xoroshiro(
+            crate::random::xoroshiro128::Xoroshiro::from_seed(get_seed()),
+        );
+        let provider = VeryBiasedToBottomIntProvider::new(0, 14, 1);
+
+        assert_eq!(provider.get_min(), 0);
+        assert_eq!(provider.get_max(), 14);
+
+        for _ in 0..100 {
+            let value = provider.get(&mut random);
+            assert!(
+                (0..=14).contains(&value),
+                "Value {value} is outside range [0, 14]"
             );
         }
     }
