@@ -151,10 +151,64 @@ impl Worldborder {
     #[must_use]
     pub fn clamp_block(&self, x: i32, z: i32) -> (i32, i32) {
         let half = self.new_diameter / 2.0;
+        // A border narrower than one block spans no block boundary, leaving `max`
+        // below `min`. `Ord::clamp` panics on an inverted range, so collapse the
+        // range onto the single block that holds the centre instead.
         let min_x = (self.center_x - half).floor() as i32;
-        let max_x = (self.center_x + half).floor() as i32 - 1;
+        let max_x = ((self.center_x + half).floor() as i32 - 1).max(min_x);
         let min_z = (self.center_z - half).floor() as i32;
-        let max_z = (self.center_z + half).floor() as i32 - 1;
+        let max_z = ((self.center_z + half).floor() as i32 - 1).max(min_z);
         (x.clamp(min_x, max_x), z.clamp(min_z, max_z))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Worldborder;
+
+    fn centered_border(diameter: f64) -> Worldborder {
+        Worldborder::new(0.0, 0.0, diameter, 0, 5, 300)
+    }
+
+    /// `find_safe_location` only falls through to the `clamp_block` fallback
+    /// because a zero-width border rejects every candidate it scans: `contains`
+    /// reduces to `x >= center && x < center`, which no coordinate satisfies.
+    #[test]
+    fn a_zero_width_border_contains_no_block() {
+        let border = centered_border(0.0);
+
+        assert!(!border.contains_block(0, 0));
+        assert!(
+            (-32..=32).all(|x| (-32..=32).all(|z| !border.contains_block(x, z))),
+            "a zero-width border should contain no block in the portal search area"
+        );
+    }
+
+    /// `/worldborder set 0` is accepted, because the command's consumer is
+    /// `BoundedNumArgumentConsumer::new().min(0.0)` and that bound is inclusive.
+    #[test]
+    fn clamp_block_handles_a_zero_width_border() {
+        let border = centered_border(0.0);
+
+        assert_eq!(border.clamp_block(0, 0), (0, 0));
+        assert_eq!(border.clamp_block(100, -100), (0, 0));
+    }
+
+    /// A centre off the block grid puts both edges inside the same block, so the
+    /// border spans no block boundary even though its diameter is not zero.
+    #[test]
+    fn clamp_block_handles_a_border_narrower_than_one_block() {
+        let border = Worldborder::new(0.5, 0.5, 0.5, 0, 5, 300);
+
+        assert_eq!(border.clamp_block(100, -100), (0, 0));
+    }
+
+    #[test]
+    fn clamp_block_still_clamps_a_normal_border() {
+        let border = centered_border(10.0);
+
+        assert_eq!(border.clamp_block(100, 100), (4, 4));
+        assert_eq!(border.clamp_block(-100, -100), (-5, -5));
+        assert_eq!(border.clamp_block(2, -3), (2, -3));
     }
 }
