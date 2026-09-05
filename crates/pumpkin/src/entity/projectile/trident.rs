@@ -374,7 +374,8 @@ impl EntityBase for TridentEntity {
                     1.0,
                     0.0,
                 );
-                world.broadcast_packet_all(&sound_packet);
+                let chunk_pos = entity.chunk_pos.load();
+                world.broadcast_to_chunk(chunk_pos, &sound_packet);
 
                 // Standard bounce/fall-back behavior
                 entity.velocity.store(Vector3::new(0.0, -0.1, 0.0));
