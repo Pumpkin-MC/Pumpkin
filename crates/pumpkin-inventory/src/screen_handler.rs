@@ -1175,6 +1175,11 @@ pub trait ScreenHandler: Send + Sync {
                             .set_stack(button as usize, ItemStack::EMPTY.clone());
                         source_slot.set_stack(button_stack);
                     }
+                } else if source_slot.can_insert(&button_stack) {
+                    player
+                        .get_inventory()
+                        .set_stack(button as usize, source_stack);
+                    source_slot.set_stack(button_stack);
                 }
             }
         }
