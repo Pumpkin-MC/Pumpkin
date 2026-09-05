@@ -57,6 +57,7 @@ const HANDSHAKE_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_se
 pub struct PendingConnection {
     pub id: u64,
     pub address: SocketAddr,
+    pub transport_peer: SocketAddr,
     pub server_address: String,
     pub version: AtomicCell<JavaMinecraftVersion>,
     pub connection_state: AtomicCell<ConnectionState>,
@@ -82,6 +83,7 @@ impl PendingConnection {
         Self {
             id,
             address,
+            transport_peer: address,
             server_address: String::new(),
             version: AtomicCell::new(CURRENT_MC_VERSION),
             connection_state: AtomicCell::new(ConnectionState::HandShake),

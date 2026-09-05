@@ -58,6 +58,7 @@ pub mod handshake;
 pub mod login;
 pub mod pending;
 pub mod play;
+pub mod proxy_protocol;
 pub mod recipe_helper;
 pub mod status;
 
@@ -85,6 +86,7 @@ pub struct JavaClient {
     pub connection_state: AtomicCell<ConnectionState>,
     /// The client's IP address. Direct field (lock-free).
     pub address: SocketAddr,
+    pub transport_peer: SocketAddr,
     /// The client's brand or modpack information. Lock-free `ArcSwap`.
     pub brand: ArcSwap<Option<String>>,
     /// Associated player reference. Lock-free `ArcSwap`.
@@ -233,6 +235,7 @@ impl JavaClient {
             config: ArcSwap::from_pointee(config),
             server_address: pending.server_address,
             address: pending.address,
+            transport_peer: pending.transport_peer,
             connection_state: pending.connection_state,
             close_token: pending.close_token,
             tasks: TaskTracker::new(),
