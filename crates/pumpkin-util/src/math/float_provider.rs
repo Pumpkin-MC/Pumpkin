@@ -247,10 +247,14 @@ impl UniformFloatProvider {
     ///
     /// # Returns
     /// A random float in the range [`min_inclusive`, `max_exclusive`].
+    #[allow(clippy::suboptimal_flops)]
     pub fn get(&self, random: &mut impl RandomImpl) -> f32 {
-        // NOTE: Use the random range in [min_inclusive, max_exclusive)
+        // NOTE: Vanilla's `Mth.randomBetween` is `nextFloat() * (max - min) + min` with the
+        // product rounded to f32 before the add. A fused multiply-add rounds only once and
+        // lands one ulp off for about one draw in seven, which is enough to move a carver
+        // radius across a block boundary. Keep the two roundings.
         let range = self.max_exclusive - self.min_inclusive;
-        random.next_f32().mul_add(range, self.min_inclusive)
+        random.next_f32() * range + self.min_inclusive
     }
 
     /// Returns the maximum exclusive value.
@@ -331,10 +335,12 @@ impl ClampedNormalFloatProvider {
     ///
     /// # Returns
     /// A random float from a normal distribution, clamped to [min, max].
+    #[allow(clippy::suboptimal_flops)]
     pub fn get(&self, random: &mut impl RandomImpl) -> f32 {
-        // NOTE: Generate normal distribution value
+        // NOTE: Vanilla's `Mth.normal` is `mean + (float) nextGaussian() * deviation`: the
+        // product is rounded to f32 before the add, so no fused multiply-add here either.
         let gaussian = random.next_gaussian() as f32;
-        let value = gaussian.mul_add(self.deviation, self.mean);
+        let value = self.mean + gaussian * self.deviation;
 
         // NOTE: Clamp to min/max range
         value.clamp(self.min, self.max)
@@ -461,6 +467,63 @@ mod tests {
         assert_eq!(provider.get_max(), 5.5);
         assert_eq!(provider.get(&mut random), 5.5);
         assert_eq!(provider.get(&mut random), 5.5); // Should always return the same value
+    }
+
+    /// Vanilla's `UniformFloat.sample` is `Mth.randomBetween`:
+    /// `random.nextFloat() * (maxExclusive - min) + min`, i.e. the product is rounded to f32
+    /// before the add. On the legacy stream seeded with 4 the first float is
+    /// `0.730_609_4`; for the cave carver's `0.7..1.4` horizontal radius multiplier the
+    /// vanilla expression gives `1.211_426_5`, while a fused multiply-add gives
+    /// `1.211_426_6`.
+    #[test]
+    fn uniform_float_provider_matches_vanilla_rounding() {
+        let provider = UniformFloatProvider::new(0.7, 1.4);
+
+        let mut random =
+            RandomGenerator::Legacy(crate::random::legacy_rand::LegacyRand::from_seed(4));
+        let sampled = provider.get(&mut random);
+
+        let mut reference =
+            RandomGenerator::Legacy(crate::random::legacy_rand::LegacyRand::from_seed(4));
+        let next_float = reference.next_f32();
+        assert_eq!(next_float, 0.730_609_4);
+        #[allow(clippy::suboptimal_flops)]
+        let vanilla = next_float * (1.4f32 - 0.7f32) + 0.7f32;
+        let fused = next_float.mul_add(1.4f32 - 0.7f32, 0.7f32);
+
+        assert_eq!(sampled, 1.211_426_5);
+        assert_eq!(sampled, vanilla);
+        assert_ne!(
+            sampled, fused,
+            "the seed must discriminate the two roundings"
+        );
+    }
+
+    /// Vanilla's `ClampedNormalFloat.sample` is `Mth.normal`:
+    /// `mean + (float) random.nextGaussian() * deviation`, again two roundings. Search the
+    /// legacy stream for the first seed where a fused multiply-add would differ and check
+    /// the provider follows the vanilla expression there.
+    #[test]
+    fn clamped_normal_float_provider_matches_vanilla_rounding() {
+        let (mean, deviation) = (0.5f32, 0.3f32);
+        let provider = ClampedNormalFloatProvider::new(mean, deviation, -10.0, 10.0);
+
+        for seed in 0..10_000u64 {
+            let mut reference =
+                RandomGenerator::Legacy(crate::random::legacy_rand::LegacyRand::from_seed(seed));
+            let gaussian = reference.next_gaussian() as f32;
+            #[allow(clippy::suboptimal_flops)]
+            let vanilla = mean + gaussian * deviation;
+            if gaussian.mul_add(deviation, mean) == vanilla {
+                continue;
+            }
+
+            let mut random =
+                RandomGenerator::Legacy(crate::random::legacy_rand::LegacyRand::from_seed(seed));
+            assert_eq!(provider.get(&mut random), vanilla, "seed {seed}");
+            return;
+        }
+        panic!("no seed in 0..10000 discriminates fused from plain rounding");
     }
 
     #[test]
