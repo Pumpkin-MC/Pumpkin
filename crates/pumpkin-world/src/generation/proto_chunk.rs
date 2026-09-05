@@ -99,6 +99,12 @@ pub trait GenerationCache: HeightLimitView + BlockAccessor {
     fn get_sea_level(&self) -> i32 {
         63
     }
+
+    /// The world seed, vanilla's `WorldGenLevel.getSeed()`; some features seed their own
+    /// noise from it directly instead of from the decoration random.
+    fn get_world_seed(&self) -> u64 {
+        self.get_center_chunk().world_seed
+    }
 }
 
 const AIR_BLOCK: Block = Block::AIR;
@@ -138,6 +144,8 @@ pub struct ProtoChunk {
     pub z: i32,
     pub default_block: &'static BlockState,
     biome_mixer_seed: i64,
+    /// The raw world seed (vanilla `WorldGenLevel.getSeed()`).
+    pub world_seed: u64,
     pub(crate) flat_block_map: Box<[BlockStateId]>,
     pub flat_biome_map: Box<[u8]>,
     pub flat_surface_height_map: [i16; CHUNK_AREA],
@@ -228,6 +236,11 @@ impl ProtoChunk {
             }
             super::generator::WorldGenerator::Custom(custom_gen) => custom_gen.biome_mixer_seed(),
         };
+        let world_seed = match generator {
+            super::generator::WorldGenerator::Noise(noise_gen) => noise_gen.random_config.seed,
+            super::generator::WorldGenerator::Flat(flat_gen) => flat_gen.seed,
+            super::generator::WorldGenerator::Custom(custom_gen) => custom_gen.seed(),
+        };
 
         let default_heightmap = [i16::MIN; CHUNK_AREA];
         Self {
@@ -235,6 +248,7 @@ impl ProtoChunk {
             z,
             default_block,
             biome_mixer_seed,
+            world_seed,
             flat_block_map: vec![BlockStateId::AIR; CHUNK_AREA * height as usize]
                 .into_boxed_slice(),
             flat_biome_map: vec![

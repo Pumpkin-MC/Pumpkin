@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use pumpkin_data::{Block, BlockDirection, BlockId, BlockState, BlockStateId};
 use pumpkin_util::{
     math::{int_provider::IntProvider, position::BlockPos},
-    random::RandomGenerator,
+    random::{RandomGenerator, legacy_rand::LegacyRand},
 };
 
 use crate::generation::feature::features::spring_feature::BlockWrapper;
@@ -67,6 +67,20 @@ pub struct GeodeFeature {
 }
 
 impl GeodeFeature {
+    /// The geode's shape noise: vanilla creates it from a `LegacyRandomSource(level.getSeed())`,
+    /// i.e. it is a function of the world seed only and consumes nothing from the feature random
+    /// (`NormalNoise.create(new WorldgenRandom(new LegacyRandomSource(level.getSeed())), -4, 1.0)`).
+    fn shape_noise(world_seed: u64) -> NormalNoise {
+        let mut random = RandomGenerator::Legacy(LegacyRand::from_seed(world_seed));
+        NormalNoise::create(&mut random, -4, &[1.0])
+    }
+
+    /// Vanilla geode noise value for testing: `GeodeFeature.place`'s `normalNoise.getValue(x, y, z)`.
+    #[cfg(test)]
+    pub(crate) fn shape_noise_value(world_seed: u64, x: f64, y: f64, z: f64) -> f64 {
+        Self::shape_noise(world_seed).get_value(x, y, z)
+    }
+
     fn safe_set_block<T: GenerationCache>(
         chunk: &mut T,
         pos: BlockPos,
@@ -102,7 +116,7 @@ impl GeodeFeature {
     ) -> bool {
         let origin = pos;
         let num_points = self.distribution_points.get(random);
-        let noise = NormalNoise::create(random, -4, &[1.0]);
+        let noise = Self::shape_noise(chunk.get_world_seed());
 
         // Precompute sets of raw block ids for fast lookups
         let mut invalid_raw_ids: HashSet<BlockId> = HashSet::new();
@@ -398,5 +412,25 @@ mod tests {
         assert_eq!(uniform_bounds(&geode.point_offset), (1, 2));
         assert_eq!(uniform_bounds(&geode.outer_wall_distance), (4, 6));
         assert_eq!(geode.invalid_blocks_threshold, 1);
+    }
+
+    /// Values printed by the real 26.2 server classes for seed 13579:
+    /// `NormalNoise.create(new WorldgenRandom(new LegacyRandomSource(13579L)), -4, 1.0)
+    ///     .getValue(x, y, z)` (see `GeodeFeature.place`).
+    #[test]
+    fn shape_noise_is_seeded_from_the_world_seed() {
+        let cases = [
+            ((0.0, 0.0, 0.0), 0.293_497_274_324_212_6f64),
+            ((-24.0, -17.0, 135.0), -0.141_043_541_033_730_46f64),
+            ((-121.0, -28.0, 36.0), -0.041_936_309_071_201_51f64),
+            ((100.5, -40.0, -7.0), 0.092_317_015_824_239_66f64),
+        ];
+        for ((x, y, z), expected) in cases {
+            let actual = GeodeFeature::shape_noise_value(13579, x, y, z);
+            assert!(
+                (actual - expected).abs() < 1e-6,
+                "noise at ({x}, {y}, {z}) = {actual}, vanilla {expected}"
+            );
+        }
     }
 }
