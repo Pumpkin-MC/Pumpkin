@@ -132,6 +132,46 @@ mod test {
         assert!(resumed.has_structure(StructureKeys::Monument));
     }
 
+    /// Real vanilla 26.2 for seed 13579 stores exactly one structure start in the 16x16
+    /// chunks x -16..-1, z 0..15: `minecraft:mineshaft_mesa` in chunk (-11, 11)
+    /// (`structures.starts` of the saved region files, pumpkin-parity/vanilla/world-13579).
+    /// Mineshafts use `legacy_type_3` frequency reduction, i.e. the large-feature seed.
+    #[test]
+    fn mineshaft_mesa_start_matches_vanilla_seed_13579() {
+        use pumpkin_data::structures::StructureKeys;
+
+        let world_gen = get_world_gen(
+            Seed(13579),
+            Dimension::OVERWORLD,
+            false,
+            Vec::new(),
+            String::new(),
+        );
+        let WorldGenerator::Noise(generator) = &*world_gen else {
+            unreachable!()
+        };
+
+        let mut proto = ProtoChunk::new(-11, 11, &world_gen);
+        proto.step_to_biomes(generator);
+        proto.set_structure_starts(generator);
+        assert!(proto.has_structure(StructureKeys::MineshaftMesa));
+        assert!(!proto.has_structure(StructureKeys::Mineshaft));
+
+        for (cx, cz) in [(-10, 11), (-11, 10), (-12, 12)] {
+            let mut proto = ProtoChunk::new(cx, cz, &world_gen);
+            proto.step_to_biomes(generator);
+            proto.set_structure_starts(generator);
+            assert!(
+                !proto.has_structure(StructureKeys::MineshaftMesa),
+                "({cx}, {cz})"
+            );
+            assert!(
+                !proto.has_structure(StructureKeys::Mineshaft),
+                "({cx}, {cz})"
+            );
+        }
+    }
+
     // Regression test for transposed heightmaps during Noise-stage chunk resume.
     // Flat terrain cannot expose this bug, so use a sloped chunk.
     #[test]

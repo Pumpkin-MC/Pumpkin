@@ -149,7 +149,19 @@ pub const fn seed_slime_chunk(x: i32, z: i32, seed: u64, salt: u64) -> u64 {
 
 /// Generates a carver seed for cave and ravine generation.
 ///
-/// Carver seeds are used for terrain carving features like caves and ravines.
+/// This is vanilla's `WorldgenRandom.setLargeFeatureSeed(seed, chunkX, chunkZ)`, which is
+/// shared by the carvers, the structure `GenerationContext` random and the `legacy_type_3`
+/// structure frequency reduction:
+///
+/// ```text
+/// this.setSeed(seed);
+/// long xScale = this.nextLong();
+/// long zScale = this.nextLong();
+/// this.setSeed(chunkX * xScale ^ chunkZ * zScale ^ seed);
+/// ```
+///
+/// Not to be confused with `setDecorationSeed`, which ORs the scales with 1 and *adds* the
+/// two products (see `get_population_seed`).
 ///
 /// # Arguments
 /// - `world_seed` – The base world seed (plus carver index).
@@ -162,11 +174,9 @@ pub const fn seed_slime_chunk(x: i32, z: i32, seed: u64, salt: u64) -> u64 {
 #[must_use]
 pub fn get_carver_seed(world_seed: u64, chunk_x: i32, chunk_z: i32) -> u64 {
     let mut random = LegacyRand::from_seed(world_seed);
-    let l = random.next_i64() | 1;
-    let m = random.next_i64() | 1;
-    ((chunk_x as i64)
-        .wrapping_mul(l)
-        .wrapping_add((chunk_z as i64).wrapping_mul(m)) as u64)
+    let x_scale = random.next_i64();
+    let z_scale = random.next_i64();
+    ((i64::from(chunk_x).wrapping_mul(x_scale)) ^ (i64::from(chunk_z).wrapping_mul(z_scale))) as u64
         ^ world_seed
 }
 
@@ -373,7 +383,7 @@ pub const fn hash_block_pos(x: i32, y: i32, z: i32) -> i64 {
 
 #[cfg(test)]
 mod tests {
-    use crate::random::get_region_seed;
+    use crate::random::{RandomImpl, get_carver_seed, get_region_seed, legacy_rand::LegacyRand};
 
     use super::hash_block_pos;
 
@@ -381,6 +391,24 @@ mod tests {
     fn region_seed() {
         let seed = get_region_seed(12345612, 1, 1, 14357620);
         assert_eq!(seed, 474797819485);
+    }
+
+    /// `WorldgenRandom.setLargeFeatureSeed(13579, -11, 11)`. In the vanilla 26.2 world for
+    /// seed 13579, chunk (-11, 11) is the only chunk in x -16..-1, z 0..15 whose
+    /// `legacy_type_3` mineshaft roll (`new LegacyRandomSource(thisSeed).nextDouble() < 0.004`)
+    /// passes; with the `setDecorationSeed` formula (`| 1`, `+`) no chunk in that area passes.
+    #[test]
+    fn carver_seed_is_large_feature_seed() {
+        assert_eq!(
+            get_carver_seed(13579, -11, 11),
+            (-4_375_068_746_237_355_838i64) as u64
+        );
+        assert_eq!(get_carver_seed(13579, 0, 0), 13579);
+
+        let mut random = LegacyRand::from_seed(get_carver_seed(13579, -11, 11));
+        assert!(random.next_f64() < 0.004);
+        let mut random = LegacyRand::from_seed(get_carver_seed(13579, -10, 11));
+        assert!(random.next_f64() >= 0.004);
     }
 
     #[test]
