@@ -1448,11 +1448,17 @@ impl ProtoChunk {
 
             match &set.placement.placement_type {
                 StructurePlacementType::RandomSpread(spread) => {
-                    let region_x = pumpkin_util::math::floor_div(self.x, spread.spacing);
-                    let region_z = pumpkin_util::math::floor_div(self.z, spread.spacing);
+                    // Vanilla `ChunkGenerator.createReferences` looks at the starts of every
+                    // chunk within 8 chunks of this one, so cover every placement region
+                    // that overlaps that 17x17 window (for `spacing: 1` sets such as
+                    // mineshafts that is 289 regions, not the 9 around this chunk).
+                    let region_min_x = pumpkin_util::math::floor_div(self.x - 8, spread.spacing);
+                    let region_max_x = pumpkin_util::math::floor_div(self.x + 8, spread.spacing);
+                    let region_min_z = pumpkin_util::math::floor_div(self.z - 8, spread.spacing);
+                    let region_max_z = pumpkin_util::math::floor_div(self.z + 8, spread.spacing);
 
-                    for rx in (region_x - 1)..=(region_x + 1) {
-                        for rz in (region_z - 1)..=(region_z + 1) {
+                    for rx in region_min_x..=region_max_x {
+                        for rz in region_min_z..=region_max_z {
                             candidate_chunks.push(
                                 crate::generation::structure::placement::get_structure_chunk_in_region(
                                     spread,
