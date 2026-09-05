@@ -362,3 +362,41 @@ impl GeodeFeature {
         true
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::generation::feature::configured_features::CONFIGURED_FEATURES;
+    use crate::generation::feature::configured_features::ConfiguredFeature;
+    use pumpkin_util::math::int_provider::NormalIntProvider;
+
+    fn amethyst_geode() -> &'static GeodeFeature {
+        match CONFIGURED_FEATURES
+            .get(&pumpkin_data::configured_feature::ConfiguredFeature::AmethystGeode)
+        {
+            Some(ConfiguredFeature::Geode(feature)) => feature,
+            _ => panic!("amethyst_geode is not a geode feature"),
+        }
+    }
+
+    fn uniform_bounds(provider: &IntProvider) -> (i32, i32) {
+        match provider {
+            IntProvider::Object(NormalIntProvider::Uniform(uniform)) => {
+                (uniform.min_inclusive, uniform.max_inclusive)
+            }
+            _ => panic!("expected a uniform int provider"),
+        }
+    }
+
+    /// Vanilla `GeodeConfiguration.CODEC` fills the fields the `amethyst_geode` datapack entry
+    /// omits with `UniformInt.of(3, 4)` (`distribution_points`) and `UniformInt.of(1, 2)`
+    /// (`point_offset`); `outer_wall_distance` is given explicitly as uniform 4..6.
+    #[test]
+    fn amethyst_geode_uses_vanilla_codec_defaults() {
+        let geode = amethyst_geode();
+        assert_eq!(uniform_bounds(&geode.distribution_points), (3, 4));
+        assert_eq!(uniform_bounds(&geode.point_offset), (1, 2));
+        assert_eq!(uniform_bounds(&geode.outer_wall_distance), (4, 6));
+        assert_eq!(geode.invalid_blocks_threshold, 1);
+    }
+}

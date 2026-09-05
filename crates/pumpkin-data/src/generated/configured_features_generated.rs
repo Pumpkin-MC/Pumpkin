@@ -178,8 +178,16 @@ fn build_configured_features()
                     max_inclusive: 6i32,
                 },
             )),
-            distribution_points: IntProvider::Constant(0),
-            point_offset: IntProvider::Constant(0),
+            distribution_points: IntProvider::Object(NormalIntProvider::Uniform(
+                UniformIntProvider {
+                    min_inclusive: 3i32,
+                    max_inclusive: 4i32,
+                },
+            )),
+            point_offset: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                min_inclusive: 1i32,
+                max_inclusive: 2i32,
+            })),
             min_gen_offset: -16i32,
             max_gen_offset: 16i32,
             noise_multiplier: 0.05f64,

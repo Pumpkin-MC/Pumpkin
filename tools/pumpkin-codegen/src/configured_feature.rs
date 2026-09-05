@@ -533,9 +533,14 @@ pub fn value_to_configured_feature(v: &Value) -> TokenStream {
             let placements_require_layer0_alternate = config["placements_require_layer0_alternate"]
                 .as_bool()
                 .unwrap_or(true);
-            let outer_wall_distance = value_to_int_provider(&config["outer_wall_distance"]);
-            let distribution_points = value_to_int_provider(&config["distribution_points"]);
-            let point_offset = value_to_int_provider(&config["point_offset"]);
+            // Vanilla `GeodeConfiguration.CODEC` defaults (`optionalFieldOf`):
+            // outer_wall_distance UniformInt.of(4, 5), distribution_points UniformInt.of(3, 4),
+            // point_offset UniformInt.of(1, 2). The datapack `amethyst_geode` omits the last two.
+            let outer_wall_distance =
+                geode_int_provider_or_uniform(&config["outer_wall_distance"], 4, 5);
+            let distribution_points =
+                geode_int_provider_or_uniform(&config["distribution_points"], 3, 4);
+            let point_offset = geode_int_provider_or_uniform(&config["point_offset"], 1, 2);
             let min_gen_offset = config["min_gen_offset"].as_i64().unwrap_or(-16) as i32;
             let max_gen_offset = config["max_gen_offset"].as_i64().unwrap_or(16) as i32;
             let noise_multiplier = config["noise_multiplier"].as_f64().unwrap_or(0.05);
@@ -1258,6 +1263,17 @@ fn value_to_block_wrapper(v: &Value) -> TokenStream {
             quote! { BlockWrapper::Multi(vec![#(#items),*]) }
         }
         _ => quote! { BlockWrapper::Single(String::new()) },
+    }
+}
+
+/// Geode int-provider fields are `optionalFieldOf` in vanilla's `GeodeConfiguration.CODEC`
+/// with a `UniformInt.of(min, max)` default; an absent field must not collapse to `Constant(0)`
+/// (zero distribution points means the geode never places a single block).
+fn geode_int_provider_or_uniform(v: &Value, min: i32, max: i32) -> TokenStream {
+    if v.is_null() {
+        quote! { IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider { min_inclusive: #min, max_inclusive: #max })) }
+    } else {
+        value_to_int_provider(v)
     }
 }
 
