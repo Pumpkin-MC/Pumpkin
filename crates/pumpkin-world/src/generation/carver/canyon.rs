@@ -288,7 +288,7 @@ impl CanyonCarver {
 
     fn carve_block(
         run: &mut CarveRun,
-        _config: &CarverConfig,
+        config: &CarverConfig,
         x: i32,
         y: i32,
         z: i32,
@@ -302,6 +302,10 @@ impl CanyonCarver {
             || block.id == pumpkin_data::Block::MYCELIUM.id
         {
             *has_grass = true;
+        }
+
+        if !block.id.has_tag(config.replaceable) {
+            return false;
         }
 
         let Some((state, should_schedule_fluid_update)) = overworld_carve_state(run, x, y, z)
@@ -319,5 +323,34 @@ impl CanyonCarver {
         );
 
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::{Block, carver::CANYON, dimension::Dimension};
+    use pumpkin_util::math::vector3::Vector3;
+
+    /// `CanyonWorldCarver` inherits Vanilla 26.2's replaceable-block gate, so a
+    /// ravine that reaches the floor must not replace bedrock with lava.
+    #[test]
+    fn leaves_non_replaceable_bedrock_untouched() {
+        assert!(!Block::BEDROCK.id.has_tag(CANYON.replaceable));
+
+        super::super::with_carve_run(Dimension::OVERWORLD, |run| {
+            let (x, y, z) = (9, -61, 12);
+            run.chunk
+                .set_block_state(x, y, z, Block::BEDROCK.default_state);
+
+            let mut has_grass = false;
+            let carved = CanyonCarver::carve_block(run, &CANYON, x, y, z, &mut has_grass);
+
+            assert!(!carved);
+            assert_eq!(
+                run.chunk.get_block_state(&Vector3::new(x, y, z)),
+                Block::BEDROCK.default_state.id
+            );
+        });
     }
 }

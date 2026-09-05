@@ -16,6 +16,7 @@
     "min_inclusive": 0.7
   },
   "probability": 0.07,
+  "replaceable": "#minecraft:overworld_carver_replaceables",
   "room_vertical_radius_multiplier": {
     "type": "minecraft:uniform",
     "max_exclusive": 0.9,

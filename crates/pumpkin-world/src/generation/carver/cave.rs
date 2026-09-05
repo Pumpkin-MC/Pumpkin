@@ -333,7 +333,7 @@ impl CaveCarver {
 
     fn carve_block(
         run: &mut CarveRun,
-        _config: &CarverConfig,
+        config: &CarverConfig,
         x: i32,
         y: i32,
         z: i32,
@@ -346,6 +346,10 @@ impl CaveCarver {
             || block.id == pumpkin_data::Block::MYCELIUM.id
         {
             *has_grass = true;
+        }
+
+        if !block.id.has_tag(config.replaceable) {
+            return false;
         }
 
         let Some((state, should_schedule_fluid_update)) = overworld_carve_state(run, x, y, z)
@@ -462,6 +466,27 @@ mod tests {
             assert_eq!(run.chunk.fluid_ticks.len(), old_tick_count + 1);
             let pos = run.chunk.fluid_ticks.last().unwrap().position.0;
             assert_eq!((pos.x, pos.y, pos.z), (x, y, z));
+        });
+    }
+
+    /// Vanilla 26.2 `WorldCarver.carveBlock` rejects blocks outside the configured
+    /// `#minecraft:overworld_carver_replaceables` tag. The seed-13579 reference keeps
+    /// bedrock intact where caves reach y=-62 (286 exact baseline mismatches).
+    #[test]
+    fn leaves_non_replaceable_bedrock_untouched() {
+        assert!(!Block::BEDROCK.id.has_tag(CAVE.replaceable));
+        assert!(Block::STONE.id.has_tag(CAVE.replaceable));
+
+        super::super::with_carve_run(Dimension::OVERWORLD, |run| {
+            let (x, y, z) = (3, -61, 4);
+            run.chunk
+                .set_block_state(x, y, z, Block::BEDROCK.default_state);
+
+            let mut has_grass = false;
+            let carved = CaveCarver::carve_block(run, &CAVE, x, y, z, &mut has_grass);
+
+            assert!(!carved);
+            assert_eq!(block_id(run, x, y, z), Block::BEDROCK.default_state.id);
         });
     }
 

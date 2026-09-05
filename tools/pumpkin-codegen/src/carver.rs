@@ -30,6 +30,7 @@ pub fn build() -> TokenStream {
 
         let prob = data["probability"].as_f64().unwrap_or(0.0) as f32;
         let y = value_to_height_provider(&data["y"]);
+        let replaceable = value_to_block_tag(&data["replaceable"]);
 
         let additional = match carver_type {
             "minecraft:cave" => {
@@ -101,6 +102,7 @@ pub fn build() -> TokenStream {
             pub const #variant_name: CarverConfig = CarverConfig {
                 probability: #prob,
                 y: #y,
+                replaceable: #replaceable,
                 additional: #additional,
             };
         });
@@ -190,12 +192,23 @@ pub fn build() -> TokenStream {
         pub struct CarverConfig {
             pub probability: f32,
             pub y: HeightProvider,
+            /// Vanilla `CarverConfiguration.replaceable`: blocks this carver may replace.
+            pub replaceable: crate::tag::Tag,
             pub additional: CarverAdditionalConfig,
         }
 
         use super::*;
         #(#carver_instances)*
     }
+}
+
+fn value_to_block_tag(v: &Value) -> TokenStream {
+    let name = v
+        .as_str()
+        .and_then(|value| value.strip_prefix('#'))
+        .expect("carver `replaceable` must be a block tag reference");
+    let ident = format_ident!("{}", name.to_uppercase().replace([':', '/', '.'], "_"));
+    quote! { crate::tag::Block::#ident }
 }
 
 fn value_to_int_provider(v: &Value) -> TokenStream {

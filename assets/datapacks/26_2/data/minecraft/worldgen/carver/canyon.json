@@ -1,6 +1,7 @@
 {
   "type": "minecraft:canyon",
   "probability": 0.01,
+  "replaceable": "#minecraft:overworld_carver_replaceables",
   "shape": {
     "distance_factor": {
       "type": "minecraft:uniform",
