@@ -77,7 +77,6 @@ impl ItemBehaviour for AxeItem {
             world.set_block_state(&location, result.new_state_id, BlockFlags::NOTIFY_ALL);
 
             if player.gamemode.load() != GameMode::Creative {
-                // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
                 let _ = item.damage_item(i32::from(result.entry.item_damage_per_use));
             }
         }
