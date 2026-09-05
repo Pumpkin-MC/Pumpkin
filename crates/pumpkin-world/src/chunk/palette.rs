@@ -663,6 +663,30 @@ impl BiomePalette {
     }
 }
 
+/// Declares "highest value this block state property reaches anywhere in the section".
+///
+/// Reads the palette, not the 4096 blocks: a section holds a handful of distinct states, so
+/// a zero answer rules, reduced lookup.
+macro_rules! palette_max {
+    ($($name:ident => $property:ident, $doc:literal;)+) => {
+        $(
+            #[doc = $doc]
+            #[must_use]
+            pub fn $name(&self) -> u8 {
+                match self {
+                    Self::Homogeneous(id) => BlockState::from_id(*id).$property,
+                    Self::Heterogeneous(data) => data
+                        .palette
+                        .iter()
+                        .map(|&id| BlockState::from_id(id).$property)
+                        .max()
+                        .unwrap_or(0),
+                }
+            }
+        )+
+    };
+}
+
 impl BlockPalette {
     /// Builds Bedrock's secondary water storage for blocks whose Java state also contains water.
     ///
@@ -840,6 +864,11 @@ impl BlockPalette {
                 }
             }
         }
+    }
+
+    palette_max! {
+        max_luminance => luminance, "Zero means the section emits no block light at all.";
+        max_opacity => opacity, "Zero means the section cannot dim or stop light.";
     }
 
     /// Check if the entire chunk is filled with only air

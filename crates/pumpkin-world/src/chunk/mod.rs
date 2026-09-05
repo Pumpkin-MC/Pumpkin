@@ -82,6 +82,7 @@ pub struct ChunkData {
     pub dirty: AtomicBool,
     pub inhabited_time: AtomicU64,
     pub custom_data: std::sync::Mutex<NbtCompound>,
+    pub sky_light_height_cache: std::sync::atomic::AtomicU32,
 }
 
 pub struct ChunkEntityData {
@@ -172,6 +173,12 @@ impl TryFrom<usize> for ChunkHeightmapType {
 }
 
 impl ChunkHeightmapType {
+    pub const ALL: [Self; 3] = [
+        Self::WorldSurface,
+        Self::MotionBlocking,
+        Self::MotionBlockingNoLeaves,
+    ];
+
     #[must_use]
     pub fn is_opaque(&self, block_state: &BlockState) -> bool {
         let block = block_state.id.to_block_id();
@@ -247,43 +254,65 @@ impl ChunkHeightmaps {
         (val as i32) + min_y - 1
     }
 
-    #[expect(clippy::too_many_arguments)]
-    pub fn update<F>(
+    /// Applies a block change to every heightmap in a single downward walk.
+    ///
+    /// Each map settles on its own predicate, so one walk reads and unpacks a column block
+    /// once instead of once per map.
+    pub fn update_all<F>(
         &mut self,
-        heightmap_type: ChunkHeightmapType,
         local_x: i32,
         local_y: i32,
         local_z: i32,
         block_state: &BlockState,
         min_y: i32,
         get_block: F,
-    ) -> bool
-    where
+    ) where
         F: Fn(i32) -> &'static BlockState,
     {
-        let first_available = self.get(heightmap_type, local_x, local_z, min_y) + 1;
-        if local_y <= first_available - 2 {
-            return false;
+        let mut searching = [None; ChunkHeightmapType::ALL.len()];
+        let mut remaining = 0usize;
+
+        for &heightmap_type in &ChunkHeightmapType::ALL {
+            let first_available = self.get(heightmap_type, local_x, local_z, min_y) + 1;
+            if local_y <= first_available - 2 {
+                continue;
+            }
+
+            if heightmap_type.is_opaque(block_state) {
+                if local_y >= first_available {
+                    self.set(heightmap_type, local_x, local_z, local_y, min_y);
+                }
+            } else if first_available - 1 == local_y {
+                searching[remaining] = Some(heightmap_type);
+                remaining += 1;
+            }
         }
 
-        if heightmap_type.is_opaque(block_state) {
-            if local_y >= first_available {
-                self.set(heightmap_type, local_x, local_z, local_y, min_y);
-                return true;
-            }
-        } else if first_available - 1 == local_y {
-            for y in (min_y..local_y).rev() {
-                let state = get_block(y);
-                if heightmap_type.is_opaque(state) {
+        if remaining == 0 {
+            return;
+        }
+
+        let mut open = remaining;
+        for y in (min_y..local_y).rev() {
+            let state = get_block(y);
+            for slot in &mut searching[..remaining] {
+                if let Some(heightmap_type) = *slot
+                    && heightmap_type.is_opaque(state)
+                {
                     self.set(heightmap_type, local_x, local_z, y, min_y);
-                    return true;
+                    *slot = None;
+                    open -= 1;
                 }
             }
-            self.set(heightmap_type, local_x, local_z, min_y - 1, min_y);
-            return true;
+            if open == 0 {
+                return;
+            }
         }
 
-        false
+        // Nothing opaque below, so whatever is still searching bottoms out.
+        for slot in searching[..remaining].iter().flatten() {
+            self.set(*slot, local_x, local_z, min_y - 1, min_y);
+        }
     }
 }
 
@@ -425,6 +454,20 @@ impl ChunkSections {
     }
 
     /// Gets the given block in the chunk
+    /// Runs `f` with the block sections read guard held once.
+    ///
+    /// `get_relative_block` takes and releases that guard per block. A caller walking a
+    /// whole column pays it per step for one and the same chunk, which for a full-height
+    /// scan is a few hundred lock round trips that all protect the same data. Taking the
+    /// guard once and indexing inside is the same work minus the lock traffic.
+    pub fn with_blocks<R>(&self, f: impl FnOnce(&[BlockPalette]) -> R) -> R {
+        let sections = self
+            .block_sections
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        f(&sections)
+    }
+
     fn get_relative_block(
         &self,
         relative_x: usize,
@@ -615,6 +658,7 @@ impl ChunkData {
             dirty: std::sync::atomic::AtomicBool::new(false),
             inhabited_time: std::sync::atomic::AtomicU64::new(0),
             custom_data: std::sync::Mutex::new(NbtCompound::new()),
+            sky_light_height_cache: std::sync::atomic::AtomicU32::new(0),
         }
     }
 
@@ -778,19 +822,18 @@ impl ChunkData {
         let y = relative_y as i32 + min_y;
         let z = relative_z as i32;
 
-        for &hm_type in &[
-            ChunkHeightmapType::WorldSurface,
-            ChunkHeightmapType::MotionBlocking,
-            ChunkHeightmapType::MotionBlockingNoLeaves,
-        ] {
-            heightmap.update(hm_type, x, z, y, block_state, min_y, |y_at| {
-                let id = self
-                    .section
-                    .get_block_absolute_y(relative_x, y_at, relative_z)
-                    .unwrap_or(BlockStateId::AIR);
+        // One sections guard for the walk, instead of one per block read.
+        self.section.with_blocks(|sections| {
+            heightmap.update_all(x, y, z, block_state, min_y, |y_at| {
+                let local_y = (y_at - min_y) as usize;
+                let id = sections
+                    .get(local_y / BlockPalette::SIZE)
+                    .map_or(BlockStateId::AIR, |section| {
+                        section.get(relative_x, local_y % BlockPalette::SIZE, relative_z)
+                    });
                 BlockState::from_id(id)
             });
-        }
+        });
     }
 
     /// Gets the given block in the chunk
@@ -1026,6 +1069,67 @@ mod tests {
         assert!(ChunkHeightmapType::MotionBlockingNoLeaves.is_opaque(stone));
         assert!(!ChunkHeightmapType::MotionBlockingNoLeaves.is_opaque(leaves)); // Excludes leaves
         assert!(ChunkHeightmapType::MotionBlockingNoLeaves.is_opaque(water)); // Water is liquid
+    }
+
+    /// `ChunkData::update_heightmap` must hand `ChunkHeightmaps::update` its arguments in
+    /// `(local_x, local_y, local_z)` order.
+    ///
+    /// It used to pass `(x, z, y)`. Every runtime heightmap update then wrote the wrong
+    /// height into the wrong column — a 60 block tall stone pillar reported
+    /// `WorldSurface = 15`. Nothing crashed, so it went unnoticed; heightmaps feed mob
+    /// spawning and block placement, not just lighting.
+    ///
+    /// The coordinates below are deliberately all different: equal values would let a
+    /// transposition pass unnoticed.
+    #[test]
+    fn update_heightmap_does_not_transpose_its_coordinates() {
+        use crate::chunk::{ChunkData, ChunkHeightmapType};
+
+        let chunk = ChunkData::empty(0, 0);
+        let (x, y, z) = (3usize, 60i32, 5usize);
+        chunk.set_block_absolute_y(x, y, z, Block::STONE.default_state.id);
+
+        let min_y = chunk.section.min_y;
+        let heightmap = chunk
+            .heightmap
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        assert_eq!(
+            heightmap.get(ChunkHeightmapType::WorldSurface, x as i32, z as i32, min_y),
+            y,
+            "the block's own column must report its height"
+        );
+        assert_eq!(
+            heightmap.get(ChunkHeightmapType::WorldSurface, z as i32, x as i32, min_y),
+            min_y - 1,
+            "the transposed column (z,x) must stay empty"
+        );
+    }
+
+    /// An empty column has nothing opaque to find, so every searching map bottoms out.
+    #[test]
+    fn a_column_with_nothing_below_bottoms_out() {
+        use crate::chunk::{ChunkData, ChunkHeightmapType};
+
+        let chunk = ChunkData::empty(0, 0);
+        let (x, z) = (1usize, 2usize);
+        let min_y = chunk.section.min_y;
+
+        chunk.set_block_absolute_y(x, 40, z, Block::STONE.default_state.id);
+        chunk.set_block_absolute_y(x, 40, z, Block::AIR.default_state.id);
+
+        for kind in ChunkHeightmapType::ALL {
+            assert_eq!(
+                chunk
+                    .heightmap
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .get(kind, x as i32, z as i32, min_y),
+                min_y - 1,
+                "{kind:?} should report an empty column"
+            );
+        }
     }
 
     #[test]

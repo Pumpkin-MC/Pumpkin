@@ -1,11 +1,15 @@
+use crate::chunk::format::LightContainer;
+use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight};
 use crate::chunk_system::Chunk;
 use crate::chunk_system::generation_cache::Cache;
 use crate::generation::height_limit::HeightLimitView;
 use crate::generation::proto_chunk::GenerationCache;
-use crate::lighting::storage::{get_block_light, get_sky_light, set_block_light, set_sky_light};
+use crate::lighting::occlusion;
+use crate::lighting::section_flags::{self, SectionMask};
+use crate::lighting::sky_fill::SkyFill;
+use crate::lighting::{decayed, luminance_of, opacity_of, sky_descended};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::{BlockDirection, BlockState, BlockStateId};
-use pumpkin_util::HeightMap;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use std::collections::VecDeque;
@@ -13,228 +17,263 @@ use std::collections::VecDeque;
 use crate::ProtoChunk;
 
 pub trait LightProvider {
-    fn get_light(cache: &Cache, pos: BlockPos) -> u8;
-    fn set_light(cache: &mut Cache, pos: BlockPos, level: u8);
-    fn get_light_proto(
-        chunk: &ProtoChunk,
-        section_idx: usize,
-        lx: usize,
-        ly: usize,
-        lz: usize,
-    ) -> u8;
-    fn set_light_proto(
-        chunk: &mut ProtoChunk,
-        section_idx: usize,
-        lx: usize,
-        ly: usize,
-        lz: usize,
-        level: u8,
-    );
+    fn proto_sections(chunk: &ProtoChunk) -> &[LightContainer];
+    fn proto_sections_mut(chunk: &mut ProtoChunk) -> &mut [LightContainer];
+    fn level_sections_mut(light: &mut ChunkLight) -> &mut [LightContainer];
+    /// Missing proto section.
+    const PROTO_MISSING: u8;
     fn propagate_level(current_level: u8, opacity: u8, dir: BlockDirection) -> u8;
+    /// Vanilla `maxPossibleNewToLevel`: opacity 0, skip the block read.
+    fn max_possible(current_level: u8, dir: BlockDirection) -> u8;
+}
+
+/// Light of one cell, with the layer's default where the section is absent.
+#[inline]
+fn light_in(
+    sections: &[LightContainer],
+    idx: usize,
+    lx: usize,
+    ly: usize,
+    lz: usize,
+    missing: u8,
+) -> u8 {
+    sections.get(idx).map_or(missing, |s| s.get(lx, ly, lz))
+}
+
+/// `false` when the section is absent and the write cannot land.
+#[inline]
+fn set_light_in(
+    sections: &mut [LightContainer],
+    idx: usize,
+    lx: usize,
+    ly: usize,
+    lz: usize,
+    level: u8,
+) -> bool {
+    sections.get_mut(idx).is_some_and(|s| {
+        s.set(lx, ly, lz, level);
+        true
+    })
+}
+
+/// One block of the flood: where it sits in the world and in its chunk's sections.
+#[derive(Clone, Copy)]
+struct LightCell {
+    y: i32,
+    min_y: i32,
+    section_idx: usize,
+    local_x: usize,
+    local_y: usize,
+    local_z: usize,
+}
+
+impl LightCell {
+    /// Y relative to the chunk bottom, as `ProtoChunk` indexes it.
+    #[inline]
+    const fn rel_y(self) -> i32 {
+        self.y - self.min_y
+    }
+}
+
+/// The popped cell, positioned in the world and in the cache so a step can be taken from it.
+#[derive(Clone, Copy)]
+struct Source {
+    x: i32,
+    y: i32,
+    z: i32,
+    rel_x: i32,
+    rel_z: i32,
+    local_x: usize,
+    local_z: usize,
+    chunk_idx: usize,
+}
+
+/// One neighbour of a [`Source`], already resolved to its chunk in the cache.
+#[derive(Clone, Copy)]
+struct Neighbor {
+    x: i32,
+    y: i32,
+    z: i32,
+    chunk_idx: usize,
+}
+
+impl Source {
+    /// One step, or `None` when it leaves the cache. Only the stepped axis is tested.
+    #[inline]
+    const fn step(self, dir: BlockDirection, bounds: CacheBounds) -> Option<Neighbor> {
+        match dir {
+            BlockDirection::Down => {
+                if self.y == bounds.min_y {
+                    return None;
+                }
+                Some(Neighbor {
+                    x: self.x,
+                    y: self.y - 1,
+                    z: self.z,
+                    chunk_idx: self.chunk_idx,
+                })
+            }
+            BlockDirection::Up => {
+                if self.y + 1 >= bounds.max_y {
+                    return None;
+                }
+                Some(Neighbor {
+                    x: self.x,
+                    y: self.y + 1,
+                    z: self.z,
+                    chunk_idx: self.chunk_idx,
+                })
+            }
+            BlockDirection::North if self.local_z == 0 => {
+                if self.rel_z == 0 {
+                    return None;
+                }
+                Some(Neighbor {
+                    x: self.x,
+                    y: self.y,
+                    z: self.z - 1,
+                    chunk_idx: self.chunk_idx - 1,
+                })
+            }
+            BlockDirection::North => Some(Neighbor {
+                x: self.x,
+                y: self.y,
+                z: self.z - 1,
+                chunk_idx: self.chunk_idx,
+            }),
+            BlockDirection::South if self.local_z == 15 => {
+                if self.rel_z + 1 >= bounds.size {
+                    return None;
+                }
+                Some(Neighbor {
+                    x: self.x,
+                    y: self.y,
+                    z: self.z + 1,
+                    chunk_idx: self.chunk_idx + 1,
+                })
+            }
+            BlockDirection::South => Some(Neighbor {
+                x: self.x,
+                y: self.y,
+                z: self.z + 1,
+                chunk_idx: self.chunk_idx,
+            }),
+            BlockDirection::West if self.local_x == 0 => {
+                if self.rel_x == 0 {
+                    return None;
+                }
+                Some(Neighbor {
+                    x: self.x - 1,
+                    y: self.y,
+                    z: self.z,
+                    chunk_idx: self.chunk_idx - bounds.size as usize,
+                })
+            }
+            BlockDirection::West => Some(Neighbor {
+                x: self.x - 1,
+                y: self.y,
+                z: self.z,
+                chunk_idx: self.chunk_idx,
+            }),
+            BlockDirection::East if self.local_x == 15 => {
+                if self.rel_x + 1 >= bounds.size {
+                    return None;
+                }
+                Some(Neighbor {
+                    x: self.x + 1,
+                    y: self.y,
+                    z: self.z,
+                    chunk_idx: self.chunk_idx + bounds.size as usize,
+                })
+            }
+            BlockDirection::East => Some(Neighbor {
+                x: self.x + 1,
+                y: self.y,
+                z: self.z,
+                chunk_idx: self.chunk_idx,
+            }),
+        }
+    }
+}
+
+/// The 3x3 cache's extent, constant for one [`LightPropagator::propagate`] drain.
+#[derive(Clone, Copy)]
+struct CacheBounds {
+    min_y: i32,
+    max_y: i32,
+    size: i32,
 }
 
 pub struct BlockLightProvider;
 impl LightProvider for BlockLightProvider {
     #[inline]
-    fn get_light(cache: &Cache, pos: BlockPos) -> u8 {
-        get_block_light(cache, pos)
+    fn proto_sections(chunk: &ProtoChunk) -> &[LightContainer] {
+        &chunk.light.block_light
     }
     #[inline]
-    fn set_light(cache: &mut Cache, pos: BlockPos, level: u8) {
-        set_block_light(cache, pos, level);
+    fn proto_sections_mut(chunk: &mut ProtoChunk) -> &mut [LightContainer] {
+        &mut chunk.light.block_light
     }
     #[inline]
-    fn get_light_proto(
-        chunk: &ProtoChunk,
-        section_idx: usize,
-        lx: usize,
-        ly: usize,
-        lz: usize,
-    ) -> u8 {
-        chunk
-            .light
-            .block_light
-            .get(section_idx)
-            .map_or(0, |c| c.get(lx, ly, lz))
+    fn level_sections_mut(light: &mut ChunkLight) -> &mut [LightContainer] {
+        &mut light.block_light
     }
-    #[inline]
-    fn set_light_proto(
-        chunk: &mut ProtoChunk,
-        section_idx: usize,
-        lx: usize,
-        ly: usize,
-        lz: usize,
-        level: u8,
-    ) {
-        if let Some(c) = chunk.light.block_light.get_mut(section_idx) {
-            c.set(lx, ly, lz, level);
-        }
-    }
+    const PROTO_MISSING: u8 = 0;
     #[inline]
     fn propagate_level(current_level: u8, opacity: u8, _dir: BlockDirection) -> u8 {
-        current_level.saturating_sub(opacity.max(1))
+        decayed(current_level, opacity)
+    }
+    #[inline]
+    fn max_possible(current_level: u8, _dir: BlockDirection) -> u8 {
+        current_level.saturating_sub(1)
     }
 }
 
 pub struct SkyLightProvider;
 impl LightProvider for SkyLightProvider {
     #[inline]
-    fn get_light(cache: &Cache, pos: BlockPos) -> u8 {
-        get_sky_light(cache, pos)
+    fn proto_sections(chunk: &ProtoChunk) -> &[LightContainer] {
+        &chunk.light.sky_light
     }
     #[inline]
-    fn set_light(cache: &mut Cache, pos: BlockPos, level: u8) {
-        set_sky_light(cache, pos, level);
+    fn proto_sections_mut(chunk: &mut ProtoChunk) -> &mut [LightContainer] {
+        &mut chunk.light.sky_light
     }
     #[inline]
-    fn get_light_proto(
-        chunk: &ProtoChunk,
-        section_idx: usize,
-        lx: usize,
-        ly: usize,
-        lz: usize,
-    ) -> u8 {
-        chunk
-            .light
-            .sky_light
-            .get(section_idx)
-            .map_or(15, |c| c.get(lx, ly, lz))
+    fn level_sections_mut(light: &mut ChunkLight) -> &mut [LightContainer] {
+        &mut light.sky_light
     }
-    #[inline]
-    fn set_light_proto(
-        chunk: &mut ProtoChunk,
-        section_idx: usize,
-        lx: usize,
-        ly: usize,
-        lz: usize,
-        level: u8,
-    ) {
-        if let Some(c) = chunk.light.sky_light.get_mut(section_idx) {
-            c.set(lx, ly, lz, level);
-        }
-    }
+    /// Unsized proto sky = open sky.
+    const PROTO_MISSING: u8 = 15;
     #[inline]
     fn propagate_level(current_level: u8, opacity: u8, dir: BlockDirection) -> u8 {
-        if current_level == 15 && dir == BlockDirection::Down && opacity == 0 {
-            return 15;
+        if dir == BlockDirection::Down {
+            sky_descended(current_level, opacity)
+        } else {
+            decayed(current_level, opacity)
         }
-
-        current_level.saturating_sub(opacity.max(1))
+    }
+    #[inline]
+    fn max_possible(current_level: u8, dir: BlockDirection) -> u8 {
+        // Straight down, a full 15 passes through transparent blocks undimmed.
+        if dir == BlockDirection::Down {
+            current_level
+        } else {
+            current_level.saturating_sub(1)
+        }
     }
 }
 
 #[derive(Clone, Copy)]
 pub struct PropagationEntry {
     pos: BlockPos,
+    /// Queued level. Do not re-read at pop: pusher already stored it.
+    level: u8,
     skip_direction: Option<BlockDirection>,
-}
-
-pub struct VisitedBitSet {
-    bits: Vec<u64>,
-    min_x: i32,
-    min_y: i32,
-    min_z: i32,
-    size_x: usize,
-    size_y: usize,
-    size_z: usize,
-}
-
-impl Default for VisitedBitSet {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl VisitedBitSet {
-    #[must_use]
-    pub const fn new() -> Self {
-        Self {
-            bits: Vec::new(),
-            min_x: 0,
-            min_y: 0,
-            min_z: 0,
-            size_x: 0,
-            size_y: 0,
-            size_z: 0,
-        }
-    }
-
-    pub fn ensure_capacity(
-        &mut self,
-        min_x: i32,
-        min_y: i32,
-        min_z: i32,
-        size_x: usize,
-        size_y: usize,
-        size_z: usize,
-    ) {
-        self.min_x = min_x;
-        self.min_y = min_y;
-        self.min_z = min_z;
-        self.size_x = size_x;
-        self.size_y = size_y;
-        self.size_z = size_z;
-        let total = size_x * size_y * size_z;
-        let words = total.div_ceil(64);
-        if self.bits.len() == words {
-            self.bits.fill(0);
-        } else {
-            self.bits.resize(words, 0);
-        }
-    }
-
-    #[inline]
-    pub fn clear(&mut self) {
-        self.bits.fill(0);
-    }
-
-    #[inline]
-    pub fn test_and_set(&mut self, x: i32, y: i32, z: i32) -> bool {
-        let lx = (x - self.min_x) as usize;
-        let ly = (y - self.min_y) as usize;
-        let lz = (z - self.min_z) as usize;
-        if lx >= self.size_x || ly >= self.size_y || lz >= self.size_z {
-            return false;
-        }
-        let idx = (ly * self.size_z + lz) * self.size_x + lx;
-        let word = idx >> 6;
-        let mask = 1u64 << (idx & 63);
-        if let Some(w) = self.bits.get_mut(word) {
-            let prev = *w;
-            if prev & mask != 0 {
-                return false;
-            }
-            *w = prev | mask;
-            true
-        } else {
-            false
-        }
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn is_visited(&self, x: i32, y: i32, z: i32) -> bool {
-        let lx = (x - self.min_x) as usize;
-        let ly = (y - self.min_y) as usize;
-        let lz = (z - self.min_z) as usize;
-        if lx >= self.size_x || ly >= self.size_y || lz >= self.size_z {
-            return true;
-        }
-        let idx = (ly * self.size_z + lz) * self.size_x + lx;
-        let word = idx >> 6;
-        let mask = 1u64 << (idx & 63);
-        if let Some(&w) = self.bits.get(word) {
-            (w & mask) != 0
-        } else {
-            true
-        }
-    }
 }
 
 pub struct LightPropagator<P: LightProvider> {
     pub(crate) queue: VecDeque<PropagationEntry>,
-    pub(crate) visited: VisitedBitSet,
-    pub(crate) decrease_queue: VecDeque<(BlockPos, u8)>,
     _marker: std::marker::PhantomData<P>,
 }
 
@@ -243,41 +282,167 @@ impl<P: LightProvider> LightPropagator<P> {
     pub fn new() -> Self {
         Self {
             queue: VecDeque::with_capacity(8192),
-            visited: VisitedBitSet::new(),
-            decrease_queue: VecDeque::new(),
             _marker: std::marker::PhantomData,
         }
     }
 
     pub fn clear(&mut self) {
         self.queue.clear();
-        self.visited.clear();
-        self.decrease_queue.clear();
     }
 
-    #[expect(clippy::too_many_lines)]
+    fn neighbor_state(chunk: &Chunk, cell: LightCell) -> BlockStateId {
+        match chunk {
+            Chunk::Proto(c) => {
+                c.get_block_state_raw(cell.local_x as i32, cell.rel_y(), cell.local_z as i32)
+            }
+            Chunk::Level(lvl) => lvl
+                .section
+                .get_block_absolute_y(cell.local_x, cell.y, cell.local_z)
+                .unwrap_or(BlockStateId::AIR),
+        }
+    }
+
+    /// One light lock: `max_possible`, `shapeOccludes`, raise. Lock order: light then section.
+    fn try_raise(
+        chunk: &mut Chunk,
+        from_id: BlockStateId,
+        dir: BlockDirection,
+        current_light: u8,
+        cell: LightCell,
+    ) -> Option<u8> {
+        let max_possible = P::max_possible(current_light, dir);
+        match chunk {
+            Chunk::Proto(c) => {
+                let stored = light_in(
+                    P::proto_sections(c),
+                    cell.section_idx,
+                    cell.local_x,
+                    cell.local_y,
+                    cell.local_z,
+                    P::PROTO_MISSING,
+                );
+                if stored >= max_possible {
+                    return None;
+                }
+                let state_id =
+                    c.get_block_state_raw(cell.local_x as i32, cell.rel_y(), cell.local_z as i32);
+                if occlusion::shape_occludes(from_id, state_id, dir) {
+                    return None;
+                }
+                let new_level = P::propagate_level(current_light, opacity_of(state_id), dir);
+                if new_level <= stored {
+                    return None;
+                }
+                set_light_in(
+                    P::proto_sections_mut(c),
+                    cell.section_idx,
+                    cell.local_x,
+                    cell.local_y,
+                    cell.local_z,
+                    new_level,
+                );
+                Some(new_level)
+            }
+            Chunk::Level(lvl) => {
+                let mut light = lvl
+                    .light_engine
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let stored = light_in(
+                    P::level_sections_mut(&mut light),
+                    cell.section_idx,
+                    cell.local_x,
+                    cell.local_y,
+                    cell.local_z,
+                    0,
+                );
+                if stored >= max_possible {
+                    return None;
+                }
+                let state_id = lvl
+                    .section
+                    .get_block_absolute_y(cell.local_x, cell.y, cell.local_z)
+                    .unwrap_or(BlockStateId::AIR);
+                if occlusion::shape_occludes(from_id, state_id, dir) {
+                    return None;
+                }
+                let new_level = P::propagate_level(current_light, opacity_of(state_id), dir);
+                if new_level <= stored {
+                    return None;
+                }
+                set_light_in(
+                    P::level_sections_mut(&mut light),
+                    cell.section_idx,
+                    cell.local_x,
+                    cell.local_y,
+                    cell.local_z,
+                    new_level,
+                );
+                drop(light);
+                lvl.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
+                Some(new_level)
+            }
+        }
+    }
+
     pub fn propagate(&mut self, cache: &mut Cache) {
         let cache_x = cache.x;
         let cache_z = cache.z;
         let cache_size = cache.size;
         let min_y = cache.bottom_y() as i32;
         let max_y = min_y + cache.height() as i32;
-
-        let min_x = cache_x * 16;
-        let min_z = cache_z * 16;
-        let size_x = (cache_size * 16) as usize;
-        let size_z = (cache_size * 16) as usize;
-        let size_y = (max_y - min_y) as usize;
-        self.visited
-            .ensure_capacity(min_x, min_y, min_z, size_x, size_y, size_z);
+        let bounds = CacheBounds {
+            min_y,
+            max_y,
+            size: cache_size,
+        };
 
         while let Some(entry) = self.queue.pop_front() {
             let pos = entry.pos;
-
-            let current_light = P::get_light(cache, pos);
+            let current_light = entry.level;
             if current_light <= 1 {
                 continue;
             }
+
+            let px = pos.0.x;
+            let py = pos.0.y;
+            let pz = pos.0.z;
+            let rel_x = (px >> 4) - cache_x;
+            let rel_z = (pz >> 4) - cache_z;
+            if py < min_y
+                || py >= max_y
+                || rel_x < 0
+                || rel_x >= cache_size
+                || rel_z < 0
+                || rel_z >= cache_size
+            {
+                continue;
+            }
+            let local_x = (px & 15) as usize;
+            let local_y = (py & 15) as usize;
+            let local_z = (pz & 15) as usize;
+            let chunk_idx = (rel_x * cache_size + rel_z) as usize;
+            let from_id = Self::neighbor_state(
+                &cache.chunks[chunk_idx],
+                LightCell {
+                    y: py,
+                    min_y,
+                    section_idx: ((py - min_y) >> 4) as usize,
+                    local_x,
+                    local_y,
+                    local_z,
+                },
+            );
+            let source = Source {
+                x: px,
+                y: py,
+                z: pz,
+                rel_x,
+                rel_z,
+                local_x,
+                local_z,
+                chunk_idx,
+            };
 
             for dir in BlockDirection::all() {
                 if let Some(skip_dir) = entry.skip_direction
@@ -286,148 +451,36 @@ impl<P: LightProvider> LightPropagator<P> {
                     continue;
                 }
 
-                let neighbor_pos = pos.offset(dir.to_offset());
-                let nx = neighbor_pos.0.x;
-                let ny = neighbor_pos.0.y;
-                let nz = neighbor_pos.0.z;
-
-                if self.visited.is_visited(nx, ny, nz) {
+                let Some(neighbor) = source.step(dir, bounds) else {
                     continue;
-                }
-
-                if ny < min_y || ny >= max_y {
-                    continue;
-                }
-
-                let rel_x = (nx >> 4) - cache_x;
-                let rel_z = (nz >> 4) - cache_z;
-                if rel_x < 0 || rel_x >= cache_size || rel_z < 0 || rel_z >= cache_size {
-                    continue;
-                }
-
-                let chunk_idx = (rel_x * cache_size + rel_z) as usize;
-                let local_x = (nx & 15) as usize;
-                let local_z = (nz & 15) as usize;
-
-                let section_idx = ((ny - min_y) >> 4) as usize;
-                let local_y = (ny & 15) as usize;
-
-                let (opacity, neighbor_light) = match &cache.chunks[chunk_idx] {
-                    Chunk::Proto(c) => {
-                        let local_y_proto = ny - min_y;
-                        let state_id =
-                            c.get_block_state_raw(local_x as i32, local_y_proto, local_z as i32);
-                        let op = if state_id == BlockStateId::AIR {
-                            0
-                        } else {
-                            let s = state_id.to_state();
-                            if s.can_occlude() {
-                                s.opacity.max(1)
-                            } else {
-                                s.opacity
-                            }
-                        };
-                        let light = P::get_light_proto(c, section_idx, local_x, local_y, local_z);
-                        (op, light)
-                    }
-                    Chunk::Level(lvl) => {
-                        let state_id = lvl
-                            .section
-                            .get_block_absolute_y(local_x, ny, local_z)
-                            .unwrap_or(BlockStateId::AIR);
-                        let op = if state_id == BlockStateId::AIR {
-                            0
-                        } else {
-                            let s = state_id.to_state();
-                            if s.can_occlude() {
-                                s.opacity.max(1)
-                            } else {
-                                s.opacity
-                            }
-                        };
-                        (op, P::get_light(cache, neighbor_pos))
-                    }
                 };
 
-                let new_level = P::propagate_level(current_light, opacity, dir);
-
-                if new_level > neighbor_light {
-                    match &mut cache.chunks[chunk_idx] {
-                        Chunk::Proto(c) => {
-                            P::set_light_proto(
-                                c,
-                                section_idx,
-                                local_x,
-                                local_y,
-                                local_z,
-                                new_level,
-                            );
-                        }
-                        Chunk::Level(_) => {
-                            P::set_light(cache, neighbor_pos, new_level);
-                        }
-                    }
-
-                    if new_level > 1 && self.visited.test_and_set(nx, ny, nz) {
-                        self.queue.push_back(PropagationEntry {
-                            pos: neighbor_pos,
-                            skip_direction: Some(dir.opposite()),
-                        });
-                    }
-                }
-            }
-        }
-    }
-
-    pub fn process_decrease_queue(&mut self, cache: &mut Cache) {
-        let cache_x = cache.x;
-        let cache_z = cache.z;
-        let cache_size = cache.size;
-
-        while let Some((pos, old_val)) = self.decrease_queue.pop_front() {
-            for dir in BlockDirection::all() {
-                let neighbor_pos = pos.offset(dir.to_offset());
-
-                let (cx, _rel) = neighbor_pos.chunk_and_chunk_relative_position();
-                let rel_x = cx.x - cache_x;
-                let rel_z = cx.y - cache_z;
-
-                if rel_x < 0 || rel_x >= cache_size || rel_z < 0 || rel_z >= cache_size {
-                    continue;
-                }
-
-                let neighbor_light = P::get_light(cache, neighbor_pos);
-                if neighbor_light == 0 {
-                    continue;
-                }
-
-                let state = cache.get_block_state(&neighbor_pos.0).to_state();
-                let opacity = if state.can_occlude() {
-                    state.opacity.max(1)
-                } else {
-                    state.opacity
+                let cell = LightCell {
+                    y: neighbor.y,
+                    min_y,
+                    section_idx: ((neighbor.y - min_y) >> 4) as usize,
+                    local_x: (neighbor.x & 15) as usize,
+                    local_y: (neighbor.y & 15) as usize,
+                    local_z: (neighbor.z & 15) as usize,
                 };
 
-                let predicted = P::propagate_level(old_val, opacity, dir);
-
-                if neighbor_light == predicted || neighbor_light < old_val {
-                    P::set_light(cache, neighbor_pos, 0);
-                    self.decrease_queue
-                        .push_back((neighbor_pos, neighbor_light));
-                } else if neighbor_light >= old_val {
-                    let nx = neighbor_pos.0.x;
-                    let ny = neighbor_pos.0.y;
-                    let nz = neighbor_pos.0.z;
+                // Relaxation: levels only rise, no visited set.
+                if let Some(new_level) = Self::try_raise(
+                    &mut cache.chunks[neighbor.chunk_idx],
+                    from_id,
+                    dir,
+                    current_light,
+                    cell,
+                ) && new_level > 1
+                {
                     self.queue.push_back(PropagationEntry {
-                        pos: neighbor_pos,
-                        skip_direction: None,
+                        pos: BlockPos(Vector3::new(neighbor.x, neighbor.y, neighbor.z)),
+                        level: new_level,
+                        skip_direction: Some(dir.opposite()),
                     });
-                    self.visited.test_and_set(nx, ny, nz);
                 }
             }
         }
-
-        self.propagate(cache);
     }
 }
 
@@ -440,7 +493,94 @@ impl<P: LightProvider> Default for LightPropagator<P> {
     }
 }
 
+/// One column of the block light seeding scan: where it sits in the world and in its chunk.
+#[derive(Clone, Copy)]
+struct SeedColumn {
+    x: i32,
+    z: i32,
+    local_x: usize,
+    local_z: usize,
+    min_y: i32,
+    max_y: i32,
+    on_rim: bool,
+}
+
 impl BlockLightPropagator {
+    /// Writes a cell's own emission and queues it when something can still spread from it.
+    fn seed_cell(
+        &mut self,
+        container: &mut LightContainer,
+        col: SeedColumn,
+        y: i32,
+        local_y: usize,
+        emission: u8,
+    ) {
+        let stored = if col.on_rim {
+            container.get(col.local_x, local_y, col.local_z)
+        } else {
+            0
+        };
+        if emission > stored {
+            container.set(col.local_x, local_y, col.local_z, emission);
+        }
+        let level = emission.max(stored);
+        if level > 1 {
+            self.queue.push_back(PropagationEntry {
+                pos: BlockPos(Vector3::new(col.x, y, col.z)),
+                level,
+                skip_direction: None,
+            });
+        }
+    }
+
+    fn seed_proto_column(&mut self, chunk: &mut ProtoChunk, seeds: SectionMask, col: SeedColumn) {
+        for section_idx in 0..chunk.light.block_light.len() {
+            if !seeds.contains(section_idx) {
+                continue;
+            }
+            for local_y in 0..16usize {
+                let relative_y = (section_idx * 16 + local_y) as i32;
+                let y = col.min_y + relative_y;
+                if y >= col.max_y {
+                    break;
+                }
+                let emission = luminance_of(chunk.get_block_state_raw(
+                    col.local_x as i32,
+                    relative_y,
+                    col.local_z as i32,
+                ));
+                let container = &mut chunk.light.block_light[section_idx];
+                self.seed_cell(container, col, y, local_y, emission);
+            }
+        }
+    }
+
+    fn seed_level_column(&mut self, chunk: &ChunkData, seeds: SectionMask, col: SeedColumn) {
+        let mut light = chunk
+            .light_engine
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        // One sections guard for the whole column instead of one per block.
+        chunk.section.with_blocks(|sections| {
+            for (section_idx, section) in sections.iter().enumerate() {
+                if !seeds.contains(section_idx) {
+                    continue;
+                }
+                let Some(container) = light.block_light.get_mut(section_idx) else {
+                    continue;
+                };
+                for local_y in 0..16usize {
+                    let y = col.min_y + (section_idx * 16 + local_y) as i32;
+                    if y >= col.max_y {
+                        break;
+                    }
+                    let emission = luminance_of(section.get(col.local_x, local_y, col.local_z));
+                    self.seed_cell(container, col, y, local_y, emission);
+                }
+            }
+        });
+    }
+
     pub fn propagate_light(&mut self, cache: &mut Cache) {
         self.clear();
 
@@ -454,13 +594,17 @@ impl BlockLightPropagator {
         let end_x = start_x + 18;
         let end_z = start_z + 18;
 
-        let min_x = cache.x * 16;
-        let min_z = cache.z * 16;
-        let size_x = (cache.size * 16) as usize;
-        let size_z = (cache.size * 16) as usize;
-        let size_y = (max_y - min_y) as usize;
-        self.visited
-            .ensure_capacity(min_x, min_y, min_z, size_x, size_y, size_z);
+        // One mask per chunk, not per column.
+        let seeds: Vec<SectionMask> = cache
+            .chunks
+            .iter()
+            .enumerate()
+            .map(|(idx, chunk)| {
+                let rim = (idx / cache.size as usize) as i32 + cache.x != center_x
+                    || (idx % cache.size as usize) as i32 + cache.z != center_z;
+                section_flags::block_light_seeds(chunk, rim)
+            })
+            .collect();
 
         for z in start_z..end_z {
             let rel_z = (z >> 4) - cache.z;
@@ -473,68 +617,22 @@ impl BlockLightPropagator {
                 }
                 let chunk_idx = (rel_x * cache.size + rel_z) as usize;
                 let local_x = (x & 15) as usize;
+                let seeds = seeds[chunk_idx];
+
+                let column = SeedColumn {
+                    x,
+                    z,
+                    local_x,
+                    local_z,
+                    min_y,
+                    max_y,
+                    // Rim: seed stored light so it can flow in.
+                    on_rim: (x >> 4) != center_x || (z >> 4) != center_z,
+                };
 
                 match &mut cache.chunks[chunk_idx] {
-                    Chunk::Proto(c) => {
-                        for y in min_y..max_y {
-                            let local_y_proto = y - min_y;
-                            let state_id = c.get_block_state_raw(
-                                local_x as i32,
-                                local_y_proto,
-                                local_z as i32,
-                            );
-                            if state_id == BlockStateId::AIR {
-                                continue;
-                            }
-                            let emission = state_id.to_state().luminance;
-                            if emission > 0 {
-                                let section_idx = (local_y_proto >> 4) as usize;
-                                let local_y = (y & 15) as usize;
-                                if section_idx < c.light.block_light.len() {
-                                    c.light.block_light[section_idx]
-                                        .set(local_x, local_y, local_z, emission);
-                                }
-                                if self.visited.test_and_set(x, y, z) {
-                                    let pos = BlockPos(Vector3::new(x, y, z));
-                                    self.queue.push_back(PropagationEntry {
-                                        pos,
-                                        skip_direction: None,
-                                    });
-                                }
-                            }
-                        }
-                    }
-                    Chunk::Level(lvl) => {
-                        let mut light_engine = lvl
-                            .light_engine
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner);
-                        for y in min_y..max_y {
-                            let state_id = lvl
-                                .section
-                                .get_block_absolute_y(local_x, y, local_z)
-                                .unwrap_or(BlockStateId::AIR);
-                            if state_id == BlockStateId::AIR {
-                                continue;
-                            }
-                            let emission = state_id.to_state().luminance;
-                            if emission > 0 {
-                                let section_idx = ((y - min_y) >> 4) as usize;
-                                let local_y = (y & 15) as usize;
-                                if section_idx < light_engine.block_light.len() {
-                                    light_engine.block_light[section_idx]
-                                        .set(local_x, local_y, local_z, emission);
-                                }
-                                if self.visited.test_and_set(x, y, z) {
-                                    let pos = BlockPos(Vector3::new(x, y, z));
-                                    self.queue.push_back(PropagationEntry {
-                                        pos,
-                                        skip_direction: None,
-                                    });
-                                }
-                            }
-                        }
-                    }
+                    Chunk::Proto(c) => self.seed_proto_column(c, seeds, column),
+                    Chunk::Level(lvl) => self.seed_level_column(lvl, seeds, column),
                 }
             }
         }
@@ -543,8 +641,74 @@ impl BlockLightPropagator {
     }
 }
 
+fn fill_sky_above(
+    sky: &mut [LightContainer],
+    local_x: usize,
+    local_z: usize,
+    from_rel_y: usize,
+    until_section: usize,
+) {
+    let top_sec = from_rel_y >> 4;
+    if top_sec >= sky.len() {
+        return;
+    }
+    let fill_end = until_section.min(sky.len());
+    sky[top_sec].set_column_y_range(local_x, local_z, from_rel_y & 15, 16, 15);
+    for section in &mut sky[top_sec + 1..fill_end] {
+        section.set_column_y_range(local_x, local_z, 0, 16, 15);
+    }
+}
+
+/// First air above the top non-air. Proto already stores that; level `WorldSurface` is inclusive.
+fn exclusive_column_top(cache: &Cache, x: i32, z: i32) -> i32 {
+    let rel_x = (x >> 4) - cache.x;
+    let rel_z = (z >> 4) - cache.z;
+    if rel_x < 0 || rel_z < 0 || rel_x >= cache.size || rel_z >= cache.size {
+        return cache.bottom_y() as i32;
+    }
+    let idx = (rel_x * cache.size + rel_z) as usize;
+    match &cache.chunks[idx] {
+        Chunk::Proto(c) => c.top_block_height_exclusive(x, z),
+        Chunk::Level(c) => {
+            let min_y = c.section.min_y;
+            c.heightmap
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get(ChunkHeightmapType::WorldSurface, x, z, min_y)
+                + 1
+        }
+    }
+}
+
+fn descend_sky_column(
+    sky: &mut [LightContainer],
+    local_x: usize,
+    local_z: usize,
+    bottom_y: i32,
+    top_y: i32,
+    mut state_at: impl FnMut(i32) -> BlockStateId,
+) {
+    let mut light = 15u8;
+    let mut above = BlockStateId::AIR;
+    for y in (bottom_y..=top_y).rev() {
+        let state_id = state_at(y);
+        light = if occlusion::shape_occludes(above, state_id, BlockDirection::Down) {
+            0
+        } else {
+            sky_descended(light, opacity_of(state_id))
+        };
+        above = state_id;
+        let rel = (y - bottom_y) as usize;
+        if let Some(section) = sky.get_mut(rel >> 4) {
+            section.set(local_x, (y & 15) as usize, local_z, light);
+        }
+        if light == 0 {
+            break;
+        }
+    }
+}
+
 impl SkyLightPropagator {
-    #[expect(clippy::too_many_lines)]
     pub fn convert_light(&mut self, cache: &mut Cache) {
         self.clear();
 
@@ -556,143 +720,71 @@ impl SkyLightPropagator {
         let end_z = start_z + 18;
 
         let bottom_y = cache.bottom_y() as i32;
-        let max_y = bottom_y + cache.height() as i32;
-
-        let min_x = cache.x * 16;
-        let min_z = cache.z * 16;
-        let size_x = (cache.size * 16) as usize;
-        let size_z = (cache.size * 16) as usize;
-        let size_y = (max_y - bottom_y) as usize;
-        self.visited
-            .ensure_capacity(min_x, bottom_y, min_z, size_x, size_y, size_z);
 
         let mut surface_heights = [0i32; 18 * 18];
-
         for z in start_z..end_z {
-            let chunk_z = z >> 4;
-            let local_z = (z & 15) as usize;
             let lz = (z - start_z) as usize;
-
             for x in start_x..end_x {
-                let chunk_x = x >> 4;
-                let local_x = (x & 15) as usize;
                 let lx = (x - start_x) as usize;
-
-                let top_y = cache.get_top_y(&HeightMap::WorldSurface, x, z);
-                surface_heights[lx * 18 + lz] = top_y;
-
-                let rel_x = chunk_x - cache.x;
-                let rel_z = chunk_z - cache.z;
-
-                if rel_x < 0 || rel_x >= cache.size || rel_z < 0 || rel_z >= cache.size {
-                    continue;
-                }
-
-                let chunk_idx = (rel_x * cache.size + rel_z) as usize;
-
-                match &mut cache.chunks[chunk_idx] {
-                    Chunk::Proto(c) => {
-                        let top_local_y = (top_y + 1 - bottom_y).max(0) as usize;
-                        let top_sec = top_local_y >> 4;
-                        let top_rem = top_local_y & 15;
-                        if top_sec < c.light.sky_light.len() {
-                            c.light.sky_light[top_sec]
-                                .set_column_y_range(local_x, local_z, top_rem, 16, 15);
-                            for sec in (top_sec + 1)..c.light.sky_light.len() {
-                                c.light.sky_light[sec]
-                                    .set_column_y_range(local_x, local_z, 0, 16, 15);
-                            }
-                        }
-
-                        let mut light: i32 = 15;
-                        for y in (bottom_y..=top_y).rev() {
-                            let local_y_proto = y - bottom_y;
-                            let state_id = c.get_block_state_raw(
-                                local_x as i32,
-                                local_y_proto,
-                                local_z as i32,
-                            );
-                            let opacity = if state_id == BlockStateId::AIR {
-                                0
-                            } else {
-                                let s = state_id.to_state();
-                                if s.can_occlude() {
-                                    s.opacity.max(1) as i32
-                                } else {
-                                    s.opacity as i32
-                                }
-                            };
-
-                            light = light.saturating_sub(opacity);
-                            let light_val = if light <= 0 { 0 } else { light as u8 };
-                            let section_idx = (local_y_proto >> 4) as usize;
-                            let local_y = (y & 15) as usize;
-
-                            if section_idx < c.light.sky_light.len() {
-                                c.light.sky_light[section_idx]
-                                    .set(local_x, local_y, local_z, light_val);
-                            }
-
-                            if light <= 0 {
-                                break;
-                            }
-                        }
-                    }
-                    Chunk::Level(c) => {
-                        let mut light_engine = c
-                            .light_engine
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-                        for y in (top_y + 1)..max_y {
-                            let section_idx = ((y - bottom_y) >> 4) as usize;
-                            let local_y = (y & 15) as usize;
-                            if section_idx < light_engine.sky_light.len() {
-                                light_engine.sky_light[section_idx]
-                                    .set(local_x, local_y, local_z, 15);
-                            }
-                        }
-
-                        let mut light: i32 = 15;
-                        for y in (bottom_y..=top_y).rev() {
-                            let section_idx = ((y - bottom_y) >> 4) as usize;
-                            let local_y = (y & 15) as usize;
-
-                            let state_id = c
-                                .section
-                                .get_block_absolute_y(local_x, y, local_z)
-                                .unwrap_or(BlockStateId::AIR);
-                            let opacity = if state_id == BlockStateId::AIR {
-                                0
-                            } else {
-                                let s = state_id.to_state();
-                                if s.can_occlude() {
-                                    s.opacity.max(1) as i32
-                                } else {
-                                    s.opacity as i32
-                                }
-                            };
-
-                            light = light.saturating_sub(opacity);
-                            let light_val = if light <= 0 { 0 } else { light as u8 };
-
-                            if section_idx < light_engine.sky_light.len() {
-                                light_engine.sky_light[section_idx]
-                                    .set(local_x, local_y, local_z, light_val);
-                            }
-
-                            if light <= 0 {
-                                break;
-                            }
-                        }
-                    }
-                }
+                surface_heights[lx * 18 + lz] = exclusive_column_top(cache, x, z);
             }
         }
 
-        for z in start_z..end_z {
+        // The centre chunk sits at rim offsets 1..17, so its own columns are already in the table.
+        let center_idx = ((cache.size / 2) * cache.size + (cache.size / 2)) as usize;
+        let center_tops = || {
+            (1..17)
+                .flat_map(|lx: usize| (1..17).map(move |lz: usize| surface_heights[lx * 18 + lz]))
+        };
+        let sky_fill = match &mut cache.chunks[center_idx] {
+            Chunk::Proto(c) => {
+                let fill = SkyFill::from_surface(center_tops(), bottom_y, c.light.sky_light.len());
+                fill.mark(&mut c.light.sky_light);
+                fill
+            }
+            Chunk::Level(c) => {
+                let mut light = c
+                    .light_engine
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let fill = SkyFill::from_surface(center_tops(), bottom_y, light.sky_light.len());
+                fill.mark(&mut light.sky_light);
+                fill
+            }
+        };
+
+        Self::fill_and_descend(
+            cache,
+            (start_x, start_z),
+            bottom_y,
+            &surface_heights,
+            center_idx,
+            sky_fill,
+        );
+
+        self.seed_shadowed_columns(
+            cache,
+            (start_x, start_z),
+            bottom_y,
+            &surface_heights,
+            center_idx,
+        );
+
+        self.propagate(cache);
+    }
+
+    /// Queues every lit cell a taller neighbouring column shadows.
+    fn seed_shadowed_columns(
+        &mut self,
+        cache: &Cache,
+        (start_x, start_z): (i32, i32),
+        bottom_y: i32,
+        surface_heights: &[i32; 18 * 18],
+        center_idx: usize,
+    ) {
+        for z in start_z..start_z + 18 {
             let lz = (z - start_z) as usize;
-            for x in start_x..end_x {
+            for x in start_x..start_x + 18 {
                 let lx = (x - start_x) as usize;
                 let top_y = surface_heights[lx * 18 + lz];
 
@@ -723,34 +815,173 @@ impl SkyLightPropagator {
                     .max(west_top)
                     .max(east_top);
 
+                // One chunk + one light guard for the column.
+                let rel_x = (x >> 4) - cache.x;
+                let rel_z = (z >> 4) - cache.z;
+                if rel_x < 0 || rel_x >= cache.size || rel_z < 0 || rel_z >= cache.size {
+                    continue;
+                }
+                let chunk_idx = (rel_x * cache.size + rel_z) as usize;
+                let local_x = (x & 15) as usize;
+                let local_z = (z & 15) as usize;
+
+                let mut level_guard = match &cache.chunks[chunk_idx] {
+                    Chunk::Proto(_) => None,
+                    Chunk::Level(c) => Some(
+                        c.light_engine
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner),
+                    ),
+                };
+                let column: &[LightContainer] = match (&cache.chunks[chunk_idx], &mut level_guard) {
+                    (Chunk::Proto(c), _) => &c.light.sky_light,
+                    (Chunk::Level(_), Some(guard)) => &guard.sky_light,
+                    (Chunk::Level(_), None) => unreachable!("guard taken for every level chunk"),
+                };
+
                 for y in (bottom_y..=max_check_y).rev() {
-                    let pos = BlockPos(Vector3::new(x, y, z));
-                    let light = get_sky_light(cache, pos);
+                    // Missing section = 0, not PROTO_MISSING.
+                    let light = light_in(
+                        column,
+                        ((y - bottom_y) >> 4) as usize,
+                        local_x,
+                        (y & 15) as usize,
+                        local_z,
+                        0,
+                    );
 
                     if light == 0 {
-                        if y <= top_y {
+                        // Centre descent is monotonic; rim light from disk is not.
+                        if y <= top_y && chunk_idx == center_idx {
                             break;
                         }
                         continue;
                     }
+                    let pos = BlockPos(Vector3::new(x, y, z));
 
-                    let is_at_surface = y == top_y;
+                    // Seed only if a taller neighbour shadows this Y.
                     let below_neighbor =
                         y < north_top || y < south_top || y < west_top || y < east_top;
 
-                    if (is_at_surface || below_neighbor) && self.visited.test_and_set(x, y, z) {
+                    if below_neighbor {
                         let skip_dir = (y >= top_y).then_some(BlockDirection::Up);
 
                         self.queue.push_back(PropagationEntry {
                             pos,
+                            level: light,
                             skip_direction: skip_dir,
                         });
                     }
                 }
             }
         }
+    }
 
-        self.propagate(cache);
+    /// Open sky above each of the 18x18 columns, then the descent through it.
+    fn fill_and_descend(
+        cache: &mut Cache,
+        (start_x, start_z): (i32, i32),
+        bottom_y: i32,
+        surface_heights: &[i32; 18 * 18],
+        center_idx: usize,
+        sky_fill: SkyFill,
+    ) {
+        for z in start_z..start_z + 18 {
+            let chunk_z = z >> 4;
+            let local_z = (z & 15) as usize;
+            let lz = (z - start_z) as usize;
+
+            for x in start_x..start_x + 18 {
+                let chunk_x = x >> 4;
+                let local_x = (x & 15) as usize;
+                let lx = (x - start_x) as usize;
+
+                let top_y = surface_heights[lx * 18 + lz];
+
+                let rel_x = chunk_x - cache.x;
+                let rel_z = chunk_z - cache.z;
+
+                if rel_x < 0 || rel_x >= cache.size || rel_z < 0 || rel_z >= cache.size {
+                    continue;
+                }
+
+                let chunk_idx = (rel_x * cache.size + rel_z) as usize;
+                // Sections the centre already holds as one uniform 15 need no column fill.
+                let is_center = chunk_idx == center_idx;
+                // `top_y` is exclusive: fill 15 from that air cell up, descend the solid below.
+                let from_rel_y = (top_y - bottom_y).max(0) as usize;
+                let descend_top = top_y - 1;
+
+                // A lit rim chunk already holds what reached it horizontally; the descent
+                // only knows this column and would overwrite that with a darker value.
+                if !is_center && cache.chunks[chunk_idx].is_lit() {
+                    continue;
+                }
+
+                match &mut cache.chunks[chunk_idx] {
+                    Chunk::Proto(c) => {
+                        let fill_end = if is_center {
+                            sky_fill.fill_end()
+                        } else {
+                            c.light.sky_light.len()
+                        };
+                        fill_sky_above(
+                            &mut c.light.sky_light,
+                            local_x,
+                            local_z,
+                            from_rel_y,
+                            fill_end,
+                        );
+                        let col_height = c.height() as usize;
+                        let map = c.flat_block_map.as_ref();
+                        descend_sky_column(
+                            &mut c.light.sky_light,
+                            local_x,
+                            local_z,
+                            bottom_y,
+                            descend_top,
+                            |y| {
+                                let rel = (y - bottom_y) as usize;
+                                map[col_height * 16 * local_x + 16 * rel + local_z]
+                            },
+                        );
+                    }
+                    Chunk::Level(c) => {
+                        let mut light_engine = c
+                            .light_engine
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        let fill_end = if is_center {
+                            sky_fill.fill_end()
+                        } else {
+                            light_engine.sky_light.len()
+                        };
+                        fill_sky_above(
+                            &mut light_engine.sky_light,
+                            local_x,
+                            local_z,
+                            from_rel_y,
+                            fill_end,
+                        );
+                        c.section.with_blocks(|sections| {
+                            descend_sky_column(
+                                &mut light_engine.sky_light,
+                                local_x,
+                                local_z,
+                                bottom_y,
+                                descend_top,
+                                |y| {
+                                    let rel = (y - bottom_y) as usize;
+                                    sections.get(rel >> 4).map_or(BlockStateId::AIR, |section| {
+                                        section.get(local_x, (y & 15) as usize, local_z)
+                                    })
+                                },
+                            );
+                        });
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -768,6 +999,7 @@ impl LightEngine {
         }
     }
 
+    /// Worldgen pass. Runtime restitch is `DynamicLightEngine`.
     pub fn initialize_light(&mut self, cache: &mut Cache, config: &LightingEngineConfig) {
         if *config != LightingEngineConfig::Default {
             return;
@@ -786,65 +1018,21 @@ impl LightEngine {
 
         self.block_light.clear();
         self.sky_light.clear();
+
+        // After carvers/features. Empty(0) already covers below-cut.
+        let center = cache.get_center_chunk_mut();
+        center.sky_light_height = crate::lighting::SkyLightHeight::compute_from_proto(center).raw();
     }
 
-    pub fn update_block_light(
-        &mut self,
-        cache: &mut Cache,
-        pos: BlockPos,
-        old_luminance: u8,
-        new_luminance: u8,
-    ) {
-        if old_luminance > new_luminance {
-            let current_light = get_block_light(cache, pos);
-            if current_light > 0 {
-                self.block_light
-                    .decrease_queue
-                    .push_back((pos, current_light));
-                set_block_light(cache, pos, 0);
-            }
-        }
-
-        if new_luminance > 0 {
-            set_block_light(cache, pos, new_luminance);
-            if self
-                .block_light
-                .visited
-                .test_and_set(pos.0.x, pos.0.y, pos.0.z)
-            {
-                self.block_light.queue.push_back(PropagationEntry {
-                    pos,
-                    skip_direction: None,
-                });
-            }
-        }
-    }
-
-    pub fn run_light_updates(&mut self, cache: &mut Cache) {
-        if !self.block_light.decrease_queue.is_empty() {
-            self.block_light.process_decrease_queue(cache);
-        }
-        if !self.block_light.queue.is_empty() {
-            self.block_light.propagate(cache);
-            self.block_light.visited.clear();
-        }
-        if !self.sky_light.decrease_queue.is_empty() {
-            self.sky_light.process_decrease_queue(cache);
-        }
-        if !self.sky_light.queue.is_empty() {
-            self.sky_light.propagate(cache);
-            self.sky_light.visited.clear();
-        }
-    }
-
-    /// Checks if a block state has an empty shape for light occlusion, matching vanilla `LightEngine.isEmptyShape`.
+    /// Whether this state's occlusion shape is empty. Vanilla `LightEngine.isEmptyShape`.
     #[inline]
     #[must_use]
     pub const fn is_empty_shape(state: &BlockState) -> bool {
         !state.can_occlude()
     }
 
-    /// Checks if two block states have different light properties, matching vanilla `LightEngine.hasDifferentLightProperties`.
+    /// Whether a block change can move any light. Vanilla
+    /// `LightEngine.hasDifferentLightProperties`.
     #[inline]
     #[must_use]
     pub fn has_different_light_properties(old_state: &BlockState, new_state: &BlockState) -> bool {
@@ -852,19 +1040,23 @@ impl LightEngine {
             return false;
         }
 
+        // Vanilla: opacity, emission, or either uses shape occlusion (stair rotate, etc.).
         old_state.opacity != new_state.opacity
             || old_state.luminance != new_state.luminance
-            || old_state.can_occlude() != new_state.can_occlude()
+            || occlusion::uses_shape_for_light_occlusion(old_state)
+            || occlusion::uses_shape_for_light_occlusion(new_state)
     }
 
-    /// Returns the minimum light dampening for this block state, matching vanilla `LightEngine.getOpacity`.
+    /// Light lost crossing one block. Vanilla `LightEngine.getOpacity`.
     #[inline]
     #[must_use]
     pub const fn get_opacity(state: &BlockState) -> u8 {
         if state.opacity > 1 { state.opacity } else { 1 }
     }
 
-    /// Calculates the light dampening between two blocks, matching vanilla `LightEngine.getLightDampeningInto`.
+    /// Light lost moving from one block into another. Vanilla
+    /// `LightEngine.getLightDampeningInto`, which returns 16 -- fully blocking -- when the
+    /// merged face shapes occlude.
     #[inline]
     #[must_use]
     pub const fn get_light_dampening_into(
@@ -884,9 +1076,258 @@ impl LightEngine {
         simple_opacity
     }
 }
-
 impl Default for LightEngine {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LightEngine;
+    use crate::ProtoChunk;
+    use crate::chunk::ChunkData;
+    use crate::chunk::format::LightContainer;
+    use crate::chunk_system::Chunk;
+    use crate::chunk_system::generation_cache::Cache;
+    use pumpkin_config::lighting::LightingEngineConfig;
+    use pumpkin_data::Block;
+    use pumpkin_data::dimension::Dimension;
+    use std::sync::Arc;
+
+    const SECTIONS: usize = 24;
+    const MIN_Y: i32 = -64;
+    const SURFACE: i32 = 60;
+
+    fn sky_light(chunk: &ChunkData, local_x: usize, y: i32, local_z: usize) -> u8 {
+        let relative = (y - MIN_Y) as usize;
+        chunk
+            .light_engine
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .sky_light[relative / 16]
+            .get(local_x, relative % 16, local_z)
+    }
+
+    fn block_light(chunk: &ChunkData, local_x: usize, y: i32, local_z: usize) -> u8 {
+        let relative = (y - MIN_Y) as usize;
+        chunk
+            .light_engine
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .block_light[relative / 16]
+            .get(local_x, relative % 16, local_z)
+    }
+
+    /// A loaded level chunk with solid ground, sized light storage, and whatever `carve`
+    /// puts into it.
+    fn level_chunk(
+        x: i32,
+        z: i32,
+        carve: impl Fn(&mut Vec<(usize, i32, usize, pumpkin_data::BlockStateId)>),
+    ) -> Arc<ChunkData> {
+        let chunk = ChunkData::empty(x, z);
+        let mut updates = Vec::new();
+        for local_x in 0..16usize {
+            for local_z in 0..16usize {
+                for y in MIN_Y..=SURFACE {
+                    updates.push((local_x, y, local_z, Block::STONE.default_state.id));
+                }
+            }
+        }
+        carve(&mut updates);
+        chunk.set_blocks_batch(updates);
+        *chunk
+            .heightmap
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = chunk.calculate_heightmap();
+
+        // `ChunkData::empty` starts with zero-length light storage; a loaded chunk has one
+        // container per section.
+        let mut light = chunk
+            .light_engine
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        light.sky_light = (0..SECTIONS)
+            .map(|_| LightContainer::new_empty(0))
+            .collect();
+        light.block_light = (0..SECTIONS)
+            .map(|_| LightContainer::new_empty(0))
+            .collect();
+        drop(light);
+
+        Arc::new(chunk)
+    }
+
+    fn proto_chunk(x: i32, z: i32) -> ProtoChunk {
+        use crate::generation::generator::{GeneratorInit, VanillaGenerator, WorldGenerator};
+        use pumpkin_util::world_seed::Seed;
+
+        let world_gen = WorldGenerator::Noise(Box::new(VanillaGenerator::new(
+            Seed(42),
+            Dimension::OVERWORLD,
+        )));
+        ProtoChunk::new(x, z, &world_gen)
+    }
+
+    /// The worldgen pass has to light the already loaded chunks around the proto chunk it
+    /// is generating, not only the proto chunk itself.
+    ///
+    /// That level branch is the one that reads blocks through the chunk's section lock and
+    /// writes light through its light mutex, and it is not reachable from any other test.
+    #[test]
+    fn the_worldgen_pass_lights_a_loaded_neighbour_chunk() {
+        let mut cache = Cache::new(-1, -1, 3);
+        for dx in 0..3 {
+            for dz in 0..3 {
+                let (x, z) = (-1 + dx, -1 + dz);
+                cache.chunks.push(if (x, z) == (0, 0) {
+                    Chunk::Proto(Box::new(proto_chunk(x, z)))
+                } else if (x, z) == (1, 0) {
+                    // The rim column x=16 sits in this chunk: a light source buried in
+                    // rock, with one air pocket beside it for the flood to reach.
+                    Chunk::Level(level_chunk(x, z, |updates| {
+                        updates.push((0, 30, 5, Block::GLOWSTONE.default_state.id));
+                        updates.push((0, 30, 6, Block::AIR.default_state.id));
+                    }))
+                } else {
+                    Chunk::Level(level_chunk(x, z, |_| {}))
+                });
+            }
+        }
+
+        LightEngine::new().initialize_light(&mut cache, &LightingEngineConfig::Default);
+
+        let Chunk::Level(lit) = &cache.chunks[(2 * 3 + 1) as usize] else {
+            panic!("the neighbour at (1, 0) is not a level chunk");
+        };
+
+        assert_eq!(
+            sky_light(lit, 0, SURFACE + 5, 5),
+            15,
+            "the open sky above the neighbour's surface stayed dark"
+        );
+        assert_eq!(
+            sky_light(lit, 0, SURFACE, 5),
+            0,
+            "sky light reached into solid stone"
+        );
+        assert_eq!(
+            block_light(lit, 0, 30, 5),
+            Block::GLOWSTONE.default_state.luminance,
+            "the buried light source in the neighbour was never seeded"
+        );
+        assert_eq!(
+            block_light(lit, 0, 30, 6),
+            Block::GLOWSTONE.default_state.luminance - 1,
+            "the light source did not propagate into the pocket beside it"
+        );
+    }
+
+    /// A lit neighbour's sky light already accounts for what reached it horizontally, which a
+    /// descent down one column cannot see. Re-descending it overwrites that with a darker
+    /// value, and the centre's edge then receives light from the darkened cell.
+    #[test]
+    fn a_lit_neighbour_keeps_the_light_the_descent_cannot_reproduce() {
+        // Leaves let the descent through while dimming it, so it reaches the cell and lands
+        // below the stored value. Under solid stone it would stop and overwrite nothing.
+        const DEPTH: i32 = 4;
+        const BURIED: i32 = SURFACE - DEPTH;
+        const DESCENT_REACHES: u8 = 15 - (DEPTH as u8 + 1);
+        const STORED: u8 = DESCENT_REACHES + 2;
+
+        let mut cache = Cache::new(-1, -1, 3);
+        for dx in 0..3 {
+            for dz in 0..3 {
+                let (x, z) = (-1 + dx, -1 + dz);
+                cache.chunks.push(if (x, z) == (0, 0) {
+                    let mut proto = proto_chunk(x, z);
+                    // Seal the face the shaft shares with the centre, so only the descent
+                    // can reach the buried cell.
+                    for y in BURIED..=SURFACE {
+                        proto.set_block_state(15, y, 5, Block::STONE.default_state);
+                    }
+                    Chunk::Proto(Box::new(proto))
+                } else if (x, z) == (1, 0) {
+                    let chunk = level_chunk(x, z, |updates| {
+                        for y in BURIED..=SURFACE {
+                            updates.push((0, y, 5, Block::OAK_LEAVES.default_state.id));
+                        }
+                    });
+                    chunk
+                        .light_populated
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                    let mut light = chunk
+                        .light_engine
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    let relative = (BURIED - MIN_Y) as usize;
+                    light.sky_light[relative / 16].set(0, relative % 16, 5, STORED);
+                    drop(light);
+                    Chunk::Level(chunk)
+                } else {
+                    Chunk::Level(level_chunk(x, z, |_| {}))
+                });
+            }
+        }
+
+        LightEngine::new().initialize_light(&mut cache, &LightingEngineConfig::Default);
+
+        let Chunk::Level(neighbour) = &cache.chunks[(2 * 3 + 1) as usize] else {
+            panic!("the neighbour at (1, 0) is not a level chunk");
+        };
+        assert_eq!(
+            sky_light(neighbour, 0, BURIED, 5),
+            STORED,
+            "the pass re-descended a lit neighbour and overwrote its stored light"
+        );
+    }
+
+    /// The emitter mask replaces a sweep over the block map, so it may name a section that no
+    /// longer emits, but never miss one that does -> a missed section is light that never
+    /// gets seeded.
+    #[test]
+    fn the_emitter_mask_names_every_section_that_emits() {
+        let mut proto = proto_chunk(0, 0);
+        let bottom_y = proto.bottom_y() as i32;
+
+        for (index, y) in [bottom_y + 5, bottom_y + 100, bottom_y + 200]
+            .into_iter()
+            .enumerate()
+        {
+            proto.set_block_state(index as i32, y, 0, Block::GLOWSTONE.default_state);
+        }
+
+        for local_y in 0..proto.height() as i32 {
+            for local_x in 0..16 {
+                for local_z in 0..16 {
+                    let state = proto.get_block_state_raw(local_x, local_y, local_z);
+                    assert!(
+                        super::luminance_of(state) == 0
+                            || proto.emitter_sections.contains((local_y >> 4) as usize),
+                        "section {} emits but is not in the mask",
+                        local_y >> 4
+                    );
+                }
+            }
+        }
+    }
+
+    /// Replacing the only emitter leaves the bit set; the pass then scans a section that turns
+    /// out to be dark, which costs a scan and never light.
+    #[test]
+    fn the_emitter_mask_is_allowed_to_go_stale_upwards() {
+        let mut proto = proto_chunk(0, 0);
+        let y = proto.bottom_y() as i32 + 5;
+        let section = ((y - proto.bottom_y() as i32) >> 4) as usize;
+
+        proto.set_block_state(0, y, 0, Block::GLOWSTONE.default_state);
+        assert!(proto.emitter_sections.contains(section));
+
+        proto.set_block_state(0, y, 0, Block::AIR.default_state);
+        assert!(
+            proto.emitter_sections.contains(section),
+            "clearing the bit would need a count, and over-reporting is the safe direction"
+        );
     }
 }

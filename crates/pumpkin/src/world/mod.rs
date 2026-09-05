@@ -1484,6 +1484,9 @@ impl World {
         let t_chunks = std::time::Instant::now();
         self.tick_chunks(server);
         let chunk_elapsed = t_chunks.elapsed();
+        // Vanilla `ThreadedLevelLightEngine` drains on the light thread. One tick-thread
+        // slice here; leftover lighting can lag a few ticks behind the blocks.
+        let light_stats = self.level.light_engine.drain_queued(&self.level);
 
         let handle = server.runtime.clone();
 
@@ -1610,9 +1613,10 @@ impl World {
         let total_elapsed = start.elapsed();
         if total_elapsed.as_millis() > 50 {
             debug!(
-                "Slow Tick [{}ms]: Chunks: {:?} | Players({}): {:?} | Entities({}): {:?} | Block Entities({}): {:?}",
+                "Slow Tick [{}ms]: Chunks: {:?} | Light: {} | Players({}): {:?} | Entities({}): {:?} | Block Entities({}): {:?}",
                 total_elapsed.as_millis(),
                 chunk_elapsed,
+                light_stats,
                 player_count,
                 player_elapsed,
                 entity_count,
@@ -5492,6 +5496,8 @@ impl World {
             }
         }
 
+        // Redstone re-routing, fences connecting, leaves updating their distance: most
+        // block changes leave every light property alone and never reach the engine.
         let old_state = replaced_block_state_id.to_state();
         let new_state = block_state_id.to_state();
         if pumpkin_world::lighting::LightEngine::has_different_light_properties(

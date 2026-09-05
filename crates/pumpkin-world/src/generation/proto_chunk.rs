@@ -54,6 +54,7 @@ use crate::generation::structure::structures::{
 };
 use crate::generation::structure::try_generate_structure;
 use crate::generation::surface::rule::try_apply_material_rule;
+use crate::lighting::section_flags::SectionMask;
 use crate::{
     chunk::CHUNK_AREA,
     generation::{biome, positions::chunk_pos},
@@ -139,6 +140,9 @@ pub struct ProtoChunk {
     pub default_block: &'static BlockState,
     biome_mixer_seed: i64,
     pub(crate) flat_block_map: Box<[BlockStateId]>,
+    /// Sections holding a light emitting block. Set as blocks are written and never cleared, so
+    /// it can name a section that no longer emits, but never miss one that does.
+    pub(crate) emitter_sections: SectionMask,
     pub flat_biome_map: Box<[u8]>,
     pub flat_surface_height_map: [i16; CHUNK_AREA],
     pub flat_ocean_floor_height_map: [i16; CHUNK_AREA],
@@ -157,6 +161,11 @@ pub struct ProtoChunk {
     pub pending_block_entities: Vec<NbtCompound>,
     pending_structure_entities: Vec<NbtCompound>,
     pub fluid_ticks: Vec<ScheduledTick<&'static Fluid>>,
+    pub sky_light_height: u32,
+    /// `PumpkinCustomData` carried through generation so a chunk that is loaded, demoted
+    /// to a proto chunk and rebuilt does not silently lose it. Plugins own most of what
+    /// lives in here; dropping it is data loss, not a recomputable cache miss.
+    pub custom_data: NbtCompound,
 }
 
 pub struct TerrainCache {
@@ -237,6 +246,7 @@ impl ProtoChunk {
             biome_mixer_seed,
             flat_block_map: vec![BlockStateId::AIR; CHUNK_AREA * height as usize]
                 .into_boxed_slice(),
+            emitter_sections: SectionMask::default(),
             flat_biome_map: vec![
                 Biome::PLAINS.id;
                 biome_coords::from_block(CHUNK_DIM as i32) as usize
@@ -270,6 +280,8 @@ impl ProtoChunk {
             pending_block_entities: Vec::new(),
             pending_structure_entities: Vec::new(),
             fluid_ticks: Vec::new(),
+            sky_light_height: 0,
+            custom_data: NbtCompound::new(),
         }
     }
 
@@ -288,6 +300,11 @@ impl ProtoChunk {
         proto_chunk
             .blending_data
             .clone_from(&chunk_data.blending_data);
+        proto_chunk.custom_data = chunk_data
+            .custom_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
 
         let section_data = &chunk_data.section;
         let heightmap_data = chunk_data
@@ -571,6 +588,10 @@ impl ProtoChunk {
                     }
                 }
             }
+        }
+
+        if block_state.luminance > 0 {
+            self.emitter_sections.set((local_y >> 4) as usize);
         }
 
         let index = self.local_pos_to_block_index(local_x, local_y, local_z);

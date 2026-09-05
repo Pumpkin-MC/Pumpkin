@@ -162,6 +162,30 @@ where
     })
 }
 
+/// Restores the sky sections a writer left out because they are uniformly lit. Everything above
+/// the highest stored array is open sky; absent sections below it stay dark.
+///
+/// Mirrors vanilla `SkyLightSectionStorage::getLightValue`, which answers 15 above the top
+/// section it holds data for. Nothing is stored below the world, so a chunk without any sky
+/// array at all (the nether) is left untouched.
+///
+// TODO: vanilla also reconstructs an absent section *inside* the band, by repeating the bottom
+// row of the nearest stored section above it (`SkyLightSectionStorage::createDataLayer` ->
+// `repeatFirstLayer`). Pumpkin never writes that shape, so this only matters for imported
+// vanilla saves whose band has a gap.
+fn restore_open_sky(sky_lights: &mut [LightContainer]) {
+    let Some(top) = sky_lights
+        .iter()
+        .rposition(|container| matches!(container, LightContainer::Full(_)))
+    else {
+        return;
+    };
+
+    for container in &mut sky_lights[top + 1..] {
+        *container = LightContainer::Empty(15);
+    }
+}
+
 impl ChunkData {
     #[allow(clippy::too_many_lines)]
     pub fn internal_from_bytes(
@@ -293,6 +317,8 @@ impl ChunkData {
             }
         }
 
+        restore_open_sky(&mut sky_lights);
+
         // Assemble the LightEngine
         let light_engine = ChunkLight {
             block_light: block_lights.into_boxed_slice(),
@@ -405,6 +431,7 @@ impl ChunkData {
             blending_data: None,
             inhabited_time: AtomicU64::new(root_tag.get_long("InhabitedTime").unwrap_or(0) as u64),
             custom_data: std::sync::Mutex::new(custom_data),
+            sky_light_height_cache: std::sync::atomic::AtomicU32::new(0),
         })
     }
 
@@ -603,6 +630,10 @@ impl ChunkData {
             self.inhabited_time.load(Ordering::Relaxed) as i64,
         );
 
+        // Last chance to pick up a cut height that only exists in RAM. Every
+        // write path persists on its own already.
+        crate::lighting::SkyLightHeightMigration::ensure_persisted(self);
+
         let custom_data = self
             .custom_data
             .lock()
@@ -616,6 +647,27 @@ impl ChunkData {
     }
 
     pub fn set_custom_data(&self, namespace: &str, key: &str, value: pumpkin_nbt::tag::NbtTag) {
+        self.write_custom_data(namespace, key, value);
+        self.dirty.store(true, Ordering::Relaxed);
+    }
+
+    /// Stores custom data **without** marking the chunk dirty.
+    ///
+    /// Only for values that are purely derived from the chunk and can be recomputed for
+    /// free if they are lost — a cache written back, not user state. Marking the chunk
+    /// dirty here would force a full rewrite of every chunk merely because something read
+    /// it, which is exactly the load-time overhead such caches exist to avoid. The value
+    /// still rides along whenever the chunk is saved for some other reason.
+    pub fn set_derived_custom_data(
+        &self,
+        namespace: &str,
+        key: &str,
+        value: pumpkin_nbt::tag::NbtTag,
+    ) {
+        self.write_custom_data(namespace, key, value);
+    }
+
+    fn write_custom_data(&self, namespace: &str, key: &str, value: pumpkin_nbt::tag::NbtTag) {
         let mut custom_data = self
             .custom_data
             .lock()
@@ -635,7 +687,6 @@ impl ChunkData {
             namespace.into(),
             pumpkin_nbt::tag::NbtTag::Compound(namespace_data),
         );
-        self.dirty.store(true, Ordering::Relaxed);
     }
 
     pub fn get_custom_data(&self, namespace: &str, key: &str) -> Option<pumpkin_nbt::tag::NbtTag> {
@@ -845,6 +896,15 @@ impl LightContainer {
         matches!(self, Self::Empty(_))
     }
 
+    /// The one level every cell holds, or `None` once the section carries a real array
+    #[must_use]
+    pub const fn uniform_level(&self) -> Option<u8> {
+        match self {
+            Self::Empty(level) => Some(*level),
+            Self::Full(_) => None,
+        }
+    }
+
     #[inline]
     const fn index(x: usize, y: usize, z: usize) -> usize {
         y * 16 * 16 + z * 16 + x
@@ -980,6 +1040,57 @@ mod tests {
             pumpkin_data::biome::Biome::from_name("the_void")
                 .unwrap()
                 .id
+        );
+    }
+
+    /// A chunk whose open-sky sections are uniform, the shape the light pass produces.
+    fn chunk_with_uniform_sky(top_lit_section: usize) -> ChunkData {
+        let chunk = ChunkData::empty(0, 0);
+        let count = chunk.section.count;
+        chunk
+            .light_populated
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        {
+            let mut light = chunk
+                .light_engine
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            light.sky_light = (0..count)
+                .map(|index| match index {
+                    i if i < top_lit_section => LightContainer::Empty(0),
+                    i if i == top_lit_section => LightContainer::new_filled(7),
+                    _ => LightContainer::Empty(15),
+                })
+                .collect();
+            light.block_light = (0..count).map(|_| LightContainer::Empty(0)).collect();
+        };
+        chunk
+    }
+
+    fn sky_levels(chunk: &ChunkData) -> Vec<u8> {
+        chunk
+            .light_engine
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .sky_light
+            .iter()
+            .map(|container| container.get(0, 0, 0))
+            .collect()
+    }
+
+    #[test]
+    fn uniform_open_sky_sections_survive_the_disk_round_trip() {
+        let top_lit_section = 5;
+        let chunk = chunk_with_uniform_sky(top_lit_section);
+        let before = sky_levels(&chunk);
+
+        let bytes = chunk.to_bytes().expect("serializes");
+        let reloaded = ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).expect("deserializes");
+
+        assert_eq!(
+            sky_levels(&reloaded),
+            before,
+            "sections above {top_lit_section} are omitted from disk and must reload as open sky"
         );
     }
 }
