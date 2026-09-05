@@ -386,3 +386,34 @@ pub fn test_vertical_gradient(
     let mut random = splitter.split_pos(context.block_pos_x, block_y, context.block_pos_z);
     random.next_f32() < mapped
 }
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_data::material_rule::{BEDROCK_FLOOR, MaterialCondition, MaterialRule};
+    use pumpkin_util::random::{RandomImpl, xoroshiro128::Xoroshiro};
+
+    /// Vanilla seeds a vertical gradient's positional random with
+    /// `RandomSupport.seedFromHashOf(name)` = the MD5 of the name read as two big-endian longs
+    /// (`ByteBuffer.wrap(md5).getLong()`). The codegen must produce the same words the runtime
+    /// `split_string` (which is big-endian) would, otherwise bedrock layers and the deepslate
+    /// transition are drawn from an unrelated random stream.
+    #[test]
+    fn vertical_gradient_seed_matches_runtime_string_hash() {
+        let MaterialRule::Condition(rule) = &BEDROCK_FLOOR else {
+            panic!("bedrock floor is a condition rule");
+        };
+        let MaterialCondition::VerticalGradient(gradient) = &rule.if_true else {
+            panic!("bedrock floor is a vertical gradient");
+        };
+        // md5("minecraft:bedrock_floor") as vanilla reads it.
+        assert_eq!(gradient.random_lo, 13_544_455_532_117_611_141);
+        assert_eq!(gradient.random_hi, 14_185_350_335_435_586_452);
+
+        let deriver = Xoroshiro::from_seed(13579).next_splitter();
+        let mut from_codegen = deriver.from_lo_and_hi(gradient.random_lo, gradient.random_hi);
+        let mut from_runtime = deriver.split_string("minecraft:bedrock_floor");
+        for _ in 0..4 {
+            assert_eq!(from_codegen.next_i64(), from_runtime.next_i64());
+        }
+    }
+}
