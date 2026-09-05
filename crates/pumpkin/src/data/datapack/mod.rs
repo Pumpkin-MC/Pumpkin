@@ -843,29 +843,35 @@ fn read_pack_mcmeta(pack_path: &Path) -> (String, u32) {
     (String::new(), 61)
 }
 
-fn load_recipes_from_dir(
+fn load_recipes_recursive(
     namespace: &str,
-    dir: &Path,
+    base_dir: &Path,
+    current_dir: &Path,
     all_recipes: &mut Vec<DynamicRecipe>,
     count: &mut usize,
 ) {
-    let Ok(entries) = fs::read_dir(dir) else {
+    let Ok(entries) = fs::read_dir(current_dir) else {
         return;
     };
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
-            load_recipes_from_dir(namespace, &path, all_recipes, count);
+            load_recipes_recursive(namespace, base_dir, &path, all_recipes, count);
         } else if path
             .extension()
             .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
         {
-            let stem = path
-                .file_stem()
-                .map(|s| s.to_string_lossy().to_string())
-                .unwrap_or_default();
+            let Ok(relative_path) = path.strip_prefix(base_dir) else {
+                continue;
+            };
+
+            let recipe_name = relative_path
+                .with_extension("")
+                .to_string_lossy()
+                .replace('\\', "/");
+
             if let Ok(content) = fs::read_to_string(&path)
-                && let Some(recipe) = recipe_loader::parse_recipe(namespace, &stem, &content)
+                && let Some(recipe) = recipe_loader::parse_recipe(namespace, &recipe_name, &content)
             {
                 all_recipes.push(recipe);
                 *count += 1;
@@ -874,6 +880,14 @@ fn load_recipes_from_dir(
     }
 }
 
+fn load_recipes_from_dir(
+    namespace: &str,
+    dir: &Path,
+    all_recipes: &mut Vec<DynamicRecipe>,
+    count: &mut usize,
+) {
+    load_recipes_recursive(namespace, dir, dir, all_recipes, count);
+}
 #[cfg(test)]
 mod tests {
     use super::DatapackManager;
