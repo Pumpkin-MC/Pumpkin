@@ -232,8 +232,10 @@ impl BedrockPlayer<'_> {
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::damage::DamageType;
-use pumpkin_data::data_component_impl::{AttributeModifiersImpl, EnchantmentsImpl, Operation};
-use pumpkin_data::data_component_impl::{EquipmentSlot, EquippableImpl, ToolImpl, WeaponImpl};
+use pumpkin_data::data_component_impl::{
+    AttributeModifiersImpl, EquipmentSlot, EquippableImpl, ToolImpl, WeaponImpl,
+};
+use pumpkin_data::data_component_impl::{EnchantmentsImpl, EquipmentType, Operation};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::item_stack::ItemStack;
@@ -241,7 +243,9 @@ use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, BlockState, Enchantment, screen::WindowType, tag, translation};
+use pumpkin_data::{
+    AttributeModifierSlot, Block, BlockState, Enchantment, screen::WindowType, tag, translation,
+};
 use pumpkin_inventory::player::{
     player_inventory::PlayerInventory, player_screen_handler::PlayerScreenHandler,
 };
@@ -456,6 +460,7 @@ pub struct Player {
     pub ping: AtomicU32,
     /// The amount of ticks since the player's last attack.
     pub last_attacked_ticks: AtomicU32,
+    last_equipment_items: Mutex<HashMap<EquipmentSlot, ItemStack>>,
     /// The player's last known experience level.
     pub last_sent_xp: AtomicI32,
     pub last_sent_health: AtomicI32,
@@ -756,6 +761,7 @@ impl Player {
             last_action_time: AtomicCell::new(std::time::Instant::now()),
             ping: AtomicU32::new(0),
             last_attacked_ticks: AtomicU32::new(0),
+            last_equipment_items: Mutex::new(HashMap::new()),
             client_loaded: AtomicBool::new(initially_loaded),
             bedrock_spawned: AtomicBool::new(false),
             client_loaded_timeout: AtomicU32::new(if initially_loaded { 0 } else { 60 }),
@@ -1140,6 +1146,8 @@ impl Player {
 
     #[expect(clippy::too_many_lines)]
     pub fn attack(&self, victim: &Arc<dyn EntityBase>) {
+        self.update_equipment_attributes(false);
+
         let world = self.world();
         let Some(server) = world.server.upgrade() else {
             return;
@@ -1158,34 +1166,19 @@ impl Player {
             );
         }
 
-        let base_damage = self
+        let damage = self
             .living_entity
             .get_attribute_value(&Attributes::ATTACK_DAMAGE);
-        let base_attack_speed = 4.0;
+        let attack_speed = self
+            .living_entity
+            .get_attribute_value(&Attributes::ATTACK_SPEED);
 
         let mut damage_multiplier = 1.0;
-        let mut add_damage = 0.0;
-        let mut add_speed = 0.0;
         let mut extra_ench_damage = 0.0;
         let mut knockback_level = 0u32;
 
         {
             let stack = &item_stack;
-            if stack.is_empty() {
-                // Vanilla fist: base_attack_damage = -1.0, base_attack_speed = -2.4
-                add_damage = -1.0;
-                add_speed = -2.4;
-            } else if let Some(modifiers) = stack.get_data_component::<AttributeModifiersImpl>() {
-                for item_mod in modifiers.attribute_modifiers.iter() {
-                    if item_mod.operation == Operation::AddValue {
-                        if item_mod.id == "minecraft:base_attack_damage" {
-                            add_damage = item_mod.amount;
-                        } else if item_mod.id == "minecraft:base_attack_speed" {
-                            add_speed = item_mod.amount;
-                        }
-                    }
-                }
-            }
             if let Some(enchantments) = stack.get_data_component::<EnchantmentsImpl>() {
                 for (enchantment, level) in enchantments.enchantment.iter() {
                     if **enchantment == Enchantment::SHARPNESS {
@@ -1226,8 +1219,6 @@ impl Player {
             }
         }
 
-        let attack_speed = base_attack_speed + add_speed;
-
         let is_bedrock = matches!(self.client.as_ref(), ClientPlatform::Bedrock(_));
         let attack_cooldown_progress = if is_bedrock {
             1.0
@@ -1243,7 +1234,7 @@ impl Player {
         }
 
         // Modify the added damage based on the multiplier.
-        let mut damage = (base_damage + add_damage) * damage_multiplier;
+        let mut damage = damage * damage_multiplier;
         damage += extra_ench_damage * attack_cooldown_progress;
 
         if let Some(strength) = self
@@ -1414,6 +1405,161 @@ impl Player {
         stack
             .get_data_component::<WeaponImpl>()
             .map_or(0, |w| w.item_damage_per_attack as i32)
+    }
+
+    fn attribute_modifier_applies_to_slot(
+        modifier_slot: &AttributeModifierSlot,
+        equipment_slot: &EquipmentSlot,
+    ) -> bool {
+        match modifier_slot {
+            AttributeModifierSlot::Any => true,
+            AttributeModifierSlot::MainHand => {
+                matches!(equipment_slot, EquipmentSlot::MainHand(_))
+            }
+            AttributeModifierSlot::OffHand => {
+                matches!(equipment_slot, EquipmentSlot::OffHand(_))
+            }
+            AttributeModifierSlot::Hand => equipment_slot.slot_type() == EquipmentType::Hand,
+            AttributeModifierSlot::Feet => matches!(equipment_slot, EquipmentSlot::Feet(_)),
+            AttributeModifierSlot::Legs => matches!(equipment_slot, EquipmentSlot::Legs(_)),
+            AttributeModifierSlot::Chest => matches!(equipment_slot, EquipmentSlot::Chest(_)),
+            AttributeModifierSlot::Head => matches!(equipment_slot, EquipmentSlot::Head(_)),
+            AttributeModifierSlot::Armor => {
+                equipment_slot.slot_type() == EquipmentType::HumanoidArmor
+            }
+            AttributeModifierSlot::Body => matches!(equipment_slot, EquipmentSlot::Body(_)),
+            AttributeModifierSlot::Saddle => matches!(equipment_slot, EquipmentSlot::Saddle(_)),
+        }
+    }
+
+    fn applicable_attribute_modifiers<'a>(
+        stack: &'a ItemStack,
+        slot: &EquipmentSlot,
+    ) -> Vec<&'a pumpkin_data::data_component_impl::Modifier> {
+        stack
+            .get_data_component::<AttributeModifiersImpl>()
+            .map(|modifiers| {
+                modifiers
+                    .attribute_modifiers
+                    .iter()
+                    .filter(|modifier| {
+                        Self::attribute_modifier_applies_to_slot(&modifier.slot, slot)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn equipment_attributes_changed(
+        previous: Option<&ItemStack>,
+        current: &ItemStack,
+        slot: &EquipmentSlot,
+    ) -> bool {
+        let previous = previous
+            .map(|stack| Self::applicable_attribute_modifiers(stack, slot))
+            .unwrap_or_default();
+        previous != Self::applicable_attribute_modifiers(current, slot)
+    }
+
+    fn touch_attribute(touched_attributes: &mut Vec<Attributes>, attribute: &Attributes) {
+        if !touched_attributes
+            .iter()
+            .any(|touched| touched.id == attribute.id)
+        {
+            touched_attributes.push(attribute.clone());
+        }
+    }
+
+    /// Applies attribute modifiers from changed equipment and synchronizes them to clients.
+    fn update_equipment_attributes(&self, force_sync: bool) {
+        let mut current_items = HashMap::new();
+        current_items.insert(EquipmentSlot::MAIN_HAND, self.inventory.held_item());
+
+        let equipment = self
+            .inventory
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for slot in self.inventory.equipment_slots.values() {
+            current_items.insert(slot.clone(), equipment.get(slot));
+        }
+        drop(equipment);
+
+        let changes = {
+            let mut last_items = self
+                .last_equipment_items
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut changes = Vec::new();
+
+            for (slot, current) in current_items {
+                let previous = last_items.get(&slot).cloned();
+                let attributes_changed =
+                    Self::equipment_attributes_changed(previous.as_ref(), &current, &slot);
+                if attributes_changed
+                    || (force_sync
+                        && !Self::applicable_attribute_modifiers(&current, &slot).is_empty())
+                {
+                    changes.push((
+                        slot.clone(),
+                        previous.unwrap_or_else(|| ItemStack::EMPTY.clone()),
+                        current.clone(),
+                    ));
+                    last_items.insert(slot, current);
+                }
+            }
+
+            changes
+        };
+
+        let mut touched_attributes = Vec::new();
+        for (slot, previous, _) in &changes {
+            if let Some(modifiers) = previous.get_data_component::<AttributeModifiersImpl>() {
+                for modifier in modifiers.attribute_modifiers.iter() {
+                    if Self::attribute_modifier_applies_to_slot(&modifier.slot, slot) {
+                        self.living_entity
+                            .update_attribute(modifier.r#type, |instance| {
+                                instance.remove_modifier(modifier.id);
+                            });
+                        Self::touch_attribute(&mut touched_attributes, modifier.r#type);
+                    }
+                }
+            }
+        }
+
+        for (slot, _, current) in &changes {
+            if let Some(modifiers) = current.get_data_component::<AttributeModifiersImpl>() {
+                for modifier in modifiers.attribute_modifiers.iter() {
+                    if Self::attribute_modifier_applies_to_slot(&modifier.slot, slot) {
+                        let operation = match modifier.operation {
+                            Operation::AddValue => ModifierOperation::Add,
+                            Operation::AddMultipliedBase => ModifierOperation::MultiplyBase,
+                            Operation::AddMultipliedTotal => ModifierOperation::MultiplyTotal,
+                        };
+                        self.living_entity
+                            .update_attribute(modifier.r#type, |instance| {
+                                instance.add_or_replace_modifier(Modifier {
+                                    id: modifier.id.to_string(),
+                                    amount: modifier.amount,
+                                    operation,
+                                });
+                            });
+                        Self::touch_attribute(&mut touched_attributes, modifier.r#type);
+                    }
+                }
+            }
+        }
+
+        if !touched_attributes.is_empty() {
+            crate::entity::attributes::send_attribute_updates_for_living(
+                &self.living_entity,
+                touched_attributes,
+            );
+        }
+    }
+
+    pub(crate) fn resync_equipment_attributes(&self) {
+        self.update_equipment_attributes(true);
     }
 
     pub fn try_send_slot_set_packet(&self, packet: &CSetPlayerInventory) {
@@ -2488,7 +2634,9 @@ impl Player {
 
     #[expect(clippy::too_many_lines)]
     pub fn tick<'a>(&'a self, server: &'a Server) {
+        self.update_equipment_attributes(false);
         self.process_inbound_packets();
+        self.update_equipment_attributes(false);
 
         if self.is_spectator() {
             self.living_entity
@@ -7694,7 +7842,11 @@ impl InventoryPlayer for Player {
 
 #[cfg(test)]
 mod tests {
-    use super::{bedrock_inventory_slot, read_root_vehicle, write_root_vehicle};
+    use super::{Player, bedrock_inventory_slot, read_root_vehicle, write_root_vehicle};
+    use pumpkin_data::{
+        AttributeModifierSlot, data_component_impl::EquipmentSlot, item::Item,
+        item_stack::ItemStack,
+    };
     use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
     use uuid::Uuid;
 
@@ -7741,6 +7893,57 @@ mod tests {
         nbt.put("RootVehicle", NbtTag::Compound(root_vehicle));
 
         assert_eq!(read_root_vehicle(&nbt), Some(expected));
+    }
+
+    #[test]
+    fn attribute_modifier_slots_match_equipment_groups() {
+        assert!(Player::attribute_modifier_applies_to_slot(
+            &AttributeModifierSlot::MainHand,
+            &EquipmentSlot::MAIN_HAND,
+        ));
+        assert!(Player::attribute_modifier_applies_to_slot(
+            &AttributeModifierSlot::Hand,
+            &EquipmentSlot::OFF_HAND,
+        ));
+        assert!(Player::attribute_modifier_applies_to_slot(
+            &AttributeModifierSlot::Armor,
+            &EquipmentSlot::CHEST,
+        ));
+        assert!(!Player::attribute_modifier_applies_to_slot(
+            &AttributeModifierSlot::Armor,
+            &EquipmentSlot::MAIN_HAND,
+        ));
+    }
+
+    #[test]
+    fn durability_changes_do_not_resync_attributes() {
+        let previous = ItemStack::new(1, &Item::WOODEN_SWORD);
+        let mut current = previous.clone();
+        current.set_damage(1);
+
+        assert!(!Player::equipment_attributes_changed(
+            Some(&previous),
+            &current,
+            &EquipmentSlot::MAIN_HAND,
+        ));
+    }
+
+    #[test]
+    fn initial_empty_equipment_does_not_change_attributes() {
+        assert!(!Player::equipment_attributes_changed(
+            None,
+            ItemStack::EMPTY,
+            &EquipmentSlot::MAIN_HAND,
+        ));
+    }
+
+    #[test]
+    fn changing_held_item_modifiers_is_detected() {
+        assert!(Player::equipment_attributes_changed(
+            Some(ItemStack::EMPTY),
+            &ItemStack::new(1, &Item::WOODEN_SWORD),
+            &EquipmentSlot::MAIN_HAND,
+        ));
     }
 
     #[test]

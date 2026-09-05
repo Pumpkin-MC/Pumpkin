@@ -310,15 +310,23 @@ impl ClientPacket for CUpdateAttributes {
             write.write_var_int(&self.entity_id)?;
         }
 
+        let properties: Vec<_> = self
+            .properties
+            .iter()
+            .filter_map(|property| {
+                remap_attribute_id_for_version(property.id.0 as u32, *version)
+                    .map(|id| (property, id))
+            })
+            .collect();
+
         if *version >= JavaMinecraftVersion::V_1_17 {
-            write.write_var_int(&VarInt(self.properties.len() as i32))?;
+            write.write_var_int(&VarInt(properties.len() as i32))?;
         } else {
-            write.write_i32_be(self.properties.len() as i32)?;
+            write.write_i32_be(properties.len() as i32)?;
         }
 
-        for prop in &self.properties {
+        for (prop, remapped_id) in properties {
             if *version >= JavaMinecraftVersion::V_1_20_5 {
-                let remapped_id = remap_attribute_id_for_version(prop.id.0 as u32, *version);
                 write.write_var_int(&VarInt(remapped_id as i32))?;
             } else if *version >= JavaMinecraftVersion::V_1_16 {
                 let name = attribute_id_to_1_16_name(prop.id.0 as u8);
@@ -402,5 +410,53 @@ impl<'a> ServerPacket<'a> for CUpdateAttributes {
             entity_id,
             properties,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_util::version::JavaMinecraftVersion;
+
+    use crate::{
+        ClientPacket,
+        codec::var_int::VarInt,
+        java::client::play::{CUpdateAttributes, Property},
+    };
+
+    fn packet_with_attribute(attribute_id: i32) -> CUpdateAttributes {
+        CUpdateAttributes::new(
+            VarInt(1),
+            vec![Property::new(VarInt(attribute_id), 4.0, Vec::new())],
+        )
+    }
+
+    #[test]
+    fn remaps_attack_speed_for_1_21_11() {
+        let mut bytes = Vec::new();
+        packet_with_attribute(5)
+            .write_packet_data(&mut bytes, &JavaMinecraftVersion::V_1_21_11)
+            .unwrap();
+
+        assert_eq!(&bytes[..3], &[1, 1, 4]);
+    }
+
+    #[test]
+    fn keeps_attack_speed_id_for_26_2() {
+        let mut bytes = Vec::new();
+        packet_with_attribute(5)
+            .write_packet_data(&mut bytes, &JavaMinecraftVersion::V_26_2)
+            .unwrap();
+
+        assert_eq!(&bytes[..3], &[1, 1, 5]);
+    }
+
+    #[test]
+    fn skips_attributes_missing_from_target_version() {
+        let mut bytes = Vec::new();
+        packet_with_attribute(0)
+            .write_packet_data(&mut bytes, &JavaMinecraftVersion::V_1_21_11)
+            .unwrap();
+
+        assert_eq!(bytes, [1, 0]);
     }
 }

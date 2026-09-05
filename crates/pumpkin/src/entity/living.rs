@@ -351,7 +351,7 @@ impl LivingEntity {
 
         let mut sent_editioned = false;
         for (slot, stack) in equipment {
-            if *slot == EquipmentSlot::MAIN_HAND {
+            if *slot == EquipmentSlot::MAIN_HAND && self.entity.entity_type != &EntityType::PLAYER {
                 self.update_weapon_attributes(stack);
             }
             if *slot == EquipmentSlot::MAIN_HAND || *slot == EquipmentSlot::OFF_HAND {

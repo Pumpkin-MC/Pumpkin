@@ -4563,6 +4563,7 @@ impl World {
             player.set_experience(0, 0.0, 0);
             player.inventory.clear();
         }
+        player.resync_equipment_attributes();
 
         // Set entity position BEFORE loading chunks, so chunks load at the right location
         // This mirrors the initial spawn flow where update_position is called before teleport
