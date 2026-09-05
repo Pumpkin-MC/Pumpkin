@@ -1096,6 +1096,11 @@ impl Server {
 
     /// Ticks the game logic for all worlds. This is the part that is affected by `/tick freeze`.
     pub fn tick_worlds(self: &Arc<Self>) {
+        let source = crate::command::CommandSender::Console.into_source(self);
+        let _ = self
+            .datapack_manager
+            .execute_function(self, &source, "#minecraft:tick");
+
         self.task_scheduler.tick(self);
         self.scheduled_functions.tick(
             self,
