@@ -54,6 +54,7 @@ mod connection_cache;
 pub(crate) mod debug_profiler;
 pub mod enchantment;
 mod key_store;
+pub mod perf_profiler;
 pub mod recipe;
 pub mod scheduler;
 pub mod seasonal_events;
@@ -138,6 +139,8 @@ pub struct Server {
     pub tick_count: AtomicI32,
     /// Owns the server-wide tick profiling session used by `/debug`.
     pub(crate) debug_profiler: debug_profiler::DebugProfiler,
+    /// The metrics recording session driven by `/perf`
+    pub perf_profiler: perf_profiler::PerfProfiler,
     /// Random unique Server ID used by Bedrock Edition
     pub server_guid: u64,
     /// Player idle timeout in minutes (0 = disabled)
@@ -312,6 +315,7 @@ impl Server {
             aggregated_tick_times_nanos: AtomicI64::new(0),
             tick_count: AtomicI32::new(0),
             debug_profiler: debug_profiler::DebugProfiler::new(),
+            perf_profiler: perf_profiler::PerfProfiler::default(),
             tasks: TaskTracker::new(),
             runtime: tokio::runtime::Handle::current(),
             task_scheduler: Arc::new(TaskScheduler::new()),
