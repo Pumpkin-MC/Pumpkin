@@ -2940,8 +2940,12 @@ impl Entity {
     }
 
     pub fn set_fall_flying(&self, fall_flying: bool) {
-        assert_ne!(self.fall_flying.load(Relaxed), fall_flying);
-        self.fall_flying.store(fall_flying, Relaxed);
+        // Every caller means "make it this value", not "toggle it" - and the plugin API exposes
+        // this directly with no guard of its own, so a no-op call (e.g. two plugins reacting to
+        // the same event) must stay a no-op rather than panic the server thread.
+        if self.fall_flying.swap(fall_flying, Relaxed) == fall_flying {
+            return;
+        }
         self.set_flag(Flag::FallFlying, fall_flying);
     }
     pub fn is_fall_flying(&self) -> bool {

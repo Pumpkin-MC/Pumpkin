@@ -79,7 +79,9 @@ impl Drop for ItemMergeReservation<'_> {
     }
 }
 
-const ITEM_UPDATE_INTERVAL: u32 = 20;
+/// Below this, a settled item's residual friction-decayed velocity is visually indistinguishable
+/// from rest; see `move_and_apply_friction`.
+const REST_EPSILON: f64 = 1.0E-3;
 
 impl ItemEntity {
     pub fn new(entity: Entity, item_stack: ItemStack) -> Self {
@@ -457,6 +459,21 @@ impl ItemEntity {
             velo.y = 0.0;
         }
 
+        // Friction only ever shrinks velocity toward zero, never reaching it exactly, so a
+        // settled item's position technically changes by a subatomic amount every tick forever.
+        // That kept `moved` true and triggered a full sync packet every tick for the item's
+        // entire remaining lifetime. Snap negligible velocity to exactly zero once it's visually
+        // indistinguishable from rest, matching what the client already renders.
+        if velo.x.abs() < REST_EPSILON {
+            velo.x = 0.0;
+        }
+        if velo.y.abs() < REST_EPSILON {
+            velo.y = 0.0;
+        }
+        if velo.z.abs() < REST_EPSILON {
+            velo.z = 0.0;
+        }
+
         entity.velocity.store(velo);
     }
 
@@ -515,16 +532,13 @@ impl ItemEntity {
             || entity.touching_lava.load(Ordering::SeqCst)
             || entity.velocity.load().sub(&original_velo).length_squared() > 0.1;
         let moved = entity.pos.load() != entity.last_sent_pos.load();
-        let position_dirty = moved
-            && self
-                .item_age
-                .load(Ordering::Relaxed)
-                .is_multiple_of(ITEM_UPDATE_INTERVAL);
 
-        if position_dirty || velocity_dirty {
+        // Sync every tick the item actually moved, not on a fixed interval - vanilla clients
+        // don't run their own physics prediction for item entities, so throttling this let the
+        // item drift/settle unsynced for up to a second before snapping to the true server
+        // position once the delayed update finally arrived.
+        if moved || velocity_dirty {
             entity.send_pos_rot();
-        } else if moved {
-            entity.send_bedrock_pos();
         }
         if velocity_dirty {
             entity.send_velocity();
