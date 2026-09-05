@@ -1012,6 +1012,7 @@ mod tests {
             random: super::super::create_chunk_random(0, 0, 0),
             sea_level: 63,
             min_y: -64,
+            generation_height: 384,
             height_sampler: None,
             structure_key: Some(pumpkin_data::structures::StructureKeys::AncientCity),
         };
@@ -1123,6 +1124,7 @@ mod tests {
             random: super::super::create_chunk_random(SEED, 75, -82),
             sea_level: 63,
             min_y: -64,
+            generation_height: 384,
             height_sampler: Some(&mut height_sampler),
             structure_key: Some(pumpkin_data::structures::StructureKeys::PillagerOutpost),
         };

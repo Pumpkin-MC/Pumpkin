@@ -852,6 +852,10 @@ pub struct StructureGeneratorContext<'a> {
     pub random: RandomGenerator,
     pub sea_level: i32,
     pub min_y: i32,
+    /// Vanilla `WorldGenerationContext::getGenDepth`: the chunk generator's noise
+    /// height clamped to the dimension, *not* the dimension height (128 in the
+    /// Nether, where the dimension is 256 tall).
+    pub generation_height: u16,
     pub height_sampler: Option<&'a mut dyn HeightSampler>,
     pub structure_key: Option<pumpkin_data::structures::StructureKeys>,
 }

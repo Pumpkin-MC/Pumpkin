@@ -1442,6 +1442,7 @@ impl ProtoChunk {
         // Constant across every chunk in the dimension, so hoist it out of the loop
         // and out of the (cached) structure-start computation below.
         let chunk_min_y = self.bottom_y() as i32;
+        let generation_height = self.generation_height();
 
         for (set_index, set) in StructureSet::ALL.iter().enumerate() {
             let mut candidate_chunks = Vec::new();
@@ -1520,6 +1521,7 @@ impl ProtoChunk {
                                     ),
                                     sea_level: settings.sea_level,
                                     min_y: chunk_min_y,
+                                    generation_height,
                                     height_sampler: Some(&mut height_sampler),
                                     structure_key: Some(entry.structure),
                                 };

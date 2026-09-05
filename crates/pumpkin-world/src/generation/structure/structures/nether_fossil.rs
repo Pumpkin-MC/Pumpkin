@@ -43,12 +43,6 @@ pub const FOSSILS: [&str; 14] = [
     "nether_fossils/fossil_14",
 ];
 
-/// Vanilla height provider bounds for nether fossils.
-/// From `nether_fossil.json`: uniform(absolute=32, `below_top=2`).
-/// Vanilla `BelowTop`: height - 1 + `min_y` - offset = 256 - 1 + 0 - 2 = 253.
-const HEIGHT_MIN: i32 = 32;
-const HEIGHT_MAX: i32 = 253;
-
 pub struct NetherFossilGenerator;
 
 impl StructureGenerator for NetherFossilGenerator {
@@ -67,16 +61,20 @@ impl StructureGenerator for NetherFossilGenerator {
         let x = start_block_x(context.chunk_x) + context.random.next_bounded_i32(16);
         let z = start_block_z(context.chunk_z) + context.random.next_bounded_i32(16);
 
-        let structure = context
+        // `nether_fossil.json`: uniform(absolute=32, `below_top=2`). `BelowTop` resolves
+        // against the generation height, which in the Nether is the noise height (128,
+        // giving max y 125), not the 256-block dimension height. Sampling up to 253 put
+        // the start above the bedrock roof, where the downward scan stopped on the roof
+        // and buried the fossil in it.
+        let initial_y = context
             .structure_key
-            .map(|key| pumpkin_data::structures::Structure::get(&key));
-
-        let initial_y = if let Some(hp) = structure.and_then(|s| s.start_height) {
-            hp.get(&mut context.random, context.min_y as i8, 256)
-        } else {
-            let height_range = HEIGHT_MAX - HEIGHT_MIN + 1;
-            HEIGHT_MIN + context.random.next_bounded_i32(height_range)
-        };
+            .map(|key| pumpkin_data::structures::Structure::get(&key))
+            .and_then(|s| s.start_height)?
+            .get(
+                &mut context.random,
+                context.min_y as i8,
+                context.generation_height,
+            );
 
         let rotation_index = context.random.next_bounded_i32(4) as u8;
         let rotation = Rotation::from_index(rotation_index);
@@ -310,4 +308,40 @@ fn make_settings(rotation: Rotation) -> StructurePlaceSettings {
                 properties: None,
             },
         ]))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::generation::structure::structures::{
+        StructureGeneratorContext, create_chunk_random,
+    };
+    use pumpkin_data::structures::StructureKeys;
+
+    /// The Nether is 256 blocks tall but only generates 128, so `below_top=2`
+    /// resolves to y=125. Sampling above that used to start the fossil over the
+    /// bedrock roof, where the downward scan stopped on the roof itself.
+    #[test]
+    fn start_height_stays_below_the_nether_roof() {
+        for chunk_x in 0..64 {
+            let context = StructureGeneratorContext {
+                seed: 0,
+                chunk_x,
+                chunk_z: 0,
+                random: create_chunk_random(0, chunk_x, 0),
+                sea_level: 32,
+                min_y: 0,
+                generation_height: 128,
+                height_sampler: None,
+                structure_key: Some(StructureKeys::NetherFossil),
+            };
+            let y = NetherFossilGenerator
+                .get_structure_position(context)
+                .expect("nether fossil template should load")
+                .start_pos
+                .0
+                .y;
+            assert!((32..=125).contains(&y), "fossil start out of range: {y}");
+        }
+    }
 }
