@@ -218,7 +218,7 @@ jobs:
         with:
           ndk-version: r27c
       - name: Install cargo-ndk
-        run: cargo install cargo-ndk 
+        run: cargo install cargo-ndk
       - uses: Swatinem/rust-cache@v2
       - name: Build Release with cargo ndk
         env:
