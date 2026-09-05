@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use pumpkin_data::{Block, BlockDirection, BlockId, BlockState, BlockStateId};
+use pumpkin_data::{Block, BlockDirection, BlockId, BlockState, BlockStateId, tag::Taggable};
 use pumpkin_util::{
     math::{int_provider::IntProvider, position::BlockPos},
     random::{RandomGenerator, legacy_rand::LegacyRand},
@@ -81,6 +81,28 @@ impl GeodeFeature {
         Self::shape_noise(world_seed).get_value(x, y, z)
     }
 
+    /// Resolves a `BlockWrapper` (block names and/or `#tags`, as vanilla `HolderSet`s) to the
+    /// set of block ids it matches.
+    fn resolve_block_set(wrapper: &BlockWrapper) -> HashSet<BlockId> {
+        let mut ids = HashSet::new();
+        let entries: Vec<&str> = match wrapper {
+            BlockWrapper::Single(s) => vec![s.as_str()],
+            BlockWrapper::Multi(v) => v.iter().map(String::as_str).collect(),
+        };
+        for entry in entries {
+            if let Some(tag) = entry.strip_prefix('#') {
+                for name in Block::get_tag_values(tag).into_iter().flatten() {
+                    if let Some(block) = Block::from_name(name) {
+                        ids.insert(block.id);
+                    }
+                }
+            } else if let Some(block) = Block::from_name(entry) {
+                ids.insert(block.id);
+            }
+        }
+        ids
+    }
+
     fn safe_set_block<T: GenerationCache>(
         chunk: &mut T,
         pos: BlockPos,
@@ -118,38 +140,9 @@ impl GeodeFeature {
         let num_points = self.distribution_points.get(random);
         let noise = Self::shape_noise(chunk.get_world_seed());
 
-        // Precompute sets of raw block ids for fast lookups
-        let mut invalid_raw_ids: HashSet<BlockId> = HashSet::new();
-        match &self.invalid_blocks {
-            BlockWrapper::Single(s) => {
-                if let Some(b) = Block::from_name(s.as_str()) {
-                    invalid_raw_ids.insert(b.id);
-                }
-            }
-            BlockWrapper::Multi(v) => {
-                for s in v {
-                    if let Some(b) = Block::from_name(s.as_str()) {
-                        invalid_raw_ids.insert(b.id);
-                    }
-                }
-            }
-        }
-
-        let mut cannot_replace_raw_ids: HashSet<BlockId> = HashSet::new();
-        match &self.cannot_replace {
-            BlockWrapper::Single(s) => {
-                if let Some(b) = Block::from_name(s.as_str()) {
-                    cannot_replace_raw_ids.insert(b.id);
-                }
-            }
-            BlockWrapper::Multi(v) => {
-                for s in v {
-                    if let Some(b) = Block::from_name(s.as_str()) {
-                        cannot_replace_raw_ids.insert(b.id);
-                    }
-                }
-            }
-        }
+        // Precompute sets of raw block ids for fast lookups (tags included).
+        let invalid_raw_ids = Self::resolve_block_set(&self.invalid_blocks);
+        let cannot_replace_raw_ids = Self::resolve_block_set(&self.cannot_replace);
 
         let mut points: Vec<(BlockPos, i32)> = Vec::with_capacity(num_points as usize);
         let mut crack_points: Vec<BlockPos> = Vec::new();
@@ -432,5 +425,21 @@ mod tests {
                 "noise at ({x}, {y}, {z}) = {actual}, vanilla {expected}"
             );
         }
+    }
+
+    /// Vanilla resolves `#minecraft:geode_invalid_blocks` / `#minecraft:features_cannot_replace`
+    /// as `HolderSet`s (`BlockState.is(HolderSet)`); a tag string must not silently resolve to
+    /// an empty set.
+    #[test]
+    fn amethyst_geode_resolves_block_tags() {
+        let geode = amethyst_geode();
+        let invalid = GeodeFeature::resolve_block_set(&geode.invalid_blocks);
+        assert!(invalid.contains(&Block::WATER.id));
+        assert!(invalid.contains(&Block::LAVA.id));
+        assert!(invalid.contains(&Block::BEDROCK.id));
+        assert!(!invalid.contains(&Block::STONE.id));
+        let cannot_replace = GeodeFeature::resolve_block_set(&geode.cannot_replace);
+        assert!(cannot_replace.contains(&Block::BEDROCK.id));
+        assert!(!cannot_replace.contains(&Block::DEEPSLATE.id));
     }
 }
