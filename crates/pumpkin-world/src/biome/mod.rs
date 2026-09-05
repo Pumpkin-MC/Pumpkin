@@ -8,6 +8,14 @@ pub mod end;
 pub mod multi_noise;
 pub mod position_finder;
 
+pub use position_finder::{
+    Climate, ClimateSampler, DistanceMetric, FittestPositionFinder, FittestPositionFinderResult,
+    ParameterList, RTree, RTreeLeaf, RTreeNode, RTreeSubTree, SpawnFinder, SpawnFinderResult,
+};
+pub use pumpkin_data::chunk::{
+    Parameter, ParameterPoint, ParameterRange, TargetPoint, quantize_coord, unquantize_coord,
+};
+
 thread_local! {
     /// A shortcut; check if last used biome is what we should use
     static LAST_RESULT_NODE: RefCell<Option<&'static BiomeTree>> = const {RefCell::new(None) };
@@ -55,11 +63,8 @@ mod test {
     use serde::Deserialize;
 
     use crate::{
-        ProtoChunk,
-        chunk::palette::BIOME_NETWORK_MAX_BITS,
-        generation::noise::router::multi_noise_sampler::{
-            MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
-        },
+        ProtoChunk, chunk::palette::BIOME_NETWORK_MAX_BITS,
+        generation::noise::router::multi_noise_sampler::MultiNoiseSampler,
     };
 
     use super::{BiomeSupplier, MultiNoiseBiomeSupplier, hash_seed};
@@ -70,9 +75,7 @@ mod test {
         use pumpkin_util::world_seed::Seed;
         let seed = 13579;
         let generator = VanillaGenerator::new(Seed(seed as u64), Dimension::OVERWORLD);
-        let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(1, 1, 1);
-        let mut sampler =
-            MultiNoiseSampler::generate(&generator.base_router.multi_noise, &multi_noise_config);
+        let mut sampler = MultiNoiseSampler::generate(&generator.base_router.multi_noise);
         let biome = MultiNoiseBiomeSupplier::OVERWORLD.biome(-24, 1, 8, &mut sampler);
         assert_eq!(biome, &Biome::DESERT);
     }
@@ -80,10 +83,7 @@ mod test {
     #[test]
     fn wide_area_surface() {
         use crate::generation::generator::{GeneratorInit, VanillaGenerator, WorldGenerator};
-        use crate::generation::noise::router::multi_noise_sampler::{
-            MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
-        };
-        use crate::generation::{biome_coords, positions::chunk_pos};
+        use crate::generation::noise::router::multi_noise_sampler::MultiNoiseSampler;
         use pumpkin_util::world_seed::Seed;
         #[derive(Deserialize)]
         struct BiomeData {
@@ -110,21 +110,8 @@ mod test {
 
             let mut chunk = ProtoChunk::new(chunk_x, chunk_z, &world_gen);
 
-            // Create MultiNoiseSampler for populate_biomes
-
-            let start_x = chunk_pos::start_block_x(chunk_x);
-            let start_z = chunk_pos::start_block_z(chunk_z);
-
-            let horizontal_biome_end = biome_coords::from_block(16);
-            let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(
-                biome_coords::from_block(start_x),
-                biome_coords::from_block(start_z),
-                horizontal_biome_end as usize,
-            );
-            let mut multi_noise_sampler = MultiNoiseSampler::generate(
-                &generator.base_router.multi_noise,
-                &multi_noise_config,
-            );
+            let mut multi_noise_sampler =
+                MultiNoiseSampler::generate(&generator.base_router.multi_noise);
 
             chunk.populate_biomes(generator, &mut multi_noise_sampler);
 

@@ -1,7 +1,7 @@
 #![no_main]
 use libfuzzer_sys::fuzz_target;
-use pumpkin_protocol::bedrock::packet_encoder::BedrockBatchEncoder;
 use pumpkin_protocol::bedrock::SubClient;
+use pumpkin_protocol::bedrock::packet_encoder::BedrockBatchEncoder;
 
 fuzz_target!(|data: &[u8]| {
     if data.len() < 10 {
@@ -23,7 +23,7 @@ fuzz_target!(|data: &[u8]| {
         2 => SubClient::SubClient1,
         _ => SubClient::SubClietn2,
     };
-    let use_compression = data[6] % 2 == 0;
+    let use_compression = data[6].is_multiple_of(2);
     let packet_payload = &data[7..];
 
     let mut encoder = BedrockBatchEncoder::new();
@@ -33,11 +33,5 @@ fuzz_target!(|data: &[u8]| {
     }
 
     let mut out = Vec::new();
-    let _ = encoder.write_game_packet(
-        packet_id,
-        sender,
-        target,
-        packet_payload,
-        &mut out
-    );
+    let _ = encoder.write_game_packet(packet_id, sender, target, packet_payload, &mut out);
 });

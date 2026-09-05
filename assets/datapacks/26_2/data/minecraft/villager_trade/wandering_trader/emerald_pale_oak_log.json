@@ -1,0 +1,10 @@
+{
+  "gives": {
+    "count": 8,
+    "id": "minecraft:pale_oak_log"
+  },
+  "reputation_discount": 0.05,
+  "wants": {
+    "id": "minecraft:emerald"
+  }
+}

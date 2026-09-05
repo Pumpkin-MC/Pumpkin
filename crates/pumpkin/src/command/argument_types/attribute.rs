@@ -1,5 +1,3 @@
-use std::pin::Pin;
-
 use crate::command::{
     argument_types::FromStringReader,
     argument_types::argument_type::{ArgumentType, JavaClientArgumentType},
@@ -42,20 +40,18 @@ impl ArgumentType for AttributeArgumentType {
 
     fn client_side_parser(&'_ self) -> JavaClientArgumentType {
         JavaClientArgumentType::Resource {
-            identifier: Identifier::vanilla("attribute").expect("valid identifier"),
+            identifier: Identifier::vanilla_static("attribute"),
         }
     }
 
-    fn list_suggestions<'a>(
-        &'a self,
-        _context: &'a CommandContext,
+    fn list_suggestions(
+        &self,
+        _context: &CommandContext,
         builder: SuggestionsBuilder,
-    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
-        Box::pin(async move {
-            builder
-                .filter_and_suggest_iter(Attributes::ALL.iter().map(|a| a.name))
-                .build()
-        })
+    ) -> Suggestions {
+        builder
+            .filter_and_suggest_iter(Attributes::ALL.iter().map(|a| a.name))
+            .build()
     }
 }
 

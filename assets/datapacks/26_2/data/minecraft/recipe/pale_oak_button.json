@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "redstone",
+  "group": "wooden_button",
+  "ingredients": [
+    "minecraft:pale_oak_planks"
+  ],
+  "result": {
+    "id": "minecraft:pale_oak_button"
+  }
+}

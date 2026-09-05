@@ -6,7 +6,7 @@ use crate::plugin::{
     loader::wasm::wasm_host::{
         state::PluginHostState,
         wit::v0_1::{
-            events::{ToFromWasmEvent, to_wasm_block_position},
+            events::{ToFromWasmEvent, cleanup_event, to_wasm_block_position},
             pumpkin::plugin::event::{
                 Event, HangingBreakByEntityEventData, HangingBreakEventData, HangingPlaceEventData,
             },
@@ -23,7 +23,8 @@ impl ToFromWasmEvent for HangingBreakEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::HangingBreakEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -48,7 +49,8 @@ impl ToFromWasmEvent for HangingBreakByEntityEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::HangingBreakByEntityEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -81,7 +83,8 @@ impl ToFromWasmEvent for HangingPlaceEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::HangingPlaceEvent(data) = event {
             self.cancelled = data.cancelled;
         }

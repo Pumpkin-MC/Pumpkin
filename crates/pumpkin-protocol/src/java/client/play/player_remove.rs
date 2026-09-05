@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_PLAYER_INFO_REMOVE;
+use pumpkin_data::packet::clientbound::play::PLAYER_INFO_REMOVE;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
@@ -10,7 +10,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 ///
 /// This packet is typically used when a player leaves the server or becomes invisible
 /// to the recipient (e.g., moving out of tracking range).
-#[java_packet(PLAY_PLAYER_INFO_REMOVE)]
+#[java_packet(PLAYER_INFO_REMOVE)]
 pub struct CRemovePlayerInfo<'a> {
     /// A list of UUIDs corresponding to the players that should be removed.
     pub players: &'a [uuid::Uuid],

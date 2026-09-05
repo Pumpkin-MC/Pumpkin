@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_polished_sulfur": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:polished_sulfur"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:sulfur_brick_wall_from_polished_sulfur_stonecutting"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_polished_sulfur"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:sulfur_brick_wall_from_polished_sulfur_stonecutting"
+    ]
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "type": "minecraft:blasting",
+  "category": "blocks",
+  "experience": 0.7,
+  "group": "redstone",
+  "ingredient": "minecraft:deepslate_redstone_ore",
+  "result": {
+    "id": "minecraft:redstone"
+  }
+}

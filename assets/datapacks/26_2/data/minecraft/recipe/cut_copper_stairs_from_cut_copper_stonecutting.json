@@ -1,0 +1,7 @@
+{
+  "type": "minecraft:stonecutting",
+  "ingredient": "minecraft:cut_copper",
+  "result": {
+    "id": "minecraft:cut_copper_stairs"
+  }
+}

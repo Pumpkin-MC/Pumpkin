@@ -1,0 +1,8 @@
+{
+  "comparator_output": 5,
+  "description": {
+    "translate": "jukebox_song.minecraft.far"
+  },
+  "length_in_seconds": 174.0,
+  "sound_event": "minecraft:music_disc.far"
+}

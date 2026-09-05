@@ -1,0 +1,31 @@
+{
+  "has_precipitation": true,
+  "temperature": 0.8,
+  "downfall": 0.9,
+  "effects": {
+    "mood_sound": {
+      "sound": "minecraft:ambient.cave",
+      "tick_delay": 6000,
+      "block_search_extent": 8,
+      "offset": 2.0
+    },
+    "music": [
+      {
+        "data": {
+          "sound": "minecraft:music.overworld.swamp",
+          "min_delay": 12000,
+          "max_delay": 24000,
+          "replace_current_music": false
+        },
+        "weight": 1
+      }
+    ],
+    "music_volume": 1.0,
+    "grass_color_modifier": "swamp",
+    "sky_color": 7907327,
+    "foliage_color": 6975545,
+    "fog_color": 12638463,
+    "water_color": 6388580,
+    "water_fog_color": 2302743
+  }
+}

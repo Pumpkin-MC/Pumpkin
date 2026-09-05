@@ -1,0 +1,9 @@
+{
+  "asset_id": "minecraft:entity/cat/cat_persian",
+  "baby_asset_id": "minecraft:entity/cat/cat_persian_baby",
+  "spawn_conditions": [
+    {
+      "priority": 0
+    }
+  ]
+}

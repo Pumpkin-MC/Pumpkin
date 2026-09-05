@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_chorus_fruit": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:chorus_fruit"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:popped_chorus_fruit"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_chorus_fruit"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:popped_chorus_fruit"
+    ]
+  }
+}

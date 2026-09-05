@@ -2,7 +2,7 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, NetworkWriteExt, ReadingError},
 };
-use pumpkin_data::packet::serverbound::STATUS_PING_REQUEST;
+use pumpkin_data::packet::serverbound::status::PING_REQUEST;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -10,7 +10,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 ///
 /// This is the second part of the Server List Ping (SLP) process
 /// The server should respond with `CPingResponse`.
-#[java_packet(STATUS_PING_REQUEST)]
+#[java_packet(PING_REQUEST)]
 pub struct SStatusPingRequest {
     pub payload: i64,
 }

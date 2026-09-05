@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_sulfur": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:sulfur"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:sulfur_wall"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_sulfur"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:sulfur_wall"
+    ]
+  }
+}

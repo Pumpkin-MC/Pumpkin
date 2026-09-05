@@ -1,0 +1,41 @@
+{
+  "parent": "minecraft:adventure/minecraft_trials_edition",
+  "criteria": {
+    "who_needs_rockets": {
+      "conditions": {
+        "cause": [
+          {
+            "condition": "minecraft:entity_properties",
+            "entity": "this",
+            "predicate": {
+              "minecraft:entity_type": "minecraft:wind_charge"
+            }
+          }
+        ],
+        "distance": {
+          "y": {
+            "min": 7.0
+          }
+        }
+      },
+      "trigger": "minecraft:fall_after_explosion"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.adventure.who_needs_rockets.description"
+    },
+    "icon": {
+      "id": "minecraft:wind_charge"
+    },
+    "title": {
+      "translate": "advancements.adventure.who_needs_rockets.title"
+    }
+  },
+  "requirements": [
+    [
+      "who_needs_rockets"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

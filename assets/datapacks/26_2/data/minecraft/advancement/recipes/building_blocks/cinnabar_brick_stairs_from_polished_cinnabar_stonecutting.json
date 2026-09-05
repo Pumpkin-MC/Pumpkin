@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_polished_cinnabar": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:polished_cinnabar"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:cinnabar_brick_stairs_from_polished_cinnabar_stonecutting"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_polished_cinnabar"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:cinnabar_brick_stairs_from_polished_cinnabar_stonecutting"
+    ]
+  }
+}

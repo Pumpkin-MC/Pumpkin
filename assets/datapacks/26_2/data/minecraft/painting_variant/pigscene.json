@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:pigscene",
+  "author": {
+    "color": "gray",
+    "translate": "painting.minecraft.pigscene.author"
+  },
+  "height": 4,
+  "title": {
+    "color": "yellow",
+    "translate": "painting.minecraft.pigscene.title"
+  },
+  "width": 4
+}

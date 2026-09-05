@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:orb",
+  "title": {
+    "translate": "painting.minecraft.orb.title",
+    "color": "yellow"
+  },
+  "author": {
+    "translate": "painting.minecraft.orb.author",
+    "color": "gray"
+  },
+  "width": 4,
+  "height": 4
+}

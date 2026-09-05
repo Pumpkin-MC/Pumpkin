@@ -1,0 +1,91 @@
+{
+  "type": "minecraft:sequence",
+  "config": {
+    "features": [
+      {
+        "feature": {
+          "type": "minecraft:lake",
+          "config": {
+            "barrier": {
+              "type": "minecraft:simple_state_provider",
+              "state": {
+                "Name": "minecraft:sulfur"
+              }
+            },
+            "can_place_feature": {
+              "type": "minecraft:not",
+              "predicate": {
+                "type": "minecraft:matching_blocks",
+                "blocks": "minecraft:sulfur_spike"
+              }
+            },
+            "can_replace_with_air_or_fluid": {
+              "type": "minecraft:not",
+              "predicate": {
+                "type": "minecraft:matching_block_tag",
+                "tag": "minecraft:features_cannot_replace"
+              }
+            },
+            "can_replace_with_barrier": {
+              "type": "minecraft:not",
+              "predicate": {
+                "type": "minecraft:matching_block_tag",
+                "tag": "minecraft:lava_pool_stone_cannot_replace"
+              }
+            },
+            "fluid": {
+              "type": "minecraft:simple_state_provider",
+              "state": {
+                "Name": "minecraft:water",
+                "Properties": {
+                  "level": "0"
+                }
+              }
+            }
+          }
+        },
+        "placement": []
+      },
+      {
+        "feature": {
+          "type": "minecraft:simple_block",
+          "config": {
+            "to_place": {
+              "type": "minecraft:simple_state_provider",
+              "state": {
+                "Name": "minecraft:potent_sulfur",
+                "Properties": {
+                  "potent_sulfur_state": "wet"
+                }
+              }
+            }
+          }
+        },
+        "placement": [
+          {
+            "type": "minecraft:environment_scan",
+            "direction_of_search": "down",
+            "max_steps": 4,
+            "target_condition": {
+              "type": "minecraft:all_of",
+              "predicates": [
+                {
+                  "type": "minecraft:solid"
+                },
+                {
+                  "type": "minecraft:matching_fluids",
+                  "fluids": "minecraft:water",
+                  "offset": [
+                    0,
+                    1,
+                    0
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

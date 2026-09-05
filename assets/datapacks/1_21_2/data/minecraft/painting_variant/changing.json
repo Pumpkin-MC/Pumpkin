@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:changing",
+  "title": {
+    "translate": "painting.minecraft.changing.title",
+    "color": "yellow"
+  },
+  "author": {
+    "translate": "painting.minecraft.changing.author",
+    "color": "gray"
+  },
+  "width": 4,
+  "height": 2
+}

@@ -1,0 +1,21 @@
+{
+  "values": [
+    "bone_block",
+    "coal_block",
+    "copper_block",
+    "diamond_block",
+    "dried_kelp_block",
+    "emerald_block",
+    "gold_block",
+    "iron_block",
+    "lapis_block",
+    "netherite_block",
+    "raw_copper_block",
+    "raw_gold_block",
+    "raw_iron_block",
+    "redstone_block",
+    "resin_block",
+    "slime_block",
+    "hay_block"
+  ]
+}

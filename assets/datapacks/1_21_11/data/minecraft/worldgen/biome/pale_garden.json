@@ -1,0 +1,18 @@
+{
+  "has_precipitation": true,
+  "temperature": 0.7,
+  "downfall": 0.8,
+  "attributes": {
+    "minecraft:visual/water_fog_color": "#556980",
+    "minecraft:visual/sky_color": "#b9b9b9",
+    "minecraft:visual/fog_color": "#817770",
+    "minecraft:audio/music_volume": 0.0,
+    "minecraft:audio/background_music": {}
+  },
+  "effects": {
+    "water_color": "#76889d",
+    "foliage_color": "#878d76",
+    "dry_foliage_color": "#a0a69c",
+    "grass_color": "#778272"
+  }
+}

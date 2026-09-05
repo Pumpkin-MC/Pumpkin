@@ -2,14 +2,15 @@ use super::BlockEntity;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
-use std::pin::Pin;
-use tokio::sync::Mutex;
+use std::sync::Mutex;
 
 pub struct BrushableBlockBlockEntity {
     pub position: BlockPos,
     pub item: Mutex<Option<ItemStack>>,
     pub hits: Mutex<i32>,
-    pub direction: Mutex<u8>,
+    pub hit_direction: Mutex<Option<u8>>,
+    pub loot_table: Mutex<Option<String>>,
+    pub loot_table_seed: Mutex<i64>,
 }
 
 impl BlockEntity for BrushableBlockBlockEntity {
@@ -29,28 +30,49 @@ impl BlockEntity for BrushableBlockBlockEntity {
             .get_compound("item")
             .and_then(ItemStack::read_item_stack);
         let hits = nbt.get_int("hits").unwrap_or(0);
-        let direction = nbt.get_byte("direction").unwrap_or(0) as u8;
+        let hit_direction = nbt
+            .get_byte("hit_direction")
+            .or_else(|| nbt.get_byte("direction"))
+            .map(|b| b as u8);
+        let loot_table = nbt.get_string("LootTable").map(ToString::to_string);
+        let loot_table_seed = nbt.get_long("LootTableSeed").unwrap_or(0);
         Self {
             position,
             item: Mutex::new(item),
             hits: Mutex::new(hits),
-            direction: Mutex::new(direction),
+            hit_direction: Mutex::new(hit_direction),
+            loot_table: Mutex::new(loot_table),
+            loot_table_seed: Mutex::new(loot_table_seed),
         }
     }
 
-    fn write_nbt<'a>(
-        &'a self,
-        nbt: &'a mut NbtCompound,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            if let Some(it) = self.item.lock().await.as_ref() {
-                let mut it_nbt = NbtCompound::new();
-                it.write_item_stack(&mut it_nbt);
-                nbt.put_compound("item", it_nbt);
+    fn write_nbt(&self, nbt: &mut NbtCompound) {
+        if let Ok(loot_table) = self.loot_table.lock()
+            && let Some(table) = loot_table.as_ref()
+        {
+            nbt.put_string("LootTable", table.clone());
+            if let Ok(seed) = self.loot_table_seed.lock()
+                && *seed != 0
+            {
+                nbt.put_long("LootTableSeed", *seed);
             }
-            nbt.put_int("hits", *self.hits.lock().await);
-            nbt.put_byte("direction", *self.direction.lock().await as i8);
-        })
+        } else if let Ok(item) = self.item.lock()
+            && let Some(it) = item.as_ref()
+        {
+            let mut it_nbt = NbtCompound::new();
+            it.write_item_stack(&mut it_nbt);
+            nbt.put_compound("item", it_nbt);
+        }
+        if let Ok(hits) = self.hits.lock()
+            && *hits != 0
+        {
+            nbt.put_int("hits", *hits);
+        }
+        if let Ok(direction) = self.hit_direction.lock()
+            && let Some(dir) = *direction
+        {
+            nbt.put_byte("hit_direction", dir as i8);
+        }
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
@@ -62,8 +84,11 @@ impl BlockEntity for BrushableBlockBlockEntity {
             it.write_item_stack(&mut it_nbt);
             nbt.put_compound("item", it_nbt);
         }
-        nbt.put_int("hits", *self.hits.try_lock().ok()?);
-        nbt.put_byte("direction", *self.direction.try_lock().ok()? as i8);
+        if let Ok(direction) = self.hit_direction.try_lock()
+            && let Some(dir) = *direction
+        {
+            nbt.put_byte("hit_direction", dir as i8);
+        }
         Some(nbt)
     }
 
@@ -78,9 +103,11 @@ impl BrushableBlockBlockEntity {
     pub const fn new(position: BlockPos) -> Self {
         Self {
             position,
-            item: Mutex::const_new(None),
-            hits: Mutex::const_new(0),
-            direction: Mutex::const_new(0),
+            item: Mutex::new(None),
+            hits: Mutex::new(0),
+            hit_direction: Mutex::new(None),
+            loot_table: Mutex::new(None),
+            loot_table_seed: Mutex::new(0),
         }
     }
 }

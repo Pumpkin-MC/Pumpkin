@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:aztec",
+  "author": {
+    "color": "gray",
+    "translate": "painting.minecraft.aztec.author"
+  },
+  "height": 1,
+  "title": {
+    "color": "yellow",
+    "translate": "painting.minecraft.aztec.title"
+  },
+  "width": 1
+}

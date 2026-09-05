@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_blaze_powder": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:blaze_powder"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:fire_charge"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_blaze_powder"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:fire_charge"
+    ]
+  }
+}

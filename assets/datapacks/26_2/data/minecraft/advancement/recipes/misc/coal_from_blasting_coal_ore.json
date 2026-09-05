@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_coal_ore": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:coal_ore"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:coal_from_blasting_coal_ore"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_coal_ore"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:coal_from_blasting_coal_ore"
+    ]
+  }
+}

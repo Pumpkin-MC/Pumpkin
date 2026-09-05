@@ -33,6 +33,7 @@ pub struct Biome {
     /// Per-entity spawn cost budget entries, keyed by namespaced entity ID.
     spawn_costs: BTreeMap<String, SpawnCosts>,
     /// Numeric registry ID assigned to this biome.
+    #[serde(default)]
     pub id: u8,
 }
 
@@ -213,9 +214,28 @@ struct MultiNoiseBiomeSuppliers {
 /// Generates the `TokenStream` for the `Biome` struct, its constants, lookup methods,
 /// the multi-noise biome source trees, and the `BiomeTree` search implementation.
 pub fn build() -> TokenStream {
-    let biomes: BTreeMap<String, Biome> =
-        serde_json::from_str(&fs::read_to_string("../../assets/biome.json").unwrap())
-            .expect("Failed to parse biome.json");
+    let dir = std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/worldgen/biome");
+    let mut biomes: BTreeMap<String, Biome> = BTreeMap::new();
+    let mut entries: Vec<_> = fs::read_dir(dir)
+        .expect("Missing worldgen/biome directory")
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
+        .collect();
+    entries.sort_by_key(|e| e.path());
+
+    for (i, entry) in entries.iter().enumerate() {
+        let stem = entry
+            .path()
+            .file_stem()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
+        let content = fs::read_to_string(entry.path()).expect("Failed to read biome file");
+        let mut biome: Biome = serde_json::from_str(&content).expect("Failed to parse biome JSON");
+        biome.id = i as u8;
+        biomes.insert(stem, biome);
+    }
+
     let biome_trees: MultiNoiseBiomeSuppliers = serde_json::from_str(
         &fs::read_to_string("../../assets/multi_noise_biome_tree.json").unwrap(),
     )
@@ -499,22 +519,264 @@ pub fn build() -> TokenStream {
             }
         }
 
-        #[derive(PartialEq)]
-        pub struct ParameterRange {
-            min: i64,
-            max: i64,
+        pub const QUANTIZATION_FACTOR: f32 = 10000.0;
+
+        #[inline]
+        #[must_use]
+        pub const fn quantize_coord(coord: f32) -> i64 {
+            (coord * QUANTIZATION_FACTOR) as i64
         }
 
-        impl ParameterRange {
-            pub fn calc_distance(&self, noise: i64) -> i64 {
-                if noise > self.max {
-                    noise - self.max
-                } else if noise < self.min {
-                    self.min - noise
+        #[inline]
+        #[must_use]
+        pub const fn unquantize_coord(coord: i64) -> f32 {
+            coord as f32 / QUANTIZATION_FACTOR
+        }
+
+        #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+        pub struct Parameter {
+            pub min: i64,
+            pub max: i64,
+        }
+
+        pub type ParameterRange = Parameter;
+
+        impl Parameter {
+            #[must_use]
+            pub const fn new(min: i64, max: i64) -> Self {
+                Self { min, max }
+            }
+
+            #[must_use]
+            pub const fn point(min: f32) -> Self {
+                Self::span(min, min)
+            }
+
+            #[must_use]
+            pub const fn span(min: f32, max: f32) -> Self {
+                assert!(min <= max, "min > max");
+                Self {
+                    min: quantize_coord(min),
+                    max: quantize_coord(max),
+                }
+            }
+
+            #[must_use]
+            pub const fn span_quantized(min: i64, max: i64) -> Self {
+                assert!(min <= max, "min > max");
+                Self { min, max }
+            }
+
+            #[inline]
+            #[must_use]
+            pub const fn calc_distance(&self, noise: i64) -> i64 {
+                self.distance(noise)
+            }
+
+            #[inline]
+            #[must_use]
+            pub const fn distance(&self, target: i64) -> i64 {
+                let above = target - self.max;
+                let below = self.min - target;
+                if above > 0 {
+                    above
+                } else if below > 0 {
+                    below
                 } else {
                     0
                 }
             }
+
+            #[inline]
+            #[must_use]
+            pub const fn distance_parameter(&self, target: &Self) -> i64 {
+                let above = target.min - self.max;
+                let below = self.min - target.max;
+                if above > 0 {
+                    above
+                } else if below > 0 {
+                    below
+                } else {
+                    0
+                }
+            }
+
+            #[inline]
+            #[must_use]
+            pub const fn span_with(&self, other: Option<&Self>) -> Self {
+                match other {
+                    None => *self,
+                    Some(other) => Self {
+                        min: if self.min < other.min { self.min } else { other.min },
+                        max: if self.max > other.max { self.max } else { other.max },
+                    },
+                }
+            }
+        }
+
+        impl fmt::Display for Parameter {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                if self.min == self.max {
+                    write!(f, "{}", self.min)
+                } else {
+                    write!(f, "[{}-{}]", self.min, self.max)
+                }
+            }
+        }
+
+        #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+        pub struct TargetPoint {
+            pub temperature: i64,
+            pub humidity: i64,
+            pub continentalness: i64,
+            pub erosion: i64,
+            pub depth: i64,
+            pub weirdness: i64,
+        }
+
+        impl TargetPoint {
+            #[must_use]
+            pub const fn new(
+                temperature: i64,
+                humidity: i64,
+                continentalness: i64,
+                erosion: i64,
+                depth: i64,
+                weirdness: i64,
+            ) -> Self {
+                Self {
+                    temperature,
+                    humidity,
+                    continentalness,
+                    erosion,
+                    depth,
+                    weirdness,
+                }
+            }
+
+            #[must_use]
+            pub const fn to_parameter_array(&self) -> [i64; 7] {
+                [
+                    self.temperature,
+                    self.humidity,
+                    self.continentalness,
+                    self.erosion,
+                    self.depth,
+                    self.weirdness,
+                    0,
+                ]
+            }
+
+            #[must_use]
+            pub const fn convert_to_list(&self) -> [i64; 7] {
+                self.to_parameter_array()
+            }
+        }
+
+        #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+        pub struct ParameterPoint {
+            pub temperature: Parameter,
+            pub humidity: Parameter,
+            pub continentalness: Parameter,
+            pub erosion: Parameter,
+            pub depth: Parameter,
+            pub weirdness: Parameter,
+            pub offset: i64,
+        }
+
+        impl ParameterPoint {
+            #[must_use]
+            pub const fn new(
+                temperature: Parameter,
+                humidity: Parameter,
+                continentalness: Parameter,
+                erosion: Parameter,
+                depth: Parameter,
+                weirdness: Parameter,
+                offset: i64,
+            ) -> Self {
+                Self {
+                    temperature,
+                    humidity,
+                    continentalness,
+                    erosion,
+                    depth,
+                    weirdness,
+                    offset,
+                }
+            }
+
+            #[inline]
+            #[must_use]
+            pub const fn fitness(&self, target: &TargetPoint) -> i64 {
+                let temp_dist = self.temperature.distance(target.temperature);
+                let hum_dist = self.humidity.distance(target.humidity);
+                let cont_dist = self.continentalness.distance(target.continentalness);
+                let ero_dist = self.erosion.distance(target.erosion);
+                let dep_dist = self.depth.distance(target.depth);
+                let wei_dist = self.weirdness.distance(target.weirdness);
+
+                temp_dist * temp_dist
+                    + hum_dist * hum_dist
+                    + cont_dist * cont_dist
+                    + ero_dist * ero_dist
+                    + dep_dist * dep_dist
+                    + wei_dist * wei_dist
+                    + self.offset * self.offset
+            }
+
+            #[must_use]
+            pub const fn parameter_space(&self) -> [Parameter; 7] {
+                [
+                    self.temperature,
+                    self.humidity,
+                    self.continentalness,
+                    self.erosion,
+                    self.depth,
+                    self.weirdness,
+                    Parameter::new(self.offset, self.offset),
+                ]
+            }
+        }
+
+        #[must_use]
+        pub const fn target(
+            temperature: f32,
+            humidity: f32,
+            continentalness: f32,
+            erosion: f32,
+            depth: f32,
+            weirdness: f32,
+        ) -> TargetPoint {
+            TargetPoint::new(
+                quantize_coord(temperature),
+                quantize_coord(humidity),
+                quantize_coord(continentalness),
+                quantize_coord(erosion),
+                quantize_coord(depth),
+                quantize_coord(weirdness),
+            )
+        }
+
+        #[must_use]
+        pub const fn parameters(
+            temperature: f32,
+            humidity: f32,
+            continentalness: f32,
+            erosion: f32,
+            depth: f32,
+            weirdness: f32,
+            offset: f32,
+        ) -> ParameterPoint {
+            ParameterPoint::new(
+                Parameter::point(temperature),
+                Parameter::point(humidity),
+                Parameter::point(continentalness),
+                Parameter::point(erosion),
+                Parameter::point(depth),
+                Parameter::point(weirdness),
+                quantize_coord(offset),
+            )
         }
 
         #[derive(PartialEq)]
@@ -588,14 +850,15 @@ pub fn build() -> TokenStream {
                     Self::Branch { parameters, .. } => parameters,
                 };
 
-                // Fully unrolled for 7 dimensions to maximize throughput
-                params[0].calc_distance(p[0]) +
-                params[1].calc_distance(p[1]) +
-                params[2].calc_distance(p[2]) +
-                params[3].calc_distance(p[3]) +
-                params[4].calc_distance(p[4]) +
-                params[5].calc_distance(p[5]) +
-                params[6].calc_distance(p[6])
+                let d0 = params[0].calc_distance(p[0]);
+                let d1 = params[1].calc_distance(p[1]);
+                let d2 = params[2].calc_distance(p[2]);
+                let d3 = params[3].calc_distance(p[3]);
+                let d4 = params[4].calc_distance(p[4]);
+                let d5 = params[5].calc_distance(p[5]);
+                let d6 = params[6].calc_distance(p[6]);
+
+                d0 * d0 + d1 * d1 + d2 * d2 + d3 * d3 + d4 * d4 + d5 * d5 + d6 * d6
             }
         }
 

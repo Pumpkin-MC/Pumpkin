@@ -71,23 +71,23 @@ impl TitleBuilder {
     }
 
     /// Sends the title configuration to the specified player.
-    pub async fn send_to(&self, player: &Player) {
+    pub fn send_to(&self, player: &Player) {
         if let (Some(fade_in), Some(stay), Some(fade_out)) =
             (self.fade_in, self.stay, self.fade_out)
         {
-            player.send_title_animation(fade_in, stay, fade_out).await;
+            player.send_title_animation(fade_in, stay, fade_out);
         }
 
         if let Some(ref title) = self.title {
-            player.show_title(title, &TitleMode::Title).await;
+            player.show_title(title, &TitleMode::Title);
         }
 
         if let Some(ref subtitle) = self.subtitle {
-            player.show_title(subtitle, &TitleMode::SubTitle).await;
+            player.show_title(subtitle, &TitleMode::SubTitle);
         }
 
         if let Some(ref actionbar) = self.actionbar {
-            player.show_title(actionbar, &TitleMode::ActionBar).await;
+            player.show_title(actionbar, &TitleMode::ActionBar);
         }
     }
 }

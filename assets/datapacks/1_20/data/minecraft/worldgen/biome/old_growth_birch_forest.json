@@ -1,0 +1,23 @@
+{
+  "temperature": 0.6000000238418579,
+  "downfall": 0.6000000238418579,
+  "effects": {
+    "water_fog_color": 329011,
+    "water_color": 4159204,
+    "music": {
+      "max_delay": 24000,
+      "sound": "minecraft:music.overworld.jungle_and_forest",
+      "replace_current_music": 0,
+      "min_delay": 12000
+    },
+    "fog_color": 12638463,
+    "mood_sound": {
+      "offset": 2.0,
+      "sound": "minecraft:ambient.cave",
+      "block_search_extent": 8,
+      "tick_delay": 6000
+    },
+    "sky_color": 8037887
+  },
+  "has_precipitation": 1
+}

@@ -1,0 +1,51 @@
+{
+  "attribute_modifiers": [
+    {
+      "amount": -1.0,
+      "attribute": "minecraft:knockback_resistance",
+      "id": "minecraft:explosive_add_knockback_resistance",
+      "operation": "add_value"
+    },
+    {
+      "amount": -1.0,
+      "attribute": "minecraft:explosion_knockback_resistance",
+      "id": "minecraft:explosive_add_explosion_knockback_resistance",
+      "operation": "add_value"
+    },
+    {
+      "amount": 0.5,
+      "attribute": "minecraft:bounciness",
+      "id": "minecraft:explosive_add_bounciness",
+      "operation": "add_value"
+    },
+    {
+      "amount": -0.699999988079071,
+      "attribute": "minecraft:friction_modifier",
+      "id": "minecraft:explosive_mul_friction_modifier",
+      "operation": "add_multiplied_total"
+    },
+    {
+      "amount": -0.699999988079071,
+      "attribute": "minecraft:air_drag_modifier",
+      "id": "minecraft:explosive_mul_air_drag_modifier",
+      "operation": "add_multiplied_total"
+    }
+  ],
+  "buoyant": true,
+  "explosion": {
+    "causes_fire": false,
+    "fuse": 120,
+    "power": 3
+  },
+  "items": "#minecraft:sulfur_cube_archetype/explosive",
+  "knockback_modifiers": {
+    "horizontal_power": 0.4125,
+    "vertical_power": 0.09
+  },
+  "sound_settings": {
+    "hit_sound": "minecraft:entity.sulfur_cube.explosive.hit",
+    "push_sound": "minecraft:entity.sulfur_cube.explosive.push",
+    "push_sound_cooldown": 0.7,
+    "push_sound_impulse_threshold": 0.1
+  }
+}

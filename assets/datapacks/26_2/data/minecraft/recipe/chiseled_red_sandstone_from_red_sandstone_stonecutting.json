@@ -1,0 +1,7 @@
+{
+  "type": "minecraft:stonecutting",
+  "ingredient": "minecraft:red_sandstone",
+  "result": {
+    "id": "minecraft:chiseled_red_sandstone"
+  }
+}

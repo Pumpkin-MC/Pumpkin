@@ -1,23 +1,23 @@
 use std::sync::Arc;
-use wasmtime::component::Resource;
+use wasmtime::component::{Access, HasSelf, Resource};
 
 use pumpkin_util::math::vector3::Vector3;
 
-use crate::entity::ai::goal::{Goal, GoalFuture};
-use crate::entity::mob::Mob;
-use crate::plugin::loader::wasm::wasm_host::{PluginInstance, WasmPlugin};
 use crate::plugin::loader::wasm::wasm_host::{
     state::{EntityResource, PluginHostState},
     wit::v0_1::events::to_wasm_position,
     wit::v0_1::pumpkin::plugin::{
-        common::{EntityPose, Position},
+        common::{EntityPose, NbtTree as WitNbtTree, Position},
         entity::Host,
         entity_types,
         text::TextComponent,
         uuid::Uuid,
         world::{
             BlockPos as WitBlockPos, BoundingBox as WitBoundingBox, Entity, HostEntity,
-            RaycastResult as WitRaycastResult, World,
+            LivingEntity as WitLivingEntity, Mob as WitMob,
+            RayTraceBlockResult as WitRayTraceBlockResult,
+            RayTraceEntityResult as WitRayTraceEntityResult, RaycastResult as WitRaycastResult,
+            World,
         },
     },
     wit::v0_1::uuid::UuidExt,
@@ -28,7 +28,7 @@ use pumpkin_data::entity::EntityPose as InternalEntityPose;
 impl Host for PluginHostState {}
 impl entity_types::Host for PluginHostState {}
 
-fn entity_from_resource(
+pub fn entity_from_resource(
     state: &PluginHostState,
     entity: &Resource<Entity>,
 ) -> wasmtime::Result<std::sync::Arc<dyn crate::entity::EntityBase>> {
@@ -37,6 +37,16 @@ fn entity_from_resource(
         .get::<EntityResource>(&Resource::new_own(entity.rep()))
         .map_err(|_| wasmtime::Error::msg("invalid entity resource handle"))
         .map(|resource| resource.provider.clone())
+}
+
+fn active_plugin(
+    state: &PluginHostState,
+) -> wasmtime::Result<Arc<crate::plugin::loader::wasm::wasm_host::WasmPlugin>> {
+    state
+        .plugin
+        .as_ref()
+        .and_then(std::sync::Weak::upgrade)
+        .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))
 }
 
 const fn map_entity_pose(pose: InternalEntityPose) -> EntityPose {
@@ -79,22 +89,7 @@ impl HostEntity for PluginHostState {
     ) -> wasmtime::Result<entity_types::EntityType> {
         let entity = entity_from_resource(self, &entity)?;
         let original_name = entity.get_entity().entity_type.resource_name;
-
-        let mut names: Vec<String> = serde_json::from_str::<
-            std::collections::BTreeMap<String, serde_json::Value>,
-        >(&std::fs::read_to_string("assets/entities.json")?)?
-        .keys()
-        .cloned()
-        .collect();
-        names.sort();
-
-        let index = names
-            .iter()
-            .position(|n| n == original_name)
-            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown entity type: {original_name}")))?;
-
-        // SAFETY: The WIT enum is generated from the sorted keys of assets/entities.json.
-        Ok(unsafe { std::mem::transmute::<u8, entity_types::EntityType>(index as u8) })
+        to_wit_entity_type(original_name)
     }
 
     async fn get_position(&mut self, entity: Resource<Entity>) -> wasmtime::Result<Position> {
@@ -164,31 +159,6 @@ impl HostEntity for PluginHostState {
             .load(std::sync::atomic::Ordering::Relaxed))
     }
 
-    async fn teleport(
-        &mut self,
-        entity: Resource<Entity>,
-        pos: Position,
-        world_ref: Resource<World>,
-    ) -> wasmtime::Result<()> {
-        let entity_base = entity_from_resource(self, &entity)?;
-        let world = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::WorldResource>(
-                &Resource::new_own(world_ref.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid world resource handle"))?;
-        let world = world.provider.clone();
-        entity_base
-            .teleport(
-                pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
-                None,
-                None,
-                world,
-            )
-            .await;
-        Ok(())
-    }
-
     async fn set_velocity(
         &mut self,
         entity: Resource<Entity>,
@@ -215,7 +185,7 @@ impl HostEntity for PluginHostState {
         sneaking: bool,
     ) -> wasmtime::Result<()> {
         let entity = entity_from_resource(self, &entity)?;
-        entity.get_entity().set_sneaking(sneaking).await;
+        entity.get_entity().set_sneaking(sneaking);
         Ok(())
     }
 
@@ -225,7 +195,7 @@ impl HostEntity for PluginHostState {
         sprinting: bool,
     ) -> wasmtime::Result<()> {
         let entity = entity_from_resource(self, &entity)?;
-        entity.get_entity().set_sprinting(sprinting).await;
+        entity.get_entity().set_sprinting(sprinting);
         Ok(())
     }
 
@@ -237,23 +207,13 @@ impl HostEntity for PluginHostState {
             .load(std::sync::atomic::Ordering::Relaxed))
     }
 
-    async fn set_swimming(
-        &mut self,
-        entity: Resource<Entity>,
-        swimming: bool,
-    ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
-        entity.get_entity().set_swimming(swimming).await;
-        Ok(())
-    }
-
     async fn set_invisible(
         &mut self,
         entity: Resource<Entity>,
         invisible: bool,
     ) -> wasmtime::Result<()> {
         let entity = entity_from_resource(self, &entity)?;
-        entity.get_entity().set_invisible(invisible).await;
+        entity.get_entity().set_invisible(invisible);
         Ok(())
     }
 
@@ -263,7 +223,7 @@ impl HostEntity for PluginHostState {
         glowing: bool,
     ) -> wasmtime::Result<()> {
         let entity = entity_from_resource(self, &entity)?;
-        entity.get_entity().set_glowing(glowing).await;
+        entity.get_entity().set_glowing(glowing);
         Ok(())
     }
 
@@ -281,7 +241,7 @@ impl HostEntity for PluginHostState {
         fall_flying: bool,
     ) -> wasmtime::Result<()> {
         let entity = entity_from_resource(self, &entity)?;
-        entity.get_entity().set_fall_flying(fall_flying).await;
+        entity.get_entity().set_fall_flying(fall_flying);
         Ok(())
     }
 
@@ -300,7 +260,7 @@ impl HostEntity for PluginHostState {
         on_fire: bool,
     ) -> wasmtime::Result<()> {
         let entity = entity_from_resource(self, &entity)?;
-        entity.get_entity().set_on_fire(on_fire).await;
+        entity.get_entity().set_on_fire(on_fire);
         Ok(())
     }
 
@@ -411,80 +371,6 @@ impl HostEntity for PluginHostState {
         Ok(())
     }
 
-    async fn get_health(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
-        let entity = entity_from_resource(self, &entity)?;
-        Ok(entity
-            .get_living_entity()
-            .map_or(0.0, |living| living.health.load()))
-    }
-
-    async fn set_health(&mut self, entity: Resource<Entity>, health: f32) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
-        if let Some(living) = entity.get_living_entity() {
-            living.health.store(health);
-        }
-        Ok(())
-    }
-
-    async fn get_max_health(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
-        let entity = entity_from_resource(self, &entity)?;
-        Ok(entity
-            .get_living_entity()
-            .map_or(0.0, crate::entity::living::LivingEntity::get_max_health))
-    }
-
-    async fn damage(&mut self, entity: Resource<Entity>, amount: f32) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
-        entity
-            .damage(&*entity, amount, pumpkin_data::damage::DamageType::GENERIC)
-            .await;
-        Ok(())
-    }
-
-    async fn is_dead(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
-        let entity = entity_from_resource(self, &entity)?;
-        Ok(entity.get_living_entity().map_or_else(
-            || entity.get_entity().removal_reason.load().is_some(),
-            |living| living.dead.load(std::sync::atomic::Ordering::Relaxed),
-        ))
-    }
-
-    async fn get_absorption(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
-        let entity = entity_from_resource(self, &entity)?;
-        Ok(entity
-            .get_living_entity()
-            .map_or(0.0, |living| living.absorption.load()))
-    }
-
-    async fn set_absorption(
-        &mut self,
-        entity: Resource<Entity>,
-        amount: f32,
-    ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
-        if let Some(living) = entity.get_living_entity() {
-            living.absorption.store(amount);
-        }
-        Ok(())
-    }
-
-    async fn get_age(&mut self, entity: Resource<Entity>) -> wasmtime::Result<i32> {
-        let entity = entity_from_resource(self, &entity)?;
-        Ok(entity
-            .get_entity()
-            .age
-            .load(std::sync::atomic::Ordering::Relaxed))
-    }
-
-    async fn set_age(&mut self, entity: Resource<Entity>, age: i32) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
-        entity
-            .get_entity()
-            .age
-            .store(age, std::sync::atomic::Ordering::Relaxed);
-        Ok(())
-    }
-
     async fn get_fall_distance(&mut self, entity: Resource<Entity>) -> wasmtime::Result<f32> {
         let entity = entity_from_resource(self, &entity)?;
         Ok(entity
@@ -574,7 +460,11 @@ impl HostEntity for PluginHostState {
         entity: Resource<Entity>,
     ) -> wasmtime::Result<Option<Resource<Entity>>> {
         let entity = entity_from_resource(self, &entity)?;
-        let vehicle = entity.get_entity().vehicle.lock().await;
+        let vehicle = entity
+            .get_entity()
+            .vehicle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(v) = vehicle.as_ref() {
             Ok(Some(self.add_entity(Arc::clone(v)).map_err(|_| {
                 wasmtime::Error::msg("failed to add entity resource")
@@ -584,38 +474,16 @@ impl HostEntity for PluginHostState {
         }
     }
 
-    async fn set_vehicle(
-        &mut self,
-        entity: Resource<Entity>,
-        vehicle: Option<Resource<Entity>>,
-    ) -> wasmtime::Result<()> {
-        let entity_base = entity_from_resource(self, &entity)?;
-
-        // Remove from current vehicle if any
-        let current_vehicle = entity_base.get_entity().vehicle.lock().await.clone();
-        if let Some(v) = current_vehicle {
-            v.get_entity()
-                .remove_passenger(entity_base.get_entity().entity_id)
-                .await;
-        }
-
-        if let Some(vehicle_res) = vehicle {
-            let vehicle_base = entity_from_resource(self, &vehicle_res)?;
-            vehicle_base
-                .get_entity()
-                .add_passenger(vehicle_base.clone(), entity_base)
-                .await;
-        }
-
-        Ok(())
-    }
-
     async fn get_passengers(
         &mut self,
         entity: Resource<Entity>,
     ) -> wasmtime::Result<Vec<Resource<Entity>>> {
         let entity = entity_from_resource(self, &entity)?;
-        let passengers = entity.get_entity().passengers.lock().await;
+        let passengers = entity
+            .get_entity()
+            .passengers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut result = Vec::new();
         for p in passengers.iter() {
             result.push(
@@ -624,50 +492,6 @@ impl HostEntity for PluginHostState {
             );
         }
         Ok(result)
-    }
-
-    async fn add_passenger(
-        &mut self,
-        entity: Resource<Entity>,
-        passenger: Resource<Entity>,
-    ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
-        let passenger = entity_from_resource(self, &passenger)?;
-        entity
-            .get_entity()
-            .add_passenger(Arc::clone(&entity), passenger)
-            .await;
-        Ok(())
-    }
-
-    async fn remove_passenger(
-        &mut self,
-        entity: Resource<Entity>,
-        passenger: Resource<Entity>,
-    ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
-        let passenger = entity_from_resource(self, &passenger)?;
-        entity
-            .get_entity()
-            .remove_passenger(passenger.get_entity().entity_id)
-            .await;
-        Ok(())
-    }
-
-    async fn eject_passengers(&mut self, entity: Resource<Entity>) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
-        let ids: Vec<i32> = entity
-            .get_entity()
-            .passengers
-            .lock()
-            .await
-            .iter()
-            .map(|p| p.get_entity().entity_id)
-            .collect();
-        for id in ids {
-            entity.get_entity().remove_passenger(id).await;
-        }
-        Ok(())
     }
 
     async fn get_bounding_box(
@@ -754,7 +578,7 @@ impl HostEntity for PluginHostState {
         visual_fire: bool,
     ) -> wasmtime::Result<()> {
         let entity = entity_from_resource(self, &entity)?;
-        entity.get_entity().set_on_fire(visual_fire).await;
+        entity.get_entity().set_on_fire(visual_fire);
         Ok(())
     }
 
@@ -809,149 +633,17 @@ impl HostEntity for PluginHostState {
         Ok(crate::entity::breath::MAX_AIR)
     }
 
-    async fn send_system_message(
-        &mut self,
-        entity: Resource<Entity>,
-        message: Resource<TextComponent>,
-    ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
-        if let Some(player) = entity.get_player() {
-            let text_res = self
-                .resource_table
-                .get::<crate::plugin::loader::wasm::wasm_host::state::TextComponentResource>(
-                    &Resource::new_own(message.rep()),
-                )
-                .map_err(|_| wasmtime::Error::msg("invalid text component resource handle"))?;
-            player.send_system_message(&text_res.provider).await;
-        }
-        Ok(())
-    }
-
     async fn remove(&mut self, entity: Resource<Entity>) -> wasmtime::Result<()> {
         let entity = entity_from_resource(self, &entity)?;
-        entity.get_entity().remove().await;
+        entity.get_entity().remove();
         Ok(())
-    }
-
-    async fn add_ai_goal(
-        &mut self,
-        entity: Resource<Entity>,
-        priority: u8,
-        goal: crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::BuiltinAiGoal,
-    ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
-        if let Some(mob) = entity.get_mob() {
-            let mob_entity = mob.get_mob_entity();
-            match goal {
-                crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::BuiltinAiGoal::Swim => {
-                    mob_entity.add_goal(priority, crate::entity::ai::goal::swim::SwimGoal::default());
-                }
-                crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::BuiltinAiGoal::WanderAround(speed) => {
-                    mob_entity.add_goal(priority, crate::entity::ai::goal::wander_around::WanderAroundGoal::new(f64::from(speed)));
-                }
-                crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::BuiltinAiGoal::MeleeAttack(speed) => {
-                    mob_entity.add_goal(priority, crate::entity::ai::goal::melee_attack::MeleeAttackGoal::new(f64::from(speed), false));
-                }
-                crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::BuiltinAiGoal::LookAtPlayer(range) => {
-                    mob_entity.add_goal(priority, crate::entity::ai::goal::look_at_entity::LookAtEntityGoal::new(
-                        std::sync::Weak::<crate::entity::mob::zombie::zombie::ZombieEntity>::new() as std::sync::Weak<dyn crate::entity::mob::Mob>,
-                        &pumpkin_data::entity::EntityType::PLAYER,
-                        range,
-                        0.02,
-                        false,
-                    ));
-                }
-                crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::BuiltinAiGoal::LookAround => {
-                    mob_entity.add_goal(priority, crate::entity::ai::goal::look_around::RandomLookAroundGoal::default());
-                }
-                crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::BuiltinAiGoal::EscapeDanger(speed) => {
-                    mob_entity.add_goal(priority, *crate::entity::ai::goal::escape_danger::EscapeDangerGoal::new(f64::from(speed)));
-                }
-                _ => {} // Remaining goals
-            }
-        }
-        Ok(())
-    }
-
-    async fn add_custom_ai_goal(
-        &mut self,
-        entity: Resource<Entity>,
-        priority: u8,
-        goal_id: u32,
-    ) -> wasmtime::Result<()> {
-        let Some(plugin) = self.plugin.as_ref().and_then(std::sync::Weak::upgrade) else {
-            return Err(wasmtime::Error::msg("Plugin not active"));
-        };
-        let entity = entity_from_resource(self, &entity)?;
-        if let Some(mob) = entity.get_mob() {
-            let mob_entity = mob.get_mob_entity();
-            mob_entity.add_goal(priority, CustomWasmGoal { plugin, goal_id });
-        }
-        Ok(())
-    }
-
-    async fn clear_ai_goals(&mut self, entity: Resource<Entity>) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
-        if let Some(mob) = entity.get_mob() {
-            mob.get_mob_entity().clear_ai_goals(mob).await;
-        }
-        Ok(())
-    }
-
-    async fn set_ai_disabled(
-        &mut self,
-        entity: Resource<Entity>,
-        disabled: bool,
-    ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
-        if let Some(mob) = entity.get_mob() {
-            mob.get_mob_entity().set_no_ai(disabled);
-        }
-        Ok(())
-    }
-
-    async fn is_ai_disabled(&mut self, entity: Resource<Entity>) -> wasmtime::Result<bool> {
-        let entity = entity_from_resource(self, &entity)?;
-        Ok(entity
-            .get_mob()
-            .is_none_or(|mob| mob.get_mob_entity().is_no_ai()))
-    }
-
-    async fn set_target(
-        &mut self,
-        entity: Resource<Entity>,
-        target: Option<Resource<Entity>>,
-    ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
-        let target_entity = if let Some(t) = target {
-            Some(entity_from_resource(self, &t)?)
-        } else {
-            None
-        };
-        if let Some(mob) = entity.get_mob() {
-            mob.get_mob_entity().set_target(target_entity).await;
-        }
-        Ok(())
-    }
-
-    async fn get_target(
-        &mut self,
-        entity: Resource<Entity>,
-    ) -> wasmtime::Result<Option<Resource<Entity>>> {
-        let entity = entity_from_resource(self, &entity)?;
-        if let Some(mob) = entity.get_mob()
-            && let Some(target) = mob.get_mob_entity().get_target().await
-        {
-            return Ok(Some(self.add_entity(target)?));
-        }
-        Ok(None)
     }
 
     async fn raycast(
         &mut self,
         entity: Resource<Entity>,
         max_distance: f64,
-        _fluid_handling: bool,
+        fluid_handling: bool,
     ) -> wasmtime::Result<Option<WitRaycastResult>> {
         let entity = entity_from_resource(self, &entity)?;
         let start = entity.get_eye_pos();
@@ -959,22 +651,9 @@ impl HostEntity for PluginHostState {
         let end = start + direction * max_distance;
         let world = entity.get_entity().world.load_full();
 
-        let hit = world
-            .raycast(
-                start,
-                end,
-                |pos: &pumpkin_util::math::position::BlockPos, w: &Arc<crate::world::World>| {
-                    let pos = *pos;
-                    let world = w.clone();
-                    async move {
-                        let block = world.get_block_state(&pos);
-                        !block.is_air()
-                    }
-                },
-            )
-            .await;
+        let hit = world.ray_trace_block(start, end, fluid_handling);
 
-        Ok(hit.map(|(pos, face)| WitRaycastResult {
+        Ok(hit.map(|(pos, face, _)| WitRaycastResult {
             pos: WitBlockPos {
                 x: pos.0.x,
                 y: pos.0.y,
@@ -982,6 +661,152 @@ impl HostEntity for PluginHostState {
             },
             face: to_wasm_block_direction(face),
         }))
+    }
+
+    async fn ray_trace_block(
+        &mut self,
+        entity: Resource<Entity>,
+        max_distance: f64,
+        include_fluids: bool,
+    ) -> wasmtime::Result<Option<WitRayTraceBlockResult>> {
+        let entity = entity_from_resource(self, &entity)?;
+        let start = entity.get_eye_pos();
+        let direction = entity.get_looking_vector();
+        let end = start + direction * max_distance;
+        let world = entity.get_entity().world.load_full();
+
+        let hit = world.ray_trace_block(start, end, include_fluids);
+
+        Ok(hit.map(|(pos, face, hit_pos)| WitRayTraceBlockResult {
+            pos: WitBlockPos {
+                x: pos.0.x,
+                y: pos.0.y,
+                z: pos.0.z,
+            },
+            face: to_wasm_block_direction(face),
+            hit_pos: to_wasm_position(hit_pos),
+        }))
+    }
+
+    async fn ray_trace_entity(
+        &mut self,
+        entity: Resource<Entity>,
+        max_distance: f64,
+    ) -> wasmtime::Result<Option<WitRayTraceEntityResult>> {
+        let entity_base = entity_from_resource(self, &entity)?;
+        let start = entity_base.get_eye_pos();
+        let direction = entity_base.get_looking_vector();
+        let end = start + direction * max_distance;
+        let world = entity_base.get_entity().world.load_full();
+        let self_id = entity_base.get_entity().entity_id;
+
+        let hits = world.ray_trace_entities(start, end);
+        for (hit_entity, hit_pos, distance) in hits {
+            if hit_entity.get_entity().entity_id != self_id {
+                let entity_res = self
+                    .add_entity(hit_entity)
+                    .map_err(|_| wasmtime::Error::msg("failed to add entity resource"))?;
+                return Ok(Some(WitRayTraceEntityResult {
+                    entity: entity_res,
+                    hit_pos: to_wasm_position(hit_pos),
+                    distance,
+                }));
+            }
+        }
+
+        Ok(None)
+    }
+
+    async fn get_target_entity(
+        &mut self,
+        entity: Resource<Entity>,
+        max_distance: f64,
+    ) -> wasmtime::Result<Option<Resource<Entity>>> {
+        let res = self.ray_trace_entity(entity, max_distance).await?;
+        Ok(res.map(|r| r.entity))
+    }
+
+    async fn set_custom_data(
+        &mut self,
+        this: Resource<Entity>,
+        namespace: String,
+        key: String,
+        value: WitNbtTree,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &this)?;
+        let base_entity = entity.get_entity();
+        let tag = super::common::from_wit_nbt_tree(&value).map_err(wasmtime::Error::msg)?;
+        base_entity.set_custom_data(&namespace, &key, tag);
+        Ok(())
+    }
+
+    async fn get_custom_data(
+        &mut self,
+        this: Resource<Entity>,
+        namespace: String,
+        key: String,
+    ) -> wasmtime::Result<Option<WitNbtTree>> {
+        let entity = entity_from_resource(self, &this)?;
+        let base_entity = entity.get_entity();
+        let tag = base_entity.get_custom_data(&namespace, &key);
+        Ok(tag.map(super::common::to_wit_nbt_tree))
+    }
+
+    async fn remove_custom_data(
+        &mut self,
+        this: Resource<Entity>,
+        namespace: String,
+        key: String,
+    ) -> wasmtime::Result<()> {
+        let entity = entity_from_resource(self, &this)?;
+        let base_entity = entity.get_entity();
+        base_entity.remove_custom_data(&namespace, &key);
+        Ok(())
+    }
+
+    async fn has_custom_data(
+        &mut self,
+        this: Resource<Entity>,
+        namespace: String,
+        key: String,
+    ) -> wasmtime::Result<bool> {
+        let entity = entity_from_resource(self, &this)?;
+        let base_entity = entity.get_entity();
+        Ok(base_entity.has_custom_data(&namespace, &key))
+    }
+
+    async fn as_living(
+        &mut self,
+        this: Resource<Entity>,
+    ) -> wasmtime::Result<Option<Resource<WitLivingEntity>>> {
+        let entity = entity_from_resource(self, &this)?;
+        if entity.get_living_entity().is_some() {
+            Ok(Some(self.add_living_entity(entity)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn as_mob(
+        &mut self,
+        this: Resource<Entity>,
+    ) -> wasmtime::Result<Option<Resource<WitMob>>> {
+        let entity = entity_from_resource(self, &this)?;
+        if entity.get_mob().is_some() {
+            Ok(Some(self.add_mob(entity)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn is_living(&mut self, this: Resource<Entity>) -> wasmtime::Result<bool> {
+        let entity = entity_from_resource(self, &this)?;
+        Ok(entity.get_living_entity().is_some())
+    }
+
+    async fn is_mob(&mut self, this: Resource<Entity>) -> wasmtime::Result<bool> {
+        let entity = entity_from_resource(self, &this)?;
+        Ok(entity.get_mob().is_some())
     }
 
     async fn drop(&mut self, rep: Resource<Entity>) -> wasmtime::Result<()> {
@@ -992,165 +817,180 @@ impl HostEntity for PluginHostState {
     }
 }
 
-pub struct CustomWasmGoal {
-    pub plugin: Arc<WasmPlugin>,
-    pub goal_id: u32,
+impl
+    crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::HostEntityWithStore<
+        PluginHostState,
+    > for HasSelf<PluginHostState>
+{
+    async fn teleport(
+        mut host: Access<'_, PluginHostState, Self>,
+        entity: Resource<Entity>,
+        pos: Position,
+        world_ref: Resource<World>,
+    ) -> wasmtime::Result<()> {
+        let (entity, world, plugin) = {
+            let state = host.get();
+            let entity = entity_from_resource(state, &entity)?;
+            let world = state
+                .resource_table
+                .get::<crate::plugin::loader::wasm::wasm_host::state::WorldResource>(
+                    &Resource::new_own(world_ref.rep()),
+                )
+                .map_err(|_| wasmtime::Error::msg("invalid world resource handle"))?
+                .provider
+                .clone();
+            (entity, world, active_plugin(state)?)
+        };
+        let pos = Vector3::new(pos.0, pos.1, pos.2);
+        plugin
+            .store
+            .pump_blocking(&mut host, move || entity.teleport(pos, None, None, world))
+            .await
+    }
+
+    async fn set_swimming(
+        mut host: Access<'_, PluginHostState, Self>,
+        entity: Resource<Entity>,
+        swimming: bool,
+    ) -> wasmtime::Result<()> {
+        let (entity, plugin) = {
+            let state = host.get();
+            (entity_from_resource(state, &entity)?, active_plugin(state)?)
+        };
+        plugin
+            .store
+            .pump_blocking(&mut host, move || {
+                entity.get_entity().set_swimming(swimming);
+            })
+            .await
+    }
+
+    async fn set_vehicle(
+        mut host: Access<'_, PluginHostState, Self>,
+        entity: Resource<Entity>,
+        vehicle: Option<Resource<Entity>>,
+    ) -> wasmtime::Result<()> {
+        let (entity, vehicle, plugin) = {
+            let state = host.get();
+            let entity = entity_from_resource(state, &entity)?;
+            let vehicle = vehicle
+                .as_ref()
+                .map(|vehicle| entity_from_resource(state, vehicle))
+                .transpose()?;
+            (entity, vehicle, active_plugin(state)?)
+        };
+        plugin
+            .store
+            .pump_blocking(&mut host, move || {
+                let current_vehicle = entity
+                    .get_entity()
+                    .vehicle
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone();
+                if let Some(current_vehicle) = current_vehicle {
+                    current_vehicle
+                        .get_entity()
+                        .remove_passenger(entity.get_entity().entity_id);
+                }
+                if let Some(vehicle) = vehicle {
+                    vehicle
+                        .get_entity()
+                        .add_passenger(Arc::clone(&vehicle), entity);
+                }
+            })
+            .await
+    }
+
+    async fn add_passenger(
+        mut host: Access<'_, PluginHostState, Self>,
+        entity: Resource<Entity>,
+        passenger: Resource<Entity>,
+    ) -> wasmtime::Result<()> {
+        let (entity, passenger, plugin) = {
+            let state = host.get();
+            (
+                entity_from_resource(state, &entity)?,
+                entity_from_resource(state, &passenger)?,
+                active_plugin(state)?,
+            )
+        };
+        plugin
+            .store
+            .pump_blocking(&mut host, move || {
+                entity
+                    .get_entity()
+                    .add_passenger(Arc::clone(&entity), passenger);
+            })
+            .await
+    }
+
+    async fn remove_passenger(
+        mut host: Access<'_, PluginHostState, Self>,
+        entity: Resource<Entity>,
+        passenger: Resource<Entity>,
+    ) -> wasmtime::Result<()> {
+        let (entity, passenger_id, plugin) = {
+            let state = host.get();
+            let entity = entity_from_resource(state, &entity)?;
+            let passenger = entity_from_resource(state, &passenger)?;
+            (
+                entity,
+                passenger.get_entity().entity_id,
+                active_plugin(state)?,
+            )
+        };
+        plugin
+            .store
+            .pump_blocking(&mut host, move || {
+                entity.get_entity().remove_passenger(passenger_id);
+            })
+            .await
+    }
+
+    async fn eject_passengers(
+        mut host: Access<'_, PluginHostState, Self>,
+        entity: Resource<Entity>,
+    ) -> wasmtime::Result<()> {
+        let (entity, plugin) = {
+            let state = host.get();
+            (entity_from_resource(state, &entity)?, active_plugin(state)?)
+        };
+        plugin
+            .store
+            .pump_blocking(&mut host, move || {
+                let passenger_ids: Vec<i32> = entity
+                    .get_entity()
+                    .passengers
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .iter()
+                    .map(|passenger| passenger.get_entity().entity_id)
+                    .collect();
+                for passenger_id in passenger_ids {
+                    entity.get_entity().remove_passenger(passenger_id);
+                }
+            })
+            .await
+    }
 }
 
-fn current_mob_entity(mob: &dyn Mob) -> Option<Arc<dyn crate::entity::EntityBase>> {
-    let entity = mob.get_entity();
-    entity.world.load().get_entity_by_id(entity.entity_id)
+pub(crate) fn to_wit_entity_type(name: &str) -> wasmtime::Result<entity_types::EntityType> {
+    let name = name.strip_prefix("minecraft:").unwrap_or(name);
+    let index = pumpkin_data::entity::EntityType::ALL
+        .binary_search_by_key(&name, |e| e.resource_name)
+        .map_err(|_| wasmtime::Error::msg(format!("Unknown entity type: {name}")))?;
+
+    // SAFETY: The WIT enum is generated with variants matching EntityType::ALL in alphabetical order.
+    Ok(unsafe { std::mem::transmute::<u8, entity_types::EntityType>(index as u8) })
 }
 
-impl Goal for CustomWasmGoal {
-    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async {
-            let mut store = self.plugin.store.lock().await;
-            if let Some(entity_arc) = current_mob_entity(mob) {
-                match self.plugin.plugin_instance {
-                    PluginInstance::V0_1(ref plugin) => {
-                        let Some(server) = store.data_mut().server.clone() else {
-                            return false;
-                        };
-                        let Ok(server_res) = store.data_mut().add_server(server) else {
-                            return false;
-                        };
-                        let Ok(entity_res) = store.data_mut().add_entity(entity_arc) else {
-                            return false;
-                        };
-                        plugin
-                            .call_handle_ai_goal_can_start(
-                                &mut *store,
-                                self.goal_id,
-                                server_res,
-                                entity_res,
-                            )
-                            .await
-                            .unwrap_or(false)
-                    }
-                }
-            } else {
-                false
-            }
-        })
-    }
-
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async {
-            let mut store = self.plugin.store.lock().await;
-            if let Some(entity_arc) = current_mob_entity(mob) {
-                match self.plugin.plugin_instance {
-                    PluginInstance::V0_1(ref plugin) => {
-                        let Some(server) = store.data_mut().server.clone() else {
-                            return false;
-                        };
-                        let Ok(server_res) = store.data_mut().add_server(server) else {
-                            return false;
-                        };
-                        let Ok(entity_res) = store.data_mut().add_entity(entity_arc) else {
-                            return false;
-                        };
-                        plugin
-                            .call_handle_ai_goal_should_continue(
-                                &mut *store,
-                                self.goal_id,
-                                server_res,
-                                entity_res,
-                            )
-                            .await
-                            .unwrap_or(false)
-                    }
-                }
-            } else {
-                false
-            }
-        })
-    }
-
-    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async {
-            let mut store = self.plugin.store.lock().await;
-            if let Some(entity_arc) = current_mob_entity(mob) {
-                match self.plugin.plugin_instance {
-                    PluginInstance::V0_1(ref plugin) => {
-                        let Some(server) = store.data_mut().server.clone() else {
-                            return;
-                        };
-                        let Ok(server_res) = store.data_mut().add_server(server) else {
-                            return;
-                        };
-                        let Ok(entity_res) = store.data_mut().add_entity(entity_arc) else {
-                            return;
-                        };
-                        let _ = plugin
-                            .call_handle_ai_goal_start(
-                                &mut *store,
-                                self.goal_id,
-                                server_res,
-                                entity_res,
-                            )
-                            .await;
-                    }
-                }
-            }
-        })
-    }
-
-    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async {
-            let mut store = self.plugin.store.lock().await;
-            if let Some(entity_arc) = current_mob_entity(mob) {
-                match self.plugin.plugin_instance {
-                    PluginInstance::V0_1(ref plugin) => {
-                        let Some(server) = store.data_mut().server.clone() else {
-                            return;
-                        };
-                        let Ok(server_res) = store.data_mut().add_server(server) else {
-                            return;
-                        };
-                        let Ok(entity_res) = store.data_mut().add_entity(entity_arc) else {
-                            return;
-                        };
-                        let _ = plugin
-                            .call_handle_ai_goal_tick(
-                                &mut *store,
-                                self.goal_id,
-                                server_res,
-                                entity_res,
-                            )
-                            .await;
-                    }
-                }
-            }
-        })
-    }
-
-    fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async {
-            let mut store = self.plugin.store.lock().await;
-            if let Some(entity_arc) = current_mob_entity(mob) {
-                match self.plugin.plugin_instance {
-                    PluginInstance::V0_1(ref plugin) => {
-                        let Some(server) = store.data_mut().server.clone() else {
-                            return;
-                        };
-                        let Ok(server_res) = store.data_mut().add_server(server) else {
-                            return;
-                        };
-                        let Ok(entity_res) = store.data_mut().add_entity(entity_arc) else {
-                            return;
-                        };
-                        let _ = plugin
-                            .call_handle_ai_goal_stop(
-                                &mut *store,
-                                self.goal_id,
-                                server_res,
-                                entity_res,
-                            )
-                            .await;
-                    }
-                }
-            }
-        })
-    }
+pub(crate) fn from_wit_entity_type(
+    entity_type: entity_types::EntityType,
+) -> wasmtime::Result<&'static pumpkin_data::entity::EntityType> {
+    let index = entity_type as usize;
+    pumpkin_data::entity::EntityType::ALL
+        .get(index)
+        .copied()
+        .ok_or_else(|| wasmtime::Error::msg(format!("Invalid entity type index: {index}")))
 }

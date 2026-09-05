@@ -1,0 +1,65 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_bowl": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:bowl"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_brown_mushroom": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:brown_mushroom"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_mushroom_stew": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:mushroom_stew"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_red_mushroom": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:red_mushroom"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:mushroom_stew"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_mushroom_stew",
+      "has_bowl",
+      "has_brown_mushroom",
+      "has_red_mushroom"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:mushroom_stew"
+    ]
+  }
+}

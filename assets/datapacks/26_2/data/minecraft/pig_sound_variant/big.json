@@ -1,0 +1,16 @@
+{
+  "adult_sounds": {
+    "ambient_sound": "minecraft:entity.pig_big.ambient",
+    "death_sound": "minecraft:entity.pig_big.death",
+    "eat_sound": "minecraft:entity.pig_big.eat",
+    "hurt_sound": "minecraft:entity.pig_big.hurt",
+    "step_sound": "minecraft:entity.pig.step"
+  },
+  "baby_sounds": {
+    "ambient_sound": "minecraft:entity.baby_pig.ambient",
+    "death_sound": "minecraft:entity.baby_pig.death",
+    "eat_sound": "minecraft:entity.baby_pig.eat",
+    "hurt_sound": "minecraft:entity.baby_pig.hurt",
+    "step_sound": "minecraft:entity.baby_pig.step"
+  }
+}

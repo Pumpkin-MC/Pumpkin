@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::io::{Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 use tracing::{info, warn};
@@ -70,16 +70,16 @@ pub struct PoiSectionData {
 pub struct PoiChunkData {
     pub data_version: i32,
     /// Sections keyed by Y section coordinate (e.g., "-1", "0", "1", "4")
-    pub sections: HashMap<String, PoiSectionData>,
+    pub sections: FxHashMap<String, PoiSectionData>,
 }
 
 /// POI data for a single region (32x32 chunks) using MCA format
 #[derive(Debug, Default)]
 pub struct PoiRegion {
     /// Entries indexed by position
-    entries: HashMap<(i32, i32, i32), PoiEntry>,
+    entries: FxHashMap<(i32, i32, i32), PoiEntry>,
     /// Track which chunks are dirty
-    dirty_chunks: std::collections::HashSet<(i32, i32)>,
+    dirty_chunks: rustc_hash::FxHashSet<(i32, i32)>,
     dirty: bool,
 }
 
@@ -144,7 +144,7 @@ impl PoiRegion {
 
     /// Group entries by chunk, then create chunk NBT data
     fn get_chunk_data(&self, chunk_x: i32, chunk_z: i32) -> Option<PoiChunkData> {
-        let mut sections: HashMap<String, PoiSectionData> = HashMap::new();
+        let mut sections: FxHashMap<String, PoiSectionData> = FxHashMap::default();
 
         for entry in self.entries.values() {
             let entry_chunk_x = entry.x >> 4;
@@ -218,7 +218,7 @@ impl PoiRegion {
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
 
         let data_version = nbt.get_int("DataVersion").unwrap_or(DATA_VERSION);
-        let mut sections = HashMap::new();
+        let mut sections = FxHashMap::default();
 
         if let Some(sec_tag) = nbt.get_compound("Sections") {
             for (sec_key, tag) in &sec_tag.child_tags {
@@ -269,11 +269,11 @@ impl PoiRegion {
         }
 
         // Build all chunk data
-        let mut chunk_data_map: HashMap<usize, Vec<u8>> = HashMap::new();
+        let mut chunk_data_map: FxHashMap<usize, Vec<u8>> = FxHashMap::default();
 
         // Collect all unique chunks that have entries
-        let mut chunks_with_data: std::collections::HashSet<(i32, i32)> =
-            std::collections::HashSet::new();
+        let mut chunks_with_data: rustc_hash::FxHashSet<(i32, i32)> =
+            rustc_hash::FxHashSet::default();
         for entry in self.entries.values() {
             chunks_with_data.insert((entry.x >> 4, entry.z >> 4));
         }
@@ -429,7 +429,7 @@ pub struct PoiStorage {
     /// Path to the poi folder
     folder: PathBuf,
     /// Loaded regions, keyed by (`region_x`, `region_z`)
-    regions: HashMap<(i32, i32), PoiRegion>,
+    regions: FxHashMap<(i32, i32), PoiRegion>,
 }
 
 impl PoiStorage {
@@ -437,7 +437,7 @@ impl PoiStorage {
     pub fn new(poi_folder: PathBuf) -> Self {
         Self {
             folder: poi_folder,
-            regions: HashMap::new(),
+            regions: FxHashMap::default(),
         }
     }
 
@@ -464,6 +464,10 @@ impl PoiStorage {
     }
 
     pub fn add(&mut self, pos: BlockPos, poi_type: &str) {
+        self.add_with_free_tickets(pos, poi_type, 0);
+    }
+
+    pub fn add_with_free_tickets(&mut self, pos: BlockPos, poi_type: &str, free_tickets: i32) {
         let (rx, rz) = Self::region_coords(&pos);
         let region = self.get_or_load_region(rx, rz);
         region.add(PoiEntry {
@@ -471,7 +475,7 @@ impl PoiStorage {
             y: pos.0.y,
             z: pos.0.z,
             poi_type: poi_type.to_string(),
-            free_tickets: 0,
+            free_tickets,
         });
     }
 
@@ -526,6 +530,51 @@ impl PoiStorage {
         }
 
         results
+    }
+
+    /// Finds the closest POI whose type matches `matches`, considering
+    /// entries within `radius` blocks of `center` on the x/z axes (like
+    /// vanilla's `PoiManager.findClosestWithType`: a chebyshev square gather
+    /// followed by picking the smallest 3D squared distance).
+    ///
+    /// Returns the entry's position together with its type.
+    pub fn find_closest_matching(
+        &mut self,
+        center: BlockPos,
+        radius: i32,
+        matches: impl Fn(&str) -> bool,
+    ) -> Option<(BlockPos, String)> {
+        let min_rx = ((center.0.x - radius) >> 4) >> 5;
+        let max_rx = ((center.0.x + radius) >> 4) >> 5;
+        let min_rz = ((center.0.z - radius) >> 4) >> 5;
+        let max_rz = ((center.0.z + radius) >> 4) >> 5;
+
+        let mut best: Option<(BlockPos, String, i64)> = None;
+
+        for rx in min_rx..=max_rx {
+            for rz in min_rz..=max_rz {
+                let region = self.get_or_load_region(rx, rz);
+                for entry in region.get_all() {
+                    if (entry.x - center.0.x).abs() > radius
+                        || (entry.z - center.0.z).abs() > radius
+                        || !matches(&entry.poi_type)
+                    {
+                        continue;
+                    }
+
+                    let dx = i64::from(entry.x - center.0.x);
+                    let dy = i64::from(entry.y - center.0.y);
+                    let dz = i64::from(entry.z - center.0.z);
+                    let distance_sq = dx * dx + dy * dy + dz * dz;
+
+                    if best.as_ref().is_none_or(|(_, _, d)| distance_sq < *d) {
+                        best = Some((entry.pos(), entry.poi_type.clone(), distance_sq));
+                    }
+                }
+            }
+        }
+
+        best.map(|(pos, poi_type, _)| (pos, poi_type))
     }
 
     pub fn save_all(&mut self) -> std::io::Result<()> {
@@ -583,6 +632,41 @@ mod tests {
 
         region.remove(&BlockPos(Vector3::new(100, 64, 200)));
         assert_eq!(region.get_all().len(), 1);
+    }
+
+    #[test]
+    fn poi_find_closest_matching() {
+        let mut storage = PoiStorage::new(std::env::temp_dir().join("pumpkin_poi_closest_test"));
+
+        storage.add_portal(BlockPos(Vector3::new(100, 64, 100)));
+        storage.add_portal(BlockPos(Vector3::new(120, 64, 100)));
+        storage.add(BlockPos(Vector3::new(101, 64, 100)), "minecraft:home");
+
+        let center = BlockPos(Vector3::new(105, 64, 100));
+        let (pos, poi_type) = storage
+            .find_closest_matching(center, 256, |t| t == POI_TYPE_NETHER_PORTAL)
+            .unwrap();
+        assert_eq!(pos, BlockPos(Vector3::new(100, 64, 100)));
+        assert_eq!(poi_type, POI_TYPE_NETHER_PORTAL);
+
+        // The overall closest one ignores the type filter mismatch above.
+        let (pos, poi_type) = storage
+            .find_closest_matching(center, 256, |_| true)
+            .unwrap();
+        assert_eq!(pos, BlockPos(Vector3::new(101, 64, 100)));
+        assert_eq!(poi_type, "minecraft:home");
+
+        assert!(
+            storage
+                .find_closest_matching(center, 256, |t| t == "minecraft:lodestone")
+                .is_none()
+        );
+        // Out of horizontal range.
+        assert!(
+            storage
+                .find_closest_matching(BlockPos(Vector3::new(1000, 64, 100)), 16, |_| true)
+                .is_none()
+        );
     }
 
     #[test]

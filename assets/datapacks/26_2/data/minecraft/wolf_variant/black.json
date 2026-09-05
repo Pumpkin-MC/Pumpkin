@@ -1,0 +1,21 @@
+{
+  "assets": {
+    "angry": "minecraft:entity/wolf/wolf_black_angry",
+    "tame": "minecraft:entity/wolf/wolf_black_tame",
+    "wild": "minecraft:entity/wolf/wolf_black"
+  },
+  "baby_assets": {
+    "angry": "minecraft:entity/wolf/wolf_black_angry_baby",
+    "tame": "minecraft:entity/wolf/wolf_black_tame_baby",
+    "wild": "minecraft:entity/wolf/wolf_black_baby"
+  },
+  "spawn_conditions": [
+    {
+      "condition": {
+        "type": "minecraft:biome",
+        "biomes": "minecraft:old_growth_pine_taiga"
+      },
+      "priority": 1
+    }
+  ]
+}

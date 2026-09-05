@@ -2,13 +2,13 @@ use crate::{
     ServerPacket,
     ser::{NetworkReadExt, ReadingError},
 };
-use pumpkin_data::packet::serverbound::PLAY_RECIPE_BOOK_CHANGE_SETTINGS;
+use pumpkin_data::packet::serverbound::play::RECIPE_BOOK_CHANGE_SETTINGS;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::VarInt;
 
-#[java_packet(PLAY_RECIPE_BOOK_CHANGE_SETTINGS)]
+#[java_packet(RECIPE_BOOK_CHANGE_SETTINGS)]
 pub struct SRecipeBookChangeSettings {
     pub book_type: VarInt,
     pub is_open: bool,
@@ -22,5 +22,19 @@ impl<'a> ServerPacket<'a> for SRecipeBookChangeSettings {
             is_open: bytebuf.get_bool()?,
             is_filtering: bytebuf.get_bool()?,
         })
+    }
+}
+
+impl crate::ClientPacket for SRecipeBookChangeSettings {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_var_int(&self.book_type)?;
+        write.write_bool(self.is_open)?;
+        write.write_bool(self.is_filtering)?;
+        Ok(())
     }
 }

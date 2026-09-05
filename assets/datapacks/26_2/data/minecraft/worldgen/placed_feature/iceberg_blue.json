@@ -1,0 +1,15 @@
+{
+  "feature": "minecraft:iceberg_blue",
+  "placement": [
+    {
+      "type": "minecraft:rarity_filter",
+      "chance": 200
+    },
+    {
+      "type": "minecraft:in_square"
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

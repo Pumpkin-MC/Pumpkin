@@ -1,0 +1,8 @@
+{
+  "replace": false,
+  "values": [
+    "#minecraft:job_site_poi",
+    "#minecraft:beds",
+    "#minecraft:meeting_site_poi"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "gives": {
+    "count": 3,
+    "id": "minecraft:blue_dye"
+  },
+  "max_uses": 12.0,
+  "reputation_discount": 0.05,
+  "wants": {
+    "id": "minecraft:emerald"
+  }
+}

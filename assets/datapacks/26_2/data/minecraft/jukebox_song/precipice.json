@@ -1,0 +1,8 @@
+{
+  "comparator_output": 13,
+  "description": {
+    "translate": "jukebox_song.minecraft.precipice"
+  },
+  "length_in_seconds": 299.0,
+  "sound_event": "minecraft:music_disc.precipice"
+}

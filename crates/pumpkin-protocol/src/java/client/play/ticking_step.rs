@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_TICKING_STEP;
+use pumpkin_data::packet::clientbound::play::TICKING_STEP;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
@@ -6,7 +6,7 @@ use crate::VarInt;
 use crate::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_TICKING_STEP)]
+#[java_packet(TICKING_STEP)]
 pub struct CTickingStep {
     pub tick_steps: VarInt,
 }

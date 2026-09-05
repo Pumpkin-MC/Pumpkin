@@ -150,18 +150,16 @@ impl StructurePieceBase for ChestCorridorPiece {
             inner.add_block(chunk, slab, 2, 1, i, &box_limit);
         }
 
-        // if !self.chest_generated {
-        //     // Check if the target chest position is within the current chunk being processed
-        //     let chest_pos = inner.to_world(3, 2, 3);
-        //     if box_limit.contains(&chest_pos) {
-        //         self.chest_generated = true;
-
-        //         let chest_state = Block::CHEST.default_state;
-        //         // Note: In a full implementation, you would use a helper to set the LootTable NBT here
-        //         inner.add_block(chunk, &chest_state, 3, 2, 3, &box_limit);
-
-        //         // chunk.set_loot_table(chest_pos, "minecraft:chests/stronghold_corridor");
-        //     }
-        // }
+        if !self.chest_generated {
+            self.chest_generated = inner.add_chest(
+                chunk,
+                &box_limit,
+                random,
+                3,
+                2,
+                3,
+                "minecraft:chests/stronghold_corridor",
+            );
+        }
     }
 }

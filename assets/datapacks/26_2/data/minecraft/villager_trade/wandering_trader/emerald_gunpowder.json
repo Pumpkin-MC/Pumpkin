@@ -1,0 +1,11 @@
+{
+  "gives": {
+    "count": 4,
+    "id": "minecraft:gunpowder"
+  },
+  "max_uses": 2.0,
+  "reputation_discount": 0.05,
+  "wants": {
+    "id": "minecraft:emerald"
+  }
+}

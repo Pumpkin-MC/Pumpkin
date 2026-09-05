@@ -133,7 +133,11 @@ impl boss_bar::HostBossBar for PluginHostState {
         bossbar.color = from_wit_color(color);
         bossbar.division = from_wit_division(division);
 
-        let server = self.server.as_ref().expect("server not available").clone();
+        let server = self
+            .server
+            .as_ref()
+            .ok_or_else(|| wasmtime::Error::msg("server not available"))?
+            .clone();
         let plugin_bossbar = Arc::new(Mutex::new(PluginBossBar::new(
             bossbar,
             Arc::downgrade(&server),
@@ -170,9 +174,7 @@ impl boss_bar::HostBossBar for PluginHostState {
         if let Some(server) = pbb.server.upgrade() {
             for uuid in &pbb.players {
                 if let Some(player) = server.get_player_by_uuid(*uuid) {
-                    player
-                        .update_bossbar_title(&pbb.bossbar.uuid, title.clone())
-                        .await;
+                    player.update_bossbar_title(&pbb.bossbar.uuid, title.clone());
                 }
             }
         }
@@ -190,9 +192,7 @@ impl boss_bar::HostBossBar for PluginHostState {
         if let Some(server) = pbb.server.upgrade() {
             for uuid in &pbb.players {
                 if let Some(player) = server.get_player_by_uuid(*uuid) {
-                    player
-                        .update_bossbar_health(&pbb.bossbar.uuid, health)
-                        .await;
+                    player.update_bossbar_health(&pbb.bossbar.uuid, health);
                 }
             }
         }
@@ -210,14 +210,11 @@ impl boss_bar::HostBossBar for PluginHostState {
         if let Some(server) = pbb.server.upgrade() {
             for uuid in &pbb.players {
                 if let Some(player) = server.get_player_by_uuid(*uuid) {
-                    player
-                        .update_bossbar_style(
-                            &pbb.bossbar.uuid,
-                            pbb.bossbar.color,
-                            pbb.bossbar.division,
-                            pbb.bossbar.flags,
-                        )
-                        .await;
+                    player.update_bossbar_style(
+                        &pbb.bossbar.uuid,
+                        pbb.bossbar.color,
+                        pbb.bossbar.division,
+                    );
                 }
             }
         }
@@ -239,14 +236,11 @@ impl boss_bar::HostBossBar for PluginHostState {
         if let Some(server) = pbb.server.upgrade() {
             for uuid in &pbb.players {
                 if let Some(player) = server.get_player_by_uuid(*uuid) {
-                    player
-                        .update_bossbar_style(
-                            &pbb.bossbar.uuid,
-                            pbb.bossbar.color,
-                            pbb.bossbar.division,
-                            pbb.bossbar.flags,
-                        )
-                        .await;
+                    player.update_bossbar_style(
+                        &pbb.bossbar.uuid,
+                        pbb.bossbar.color,
+                        pbb.bossbar.division,
+                    );
                 }
             }
         }
@@ -268,9 +262,7 @@ impl boss_bar::HostBossBar for PluginHostState {
         if let Some(server) = pbb.server.upgrade() {
             for uuid in &pbb.players {
                 if let Some(player) = server.get_player_by_uuid(*uuid) {
-                    player
-                        .update_bossbar_flags(&pbb.bossbar.uuid, pbb.bossbar.flags)
-                        .await;
+                    player.update_bossbar_flags(&pbb.bossbar.uuid, pbb.bossbar.flags);
                 }
             }
         }
@@ -319,7 +311,7 @@ impl boss_bar::HostBossBar for PluginHostState {
 
         if !pbb.players.contains(&uuid) {
             pbb.players.push(uuid);
-            player.send_bossbar(&pbb.bossbar).await;
+            player.send_bossbar(&pbb.bossbar);
         }
         Ok(())
     }
@@ -337,7 +329,7 @@ impl boss_bar::HostBossBar for PluginHostState {
 
         if let Some(idx) = pbb.players.iter().position(|&x| x == uuid) {
             pbb.players.remove(idx);
-            player.remove_bossbar(pbb.bossbar.uuid).await;
+            player.remove_bossbar(pbb.bossbar.uuid);
         }
         Ok(())
     }
@@ -347,7 +339,7 @@ impl boss_bar::HostBossBar for PluginHostState {
         if let Some(server) = pbb.server.upgrade() {
             for uuid in &pbb.players {
                 if let Some(player) = server.get_player_by_uuid(*uuid) {
-                    player.remove_bossbar(pbb.bossbar.uuid).await;
+                    player.remove_bossbar(pbb.bossbar.uuid);
                 }
             }
         }

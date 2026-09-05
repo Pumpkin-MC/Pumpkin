@@ -2,9 +2,10 @@ use crate::data_component::DataComponent;
 use crate::data_component::DataComponent::Enchantments;
 use crate::data_component_impl::{
     BlocksAttacksImpl, ConsumableImpl, CustomDataImpl, DamageImpl, DataComponentImpl,
-    EnchantmentsImpl, IDSet, MaxDamageImpl, MaxStackSizeImpl, ToolImpl, UnbreakableImpl,
-    UseCooldownImpl, get, get_mut, read_data,
+    EnchantmentsImpl, IDSet, MaxDamageImpl, MaxStackSizeImpl, Rarity, RarityImpl,
+    SwingAnimationImpl, ToolImpl, UnbreakableImpl, UseCooldownImpl, get, get_mut, read_data,
 };
+
 use crate::item::Item;
 use crate::recipes::RecipeResultStruct;
 use crate::tag::Taggable;
@@ -15,7 +16,7 @@ use pumpkin_util::GameMode;
 use rand;
 use std::borrow::Cow;
 use std::cmp::{max, min};
-use std::num::NonZeroI32;
+use std::num::NonZero;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 mod categories;
@@ -42,7 +43,7 @@ pub struct ItemStack {
 
     // unique ID for Bedrock network; don't serialize
     // Should always be a positive value for non-empty stacks
-    pub uid: NonZeroI32,
+    pub uid: NonZero<i32>,
 }
 
 // impl Hash for ItemStack {
@@ -71,14 +72,14 @@ impl ItemStackIdGenerator {
         }
     }
 
-    pub fn next_id(&self) -> NonZeroI32 {
+    pub fn next_id(&self) -> NonZero<i32> {
         // Wraps on overflow, which is what we want.
         let value = self.counter.fetch_add(1, Ordering::Relaxed);
 
         // Negative values are invalid; cycle through the positives
         let masked = value & 0x7FFFFFFF;
 
-        if let Some(id) = NonZeroI32::new(masked as i32) {
+        if let Some(id) = NonZero::new(masked as i32) {
             id
         } else {
             // If we fetched 0 or 0x80000000, that's masked out as 0
@@ -133,7 +134,7 @@ impl ItemStack {
             item,
             patch: Vec::new(),
 
-            uid: match NonZeroI32::new(1) {
+            uid: match NonZero::new(1) {
                 Some(v) => v,
                 None => panic!("1 is non-zero"),
             },
@@ -187,6 +188,21 @@ impl ItemStack {
         None
     }
 
+    #[must_use]
+    pub fn has_data_component(&self, to_get_id: DataComponent) -> bool {
+        for (id, component) in &self.patch {
+            if *id == to_get_id {
+                return component.is_some();
+            }
+        }
+        for (id, _) in self.item.components {
+            if *id == to_get_id {
+                return true;
+            }
+        }
+        false
+    }
+
     pub fn has_enchantments(&self) -> bool {
         self.get_data_component::<EnchantmentsImpl>()
             .is_some_and(|e| !e.enchantment.is_empty())
@@ -206,12 +222,51 @@ impl ItemStack {
         }
     }
 
+    pub fn set_lore(&mut self, lines: Vec<pumpkin_util::text::TextComponent>) {
+        let lore = Some(Box::new(crate::data_component_impl::LoreImpl { lines }) as _);
+        if let Some((_, component)) = self
+            .patch
+            .iter_mut()
+            .find(|(id, _)| *id == DataComponent::Lore)
+        {
+            *component = lore;
+        } else {
+            self.patch.push((DataComponent::Lore, lore));
+        }
+    }
+
+    pub fn set_data_component<T: DataComponentImpl + 'static>(&mut self, component: T) {
+        let to_set_id = T::get_enum();
+        let boxed = Some(Box::new(component) as _);
+        if let Some((_, c)) = self.patch.iter_mut().find(|(id, _)| *id == to_set_id) {
+            *c = boxed;
+        } else {
+            self.patch.push((to_set_id, boxed));
+        }
+    }
+
+    pub fn remove_data_component(&mut self, to_remove_id: DataComponent) {
+        if let Some((_, c)) = self.patch.iter_mut().find(|(id, _)| *id == to_remove_id) {
+            *c = None;
+        } else {
+            self.patch.push((to_remove_id, None));
+        }
+    }
+
+    pub fn add_lore(&mut self, line: pumpkin_util::text::TextComponent) {
+        let mut lines = self
+            .get_data_component::<crate::data_component_impl::LoreImpl>()
+            .map_or_else(Vec::new, |lore| lore.lines.clone());
+        lines.push(line);
+        self.set_lore(lines);
+    }
+
     pub const EMPTY: &'static Self = &Self {
         item_count: 0,
         item: &Item::AIR,
         patch: Vec::new(),
 
-        uid: NonZeroI32::MIN, // white lie - Bedrock `uid` is never sent if the stack is empty
+        uid: NonZero::<i32>::MIN, // white lie - Bedrock `uid` is never sent if the stack is empty
     };
 
     #[must_use]
@@ -415,7 +470,83 @@ impl ItemStack {
         }
     }
 
-    fn custom_data_compound(&self) -> Option<&NbtCompound> {
+    #[must_use]
+    pub fn has_custom_name(&self) -> bool {
+        self.get_data_component::<crate::data_component_impl::CustomNameImpl>()
+            .is_some()
+    }
+
+    #[must_use]
+    pub fn get_custom_name(&self) -> Option<&pumpkin_util::text::TextComponent> {
+        self.get_data_component::<crate::data_component_impl::CustomNameImpl>()
+            .map(|c| &c.name)
+    }
+
+    pub fn remove_custom_name(&mut self) {
+        self.patch
+            .retain(|(id, _)| *id != DataComponent::CustomName);
+    }
+
+    #[must_use]
+    pub fn get_hover_name(&self) -> String {
+        if let Some(custom_name) =
+            self.get_data_component::<crate::data_component_impl::CustomNameImpl>()
+        {
+            return custom_name.name.clone().get_text();
+        }
+        if let Some(item_name) =
+            self.get_data_component::<crate::data_component_impl::ItemNameImpl>()
+        {
+            return item_name.name.to_string();
+        }
+        self.item.registry_key.to_string()
+    }
+
+    #[must_use]
+    pub fn get_repair_cost(&self) -> i32 {
+        self.get_data_component::<crate::data_component_impl::RepairCostImpl>()
+            .map_or(0, |value| value.cost)
+    }
+
+    pub fn set_repair_cost(&mut self, cost: i32) {
+        if cost <= 0 {
+            self.patch
+                .retain(|(id, _)| *id != DataComponent::RepairCost);
+            return;
+        }
+        self.set_data_component(crate::data_component_impl::RepairCostImpl { cost });
+    }
+
+    #[must_use]
+    pub fn is_valid_repair_item(&self, repair_item: &ItemStack) -> bool {
+        let repairable = self.get_data_component::<crate::data_component_impl::RepairableImpl>();
+        repairable.is_some_and(|r| r.is_valid_repair_item(repair_item))
+    }
+
+    #[must_use]
+    pub fn get_swing_animation(&self) -> SwingAnimationImpl {
+        self.get_data_component::<SwingAnimationImpl>()
+            .copied()
+            .unwrap_or(SwingAnimationImpl::DEFAULT)
+    }
+
+    #[must_use]
+    pub fn get_rarity(&self) -> Rarity {
+        let base = self
+            .get_data_component::<RarityImpl>()
+            .map_or(Rarity::Common, |r| r.rarity);
+        if !self.has_enchantments() {
+            return base;
+        }
+        match base {
+            Rarity::Common | Rarity::Uncommon => Rarity::Rare,
+            Rarity::Rare => Rarity::Epic,
+            Rarity::Epic => Rarity::Epic,
+        }
+    }
+
+    #[must_use]
+    pub fn custom_data_compound(&self) -> Option<&NbtCompound> {
         self.get_data_component::<CustomDataImpl>()
             .map(|custom_data| &custom_data.data)
     }
@@ -743,7 +874,8 @@ mod tests {
     use super::*;
     use crate::data_component::DataComponent;
     use crate::data_component_impl::{
-        CustomDataImpl, CustomNameImpl, DataComponentImpl, EnchantmentsImpl, UnbreakableImpl,
+        CustomDataImpl, CustomNameImpl, DataComponentImpl, EnchantmentsImpl, ItemNameImpl,
+        LoreImpl, UnbreakableImpl,
     };
 
     /// Helper: creates a fresh Iron Sword (max_damage 250, damage 0).
@@ -905,6 +1037,20 @@ mod tests {
     }
 
     #[test]
+    fn lore_can_be_set_and_appended() {
+        let mut stack = ItemStack::new(1, &Item::WOODEN_AXE);
+        stack.set_lore(vec![pumpkin_util::text::TextComponent::text("First line")]);
+        stack.add_lore(pumpkin_util::text::TextComponent::text("Second line"));
+
+        let lore = stack
+            .get_data_component::<LoreImpl>()
+            .expect("lore component should be present");
+        assert_eq!(lore.lines.len(), 2);
+        assert_eq!(lore.lines[0].clone().get_text(), "First line");
+        assert_eq!(lore.lines[1].clone().get_text(), "Second line");
+    }
+
+    #[test]
     fn custom_data_survives_item_stack_nbt_roundtrip() {
         let mut stack = ItemStack::new(1, &Item::WOODEN_AXE);
         stack.set_custom_data("test_plugin", "marker", NbtTag::Byte(1));
@@ -926,6 +1072,32 @@ mod tests {
             Some(NbtTag::String("pos1".into()))
         );
         assert!(decoded.get_data_component::<UnbreakableImpl>().is_some());
+    }
+
+    #[test]
+    fn translated_item_name_survives_item_stack_nbt_roundtrip() {
+        let mut stack = ItemStack::new(1, &Item::FILLED_MAP);
+        stack.patch.push((
+            DataComponent::ItemName,
+            Some(
+                ItemNameImpl {
+                    name: Cow::Borrowed("filled_map.mansion"),
+                }
+                .to_dyn(),
+            ),
+        ));
+
+        let mut compound = NbtCompound::new();
+        stack.write_item_stack(&mut compound);
+        let decoded = ItemStack::read_item_stack(&compound).expect("stack should decode");
+
+        assert_eq!(
+            decoded
+                .get_data_component::<ItemNameImpl>()
+                .expect("item name should decode")
+                .name,
+            "filled_map.mansion"
+        );
     }
 
     // ── damage_item ───────────────────────────────────────────────

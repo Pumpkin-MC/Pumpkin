@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_mossy_cobblestone": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:mossy_cobblestone"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:mossy_cobblestone_stairs"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_mossy_cobblestone"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:mossy_cobblestone_stairs"
+    ]
+  }
+}

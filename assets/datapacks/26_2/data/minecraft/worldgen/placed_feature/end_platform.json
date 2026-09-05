@@ -1,0 +1,18 @@
+{
+  "feature": "minecraft:end_platform",
+  "placement": [
+    {
+      "type": "minecraft:fixed_placement",
+      "positions": [
+        [
+          100,
+          49,
+          0
+        ]
+      ]
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

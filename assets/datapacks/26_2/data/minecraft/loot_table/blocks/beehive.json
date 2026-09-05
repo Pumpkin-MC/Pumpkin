@@ -1,0 +1,57 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "entries": [
+        {
+          "type": "minecraft:alternatives",
+          "children": [
+            {
+              "type": "minecraft:item",
+              "conditions": [
+                {
+                  "condition": "minecraft:match_tool",
+                  "predicate": {
+                    "predicates": {
+                      "minecraft:enchantments": [
+                        {
+                          "enchantments": "minecraft:silk_touch",
+                          "levels": {
+                            "min": 1
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              ],
+              "functions": [
+                {
+                  "function": "minecraft:copy_components",
+                  "include": [
+                    "minecraft:bees"
+                  ],
+                  "source": "block_entity"
+                },
+                {
+                  "block": "minecraft:beehive",
+                  "function": "minecraft:copy_state",
+                  "properties": [
+                    "honey_level"
+                  ]
+                }
+              ],
+              "name": "minecraft:beehive"
+            },
+            {
+              "type": "minecraft:item",
+              "name": "minecraft:beehive"
+            }
+          ]
+        }
+      ],
+      "rolls": 1.0
+    }
+  ],
+  "random_sequence": "minecraft:blocks/beehive"
+}

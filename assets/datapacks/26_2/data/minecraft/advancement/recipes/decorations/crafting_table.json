@@ -1,0 +1,25 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:crafting_table"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    },
+    "unlock_right_away": {
+      "trigger": "minecraft:tick"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "unlock_right_away"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:crafting_table"
+    ]
+  }
+}

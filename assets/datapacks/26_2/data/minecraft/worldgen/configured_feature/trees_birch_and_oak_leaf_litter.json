@@ -1,0 +1,24 @@
+{
+  "type": "minecraft:random_selector",
+  "config": {
+    "default": "minecraft:oak_bees_0002_leaf_litter",
+    "features": [
+      {
+        "chance": 0.0025,
+        "feature": "minecraft:fallen_birch_tree"
+      },
+      {
+        "chance": 0.2,
+        "feature": "minecraft:birch_bees_0002_leaf_litter"
+      },
+      {
+        "chance": 0.1,
+        "feature": "minecraft:fancy_oak_bees_0002_leaf_litter"
+      },
+      {
+        "chance": 0.0125,
+        "feature": "minecraft:fallen_oak_tree"
+      }
+    ]
+  }
+}

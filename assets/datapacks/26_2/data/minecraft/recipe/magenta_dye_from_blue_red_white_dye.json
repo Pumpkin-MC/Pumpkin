@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "group": "magenta_dye",
+  "ingredients": [
+    "minecraft:blue_dye",
+    "minecraft:red_dye",
+    "minecraft:red_dye",
+    "minecraft:white_dye"
+  ],
+  "result": {
+    "count": 4,
+    "id": "minecraft:magenta_dye"
+  }
+}

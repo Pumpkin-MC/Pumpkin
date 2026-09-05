@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_lots_of_items": {
+      "conditions": {
+        "slots": {
+          "occupied": {
+            "min": 10
+          }
+        }
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:chest"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_lots_of_items"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:chest"
+    ]
+  }
+}

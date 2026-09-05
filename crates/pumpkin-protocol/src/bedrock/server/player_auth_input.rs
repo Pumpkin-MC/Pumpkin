@@ -94,7 +94,13 @@ impl PacketRead for SPlayerAuthInput {
         // 3. Block Actions
         let block_actions = if bool::read(reader)? && bool::read(reader)? {
             let count = VarUInt::read(reader)?.0 as usize;
-            let mut actions = Vec::with_capacity(count);
+            if count > 1024 {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    "block_actions count exceeds limit",
+                ));
+            }
+            let mut actions = Vec::with_capacity(count.min(64));
             for _ in 0..count {
                 actions.push(PlayerBlockAction::read(reader)?);
             }
@@ -155,7 +161,14 @@ impl PacketRead for PlayerInventoryAction {
         let legacy_request_id = VarInt::read(buf)?;
         let mut legacy_slots = Vec::new();
         if bool::read(buf)? && legacy_request_id.0 < -1 && (legacy_request_id.0 & 1) == 0 {
-            let slots_len = VarUInt::read(buf)?.0;
+            let slots_len = VarUInt::read(buf)?.0 as usize;
+            if slots_len > 1024 {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    "slots_len exceeds limit",
+                ));
+            }
+            legacy_slots.reserve(slots_len.min(64));
             for _ in 0..slots_len {
                 legacy_slots.push(
                     crate::bedrock::server::inventory_transaction::LegacySetItemSlot::read(buf)?,
@@ -164,8 +177,14 @@ impl PacketRead for PlayerInventoryAction {
         }
         let mut actions = Vec::new();
         if bool::read(buf)? && bool::read(buf)? {
-            let actions_len = VarUInt::read(buf)?.0;
-            actions.reserve(actions_len as usize);
+            let actions_len = VarUInt::read(buf)?.0 as usize;
+            if actions_len > 1024 {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    "actions_len exceeds limit",
+                ));
+            }
+            actions.reserve(actions_len.min(64));
             for _ in 0..actions_len {
                 actions.push(
                     crate::bedrock::server::inventory_transaction::InventoryAction::read(buf)?,

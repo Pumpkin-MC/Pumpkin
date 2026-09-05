@@ -1,0 +1,28 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:pale_oak_boat"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    },
+    "in_water": {
+      "conditions": {
+        "block": "minecraft:water"
+      },
+      "trigger": "minecraft:enter_block"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "in_water"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:pale_oak_boat"
+    ]
+  }
+}

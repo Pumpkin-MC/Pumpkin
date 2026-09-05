@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_purple_wool": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:purple_wool"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:purple_banner"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_purple_wool"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:purple_banner"
+    ]
+  }
+}

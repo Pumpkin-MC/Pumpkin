@@ -8,9 +8,12 @@ use pumpkin_data::translation;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::{Axis, Vector3};
 
+pub mod angle;
 pub mod block_pos;
 pub mod column_pos;
 pub mod rotation;
+pub mod swizzle;
+pub mod vec2;
 pub mod vec3;
 
 pub const MIXED_TYPE_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(

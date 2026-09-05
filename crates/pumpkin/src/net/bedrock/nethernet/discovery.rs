@@ -103,12 +103,16 @@ impl NetherNetDiscovery {
         let players = server
             .get_status()
             .lock()
-            .await
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .status_response
             .players
             .as_ref()
             .map_or(0, |players| players.online);
-        let game_mode = server.defaultgamemode.lock().await.gamemode as u8;
+        let game_mode = server
+            .defaultgamemode
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .gamemode as u8;
         let response = encode_response(
             self.network_id,
             self.advertisement_id,

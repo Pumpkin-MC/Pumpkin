@@ -1,9 +1,10 @@
 use std::sync::{Arc, Weak};
 
+use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity, EntityBase,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, swim::SwimGoal, wander_around::WanderAroundGoal,
@@ -67,10 +68,16 @@ impl GuardianEntity {
     }
 }
 
-impl NBTStorage for GuardianEntity {}
-
 impl Mob for GuardianEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn on_damage(&self, _damage_type: DamageType, source: Option<&dyn EntityBase>) {
+        if let Some(src) = source
+            && let Some(living) = src.get_living_entity()
+        {
+            let _ = living.damage(src, 2.0, DamageType::THORNS);
+        }
     }
 }

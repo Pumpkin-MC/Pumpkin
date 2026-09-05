@@ -9,15 +9,10 @@ use crate::version::JavaMinecraftVersion;
 pub fn build() -> TokenStream {
     // ViaBackwards mappings go new → old (26.1 → 1.21.11 → ... → 1.20.5)
     // This is the correct direction for a new server sending to old clients.
-    let node_1_7_2 = MappingNode {
-        version: JavaMinecraftVersion::V_1_7_2,
-        value: "../../assets/viabackwards/data/mappings-1.7.6to1.7.2.nbt",
-        child: None,
-    };
     let node_1_7_6 = MappingNode {
         version: JavaMinecraftVersion::V_1_7_6,
         value: "../../assets/viarewind/data/mappings-1.8to1.7.10.nbt",
-        child: Some(&node_1_7_2),
+        child: None,
     };
     let node_1_8 = MappingNode {
         version: JavaMinecraftVersion::V_1_8,
@@ -204,6 +199,7 @@ pub fn build() -> TokenStream {
     let mut match_arms_id_from_ver = TokenStream::new();
 
     for (ver, mapping) in &all_mappings {
+        let versions = crate::remap::version_patterns(*ver);
         // Forward: 26.1 → old version (for sending to old clients)
         {
             let ident = format_ident!(
@@ -221,7 +217,7 @@ pub fn build() -> TokenStream {
                 const #ident: &[u16] = &[#(#mapping_tokens),*];
             });
             match_arms_id_for_ver.extend(quote! {
-                #ver => #ident
+                #(#versions)|* => #ident
                     .get(usize::from(item_id))
                     .copied()
                     .unwrap_or(item_id),
@@ -240,7 +236,7 @@ pub fn build() -> TokenStream {
                 const #ident: &[u16] = &[#(#mapping_tokens),*];
             });
             match_arms_id_from_ver.extend(quote! {
-                #ver => #ident
+                #(#versions)|* => #ident
                     .get(usize::from(item_id))
                     .copied()
                     .unwrap_or(item_id),

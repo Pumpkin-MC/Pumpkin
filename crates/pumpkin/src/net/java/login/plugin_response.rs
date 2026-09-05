@@ -4,9 +4,9 @@ use super::*;
 impl PendingConnection {
     pub async fn handle_plugin_response(
         &mut self,
-        server: &Server,
+        server: &Arc<Server>,
         plugin_response: SLoginPluginResponse,
-    ) {
+    ) -> Option<PacketHandlerResult> {
         debug!("Handling plugin");
         let velocity_config = &server.advanced_config.networking.proxy.velocity;
         if velocity_config.enabled {
@@ -16,12 +16,17 @@ impl PendingConnection {
                 plugin_response,
             ) {
                 Ok((profile, new_address)) => {
-                    self.finish_login(&profile).await;
-                    self.gameprofile = Some(profile);
+                    self.gameprofile = Some(profile.clone());
                     self.address = new_address;
+                    self.finish_login(server, &profile).await
                 }
-                Err(error) => self.kick(TextComponent::text(error.to_string())).await,
+                Err(error) => {
+                    self.kick(TextComponent::text(error.to_string())).await;
+                    Some(PacketHandlerResult::Stop)
+                }
             }
+        } else {
+            None
         }
     }
 }

@@ -1,0 +1,20 @@
+{
+  "category": "extreme_hills",
+  "temperature": 0.20000000298023224,
+  "downfall": 0.30000001192092896,
+  "depth": 0.800000011920929,
+  "effects": {
+    "water_fog_color": 329011,
+    "water_color": 4159204,
+    "fog_color": 12638463,
+    "mood_sound": {
+      "offset": 2.0,
+      "sound": "minecraft:ambient.cave",
+      "block_search_extent": 8,
+      "tick_delay": 6000
+    },
+    "sky_color": 8233727
+  },
+  "precipitation": "rain",
+  "scale": 0.30000001192092896
+}

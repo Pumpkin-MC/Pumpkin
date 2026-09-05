@@ -1,0 +1,45 @@
+{
+  "parent": "minecraft:adventure/shoot_arrow",
+  "criteria": {
+    "bullseye": {
+      "conditions": {
+        "projectile": [
+          {
+            "condition": "minecraft:entity_properties",
+            "entity": "this",
+            "predicate": {
+              "minecraft:distance": {
+                "horizontal": {
+                  "min": 30.0
+                }
+              }
+            }
+          }
+        ],
+        "signal_strength": 15
+      },
+      "trigger": "minecraft:target_hit"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.adventure.bullseye.description"
+    },
+    "frame": "challenge",
+    "icon": {
+      "id": "minecraft:target"
+    },
+    "title": {
+      "translate": "advancements.adventure.bullseye.title"
+    }
+  },
+  "requirements": [
+    [
+      "bullseye"
+    ]
+  ],
+  "rewards": {
+    "experience": 50
+  },
+  "sends_telemetry_event": true
+}

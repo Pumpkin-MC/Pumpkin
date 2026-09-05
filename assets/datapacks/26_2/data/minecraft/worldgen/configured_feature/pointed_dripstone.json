@@ -1,0 +1,101 @@
+{
+  "type": "minecraft:simple_random_selector",
+  "config": {
+    "features": [
+      {
+        "feature": {
+          "type": "minecraft:speleothem",
+          "config": {
+            "base_block": {
+              "Name": "minecraft:dripstone_block"
+            },
+            "pointed_block": {
+              "Name": "minecraft:pointed_dripstone",
+              "Properties": {
+                "thickness": "tip",
+                "vertical_direction": "up",
+                "waterlogged": "false"
+              }
+            },
+            "replaceable_blocks": "#minecraft:dripstone_replaceable_blocks"
+          }
+        },
+        "placement": [
+          {
+            "type": "minecraft:environment_scan",
+            "allowed_search_condition": {
+              "type": "minecraft:any_of",
+              "predicates": [
+                {
+                  "type": "minecraft:matching_block_tag",
+                  "tag": "minecraft:air"
+                },
+                {
+                  "type": "minecraft:matching_blocks",
+                  "blocks": "minecraft:water"
+                }
+              ]
+            },
+            "direction_of_search": "down",
+            "max_steps": 12,
+            "target_condition": {
+              "type": "minecraft:solid"
+            }
+          },
+          {
+            "type": "minecraft:random_offset",
+            "xz_spread": 0,
+            "y_spread": 1
+          }
+        ]
+      },
+      {
+        "feature": {
+          "type": "minecraft:speleothem",
+          "config": {
+            "base_block": {
+              "Name": "minecraft:dripstone_block"
+            },
+            "pointed_block": {
+              "Name": "minecraft:pointed_dripstone",
+              "Properties": {
+                "thickness": "tip",
+                "vertical_direction": "up",
+                "waterlogged": "false"
+              }
+            },
+            "replaceable_blocks": "#minecraft:dripstone_replaceable_blocks"
+          }
+        },
+        "placement": [
+          {
+            "type": "minecraft:environment_scan",
+            "allowed_search_condition": {
+              "type": "minecraft:any_of",
+              "predicates": [
+                {
+                  "type": "minecraft:matching_block_tag",
+                  "tag": "minecraft:air"
+                },
+                {
+                  "type": "minecraft:matching_blocks",
+                  "blocks": "minecraft:water"
+                }
+              ]
+            },
+            "direction_of_search": "up",
+            "max_steps": 12,
+            "target_condition": {
+              "type": "minecraft:solid"
+            }
+          },
+          {
+            "type": "minecraft:random_offset",
+            "xz_spread": 0,
+            "y_spread": -1
+          }
+        ]
+      }
+    ]
+  }
+}

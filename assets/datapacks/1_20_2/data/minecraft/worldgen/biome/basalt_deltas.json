@@ -1,0 +1,34 @@
+{
+  "effects": {
+    "music": {
+      "replace_current_music": 0,
+      "max_delay": 24000,
+      "sound": "minecraft:music.nether.basalt_deltas",
+      "min_delay": 12000
+    },
+    "sky_color": 7254527,
+    "ambient_sound": "minecraft:ambient.basalt_deltas.loop",
+    "additions_sound": {
+      "sound": "minecraft:ambient.basalt_deltas.additions",
+      "tick_chance": 0.0111
+    },
+    "particle": {
+      "probability": 0.1180933341383934,
+      "options": {
+        "type": "minecraft:white_ash"
+      }
+    },
+    "water_fog_color": 329011,
+    "fog_color": 6840176,
+    "water_color": 4159204,
+    "mood_sound": {
+      "tick_delay": 6000,
+      "offset": 2.0,
+      "sound": "minecraft:ambient.basalt_deltas.mood",
+      "block_search_extent": 8
+    }
+  },
+  "has_precipitation": 0,
+  "temperature": 2.0,
+  "downfall": 0.0
+}

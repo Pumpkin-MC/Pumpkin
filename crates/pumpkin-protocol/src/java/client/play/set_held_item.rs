@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::{PLAY_SET_CARRIED_ITEM, PLAY_SET_HELD_SLOT};
+use pumpkin_data::packet::clientbound::play::{SET_CARRIED_ITEM, SET_HELD_SLOT};
 use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::ClientPacket;
@@ -20,21 +20,23 @@ impl ClientPacket for CSetSelectedSlot {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        write.write_i8(self.slot)?;
+        if *version >= JavaMinecraftVersion::V_1_21_4 {
+            write.write_var_int(&crate::VarInt(i32::from(self.slot)))?;
+        } else {
+            write.write_i8(self.slot)?;
+        }
         Ok(())
     }
 }
 
 impl MultiVersionJavaPacket for CSetSelectedSlot {
     fn to_id(version: JavaMinecraftVersion) -> i32 {
-        if version >= JavaMinecraftVersion::V_1_21_2 {
-            PLAY_SET_HELD_SLOT.to_id(version)
-        } else if version == JavaMinecraftVersion::V_1_21 {
-            PLAY_SET_CARRIED_ITEM.to_id(version)
+        if version == JavaMinecraftVersion::V_1_21 {
+            SET_CARRIED_ITEM.to_id(version)
         } else {
-            PLAY_SET_HELD_SLOT.to_id(version)
+            SET_HELD_SLOT.to_id(version)
         }
     }
 }

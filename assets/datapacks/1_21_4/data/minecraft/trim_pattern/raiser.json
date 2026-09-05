@@ -1,0 +1,8 @@
+{
+  "asset_id": "minecraft:raiser",
+  "template_item": "minecraft:raiser_armor_trim_smithing_template",
+  "description": {
+    "translate": "trim_pattern.minecraft.raiser"
+  },
+  "decal": false
+}

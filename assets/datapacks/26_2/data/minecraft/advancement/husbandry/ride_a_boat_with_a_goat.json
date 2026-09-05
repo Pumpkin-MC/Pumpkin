@@ -1,0 +1,41 @@
+{
+  "parent": "minecraft:husbandry/root",
+  "criteria": {
+    "ride_a_boat_with_a_goat": {
+      "conditions": {
+        "player": [
+          {
+            "condition": "minecraft:entity_properties",
+            "entity": "this",
+            "predicate": {
+              "minecraft:vehicle": {
+                "minecraft:entity_type": "#minecraft:boat",
+                "minecraft:passenger": {
+                  "minecraft:entity_type": "minecraft:goat"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "trigger": "minecraft:started_riding"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.husbandry.ride_a_boat_with_a_goat.description"
+    },
+    "icon": {
+      "id": "minecraft:oak_boat"
+    },
+    "title": {
+      "translate": "advancements.husbandry.ride_a_boat_with_a_goat.title"
+    }
+  },
+  "requirements": [
+    [
+      "ride_a_boat_with_a_goat"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

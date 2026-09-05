@@ -1,0 +1,17 @@
+{
+  "chat": {
+    "translation_key": "chat.type.team.text",
+    "parameters": [
+      "target",
+      "sender",
+      "content"
+    ]
+  },
+  "narration": {
+    "translation_key": "chat.type.text.narrate",
+    "parameters": [
+      "sender",
+      "content"
+    ]
+  }
+}

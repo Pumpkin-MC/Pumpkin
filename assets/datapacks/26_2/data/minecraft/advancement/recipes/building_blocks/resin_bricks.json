@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_resin_brick": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:resin_brick"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:resin_bricks"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_resin_brick"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:resin_bricks"
+    ]
+  }
+}

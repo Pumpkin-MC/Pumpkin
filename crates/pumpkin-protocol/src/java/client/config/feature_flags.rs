@@ -1,10 +1,10 @@
-use pumpkin_data::packet::clientbound::CONFIG_UPDATE_ENABLED_FEATURES;
+use pumpkin_data::packet::clientbound::config::UPDATE_ENABLED_FEATURES;
 use pumpkin_macros::java_packet;
 use pumpkin_util::{resource_location::ResourceLocation, version::JavaMinecraftVersion};
 
 use crate::{ClientPacket, ser::NetworkWriteExt};
 
-#[java_packet(CONFIG_UPDATE_ENABLED_FEATURES)]
+#[java_packet(UPDATE_ENABLED_FEATURES)]
 pub struct CFeatureFlags<'a> {
     pub features: &'a [ResourceLocation],
 }

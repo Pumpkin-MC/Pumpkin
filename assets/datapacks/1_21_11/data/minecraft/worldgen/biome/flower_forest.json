@@ -1,0 +1,18 @@
+{
+  "has_precipitation": true,
+  "temperature": 0.7,
+  "downfall": 0.8,
+  "attributes": {
+    "minecraft:visual/sky_color": "#79a6ff",
+    "minecraft:audio/background_music": {
+      "default": {
+        "sound": "minecraft:music.overworld.flower_forest",
+        "min_delay": 12000,
+        "max_delay": 24000
+      }
+    }
+  },
+  "effects": {
+    "water_color": "#3f76e4"
+  }
+}

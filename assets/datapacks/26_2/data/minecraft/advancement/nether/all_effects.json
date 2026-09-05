@@ -1,0 +1,68 @@
+{
+  "parent": "minecraft:nether/all_potions",
+  "criteria": {
+    "all_effects": {
+      "conditions": {
+        "effects": {
+          "minecraft:absorption": {},
+          "minecraft:bad_omen": {},
+          "minecraft:blindness": {},
+          "minecraft:breath_of_the_nautilus": {},
+          "minecraft:conduit_power": {},
+          "minecraft:darkness": {},
+          "minecraft:dolphins_grace": {},
+          "minecraft:fire_resistance": {},
+          "minecraft:glowing": {},
+          "minecraft:haste": {},
+          "minecraft:hero_of_the_village": {},
+          "minecraft:hunger": {},
+          "minecraft:infested": {},
+          "minecraft:invisibility": {},
+          "minecraft:jump_boost": {},
+          "minecraft:levitation": {},
+          "minecraft:mining_fatigue": {},
+          "minecraft:nausea": {},
+          "minecraft:night_vision": {},
+          "minecraft:oozing": {},
+          "minecraft:poison": {},
+          "minecraft:raid_omen": {},
+          "minecraft:regeneration": {},
+          "minecraft:resistance": {},
+          "minecraft:slow_falling": {},
+          "minecraft:slowness": {},
+          "minecraft:speed": {},
+          "minecraft:strength": {},
+          "minecraft:trial_omen": {},
+          "minecraft:water_breathing": {},
+          "minecraft:weakness": {},
+          "minecraft:weaving": {},
+          "minecraft:wind_charged": {},
+          "minecraft:wither": {}
+        }
+      },
+      "trigger": "minecraft:effects_changed"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.nether.all_effects.description"
+    },
+    "frame": "challenge",
+    "hidden": true,
+    "icon": {
+      "id": "minecraft:bucket"
+    },
+    "title": {
+      "translate": "advancements.nether.all_effects.title"
+    }
+  },
+  "requirements": [
+    [
+      "all_effects"
+    ]
+  ],
+  "rewards": {
+    "experience": 1000
+  },
+  "sends_telemetry_event": true
+}

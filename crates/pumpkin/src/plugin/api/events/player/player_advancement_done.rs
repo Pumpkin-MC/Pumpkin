@@ -15,6 +15,17 @@ pub struct PlayerAdvancementDoneEvent {
     pub advancement_id: String,
 }
 
+impl PlayerAdvancementDoneEvent {
+    #[must_use]
+    pub const fn new(player: Arc<Player>, advancement_id: String) -> Self {
+        Self {
+            player,
+            advancement_id,
+            cancelled: false,
+        }
+    }
+}
+
 impl PlayerEvent for PlayerAdvancementDoneEvent {
     fn get_player(&self) -> &Arc<Player> {
         &self.player

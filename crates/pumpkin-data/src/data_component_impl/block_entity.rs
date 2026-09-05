@@ -18,17 +18,30 @@ impl BlockEntityDataImpl {
     }
 }
 impl DataComponentImpl for BlockEntityDataImpl {
+    fn write_data(&self) -> NbtTag {
+        NbtTag::Compound(self.nbt.clone())
+    }
     default_impl!(BlockEntityData);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct EntityDataImpl;
+impl EntityDataImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for EntityDataImpl {
     default_impl!(EntityData);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BucketEntityDataImpl;
+impl BucketEntityDataImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for BucketEntityDataImpl {
     default_impl!(BucketEntityData);
 }
@@ -67,6 +80,18 @@ impl ContainerImpl {
     }
 }
 impl DataComponentImpl for ContainerImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut list = Vec::new();
+        for (slot, stack) in &self.items {
+            let mut entry = NbtCompound::new();
+            entry.put_int("slot", *slot as i32);
+            let mut item_compound = NbtCompound::new();
+            stack.write_item_stack(&mut item_compound);
+            entry.put_compound("item", item_compound);
+            list.push(NbtTag::Compound(entry));
+        }
+        NbtTag::List(list)
+    }
     default_impl!(Container);
 }
 
@@ -133,6 +158,11 @@ impl DataComponentImpl for BlockStateImpl {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BeesImpl;
+impl BeesImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for BeesImpl {
     default_impl!(Bees);
 }
@@ -162,6 +192,11 @@ impl DataComponentImpl for ContainerLootImpl {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct SulfurCubeContentImpl;
+impl SulfurCubeContentImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for SulfurCubeContentImpl {
     default_impl!(SulfurCubeContent);
 }

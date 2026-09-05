@@ -1,0 +1,27 @@
+{
+  "feature": "minecraft:spring_nether_open",
+  "placement": [
+    {
+      "type": "minecraft:count",
+      "count": 8
+    },
+    {
+      "type": "minecraft:in_square"
+    },
+    {
+      "type": "minecraft:height_range",
+      "height": {
+        "type": "minecraft:uniform",
+        "max_inclusive": {
+          "below_top": 4
+        },
+        "min_inclusive": {
+          "above_bottom": 4
+        }
+      }
+    },
+    {
+      "type": "minecraft:biome"
+    }
+  ]
+}

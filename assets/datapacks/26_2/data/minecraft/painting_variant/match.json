@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:match",
+  "author": {
+    "color": "gray",
+    "translate": "painting.minecraft.match.author"
+  },
+  "height": 2,
+  "title": {
+    "color": "yellow",
+    "translate": "painting.minecraft.match.title"
+  },
+  "width": 2
+}

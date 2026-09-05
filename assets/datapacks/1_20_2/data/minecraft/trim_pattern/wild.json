@@ -1,0 +1,8 @@
+{
+  "template_item": "minecraft:wild_armor_trim_smithing_template",
+  "description": {
+    "translate": "trim_pattern.minecraft.wild"
+  },
+  "asset_id": "minecraft:wild",
+  "decal": 0
+}

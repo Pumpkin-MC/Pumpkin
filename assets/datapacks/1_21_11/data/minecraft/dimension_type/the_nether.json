@@ -1,0 +1,29 @@
+{
+  "has_fixed_time": true,
+  "has_skylight": false,
+  "has_ceiling": true,
+  "coordinate_scale": 8.0,
+  "min_y": 0,
+  "height": 256,
+  "logical_height": 128,
+  "infiniburn": "#minecraft:infiniburn_nether",
+  "ambient_light": 0.1,
+  "monster_spawn_light_level": 7,
+  "monster_spawn_block_light_limit": 15,
+  "skybox": "none",
+  "cardinal_light": "nether",
+  "attributes": {
+    "minecraft:visual/default_dripstone_particle": {
+      "type": "minecraft:dripping_dripstone_lava"
+    },
+    "minecraft:visual/sky_light_color": "#7a7aff",
+    "minecraft:gameplay/water_evaporates": true,
+    "minecraft:gameplay/fast_lava": true,
+    "minecraft:visual/fog_end_distance": 96.0,
+    "minecraft:gameplay/piglins_zombify": false,
+    "minecraft:gameplay/sky_light_level": 4.0,
+    "minecraft:visual/sky_light_factor": 0.0,
+    "minecraft:visual/fog_start_distance": 10.0
+  },
+  "timelines": "#minecraft:in_nether"
+}

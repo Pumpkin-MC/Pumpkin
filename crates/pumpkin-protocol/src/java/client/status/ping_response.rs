@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::STATUS_PONG_RESPONSE;
+use pumpkin_data::packet::clientbound::status::PONG_RESPONSE;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
@@ -9,7 +9,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 ///
 /// This is the final packet in the Server List Ping (SLP) sequence. It allows the
 /// client to calculate the round-trip time (ping) to the server.
-#[java_packet(STATUS_PONG_RESPONSE)]
+#[java_packet(PONG_RESPONSE)]
 pub struct CPingResponse {
     /// The exact 64-bit integer received from the client's ping request.
     ///

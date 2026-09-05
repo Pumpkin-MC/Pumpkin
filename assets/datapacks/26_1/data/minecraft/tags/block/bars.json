@@ -1,0 +1,13 @@
+{
+  "values": [
+    "minecraft:iron_bars",
+    "minecraft:copper_bars",
+    "minecraft:waxed_copper_bars",
+    "minecraft:exposed_copper_bars",
+    "minecraft:waxed_exposed_copper_bars",
+    "minecraft:weathered_copper_bars",
+    "minecraft:waxed_weathered_copper_bars",
+    "minecraft:oxidized_copper_bars",
+    "minecraft:waxed_oxidized_copper_bars"
+  ]
+}

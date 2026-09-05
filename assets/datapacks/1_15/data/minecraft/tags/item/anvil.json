@@ -1,0 +1,8 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:anvil",
+    "minecraft:chipped_anvil",
+    "minecraft:damaged_anvil"
+  ]
+}

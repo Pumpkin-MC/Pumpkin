@@ -1,0 +1,75 @@
+{
+  "parent": "minecraft:adventure/voluntary_exile",
+  "criteria": {
+    "hero_of_the_village": {
+      "trigger": "minecraft:hero_of_the_village"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.adventure.hero_of_the_village.description"
+    },
+    "frame": "challenge",
+    "hidden": true,
+    "icon": {
+      "components": {
+        "minecraft:banner_patterns": [
+          {
+            "color": "cyan",
+            "pattern": "minecraft:rhombus"
+          },
+          {
+            "color": "light_gray",
+            "pattern": "minecraft:stripe_bottom"
+          },
+          {
+            "color": "gray",
+            "pattern": "minecraft:stripe_center"
+          },
+          {
+            "color": "light_gray",
+            "pattern": "minecraft:border"
+          },
+          {
+            "color": "black",
+            "pattern": "minecraft:stripe_middle"
+          },
+          {
+            "color": "light_gray",
+            "pattern": "minecraft:half_horizontal"
+          },
+          {
+            "color": "light_gray",
+            "pattern": "minecraft:circle"
+          },
+          {
+            "color": "black",
+            "pattern": "minecraft:border"
+          }
+        ],
+        "minecraft:item_name": {
+          "translate": "block.minecraft.ominous_banner"
+        },
+        "minecraft:rarity": "uncommon",
+        "minecraft:tooltip_display": {
+          "hidden_components": [
+            "minecraft:banner_patterns"
+          ]
+        }
+      },
+      "id": "minecraft:white_banner"
+    },
+    "title": {
+      "translate": "advancements.adventure.hero_of_the_village.title"
+    }
+  },
+  "requirements": [
+    [
+      "hero_of_the_village"
+    ]
+  ],
+  "rewards": {
+    "experience": 100
+  },
+  "sends_telemetry_event": true
+}

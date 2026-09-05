@@ -1,0 +1,8 @@
+{
+  "hurt_sound": "minecraft:entity.wolf_cute.hurt",
+  "pant_sound": "minecraft:entity.wolf_cute.pant",
+  "whine_sound": "minecraft:entity.wolf_cute.whine",
+  "ambient_sound": "minecraft:entity.wolf_cute.ambient",
+  "death_sound": "minecraft:entity.wolf_cute.death",
+  "growl_sound": "minecraft:entity.wolf_cute.growl"
+}

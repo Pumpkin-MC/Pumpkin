@@ -1,0 +1,33 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "conditions": [
+        {
+          "condition": "minecraft:survives_explosion"
+        }
+      ],
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "functions": [
+            {
+              "function": "minecraft:copy_components",
+              "include": [
+                "minecraft:custom_name",
+                "minecraft:item_name",
+                "minecraft:tooltip_display",
+                "minecraft:banner_patterns",
+                "minecraft:rarity"
+              ],
+              "source": "block_entity"
+            }
+          ],
+          "name": "minecraft:light_blue_banner"
+        }
+      ],
+      "rolls": 1.0
+    }
+  ],
+  "random_sequence": "minecraft:blocks/light_blue_banner"
+}

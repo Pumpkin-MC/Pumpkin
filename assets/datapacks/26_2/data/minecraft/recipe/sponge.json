@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:smelting",
+  "category": "blocks",
+  "experience": 0.15,
+  "ingredient": "minecraft:wet_sponge",
+  "result": {
+    "id": "minecraft:sponge"
+  }
+}

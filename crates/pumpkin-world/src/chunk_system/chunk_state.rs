@@ -14,6 +14,7 @@ use crate::ProtoChunk;
 use crate::level::SyncChunk;
 
 use pumpkin_data::chunk::ChunkStatus;
+use pumpkin_nbt::compound::NbtCompound;
 use std::sync::Mutex;
 
 #[repr(u8)]
@@ -128,15 +129,22 @@ impl StagedChunkEnum {
         Self::Lighting,
         Self::Features,
         Self::Carvers,
-        Self::Surface,
+        Self::Biomes,
     ];
-    pub const FULL_RADIUS: i32 = 4;
+    pub const FULL_RADIUS: i32 = 5;
     #[must_use]
     pub const fn get_direct_radius(self) -> i32 {
         // self exclude
         match self {
-            Self::Features | Self::Lighting | Self::Spawn | Self::Full => 1,
+            Self::Surface | Self::Features | Self::Lighting | Self::Spawn | Self::Full => 1,
             _ => 0,
+        }
+    }
+    #[must_use]
+    pub const fn get_read_radius(self) -> i32 {
+        match self {
+            Self::Surface => 1,
+            _ => self.get_write_radius(),
         }
     }
     #[must_use]
@@ -166,7 +174,7 @@ impl StagedChunkEnum {
                 Self::StructureStart,
             ],
             Self::Noise => &[Self::StructureReferences],
-            Self::Surface => &[Self::Noise],
+            Self::Surface => &[Self::Noise, Self::Biomes],
             Self::Carvers => &[Self::Surface],
             Self::Features => &[Self::Carvers, Self::Carvers],
             Self::Lighting => &[Self::Features, Self::Features],
@@ -278,6 +286,7 @@ impl Chunk {
                 blending_data: None,
                 dirty: AtomicBool::new(false),
                 inhabited_time: AtomicU64::new(0),
+                custom_data: Mutex::new(NbtCompound::new()),
             })),
         ) {
             Self::Proto(proto) => proto,
@@ -324,8 +333,25 @@ impl Chunk {
             status: proto_chunk.stage.into(),
             blending_data: proto_chunk.blending_data,
             inhabited_time: AtomicU64::new(0),
+            custom_data: Mutex::new(NbtCompound::new()),
         };
 
         *self = Self::Level(Arc::new(chunk));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::StagedChunkEnum;
+
+    #[test]
+    fn surface_reads_neighbor_biomes_without_owning_neighbors() {
+        assert_eq!(StagedChunkEnum::Surface.get_direct_radius(), 1);
+        assert_eq!(StagedChunkEnum::Surface.get_read_radius(), 1);
+        assert_eq!(StagedChunkEnum::Surface.get_write_radius(), 0);
+        assert_eq!(
+            StagedChunkEnum::Surface.get_direct_dependencies(),
+            &[StagedChunkEnum::Noise, StagedChunkEnum::Biomes]
+        );
     }
 }

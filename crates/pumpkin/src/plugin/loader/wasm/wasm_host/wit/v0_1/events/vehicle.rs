@@ -2,7 +2,9 @@ use crate::plugin::{
     loader::wasm::wasm_host::{
         state::PluginHostState,
         wit::v0_1::{
-            events::{ToFromWasmEvent, from_wasm_block_position, to_wasm_block_position},
+            events::{
+                ToFromWasmEvent, cleanup_event, from_wasm_block_position, to_wasm_block_position,
+            },
             pumpkin::plugin::event::{
                 Event, VehicleBlockCollisionEventData, VehicleCollisionEventData,
                 VehicleCreateEventData, VehicleDamageEventData, VehicleDestroyEventData,
@@ -42,7 +44,8 @@ impl ToFromWasmEvent for VehicleBlockCollisionEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::VehicleBlockCollisionEvent(data) = event {
             self.block_pos = from_wasm_block_position(data.block_pos);
             self.cancelled = data.cancelled;
@@ -68,7 +71,8 @@ impl ToFromWasmEvent for VehicleCollisionEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::VehicleCollisionEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -93,7 +97,8 @@ impl ToFromWasmEvent for VehicleCreateEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::VehicleCreateEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -122,7 +127,8 @@ impl ToFromWasmEvent for VehicleDamageEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::VehicleDamageEvent(data) = event {
             self.damage = data.damage;
             self.attacker_id = data.attacker_id;
@@ -151,7 +157,8 @@ impl ToFromWasmEvent for VehicleDestroyEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::VehicleDestroyEvent(data) = event {
             self.attacker_id = data.attacker_id;
             self.cancelled = data.cancelled;
@@ -179,7 +186,8 @@ impl ToFromWasmEvent for VehicleEnterEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::VehicleEnterEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -206,7 +214,8 @@ impl ToFromWasmEvent for VehicleEntityCollisionEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::VehicleEntityCollisionEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -233,7 +242,8 @@ impl ToFromWasmEvent for VehicleExitEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::VehicleExitEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -266,7 +276,8 @@ impl ToFromWasmEvent for VehicleMoveEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::VehicleMoveEvent(data) = event {
             self.from = Vector3::new(
                 data.from_position.0,
@@ -297,7 +308,8 @@ impl ToFromWasmEvent for VehicleUpdateEvent {
         }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::VehicleUpdateEvent(data) = event {
             self.cancelled = data.cancelled;
         }

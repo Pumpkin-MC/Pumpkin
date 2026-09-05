@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use pumpkin_data::packet::clientbound::PLAY_RECIPE_BOOK_SETTINGS;
+use pumpkin_data::packet::clientbound::play::RECIPE_BOOK_SETTINGS;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -10,7 +10,7 @@ use crate::{ClientPacket, WritingError, ser::NetworkWriteExt};
 ///
 /// Wire format: 4 `TypeSettings` pairs (crafting, furnace, `blast_furnace`, smoker),
 /// each pair is (`is_open`: bool, `is_filtering`: bool).
-#[java_packet(PLAY_RECIPE_BOOK_SETTINGS)]
+#[java_packet(RECIPE_BOOK_SETTINGS)]
 pub struct CRecipeBookSettings {
     pub crafting_open: bool,
     pub crafting_filtering: bool,

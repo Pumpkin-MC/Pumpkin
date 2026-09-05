@@ -1,0 +1,19 @@
+[package]
+name = "pumpkin-fuzzer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+tokio = { workspace = true, features = ["full"] }
+clap = { version = "4", features = ["derive"] }
+colored.workspace = true
+rand.workspace = true
+
+[lints.clippy]
+expect_used = "allow"
+unwrap_used = "allow"
+panic = "allow"
+pedantic = { level = "allow", priority = -1 }
+all = { level = "allow", priority = -1 }

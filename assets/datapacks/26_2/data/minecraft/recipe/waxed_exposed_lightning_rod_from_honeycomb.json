@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "building",
+  "group": "waxed_lightning_rod",
+  "ingredients": [
+    "minecraft:exposed_lightning_rod",
+    "minecraft:honeycomb"
+  ],
+  "result": {
+    "id": "minecraft:waxed_exposed_lightning_rod"
+  }
+}

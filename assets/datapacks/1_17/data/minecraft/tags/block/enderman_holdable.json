@@ -1,0 +1,24 @@
+{
+  "replace": false,
+  "values": [
+    "#minecraft:small_flowers",
+    "#minecraft:dirt",
+    "minecraft:sand",
+    "minecraft:red_sand",
+    "minecraft:gravel",
+    "minecraft:brown_mushroom",
+    "minecraft:red_mushroom",
+    "minecraft:tnt",
+    "minecraft:cactus",
+    "minecraft:clay",
+    "minecraft:pumpkin",
+    "minecraft:carved_pumpkin",
+    "minecraft:melon",
+    "minecraft:crimson_fungus",
+    "minecraft:crimson_nylium",
+    "minecraft:crimson_roots",
+    "minecraft:warped_fungus",
+    "minecraft:warped_nylium",
+    "minecraft:warped_roots"
+  ]
+}

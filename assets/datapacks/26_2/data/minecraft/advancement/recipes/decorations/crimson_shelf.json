@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_stripped_crimson_stem": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:stripped_crimson_stem"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:crimson_shelf"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_stripped_crimson_stem"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:crimson_shelf"
+    ]
+  }
+}

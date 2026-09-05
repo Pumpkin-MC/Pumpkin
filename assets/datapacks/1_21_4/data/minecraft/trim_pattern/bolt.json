@@ -1,0 +1,8 @@
+{
+  "asset_id": "minecraft:bolt",
+  "template_item": "minecraft:bolt_armor_trim_smithing_template",
+  "description": {
+    "translate": "trim_pattern.minecraft.bolt"
+  },
+  "decal": false
+}

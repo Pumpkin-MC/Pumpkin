@@ -1,0 +1,16 @@
+{
+  "infiniburn": "minecraft:infiniburn_end",
+  "effects": "minecraft:the_end",
+  "ultrawarm": 0,
+  "logical_height": 256,
+  "natural": 0,
+  "bed_works": 0,
+  "fixed_time": 6000,
+  "coordinate_scale": 1.0,
+  "piglin_safe": 0,
+  "has_skylight": 0,
+  "has_ceiling": 0,
+  "ambient_light": 0.0,
+  "has_raids": 1,
+  "respawn_anchor_works": 0
+}

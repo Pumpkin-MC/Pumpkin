@@ -5,7 +5,8 @@ use crate::plugin::{
         state::PluginHostState,
         wit::v0_1::{
             events::{
-                ToFromWasmEvent, consume_world, from_wasm_block_position, to_wasm_block_position,
+                ToFromWasmEvent, cleanup_event, consume_world, from_wasm_block_position,
+                to_wasm_block_position,
             },
             pumpkin::plugin::event::{
                 ChunkLoadEventData, ChunkSaveEventData, ChunkSendEventData, Event,
@@ -59,11 +60,14 @@ impl ToFromWasmEvent for ChunkLoad {
             .add_world(self.world.clone())
             .expect("failed to add world resource");
 
-        let guard = self.chunk.blocking_read();
+        let (chunk_x, chunk_z) = self
+            .chunk
+            .try_read()
+            .map_or((0, 0), |guard| (guard.x, guard.z));
         Event::ChunkLoadEvent(ChunkLoadEventData {
             target_world,
-            chunk_x: guard.x,
-            chunk_z: guard.z,
+            chunk_x,
+            chunk_z,
             cancelled: self.cancelled,
         })
     }
@@ -90,6 +94,7 @@ impl ToFromWasmEvent for ChunkLoad {
                     blending_data: None,
                     dirty: std::sync::atomic::AtomicBool::new(false),
                     inhabited_time: std::sync::atomic::AtomicU64::new(0),
+                    custom_data: std::sync::Mutex::new(pumpkin_nbt::compound::NbtCompound::new()),
                 };
                 Self {
                     world,
@@ -108,11 +113,14 @@ impl ToFromWasmEvent for ChunkSave {
             .add_world(self.world.clone())
             .expect("failed to add world resource");
 
-        let guard = self.chunk.blocking_read();
+        let (chunk_x, chunk_z) = self
+            .chunk
+            .try_read()
+            .map_or((0, 0), |guard| (guard.x, guard.z));
         Event::ChunkSaveEvent(ChunkSaveEventData {
             target_world,
-            chunk_x: guard.x,
-            chunk_z: guard.z,
+            chunk_x,
+            chunk_z,
             cancelled: self.cancelled,
         })
     }
@@ -139,6 +147,7 @@ impl ToFromWasmEvent for ChunkSave {
                     blending_data: None,
                     dirty: std::sync::atomic::AtomicBool::new(false),
                     inhabited_time: std::sync::atomic::AtomicU64::new(0),
+                    custom_data: std::sync::Mutex::new(pumpkin_nbt::compound::NbtCompound::new()),
                 };
                 Self {
                     world,
@@ -187,6 +196,7 @@ impl ToFromWasmEvent for ChunkSend {
                     blending_data: None,
                     dirty: std::sync::atomic::AtomicBool::new(false),
                     inhabited_time: std::sync::atomic::AtomicU64::new(0),
+                    custom_data: std::sync::Mutex::new(pumpkin_nbt::compound::NbtCompound::new()),
                 };
                 Self {
                     world,
@@ -315,7 +325,8 @@ impl ToFromWasmEvent
         }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::AsyncStructureGenerateEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -346,7 +357,8 @@ impl ToFromWasmEvent
         }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::AsyncStructureSpawnEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -372,7 +384,8 @@ impl ToFromWasmEvent for crate::plugin::api::events::world::chunk_populate::Chun
         }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::ChunkPopulateEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -398,7 +411,8 @@ impl ToFromWasmEvent for crate::plugin::api::events::world::chunk_unload::ChunkU
         }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::ChunkUnloadEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -426,7 +440,8 @@ impl ToFromWasmEvent for crate::plugin::api::events::world::entities_load::Entit
         }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::EntitiesLoadEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -454,7 +469,8 @@ impl ToFromWasmEvent for crate::plugin::api::events::world::entities_unload::Ent
         }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::EntitiesUnloadEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -483,7 +499,8 @@ impl ToFromWasmEvent for crate::plugin::api::events::world::generic_game::Generi
         }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::GenericGameEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -508,7 +525,8 @@ impl ToFromWasmEvent for crate::plugin::api::events::world::loot_generate::LootG
         }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::LootGenerateEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -541,7 +559,8 @@ impl ToFromWasmEvent for crate::plugin::api::events::world::portal_create::Porta
         }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::PortalCreateEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -591,7 +610,8 @@ impl ToFromWasmEvent for crate::plugin::api::events::world::structure_grow::Stru
         }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::StructureGrowEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -616,7 +636,8 @@ impl ToFromWasmEvent for crate::plugin::api::events::world::time_skip::TimeSkipE
         }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::TimeSkipEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -662,7 +683,8 @@ impl ToFromWasmEvent for crate::plugin::api::events::world::world_save::WorldSav
         }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::WorldSaveEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -692,7 +714,8 @@ impl ToFromWasmEvent for crate::plugin::api::events::world::lightning_strike::Li
         }
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::LightningStrikeEvent(data) = event {
             self.cancelled = data.cancelled;
         }

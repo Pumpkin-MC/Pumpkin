@@ -1,0 +1,45 @@
+{
+  "parent": "minecraft:adventure/sleep_in_bed",
+  "criteria": {
+    "walk_on_powder_snow_with_leather_boots": {
+      "conditions": {
+        "player": [
+          {
+            "condition": "minecraft:entity_properties",
+            "entity": "this",
+            "predicate": {
+              "minecraft:equipment": {
+                "feet": {
+                  "items": "minecraft:leather_boots"
+                }
+              },
+              "minecraft:stepping_on": {
+                "block": {
+                  "blocks": "minecraft:powder_snow"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "trigger": "minecraft:location"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.adventure.walk_on_powder_snow_with_leather_boots.description"
+    },
+    "icon": {
+      "id": "minecraft:leather_boots"
+    },
+    "title": {
+      "translate": "advancements.adventure.walk_on_powder_snow_with_leather_boots.title"
+    }
+  },
+  "requirements": [
+    [
+      "walk_on_powder_snow_with_leather_boots"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

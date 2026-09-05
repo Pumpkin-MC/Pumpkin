@@ -5,7 +5,7 @@ use crate::{
     ser::{NetworkWriteExt, WritingError},
 };
 use pumpkin_data::block_state_remap::remap_block_state_for_version;
-use pumpkin_data::packet::clientbound::PLAY_LEVEL_EVENT;
+use pumpkin_data::packet::clientbound::play::LEVEL_EVENT;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::version::JavaMinecraftVersion;
@@ -16,7 +16,7 @@ use pumpkin_macros::java_packet;
 ///
 /// This is used for a wide variety of effects, from breaking blocks and firework
 /// explosions to splashing water or record playing.
-#[java_packet(PLAY_LEVEL_EVENT)]
+#[java_packet(LEVEL_EVENT)]
 pub struct CWorldEvent {
     /// The ID of the event to trigger (e.g., 1000 for a bow shoot, 2001 for block break).
     /// Refer to the latest protocol registry for the full list of sound/particle IDs.
@@ -58,7 +58,7 @@ impl ClientPacket for CWorldEvent {
     ) -> Result<(), WritingError> {
         let mut write = write;
         write.write_i32_be(self.event)?;
-        write.write_block_pos(&self.location)?;
+        write.write_block_pos(&self.location, version)?;
 
         let data = if self.event == WorldEvent::ParticlesDestroyBlock as i32 {
             u16::try_from(self.data).map_or(self.data, |state_id| {

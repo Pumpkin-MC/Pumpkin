@@ -1,3 +1,4 @@
+use pumpkin_data::damage::DamageType;
 use pumpkin_macros::{Event, cancellable};
 
 /// An event that occurs when an entity takes damage.
@@ -10,17 +11,17 @@ pub struct EntityDamageEvent {
     /// The amount of damage taken.
     pub damage: f32,
 
-    /// The cause or type of damage as a string.
-    pub cause: String,
+    /// The damage type.
+    pub damage_type: DamageType,
 }
 
 impl EntityDamageEvent {
     #[must_use]
-    pub const fn new(entity_id: i32, damage_type: String, damage_amount: f32) -> Self {
+    pub const fn new(entity_id: i32, damage_type: DamageType, damage_amount: f32) -> Self {
         Self {
             entity_id,
             damage: damage_amount,
-            cause: damage_type,
+            damage_type,
             cancelled: false,
         }
     }

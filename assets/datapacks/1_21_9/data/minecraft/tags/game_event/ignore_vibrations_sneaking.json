@@ -1,0 +1,10 @@
+{
+  "values": [
+    "minecraft:hit_ground",
+    "minecraft:projectile_shoot",
+    "minecraft:step",
+    "minecraft:swim",
+    "minecraft:item_interact_start",
+    "minecraft:item_interact_finish"
+  ]
+}

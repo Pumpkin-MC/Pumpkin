@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:graham",
+  "title": {
+    "translate": "painting.minecraft.graham.title",
+    "color": "yellow"
+  },
+  "author": {
+    "translate": "painting.minecraft.graham.author",
+    "color": "gray"
+  },
+  "width": 1,
+  "height": 2
+}

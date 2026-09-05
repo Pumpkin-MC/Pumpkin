@@ -1,0 +1,13 @@
+{
+  "values": [
+    "minecraft:gold_block",
+    "minecraft:barrel",
+    "minecraft:chest",
+    "minecraft:ender_chest",
+    "minecraft:gilded_blackstone",
+    "minecraft:trapped_chest",
+    "minecraft:raw_gold_block",
+    "#minecraft:shulker_boxes",
+    "#minecraft:gold_ores"
+  ]
+}

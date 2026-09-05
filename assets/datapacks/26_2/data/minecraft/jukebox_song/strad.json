@@ -1,0 +1,8 @@
+{
+  "comparator_output": 9,
+  "description": {
+    "translate": "jukebox_song.minecraft.strad"
+  },
+  "length_in_seconds": 188.0,
+  "sound_event": "minecraft:music_disc.strad"
+}

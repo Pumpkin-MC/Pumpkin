@@ -1,0 +1,21 @@
+{
+  "values": [
+    "minecraft:bundle",
+    "minecraft:white_bundle",
+    "minecraft:orange_bundle",
+    "minecraft:magenta_bundle",
+    "minecraft:light_blue_bundle",
+    "minecraft:yellow_bundle",
+    "minecraft:lime_bundle",
+    "minecraft:pink_bundle",
+    "minecraft:gray_bundle",
+    "minecraft:light_gray_bundle",
+    "minecraft:cyan_bundle",
+    "minecraft:purple_bundle",
+    "minecraft:blue_bundle",
+    "minecraft:brown_bundle",
+    "minecraft:green_bundle",
+    "minecraft:red_bundle",
+    "minecraft:black_bundle"
+  ]
+}

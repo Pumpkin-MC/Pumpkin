@@ -172,8 +172,14 @@ impl PacketRead for String {
 
 impl<T: PacketRead> PacketRead for Vec<T> {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        let len = VarUInt::read(reader)?.0 as _;
-        let mut buf = Self::with_capacity(len);
+        let len = VarUInt::read(reader)?.0 as usize;
+        if len > 65536 {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                format!("Vector length {len} exceeds limit of 65536"),
+            ));
+        }
+        let mut buf = Self::with_capacity(len.min(1024));
         for _ in 0..len {
             buf.push(T::read(reader)?);
         }

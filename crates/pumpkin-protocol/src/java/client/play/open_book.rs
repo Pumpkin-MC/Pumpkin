@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_OPEN_BOOK;
+use pumpkin_data::packet::clientbound::play::OPEN_BOOK;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -6,7 +6,7 @@ use crate::ser::NetworkWriteExt;
 use crate::{ClientPacket, VarInt};
 
 #[derive(Clone, Copy, Debug)]
-#[java_packet(PLAY_OPEN_BOOK)]
+#[java_packet(OPEN_BOOK)]
 pub struct COpenBook {
     pub hand: VarInt,
 }

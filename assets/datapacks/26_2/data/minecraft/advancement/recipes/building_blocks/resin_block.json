@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_resin_clump": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:resin_clump"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:resin_block"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_resin_clump"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:resin_block"
+    ]
+  }
+}

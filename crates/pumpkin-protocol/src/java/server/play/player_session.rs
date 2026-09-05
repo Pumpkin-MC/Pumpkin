@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_CHAT_SESSION_UPDATE;
+use pumpkin_data::packet::serverbound::play::CHAT_SESSION_UPDATE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -8,7 +8,7 @@ use crate::{
 };
 
 #[derive(Debug)]
-#[java_packet(PLAY_CHAT_SESSION_UPDATE)]
+#[java_packet(CHAT_SESSION_UPDATE)]
 pub struct SPlayerSession {
     pub session_id: uuid::Uuid,
     pub expires_at: i64,
@@ -21,11 +21,19 @@ impl<'a> ServerPacket<'a> for SPlayerSession {
         let session_id = read.get_uuid()?;
         let expires_at = read.get_i64_be()?;
 
-        let public_key_length = read.get_var_int()?.0 as usize;
+        let public_key_length = usize::try_from(read.get_var_int()?.0)
+            .map_err(|_| ReadingError::Message("Negative public key length".into()))?;
+        if public_key_length > 2048 {
+            return Err(ReadingError::TooLarge("Public key too long".into()));
+        }
         let mut public_key = vec![0u8; public_key_length];
         read.read_bytes_to_buf(&mut public_key)?;
 
-        let key_signature_length = read.get_var_int()?.0 as usize;
+        let key_signature_length = usize::try_from(read.get_var_int()?.0)
+            .map_err(|_| ReadingError::Message("Negative key signature length".into()))?;
+        if key_signature_length > 4096 {
+            return Err(ReadingError::TooLarge("Key signature too long".into()));
+        }
         let mut key_signature = vec![0u8; key_signature_length];
         read.read_bytes_to_buf(&mut key_signature)?;
 
@@ -35,5 +43,22 @@ impl<'a> ServerPacket<'a> for SPlayerSession {
             public_key: public_key.into_boxed_slice(),
             key_signature: key_signature.into_boxed_slice(),
         })
+    }
+}
+
+impl crate::ClientPacket for SPlayerSession {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::{VarInt, ser::NetworkWriteExt};
+        write.write_uuid(&self.session_id)?;
+        write.write_i64_be(self.expires_at)?;
+        write.write_var_int(&VarInt(self.public_key.len() as i32))?;
+        write.write_slice(&self.public_key)?;
+        write.write_var_int(&VarInt(self.key_signature.len() as i32))?;
+        write.write_slice(&self.key_signature)?;
+        Ok(())
     }
 }

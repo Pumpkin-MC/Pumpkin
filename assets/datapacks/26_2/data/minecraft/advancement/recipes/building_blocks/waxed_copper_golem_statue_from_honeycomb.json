@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_copper_golem_statue": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:copper_golem_statue"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:waxed_copper_golem_statue_from_honeycomb"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_copper_golem_statue"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:waxed_copper_golem_statue_from_honeycomb"
+    ]
+  }
+}

@@ -8,7 +8,7 @@ use bytes::Bytes;
 use pumpkin_world::level::SyncChunk;
 use std::{
     net::SocketAddr,
-    num::NonZeroU8,
+    num::NonZero,
     sync::{Arc, atomic::Ordering},
 };
 
@@ -28,8 +28,13 @@ use thiserror::Error;
 use uuid::Uuid;
 pub mod authentication;
 pub mod bedrock;
+pub mod chat;
+pub mod chunk_sender;
+pub use chunk_sender::ChunkSender;
 pub mod java;
 pub mod lan_broadcast;
+pub mod packet_limiter;
+pub use packet_limiter::PacketRateLimiter;
 mod proxy;
 pub mod query;
 pub mod rcon;
@@ -79,7 +84,7 @@ pub struct PlayerConfig {
     /// The player's preferred language.
     pub locale: String, // 16
     /// The maximum distance at which chunks are rendered.
-    pub view_distance: NonZeroU8,
+    pub view_distance: NonZero<u8>,
     /// The player's chat mode settings
     pub chat_mode: ChatMode,
     /// Whether chat colors are enabled.
@@ -98,7 +103,7 @@ impl Default for PlayerConfig {
     fn default() -> Self {
         Self {
             locale: "en_us".to_string(),
-            view_distance: NonZeroU8::new(8).unwrap_or(NonZeroU8::MIN),
+            view_distance: NonZero::new(8).unwrap_or(NonZero::<u8>::MIN),
             chat_mode: ChatMode::Enabled,
             chat_colors: true,
             skin_parts: 0x7F,
@@ -202,8 +207,16 @@ impl ClientPlatform {
         be_packet: &B,
     ) {
         match self {
-            Self::Java(java) => java.enqueue_packet(je_packet).await,
-            Self::Bedrock(bedrock) => bedrock.enqueue_packet(be_packet).await,
+            Self::Java(java) => {
+                if let Ok(data) = java.serialize_packet(je_packet) {
+                    java.enqueue_packet(data).await;
+                }
+            }
+            Self::Bedrock(bedrock) => {
+                if let Ok(data) = bedrock.serialize_packet(be_packet) {
+                    bedrock.enqueue_packet(data).await;
+                }
+            }
         }
     }
 
@@ -213,46 +226,41 @@ impl ClientPlatform {
         be_packet: &B,
     ) {
         match self {
-            Self::Java(java) => java.try_enqueue_packet(je_packet),
-            Self::Bedrock(bedrock) => bedrock.try_enqueue_packet(be_packet),
+            Self::Java(java) => {
+                if let Ok(data) = java.serialize_packet(je_packet) {
+                    java.try_enqueue_packet(data);
+                }
+            }
+            Self::Bedrock(bedrock) => {
+                if let Ok(data) = bedrock.serialize_packet(be_packet) {
+                    bedrock.try_enqueue_packet(data);
+                }
+            }
         }
     }
 
-    pub async fn enqueue_packet<P: ClientPacket>(&self, packet: &P) {
-        if let Self::Java(java) = self {
-            java.enqueue_packet(packet).await;
+    pub async fn enqueue_packet(&self, packet_data: Bytes) {
+        match self {
+            Self::Java(java) => java.enqueue_packet(packet_data).await,
+            Self::Bedrock(bedrock) => bedrock.enqueue_packet(packet_data).await,
         }
     }
 
-    pub async fn enqueue_be_packet<P: BClientPacket>(&self, packet: &P) {
-        if let Self::Bedrock(bedrock) = self {
-            bedrock.enqueue_packet(packet).await;
-        }
-    }
-
-    pub fn try_enqueue_packet<P: ClientPacket>(&self, packet: &P) {
-        if let Self::Java(java) = self {
-            java.try_enqueue_packet(packet);
-        }
-    }
-
-    pub fn try_enqueue_be_packet<P: BClientPacket>(&self, packet: &P) {
-        if let Self::Bedrock(bedrock) = self {
-            bedrock.try_enqueue_packet(packet);
+    pub fn try_enqueue_packet(&self, packet_data: Bytes) {
+        match self {
+            Self::Java(java) => java.try_enqueue_packet(packet_data),
+            Self::Bedrock(bedrock) => bedrock.try_enqueue_packet(packet_data),
         }
     }
 
     pub fn try_enqueue_spawn_packet(&self, entity: &Arc<dyn crate::entity::EntityBase>) {
-        match self {
-            Self::Java(java) => java.try_enqueue_packet(&entity.get_entity().create_spawn_packet()),
-            Self::Bedrock(bedrock) => bedrock.enqueue_spawn_packet(entity.clone()),
-        }
+        self.enqueue_spawn_packet(entity);
     }
 
-    pub async fn enqueue_spawn_packet(&self, entity: &Arc<dyn crate::entity::EntityBase>) {
+    pub fn enqueue_spawn_packet(&self, entity: &Arc<dyn crate::entity::EntityBase>) {
         match self {
-            Self::Java(java) => entity.send_java_spawn_packet(java).await,
-            Self::Bedrock(bedrock) => entity.send_bedrock_spawn_packet(bedrock).await,
+            Self::Java(java) => entity.send_java_spawn_packet(java),
+            Self::Bedrock(bedrock) => entity.send_bedrock_spawn_packet(bedrock),
         }
     }
 
@@ -263,15 +271,10 @@ impl ClientPlatform {
         }
     }
 
-    pub async fn send_packet_now<P: ClientPacket>(&self, packet: &P) {
-        if let Self::Java(java) = self {
-            java.send_packet_now(packet).await;
-        }
-    }
-
-    pub async fn send_be_packet_now<P: BClientPacket>(&self, packet: &P) {
-        if let Self::Bedrock(bedrock) = self {
-            bedrock.send_game_packet(packet).await;
+    pub async fn send_packet_now(&self, packet_data: Bytes) {
+        match self {
+            Self::Java(java) => java.send_packet_now(packet_data).await,
+            Self::Bedrock(bedrock) => bedrock.send_game_packet(packet_data).await,
         }
     }
 
@@ -281,15 +284,27 @@ impl ClientPlatform {
         be_packet: &B,
     ) {
         match self {
-            Self::Java(java) => java.send_packet_now(je_packet).await,
-            Self::Bedrock(bedrock) => bedrock.send_game_packet(be_packet).await,
+            Self::Java(java) => {
+                if let Ok(data) = java.serialize_packet(je_packet) {
+                    java.send_packet_now(data).await;
+                }
+            }
+            Self::Bedrock(bedrock) => {
+                if let Ok(data) = bedrock.serialize_packet(be_packet) {
+                    bedrock.send_game_packet(data).await;
+                }
+            }
         }
     }
 
     pub async fn send_packet_now_data(&self, data: Bytes) {
+        self.send_packet_now(data).await;
+    }
+
+    pub fn try_kick(&self, reason: DisconnectReason, message: &TextComponent) {
         match self {
-            Self::Java(java) => java.send_packet_now_data(data).await,
-            Self::Bedrock(bedrock) => bedrock.enqueue_packet_data(data).await,
+            Self::Java(java) => java.try_kick(message),
+            Self::Bedrock(bedrock) => bedrock.try_kick(reason, message.clone().get_text()),
         }
     }
 
@@ -310,7 +325,11 @@ pub async fn can_not_join(
         "[year]-[month]-[day] at [hour]:[minute]:[second] [offset_hour sign:mandatory]:[offset_minute]"
     );
 
-    let mut banned_players = server.data.banned_player_list.write().await;
+    let mut banned_players = server
+        .data
+        .banned_player_list
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if let Some(entry) = banned_players.get_entry(profile) {
         let text = TextComponent::translate_cross(
             translation::java::MULTIPLAYER_DISCONNECT_BANNED_REASON,
@@ -331,8 +350,16 @@ pub async fn can_not_join(
     drop(banned_players);
 
     if server.white_list.load(Ordering::Relaxed) {
-        let ops = server.data.operator_config.read().await;
-        let whitelist = server.data.whitelist_config.read().await;
+        let ops = server
+            .data
+            .operator_config
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let whitelist = server
+            .data
+            .whitelist_config
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         if ops.get_entry(&profile.id).is_none() && !whitelist.is_whitelisted(profile) {
             return Some(TextComponent::translate_cross(
@@ -347,7 +374,7 @@ pub async fn can_not_join(
         .data
         .banned_ip_list
         .write()
-        .await
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .get_entry(&address.ip())
     {
         let text = TextComponent::translate_cross(
@@ -378,6 +405,10 @@ pub enum EncryptionError {
     SharedWrongLength,
     #[error("encryption is already enabled")]
     AlreadyEncrypted,
+    #[error("no encryption request is pending")]
+    NoPendingVerifyToken,
+    #[error("verify token does not match")]
+    VerifyTokenMismatch,
 }
 
 fn is_valid_player_name(name: &str) -> bool {
@@ -387,7 +418,7 @@ fn is_valid_player_name(name: &str) -> bool {
     !name.chars().any(|c| c.is_control() || c == ' ')
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum DisconnectReason {
     Unknown = 0,
     CantConnectNoInternet = 1,

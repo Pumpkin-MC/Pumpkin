@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:humble",
+  "title": {
+    "translate": "painting.minecraft.humble.title",
+    "color": "yellow"
+  },
+  "author": {
+    "translate": "painting.minecraft.humble.author",
+    "color": "gray"
+  },
+  "width": 2,
+  "height": 2
+}
