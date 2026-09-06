@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use pumpkin_data::{
     Block, BlockDirection as DataBlockDirection, BlockState,
-    block_properties::{HorizontalFacing, OakFenceLikeProperties, WallTorchLikeProperties},
+    block_properties::{
+        HorizontalFacing, OakFenceLikeProperties, RailLikeProperties, RailShape,
+        WallTorchLikeProperties,
+    },
 };
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::{
@@ -179,6 +182,40 @@ fn set_planks_block(
     if places_floor_planks(is_interior, sturdy) {
         chunk.set_block_state(pos.x, pos.y, pos.z, planks);
     }
+}
+
+/// Vanilla `MineshaftPieces$MineShaftCorridor.createChest`
+/// (`MineshaftPieces.java:355-378`) overrides the generic
+/// `StructurePiece.createChest`: it does *not* place a chest block. It places a
+/// rail whose shape comes from `random.nextBoolean()` and spawns a
+/// `chest_minecart` entity whose loot seed is `random.nextLong()`:
+///
+/// ```java
+/// BlockPos pos = this.getWorldPos(x, y, z);
+/// if (chunkBB.isInside(pos) && level.getBlockState(pos).isAir() && !level.getBlockState(pos.below()).isAir()) {
+///    BlockState state = Blocks.RAIL.defaultBlockState()
+///        .setValue(RailBlock.SHAPE, random.nextBoolean() ? RailShape.NORTH_SOUTH : RailShape.EAST_WEST);
+///    this.placeBlock(level, state, x, y, z, chunkBB);
+///    MinecartChest chest = EntityTypes.CHEST_MINECART.create(...);
+///    chest.setLootTable(lootTable, random.nextLong());
+///    ...
+///    return true;
+/// }
+/// return false;
+/// ```
+///
+/// So the gate consumes **no** random at all when it fails, and exactly **two**
+/// draws (a boolean then a long) when it succeeds.
+fn minecart_chest_rail(north_south: bool) -> &'static BlockState {
+    let props = RailLikeProperties {
+        shape: if north_south {
+            RailShape::NorthSouth
+        } else {
+            RailShape::EastWest
+        },
+        waterlogged: false,
+    };
+    BlockState::from_id(props.to_state_id(&Block::RAIL))
 }
 
 fn boundary_matches(
@@ -1260,6 +1297,62 @@ impl MineShaftCorridor {
         }
     }
 
+    /// Vanilla `MineShaftCorridor.createChest`: a rail plus a `chest_minecart`
+    /// entity, gated on the target being air with a non-air block below it. See
+    /// [`minecart_chest_rail`] for the vanilla source.
+    fn create_minecart_chest(
+        &self,
+        chunk: &mut ProtoChunk,
+        chunk_box: &BlockBox,
+        random: &mut RandomGenerator,
+        x: i32,
+        y: i32,
+        z: i32,
+    ) -> bool {
+        let pos = self.piece.offset_pos(x, y, z);
+        if !chunk_box.contains_pos(&pos) {
+            return false;
+        }
+        if !chunk.get_block_state(&pos).to_state().is_air() {
+            return false;
+        }
+        let below = Vector3::new(pos.x, pos.y - 1, pos.z);
+        if chunk.get_block_state(&below).to_state().is_air() {
+            return false;
+        }
+
+        let rail = minecart_chest_rail(random.next_bool());
+        add_mineshaft_block(
+            &self.piece,
+            self.shaft_type,
+            chunk,
+            rail,
+            x,
+            y,
+            z,
+            chunk_box,
+        );
+
+        let loot_seed = random.next_i64();
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("id", "minecraft:chest_minecart".to_string());
+        nbt.put_list(
+            "Pos",
+            vec![
+                (f64::from(pos.x) + 0.5).into(),
+                (f64::from(pos.y) + 0.5).into(),
+                (f64::from(pos.z) + 0.5).into(),
+            ],
+        );
+        nbt.put_string(
+            "LootTable",
+            "minecraft:chests/abandoned_mineshaft".to_string(),
+        );
+        nbt.put_long("LootTableSeed", loot_seed);
+        chunk.add_structure_entity(nbt);
+        true
+    }
+
     #[expect(clippy::too_many_arguments)]
     fn maybe_place_cobweb(
         &self,
@@ -1406,26 +1499,10 @@ impl StructurePieceBase for MineShaftCorridor {
             }
 
             if random.next_bounded_i32(100) == 0 {
-                self.piece.add_chest(
-                    chunk,
-                    chunk_box,
-                    random,
-                    2,
-                    0,
-                    z - 1,
-                    "minecraft:chests/abandoned_mineshaft",
-                );
+                self.create_minecart_chest(chunk, chunk_box, random, 2, 0, z - 1);
             }
             if random.next_bounded_i32(100) == 0 {
-                self.piece.add_chest(
-                    chunk,
-                    chunk_box,
-                    random,
-                    0,
-                    0,
-                    z + 1,
-                    "minecraft:chests/abandoned_mineshaft",
-                );
+                self.create_minecart_chest(chunk, chunk_box, random, 0, 0, z + 1);
             }
 
             if self.spider_corridor && !self.has_placed_spider {
@@ -2037,10 +2114,39 @@ impl StructurePieceBase for MineShaftStairs {
 mod tests {
     use super::{
         MineshaftType, boundary_matches, for_each_maybe_box_position, is_falling_block,
-        is_supporting_box, passes_cobweb_random_gate, places_floor_planks, rail_chance,
+        is_supporting_box, minecart_chest_rail, passes_cobweb_random_gate, places_floor_planks,
+        rail_chance,
     };
-    use pumpkin_data::Block;
+    use pumpkin_data::block_properties::{RailLikeProperties, RailShape};
+    use pumpkin_data::{Block, BlockId};
     use pumpkin_util::random::{RandomGenerator, RandomImpl, legacy_rand::LegacyRand};
+
+    #[test]
+    fn minecart_chest_places_a_rail_not_a_chest() {
+        // Vanilla 26.2 MineshaftPieces$MineShaftCorridor.createChest:
+        //   BlockState state = Blocks.RAIL.defaultBlockState()
+        //       .setValue(RailBlock.SHAPE, random.nextBoolean() ? RailShape.NORTH_SOUTH
+        //                                                       : RailShape.EAST_WEST);
+        // The corridor never writes a chest block; the loot lives in a
+        // `chest_minecart` entity spawned on top of the rail.
+        let north_south = minecart_chest_rail(true);
+        let east_west = minecart_chest_rail(false);
+
+        assert_eq!(BlockId::from_state_id(north_south.id), Block::RAIL.id);
+        assert_eq!(BlockId::from_state_id(east_west.id), Block::RAIL.id);
+        assert_ne!(north_south.id, east_west.id);
+        // `Blocks.RAIL.defaultBlockState()` already carries SHAPE=north_south, so
+        // the `nextBoolean() == true` branch must be exactly the default state.
+        assert_eq!(north_south.id, Block::RAIL.default_state.id);
+        assert_eq!(
+            RailLikeProperties::from_state_id(east_west.id).shape,
+            RailShape::EastWest
+        );
+        assert_eq!(
+            RailLikeProperties::from_state_id(north_south.id).shape,
+            RailShape::NorthSouth
+        );
+    }
 
     #[test]
     fn mineshaft_can_be_replaced_excludes_its_own_building_blocks() {
