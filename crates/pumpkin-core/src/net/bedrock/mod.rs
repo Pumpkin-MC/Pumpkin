@@ -858,6 +858,7 @@ impl BedrockClient {
             cache.remove(&hash);
         }
         let mut missing_blobs = Vec::with_capacity(packet.miss_hashes.len());
+        let mut unknown_hash_count = 0;
         for hash in &packet.miss_hashes {
             if let Some(payload) = cache.get(hash) {
                 missing_blobs.push(MissingBlobData {
@@ -865,8 +866,11 @@ impl BedrockClient {
                     blob_data: payload.clone(),
                 });
             } else {
-                warn!("Client requested missing blob {hash:#x} not found in server cache");
+                unknown_hash_count += 1;
             }
+        }
+        if unknown_hash_count > 0 {
+            warn!("Client requested {unknown_hash_count} blob hashes not found in server cache");
         }
         if missing_blobs.is_empty() {
             return;

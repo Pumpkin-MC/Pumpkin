@@ -465,6 +465,90 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn blob_status_limits_unknown_hash_warnings() -> Result<(), Box<dyn std::error::Error>> {
+        use pumpkin_protocol::bedrock::{
+            client::client_cache_miss_response::{CClientCacheMissResponse, MissingBlobData},
+            server::client_cache_blob_status::SClientCacheBlobStatus,
+        };
+
+        let client = blob_test_client().await?;
+        let mut outgoing = client
+            .outgoing_packet_queue_recv
+            .lock()
+            .await
+            .take()
+            .ok_or("missing queue")?;
+
+        // Cover the maximum unknown count, mixed requests, known misses, and hits only.
+        for (unknown_count, request_known) in [(4096, false), (4095, true), (0, true), (0, false)] {
+            client
+                .blob_cache
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .extend([(1, vec![1]), (2, vec![2]), (3, vec![3])]);
+            let mut miss_hashes = vec![99; unknown_count];
+            if request_known {
+                miss_hashes.push(1);
+            }
+
+            let log_file = tempfile::NamedTempFile::new()?;
+            let subscriber = tracing_subscriber::fmt()
+                .without_time()
+                .with_ansi(false)
+                .with_max_level(tracing::Level::WARN)
+                .with_writer(log_file.reopen()?)
+                .finish();
+            tracing::subscriber::with_default(subscriber, || {
+                client.handle_client_cache_blob_status(SClientCacheBlobStatus {
+                    hit_hashes: vec![2],
+                    miss_hashes,
+                });
+            });
+
+            let logs = std::fs::read_to_string(log_file.path())?;
+            if unknown_count == 0 {
+                assert!(logs.is_empty(), "known hashes must not generate warnings");
+            } else {
+                assert_eq!(
+                    logs.lines().count(),
+                    1,
+                    "warnings must be bounded per packet"
+                );
+                assert!(logs.contains(&format!(
+                    "Client requested {unknown_count} blob hashes not found in server cache"
+                )));
+            }
+
+            if request_known {
+                let expected = client.serialize_packet(&CClientCacheMissResponse {
+                    missing_blobs: vec![MissingBlobData {
+                        blob_id: 1,
+                        blob_data: vec![1],
+                    }],
+                })?;
+                assert_eq!(outgoing.try_recv()?.data, expected);
+            }
+            assert!(matches!(
+                outgoing.try_recv(),
+                Err(mpsc::error::TryRecvError::Empty)
+            ));
+            let cache = client
+                .blob_cache
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            assert_eq!(cache.contains_key(&1), !request_known);
+            assert!(
+                !cache.contains_key(&2),
+                "acknowledged payload remains cached"
+            );
+            assert_eq!(cache.get(&3), Some(&vec![3]));
+        }
+
+        client.close().await;
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn reliable_delivery_waits_until_no_bytes_are_outstanding() {
         let polls = Arc::new(AtomicUsize::new(0));
         let result = wait_for_reliable_delivery(Duration::from_secs(1), || {
