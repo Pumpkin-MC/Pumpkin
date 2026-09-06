@@ -515,19 +515,38 @@ impl TrapezoidIntProvider {
     ///
     /// # Returns
     /// A random integer from the source provider, clamped to [`min_inclusive`, `max_inclusive`].
+    ///
+    /// Mirrors vanilla `TrapezoidInt.sample` draw for draw:
+    ///
+    /// ```java
+    /// if (this.plateau == 0 && this.maxInclusive == -this.minInclusive) {
+    ///     return random.nextInt(this.maxInclusive + 1) - random.nextInt(this.maxInclusive + 1);
+    /// }
+    /// int range = this.maxInclusive - this.minInclusive;
+    /// if (this.plateau == range) {
+    ///     return Mth.randomBetweenInclusive(random, this.minInclusive, this.maxInclusive);
+    /// }
+    /// int half = (range - this.plateau) / 2;
+    /// int rest = range - half;
+    /// return this.minInclusive
+    ///     + Mth.randomBetweenInclusive(random, 0, rest)
+    ///     + Mth.randomBetweenInclusive(random, 0, half);
+    /// ```
+    ///
+    /// The symmetric branch is the one every `random_offset` placement modifier in the 26.2
+    /// data takes, and it is a *difference* of two draws, not a sum offset by `min`.
     pub fn get(&self, random: &mut impl RandomImpl) -> i32 {
-        if self.min_inclusive >= self.max_inclusive {
-            return self.min_inclusive;
+        if self.plateau == 0 && self.max_inclusive == -self.min_inclusive {
+            return random.next_bounded_i32(self.max_inclusive + 1)
+                - random.next_bounded_i32(self.max_inclusive + 1);
         }
         let range = self.max_inclusive - self.min_inclusive;
-        if self.plateau >= range {
+        if self.plateau == range {
             return self.min_inclusive + random.next_bounded_i32(range + 1);
         }
-        let plateau_start = (range - self.plateau) / 2;
-        let plateau_end = range - plateau_start;
-        self.min_inclusive
-            + random.next_bounded_i32(plateau_end + 1)
-            + random.next_bounded_i32(plateau_start + 1)
+        let half = (range - self.plateau) / 2;
+        let rest = range - half;
+        self.min_inclusive + random.next_bounded_i32(rest + 1) + random.next_bounded_i32(half + 1)
     }
 
     /// Returns the maximum value after clamping.
@@ -972,5 +991,94 @@ mod tests {
             (5..=15).contains(&value),
             "Value {value} is outside range [5, 15]"
         );
+    }
+
+    /// Reference values taken from the real 26.2 server jar:
+    /// `TrapezoidInt.of(min, max, plateau).sample(new LegacyRandomSource(13579))`, eight
+    /// samples per provider, and the same with a `XoroshiroRandomSource(13579)`.
+    #[test]
+    fn trapezoid_int_matches_vanilla_samples() {
+        /// `(min, max, plateau)` plus the eight `LegacyRandomSource(13579)` samples and the
+        /// eight `XoroshiroRandomSource(13579)` samples vanilla returns for it.
+        type TrapezoidCase = (i32, i32, i32, [i32; 8], [i32; 8]);
+
+        let cases: &[TrapezoidCase] = &[
+            // Every `random_offset` placement modifier in the 26.2 data is symmetric with
+            // plateau 0, i.e. `nextInt(max + 1) - nextInt(max + 1)`.
+            (
+                -7,
+                7,
+                0,
+                [0, -5, 1, -4, 0, -7, -4, 3],
+                [-2, -6, -1, -7, 2, 0, 0, -3],
+            ),
+            (
+                -6,
+                6,
+                0,
+                [3, 2, 3, -4, 1, -2, 6, 1],
+                [-2, -5, -1, -6, 2, 0, 1, -2],
+            ),
+            (
+                -3,
+                3,
+                0,
+                [0, -2, 1, -2, 0, -3, -2, 1],
+                [-1, -3, 0, -3, 1, 0, 0, -1],
+            ),
+            (
+                -2,
+                2,
+                0,
+                [0, -1, 0, -1, 0, -1, 1, -1],
+                [0, -2, -1, -2, 1, 0, 0, -1],
+            ),
+            // `patch_sugar_cane*` uses a `[0, 0]` y_spread: still two draws, always zero.
+            (0, 0, 0, [0; 8], [0; 8]),
+            // The general branch: `min + nextInt(rest + 1) + nextInt(half + 1)`.
+            (
+                -3,
+                5,
+                2,
+                [3, 3, -2, 0, 4, 0, 1, 0],
+                [1, 0, 2, 0, -1, 3, 5, 3],
+            ),
+            // `plateau == range`: a single uniform draw.
+            (2, 5, 3, [3, 3, 2, 4, 4, 3, 2, 4], [3, 4, 2, 5, 4, 4, 2, 5]),
+        ];
+
+        for (min, max, plateau, legacy_expected, xoroshiro_expected) in cases {
+            let provider = TrapezoidIntProvider::new(*min, *max, *plateau);
+
+            let mut legacy = crate::random::legacy_rand::LegacyRand::from_seed(13579);
+            let legacy_actual: [i32; 8] = std::array::from_fn(|_| provider.get(&mut legacy));
+            assert_eq!(
+                &legacy_actual, legacy_expected,
+                "legacy samples for trapezoid({min}, {max}, {plateau})"
+            );
+
+            let mut xoroshiro = crate::random::xoroshiro128::Xoroshiro::from_seed(13579);
+            let xoroshiro_actual: [i32; 8] = std::array::from_fn(|_| provider.get(&mut xoroshiro));
+            assert_eq!(
+                &xoroshiro_actual, xoroshiro_expected,
+                "xoroshiro samples for trapezoid({min}, {max}, {plateau})"
+            );
+        }
+    }
+
+    /// A `[0, 0]` trapezoid consumes two draws in vanilla, not zero: after one
+    /// `sample(new LegacyRandomSource(13579))` the next `nextInt()` is 392090517, the *third*
+    /// value of that stream (`1265370827, 1234256338, 392090517, ...`). Skipping those draws
+    /// desynchronises every later draw of the feature.
+    #[test]
+    fn trapezoid_int_empty_range_still_consumes_two_draws() {
+        let mut random = crate::random::legacy_rand::LegacyRand::from_seed(13579);
+        assert_eq!(TrapezoidIntProvider::new(0, 0, 0).get(&mut random), 0);
+        assert_eq!(random.next_i32(), 392090517);
+
+        // `plateau == range` consumes exactly one draw.
+        let mut random = crate::random::legacy_rand::LegacyRand::from_seed(13579);
+        TrapezoidIntProvider::new(2, 5, 3).get(&mut random);
+        assert_eq!(random.next_i32(), 1234256338);
     }
 }
