@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::{
-    Block, BlockState,
+    Block, BlockDirection as DataBlockDirection, BlockState,
     block_properties::{HorizontalFacing, WallTorchLikeProperties},
 };
 use pumpkin_nbt::compound::NbtCompound;
@@ -128,6 +128,10 @@ fn for_each_maybe_box_position(
 
 fn is_supporting_box(min_x: i32, max_x: i32, mut is_air: impl FnMut(i32) -> bool) -> bool {
     (min_x..=max_x).all(|x| !is_air(x))
+}
+
+fn passes_cobweb_random_gate(random: &mut RandomGenerator, chance: f32, is_interior: bool) -> bool {
+    is_interior && random.next_f32() < chance
 }
 
 pub struct MineshaftGenerator {
@@ -1083,6 +1087,67 @@ impl MineShaftCorridor {
             dist += 1;
         }
     }
+
+    fn maybe_place_cobweb(
+        &self,
+        chunk: &mut ProtoChunk,
+        chunk_box: &BlockBox,
+        random: &mut RandomGenerator,
+        chance: f32,
+        x: i32,
+        y: i32,
+        z: i32,
+    ) {
+        let is_interior = self.piece.is_under_sea_level(chunk, x, y, z, chunk_box);
+        if !passes_cobweb_random_gate(random, chance, is_interior) {
+            return;
+        }
+
+        let world_pos = self.piece.offset_pos(x, y, z);
+        let mut sturdy_neighbours = 0;
+        for direction in [
+            BlockDirection::Down,
+            BlockDirection::Up,
+            BlockDirection::North,
+            BlockDirection::South,
+            BlockDirection::West,
+            BlockDirection::East,
+        ] {
+            let offset = direction.to_vector();
+            let neighbour = Vector3::new(
+                world_pos.x + offset.x,
+                world_pos.y + offset.y,
+                world_pos.z + offset.z,
+            );
+            if chunk_box.contains_pos(&neighbour)
+                && chunk.get_block_state(&neighbour).to_state().is_side_solid(
+                    match direction.opposite() {
+                        BlockDirection::Down => DataBlockDirection::Down,
+                        BlockDirection::Up => DataBlockDirection::Up,
+                        BlockDirection::North => DataBlockDirection::North,
+                        BlockDirection::South => DataBlockDirection::South,
+                        BlockDirection::West => DataBlockDirection::West,
+                        BlockDirection::East => DataBlockDirection::East,
+                    },
+                )
+            {
+                sturdy_neighbours += 1;
+                if sturdy_neighbours >= 2 {
+                    add_mineshaft_block(
+                        &self.piece,
+                        self.shaft_type,
+                        chunk,
+                        Block::COBWEB.default_state,
+                        x,
+                        y,
+                        z,
+                        chunk_box,
+                    );
+                    return;
+                }
+            }
+        }
+    }
 }
 
 impl StructurePieceBase for MineShaftCorridor {
@@ -1150,7 +1215,7 @@ impl StructurePieceBase for MineShaftCorridor {
             let z = 2 + section * 5;
             self.place_support(chunk, chunk_box, 0, 0, z, 2, 2, random);
 
-            for (cx, cy, cz, prob) in [
+            for (cx, cy, cz, chance) in [
                 (0, 2, z - 1, 0.1f32),
                 (2, 2, z - 1, 0.1),
                 (0, 2, z + 1, 0.1),
@@ -1160,18 +1225,7 @@ impl StructurePieceBase for MineShaftCorridor {
                 (0, 2, z + 2, 0.05),
                 (2, 2, z + 2, 0.05),
             ] {
-                if random.next_f32() < prob {
-                    add_mineshaft_block(
-                        &self.piece,
-                        self.shaft_type,
-                        chunk,
-                        Block::COBWEB.default_state,
-                        cx,
-                        cy,
-                        cz,
-                        chunk_box,
-                    );
-                }
+                self.maybe_place_cobweb(chunk, chunk_box, random, chance, cx, cy, cz);
             }
 
             if random.next_bounded_i32(100) == 0 {
@@ -1801,7 +1855,9 @@ impl StructurePieceBase for MineShaftStairs {
 
 #[cfg(test)]
 mod tests {
-    use super::{MineshaftType, for_each_maybe_box_position, is_supporting_box};
+    use super::{
+        MineshaftType, for_each_maybe_box_position, is_supporting_box, passes_cobweb_random_gate,
+    };
     use pumpkin_data::Block;
     use pumpkin_util::random::{RandomGenerator, RandomImpl, legacy_rand::LegacyRand};
 
@@ -1851,5 +1907,15 @@ mod tests {
         // for (x = minX; x <= maxX; x++) if (getBlock(x, y + 1, z).isAir()) return false.
         assert!(is_supporting_box(0, 2, |_| false));
         assert!(!is_supporting_box(0, 2, |x| x == 1));
+    }
+
+    #[test]
+    fn cobweb_interior_gate_precedes_the_random_draw() {
+        // Vanilla 26.2 MineShaftCorridor.maybePlaceCobWeb:
+        // isInterior(...) && random.nextFloat() < chance && hasSturdyNeighbours(..., 2).
+        let mut random = RandomGenerator::Legacy(LegacyRand::from_seed(0));
+        assert!(!passes_cobweb_random_gate(&mut random, 0.8, false));
+        assert!(passes_cobweb_random_gate(&mut random, 0.8, true));
+        assert_eq!(random.next_f32(), 0.831_441);
     }
 }
