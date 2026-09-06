@@ -169,6 +169,18 @@ fn place_fossil_template<T: GenerationCache>(
     random: &mut RandomGenerator,
     placement_box: &BlockBox,
 ) {
+    // `StructureTemplate.placeInWorld` opens by asking `StructurePlaceSettings.getRandomPalette`
+    // for the palette to read, and that pick is unconditional: it indexes the palette list with
+    // `nextInt(palette_count)` off the settings' position-seeded random, however many palettes
+    // there are. So a single-palette template still burns one `nextInt(1)` off the feature random
+    // before the first block-rot draw. `placeInWorld` bails out earlier still when the template
+    // has no palette at all.
+    let palette_count = template.palettes.len();
+    if palette_count == 0 {
+        return;
+    }
+    let _ = random.next_bounded_i32(palette_count as i32);
+
     for block in &template.blocks {
         let local_pos = rotation.transform_pos(block.pos, template.size);
         let world_pos = origin + local_pos;
@@ -194,5 +206,59 @@ fn place_fossil_template<T: GenerationCache>(
         {
             chunk.set_block_state(&world_pos, processor.process(state));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{FossilProcessor, place_fossil_template};
+    use crate::ProtoChunk;
+    use crate::generation::get_world_gen;
+    use crate::generation::structure::template::get_template;
+    use pumpkin_data::{Rotation, dimension::Dimension};
+    use pumpkin_util::math::{block_box::BlockBox, vector3::Vector3};
+    use pumpkin_util::random::{RandomGenerator, RandomImpl, xoroshiro128::Xoroshiro};
+    use pumpkin_util::world_seed::Seed;
+
+    /// The palette pick in `StructurePlaceSettings.getRandomPalette` is unconditional, so a
+    /// single-palette template still burns one `nextInt(1)` off the feature random before the
+    /// first `BlockRotProcessor` draw.
+    #[test]
+    fn placing_a_template_burns_the_palette_draw_before_the_rot_draws() {
+        let world_gen = get_world_gen(
+            Seed(13579),
+            Dimension::OVERWORLD,
+            false,
+            Vec::new(),
+            String::new(),
+        );
+        let mut chunk = ProtoChunk::new(0, 0, &world_gen);
+        let template = get_template("fossil/spine_3").expect("fossil/spine_3 template");
+        assert_eq!(template.palettes.len(), 1, "spine_3 ships a single palette");
+        assert_eq!(template.size, Vector3::new(7, 4, 13));
+
+        // A box that holds the whole unrotated template, so every block draws.
+        let placement_box = BlockBox::new(-16, -64, -16, 31, 319, 31);
+        let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(13579));
+        place_fossil_template(
+            &mut chunk,
+            &template,
+            Vector3::new(0, 0, 0),
+            Rotation::None,
+            FossilProcessor::FossilRot,
+            &mut random,
+            &placement_box,
+        );
+
+        let mut expected = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(13579));
+        expected.next_bounded_i32(template.palettes.len() as i32);
+        for _ in 0..template.blocks.len() {
+            let _ = expected.next_f32();
+        }
+        assert_eq!(
+            random.next_i64(),
+            expected.next_i64(),
+            "placing a fossil template must consume nextInt(paletteSize) + one nextFloat() per block"
+        );
     }
 }
