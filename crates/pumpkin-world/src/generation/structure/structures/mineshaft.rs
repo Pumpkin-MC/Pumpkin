@@ -1067,7 +1067,7 @@ impl MineShaftCorridor {
                 let empty_below =
                     state_below.to_state().is_air() || state_below.to_block_id() == Block::WATER.id;
                 if !empty_below && state_below.to_block_id() != Block::LAVA.id {
-                    for py in (below_y + 1)..=world_y {
+                    for py in (below_y + 1)..world_y {
                         chunk.set_block_state(world_pos.x, py, world_pos.z, self.shaft_type.wood());
                     }
                     return;
@@ -1087,7 +1087,7 @@ impl MineShaftCorridor {
                         world_pos.z,
                         self.shaft_type.fence(),
                     );
-                    for py in (world_y + 2)..=above_y {
+                    for py in (world_y + 2)..above_y {
                         chunk.set_block_state(
                             world_pos.x,
                             py,
@@ -1960,5 +1960,12 @@ mod tests {
             pumpkin_data::block_properties::OakFenceLikeProperties::from_state_id(east.id);
         assert!(west_props.west && !west_props.east);
         assert!(!east_props.west && east_props.east);
+    }
+
+    #[test]
+    fn pillar_fill_column_excludes_its_anchor_endpoint() {
+        // Vanilla 26.2 fillColumnBetween: for (int y = start; y < end; ++y).
+        assert_eq!((6..10).collect::<Vec<_>>(), [6, 7, 8, 9]);
+        assert_eq!((12..12).count(), 0);
     }
 }
