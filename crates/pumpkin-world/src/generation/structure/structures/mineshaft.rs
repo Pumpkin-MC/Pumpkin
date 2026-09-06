@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use pumpkin_data::{
     Block, BlockDirection as DataBlockDirection, BlockState,
-    block_properties::{HorizontalFacing, WallTorchLikeProperties},
+    block_properties::{HorizontalFacing, OakFenceLikeProperties, WallTorchLikeProperties},
 };
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::{
@@ -51,6 +51,17 @@ impl MineshaftType {
             Self::Normal => Block::OAK_FENCE.default_state,
             Self::Mesa => Block::DARK_OAK_FENCE.default_state,
         }
+    }
+
+    fn connected_fence(self, west: bool, east: bool) -> &'static BlockState {
+        let block = match self {
+            Self::Normal => &Block::OAK_FENCE,
+            Self::Mesa => &Block::DARK_OAK_FENCE,
+        };
+        let mut properties = OakFenceLikeProperties::default(block);
+        properties.west = west;
+        properties.east = east;
+        BlockState::from_id(properties.to_state_id(block))
     }
 
     fn can_replace(self, state: &BlockState) -> bool {
@@ -923,7 +934,8 @@ impl MineShaftCorridor {
         }
 
         let planks = self.shaft_type.planks();
-        let fence = self.shaft_type.fence();
+        let west_fence = self.shaft_type.connected_fence(true, false);
+        let east_fence = self.shaft_type.connected_fence(false, true);
 
         fill_mineshaft_box(
             &self.piece,
@@ -936,7 +948,7 @@ impl MineShaftCorridor {
             x0,
             y1 - 1,
             z,
-            fence,
+            west_fence,
         );
         fill_mineshaft_box(
             &self.piece,
@@ -949,7 +961,7 @@ impl MineShaftCorridor {
             x1,
             y1 - 1,
             z,
-            fence,
+            east_fence,
         );
 
         if random.next_bounded_i32(4) == 0 {
@@ -1934,5 +1946,19 @@ mod tests {
         // float chance = isInterior(world, 1, 0, z, box) ? 0.7F : 0.9F.
         assert_eq!(rail_chance(true), 0.7);
         assert_eq!(rail_chance(false), 0.9);
+    }
+
+    #[test]
+    fn corridor_support_fences_connect_toward_the_beam() {
+        // Vanilla 26.2 MineShaftCorridor.placeSupport uses
+        // fence.setValue(WEST, true) at x0 and fence.setValue(EAST, true) at x1.
+        let west = MineshaftType::Mesa.connected_fence(true, false);
+        let east = MineshaftType::Mesa.connected_fence(false, true);
+        let west_props =
+            pumpkin_data::block_properties::OakFenceLikeProperties::from_state_id(west.id);
+        let east_props =
+            pumpkin_data::block_properties::OakFenceLikeProperties::from_state_id(east.id);
+        assert!(west_props.west && !west_props.east);
+        assert!(!east_props.west && east_props.east);
     }
 }
