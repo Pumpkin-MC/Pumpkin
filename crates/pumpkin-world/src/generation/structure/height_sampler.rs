@@ -19,11 +19,47 @@ use crate::generation::{
 
 use super::structures::HeightSampler;
 
+/// One noise column, vanilla `NoiseBasedChunkGenerator.getBaseColumn`, reduced to the two
+/// heightmap predicates that structure placement asks it about.
+struct NoiseColumn {
+    min_y: i32,
+    not_air: Box<[bool]>,
+    blocks_motion: Box<[bool]>,
+}
+
+impl NoiseColumn {
+    fn top(&self, blocks_motion: bool) -> i32 {
+        let flags = if blocks_motion {
+            &self.blocks_motion
+        } else {
+            &self.not_air
+        };
+        for (index, solid) in flags.iter().enumerate().rev() {
+            if *solid {
+                return self.min_y + index as i32 + 1;
+            }
+        }
+        self.min_y
+    }
+
+    fn is_opaque(&self, y: i32, blocks_motion: bool) -> bool {
+        let index = y - self.min_y;
+        if index < 0 || index >= self.not_air.len() as i32 {
+            return false;
+        }
+        let flags = if blocks_motion {
+            &self.blocks_motion
+        } else {
+            &self.not_air
+        };
+        flags[index as usize]
+    }
+}
+
 pub struct NoiseHeightSampler<'a> {
     generator: &'a VanillaGenerator,
     preliminary: SurfaceHeightEstimateSampler<'a>,
-    heights: FxHashMap<(i32, i32), i32>,
-    ocean_floor_heights: FxHashMap<(i32, i32), i32>,
+    columns: FxHashMap<(i32, i32), NoiseColumn>,
 }
 
 impl<'a> NoiseHeightSampler<'a> {
@@ -40,12 +76,11 @@ impl<'a> NoiseHeightSampler<'a> {
         Self {
             generator,
             preliminary,
-            heights: FxHashMap::default(),
-            ocean_floor_heights: FxHashMap::default(),
+            columns: FxHashMap::default(),
         }
     }
 
-    fn sample_column(&mut self, x: i32, z: i32, ocean_floor: bool) -> i32 {
+    fn sample_column(&mut self, x: i32, z: i32) -> NoiseColumn {
         let settings = self.generator.settings;
         let shape = &settings.shape;
         let fluid_sampler = StandardChunkFluidLevelSampler::new(
@@ -77,7 +112,9 @@ impl<'a> NoiseHeightSampler<'a> {
         );
 
         let densities = noise.sample_density();
-        for y in (0..volume.size_y).rev() {
+        let mut not_air = vec![false; volume.size_y].into_boxed_slice();
+        let mut blocks_motion = vec![false; volume.size_y].into_boxed_slice();
+        for y in 0..volume.size_y {
             let block_y = volume.block_y(y);
             let index = volume.index_unchecked(0, y, 0);
             let state = noise
@@ -89,39 +126,38 @@ impl<'a> NoiseHeightSampler<'a> {
                     &mut self.preliminary,
                 )
                 .unwrap_or(self.generator.default_block);
-            if if ocean_floor {
-                blocks_movement(state, BlockId::from_state_id(state.id))
-            } else {
-                !state.is_air()
-            } {
-                return block_y + 1;
-            }
+            not_air[y] = !state.is_air();
+            blocks_motion[y] = blocks_movement(state, BlockId::from_state_id(state.id));
         }
 
-        i32::from(shape.min_y)
+        NoiseColumn {
+            min_y: i32::from(shape.min_y),
+            not_air,
+            blocks_motion,
+        }
+    }
+
+    fn column(&mut self, x: i32, z: i32) -> &NoiseColumn {
+        if !self.columns.contains_key(&(x, z)) {
+            let column = self.sample_column(x, z);
+            self.columns.insert((x, z), column);
+        }
+        &self.columns[&(x, z)]
     }
 }
 
 impl HeightSampler for NoiseHeightSampler<'_> {
     fn estimate_height(&mut self, block_x: i32, block_z: i32) -> i32 {
-        let key = (block_x, block_z);
-        if let Some(height) = self.heights.get(&key) {
-            return *height;
-        }
-        let height = self.sample_column(block_x, block_z, false);
-        self.heights.insert(key, height);
-        height
+        self.column(block_x, block_z).top(false)
     }
 
     fn estimate_ocean_floor_height(&mut self, block_x: i32, block_z: i32) -> i32 {
-        let key = (block_x, block_z);
-        if let Some(height) = self.ocean_floor_heights.get(&key) {
-            return *height;
-        }
         // Vanilla's structure helper asks for the highest occupied block, while
         // heightmaps store the first free block above it.
-        let height = self.sample_column(block_x, block_z, true) - 1;
-        self.ocean_floor_heights.insert(key, height);
-        height
+        self.column(block_x, block_z).top(true) - 1
+    }
+
+    fn column_is_opaque(&mut self, block_x: i32, block_z: i32, y: i32, ocean_floor: bool) -> bool {
+        self.column(block_x, block_z).is_opaque(y, ocean_floor)
     }
 }

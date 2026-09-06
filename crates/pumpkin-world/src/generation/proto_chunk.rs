@@ -1492,7 +1492,6 @@ impl ProtoChunk {
         // `index` is the structure's position inside its step's list in registry
         // order, i.e. resource-location order, and it is counted for every
         // structure of the step whether or not the chunk holds a start of it.
-        let chunk = cache.get_center_chunk_mut();
         for (structure_index, id) in structures_in_step(step) {
             let decorator_seed = get_decorator_seed(population_seed, structure_index, step as u64);
             let mut random = RandomGenerator::Worldgen(WorldgenRandom::from_seed(decorator_seed));
@@ -1501,7 +1500,10 @@ impl ProtoChunk {
                 let mut collector = collector_arc
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
-                collector.generate_in_chunk(chunk, block_registry, &mut random, world_seed);
+                // The whole write window, not just the centre chunk: vanilla hands
+                // `StructureStart.placeInChunk` the `WorldGenLevel`, and a piece may write
+                // outside the chunk it is being placed for.
+                collector.generate_in_chunk(cache, block_registry, &mut random, world_seed);
             }
         }
     }

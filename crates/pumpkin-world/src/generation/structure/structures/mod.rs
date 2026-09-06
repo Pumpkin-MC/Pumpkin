@@ -16,6 +16,7 @@ use crate::{
     ProtoChunk,
     generation::{
         positions::chunk_pos::{start_block_x, start_block_z},
+        proto_chunk::GenerationCache,
         structure::piece::StructurePieceType,
     },
 };
@@ -67,6 +68,20 @@ pub trait StructurePieceBase: Send + Sync {
         seed: i64,
         _chunk_box: &BlockBox,
     );
+
+    /// Extra placement that reaches outside the chunk being decorated.
+    ///
+    /// Vanilla pieces write through the `WorldGenLevel`, so a `postProcess` may touch any
+    /// column of the region, not just the chunk it was called for
+    /// (`RuinedPortalPiece.spreadNetherrack` walks 14 blocks out from the piece centre).
+    /// Runs right after [`Self::place`] for the same chunk; the default does nothing.
+    fn place_across_chunks(
+        &mut self,
+        _cache: &mut dyn GenerationCache,
+        _random: &mut RandomGenerator,
+        _chunk_box: &BlockBox,
+    ) {
+    }
 
     #[expect(clippy::too_many_arguments)]
     fn fill_openings(
@@ -709,27 +724,37 @@ impl StructurePiecesCollector {
     }
 
     /// Iterates over all pieces and generates them if they intersect the current chunk.
-    pub fn generate_in_chunk(
+    pub fn generate_in_chunk<T: GenerationCache>(
         &mut self,
-        chunk: &mut ProtoChunk,
+        cache: &mut T,
         block_registry: &dyn WorldPortalExt,
         random: &mut RandomGenerator,
         seed: i64,
     ) {
-        let chunk_x = start_block_x(chunk.x);
-        let chunk_z = start_block_z(chunk.z);
-        let chunk_box = BlockBox::new(
-            chunk_x,
-            chunk.bottom_y() as i32,
-            chunk_z,
-            chunk_x + 15,
-            i32::MAX,
-            chunk_z + 15,
-        );
+        let chunk_box = {
+            let chunk = cache.get_center_chunk();
+            let chunk_x = start_block_x(chunk.x);
+            let chunk_z = start_block_z(chunk.z);
+            BlockBox::new(
+                chunk_x,
+                chunk.bottom_y() as i32,
+                chunk_z,
+                chunk_x + 15,
+                i32::MAX,
+                chunk_z + 15,
+            )
+        };
 
         for piece in &mut self.pieces {
             if piece.bounding_box().intersects(&chunk_box) {
-                piece.place(chunk, block_registry, random, seed, &chunk_box);
+                piece.place(
+                    cache.get_center_chunk_mut(),
+                    block_registry,
+                    random,
+                    seed,
+                    &chunk_box,
+                );
+                piece.place_across_chunks(cache, random, &chunk_box);
             }
         }
     }
@@ -834,6 +859,19 @@ pub trait HeightSampler {
 
     fn estimate_ocean_floor_height(&mut self, block_x: i32, block_z: i32) -> i32 {
         self.estimate_height(block_x, block_z)
+    }
+
+    /// Vanilla `ChunkGenerator.getBaseColumn(x, z).getBlock(y)` tested against a heightmap's
+    /// `isOpaque` predicate (`RuinedPortalStructure.findSuitableY` walks the four bottom
+    /// corners of a piece down the noise columns). Samplers that only know a surface level
+    /// answer from it.
+    fn column_is_opaque(&mut self, block_x: i32, block_z: i32, y: i32, ocean_floor: bool) -> bool {
+        let top = if ocean_floor {
+            self.estimate_ocean_floor_height(block_x, block_z) + 1
+        } else {
+            self.estimate_height(block_x, block_z)
+        };
+        y < top
     }
 }
 
