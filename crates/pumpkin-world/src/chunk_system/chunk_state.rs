@@ -245,7 +245,7 @@ impl Chunk {
                 for (heightmap_type, height) in [
                     (
                         ChunkHeightmapType::WorldSurface,
-                        proto_chunk.flat_surface_height_map[source_index],
+                        proto_chunk.flat_final_surface_height_map[source_index],
                     ),
                     (
                         ChunkHeightmapType::MotionBlocking,

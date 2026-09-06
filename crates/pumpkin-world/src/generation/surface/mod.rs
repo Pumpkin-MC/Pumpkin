@@ -188,8 +188,9 @@ pub fn steep_material_condition(chunk: &ProtoChunk, block_x: i32, block_z: i32) 
     let local_z_sub = 0.max(local_z - 1);
     let local_z_add = 15.min(local_z + 1);
 
-    let sub_height = chunk.top_block_height_exclusive(local_x, local_z_sub);
-    let add_height = chunk.top_block_height_exclusive(local_x, local_z_add);
+    // Vanilla `SurfaceRules.Steep` reads `Heightmap.Types.WORLD_SURFACE_WG`.
+    let sub_height = chunk.top_block_height_wg_exclusive(local_x, local_z_sub);
+    let add_height = chunk.top_block_height_wg_exclusive(local_x, local_z_add);
 
     if add_height >= sub_height + 4 {
         return true;
@@ -198,8 +199,8 @@ pub fn steep_material_condition(chunk: &ProtoChunk, block_x: i32, block_z: i32) 
     let local_x_sub = 0.max(local_x - 1);
     let local_x_add = 15.min(local_x + 1);
 
-    let sub_height = chunk.top_block_height_exclusive(local_x_sub, local_z);
-    let add_height = chunk.top_block_height_exclusive(local_x_add, local_z);
+    let sub_height = chunk.top_block_height_wg_exclusive(local_x_sub, local_z);
+    let add_height = chunk.top_block_height_wg_exclusive(local_x_add, local_z);
 
     sub_height >= add_height + 4
 }

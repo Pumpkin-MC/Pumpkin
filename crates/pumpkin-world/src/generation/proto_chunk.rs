@@ -140,10 +140,24 @@ pub struct ProtoChunk {
     biome_mixer_seed: i64,
     pub(crate) flat_block_map: Box<[BlockStateId]>,
     pub flat_biome_map: Box<[u8]>,
+    /// Vanilla `WORLD_SURFACE_WG`. `ChunkStatus.WORLDGEN_HEIGHTMAPS` is only maintained up
+    /// to and including the surface step, so carving still lowers it but features never
+    /// touch it again.
     pub flat_surface_height_map: [i16; CHUNK_AREA],
+    /// Vanilla `OCEAN_FLOOR_WG`, same lifetime as `flat_surface_height_map`.
     pub flat_ocean_floor_height_map: [i16; CHUNK_AREA],
+    /// Vanilla `WORLD_SURFACE`, one of `ChunkStatus.FINAL_HEIGHTMAPS`: primed from the blocks
+    /// when the chunk's feature step starts and kept current by every later write.
+    pub flat_final_surface_height_map: [i16; CHUNK_AREA],
+    /// Vanilla `OCEAN_FLOOR`, same lifetime as `flat_final_surface_height_map`.
+    pub flat_final_ocean_floor_height_map: [i16; CHUNK_AREA],
+    /// Vanilla `MOTION_BLOCKING`, same lifetime as `flat_final_surface_height_map`.
     pub flat_motion_blocking_height_map: [i16; CHUNK_AREA],
+    /// Vanilla `MOTION_BLOCKING_NO_LEAVES`, same lifetime as `flat_final_surface_height_map`.
     pub flat_motion_blocking_no_leaves_height_map: [i16; CHUNK_AREA],
+    /// Whether the four `FINAL_HEIGHTMAPS` have been primed for this chunk yet; vanilla
+    /// creates them lazily, so the first write after the carver step primes them.
+    final_heightmaps_primed: bool,
     structure_starts: FxHashMap<StructureKeys, StructureInstance>,
 
     height: u16,
@@ -229,7 +243,8 @@ impl ProtoChunk {
             super::generator::WorldGenerator::Custom(custom_gen) => custom_gen.biome_mixer_seed(),
         };
 
-        let default_heightmap = [i16::MIN; CHUNK_AREA];
+        // A column with nothing in it reads as "first available = bottom", i.e. top = bottom - 1.
+        let default_heightmap = [i16::from(bottom_y) - 1; CHUNK_AREA];
         Self {
             x,
             z,
@@ -246,8 +261,11 @@ impl ProtoChunk {
             .into_boxed_slice(),
             flat_surface_height_map: default_heightmap,
             flat_ocean_floor_height_map: default_heightmap,
+            flat_final_surface_height_map: default_heightmap,
+            flat_final_ocean_floor_height_map: default_heightmap,
             flat_motion_blocking_height_map: default_heightmap,
             flat_motion_blocking_no_leaves_height_map: default_heightmap,
+            final_heightmaps_primed: false,
             structure_starts: FxHashMap::default(),
             height,
             bottom_y,
@@ -362,11 +380,17 @@ impl ProtoChunk {
                 )
                     as i16;
 
-                proto_chunk.flat_surface_height_map[index] =
+                proto_chunk.flat_final_surface_height_map[index] =
                     heightmap_data.get(ChunkHeightmapType::WorldSurface, x, z, section_data.min_y)
                         as i16;
             }
         }
+
+        // Only the three level heightmaps are saved; the remaining maps are a pure function
+        // of the blocks, so rebuild them the way vanilla primes a missing one.
+        proto_chunk.final_heightmaps_primed = true;
+        proto_chunk.prime_ocean_floor_from_blocks();
+        proto_chunk.prime_worldgen_heightmaps();
 
         let saved_stage = StagedChunkEnum::from(chunk_data.status);
         proto_chunk.stage = saved_stage;
@@ -437,35 +461,176 @@ impl ProtoChunk {
         });
     }
 
-    fn maybe_update_surface_height_map(&mut self, index: usize, y: i16) {
-        let current_height = self.flat_surface_height_map[index];
-        self.flat_surface_height_map[index] = current_height.max(y);
+    /// Vanilla `Heightmap.update` after the block at `y` in this column was written:
+    ///
+    /// ```java
+    /// int i = this.getFirstAvailable(x, z);
+    /// if (y <= i - 2) return false;
+    /// if (this.isOpaque.test(state)) {
+    ///     if (y >= i) { this.setHeight(x, z, y + 1); return true; }
+    /// } else if (i - 1 == y) {
+    ///     for (int j = y - 1; j >= this.chunk.getMinY(); j--) {
+    ///         if (this.isOpaque.test(this.chunk.getBlockState(mutable.set(x, j, z)))) {
+    ///             this.setHeight(x, z, j + 1);
+    ///             return true;
+    ///         }
+    ///     }
+    ///     this.setHeight(x, z, this.chunk.getMinY());
+    ///     return true;
+    /// }
+    /// ```
+    ///
+    /// Pumpkin stores the top matching block itself rather than the first free slot above it,
+    /// so `first_available == current + 1`. Overwriting the top of a column with something the
+    /// map does not match scans down for the next match: that is how carving *lowers* a map,
+    /// which the old `max`-only updaters never did.
+    fn heightmap_after_write(
+        &self,
+        current: i16,
+        local_x: i32,
+        local_z: i32,
+        y: i32,
+        matches: bool,
+        predicate: fn(BlockStateId) -> bool,
+    ) -> i16 {
+        let first_available = i32::from(current) + 1;
+        if y <= first_available - 2 {
+            return current;
+        }
+        if matches {
+            return if y >= first_available {
+                y as i16
+            } else {
+                current
+            };
+        }
+        if first_available - 1 != y {
+            return current;
+        }
+        let bottom = i32::from(self.bottom_y());
+        for below in (bottom..y).rev() {
+            if predicate(self.get_block_state_raw(local_x, below - bottom, local_z)) {
+                return below as i16;
+            }
+        }
+        (bottom - 1) as i16
     }
 
-    fn maybe_update_ocean_floor_height_map(&mut self, index: usize, y: i16) {
-        let current_height = self.flat_ocean_floor_height_map[index];
-        self.flat_ocean_floor_height_map[index] = current_height.max(y);
+    /// Vanilla `Heightmap.Types.WORLD_SURFACE(_WG)`: `!state.isAir()`.
+    const fn heightmap_not_air(id: BlockStateId) -> bool {
+        !BlockState::from_id(id).is_air()
     }
 
-    fn maybe_update_motion_blocking_height_map(&mut self, index: usize, y: i16) {
-        let current_height = self.flat_motion_blocking_height_map[index];
-        self.flat_motion_blocking_height_map[index] = current_height.max(y);
+    /// Vanilla `Heightmap.Types.OCEAN_FLOOR(_WG)`: `state.blocksMotion()`.
+    const fn heightmap_blocks_motion(id: BlockStateId) -> bool {
+        let state = BlockState::from_id(id);
+        !state.is_air() && blocks_movement(state, BlockId::from_state_id(id))
     }
 
-    fn maybe_update_motion_blocking_no_leaves_height_map(&mut self, index: usize, y: i16) {
-        let current_height = self.flat_motion_blocking_no_leaves_height_map[index];
-        self.flat_motion_blocking_no_leaves_height_map[index] = current_height.max(y);
+    /// Vanilla `Heightmap.Types.MOTION_BLOCKING`:
+    /// `state.blocksMotion() || !state.getFluidState().isEmpty()`.
+    const fn heightmap_motion_blocking(id: BlockStateId) -> bool {
+        let state = BlockState::from_id(id);
+        !state.is_air() && (blocks_movement(state, BlockId::from_state_id(id)) || state.is_liquid())
+    }
+
+    /// Vanilla `Heightmap.Types.MOTION_BLOCKING_NO_LEAVES`: the above minus `LeavesBlock`.
+    fn heightmap_motion_blocking_no_leaves(id: BlockStateId) -> bool {
+        Self::heightmap_motion_blocking(id)
+            && !BlockId::from_state_id(id).has_tag(tag::Block::MINECRAFT_LEAVES)
+    }
+
+    fn prime_column<const N: usize>(
+        &self,
+        local_x: i32,
+        local_z: i32,
+        predicates: [fn(BlockStateId) -> bool; N],
+    ) -> [i16; N] {
+        let bottom = i32::from(self.bottom_y());
+        let empty = (bottom - 1) as i16;
+        let mut tops = [empty; N];
+        let mut remaining = N;
+        for local_y in (0..i32::from(self.height())).rev() {
+            let id = self.get_block_state_raw(local_x, local_y, local_z);
+            if BlockState::from_id(id).is_air() {
+                continue;
+            }
+            for (top, predicate) in tops.iter_mut().zip(predicates) {
+                if *top == empty && predicate(id) {
+                    *top = (bottom + local_y) as i16;
+                    remaining -= 1;
+                }
+            }
+            if remaining == 0 {
+                break;
+            }
+        }
+        tops
+    }
+
+    /// Vanilla `Heightmap.primeHeightmaps` for `ChunkStatus.FINAL_HEIGHTMAPS`, which
+    /// `ChunkStatusTasks.generateFeatures` runs before any feature is placed:
+    ///
+    /// ```java
+    /// Heightmap.primeHeightmaps(chunk, EnumSet.of(MOTION_BLOCKING, MOTION_BLOCKING_NO_LEAVES,
+    ///                                             OCEAN_FLOOR, WORLD_SURFACE));
+    /// ```
+    pub fn prime_final_heightmaps(&mut self) {
+        for local_x in 0..CHUNK_DIM as i32 {
+            for local_z in 0..CHUNK_DIM as i32 {
+                let [surface, ocean_floor, motion_blocking, no_leaves] = self.prime_column(
+                    local_x,
+                    local_z,
+                    [
+                        Self::heightmap_not_air,
+                        Self::heightmap_blocks_motion,
+                        Self::heightmap_motion_blocking,
+                        Self::heightmap_motion_blocking_no_leaves,
+                    ],
+                );
+                let index = Self::local_position_to_height_map_index(local_x, local_z);
+                self.flat_final_surface_height_map[index] = surface;
+                self.flat_final_ocean_floor_height_map[index] = ocean_floor;
+                self.flat_motion_blocking_height_map[index] = motion_blocking;
+                self.flat_motion_blocking_no_leaves_height_map[index] = no_leaves;
+            }
+        }
+        self.final_heightmaps_primed = true;
+    }
+
+    fn prime_worldgen_heightmaps(&mut self) {
+        for local_x in 0..CHUNK_DIM as i32 {
+            for local_z in 0..CHUNK_DIM as i32 {
+                let [surface, ocean_floor] = self.prime_column(
+                    local_x,
+                    local_z,
+                    [Self::heightmap_not_air, Self::heightmap_blocks_motion],
+                );
+                let index = Self::local_position_to_height_map_index(local_x, local_z);
+                self.flat_surface_height_map[index] = surface;
+                self.flat_ocean_floor_height_map[index] = ocean_floor;
+            }
+        }
+    }
+
+    fn prime_ocean_floor_from_blocks(&mut self) {
+        for local_x in 0..CHUNK_DIM as i32 {
+            for local_z in 0..CHUNK_DIM as i32 {
+                let [ocean_floor] =
+                    self.prime_column(local_x, local_z, [Self::heightmap_blocks_motion]);
+                let index = Self::local_position_to_height_map_index(local_x, local_z);
+                self.flat_final_ocean_floor_height_map[index] = ocean_floor;
+            }
+        }
     }
 
     #[must_use]
     pub const fn get_top_y(&self, heightmap: &HeightMap, x: i32, z: i32) -> i32 {
         match heightmap {
-            HeightMap::WorldSurfaceWg | HeightMap::WorldSurface => {
-                self.top_block_height_exclusive(x, z)
-            }
-            HeightMap::OceanFloorWg | HeightMap::OceanFloor => {
-                self.ocean_floor_height_exclusive(x, z)
-            }
+            HeightMap::WorldSurfaceWg => self.top_block_height_wg_exclusive(x, z),
+            HeightMap::WorldSurface => self.top_block_height_exclusive(x, z),
+            HeightMap::OceanFloorWg => self.ocean_floor_height_wg_exclusive(x, z),
+            HeightMap::OceanFloor => self.ocean_floor_height_exclusive(x, z),
             HeightMap::MotionBlocking => self.top_motion_blocking_block_height_exclusive(x, z),
             HeightMap::MotionBlockingNoLeaves => {
                 self.top_motion_blocking_block_no_leaves_height_exclusive(x, z)
@@ -473,16 +638,33 @@ impl ProtoChunk {
         }
     }
 
+    /// Vanilla `WORLD_SURFACE_WG`: the surface as the carvers left it, frozen for the whole
+    /// feature step. Surface rules read this one (`SurfaceRules.Steep`).
     #[must_use]
-    pub const fn top_block_height_exclusive(&self, x: i32, z: i32) -> i32 {
+    pub const fn top_block_height_wg_exclusive(&self, x: i32, z: i32) -> i32 {
         let index = Self::local_position_to_height_map_index(x & 15, z & 15);
         self.flat_surface_height_map[index] as i32 + 1
     }
 
+    /// Vanilla `OCEAN_FLOOR_WG`, frozen the same way.
+    #[must_use]
+    pub const fn ocean_floor_height_wg_exclusive(&self, x: i32, z: i32) -> i32 {
+        let index = Self::local_position_to_height_map_index(x & 15, z & 15);
+        self.flat_ocean_floor_height_map[index] as i32 + 1
+    }
+
+    /// Vanilla `WORLD_SURFACE`: live during feature placement.
+    #[must_use]
+    pub const fn top_block_height_exclusive(&self, x: i32, z: i32) -> i32 {
+        let index = Self::local_position_to_height_map_index(x & 15, z & 15);
+        self.flat_final_surface_height_map[index] as i32 + 1
+    }
+
+    /// Vanilla `OCEAN_FLOOR`: live during feature placement.
     #[must_use]
     pub const fn ocean_floor_height_exclusive(&self, x: i32, z: i32) -> i32 {
         let index = Self::local_position_to_height_map_index(x & 15, z & 15);
-        self.flat_ocean_floor_height_map[index] as i32 + 1
+        self.flat_final_ocean_floor_height_map[index] as i32 + 1
     }
 
     #[must_use]
@@ -553,28 +735,74 @@ impl ProtoChunk {
         if local_y < 0 || local_y >= self.height() as i32 {
             return;
         }
-        if !block_state.is_air() {
-            let index = Self::local_position_to_height_map_index(local_x, local_z);
-            let y = y as i16;
-            self.maybe_update_surface_height_map(index, y);
-            let block = BlockId::from_state_id(block_state.id);
-
-            let blocks_movement = blocks_movement(block_state, block);
-            if blocks_movement {
-                self.maybe_update_ocean_floor_height_map(index, y);
-            }
-            if blocks_movement || block_state.is_liquid() {
-                self.maybe_update_motion_blocking_height_map(index, y);
-                if !block.has_tag(tag::Block::MINECRAFT_LEAVES) {
-                    {
-                        self.maybe_update_motion_blocking_no_leaves_height_map(index, y);
-                    }
-                }
-            }
-        }
-
         let index = self.local_pos_to_block_index(local_x, local_y, local_z);
         self.flat_block_map[index] = block_state.id;
+
+        // Vanilla `ProtoChunk.setBlockState` writes the block first and then updates exactly
+        // the maps in `getPersistedStatus().heightmapsAfter()`: `WORLDGEN_HEIGHTMAPS`
+        // (`WORLD_SURFACE_WG`, `OCEAN_FLOOR_WG`) up to and including the surface step, and
+        // `FINAL_HEIGHTMAPS` from the carver step on. A chunk's persisted status is still
+        // `SURFACE` while its carvers run and `CARVERS` while its features run, so carving
+        // lowers the worldgen maps and features only ever move the final ones.
+        let column = Self::local_position_to_height_map_index(local_x, local_z);
+        let id = block_state.id;
+        if self.stage < StagedChunkEnum::Carvers {
+            self.flat_surface_height_map[column] = self.heightmap_after_write(
+                self.flat_surface_height_map[column],
+                local_x,
+                local_z,
+                y,
+                Self::heightmap_not_air(id),
+                Self::heightmap_not_air,
+            );
+            self.flat_ocean_floor_height_map[column] = self.heightmap_after_write(
+                self.flat_ocean_floor_height_map[column],
+                local_x,
+                local_z,
+                y,
+                Self::heightmap_blocks_motion(id),
+                Self::heightmap_blocks_motion,
+            );
+            return;
+        }
+
+        if !self.final_heightmaps_primed {
+            self.prime_final_heightmaps();
+            return;
+        }
+
+        self.flat_final_surface_height_map[column] = self.heightmap_after_write(
+            self.flat_final_surface_height_map[column],
+            local_x,
+            local_z,
+            y,
+            Self::heightmap_not_air(id),
+            Self::heightmap_not_air,
+        );
+        self.flat_final_ocean_floor_height_map[column] = self.heightmap_after_write(
+            self.flat_final_ocean_floor_height_map[column],
+            local_x,
+            local_z,
+            y,
+            Self::heightmap_blocks_motion(id),
+            Self::heightmap_blocks_motion,
+        );
+        self.flat_motion_blocking_height_map[column] = self.heightmap_after_write(
+            self.flat_motion_blocking_height_map[column],
+            local_x,
+            local_z,
+            y,
+            Self::heightmap_motion_blocking(id),
+            Self::heightmap_motion_blocking,
+        );
+        self.flat_motion_blocking_no_leaves_height_map[column] = self.heightmap_after_write(
+            self.flat_motion_blocking_no_leaves_height_map[column],
+            local_x,
+            local_z,
+            y,
+            Self::heightmap_motion_blocking_no_leaves(id),
+            Self::heightmap_motion_blocking_no_leaves,
+        );
     }
 
     #[inline]
@@ -990,7 +1218,8 @@ impl ProtoChunk {
                 let x = start_x + local_x;
                 let z = start_z + local_z;
 
-                let mut top_block = self.top_block_height_exclusive(local_x, local_z);
+                // Vanilla `SurfaceSystem.buildSurface` reads `Heightmap.Types.WORLD_SURFACE_WG`.
+                let mut top_block = self.top_block_height_wg_exclusive(local_x, local_z);
 
                 let biome_y = if settings.legacy_random_source {
                     0
@@ -1008,7 +1237,7 @@ impl ProtoChunk {
                         .terrain_builder
                         .place_badlands_pillar(self, x, z, top_block);
 
-                    top_block = self.top_block_height_exclusive(local_x, local_z);
+                    top_block = self.top_block_height_wg_exclusive(local_x, local_z);
                 }
 
                 context.init_horizontal(x, z);
@@ -1104,6 +1333,10 @@ impl ProtoChunk {
         block_registry: &dyn WorldPortalExt,
         random_config: &GlobalRandomConfig,
     ) {
+        // `ChunkStatusTasks.generateFeatures` primes the four final heightmaps from the
+        // carved blocks before the first feature runs.
+        cache.get_center_chunk_mut().prime_final_heightmaps();
+
         let (center_x, center_z, min_y, generation_min_y, generation_height) = {
             let chunk = cache.get_center_chunk();
             (

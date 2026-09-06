@@ -156,7 +156,8 @@ mod test {
         let mut expected_heights = [[0i32; 16]; 16];
         for z in 0..16i32 {
             for x in 0..16i32 {
-                expected_heights[z as usize][x as usize] = proto.top_block_height_exclusive(x, z);
+                expected_heights[z as usize][x as usize] =
+                    proto.top_block_height_wg_exclusive(x, z);
             }
         }
 
@@ -174,7 +175,7 @@ mod test {
         for z in 0..16i32 {
             for x in 0..16i32 {
                 let expected = expected_heights[z as usize][x as usize];
-                let got = resumed.top_block_height_exclusive(x, z);
+                let got = resumed.top_block_height_wg_exclusive(x, z);
                 if got != expected {
                     height_mismatches += 1;
                 }
@@ -304,6 +305,102 @@ mod test {
                 }
             }
         }
+    }
+
+    /// Vanilla `Heightmap.update` lowers a map when the block it was pointing at is replaced
+    /// by one the map does not match:
+    ///
+    /// ```java
+    /// } else if (i - 1 == y) {
+    ///     for (int j = y - 1; j >= this.chunk.getMinY(); j--) {
+    ///         if (this.isOpaque.test(this.chunk.getBlockState(mutableBlockPos.set(x, j, z)))) {
+    ///             this.setHeight(x, z, j + 1);
+    ///             return true;
+    ///         }
+    ///     }
+    ///     this.setHeight(x, z, this.chunk.getMinY());
+    ///     return true;
+    /// }
+    /// ```
+    ///
+    /// which is how carving pulls `WORLD_SURFACE_WG` / `OCEAN_FLOOR_WG` back down. Pumpkin
+    /// used to keep a running `max`, so a carved-open column still reported its pre-carver
+    /// surface for the whole feature step.
+    #[test]
+    fn a_write_over_the_top_block_lowers_the_worldgen_heightmap() {
+        use pumpkin_data::Block;
+
+        let seed = Seed(13579);
+        let world_gen = get_world_gen(seed, Dimension::OVERWORLD, false, Vec::new(), String::new());
+        let WorldGenerator::Noise(generator) = &*world_gen else {
+            unreachable!()
+        };
+        let (chunk_x, chunk_z) = (0, 0);
+        let mut chunk = ProtoChunk::new(chunk_x, chunk_z, &world_gen);
+        chunk.step_to_biomes(generator);
+        chunk.stage = StagedChunkEnum::StructureReferences;
+        chunk.step_to_noise(generator);
+        let surface_biomes = surface_biomes(&world_gen, chunk_x, chunk_z);
+        chunk.step_to_surface(generator, &surface_biomes);
+        assert_eq!(chunk.stage, StagedChunkEnum::Surface);
+
+        // A carver-shaped write: replace the top block of every column with air.
+        let bottom = chunk.bottom_y() as i32;
+        for x in 0..16i32 {
+            for z in 0..16i32 {
+                let top = chunk.top_block_height_wg_exclusive(x, z) - 1;
+                assert!(
+                    top >= bottom,
+                    "column ({x}, {z}) has no surface after the surface step"
+                );
+                chunk.set_block_state(x, top, z, Block::AIR.default_state);
+
+                let expected = (bottom..top)
+                    .rev()
+                    .find(|&y| {
+                        !pumpkin_data::BlockState::from_id(chunk.get_block_state_raw(
+                            x,
+                            y - bottom,
+                            z,
+                        ))
+                        .is_air()
+                    })
+                    .unwrap_or(bottom - 1);
+                assert_eq!(
+                    chunk.top_block_height_wg_exclusive(x, z) - 1,
+                    expected,
+                    "WORLD_SURFACE_WG at ({x}, {z}) was not lowered onto the next non-air block"
+                );
+            }
+        }
+
+        // From the carver step on, vanilla maintains `FINAL_HEIGHTMAPS` instead: feature
+        // writes move `WORLD_SURFACE` and leave `WORLD_SURFACE_WG` frozen where carving
+        // left it.
+        chunk.stage = StagedChunkEnum::Carvers;
+        chunk.prime_final_heightmaps();
+        let frozen = chunk.flat_surface_height_map;
+        for x in 0..16i32 {
+            for z in 0..16i32 {
+                assert_eq!(
+                    chunk.top_block_height_exclusive(x, z),
+                    chunk.top_block_height_wg_exclusive(x, z),
+                    "priming WORLD_SURFACE must reproduce the carved surface at ({x}, {z})"
+                );
+            }
+        }
+
+        let grown = chunk.top_block_height_exclusive(0, 0);
+        chunk.set_block_state(0, grown, 0, Block::SHORT_GRASS.default_state);
+        assert_eq!(
+            chunk.flat_surface_height_map, frozen,
+            "a feature write must not touch WORLD_SURFACE_WG"
+        );
+        assert_eq!(
+            chunk.top_block_height_exclusive(0, 0),
+            grown + 1,
+            "a feature write must raise WORLD_SURFACE"
+        );
     }
 
     fn verify_chunk_surface(
