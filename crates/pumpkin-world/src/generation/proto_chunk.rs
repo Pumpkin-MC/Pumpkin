@@ -157,6 +157,9 @@ pub struct ProtoChunk {
     pub pending_block_entities: Vec<NbtCompound>,
     pending_structure_entities: Vec<NbtCompound>,
     pub fluid_ticks: Vec<ScheduledTick<&'static Fluid>>,
+    /// Vanilla `ChunkAccess.postProcessing`: positions `WorldGenRegion.setBlock` handed to
+    /// `markPosForPostProcessing`, replayed by `LevelChunk.postProcessGeneration`.
+    pub(crate) post_processing: Vec<Vector3<i32>>,
 }
 
 pub struct TerrainCache {
@@ -270,7 +273,13 @@ impl ProtoChunk {
             pending_block_entities: Vec::new(),
             pending_structure_entities: Vec::new(),
             fluid_ticks: Vec::new(),
+            post_processing: Vec::new(),
         }
+    }
+
+    /// Vanilla `ChunkAccess.markPosForPostProcessing`.
+    pub(crate) fn mark_pos_for_post_processing(&mut self, pos: Vector3<i32>) {
+        self.post_processing.push(pos);
     }
 
     #[must_use]
@@ -1167,6 +1176,20 @@ impl ProtoChunk {
         }
 
         cache.get_center_chunk_mut().stage = StagedChunkEnum::Features;
+
+        // Vanilla runs `LevelChunk.postProcessGeneration` when the chunk reaches `FULL`, which
+        // needs all nine neighbours past `FEATURES`. Pumpkin has no such step, so the marks are
+        // drained here: for the chunk that just finished, and for any neighbour that is already
+        // done and therefore would never look at its list again.
+        for chunk_x in center_x - 1..=center_x + 1 {
+            for chunk_z in center_z - 1..=center_z + 1 {
+                if let Some(chunk) = cache.get_chunk_mut(chunk_x, chunk_z)
+                    && chunk.stage >= StagedChunkEnum::Features
+                {
+                    super::post_processing::post_process_generation(chunk);
+                }
+            }
+        }
     }
 
     fn generate_structure_step<T: GenerationCache>(
@@ -1641,6 +1664,11 @@ impl GenerationCache for ProtoChunk {
     }
     fn set_block_state(&mut self, pos: &Vector3<i32>, block_state: &BlockState) {
         Self::set_block_state(self, pos.x, pos.y, pos.z, block_state);
+        // `WorldGenRegion.setBlock`: `if ((updateFlags & 16) == 0) { BlockPos p =
+        // blockState.getPostProcessPos(this, pos); if (p != null) markPosForPostProcessing(p); }`
+        if let Some(mark) = super::post_processing::post_process_pos(block_state.id, *pos) {
+            self.mark_pos_for_post_processing(mark);
+        }
     }
     fn add_block_entity(&mut self, _pos: &Vector3<i32>, nbt: NbtCompound) {
         self.add_block_entity(nbt);

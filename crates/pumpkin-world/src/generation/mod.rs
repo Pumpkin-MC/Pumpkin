@@ -12,6 +12,7 @@ pub mod height_limit;
 pub mod height_provider;
 pub mod noise;
 pub mod positions;
+pub mod post_processing;
 pub mod proto_chunk;
 pub mod proto_chunk_test;
 pub mod rule;

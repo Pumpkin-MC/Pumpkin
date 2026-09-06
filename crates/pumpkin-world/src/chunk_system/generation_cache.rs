@@ -4,6 +4,7 @@ use crate::chunk::ChunkHeightmapType;
 use crate::generation::biome_coords;
 use crate::generation::generator;
 use crate::generation::height_limit::HeightLimitView;
+use crate::generation::post_processing::post_process_pos;
 use crate::generation::proto_chunk::GenerationCache;
 use crate::world::{BlockAccessor, WorldPortalExt};
 use pumpkin_config::lighting::LightingEngineConfig;
@@ -296,6 +297,15 @@ impl GenerationCache for Cache {
             Chunk::Proto(data) => {
                 data.set_block_state(pos.x, pos.y, pos.z, block_state);
             }
+        }
+
+        // `WorldGenRegion.setBlock`: `if ((updateFlags & 16) == 0) { BlockPos p =
+        // blockState.getPostProcessPos(this, pos); if (p != null) markPosForPostProcessing(p); }`
+        // `markPosForPostProcessing` targets the chunk that holds the marked position.
+        if let Some(mark) = post_process_pos(block_state.id, *pos)
+            && let Some(chunk) = self.get_chunk_mut(mark.x >> 4, mark.z >> 4)
+        {
+            chunk.mark_pos_for_post_processing(mark);
         }
     }
 
