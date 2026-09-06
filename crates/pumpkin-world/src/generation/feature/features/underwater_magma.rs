@@ -15,57 +15,60 @@ pub struct UnderwaterMagmaFeature {
 }
 
 impl UnderwaterMagmaFeature {
-    /// Find the Y coordinate of a solid floor beneath a water column at the origin's XZ.
+    /// Y of the floor of the water column the origin sits in, or `None`.
+    ///
+    /// Vanilla `UnderwaterMagmaFeature.getFloorY` runs `Column.scan(level, origin,
+    /// floorSearchRange, state -> state.is(WATER), state -> !state.is(WATER))` and takes
+    /// `Column::getFloor`. `Column.scan` bails out immediately when the origin itself is not
+    /// water, then `scanDirection(..., Direction.DOWN)` walks down with
+    /// `for (int i = 1; i < searchRange && isStateAtPosition(inside); i++) move(DOWN)` and
+    /// returns the reached Y only when the block there matches the edge predicate.
     fn get_floor_y<T: GenerationCache>(&self, chunk: &T, origin: BlockPos) -> Option<i32> {
         let x = origin.0.x;
         let z = origin.0.z;
+        let is_water = |chunk: &T, y: i32| {
+            GenerationCache::get_block_state(chunk, &BlockPos::new(x, y, z).0).to_block_id()
+                == Block::WATER
+        };
 
-        // Drop down until water found
-        for dy in 0..=self.floor_search_range {
-            let check_y = origin.0.y - dy;
-            let pos = BlockPos::new(x, check_y, z);
-            let state_id = GenerationCache::get_block_state(chunk, &pos.0).to_block_id();
-
-            if state_id == Block::WATER {
-                // Sink to first non-water block below the column
-                let mut floor_y = check_y - 1;
-                loop {
-                    let floor_pos = BlockPos::new(x, floor_y, z);
-                    let floor_id =
-                        GenerationCache::get_block_state(chunk, &floor_pos.0).to_block_id();
-                    if floor_id != Block::WATER {
-                        return Some(floor_y);
-                    }
-                    if (check_y - floor_y) > self.floor_search_range {
-                        break;
-                    }
-                    floor_y -= 1;
-                }
-            }
+        // `Column.scan` returns empty unless the origin is inside the column.
+        if !is_water(chunk, origin.0.y) {
+            return None;
         }
-        None
+
+        let mut y = origin.0.y;
+        let mut i = 1;
+        while i < self.floor_search_range && is_water(chunk, y) {
+            y -= 1;
+            i += 1;
+        }
+
+        // The edge predicate is `!state.is(WATER)`.
+        if is_water(chunk, y) { None } else { Some(y) }
     }
 
-    /// Check if a block can host magma
+    /// Vanilla `UnderwaterMagmaFeature.isValidPlacement`.
+    ///
+    /// `!isWaterOrAir(state(pos)) && !isVisibleFromOutside(below, UP)` and then no horizontal
+    /// neighbour may be visible from outside. `isVisibleFromOutside` asks for
+    /// `getFaceOcclusionShape(dir)`, which `BlockBehaviour.BlockStateBase` fills with
+    /// `FULL_BLOCK_OCCLUSION_SHAPES` exactly when the state is solid-render (`canOcclude()` and
+    /// a full-block occlusion shape) and with slices otherwise, so the test collapses to
+    /// `!state.isSolidRender()`.
     fn is_valid_placement<T: GenerationCache>(chunk: &T, target: &BlockPos) -> bool {
-        // Reject water/air or unsupported blocks
-        let target_id = GenerationCache::get_block_state(chunk, &target.0).to_block_id();
-        if target_id == Block::WATER || target_id == Block::AIR {
+        let target_state = GenerationCache::get_block_state(chunk, &target.0);
+        if target_state.to_block_id() == Block::WATER || target_state.to_state().is_air() {
             return false;
         }
 
-        // Below must be solid
         let below = target.offset(BlockDirection::Down.to_offset());
-        let below_id = GenerationCache::get_block_state(chunk, &below.0).to_block_id();
-        if below_id == Block::WATER || below_id == Block::AIR {
+        if !GenerationCache::get_block_state(chunk, &below.0).is_solid_render() {
             return false;
         }
 
-        // No open horizontal faces
         for dir in &BlockDirection::horizontal() {
             let neighbour = target.offset(dir.to_offset());
-            let n_id = GenerationCache::get_block_state(chunk, &neighbour.0).to_block_id();
-            if n_id == Block::WATER || n_id == Block::AIR {
+            if !GenerationCache::get_block_state(chunk, &neighbour.0).is_solid_render() {
                 return false;
             }
         }
@@ -90,13 +93,16 @@ impl UnderwaterMagmaFeature {
 
         let floor_pos = BlockPos::new(pos.0.x, floor_y, pos.0.z);
 
-        // Sample a cube around the floor, placing magma with probability and validity checks
+        // Sample a cube around the floor, placing magma with probability and validity checks.
+        // `BlockPos.betweenClosedStream` walks X fastest, then Y, then Z (`x = index % width;
+        // y = index / width % height; z = index / width / height`), and the random draw happens
+        // per visited position, so the loop nesting decides which position gets which float.
         let mut placed = 0i32;
         let r = self.placement_radius;
 
-        for dx in -r..=r {
+        for dz in -r..=r {
             for dy in -r..=r {
-                for dz in -r..=r {
+                for dx in -r..=r {
                     if random.next_f32() >= self.placement_probability {
                         continue;
                     }
@@ -116,5 +122,61 @@ impl UnderwaterMagmaFeature {
         }
 
         placed > 0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_data::{Block, BlockState};
+
+    /// `UnderwaterMagmaFeature.place` walks its cube with
+    /// `BlockPos.betweenClosedStream(BoundingBox.fromCorners(floor - r, floor + r))`, and
+    /// `BlockPos.betweenClosed` computes
+    /// `x = index % width; y = index / width % height; z = index / width / height`.
+    /// Every visited position consumes one `random.nextFloat()`, so the loop nesting has to
+    /// reproduce that exact order: X fastest, then Y, then Z.
+    #[test]
+    fn cube_walk_matches_between_closed() {
+        let r = 1i32;
+        let width = 2 * r + 1;
+        let height = width;
+
+        let mut ours = Vec::new();
+        for dz in -r..=r {
+            for dy in -r..=r {
+                for dx in -r..=r {
+                    ours.push((dx, dy, dz));
+                }
+            }
+        }
+
+        let mut vanilla = Vec::new();
+        for index in 0..(width * height * width) {
+            let x = index % width;
+            let y = index / width % height;
+            let z = index / width / height;
+            vanilla.push((-r + x, -r + y, -r + z));
+        }
+
+        assert_eq!(ours, vanilla);
+        assert_eq!(ours[0], (-1, -1, -1));
+        assert_eq!(ours[1], (0, -1, -1));
+        assert_eq!(ours[3], (-1, 0, -1));
+        assert_eq!(ours[9], (-1, -1, 0));
+    }
+
+    /// `isVisibleFromOutside` returns `faceOcclusionShape == Shapes.empty() ||
+    /// !Block.isShapeFullBlock(faceOcclusionShape)`. `BlockStateBase.initCache` stores
+    /// `FULL_BLOCK_OCCLUSION_SHAPES` for solid-render states and slices for everything else, so
+    /// the predicate is exactly `!state.isSolidRender()` — and `cave_air`, not just `air`, is on
+    /// the visible side of it.
+    #[test]
+    fn cave_air_is_visible_from_outside() {
+        assert!(!BlockState::from_id(Block::CAVE_AIR.default_state.id).is_solid_render());
+        assert!(!BlockState::from_id(Block::AIR.default_state.id).is_solid_render());
+        assert!(!BlockState::from_id(Block::WATER.default_state.id).is_solid_render());
+        assert!(BlockState::from_id(Block::STONE.default_state.id).is_solid_render());
+        assert!(BlockState::from_id(Block::DEEPSLATE.default_state.id).is_solid_render());
+        assert!(BlockState::from_id(Block::MAGMA_BLOCK.default_state.id).is_solid_render());
     }
 }
