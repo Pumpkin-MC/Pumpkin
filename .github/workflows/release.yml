@@ -41,17 +41,41 @@ jobs:
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
 
+      - name: Install musl-tools (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
       - name: Build Release
         shell: bash
         run: |
           cargo build --verbose --release
+          if [ "${{ runner.os }}" == "Linux" ]; then
+            if [ "${{ runner.arch }}" == "X64" ]; then
+              TARGET="x86_64-unknown-linux-musl"
+            elif [ "${{ runner.arch }}" == "ARM64" ]; then
+              TARGET="aarch64-unknown-linux-musl"
+            fi
+            rustup target add "$TARGET"
+            cargo build --verbose --release --target "$TARGET"
+          fi
 
       - name: Prepare artifacts
         shell: bash
         run: |
           mkdir -p dist
+          EXT=""
           if [ "${{ runner.os }}" == "Windows" ]; then EXT=".exe"; fi
           cp "target/release/pumpkin$EXT" "dist/pumpkin-${{ runner.arch }}-${{ runner.os }}$EXT"
+          if [ "${{ runner.os }}" == "Linux" ]; then
+            if [ "${{ runner.arch }}" == "X64" ]; then
+              TARGET="x86_64-unknown-linux-musl"
+            elif [ "${{ runner.arch }}" == "ARM64" ]; then
+              TARGET="aarch64-unknown-linux-musl"
+            fi
+            cp "target/$TARGET/release/pumpkin" "dist/pumpkin-${{ runner.arch }}-${{ runner.os }}-musl"
+          fi
 
       - name: Upload unsigned executable for SignPath (Windows only)
         if: runner.os == 'Windows'
@@ -88,11 +112,43 @@ jobs:
           compression-level: 9
           path: dist/pumpkin-*
 
+  build_android_release:
+    name: Build project in release for Android (AArch64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk
+      - uses: Swatinem/rust-cache@v2
+      - name: Build Release with cargo ndk
+        env:
+          CARGO_NDK_PLATFORM: 24
+        run: cargo ndk -t arm64-v8a build --release --locked
+      - name: Prepare artifacts
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp "target/aarch64-linux-android/release/pumpkin" "dist/pumpkin-aarch64-android"
+      - name: Export executable
+        uses: actions/upload-artifact@v7
+        with:
+          name: pumpkin-aarch64-android
+          compression-level: 9
+          path: dist/pumpkin-aarch64-android
+
   publish_release:
     name: Publish GitHub Release
     permissions:
       contents: write
-    needs: [build_release]
+    needs: [build_release, build_android_release]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

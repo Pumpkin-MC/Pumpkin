@@ -38,13 +38,40 @@ impl ClientPacket for CUpdateMobEffect {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        write.write_var_int(&self.entity_id)?;
-        write.write_var_int(&self.effect_id)?;
-        write.write_var_int(&self.amplifier)?;
-        write.write_var_int(&self.duration)?;
-        write.write_i8(self.flags)?;
+        if *version <= JavaMinecraftVersion::V_1_7_6 {
+            write.write_i32_be(self.entity_id.0)?;
+        } else {
+            write.write_var_int(&self.entity_id)?;
+        }
+
+        if *version >= JavaMinecraftVersion::V_1_18_2 {
+            write.write_var_int(&self.effect_id)?;
+        } else {
+            write.write_u8(self.effect_id.0 as u8)?;
+        }
+
+        if *version >= JavaMinecraftVersion::V_1_20_5 {
+            write.write_var_int(&self.amplifier)?;
+        } else {
+            write.write_i8(self.amplifier.0 as i8)?;
+        }
+
+        if *version <= JavaMinecraftVersion::V_1_7_6 {
+            write.write_i16_be(self.duration.0 as i16)?;
+        } else {
+            write.write_var_int(&self.duration)?;
+        }
+
+        if *version > JavaMinecraftVersion::V_1_7_6 {
+            write.write_i8(self.flags)?;
+        }
+
+        if *version >= JavaMinecraftVersion::V_1_19 && *version < JavaMinecraftVersion::V_1_20_5 {
+            write.write_bool(false)?;
+        }
+
         Ok(())
     }
 }

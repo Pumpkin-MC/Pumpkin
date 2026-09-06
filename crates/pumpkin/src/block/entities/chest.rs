@@ -1,6 +1,5 @@
-use std::sync::{Arc, Mutex as StdMutex, atomic::AtomicBool};
+use std::sync::{Arc, Mutex as StdMutex, RwLock, atomic::AtomicBool};
 
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_util::math::position::BlockPos;
 
@@ -11,7 +10,7 @@ use crate::{
 
 pub struct ChestBlockEntity {
     pub position: BlockPos,
-    pub items: tokio::sync::RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
+    pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
     pub dirty: AtomicBool,
 
     // Viewer

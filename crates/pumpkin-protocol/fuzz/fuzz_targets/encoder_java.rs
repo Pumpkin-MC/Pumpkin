@@ -20,8 +20,8 @@ fuzz_target!(|data: &[u8]| {
     let compression_threshold = data[0] as usize;
     let compression_level = (data[1] % 10) as u32;
     let encryption_key: [u8; 16] = data[2..18].try_into().unwrap();
-    let use_compression = data[18] % 2 == 0;
-    let use_encryption = data[19] % 2 == 0;
+    let use_compression = data[18].is_multiple_of(2);
+    let use_encryption = data[19].is_multiple_of(2);
     let packet_data = &data[20..];
 
     let rt = Runtime::new().unwrap();

@@ -244,32 +244,26 @@ pub const OIDC_DISCOVERY_URL: &str =
     "https://client.discovery.minecraft-services.net/api/v1.0/discovery/MinecraftPE/builds/1.0.0.0";
 
 /// Fetches the OIDC JSON Web Key Set (JWKS) from the discovery endpoint.
-pub fn fetch_oidc_jwks(
+pub async fn fetch_oidc_jwks(
     discovery_url: Option<&str>,
     connect_timeout_ms: u32,
     read_timeout_ms: u32,
 ) -> Result<(String, Jwks), AuthError> {
     let url = discovery_url.unwrap_or(OIDC_DISCOVERY_URL);
-    let config = ureq::Agent::config_builder()
-        .timeout_connect(Some(std::time::Duration::from_millis(
-            connect_timeout_ms as u64,
-        )))
-        .timeout_recv_response(Some(std::time::Duration::from_millis(
-            read_timeout_ms as u64,
-        )))
-        .build();
-    let agent: ureq::Agent = config.into();
+    let client = crate::client_builder()
+        .connect_timeout(std::time::Duration::from_millis(connect_timeout_ms as u64))
+        .timeout(std::time::Duration::from_millis(read_timeout_ms as u64))
+        .build()
+        .map_err(|e| AuthError::PublicKeyBuild(e.to_string()))?;
 
-    let discovery: Value = agent
+    let discovery: Value = client
         .get(url)
-        .call()
+        .send()
+        .await
         .map_err(|e| AuthError::PublicKeyBuild(e.to_string()))?
-        .body_mut()
-        .read_to_string()
-        .map_err(|e| AuthError::PublicKeyBuild(format!("Failed to read response: {e}")))
-        .and_then(|s| {
-            serde_json::from_str(&s).map_err(|e| AuthError::PublicKeyBuild(e.to_string()))
-        })?;
+        .json()
+        .await
+        .map_err(|e| AuthError::PublicKeyBuild(e.to_string()))?;
 
     let service_uri = discovery
         .get("result")
@@ -281,16 +275,14 @@ pub fn fetch_oidc_jwks(
         .ok_or_else(|| AuthError::PublicKeyBuild("Discovery missing serviceUri".into()))?;
 
     let openid_config_url = format!("{service_uri}/.well-known/openid-configuration");
-    let openid_config: Value = agent
+    let openid_config: Value = client
         .get(&openid_config_url)
-        .call()
+        .send()
+        .await
         .map_err(|e| AuthError::PublicKeyBuild(e.to_string()))?
-        .body_mut()
-        .read_to_string()
-        .map_err(|e| AuthError::PublicKeyBuild(format!("Failed to read response: {e}")))
-        .and_then(|s| {
-            serde_json::from_str(&s).map_err(|e| AuthError::PublicKeyBuild(e.to_string()))
-        })?;
+        .json()
+        .await
+        .map_err(|e| AuthError::PublicKeyBuild(e.to_string()))?;
 
     let jwks_uri = openid_config
         .get("jwks_uri")
@@ -303,16 +295,14 @@ pub fn fetch_oidc_jwks(
         .ok_or_else(|| AuthError::PublicKeyBuild("OpenID config missing issuer".into()))?
         .to_string();
 
-    let jwks: Jwks = agent
+    let jwks: Jwks = client
         .get(jwks_uri)
-        .call()
+        .send()
+        .await
         .map_err(|e| AuthError::PublicKeyBuild(e.to_string()))?
-        .body_mut()
-        .read_to_string()
-        .map_err(|e| AuthError::PublicKeyBuild(format!("Failed to read response: {e}")))
-        .and_then(|s| {
-            serde_json::from_str(&s).map_err(|e| AuthError::PublicKeyBuild(e.to_string()))
-        })?;
+        .json()
+        .await
+        .map_err(|e| AuthError::PublicKeyBuild(e.to_string()))?;
 
     Ok((issuer, jwks))
 }

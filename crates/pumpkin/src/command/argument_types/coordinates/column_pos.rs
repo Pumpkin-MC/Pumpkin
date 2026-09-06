@@ -1,5 +1,3 @@
-use std::pin::Pin;
-
 use pumpkin_data::translation;
 use pumpkin_util::math::position::{BlockPos, ColumnPos};
 use pumpkin_util::math::vector2::Vector2;
@@ -48,23 +46,21 @@ impl ArgumentType for ColumnPosArgumentType {
         }
     }
 
-    fn list_suggestions<'a>(
-        &'a self,
-        _context: &'a CommandContext,
+    fn list_suggestions(
+        &self,
+        _context: &CommandContext,
         builder: SuggestionsBuilder,
-    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
-        Box::pin(async move {
-            let remainder = builder.remaining();
+    ) -> Suggestions {
+        let remainder = builder.remaining();
 
-            let suggested_coordinates = if remainder.bytes().next() == Some(b'^') {
-                TextCoordinates::Local
-            } else {
-                TextCoordinates::Global
-            };
+        let suggested_coordinates = if remainder.bytes().next() == Some(b'^') {
+            TextCoordinates::Local
+        } else {
+            TextCoordinates::Global
+        };
 
-            builder.suggest_2d_coordinates(suggested_coordinates, |value| {
-                self.parse(&mut StringReader::new(value)).is_ok()
-            })
+        builder.suggest_2d_coordinates(suggested_coordinates, |value| {
+            self.parse(&mut StringReader::new(value)).is_ok()
         })
     }
 

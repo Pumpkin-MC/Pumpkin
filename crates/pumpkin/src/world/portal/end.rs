@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pumpkin_data::{Block, BlockDirection, BlockId, block_properties::BlockProperties};
+use pumpkin_data::{Block, BlockDirection, BlockId};
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::world::BlockFlags;
 
@@ -14,12 +14,12 @@ impl EndPortal {
     const FRAME_BLOCK: Block = Block::END_PORTAL_FRAME;
     const FRAME_BLOCK_ID: BlockId = Self::FRAME_BLOCK.id;
 
-    pub async fn get_new_portal(world: &Arc<World>, pos: BlockPos) {
+    pub fn get_new_portal(world: &Arc<World>, pos: BlockPos) {
         let mid_pos = Self::get_mid_pos(world, pos);
         if let Some(mid_pos) = mid_pos
             && Self::is_valid_portal(world, mid_pos)
         {
-            Self::create_portal(world, mid_pos).await;
+            Self::create_portal(world, mid_pos);
         }
     }
 
@@ -29,7 +29,7 @@ impl EndPortal {
             return None;
         }
 
-        let properties = EndPortalFrameProperties::from_state_id(state, block);
+        let properties = EndPortalFrameProperties::from_state_id(state);
         let facing_dir = properties.facing;
         let left_pos = pos.offset_dir(facing_dir.rotate_clockwise().to_offset(), 1);
         let right_pos = pos.offset_dir(facing_dir.rotate_counter_clockwise().to_offset(), 1);
@@ -67,10 +67,9 @@ impl EndPortal {
                 return false;
             }
 
-            let mid_properties = EndPortalFrameProperties::from_state_id(mid_state, mid_block);
-            let left_properties = EndPortalFrameProperties::from_state_id(left_state, left_block);
-            let right_properties =
-                EndPortalFrameProperties::from_state_id(right_state, right_block);
+            let mid_properties = EndPortalFrameProperties::from_state_id(mid_state);
+            let left_properties = EndPortalFrameProperties::from_state_id(left_state);
+            let right_properties = EndPortalFrameProperties::from_state_id(right_state);
 
             let facing = dir.to_facing();
 
@@ -88,16 +87,14 @@ impl EndPortal {
         true
     }
 
-    async fn create_portal(world: &Arc<World>, pos: BlockPos) {
+    fn create_portal(world: &Arc<World>, pos: BlockPos) {
         for x in -1..=1 {
             for z in -1..=1 {
-                world
-                    .set_block_state(
-                        &pos.offset(Vector3::new(x, 0, z)),
-                        Block::END_PORTAL.default_state.id,
-                        BlockFlags::NOTIFY_LISTENERS,
-                    )
-                    .await;
+                world.set_block_state(
+                    &pos.offset(Vector3::new(x, 0, z)),
+                    Block::END_PORTAL.default_state.id,
+                    BlockFlags::NOTIFY_LISTENERS,
+                );
             }
         }
     }

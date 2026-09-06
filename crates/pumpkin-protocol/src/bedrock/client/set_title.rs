@@ -1,37 +1,61 @@
+// Last verified for v2169
+
+use std::io::{Error, Write};
+
 use crate::{codec::var_int::VarInt, serial::PacketWrite};
 use pumpkin_macros::packet;
 
 #[derive(PacketWrite)]
 #[packet(88)]
 pub struct CSetTitle {
-    pub action_type: VarInt,
-    pub text: String,
-    pub fade_in_duration: VarInt,
-    pub remain_duration: VarInt,
-    pub fade_out_duration: VarInt,
+    pub title_type: TitleType,
+    pub title_text: String,
+    pub fade_in_time: VarInt,
+    pub stay_time: VarInt,
+    pub fade_out_time: VarInt,
     pub xuid: String,
     pub platform_online_id: String,
-    pub filtered_message: String,
+    pub filtered_title_message: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(i32)]
+pub enum TitleType {
+    Clear,
+    Reset,
+    Title,
+    Subtitle,
+    Actionbar,
+    Times,
+    TitleTextObject,
+    SubtitleTextObject,
+    ActionbarTextObject,
+}
+
+impl PacketWrite for TitleType {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        VarInt(*self as i32).write(writer)
+    }
 }
 
 impl CSetTitle {
     #[must_use]
     pub const fn new(
-        action_type: i32,
-        text: String,
-        fade_in_duration: i32,
-        remain_duration: i32,
-        fade_out_duration: i32,
+        title_type: TitleType,
+        title_text: String,
+        fade_in_time: i32,
+        stay_time: i32,
+        fade_out_time: i32,
     ) -> Self {
         Self {
-            action_type: VarInt(action_type),
-            text,
-            fade_in_duration: VarInt(fade_in_duration),
-            remain_duration: VarInt(remain_duration),
-            fade_out_duration: VarInt(fade_out_duration),
+            title_type,
+            title_text,
+            fade_in_time: VarInt(fade_in_time),
+            stay_time: VarInt(stay_time),
+            fade_out_time: VarInt(fade_out_time),
             xuid: String::new(),
             platform_online_id: String::new(),
-            filtered_message: String::new(),
+            filtered_title_message: String::new(),
         }
     }
 }

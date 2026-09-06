@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::io::{Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 use tracing::{info, warn};
@@ -70,16 +70,16 @@ pub struct PoiSectionData {
 pub struct PoiChunkData {
     pub data_version: i32,
     /// Sections keyed by Y section coordinate (e.g., "-1", "0", "1", "4")
-    pub sections: HashMap<String, PoiSectionData>,
+    pub sections: FxHashMap<String, PoiSectionData>,
 }
 
 /// POI data for a single region (32x32 chunks) using MCA format
 #[derive(Debug, Default)]
 pub struct PoiRegion {
     /// Entries indexed by position
-    entries: HashMap<(i32, i32, i32), PoiEntry>,
+    entries: FxHashMap<(i32, i32, i32), PoiEntry>,
     /// Track which chunks are dirty
-    dirty_chunks: std::collections::HashSet<(i32, i32)>,
+    dirty_chunks: rustc_hash::FxHashSet<(i32, i32)>,
     dirty: bool,
 }
 
@@ -144,7 +144,7 @@ impl PoiRegion {
 
     /// Group entries by chunk, then create chunk NBT data
     fn get_chunk_data(&self, chunk_x: i32, chunk_z: i32) -> Option<PoiChunkData> {
-        let mut sections: HashMap<String, PoiSectionData> = HashMap::new();
+        let mut sections: FxHashMap<String, PoiSectionData> = FxHashMap::default();
 
         for entry in self.entries.values() {
             let entry_chunk_x = entry.x >> 4;
@@ -218,7 +218,7 @@ impl PoiRegion {
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
 
         let data_version = nbt.get_int("DataVersion").unwrap_or(DATA_VERSION);
-        let mut sections = HashMap::new();
+        let mut sections = FxHashMap::default();
 
         if let Some(sec_tag) = nbt.get_compound("Sections") {
             for (sec_key, tag) in &sec_tag.child_tags {
@@ -269,11 +269,11 @@ impl PoiRegion {
         }
 
         // Build all chunk data
-        let mut chunk_data_map: HashMap<usize, Vec<u8>> = HashMap::new();
+        let mut chunk_data_map: FxHashMap<usize, Vec<u8>> = FxHashMap::default();
 
         // Collect all unique chunks that have entries
-        let mut chunks_with_data: std::collections::HashSet<(i32, i32)> =
-            std::collections::HashSet::new();
+        let mut chunks_with_data: rustc_hash::FxHashSet<(i32, i32)> =
+            rustc_hash::FxHashSet::default();
         for entry in self.entries.values() {
             chunks_with_data.insert((entry.x >> 4, entry.z >> 4));
         }
@@ -429,7 +429,7 @@ pub struct PoiStorage {
     /// Path to the poi folder
     folder: PathBuf,
     /// Loaded regions, keyed by (`region_x`, `region_z`)
-    regions: HashMap<(i32, i32), PoiRegion>,
+    regions: FxHashMap<(i32, i32), PoiRegion>,
 }
 
 impl PoiStorage {
@@ -437,7 +437,7 @@ impl PoiStorage {
     pub fn new(poi_folder: PathBuf) -> Self {
         Self {
             folder: poi_folder,
-            regions: HashMap::new(),
+            regions: FxHashMap::default(),
         }
     }
 

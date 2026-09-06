@@ -2,6 +2,7 @@
 
 mod advancement;
 mod attributes;
+mod block;
 mod game_rules;
 pub mod player;
 mod server_list_ping;

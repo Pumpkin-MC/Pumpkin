@@ -1,10 +1,15 @@
 use crate::plugin::loader::wasm::wasm_host::state::{ItemStackResource, PluginHostState};
+use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::attributes::{
+    Attribute as WitAttribute, AttributeModifier as WitAttributeModifier,
+    ModifierOperation as WitModifierOperation,
+};
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::data_components::DataComponent as WitDataComponent;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::enchantments::Enchantment as WitEnchantment;
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::item_stack::{
     CustomEnchantmentValue as WitCustomEnchantmentValue,
     DataComponentValue as WitDataComponentValue, EnchantmentValue as WitEnchantmentValue,
-    Host as ItemStackInterfaceHost, HostItemStack, ItemStack as ItemStackHandle,
+    Host as ItemStackInterfaceHost, HostItemStack,
+    ItemAttributeModifier as WitItemAttributeModifier, ItemStack as ItemStackHandle,
 };
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::text::TextComponent as WitTextComponent;
 use std::sync::Arc;
@@ -14,8 +19,12 @@ use wasmtime::component::Resource;
 use super::common::{WitNbtTree, from_wit_nbt_tree, to_wit_nbt_tree};
 use crate::plugin::loader::wasm::wasm_host::wit::v0_1::player::text_component_from_resource;
 use pumpkin_data::Enchantment;
+use pumpkin_data::attributes::Attributes;
 use pumpkin_data::data_component::DataComponent;
-use pumpkin_data::data_component_impl::{CustomNameImpl, EnchantmentsImpl, LoreImpl};
+use pumpkin_data::data_component_impl::combat::{Modifier, Operation};
+use pumpkin_data::data_component_impl::{
+    AttributeModifiersImpl, CustomNameImpl, EnchantmentsImpl, LoreImpl,
+};
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::codec::data_component::{deserialize, serialize};
 use std::borrow::Cow;
@@ -38,6 +47,30 @@ pub(crate) fn to_wit_enchantment(id: &Enchantment) -> WitEnchantment {
 pub(crate) fn from_wit_enchantment(id: WitEnchantment) -> &'static Enchantment {
     // Safety: WIT enum is generated in the same order as the internal enum
     Enchantment::from_id(id as u8).expect("valid enchantment ID")
+}
+
+#[must_use]
+pub fn to_wit_attribute(attr: &Attributes) -> WitAttribute {
+    // SAFETY: WIT enum is generated in the same order as the internal ID
+    unsafe { std::mem::transmute(attr.id) }
+}
+
+#[must_use]
+pub const fn from_wit_item_operation(op: WitModifierOperation) -> Operation {
+    match op {
+        WitModifierOperation::Add => Operation::AddValue,
+        WitModifierOperation::MultiplyBase => Operation::AddMultipliedBase,
+        WitModifierOperation::MultiplyTotal => Operation::AddMultipliedTotal,
+    }
+}
+
+#[must_use]
+pub const fn to_wit_item_operation(op: Operation) -> WitModifierOperation {
+    match op {
+        Operation::AddValue => WitModifierOperation::Add,
+        Operation::AddMultipliedBase => WitModifierOperation::MultiplyBase,
+        Operation::AddMultipliedTotal => WitModifierOperation::MultiplyTotal,
+    }
 }
 
 impl PluginHostState {
@@ -378,6 +411,101 @@ impl HostItemStack for PluginHostState {
         }
 
         Ok(false)
+    }
+
+    async fn get_attribute_modifiers(
+        &mut self,
+        res: Resource<ItemStackHandle>,
+    ) -> wasmtime::Result<Vec<WitItemAttributeModifier>> {
+        let stack = self.get_item_stack(&res)?;
+        let stack = stack.lock().await;
+        let mut modifiers = Vec::new();
+        if let Some(comp) = stack.get_data_component::<AttributeModifiersImpl>() {
+            for m in comp.attribute_modifiers.iter() {
+                modifiers.push(WitItemAttributeModifier {
+                    attribute: to_wit_attribute(m.r#type),
+                    modifier: WitAttributeModifier {
+                        id: m.id.to_string(),
+                        amount: m.amount,
+                        operation: to_wit_item_operation(m.operation),
+                    },
+                    slot: super::enchantment::to_wit_slot(&m.slot),
+                });
+            }
+        }
+        Ok(modifiers)
+    }
+
+    async fn add_attribute_modifier(
+        &mut self,
+        res: Resource<ItemStackHandle>,
+        modifier: WitItemAttributeModifier,
+    ) -> wasmtime::Result<()> {
+        let stack = self.get_item_stack(&res)?;
+        let mut stack = stack.lock().await;
+        let attr = super::living_entity::from_wit_attribute(modifier.attribute);
+        let slot = super::enchantment::to_data_slot(modifier.slot);
+        let op = from_wit_item_operation(modifier.modifier.operation);
+        let leaked_id: &'static str = Box::leak(modifier.modifier.id.into_boxed_str());
+
+        let mut current_mods = stack
+            .get_data_component::<AttributeModifiersImpl>()
+            .map_or_else(Vec::new, |comp| {
+                comp.attribute_modifiers.clone().into_owned()
+            });
+
+        current_mods.retain(|m| !(m.r#type == attr && m.id == leaked_id && m.slot == slot));
+        current_mods.push(Modifier {
+            r#type: attr,
+            id: leaked_id,
+            amount: modifier.modifier.amount,
+            operation: op,
+            slot,
+        });
+
+        stack.set_data_component(AttributeModifiersImpl {
+            attribute_modifiers: Cow::Owned(current_mods),
+        });
+
+        Ok(())
+    }
+
+    async fn remove_attribute_modifiers(
+        &mut self,
+        res: Resource<ItemStackHandle>,
+        attribute: WitAttribute,
+    ) -> wasmtime::Result<()> {
+        let stack = self.get_item_stack(&res)?;
+        let mut stack = stack.lock().await;
+        let attr = super::living_entity::from_wit_attribute(attribute);
+
+        if let Some(comp) = stack.get_data_component::<AttributeModifiersImpl>() {
+            let mut current_mods = comp.attribute_modifiers.clone().into_owned();
+            current_mods.retain(|m| m.r#type != attr);
+            if current_mods.is_empty() {
+                stack
+                    .patch
+                    .retain(|(id, _)| *id != DataComponent::AttributeModifiers);
+            } else {
+                stack.set_data_component(AttributeModifiersImpl {
+                    attribute_modifiers: Cow::Owned(current_mods),
+                });
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn clear_attribute_modifiers(
+        &mut self,
+        res: Resource<ItemStackHandle>,
+    ) -> wasmtime::Result<()> {
+        let stack = self.get_item_stack(&res)?;
+        let mut stack = stack.lock().await;
+        stack
+            .patch
+            .retain(|(id, _)| *id != DataComponent::AttributeModifiers);
+        Ok(())
     }
 
     async fn get_lore(

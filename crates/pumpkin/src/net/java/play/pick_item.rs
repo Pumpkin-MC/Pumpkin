@@ -2,10 +2,10 @@
 use super::*;
 
 impl JavaClient {
-    pub async fn handle_pick_item_from_block(
+    pub fn handle_pick_item_from_block(
         &self,
         player: &Arc<Player>,
-        pick_item: SPickItemFromBlock,
+        pick_item: &SPickItemFromBlock,
     ) {
         if !player.can_interact_with_block_at(&pick_item.pos, 1.0) {
             return;
@@ -24,7 +24,7 @@ impl JavaClient {
         };
         let stack = ItemStack::new(1, item);
 
-        let slot_with_stack = player.inventory().get_slot_with_stack(&stack).await;
+        let slot_with_stack = player.inventory().get_slot_with_stack(&stack);
 
         if slot_with_stack != -1 {
             if PlayerInventory::is_valid_hotbar_index(slot_with_stack as usize) {
@@ -32,30 +32,26 @@ impl JavaClient {
             } else {
                 player
                     .inventory
-                    .swap_slot_with_hotbar(slot_with_stack as usize)
-                    .await;
+                    .swap_slot_with_hotbar(slot_with_stack as usize);
             }
         } else if player.gamemode.load() == GameMode::Creative {
-            player.inventory.swap_stack_with_hotbar(stack).await;
+            player.inventory.swap_stack_with_hotbar(stack);
         }
 
-        player
-            .send_client_packet(&CSetSelectedSlot::new(
-                player.inventory.get_selected_slot() as i8
-            ))
-            .await;
+        player.try_send_client_packet(&CSetSelectedSlot::new(
+            player.inventory.get_selected_slot() as i8
+        ));
         player
             .player_screen_handler
             .lock()
-            .await
-            .send_content_updates()
-            .await;
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .send_content_updates();
     }
 
-    pub async fn handle_pick_item_from_entity(
+    pub fn handle_pick_item_from_entity(
         &self,
         player: &Arc<Player>,
-        pick_item: SPickItemFromEntity,
+        pick_item: &SPickItemFromEntity,
     ) {
         use pumpkin_data::entity::{entity_from_egg, spawn_egg_ids};
 
@@ -87,7 +83,7 @@ impl JavaClient {
         if let Some(item) = found_egg.and_then(Item::from_id) {
             let stack = ItemStack::new(1, item);
 
-            let slot_with_stack = player.inventory().get_slot_with_stack(&stack).await;
+            let slot_with_stack = player.inventory().get_slot_with_stack(&stack);
 
             if slot_with_stack != -1 {
                 if PlayerInventory::is_valid_hotbar_index(slot_with_stack as usize) {
@@ -95,24 +91,20 @@ impl JavaClient {
                 } else {
                     player
                         .inventory
-                        .swap_slot_with_hotbar(slot_with_stack as usize)
-                        .await;
+                        .swap_slot_with_hotbar(slot_with_stack as usize);
                 }
             } else if player.gamemode.load() == GameMode::Creative {
-                player.inventory.swap_stack_with_hotbar(stack).await;
+                player.inventory.swap_stack_with_hotbar(stack);
             }
 
-            player
-                .send_client_packet(&CSetSelectedSlot::new(
-                    player.inventory.get_selected_slot() as i8
-                ))
-                .await;
+            player.try_send_client_packet(&CSetSelectedSlot::new(
+                player.inventory.get_selected_slot() as i8,
+            ));
             player
                 .player_screen_handler
                 .lock()
-                .await
-                .send_content_updates()
-                .await;
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .send_content_updates();
         }
     }
 }

@@ -2,21 +2,20 @@
 use super::*;
 
 impl JavaClient {
-    pub async fn handle_client_information(
+    pub fn handle_client_information(
         &self,
         server: &Arc<Server>,
         player: &Arc<Player>,
-        client_information: SClientInformationPlay<'_>,
+        client_information: &SClientInformationPlay<'_>,
     ) {
         if let (Ok(main_hand), Ok(chat_mode)) = (
             Hand::try_from(client_information.main_hand.0),
             ChatMode::try_from(client_information.chat_mode.0),
         ) {
             if client_information.view_distance <= 0 {
-                self.kick(TextComponent::text(
+                self.try_kick(&TextComponent::text(
                     "Cannot have zero or negative view distance!",
-                ))
-                .await;
+                ));
                 return;
             }
 
@@ -72,12 +71,12 @@ impl JavaClient {
             };
 
             if update_watched {
-                chunker::update_position(player).await;
+                chunker::update_position(player);
             }
 
             if main_hand_changed {
                 let mut event = PlayerChangedMainHandEvent::new(player.clone(), main_hand);
-                server.plugin_manager.fire(server, &mut event).await;
+                server.plugin_manager.fire_blocking(server, &mut event);
             }
 
             if locale_changed {
@@ -86,7 +85,7 @@ impl JavaClient {
                     new_locale: client_information.locale.to_string(),
                     cancelled: false,
                 };
-                server.plugin_manager.fire(server, &mut event).await;
+                server.plugin_manager.fire_blocking(server, &mut event);
             }
 
             if update_settings {
@@ -97,8 +96,7 @@ impl JavaClient {
                 player.send_client_information();
             }
         } else {
-            self.kick(TextComponent::text("Invalid hand or chat type"))
-                .await;
+            self.try_kick(&TextComponent::text("Invalid hand or chat type"));
         }
     }
 }

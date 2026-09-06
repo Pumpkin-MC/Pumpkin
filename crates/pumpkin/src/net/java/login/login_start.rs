@@ -4,7 +4,7 @@ use super::*;
 impl PendingConnection {
     pub async fn handle_login_start(
         &mut self,
-        server: &Server,
+        server: &Arc<Server>,
         login_start: SLoginStart,
     ) -> Option<PacketHandlerResult> {
         debug!("login start");
@@ -44,6 +44,7 @@ impl PendingConnection {
                     &self.address,
                     &self.server_address,
                     login_start.name.into_string(),
+                    &proxy.bungeecord.secret,
                 ) {
                     Ok((_ip, profile)) => {
                         self.gameprofile = Some(profile.clone());

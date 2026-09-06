@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:condition",
+  "if_true": "minecraft:not_underwater",
+  "then_run": {
+    "type": "minecraft:block",
+    "result_state": "minecraft:snow_block"
+  }
+}

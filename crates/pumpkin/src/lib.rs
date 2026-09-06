@@ -1,5 +1,6 @@
 #![deny(clippy::unwrap_used)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
+#![allow(clippy::significant_drop_in_scrutinee)]
 // Not warn event sending macros
 #![allow(unused_labels, deprecated)]
 
@@ -52,6 +53,7 @@ pub mod block;
 pub mod command;
 pub mod crash;
 pub mod data;
+pub mod enchantment;
 pub mod entity;
 pub mod error;
 pub mod item;
@@ -64,6 +66,8 @@ pub mod world;
 pub struct LoggingConfig {
     pub color: bool,
     pub threads: bool,
+    pub thread_ids: bool,
+    pub target: bool,
     pub timestamp: bool,
 }
 
@@ -80,6 +84,7 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
         let level = std::env::var("RUST_LOG")
             .ok()
             .as_deref()
+            .or(Some(advanced_config.logging.level.as_str()))
             .map(LevelFilter::from_str)
             .and_then(Result::ok)
             .unwrap_or(LevelFilter::INFO);
@@ -143,17 +148,25 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
             .with_writer(std::sync::Mutex::new(logger))
             .with_ansi(advanced_config.logging.color)
             .with_ansi_sanitization(false)
-            .with_target(true)
+            .with_target(advanced_config.logging.target)
             .with_thread_names(advanced_config.logging.threads)
-            .with_thread_ids(advanced_config.logging.threads);
+            .with_thread_ids(advanced_config.logging.thread_ids);
 
         if advanced_config.logging.timestamp {
             let local_offset =
                 time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC);
-            let fmt_layer = fmt_layer.with_timer(fmt::time::OffsetTime::new(
-                local_offset,
-                time::macros::format_description!("[year]-[month]-[day] [hour]:[minute]:[second]"),
-            ));
+            let format_str: &'static str = Box::leak(
+                advanced_config
+                    .logging
+                    .timestamp_format
+                    .clone()
+                    .into_boxed_str(),
+            );
+            let timer_format = time::format_description::parse(format_str).unwrap_or_else(|_| {
+                time::macros::format_description!("[hour]:[minute]:[second]").to_vec()
+            });
+            let fmt_layer =
+                fmt_layer.with_timer(fmt::time::OffsetTime::new(local_offset, timer_format));
             let registry = tracing_subscriber::registry()
                 .with(env_filter)
                 .with(fmt_layer);
@@ -177,6 +190,8 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
         let logging_config = LoggingConfig {
             color: advanced_config.logging.color,
             threads: advanced_config.logging.threads,
+            thread_ids: advanced_config.logging.thread_ids,
+            target: advanced_config.logging.target,
             timestamp: advanced_config.logging.timestamp,
         };
 
@@ -236,6 +251,9 @@ impl PumpkinServer {
         vanilla_data: VanillaData,
     ) -> Self {
         let server = Server::new(basic_config, advanced_config, vanilla_data).await;
+
+        #[cfg(target_family = "unix")]
+        adjust_file_descriptor_limit();
 
         let rcon = server.advanced_config.networking.rcon.clone();
 
@@ -306,9 +324,15 @@ impl PumpkinServer {
         // Ticker
         {
             let ticker_server = server.clone();
-            server.spawn_task(async move {
-                Ticker::run(&ticker_server).await;
-            });
+            if let Err(err) = std::thread::Builder::new()
+                .name("Server-Ticker".into())
+                .spawn(move || {
+                    Ticker::run(&ticker_server);
+                })
+            {
+                error!("Failed to spawn Server-Ticker thread: {err}");
+                std::process::exit(1);
+            }
         };
 
         let (bedrock_status, ice_socket) = Self::bind_bedrock_status(&server).await;
@@ -429,7 +453,7 @@ impl PumpkinServer {
                         "The input is not a TTY; falling back to simple logger and ignoring `use_tty` setting"
                     );
                 }
-                setup_stdin_console(self.server.clone());
+                setup_stdin_console(&self.server);
             }
         }
 
@@ -473,7 +497,6 @@ impl PumpkinServer {
             .server
             .player_data_storage
             .save_all_players(&self.server)
-            .await
         {
             error!("Error saving all players during shutdown: {e}");
         }
@@ -489,9 +512,7 @@ impl PumpkinServer {
 
         let kick_message = TextComponent::text("Server stopped");
         for player in self.server.get_all_players() {
-            player
-                .kick(DisconnectReason::Shutdown, kick_message.clone())
-                .await;
+            player.kick(DisconnectReason::Shutdown, &kick_message);
         }
 
         info!("Ending player tasks");
@@ -562,31 +583,31 @@ impl PumpkinServer {
                                      java_client.start_outgoing_packet_task();
 
                                      if let Some((player, world)) = server_clone
-                                     .add_player(Arc::new(ClientPlatform::Java(java_client)), profile, Some(config))
-                                          .await
-                                {
+                                         .add_player(Arc::new(ClientPlatform::Java(java_client)), profile, Some(config))
+                                 {
 
-                                    if let ClientPlatform::Java(client) = player.client.as_ref() {
-                                        client.set_player(player.clone());
-                                    }
-                                    world
-                                        .spawn_java_player(&server_clone.basic_config, &player, &server_clone)
-                                        .await;
+                                     if let ClientPlatform::Java(client) = player.client.as_ref() {
+                                         client.set_player(player.clone());
+                                     }
+                                     world
+                                         .spawn_java_player(&server_clone.basic_config, &player, &server_clone)
+                                         .await;
 
-                                    if let ClientPlatform::Java(client) = player.client.as_ref() {
-                                        client.progress_player_packets(&player, &server_clone).await;
+                                     if let ClientPlatform::Java(client) = player.client.as_ref() {
+                                         client.progress_player_packets(&player, &server_clone).await;
 
-                                        // Close when done
-                                        client.close();
-                                        client.await_tasks().await;
-                                    }
-                                    player.remove().await;
-                                    server_clone.remove_player(&player).await;
-                                    if let Err(e) = server_clone.player_data_storage
+                                         // Close when done
+                                         client.close();
+                                         client.await_tasks().await;
+                                     }
+                                     player.remove().await;
+                                     server_clone.remove_player(&player);
+                                    if let Err(e) = server_clone
+                                        .player_data_storage
                                         .handle_player_leave(&player)
-                                        .await {
-                                            error!("Failed to save player data on disconnect: {e}");
-                                        }
+                                    {
+                                        error!("Failed to save player data on disconnect: {e}");
+                                    }
                                     if let Err(e) = server_clone.advancement_manager
                                         .save_player(&player)
                                         .await {
@@ -598,6 +619,15 @@ impl PumpkinServer {
                         });
                     }
                     Err(e) => {
+                        #[cfg(target_family = "unix")]
+                        if e.raw_os_error() == Some(libc::EMFILE) {
+                            error!(
+                                "Too many open files! Server reached file descriptor limit. \
+                                New connections cannot be accepted until existing connections close or `ulimit -n` is increased."
+                            );
+                            sleep(Duration::from_millis(500)).await;
+                            return true;
+                        }
                         error!("Failed to accept Java client connection: {e}");
                         sleep(Duration::from_millis(50)).await;
                     }
@@ -668,24 +698,18 @@ impl PumpkinServer {
                     client.await_tasks().await;
                 }
                 PacketHandlerResult::ReadyToPlay(profile, config) => {
-                    if let Some((player, _world)) = server
-                        .add_player(
-                            Arc::new(ClientPlatform::Bedrock(client.clone())),
-                            profile,
-                            Some(config),
-                        )
-                        .await
-                    {
+                    if let Some((player, _world)) = server.add_player(
+                        Arc::new(ClientPlatform::Bedrock(client.clone())),
+                        profile,
+                        Some(config),
+                    ) {
                         client.set_player(player.clone());
-                        client.progress_player_packets(&player, &server).await;
+                        client.progress_player_packets(&player).await;
                         client.close().await;
                         client.await_tasks().await;
                         player.remove().await;
-                        server.remove_player(&player).await;
-                        if let Err(error) = server
-                            .player_data_storage
-                            .handle_player_leave(&player)
-                            .await
+                        server.remove_player(&player);
+                        if let Err(error) = server.player_data_storage.handle_player_leave(&player)
                         {
                             error!("Failed to save player data on disconnect: {error}");
                         }
@@ -696,7 +720,7 @@ impl PumpkinServer {
     }
 }
 
-fn setup_stdin_console(server: Arc<Server>) {
+fn setup_stdin_console(server: &Arc<Server>) {
     let (tx, mut rx) = tokio::sync::mpsc::channel(1);
     let rt = tokio::runtime::Handle::current();
     std::thread::spawn(move || {
@@ -716,21 +740,21 @@ fn setup_stdin_console(server: Arc<Server>) {
             let _ = rt.block_on(tx.send(line.trim().to_string()));
         }
     });
-    tokio::spawn(async move {
+    let server_clone = server.clone();
+    server.spawn_task(async move {
         while !SHOULD_STOP.load(Ordering::Relaxed)
             && let Some(command) = rx.recv().await
         {
             let mut event = ServerCommandEvent::new(command.clone());
-            server.plugin_manager.fire(&server, &mut event).await;
+            server_clone
+                .plugin_manager
+                .fire(&server_clone, &mut event)
+                .await;
             if !event.cancelled {
-                server
-                    .command_dispatcher
-                    .load()
-                    .handle_command(
-                        &command::CommandSender::Console.into_source(&server).await,
-                        command.as_str(),
-                    )
-                    .await;
+                server_clone.command_dispatcher.load().handle_command(
+                    &command::CommandSender::Console.into_source(&server_clone),
+                    command.as_str(),
+                );
             }
         }
     });
@@ -795,14 +819,10 @@ fn setup_console(mut rl: Editor<PumpkinCommandCompleter, FileHistory>, server: A
                 let mut event = ServerCommandEvent::new(line.clone());
                 server.plugin_manager.fire(&server, &mut event).await;
                 if !event.cancelled {
-                    server
-                        .command_dispatcher
-                        .load()
-                        .handle_command(
-                            &command::CommandSender::Console.into_source(&server).await,
-                            &line,
-                        )
-                        .await;
+                    server.command_dispatcher.load().handle_command(
+                        &command::CommandSender::Console.into_source(&server),
+                        &line,
+                    );
                 }
                 let _ = tx_reply.send(1).await;
             } else {
@@ -818,4 +838,59 @@ fn scrub_address(ip: &str) -> String {
     ip.chars()
         .map(|ch| if ch == '.' || ch == ':' { ch } else { 'x' })
         .collect()
+}
+
+#[cfg(target_family = "unix")]
+fn adjust_file_descriptor_limit() {
+    let mut rlim = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+
+    // SAFETY: Passing a valid mutable pointer to a stack-allocated `rlimit` struct.
+    if unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &raw mut rlim) } != 0 {
+        return;
+    }
+
+    let max_target = if rlim.rlim_max == libc::RLIM_INFINITY {
+        1_048_576
+    } else {
+        rlim.rlim_max
+    };
+
+    if rlim.rlim_cur < max_target {
+        let old_limit = rlim.rlim_cur;
+        rlim.rlim_cur = max_target;
+
+        // SAFETY: Calling `setrlimit` with a valid resource and valid pointer to initialized `rlimit`.
+        let res = unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &raw const rlim) };
+        if res == 0 {
+            debug!("Increased open file descriptor limit from {old_limit} to {max_target}");
+        } else {
+            // Fallback: try setting to a reasonable high value (65,536) if max_target was rejected by the OS.
+            let fallback = 65_536.min(max_target);
+            if fallback > old_limit {
+                rlim.rlim_cur = fallback;
+                // SAFETY: Calling `setrlimit` with a valid resource and valid pointer to initialized `rlimit`.
+                if unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &raw const rlim) } == 0 {
+                    debug!("Increased open file descriptor limit from {old_limit} to {fallback}");
+                }
+            }
+        }
+    }
+
+    let mut current_rlim = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+    // SAFETY: Passing a valid mutable pointer to a stack-allocated `rlimit` struct.
+    if unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &raw mut current_rlim) } == 0
+        && current_rlim.rlim_cur < 4096
+    {
+        warn!(
+            "Open file descriptor limit is low ({}). Supporting >1000 concurrent players may fail with 'Too many open files'. \
+            Consider increasing the limit with `ulimit -n 65535` or setting `LimitNOFILE=65535` in systemd.",
+            current_rlim.rlim_cur
+        );
+    }
 }

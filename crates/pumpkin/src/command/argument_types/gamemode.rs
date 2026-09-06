@@ -7,7 +7,6 @@ use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 use pumpkin_data::translation;
 use pumpkin_util::GameMode;
 use pumpkin_util::text::TextComponent;
-use std::pin::Pin;
 use std::str::FromStr;
 
 pub const INVALID_ERROR_TYPE: CommandErrorType<1> = CommandErrorType::new(
@@ -30,17 +29,15 @@ impl ArgumentType for GameModeArgumentType {
         JavaClientArgumentType::Gamemode
     }
 
-    fn list_suggestions<'a>(
-        &'a self,
-        _context: &'a CommandContext,
+    fn list_suggestions(
+        &self,
+        _context: &CommandContext,
         mut builder: SuggestionsBuilder,
-    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
-        Box::pin(async move {
-            for gamemode in GameMode::VALUES {
-                builder = builder.filter_and_suggest_one(gamemode.name());
-            }
-            builder.build()
-        })
+    ) -> Suggestions {
+        for gamemode in GameMode::VALUES {
+            builder = builder.filter_and_suggest_one(gamemode.name());
+        }
+        builder.build()
     }
 
     fn examples(&self) -> Vec<String> {

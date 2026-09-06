@@ -3,9 +3,7 @@ use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
 use pumpkin_macros::pumpkin_block;
 
-use crate::block::{
-    BlockBehaviour, BlockFuture, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
-};
+use crate::block::{BlockBehaviour, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs};
 
 use super::FireBlockBase;
 use crate::block::OnEntityCollisionArgs;
@@ -21,30 +19,28 @@ impl SoulFireBlock {
 }
 
 impl BlockBehaviour for SoulFireBlock {
-    fn on_entity_collision<'a>(&'a self, args: OnEntityCollisionArgs<'a>) -> BlockFuture<'a, ()> {
-        FireBlockBase::apply_fire_collision(args, true)
+    fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
+        FireBlockBase::apply_fire_collision(&args, true);
     }
 
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            if !Self::is_soul_base(args.world.get_block(&args.position.down())) {
-                return Block::AIR.default_state.id;
-            }
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        if !Self::is_soul_base(args.world.get_block(&args.position.down())) {
+            return Block::AIR.default_state.id;
+        }
 
-            args.state_id
-        })
+        args.state_id
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         Self::is_soul_base(args.block_accessor.get_block(&args.position.down()))
     }
 
-    fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
+    fn broken(&self, args: BrokenArgs<'_>) {
+        {
             FireBlockBase::broken(args.world, *args.position);
-        })
+        }
     }
 }

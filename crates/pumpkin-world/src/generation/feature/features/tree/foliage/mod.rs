@@ -380,18 +380,16 @@ impl FoliageType {
 
     pub fn get_random_height(&self, random: &mut RandomGenerator, trunk_height: i32) -> i32 {
         match self {
-            Self::Blob(blob) => blob.get_random_height(random),
+            Self::Blob(blob) => blob.get_random_height(),
             Self::Spruce(spruce) => spruce.get_random_height(random, trunk_height),
-            Self::Pine(pine) => pine.get_random_height(random, trunk_height),
-            Self::Acacia(_acacia) => AcaciaFoliagePlacer::get_random_height(random),
-            Self::Bush(bush) => bush.get_random_height(random),
-            Self::Fancy(fancy) => fancy.get_random_height(random),
-            Self::Jungle(jungle) => jungle.get_random_height(random, trunk_height),
-            Self::MegaPine(mega_pine) => mega_pine.get_random_height(random, trunk_height),
-            Self::DarkOak(_dark_oak) => DarkOakFoliagePlacer::get_random_height(random),
-            Self::RandomSpread(random_spread) => {
-                random_spread.get_random_height(random, trunk_height)
-            }
+            Self::Pine(pine) => pine.get_random_height(random),
+            Self::Acacia(_acacia) => AcaciaFoliagePlacer::get_random_height(),
+            Self::Bush(bush) => bush.get_random_height(),
+            Self::Fancy(fancy) => fancy.get_random_height(),
+            Self::Jungle(jungle) => jungle.get_random_height(),
+            Self::MegaPine(mega_pine) => mega_pine.get_random_height(random),
+            Self::DarkOak(_dark_oak) => DarkOakFoliagePlacer::get_random_height(),
+            Self::RandomSpread(random_spread) => random_spread.get_random_height(random),
             Self::Cherry(cherry) => cherry.get_random_height(random),
         }
     }

@@ -4,24 +4,22 @@ use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::entities::bell::BellBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
-    BlockBehaviour, BlockFuture, BlockHitResult, BrokenArgs, CanPlaceAtArgs, NormalUseArgs,
-    OnNeighborUpdateArgs, OnPlaceArgs, PlacedArgs,
+    BlockBehaviour, BlockHitResult, BrokenArgs, CanPlaceAtArgs, NormalUseArgs,
+    OnNeighborUpdateArgs, OnPlaceArgs, OnProjectileHitArgs, PathComputationType, PlacedArgs,
 };
 use crate::world::World;
-use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::block_properties::{AttachFace, BellAttachment, BellLikeProperties};
 use pumpkin_data::sound::Sound;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, BlockDirection};
+use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
 use pumpkin_data::{HorizontalFacingExt, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 
-async fn ring_bell(
+fn ring_bell(
     position: BlockPos,
     world: &Arc<World>,
     hit_direction: Option<HorizontalFacing>,
@@ -35,15 +33,15 @@ async fn ring_bell(
         cancelled: false,
     };
     if let Some(server) = world.server.upgrade() {
-        server.plugin_manager.fire(&server, &mut event).await;
+        server.plugin_manager.fire_blocking(&server, &mut event);
     }
     if event.cancelled {
         return false;
     }
 
-    let (block, state_id) = world.get_block_and_state_id(&position);
+    let (_block, state_id) = world.get_block_and_state_id(&position);
 
-    let props = BellLikeProperties::from_state_id(state_id, block);
+    let props = BellLikeProperties::from_state_id(state_id);
     let direction = hit_direction.unwrap_or(props.facing);
 
     if let Some(block_entity) = world.get_block_entity(&position)
@@ -97,8 +95,8 @@ fn is_single_wall(position: BlockPos, facing: HorizontalFacing, world: &World) -
 pub struct BellBlock;
 
 impl WallMountedBlock for BellBlock {
-    fn get_direction(&self, state_id: BlockStateId, block: &Block) -> BlockDirection {
-        let props = BellLikeProperties::from_state_id(state_id, block);
+    fn get_direction(&self, state_id: BlockStateId, _block: &Block) -> BlockDirection {
+        let props = BellLikeProperties::from_state_id(state_id);
         match props.attachment {
             BellAttachment::Ceiling => BlockDirection::Down,
             BellAttachment::Floor => BlockDirection::Up,
@@ -131,105 +129,115 @@ impl BlockBehaviour for BellBlock {
             false
         }
     }
-    fn broken<'a>(&'a self, args: BrokenArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let world: &World = args.world;
-            world.remove_block_entity(args.position);
-        })
+    fn broken(&self, args: BrokenArgs<'_>) {
+        let world: &World = args.world;
+        world.remove_block_entity(args.position);
     }
 
-    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            args.world
-                .add_block_entity(Arc::new(BellBlockEntity::new(*args.position)));
-        })
+    fn placed(&self, args: PlacedArgs<'_>) {
+        args.world
+            .add_block_entity(Arc::new(BellBlockEntity::new(*args.position)));
     }
-    fn normal_use<'a>(&'a self, args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
-        Box::pin(async move {
-            let state = args.world.get_block_state(args.position);
+    fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
+        let state = args.world.get_block_state(args.position);
 
-            let props = BellLikeProperties::from_state_id(state.id, args.block);
+        let props = BellLikeProperties::from_state_id(state.id);
 
-            if !is_point_on_bell(args.hit, props.attachment, props.facing) {
-                return BlockActionResult::Pass; // Pass if Crosshair wasn't correctly positioned
-            }
-            if !ring_bell(
-                *args.position,
-                args.world,
-                args.hit.face.to_horizontal_facing(),
-                Some(args.player.clone()),
-            )
-            .await
-            {
-                return BlockActionResult::Pass;
-            }
+        if !is_point_on_bell(args.hit, props.attachment, props.facing) {
+            return BlockActionResult::Pass; // Pass if Crosshair wasn't correctly positioned
+        }
+        if !ring_bell(
+            *args.position,
+            args.world,
+            args.hit.face.to_horizontal_facing(),
+            Some(args.player.clone()),
+        ) {
+            return BlockActionResult::Pass;
+        }
 
-            args.player
-                .increment_stat(
-                    pumpkin_data::statistic::StatisticCategory::Custom,
-                    pumpkin_data::statistic::CustomStatistic::BellRing as i32,
-                    1,
-                )
-                .await;
+        args.player.increment_stat(
+            pumpkin_data::statistic::StatisticCategory::Custom,
+            pumpkin_data::statistic::CustomStatistic::BellRing as i32,
+            1,
+        );
 
-            BlockActionResult::Success
-        })
+        BlockActionResult::Success
     }
 
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let mut props = BellLikeProperties::default(args.block);
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut props = BellLikeProperties::default(args.block);
 
-            let block_face;
-            let facing;
-            (block_face, facing) =
-                WallMountedBlock::get_placement_face(self, args.player, args.direction);
+        let block_face;
+        let facing;
+        (block_face, facing) =
+            WallMountedBlock::get_placement_face(self, args.player, args.direction);
 
-            props.facing = match block_face {
-                AttachFace::Floor | AttachFace::Ceiling => facing,
-                AttachFace::Wall => facing.opposite(),
-            };
+        props.facing = match block_face {
+            AttachFace::Floor | AttachFace::Ceiling => facing,
+            AttachFace::Wall => facing.opposite(),
+        };
 
-            props.attachment = match block_face {
-                AttachFace::Wall => {
-                    if is_single_wall(*args.position, props.facing.opposite(), args.world) {
-                        BellAttachment::SingleWall
-                    } else {
-                        BellAttachment::DoubleWall
-                    }
-                }
-                AttachFace::Floor => BellAttachment::Floor,
-                AttachFace::Ceiling => BellAttachment::Ceiling,
-            };
-
-            props.to_state_id(args.block)
-        })
-    }
-
-    fn on_neighbor_update<'a>(&'a self, args: OnNeighborUpdateArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
-            let world: &World = args.world;
-
-            let is_receiving_power = block_receives_redstone_power(world, args.position).await;
-            let state = args.world.get_block_state(args.position);
-
-            let mut props = BellLikeProperties::from_state_id(state.id, args.block);
-
-            if props.powered != is_receiving_power {
-                props.powered = is_receiving_power;
-
-                args.world
-                    .set_block_state(
-                        args.position,
-                        props.to_state_id(args.block),
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
-
-                if is_receiving_power {
-                    ring_bell(*args.position, args.world, None, None).await;
+        props.attachment = match block_face {
+            AttachFace::Wall => {
+                if is_single_wall(*args.position, props.facing.opposite(), args.world) {
+                    BellAttachment::SingleWall
+                } else {
+                    BellAttachment::DoubleWall
                 }
             }
-        })
+            AttachFace::Floor => BellAttachment::Floor,
+            AttachFace::Ceiling => BellAttachment::Ceiling,
+        };
+
+        props.to_state_id(args.block)
+    }
+
+    fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+        let world: &World = args.world;
+
+        let is_receiving_power = block_receives_redstone_power(world, args.position);
+        let state = args.world.get_block_state(args.position);
+
+        let mut props = BellLikeProperties::from_state_id(state.id);
+
+        if props.powered != is_receiving_power {
+            props.powered = is_receiving_power;
+
+            args.world.set_block_state(
+                args.position,
+                props.to_state_id(args.block),
+                BlockFlags::NOTIFY_ALL,
+            );
+
+            if is_receiving_power {
+                ring_bell(*args.position, args.world, None, None);
+            }
+        }
+    }
+
+    fn on_projectile_hit(&self, args: OnProjectileHitArgs<'_>) {
+        let player = args
+            .projectile
+            .get_owner_id()
+            .and_then(|id| args.world.get_player_by_id(id));
+        if ring_bell(
+            *args.position,
+            args.world,
+            None,
+            player
+                .as_ref()
+                .map(|p| p.clone() as Arc<dyn crate::entity::EntityBase>),
+        ) && let Some(player) = player
+        {
+            player.increment_stat(
+                pumpkin_data::statistic::StatisticCategory::Custom,
+                pumpkin_data::statistic::CustomStatistic::BellRing as i32,
+                1,
+            );
+        }
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }

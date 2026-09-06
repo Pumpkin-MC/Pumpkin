@@ -29,7 +29,7 @@ macro_rules! register_host_event {
     };
 }
 
-fn register_typed_event<E: crate::plugin::Payload + ToFromWasmEvent + 'static>(
+fn register_typed_event<E: crate::plugin::Payload + ToFromWasmEvent + Clone + 'static>(
     resource: &ContextResource,
     handler: &Arc<WasmPluginEventHandler>,
     priority: crate::plugin::EventPriority,
@@ -48,8 +48,8 @@ fn register_player_event(
 ) {
     use crate::plugin::player::{
         bedrock_form_response::BedrockFormResponseEvent,
-        changed_main_hand::PlayerChangedMainHandEvent, custom_click_action::CustomClickActionEvent,
-        egg_throw::PlayerEggThrowEvent, exp_change::PlayerExpChangeEvent, fish::PlayerFishEvent,
+        changed_main_hand::PlayerChangedMainHandEvent, egg_throw::PlayerEggThrowEvent,
+        exp_change::PlayerExpChangeEvent, fish::PlayerFishEvent,
         inventory_close::InventoryCloseEvent, inventory_interact::InventoryClickEvent,
         item_held::PlayerItemHeldEvent, player_change_world::PlayerChangeWorldEvent,
         player_chat::PlayerChatEvent, player_command_send::PlayerCommandSendEvent,
@@ -154,9 +154,6 @@ fn register_player_event(
         }
         EventType::BedrockFormResponseEvent => {
             register_typed_event::<BedrockFormResponseEvent>(resource, handler, priority, blocking);
-        }
-        EventType::CustomClickActionEvent => {
-            register_typed_event::<CustomClickActionEvent>(resource, handler, priority, blocking);
         }
         EventType::PlayerItemConsumeEvent => {
             register_typed_event::<
@@ -1368,6 +1365,33 @@ fn register_raid_event(
     }
 }
 
+fn register_dialog_event(
+    resource: &ContextResource,
+    handler: &Arc<WasmPluginEventHandler>,
+    priority: crate::plugin::EventPriority,
+    blocking: bool,
+    event_type: EventType,
+) {
+    use crate::plugin::api::events::dialog::{
+        DialogClearEvent, DialogClickActionEvent, DialogShowEvent,
+    };
+
+    match event_type {
+        EventType::DialogClickActionEvent => {
+            register_typed_event::<DialogClickActionEvent>(resource, handler, priority, blocking);
+        }
+        EventType::DialogShowEvent => {
+            register_typed_event::<DialogShowEvent>(resource, handler, priority, blocking);
+        }
+        EventType::DialogClearEvent => {
+            register_typed_event::<DialogClearEvent>(resource, handler, priority, blocking);
+        }
+        _ => {
+            tracing::error!("non-dialog event should not be routed to register_dialog_event");
+        }
+    }
+}
+
 fn register_server_event(
     resource: &ContextResource,
     handler: &Arc<WasmPluginEventHandler>,
@@ -1721,6 +1745,11 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
             | EventType::RaidTriggerEvent) => {
                 register_raid_event(resource, &handler, priority, blocking, event_type);
             }
+            event_type @ (EventType::DialogClickActionEvent
+            | EventType::DialogShowEvent
+            | EventType::DialogClearEvent) => {
+                register_dialog_event(resource, &handler, priority, blocking, event_type);
+            }
             event_type => {
                 register_player_event(resource, &handler, priority, blocking, event_type);
             }
@@ -1735,15 +1764,18 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         command: Resource<Command>,
         permission: String,
     ) -> wasmtime::Result<()> {
-        // Updated return type
-        // Use your helpers to safely take/get resources
-        let command_res = self.take_command(&command)?;
-        let context_res = self.get_context(&context)?;
+        use crate::command::argument_builder::ArgumentBuilder;
 
-        context_res
-            .provider
-            .register_command(command_res.provider, permission)
-            .await;
+        let command = self.take_command(&command)?.provider;
+        let context = self.get_context(&context)?.provider.clone();
+        let aliases = if command.names.len() > 1 {
+            command.names[1..].to_vec()
+        } else {
+            Vec::new()
+        };
+        let node = command.builder.build();
+        context.register_command_with_aliases(node, &aliases, permission);
+
         Ok(())
     }
 

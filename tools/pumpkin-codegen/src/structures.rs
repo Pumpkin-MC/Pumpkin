@@ -1044,14 +1044,13 @@ pub fn build() -> TokenStream {
                 let max = self.max_inclusive.get_y(min_y as i16, height);
                 let inner = self.inner.map_or(1, std::num::NonZero::get) as i32;
 
-                if min >= max {
+                if max - min - inner + 1 <= 0 {
                     return min;
                 }
 
-                let min_rnd = random.next_inbetween_i32(min + inner, max);
-                let max_rnd = random.next_inbetween_i32(min, min_rnd - 1);
-
-                random.next_inbetween_i32(min, max_rnd - 1 + inner)
+                let upper_inclusive = random.next_inbetween_i32(min + inner, max);
+                let biased_upper_inclusive = random.next_inbetween_i32(min, upper_inclusive - 1);
+                random.next_inbetween_i32(min, biased_upper_inclusive - 1 + inner)
             }
         }
 

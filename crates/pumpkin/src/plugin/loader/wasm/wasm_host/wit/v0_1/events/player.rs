@@ -1,7 +1,6 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::plugin::api::events::player::custom_click_action::CustomClickActionEvent;
 use crate::plugin::{
     loader::wasm::wasm_host::{
         state::PluginHostState,
@@ -17,12 +16,11 @@ use crate::plugin::{
             gui::{from_wit_screen, to_wit_screen},
             pumpkin::plugin::event::{
                 AsyncPlayerChatEventData, AsyncPlayerPreLoginEventData,
-                BedrockFormResponseEventData, CustomClickActionEventData, Event,
-                InteractAction as WasmInteractAction, InventoryClickEventData,
-                InventoryCloseEventData, PlayerAdvancementDoneEventData, PlayerAnimationEventData,
-                PlayerArmorStandManipulateEventData, PlayerBedEnterEventData,
-                PlayerBedLeaveEventData, PlayerBucketEmptyEventData, PlayerBucketEntityEventData,
-                PlayerBucketFillEventData, PlayerChangeWorldEventData,
+                BedrockFormResponseEventData, Event, InteractAction as WasmInteractAction,
+                InventoryClickEventData, InventoryCloseEventData, PlayerAdvancementDoneEventData,
+                PlayerAnimationEventData, PlayerArmorStandManipulateEventData,
+                PlayerBedEnterEventData, PlayerBedLeaveEventData, PlayerBucketEmptyEventData,
+                PlayerBucketEntityEventData, PlayerBucketFillEventData, PlayerChangeWorldEventData,
                 PlayerChangedMainHandEventData, PlayerChangedWorldEventData,
                 PlayerChannelEventData, PlayerChatEventData, PlayerCommandPreprocessEventData,
                 PlayerCommandSendEventData, PlayerCustomPayloadEventData, PlayerDropItemEventData,
@@ -324,6 +322,7 @@ impl ToFromWasmEvent for PlayerChatEvent {
             player,
             message: self.message.clone(),
             recipients,
+            signature: self.signature.clone(),
             cancelled: self.cancelled,
         })
     }
@@ -338,6 +337,7 @@ impl ToFromWasmEvent for PlayerChatEvent {
                     .into_iter()
                     .map(|recipient| consume_player(state, &recipient))
                     .collect(),
+                signature: data.signature,
                 cancelled: data.cancelled,
             },
             _ => panic!("unexpected event type"),
@@ -892,29 +892,6 @@ impl ToFromWasmEvent for BedrockFormResponseEvent {
     }
 }
 
-impl ToFromWasmEvent for CustomClickActionEvent {
-    fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        Event::CustomClickActionEvent(CustomClickActionEventData {
-            player: state
-                .add_player(self.player.clone())
-                .expect("failed to add player resource"),
-            id: self.id.clone(),
-            payload: self.payload.as_ref().map(|p| p.to_vec()),
-        })
-    }
-
-    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
-        match event {
-            Event::CustomClickActionEvent(data) => Self {
-                player: consume_player(state, &data.player),
-                id: data.id,
-                payload: data.payload.map(Bytes::from),
-            },
-            _ => panic!("unexpected event type"),
-        }
-    }
-}
-
 impl ToFromWasmEvent for PlayerInteractEntityEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let player = state
@@ -1154,12 +1131,15 @@ impl ToFromWasmEvent for AsyncPlayerChatEvent {
     }
 
     fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::AsyncPlayerChatEvent(data) = event {
-            self.cancelled = data.cancelled;
-            self.message = data.message;
-            self.format = consume_text_component(state, &data.format);
+        if !matches!(&event, Event::AsyncPlayerChatEvent(_)) {
+            cleanup_event(&event, state);
+            return;
         }
+
+        let returned = Self::from_wasm_event(event, state);
+        self.cancelled = returned.cancelled;
+        self.message = returned.message;
+        self.format = returned.format;
     }
 
     fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
@@ -1190,11 +1170,14 @@ impl ToFromWasmEvent for AsyncPlayerPreLoginEvent {
     }
 
     fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::AsyncPlayerPreLoginEvent(data) = event {
-            self.cancelled = data.cancelled;
-            self.kick_message = consume_text_component(state, &data.kick_message);
+        if !matches!(&event, Event::AsyncPlayerPreLoginEvent(_)) {
+            cleanup_event(&event, state);
+            return;
         }
+
+        let returned = Self::from_wasm_event(event, state);
+        self.cancelled = returned.cancelled;
+        self.kick_message = returned.kick_message;
     }
 
     fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
@@ -1823,11 +1806,14 @@ impl ToFromWasmEvent for PlayerNameEntityEvent {
     }
 
     fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::PlayerNameEntityEvent(data) = event {
-            self.cancelled = data.cancelled;
-            self.name = consume_text_component(state, &data.name);
+        if !matches!(&event, Event::PlayerNameEntityEvent(_)) {
+            cleanup_event(&event, state);
+            return;
         }
+
+        let returned = Self::from_wasm_event(event, state);
+        self.cancelled = returned.cancelled;
+        self.name = returned.name;
     }
 
     fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
@@ -1925,11 +1911,14 @@ impl ToFromWasmEvent for PlayerPreLoginEvent {
     }
 
     fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
-        cleanup_event(&event, state);
-        if let Event::PlayerPreLoginEvent(data) = event {
-            self.cancelled = data.cancelled;
-            self.kick_message = consume_text_component(state, &data.kick_message);
+        if !matches!(&event, Event::PlayerPreLoginEvent(_)) {
+            cleanup_event(&event, state);
+            return;
         }
+
+        let returned = Self::from_wasm_event(event, state);
+        self.cancelled = returned.cancelled;
+        self.kick_message = returned.kick_message;
     }
 
     fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {

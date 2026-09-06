@@ -1,12 +1,9 @@
 use crate::block::blocks::plant::PlantBlockBase;
 use crate::block::{
-    BlockBehaviour, BlockFuture, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
-    PlacedArgs,
+    BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs, PlacedArgs,
 };
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{
-    BlockProperties, DoubleBlockHalf, SmallDripleafLikeProperties,
-};
+use pumpkin_data::block_properties::{DoubleBlockHalf, SmallDripleafLikeProperties};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, tag};
 use pumpkin_macros::pumpkin_block;
@@ -20,42 +17,37 @@ impl BlockBehaviour for SmallDripleafBlock {
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let facing = args
-                .player
-                .living_entity
-                .entity
-                .get_horizontal_facing()
-                .opposite();
-            let mut small_dripleaf_props = SmallDripleafLikeProperties::default(args.block);
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let facing = args
+            .player
+            .living_entity
+            .entity
+            .get_horizontal_facing()
+            .opposite();
+        let mut small_dripleaf_props = SmallDripleafLikeProperties::default(args.block);
 
-            small_dripleaf_props.facing = facing;
-            small_dripleaf_props.waterlogged = args.replacing.water_source();
-            small_dripleaf_props.half = DoubleBlockHalf::Lower;
+        small_dripleaf_props.facing = facing;
+        small_dripleaf_props.waterlogged = args.replacing.water_source();
+        small_dripleaf_props.half = DoubleBlockHalf::Lower;
 
-            small_dripleaf_props.to_state_id(args.block)
-        })
+        small_dripleaf_props.to_state_id(args.block)
     }
 
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            <Self as PlantBlockBase>::get_state_for_neighbor_update(
-                self,
-                args.world,
-                args.position,
-                args.state_id,
-            )
-            .await
-        })
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        <Self as PlantBlockBase>::get_state_for_neighbor_update(
+            self,
+            args.world,
+            args.position,
+            args.state_id,
+        )
     }
-    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
+    fn placed(&self, args: PlacedArgs<'_>) {
+        {
             let lower_small_dripleaf_props =
-                SmallDripleafLikeProperties::from_state_id(args.state_id, args.block);
+                SmallDripleafLikeProperties::from_state_id(args.state_id);
             if lower_small_dripleaf_props.half != DoubleBlockHalf::Lower {
                 return;
             }
@@ -68,19 +60,16 @@ impl BlockBehaviour for SmallDripleafBlock {
             upper_small_dripleaf_props.waterlogged = upper_block == &Block::WATER;
             upper_small_dripleaf_props.half = DoubleBlockHalf::Upper;
 
-            args.world
-                .set_block_state(
-                    &args.position.up(),
-                    upper_small_dripleaf_props.to_state_id(&Block::SMALL_DRIPLEAF),
-                    BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
-                )
-                .await;
-        })
+            args.world.set_block_state(
+                &args.position.up(),
+                upper_small_dripleaf_props.to_state_id(&Block::SMALL_DRIPLEAF),
+                BlockFlags::NOTIFY_ALL | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK,
+            );
+        }
     }
 }
 fn is_small_dripleaf_waterlogged(state_id: BlockStateId) -> bool {
-    let dripleaf_props =
-        SmallDripleafLikeProperties::from_state_id(state_id, &Block::SMALL_DRIPLEAF);
+    let dripleaf_props = SmallDripleafLikeProperties::from_state_id(state_id);
     dripleaf_props.waterlogged
 }
 impl PlantBlockBase for SmallDripleafBlock {
@@ -107,8 +96,7 @@ impl PlantBlockBase for SmallDripleafBlock {
         }
     }
 
-    #[allow(clippy::unused_async_trait_impl)]
-    async fn get_state_for_neighbor_update(
+    fn get_state_for_neighbor_update(
         &self,
         block_accessor: &dyn BlockAccessor,
         block_pos: &BlockPos,

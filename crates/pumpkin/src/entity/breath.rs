@@ -5,10 +5,8 @@ use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, Ordering};
 
 pub const MAX_AIR: i32 = 300;
@@ -32,7 +30,7 @@ impl Default for BreathManager {
 }
 
 impl BreathManager {
-    pub async fn tick(&self, player: &Arc<Player>) {
+    pub fn tick(&self, player: &Player) {
         let mode = player.gamemode.load();
 
         if matches!(mode, GameMode::Creative | GameMode::Spectator) {
@@ -51,7 +49,6 @@ impl BreathManager {
         if player
             .living_entity
             .has_effect(&StatusEffect::WATER_BREATHING)
-            .await
         {
             if self.air_supply.swap(MAX_AIR, Ordering::Relaxed) != MAX_AIR {
                 self.send_air_supply(player);
@@ -61,29 +58,24 @@ impl BreathManager {
         }
 
         let in_water = Self::is_eye_in_water(player);
+        let prev = self.air_supply.load(Ordering::Relaxed);
 
         if in_water {
-            let prev = self
-                .air_supply
-                .fetch_sub(AIR_DEPLETION_RATE, Ordering::Relaxed);
-            let new_air = (prev - AIR_DEPLETION_RATE).max(0);
+            let mut new_air = (prev - AIR_DEPLETION_RATE).max(0);
             if new_air != prev {
-                self.air_supply.store(new_air, Ordering::Relaxed);
                 let server = player.world().server.upgrade();
                 if let Some(server) = server {
                     let mut event = crate::plugin::api::events::entity::entity_air_change::EntityAirChangeEvent::new(
                         player.entity_id(),
                         new_air,
                     );
-                    tokio::task::block_in_place(|| {
-                        tokio::runtime::Handle::current()
-                            .block_on(server.plugin_manager.fire(&server, &mut event));
-                    });
+                    server.plugin_manager.fire_blocking(&server, &mut event);
                     if event.cancelled {
-                        self.air_supply.store(prev, Ordering::Relaxed);
                         return;
                     }
+                    new_air = event.amount.clamp(0, MAX_AIR);
                 }
+                self.air_supply.store(new_air, Ordering::Relaxed);
                 self.send_air_supply(player);
             }
 
@@ -94,14 +86,24 @@ impl BreathManager {
                     self.drowning_tick.store(0, Ordering::Relaxed);
                     player
                         .living_entity
-                        .damage(player.as_ref(), DROWNING_DAMAGE, DamageType::DROWN)
-                        .await;
+                        .damage(player, DROWNING_DAMAGE, DamageType::DROWN);
                 }
             }
         } else {
-            let prev = self.air_supply.load(Ordering::Relaxed);
-            let new_air = (prev + AIR_RECOVERY_RATE).min(MAX_AIR);
+            let mut new_air = (prev + AIR_RECOVERY_RATE).min(MAX_AIR);
             if new_air != prev {
+                let server = player.world().server.upgrade();
+                if let Some(server) = server {
+                    let mut event = crate::plugin::api::events::entity::entity_air_change::EntityAirChangeEvent::new(
+                        player.entity_id(),
+                        new_air,
+                    );
+                    server.plugin_manager.fire_blocking(&server, &mut event);
+                    if event.cancelled {
+                        return;
+                    }
+                    new_air = event.amount.clamp(0, MAX_AIR);
+                }
                 self.air_supply.store(new_air, Ordering::Relaxed);
                 self.send_air_supply(player);
             }
@@ -166,19 +168,17 @@ impl BreathManager {
         let air = self.air_supply.load(Ordering::Relaxed).clamp(0, MAX_AIR);
 
         let mut bedrock_meta =
-            pumpkin_protocol::bedrock::client::set_actor_data::EntityMetadata::new();
+            pumpkin_protocol::bedrock::client::set_actor_data::SyncedActorDataList::new();
         bedrock_meta.set(
             pumpkin_protocol::bedrock::client::set_actor_data::entity_data_key::AIR_SUPPLY,
             pumpkin_protocol::bedrock::client::set_actor_data::MetadataValue::Short(air as i16),
         );
 
-        player.get_entity().send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::entity::DATA_AIR_SUPPLY_ID,
-                VarInt(air),
-            )],
-            Some(&bedrock_meta),
+        player.get_entity().set_synced_data(
+            pumpkin_data::tracked_data::entity::DATA_AIR_SUPPLY_ID,
+            VarInt(air),
         );
+        player.get_entity().send_bedrock_actor_data(&bedrock_meta);
     }
 
     pub fn reset(&self, player: &Player) {

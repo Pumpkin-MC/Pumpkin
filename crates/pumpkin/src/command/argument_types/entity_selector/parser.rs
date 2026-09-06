@@ -20,7 +20,6 @@ use pumpkin_util::math::bounds::{DoubleBounds, FloatDegreeBounds, IntBounds};
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
-use std::pin::Pin;
 use uuid::Uuid;
 
 pub const INVALID_NAME_OR_UUID_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
@@ -593,31 +592,25 @@ impl EntitySelectorParserSuggestions {
         builder
     }
 
-    pub fn list_suggestions<'a>(
-        context: &'a CommandContext<'_>,
-        suggestions_builder: SuggestionsBuilder,
-    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
-        Box::pin(async move {
-            let mut reader = StringReader::new(suggestions_builder.input.clone());
-            reader.set_cursor(suggestions_builder.start);
-            let mut parser = EntitySelectorParser::new(
-                &mut reader,
-                context
-                    .source
-                    .has_permission(ENTITY_SELECTOR_PERMISSION)
-                    .await,
-            );
+    pub fn list_suggestions(
+        context: &CommandContext<'_>,
+        suggestions_builder: &SuggestionsBuilder,
+    ) -> Suggestions {
+        let mut reader = StringReader::new(suggestions_builder.input.clone());
+        reader.set_cursor(suggestions_builder.start);
+        let mut parser = EntitySelectorParser::new(
+            &mut reader,
+            context.source.has_permission(ENTITY_SELECTOR_PERMISSION),
+        );
 
-            let _ = parser.parse();
+        let _ = parser.parse();
 
-            parser.fill_suggestions(&suggestions_builder, |mut suggestions| {
-                for player in context.server().get_all_players() {
-                    suggestions =
-                        suggestions.filter_and_suggest_one(player.gameprofile.name.clone());
-                }
-                // ONLY FOR EntityArgumentType: This is server-side, so no other entity will show up.
-                suggestions
-            })
+        parser.fill_suggestions(suggestions_builder, |mut suggestions| {
+            for player in context.server().get_all_players() {
+                suggestions = suggestions.filter_and_suggest_one(player.gameprofile.name.clone());
+            }
+            // ONLY FOR EntityArgumentType: This is server-side, so no other entity will show up.
+            suggestions
         })
     }
 }

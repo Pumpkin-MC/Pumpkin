@@ -19,7 +19,7 @@ impl PendingConnection {
             let status = server.get_status();
             status
                 .lock()
-                .await
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .get_status_response(self.version.load().protocol_version())
         };
 

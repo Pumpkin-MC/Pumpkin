@@ -1,5 +1,5 @@
 use pumpkin_data::Block;
-use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
+use pumpkin_util::math::position::BlockPos;
 
 use crate::generation::proto_chunk::GenerationCache;
 
@@ -7,12 +7,7 @@ pub struct DripstoneClusterFeature;
 
 impl DripstoneClusterFeature {
     #[allow(clippy::unused_self)]
-    pub fn generate<T: GenerationCache>(
-        &self,
-        chunk: &mut T,
-        _random: &mut RandomGenerator,
-        pos: BlockPos,
-    ) -> bool {
+    pub fn generate<T: GenerationCache>(&self, chunk: &mut T, pos: BlockPos) -> bool {
         let mut generated = false;
         let radius = 3;
 

@@ -20,6 +20,12 @@ pub struct ProxyConfig {
 pub struct BungeeCordConfig {
     /// Whether `BungeeCord` support is enabled.
     pub enabled: bool,
+    /// Shared secret for authenticating connections from the `BungeeCord`
+    /// proxy, as provided by the `BungeeGuard` plugin. When set, the forwarded
+    /// profile properties must contain a `bungeeguard-token` property holding
+    /// this secret, otherwise the connection is rejected. This also blocks
+    /// players connecting directly instead of through the proxy.
+    pub secret: String,
 }
 
 /// Configuration for Velocity proxy integration.

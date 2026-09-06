@@ -112,258 +112,236 @@ impl HelpCommandExecutor {
             })
     }
 
-    fn page<'a>(context: &'a CommandContext, page_number: usize) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let server = context.server();
+    fn page(context: &CommandContext, page_number: usize) -> CommandExecutorResult {
+        let server = context.server();
 
-            let dispatcher = server.command_dispatcher.load();
-            let commands = dispatcher
-                .get_all_permitted_commands_usage(&context.source)
-                .await;
+        let dispatcher = server.command_dispatcher.load();
+        let commands = dispatcher.get_all_permitted_commands_usage(&context.source);
 
-            let commands_available = commands.len();
-            if commands_available == 0 {
-                return Err(NO_COMMANDS_ERROR_TYPE.create_without_context());
-            }
+        let commands_available = commands.len();
+        if commands_available == 0 {
+            return Err(NO_COMMANDS_ERROR_TYPE.create_without_context());
+        }
 
-            let total_pages = commands_available.div_ceil(COMMANDS_PER_PAGE);
-            let page = page_number.min(total_pages);
+        let total_pages = commands_available.div_ceil(COMMANDS_PER_PAGE);
+        let page = page_number.min(total_pages);
 
-            let start = (page - 1) * COMMANDS_PER_PAGE;
-            let end = (start + COMMANDS_PER_PAGE).min(commands_available);
+        let start = (page - 1) * COMMANDS_PER_PAGE;
+        let end = (start + COMMANDS_PER_PAGE).min(commands_available);
 
-            let page_commands = commands.into_iter().skip(start).take(end - start);
+        let page_commands = commands.into_iter().skip(start).take(end - start);
 
-            let arrow_left = if page > 1 {
-                Self::create_help_command_with_given_page_number(page - 1, "<<<")
-            } else {
-                TextComponent::text("<<<").color(Color::Named(NamedColor::Gray))
-            };
+        let arrow_left = if page > 1 {
+            Self::create_help_command_with_given_page_number(page - 1, "<<<")
+        } else {
+            TextComponent::text("<<<").color(Color::Named(NamedColor::Gray))
+        };
 
-            let arrow_right = if page < total_pages {
-                Self::create_help_command_with_given_page_number(page + 1, ">>>")
-            } else {
-                TextComponent::text(">>>").color(Color::Named(NamedColor::Gray))
-            };
+        let arrow_right = if page < total_pages {
+            Self::create_help_command_with_given_page_number(page + 1, ">>>")
+        } else {
+            TextComponent::text(">>>").color(Color::Named(NamedColor::Gray))
+        };
 
-            let header_text = format!(" Help - Page {page}/{total_pages} ");
+        let header_text = format!(" Help - Page {page}/{total_pages} ");
 
-            let dashes = 52usize.saturating_sub(header_text.len() + 3) / 2;
+        let dashes = 52usize.saturating_sub(header_text.len() + 3) / 2;
 
-            let mut message = TextComponent::empty()
-                .add_child(
-                    TextComponent::text("-".repeat(dashes) + " ").color_named(NamedColor::Yellow),
-                )
-                .add_child(arrow_left.clone())
-                .add_child(TextComponent::text(header_text.clone()))
-                .add_child(arrow_right.clone())
-                .add_child(
-                    TextComponent::text(" ".to_owned() + &"-".repeat(dashes) + "\n")
-                        .color_named(NamedColor::Yellow),
-                );
+        let mut message = TextComponent::empty()
+            .add_child(
+                TextComponent::text("-".repeat(dashes) + " ").color_named(NamedColor::Yellow),
+            )
+            .add_child(arrow_left.clone())
+            .add_child(TextComponent::text(header_text))
+            .add_child(arrow_right.clone())
+            .add_child(
+                TextComponent::text(" ".to_owned() + &"-".repeat(dashes) + "\n")
+                    .color_named(NamedColor::Yellow),
+            );
 
-            for (command, (description, usage)) in page_commands {
-                let command_declaration = format!("/{command}");
-                message = message.add_child(
-                    TextComponent::text(command_declaration.clone())
-                        .color_named(NamedColor::Gold)
-                        .add_child(TextComponent::text(" - ").color_named(NamedColor::Yellow))
-                        .add_child(
-                            TextComponent::text(description.to_owned() + "\n")
-                                .color_named(NamedColor::White),
-                        )
-                        .add_child(
-                            TextComponent::text("    Usage: ").color_named(NamedColor::Yellow),
-                        )
-                        .add_child(
-                            TextComponent::text(usage.into_string()).color_named(NamedColor::White),
-                        )
-                        .add_child(TextComponent::text("\n").color_named(NamedColor::White))
-                        .click_event(ClickEvent::SuggestCommand {
-                            command: command_declaration.into(),
-                        }),
-                );
-            }
+        for (command, (description, usage)) in page_commands {
+            let command_declaration = format!("/{command}");
+            message = message.add_child(
+                TextComponent::text(command_declaration.clone())
+                    .color_named(NamedColor::Gold)
+                    .add_child(TextComponent::text(" - ").color_named(NamedColor::Yellow))
+                    .add_child(
+                        TextComponent::text(description.to_owned() + "\n")
+                            .color_named(NamedColor::White),
+                    )
+                    .add_child(TextComponent::text("    Usage: ").color_named(NamedColor::Yellow))
+                    .add_child(
+                        TextComponent::text(usage.into_string()).color_named(NamedColor::White),
+                    )
+                    .add_child(TextComponent::text("\n").color_named(NamedColor::White))
+                    .click_event(ClickEvent::SuggestCommand {
+                        command: command_declaration.into(),
+                    }),
+            );
+        }
 
-            let footer_text = format!(" Page {page}/{total_pages} ");
-            message = message
-                .add_child(
-                    TextComponent::text("-".repeat(dashes) + " ").color_named(NamedColor::Yellow),
-                )
-                .add_child(arrow_left)
-                .add_child(TextComponent::text(footer_text.clone()))
-                .add_child(arrow_right)
-                .add_child(
-                    TextComponent::text(" ".to_owned() + &"-".repeat(dashes))
-                        .color_named(NamedColor::Yellow),
-                );
+        let footer_text = format!(" Page {page}/{total_pages} ");
+        message = message
+            .add_child(
+                TextComponent::text("-".repeat(dashes) + " ").color_named(NamedColor::Yellow),
+            )
+            .add_child(arrow_left)
+            .add_child(TextComponent::text(footer_text))
+            .add_child(arrow_right)
+            .add_child(
+                TextComponent::text(" ".to_owned() + &"-".repeat(dashes))
+                    .color_named(NamedColor::Yellow),
+            );
 
-            context.source.send_message(message).await;
+        context.source.send_message(message);
 
-            Ok(commands_available as i32)
-        })
+        Ok(commands_available as i32)
     }
 
-    fn command<'a>(context: &'a CommandContext, command: &'a str) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
+    fn command(context: &CommandContext, command: &str) -> CommandExecutorResult {
+        let dispatcher = context.server().command_dispatcher.load();
+
+        let Some((description, usage)) =
+            dispatcher.get_permitted_command_usage(&context.source, command)
+        else {
+            return Err(FAILED_ERROR_TYPE.create_without_context());
+        };
+
+        let command_with_slash = format!("/{command}");
+        let header_text = format!(" Help - /{command} ");
+
+        let dashes = 52usize.saturating_sub(header_text.len()) / 2;
+
+        let mut message = TextComponent::empty()
+            .add_child(
+                TextComponent::text("-".repeat(dashes) + " ").color_named(NamedColor::Yellow),
+            )
+            .add_child(TextComponent::text(header_text))
+            .add_child(
+                TextComponent::text(" ".to_owned() + &"-".repeat(dashes) + "\n")
+                    .color_named(NamedColor::Yellow),
+            )
+            .add_child(
+                TextComponent::text("Command: ")
+                    .color_named(NamedColor::Aqua)
+                    .add_child(
+                        TextComponent::text(command_with_slash.clone())
+                            .color_named(NamedColor::Gold)
+                            .bold(),
+                    )
+                    .add_child(TextComponent::text("\n").color_named(NamedColor::White))
+                    .click_event(ClickEvent::SuggestCommand {
+                        command: command_with_slash.clone().into(),
+                    }),
+            )
+            .add_child(
+                TextComponent::text("Description: ")
+                    .color_named(NamedColor::Aqua)
+                    .add_child(
+                        TextComponent::text(format!("{description}\n"))
+                            .color_named(NamedColor::White),
+                    ),
+            )
+            .add_child(
+                TextComponent::text("Usage: ")
+                    .color_named(NamedColor::Aqua)
+                    .add_child(
+                        TextComponent::text(format!("{usage}\n")).color_named(NamedColor::White),
+                    )
+                    .click_event(ClickEvent::SuggestCommand {
+                        command: command_with_slash.into(),
+                    }),
+            );
+
+        message =
+            message.add_child(TextComponent::text("-".repeat(52)).color_named(NamedColor::Yellow));
+
+        context.source.send_message(message);
+
+        Ok(1)
+    }
+
+    fn plugin(context: &CommandContext, plugin_name: &str) -> CommandExecutorResult {
+        let server = context.server();
+        let dispatcher = server.command_dispatcher.load();
+        let commands =
+            dispatcher.get_all_permitted_commands_usage_by_plugin(&context.source, plugin_name);
+
+        if commands.is_empty() {
+            return Err(PLUGIN_NOT_FOUND_ERROR_TYPE.create_without_context());
+        }
+
+        let header_text = format!(" Help - Plugin: {plugin_name} ");
+        let dashes = 52usize.saturating_sub(header_text.len() + 3) / 2;
+
+        let mut message = TextComponent::empty()
+            .add_child(
+                TextComponent::text("-".repeat(dashes) + " ").color_named(NamedColor::Yellow),
+            )
+            .add_child(TextComponent::text(header_text))
+            .add_child(
+                TextComponent::text(" ".to_owned() + &"-".repeat(dashes) + "\n")
+                    .color_named(NamedColor::Yellow),
+            );
+
+        let commands_len = commands.len();
+        for (command, (description, usage)) in commands {
+            let command_declaration = format!("/{command}");
+            message = message.add_child(
+                TextComponent::text(command_declaration.clone())
+                    .color_named(NamedColor::Gold)
+                    .add_child(TextComponent::text(" - ").color_named(NamedColor::Yellow))
+                    .add_child(
+                        TextComponent::text(description.to_owned() + "\n")
+                            .color_named(NamedColor::White),
+                    )
+                    .add_child(TextComponent::text("    Usage: ").color_named(NamedColor::Yellow))
+                    .add_child(
+                        TextComponent::text(usage.into_string()).color_named(NamedColor::White),
+                    )
+                    .add_child(TextComponent::text("\n").color_named(NamedColor::White))
+                    .click_event(ClickEvent::SuggestCommand {
+                        command: command_declaration.into(),
+                    }),
+            );
+        }
+
+        message =
+            message.add_child(TextComponent::text("-".repeat(52)).color_named(NamedColor::Yellow));
+
+        context.source.send_message(message);
+        Ok(commands_len as i32)
+    }
+
+    fn command_or_plugin(context: &CommandContext, input: &str) -> CommandExecutorResult {
+        // Prioritize commands ig
+        {
             let dispatcher = context.server().command_dispatcher.load();
-
-            let Some((description, usage)) = dispatcher
-                .get_permitted_command_usage(&context.source, command)
-                .await
-            else {
-                return Err(FAILED_ERROR_TYPE.create_without_context());
-            };
-
-            let command_with_slash = format!("/{command}");
-            let header_text = format!(" Help - /{command} ");
-
-            let dashes = 52usize.saturating_sub(header_text.len()) / 2;
-
-            let mut message = TextComponent::empty()
-                .add_child(
-                    TextComponent::text("-".repeat(dashes) + " ").color_named(NamedColor::Yellow),
-                )
-                .add_child(TextComponent::text(header_text.clone()))
-                .add_child(
-                    TextComponent::text(" ".to_owned() + &"-".repeat(dashes) + "\n")
-                        .color_named(NamedColor::Yellow),
-                )
-                .add_child(
-                    TextComponent::text("Command: ")
-                        .color_named(NamedColor::Aqua)
-                        .add_child(
-                            TextComponent::text(command_with_slash.clone())
-                                .color_named(NamedColor::Gold)
-                                .bold(),
-                        )
-                        .add_child(TextComponent::text("\n").color_named(NamedColor::White))
-                        .click_event(ClickEvent::SuggestCommand {
-                            command: command_with_slash.clone().into(),
-                        }),
-                )
-                .add_child(
-                    TextComponent::text("Description: ")
-                        .color_named(NamedColor::Aqua)
-                        .add_child(
-                            TextComponent::text(format!("{description}\n"))
-                                .color_named(NamedColor::White),
-                        ),
-                )
-                .add_child(
-                    TextComponent::text("Usage: ")
-                        .color_named(NamedColor::Aqua)
-                        .add_child(
-                            TextComponent::text(format!("{usage}\n"))
-                                .color_named(NamedColor::White),
-                        )
-                        .click_event(ClickEvent::SuggestCommand {
-                            command: command_with_slash.into(),
-                        }),
-                );
-
-            message = message
-                .add_child(TextComponent::text("-".repeat(52)).color_named(NamedColor::Yellow));
-
-            context.source.send_message(message).await;
-
-            Ok(1)
-        })
-    }
-
-    fn plugin<'a>(context: &'a CommandContext, plugin_name: &'a str) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let server = context.server();
-            let dispatcher = server.command_dispatcher.load();
-            let commands = dispatcher
-                .get_all_permitted_commands_usage_by_plugin(&context.source, plugin_name)
-                .await;
-
-            if commands.is_empty() {
-                return Err(PLUGIN_NOT_FOUND_ERROR_TYPE.create_without_context());
-            }
-
-            let header_text = format!(" Help - Plugin: {plugin_name} ");
-            let dashes = 52usize.saturating_sub(header_text.len() + 3) / 2;
-
-            let mut message = TextComponent::empty()
-                .add_child(
-                    TextComponent::text("-".repeat(dashes) + " ").color_named(NamedColor::Yellow),
-                )
-                .add_child(TextComponent::text(header_text.clone()))
-                .add_child(
-                    TextComponent::text(" ".to_owned() + &"-".repeat(dashes) + "\n")
-                        .color_named(NamedColor::Yellow),
-                );
-
-            let commands_len = commands.len();
-            for (command, (description, usage)) in commands {
-                let command_declaration = format!("/{command}");
-                message = message.add_child(
-                    TextComponent::text(command_declaration.clone())
-                        .color_named(NamedColor::Gold)
-                        .add_child(TextComponent::text(" - ").color_named(NamedColor::Yellow))
-                        .add_child(
-                            TextComponent::text(description.to_owned() + "\n")
-                                .color_named(NamedColor::White),
-                        )
-                        .add_child(
-                            TextComponent::text("    Usage: ").color_named(NamedColor::Yellow),
-                        )
-                        .add_child(
-                            TextComponent::text(usage.into_string()).color_named(NamedColor::White),
-                        )
-                        .add_child(TextComponent::text("\n").color_named(NamedColor::White))
-                        .click_event(ClickEvent::SuggestCommand {
-                            command: command_declaration.into(),
-                        }),
-                );
-            }
-
-            message = message
-                .add_child(TextComponent::text("-".repeat(52)).color_named(NamedColor::Yellow));
-
-            context.source.send_message(message).await;
-            Ok(commands_len as i32)
-        })
-    }
-
-    fn command_or_plugin<'a>(
-        context: &'a CommandContext,
-        input: &'a str,
-    ) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            // Prioritize commands ig
+            if dispatcher
+                .get_permitted_command_usage(&context.source, input)
+                .is_some()
             {
-                let dispatcher = context.server().command_dispatcher.load();
-                if dispatcher
-                    .get_permitted_command_usage(&context.source, input)
-                    .await
-                    .is_some()
-                {
-                    return Self::command(context, input).await;
-                }
+                return Self::command(context, input);
             }
+        }
 
-            {
-                let dispatcher = context.server().command_dispatcher.load();
-                let plugin_commands = dispatcher
-                    .get_all_permitted_commands_usage_by_plugin(&context.source, input)
-                    .await;
+        {
+            let dispatcher = context.server().command_dispatcher.load();
+            let plugin_commands =
+                dispatcher.get_all_permitted_commands_usage_by_plugin(&context.source, input);
 
-                if !plugin_commands.is_empty() {
-                    return Self::plugin(context, input).await;
-                }
+            if !plugin_commands.is_empty() {
+                return Self::plugin(context, input);
             }
+        }
 
-            Err(FAILED_ERROR_TYPE.create_without_context())
-        })
+        Err(FAILED_ERROR_TYPE.create_without_context())
     }
 }
 
 struct HelpCommandExecutor;
 impl CommandExecutor for HelpCommandExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let arg = context.get_argument(ARG).unwrap_or(&HelpArgument::Page(1));
 
         match arg {

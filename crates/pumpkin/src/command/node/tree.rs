@@ -111,6 +111,18 @@ impl Tree {
         }
     }
 
+    /// Returns the number of nodes in this tree.
+    #[must_use]
+    pub const fn len(&self) -> usize {
+        self.nodes.len()
+    }
+
+    /// Returns `true` if the tree has no nodes.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
+    }
+
     /// Allocates a new [`NodeId`] by creating a new unique one.
     const fn alloc(&self) -> NodeId {
         NodeId(NonZero::new(self.nodes.len() + 1).expect("expected a non-zero id"))
@@ -170,7 +182,7 @@ impl Tree {
         let node = node.into();
         let name = node.meta.literal.to_string();
         let node = self.attach(node.into());
-        self.add_attached_child(ROOT_NODE_ID, node);
+        let node = self.add_attached_child(ROOT_NODE_ID, node);
 
         // This is safe as the node ID now points to a `CommandAttachedNode`.
         let node = CommandNodeId(node.0);
@@ -196,8 +208,7 @@ impl Tree {
 
         // First, attach the node to this tree.
         let node = self.attach(node);
-        self.add_attached_child(parent, node);
-        node
+        self.add_attached_child(parent, node)
     }
 
     /// Adds an already-attached child to a given node.
@@ -209,7 +220,7 @@ impl Tree {
     ///
     /// Essentially, this means that a [`CommandAttachedNode`] must have the root node
     /// of the tree *as its parent*, and [`RootAttachedNode`] cannot have a parent.
-    fn add_attached_child(&mut self, parent: NodeId, node: NodeId) {
+    fn add_attached_child(&mut self, parent: NodeId, node: NodeId) -> NodeId {
         assert!(
             parent == ROOT_NODE_ID || self[node].classification() != NodeClassification::Command,
             "Cannot add a CommandAttachedNode as a child of a non-root node"
@@ -230,8 +241,10 @@ impl Tree {
             for grandchild in node_children {
                 self.add_attached_child(child, grandchild);
             }
+            child
         } else {
             self[parent].children_mut_ref().insert(node_name, node);
+            node
         }
     }
 
@@ -256,8 +269,8 @@ impl Tree {
 
     /// Returns whether the given node is able to be used by a given source.
     #[must_use]
-    pub async fn can_use(&self, node: NodeId, source: &CommandSource) -> bool {
-        self[node].requirements().evaluate(source).await
+    pub fn can_use(&self, node: NodeId, source: &CommandSource) -> bool {
+        self[node].requirements().evaluate(source)
     }
 
     /// Finds ambiguities of input and gives them to the [`AmbiguityConsumer`].
@@ -346,7 +359,7 @@ impl Tree {
     }
 
     /// Parses the given node, returning an error on failure.
-    pub async fn parse<'a>(
+    pub fn parse<'a>(
         &self,
         node_id: NodeId,
         reader: &'a mut StringReader<'_>,
@@ -375,8 +388,7 @@ impl Tree {
                 let result = node
                     .meta
                     .argument_type
-                    .parse_with_source(reader, &command_context_builder.source)
-                    .await?;
+                    .parse_with_source(reader, &command_context_builder.source)?;
                 let range = StringRange::between(start, reader.cursor());
                 let parsed = ParsedArgument::new(range, result);
                 command_context_builder.with_argument(node.meta.name.to_string(), Arc::new(parsed));

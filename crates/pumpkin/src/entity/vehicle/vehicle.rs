@@ -2,10 +2,8 @@ use crossbeam::atomic::AtomicCell;
 use std::sync::atomic::{AtomicI32, Ordering};
 
 use crate::entity::Entity;
-use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::EntityBase;
-use crate::world::loot::{LootContextParameters, LootTableExt};
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::GameMode;
 
@@ -42,11 +40,9 @@ impl VehicleEntity {
                 self.entity.entity_id,
             );
         if let Some(server) = self.entity.world.load().server.upgrade() {
-            tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current().block_on(async {
-                    server.plugin_manager.fire(&server, &mut update_event).await;
-                });
-            });
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut update_event);
         }
     }
 
@@ -137,51 +133,40 @@ impl VehicleEntity {
     }
 
     pub fn send_wobble_metadata(&self) {
-        self.entity.send_meta_data(
-            &[
-                Metadata::new(
-                    pumpkin_data::tracked_data::boat::ID_HURT,
-                    VarInt(self.get_hurt_time()),
-                ),
-                Metadata::new(
-                    pumpkin_data::tracked_data::boat::ID_HURTDIR,
-                    VarInt(self.get_hurt_dir()),
-                ),
-            ],
-            None,
+        self.entity.set_synced_data(
+            pumpkin_data::tracked_data::boat::ID_HURT,
+            VarInt(self.get_hurt_time()),
         );
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::boat::ID_DAMAGE,
-                self.get_damage(),
-            )],
-            None,
+        self.entity.set_synced_data(
+            pumpkin_data::tracked_data::boat::ID_HURTDIR,
+            VarInt(self.get_hurt_dir()),
+        );
+        self.entity.set_synced_data(
+            pumpkin_data::tracked_data::boat::ID_DAMAGE,
+            self.get_damage(),
         );
     }
 
-    pub async fn kill_and_drop_self(&self) {
+    pub fn kill_and_drop_self(&self) {
         let world = self.entity.world.load();
         let entity_drops = world.level_info.load().game_rules.entity_drops;
 
-        if entity_drops && let Some(loot_table) = &self.entity.entity_type.loot_table {
-            let pos = self.entity.block_pos.load();
-            let is_raining = world.is_raining().await;
-            let is_thundering = world.is_thundering().await;
-            let params = LootContextParameters {
-                is_raining: Some(is_raining),
-                is_thundering: Some(is_thundering),
-                world_time: world.level_info.load().day_time as u64,
-                ..Default::default()
-            };
-            for stack in loot_table.get_loot(params) {
-                world.drop_stack(&pos, stack).await;
+        if entity_drops {
+            let resource_name = self.entity.entity_type.resource_name;
+            let key = format!("minecraft:entities/{resource_name}");
+            if let Some(loot_table) = pumpkin_data::loot_table::get_loot_table(&key) {
+                let pos = self.entity.block_pos.load();
+                let seed: i64 = rand::random();
+                for stack in crate::world::loot::generate_loot(loot_table, seed) {
+                    world.drop_stack(&pos, stack);
+                }
             }
         }
 
-        self.entity.remove().await;
+        self.entity.remove();
     }
 
-    pub async fn damage_with_context(&self, amount: f32, source: Option<&dyn EntityBase>) -> bool {
+    pub fn damage_with_context(&self, amount: f32, source: Option<&dyn EntityBase>) -> bool {
         if !self.entity.is_alive() {
             return true;
         }
@@ -194,7 +179,9 @@ impl VehicleEntity {
                 attacker_id,
             );
         if let Some(server) = self.entity.world.load().server.upgrade() {
-            server.plugin_manager.fire(&server, &mut damage_event).await;
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut damage_event);
         }
         if damage_event.cancelled {
             return false;
@@ -215,17 +202,16 @@ impl VehicleEntity {
             if let Some(server) = self.entity.world.load().server.upgrade() {
                 server
                     .plugin_manager
-                    .fire(&server, &mut destroy_event)
-                    .await;
+                    .fire_blocking(&server, &mut destroy_event);
             }
             if destroy_event.cancelled {
                 return false;
             }
 
             if is_creative {
-                self.entity.remove().await;
+                self.entity.remove();
             } else {
-                self.kill_and_drop_self().await;
+                self.kill_and_drop_self();
             }
         }
 

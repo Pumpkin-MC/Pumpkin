@@ -67,12 +67,12 @@ use crate::plugin::{
     loader::wasm::wasm_host::{
         state::PluginHostState,
         wit::v0_1::{
-            entity::{from_wit_damage_type, to_wit_damage_type},
             events::{
                 ToFromWasmEvent, cleanup_event, consume_player, consume_text_component,
                 consume_world, from_wasm_block_position, from_wasm_position,
                 to_wasm_block_position, to_wasm_position,
             },
+            living_entity::{from_wit_damage_type, to_wit_damage_type},
             pumpkin::plugin::event::{
                 AreaEffectCloudApplyEventData, ArrowBodyCountChangeEventData,
                 BatToggleSleepEventData, CreatureSpawnEventData, CreeperPowerEventData,
