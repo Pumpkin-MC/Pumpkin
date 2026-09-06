@@ -134,6 +134,10 @@ fn passes_cobweb_random_gate(random: &mut RandomGenerator, chance: f32, is_inter
     is_interior && random.next_f32() < chance
 }
 
+const fn rail_chance(is_interior: bool) -> f32 {
+    if is_interior { 0.7 } else { 0.9 }
+}
+
 pub struct MineshaftGenerator {
     pub is_mesa: bool,
 }
@@ -1304,7 +1308,11 @@ impl StructurePieceBase for MineShaftCorridor {
                 let floor_pos = self.piece.offset_pos(1, -1, z);
                 if chunk_box.contains_pos(&floor_pos) {
                     let floor_state = chunk.get_block_state(&floor_pos);
-                    if !floor_state.to_state().is_air() && random.next_f32() < 0.7 {
+                    if !floor_state.to_state().is_air()
+                        && floor_state.to_state().is_solid_render()
+                        && random.next_f32()
+                            < rail_chance(self.piece.is_under_sea_level(chunk, 1, 0, z, chunk_box))
+                    {
                         add_mineshaft_block(
                             &self.piece,
                             self.shaft_type,
@@ -1857,6 +1865,7 @@ impl StructurePieceBase for MineShaftStairs {
 mod tests {
     use super::{
         MineshaftType, for_each_maybe_box_position, is_supporting_box, passes_cobweb_random_gate,
+        rail_chance,
     };
     use pumpkin_data::Block;
     use pumpkin_util::random::{RandomGenerator, RandomImpl, legacy_rand::LegacyRand};
@@ -1917,5 +1926,13 @@ mod tests {
         assert!(!passes_cobweb_random_gate(&mut random, 0.8, false));
         assert!(passes_cobweb_random_gate(&mut random, 0.8, true));
         assert_eq!(random.next_f32(), 0.831_441);
+    }
+
+    #[test]
+    fn corridor_rail_chance_depends_on_interior_status() {
+        // Vanilla 26.2 MineShaftCorridor.postProcess:
+        // float chance = isInterior(world, 1, 0, z, box) ? 0.7F : 0.9F.
+        assert_eq!(rail_chance(true), 0.7);
+        assert_eq!(rail_chance(false), 0.9);
     }
 }
