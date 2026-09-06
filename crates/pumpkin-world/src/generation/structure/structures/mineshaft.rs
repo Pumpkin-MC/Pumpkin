@@ -52,6 +52,53 @@ impl MineshaftType {
             Self::Mesa => Block::DARK_OAK_FENCE.default_state,
         }
     }
+
+    fn can_replace(self, state: &BlockState) -> bool {
+        let block_id = state.id.to_block_id();
+        block_id != self.planks().id.to_block_id()
+            && block_id != self.wood().id.to_block_id()
+            && block_id != self.fence().id.to_block_id()
+            && block_id != Block::IRON_CHAIN.id
+    }
+}
+
+#[expect(clippy::too_many_arguments)]
+fn add_mineshaft_block(
+    piece: &StructurePiece,
+    shaft_type: MineshaftType,
+    chunk: &mut ProtoChunk,
+    state: &BlockState,
+    x: i32,
+    y: i32,
+    z: i32,
+    chunk_box: &BlockBox,
+) {
+    if shaft_type.can_replace(piece.get_block_at(chunk, x, y, z, chunk_box)) {
+        piece.add_block(chunk, state, x, y, z, chunk_box);
+    }
+}
+
+#[expect(clippy::too_many_arguments)]
+fn fill_mineshaft_box(
+    piece: &StructurePiece,
+    shaft_type: MineshaftType,
+    chunk: &mut ProtoChunk,
+    chunk_box: &BlockBox,
+    min_x: i32,
+    min_y: i32,
+    min_z: i32,
+    max_x: i32,
+    max_y: i32,
+    max_z: i32,
+    state: &BlockState,
+) {
+    for y in min_y..=max_y {
+        for x in min_x..=max_x {
+            for z in min_z..=max_z {
+                add_mineshaft_block(piece, shaft_type, chunk, state, x, y, z, chunk_box);
+            }
+        }
+    }
 }
 
 pub struct MineshaftGenerator {
@@ -833,19 +880,74 @@ impl MineShaftCorridor {
         let planks = self.shaft_type.planks();
         let fence = self.shaft_type.fence();
 
-        self.piece
-            .fill(chunk, chunk_box, x0, y0, z, x0, y1 - 1, z, fence);
-        self.piece
-            .fill(chunk, chunk_box, x1, y0, z, x1, y1 - 1, z, fence);
+        fill_mineshaft_box(
+            &self.piece,
+            self.shaft_type,
+            chunk,
+            chunk_box,
+            x0,
+            y0,
+            z,
+            x0,
+            y1 - 1,
+            z,
+            fence,
+        );
+        fill_mineshaft_box(
+            &self.piece,
+            self.shaft_type,
+            chunk,
+            chunk_box,
+            x1,
+            y0,
+            z,
+            x1,
+            y1 - 1,
+            z,
+            fence,
+        );
 
         if random.next_bounded_i32(4) == 0 {
-            self.piece
-                .fill(chunk, chunk_box, x0, y1, z, x0, y1, z, planks);
-            self.piece
-                .fill(chunk, chunk_box, x1, y1, z, x1, y1, z, planks);
+            fill_mineshaft_box(
+                &self.piece,
+                self.shaft_type,
+                chunk,
+                chunk_box,
+                x0,
+                y1,
+                z,
+                x0,
+                y1,
+                z,
+                planks,
+            );
+            fill_mineshaft_box(
+                &self.piece,
+                self.shaft_type,
+                chunk,
+                chunk_box,
+                x1,
+                y1,
+                z,
+                x1,
+                y1,
+                z,
+                planks,
+            );
         } else {
-            self.piece
-                .fill(chunk, chunk_box, x0, y1, z, x1, y1, z, planks);
+            fill_mineshaft_box(
+                &self.piece,
+                self.shaft_type,
+                chunk,
+                chunk_box,
+                x0,
+                y1,
+                z,
+                x1,
+                y1,
+                z,
+                planks,
+            );
 
             let mut props_s = WallTorchLikeProperties::default(&Block::WALL_TORCH);
             props_s.facing = HorizontalFacing::South;
@@ -856,12 +958,28 @@ impl MineShaftCorridor {
             let torch_n = BlockState::from_id(props_n.to_state_id(&Block::WALL_TORCH));
 
             if random.next_f32() < 0.05 {
-                self.piece
-                    .add_block(chunk, torch_s, x0 + 1, y1, z - 1, chunk_box);
+                add_mineshaft_block(
+                    &self.piece,
+                    self.shaft_type,
+                    chunk,
+                    torch_s,
+                    x0 + 1,
+                    y1,
+                    z - 1,
+                    chunk_box,
+                );
             }
             if random.next_f32() < 0.05 {
-                self.piece
-                    .add_block(chunk, torch_n, x0 + 1, y1, z + 1, chunk_box);
+                add_mineshaft_block(
+                    &self.piece,
+                    self.shaft_type,
+                    chunk,
+                    torch_n,
+                    x0 + 1,
+                    y1,
+                    z + 1,
+                    chunk_box,
+                );
             }
         }
     }
@@ -956,17 +1074,45 @@ impl StructurePieceBase for MineShaftCorridor {
         let length = self.num_sections * 5 - 1;
         let planks = self.shaft_type.planks();
 
-        self.piece
-            .fill(chunk, chunk_box, 0, 0, 0, 2, 1, length, air);
+        fill_mineshaft_box(
+            &self.piece,
+            self.shaft_type,
+            chunk,
+            chunk_box,
+            0,
+            0,
+            0,
+            2,
+            1,
+            length,
+            air,
+        );
 
         for z in 0..=length {
             for x in 0..=2 {
                 if random.next_f32() < 0.8 {
-                    self.piece.add_block(chunk, air, x, 2, z, chunk_box);
+                    add_mineshaft_block(
+                        &self.piece,
+                        self.shaft_type,
+                        chunk,
+                        air,
+                        x,
+                        2,
+                        z,
+                        chunk_box,
+                    );
                 }
                 if self.spider_corridor && random.next_f32() < 0.6 {
-                    self.piece
-                        .add_block(chunk, Block::COBWEB.default_state, x, 0, z, chunk_box);
+                    add_mineshaft_block(
+                        &self.piece,
+                        self.shaft_type,
+                        chunk,
+                        Block::COBWEB.default_state,
+                        x,
+                        0,
+                        z,
+                        chunk_box,
+                    );
                 }
             }
         }
@@ -986,8 +1132,16 @@ impl StructurePieceBase for MineShaftCorridor {
                 (2, 2, z + 2, 0.05),
             ] {
                 if random.next_f32() < prob {
-                    self.piece
-                        .add_block(chunk, Block::COBWEB.default_state, cx, cy, cz, chunk_box);
+                    add_mineshaft_block(
+                        &self.piece,
+                        self.shaft_type,
+                        chunk,
+                        Block::COBWEB.default_state,
+                        cx,
+                        cy,
+                        cz,
+                        chunk_box,
+                    );
                 }
             }
 
@@ -1068,7 +1222,16 @@ impl StructurePieceBase for MineShaftCorridor {
                 if chunk_box.contains_pos(&floor_pos) {
                     let floor_state = chunk.get_block_state(&floor_pos);
                     if !floor_state.to_state().is_air() && random.next_f32() < 0.7 {
-                        self.piece.add_block(chunk, rail, 1, 0, z, chunk_box);
+                        add_mineshaft_block(
+                            &self.piece,
+                            self.shaft_type,
+                            chunk,
+                            rail,
+                            1,
+                            0,
+                            z,
+                            chunk_box,
+                        );
                     }
                 }
             }
@@ -1603,6 +1766,26 @@ impl StructurePieceBase for MineShaftStairs {
             let z = 2 + i;
             self.piece
                 .fill(chunk, chunk_box, 0, y_min, z, 2, y_max, z, air);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::MineshaftType;
+    use pumpkin_data::Block;
+
+    #[test]
+    fn mineshaft_can_be_replaced_excludes_its_own_building_blocks() {
+        // Vanilla 26.2 MineShaftPiece.canBeReplaced:
+        // state is neither type.planks nor type.wood nor type.fence nor IRON_CHAIN.
+        for shaft_type in [MineshaftType::Normal, MineshaftType::Mesa] {
+            assert!(!shaft_type.can_replace(shaft_type.planks()));
+            assert!(!shaft_type.can_replace(shaft_type.wood()));
+            assert!(!shaft_type.can_replace(shaft_type.fence()));
+            assert!(!shaft_type.can_replace(Block::IRON_CHAIN.default_state));
+            assert!(shaft_type.can_replace(Block::STONE.default_state));
+            assert!(shaft_type.can_replace(Block::CAVE_AIR.default_state));
         }
     }
 }
