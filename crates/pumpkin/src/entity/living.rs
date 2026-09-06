@@ -3646,7 +3646,7 @@ mod tests {
     #[test]
     fn hurt_sound_for_entity_defaults_to_generic_hurt() {
         assert_eq!(
-            LivingEntity::hurt_sound_for_entity(&EntityType::CREEPER),
+            LivingEntity::hurt_sound_for_entity(&EntityType::ITEM),
             Sound::EntityGenericHurt
         );
     }
