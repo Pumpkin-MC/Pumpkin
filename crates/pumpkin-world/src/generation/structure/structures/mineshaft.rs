@@ -149,6 +149,55 @@ const fn rail_chance(is_interior: bool) -> f32 {
     if is_interior { 0.7 } else { 0.9 }
 }
 
+fn boundary_matches(
+    piece_box: &BlockBox,
+    chunk_box: &BlockBox,
+    mut predicate: impl FnMut(i32, i32, i32) -> bool,
+) -> bool {
+    let min_x = (piece_box.min.x - 1).max(chunk_box.min.x);
+    let min_y = (piece_box.min.y - 1).max(chunk_box.min.y);
+    let min_z = (piece_box.min.z - 1).max(chunk_box.min.z);
+    let max_x = (piece_box.max.x + 1).min(chunk_box.max.x);
+    let max_y = (piece_box.max.y + 1).min(chunk_box.max.y);
+    let max_z = (piece_box.max.z + 1).min(chunk_box.max.z);
+
+    for x in min_x..=max_x {
+        for z in min_z..=max_z {
+            if predicate(x, min_y, z) || predicate(x, max_y, z) {
+                return true;
+            }
+        }
+    }
+    for x in min_x..=max_x {
+        for y in min_y..=max_y {
+            if predicate(x, y, min_z) || predicate(x, y, max_z) {
+                return true;
+            }
+        }
+    }
+    for z in min_z..=max_z {
+        for y in min_y..=max_y {
+            if predicate(min_x, y, z) || predicate(max_x, y, z) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn is_in_invalid_liquid_location(
+    chunk: &ProtoChunk,
+    piece_box: &BlockBox,
+    chunk_box: &BlockBox,
+) -> bool {
+    boundary_matches(piece_box, chunk_box, |x, y, z| {
+        chunk
+            .get_block_state(&Vector3::new(x, y, z))
+            .to_state()
+            .is_liquid()
+    })
+}
+
 pub struct MineshaftGenerator {
     pub is_mesa: bool,
 }
@@ -552,6 +601,10 @@ impl StructurePieceBase for MineShaftRoom {
         _seed: i64,
         chunk_box: &BlockBox,
     ) {
+        if is_in_invalid_liquid_location(chunk, &self.piece.bounding_box, chunk_box) {
+            return;
+        }
+
         let air = Block::CAVE_AIR.default_state;
         let bb = self.piece.bounding_box;
 
@@ -1188,6 +1241,10 @@ impl StructurePieceBase for MineShaftCorridor {
         _seed: i64,
         chunk_box: &BlockBox,
     ) {
+        if is_in_invalid_liquid_location(chunk, &self.piece.bounding_box, chunk_box) {
+            return;
+        }
+
         let air = Block::CAVE_AIR.default_state;
         let length = self.num_sections * 5 - 1;
         let planks = self.shaft_type.planks();
@@ -1634,6 +1691,10 @@ impl StructurePieceBase for MineShaftCrossing {
         _seed: i64,
         chunk_box: &BlockBox,
     ) {
+        if is_in_invalid_liquid_location(chunk, &self.piece.bounding_box, chunk_box) {
+            return;
+        }
+
         let air = Block::CAVE_AIR.default_state;
         let planks = self.shaft_type.planks();
         let bb = self.piece.bounding_box;
@@ -1859,6 +1920,10 @@ impl StructurePieceBase for MineShaftStairs {
         _seed: i64,
         chunk_box: &BlockBox,
     ) {
+        if is_in_invalid_liquid_location(chunk, &self.piece.bounding_box, chunk_box) {
+            return;
+        }
+
         let air = Block::CAVE_AIR.default_state;
         self.piece.fill(chunk, chunk_box, 0, 5, 0, 2, 7, 1, air);
         self.piece.fill(chunk, chunk_box, 0, 0, 7, 2, 2, 8, air);
@@ -1877,7 +1942,7 @@ impl StructurePieceBase for MineShaftStairs {
 mod tests {
     use super::{
         MineshaftType, for_each_maybe_box_position, is_supporting_box, passes_cobweb_random_gate,
-        rail_chance,
+        boundary_matches, rail_chance,
     };
     use pumpkin_data::Block;
     use pumpkin_util::random::{RandomGenerator, RandomImpl, legacy_rand::LegacyRand};
@@ -1967,5 +2032,19 @@ mod tests {
         // Vanilla 26.2 fillColumnBetween: for (int y = start; y < end; ++y).
         assert_eq!((6..10).collect::<Vec<_>>(), [6, 7, 8, 9]);
         assert_eq!((12..12).count(), 0);
+    }
+
+    #[test]
+    fn invalid_location_scans_only_the_expanded_piece_boundary() {
+        // Vanilla 26.2 MineShaftPiece.isInInvalidLocation scans the six faces of
+        // piece.boundingBox inflated by one and intersected with the chunk box.
+        let piece = pumpkin_util::math::block_box::BlockBox::new(10, 20, 30, 12, 22, 32);
+        let chunk = pumpkin_util::math::block_box::BlockBox::new(0, 0, 0, 40, 40, 40);
+        assert!(boundary_matches(&piece, &chunk, |x, y, z| {
+            x == 9 && y == 20 && z == 31
+        }));
+        assert!(!boundary_matches(&piece, &chunk, |x, y, z| {
+            x == 11 && y == 21 && z == 31
+        }));
     }
 }
