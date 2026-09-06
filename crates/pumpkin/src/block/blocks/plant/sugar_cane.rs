@@ -1,7 +1,7 @@
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, block_properties::CactusLikeProperties, tag};
+use pumpkin_data::{Block, block_properties::CactusLikeProperties, fluid::Fluid, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
@@ -75,10 +75,27 @@ fn can_place_at(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> boo
 
     if block_below.has_tag(&tag::Block::MINECRAFT_SUPPORTS_SUGAR_CANE) {
         for direction in HorizontalFacing::all() {
-            let block = block_accessor.get_block(&block_pos.down().offset(direction.to_offset()));
-            // TODO: use fluid
-            if block.has_tag(&tag::Fluid::MINECRAFT_SUPPORTS_SUGAR_CANE_ADJACENTLY)
-                && block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_SUGAR_CANE_ADJACENTLY)
+            let side = block_pos.down().offset(direction.to_offset());
+            let (block, state) = block_accessor.get_block_and_state(&side);
+            // Vanilla `SugarCaneBlock.canSurvive` takes *either* side, and reads the fluid
+            // tag off the fluid state, not off the block:
+            //
+            //     FluidState fluidState = level.getFluidState(blockPos);
+            //     if (fluidState.is(FluidTags.SUPPORTS_SUGAR_CANE_ADJACENTLY)
+            //         || blockState2.is(BlockTags.SUPPORTS_SUGAR_CANE_ADJACENTLY)) return true;
+            //
+            // `#minecraft:supports_sugar_cane_adjacently` is `#minecraft:water` as a fluid
+            // tag and `{minecraft:frosted_ice}` as a block tag, so asking one block to carry
+            // both (as this used to) can never hold: sugar cane never survived anywhere.
+            let fluid_supports = if state.is_waterlogged() {
+                Fluid::WATER.has_tag(&tag::Fluid::MINECRAFT_SUPPORTS_SUGAR_CANE_ADJACENTLY)
+            } else {
+                Fluid::from_state_id(state.id).is_some_and(|fluid| {
+                    fluid.has_tag(&tag::Fluid::MINECRAFT_SUPPORTS_SUGAR_CANE_ADJACENTLY)
+                })
+            };
+            if fluid_supports
+                || block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_SUGAR_CANE_ADJACENTLY)
             {
                 return true;
             }
@@ -86,4 +103,97 @@ fn can_place_at(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> boo
     }
 
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use pumpkin_data::{Block, BlockState, BlockStateId};
+    use pumpkin_util::math::position::BlockPos;
+    use pumpkin_world::world::BlockAccessor;
+
+    use super::can_place_at;
+
+    #[derive(Default)]
+    struct Blocks(HashMap<BlockPos, &'static Block>);
+
+    impl BlockAccessor for Blocks {
+        fn get_block(&self, position: &BlockPos) -> &'static Block {
+            self.0.get(position).copied().unwrap_or(&Block::AIR)
+        }
+
+        fn get_block_state(&self, position: &BlockPos) -> &'static BlockState {
+            BlockState::from_id(self.get_block(position).default_state.id)
+        }
+
+        fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
+            self.get_block(position).default_state.id
+        }
+
+        fn get_block_and_state(
+            &self,
+            position: &BlockPos,
+        ) -> (&'static Block, &'static BlockState) {
+            (self.get_block(position), self.get_block_state(position))
+        }
+    }
+
+    /// `minecraft:supports_sugar_cane_adjacently` is `#minecraft:water` as a *fluid* tag and
+    /// `{minecraft:frosted_ice}` as a *block* tag; vanilla takes either.
+    #[test]
+    fn sand_next_to_water_supports_sugar_cane() {
+        let pos = BlockPos::new(0, 64, 0);
+        let mut world = Blocks::default();
+        world.0.insert(pos.down(), &Block::SAND);
+
+        assert!(
+            !can_place_at(&world, &pos),
+            "sand with nothing beside it must not support sugar cane"
+        );
+
+        world.0.insert(
+            pos.down()
+                .offset(pumpkin_util::math::vector3::Vector3::new(1, 0, 0)),
+            &Block::WATER,
+        );
+        assert!(
+            can_place_at(&world, &pos),
+            "sand with water beside it must support sugar cane"
+        );
+    }
+
+    #[test]
+    fn frosted_ice_beside_the_soil_also_supports_sugar_cane() {
+        let pos = BlockPos::new(0, 64, 0);
+        let mut world = Blocks::default();
+        world.0.insert(pos.down(), &Block::SAND);
+        world.0.insert(
+            pos.down()
+                .offset(pumpkin_util::math::vector3::Vector3::new(0, 0, -1)),
+            &Block::FROSTED_ICE,
+        );
+        assert!(can_place_at(&world, &pos));
+    }
+
+    #[test]
+    fn sugar_cane_stacks_on_itself() {
+        let pos = BlockPos::new(0, 64, 0);
+        let mut world = Blocks::default();
+        world.0.insert(pos.down(), &Block::SUGAR_CANE);
+        assert!(can_place_at(&world, &pos));
+    }
+
+    #[test]
+    fn stone_never_supports_sugar_cane() {
+        let pos = BlockPos::new(0, 64, 0);
+        let mut world = Blocks::default();
+        world.0.insert(pos.down(), &Block::STONE);
+        world.0.insert(
+            pos.down()
+                .offset(pumpkin_util::math::vector3::Vector3::new(1, 0, 0)),
+            &Block::WATER,
+        );
+        assert!(!can_place_at(&world, &pos));
+    }
 }
