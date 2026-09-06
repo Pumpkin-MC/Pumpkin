@@ -17,6 +17,34 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use tracing::debug;
 
+/// Vanilla `BlockBehaviour.getFluidState`. A block that is not itself a fluid
+/// can still report a fluid state, and every such overworld block reports
+/// `Fluids.WATER.getSource(false)` — the water **source**, never
+/// `flowing_water`:
+///
+/// * `state.getValue(WATERLOGGED) ? Fluids.WATER.getSource(false) : ...` in
+///   `BaseRailBlock`, `SlabBlock`, `LeavesBlock`, `SignBlock`, … (26.2);
+/// * unconditionally in `SeagrassBlock:87`, `TallSeagrassBlock:80`,
+///   `KelpBlock:73`, `KelpPlantBlock:36` and `BubbleColumnBlock:74`, which have
+///   no `waterlogged` property at all.
+///
+/// This matters during worldgen because `MatchingFluidsPredicate` tests
+/// `state.getFluidState().getType()` against `minecraft:water`: the
+/// `disk_gravel` / `disk_sand` / `disk_clay` placements sit on the ocean floor,
+/// where an earlier feature has usually already replaced the water with
+/// seagrass or kelp.
+fn holds_source_water(id: BlockStateId) -> bool {
+    if id.is_waterlogged() {
+        return true;
+    }
+    let block = id.to_block_id();
+    block == Block::SEAGRASS.id
+        || block == Block::TALL_SEAGRASS.id
+        || block == Block::KELP.id
+        || block == Block::KELP_PLANT.id
+        || block == Block::BUBBLE_COLUMN.id
+}
+
 pub struct Cache {
     pub x: i32,
     pub z: i32,
@@ -233,8 +261,8 @@ impl GenerationCache for Cache {
         let id = GenerationCache::get_block_state(self, pos);
 
         let Some(fluid) = Fluid::from_state_id(id) else {
-            let fluid = if id.is_waterlogged() {
-                Fluid::FLOWING_WATER
+            let fluid = if holds_source_water(id) {
+                Fluid::WATER
             } else {
                 Fluid::EMPTY
             };
@@ -710,9 +738,46 @@ impl Cache {
 
 #[cfg(test)]
 mod tests {
-    use super::{Chunk, SurfaceBiomeNeighborhood};
+    use super::{Chunk, SurfaceBiomeNeighborhood, holds_source_water};
     use crate::chunk::ChunkData;
     use pumpkin_data::biome::Biome;
+    use pumpkin_data::{Block, BlockStateId};
+
+    #[test]
+    fn seagrass_kelp_and_waterlogged_blocks_report_source_water() {
+        // Vanilla 26.2 `getFluidState` overrides that return
+        // `Fluids.WATER.getSource(false)`:
+        //   SeagrassBlock:87, TallSeagrassBlock:80, KelpBlock:73,
+        //   KelpPlantBlock:36, BubbleColumnBlock:74 (unconditional, these blocks
+        //   have no `waterlogged` property), plus every
+        //   `state.getValue(WATERLOGGED) ? Fluids.WATER.getSource(false) : ...`
+        //   override (BaseRailBlock:298, SlabBlock:102, LeavesBlock:140, ...).
+        for block in [
+            &Block::SEAGRASS,
+            &Block::TALL_SEAGRASS,
+            &Block::KELP,
+            &Block::KELP_PLANT,
+            &Block::BUBBLE_COLUMN,
+        ] {
+            assert!(
+                holds_source_water(block.default_state.id),
+                "{} must report a water fluid state",
+                block.name
+            );
+        }
+
+        let waterlogged = Block::OAK_SLAB
+            .default_state
+            .set_waterlogged(true)
+            .expect("oak_slab is waterloggable");
+        assert!(holds_source_water(waterlogged.id));
+        assert!(!holds_source_water(Block::OAK_SLAB.default_state.id));
+
+        // Blocks with no fluid state of their own stay dry.
+        assert!(!holds_source_water(Block::DIRT.default_state.id));
+        assert!(!holds_source_water(Block::GRAVEL.default_state.id));
+        assert!(!holds_source_water(BlockStateId::AIR));
+    }
 
     #[test]
     fn surface_biome_snapshot_copies_level_chunk_palettes() {
