@@ -87,6 +87,7 @@ impl LoadConfiguration for PumpkinConfig {
     fn validate(&self) {
         self.basic.validate();
         self.advanced.validate();
+        self.advanced.networking.java.proxy_protocol.validate();
 
         let min_vd = NonZero::<u8>::MIN;
         let Some(max_vd) = NonZero::new(64) else {
