@@ -60,7 +60,7 @@ fn play_sound(
     let range = 16.0 * if volume > 1.0 { volume } else { 1.0 };
     let max_dist_sq = f64::from(range * range);
     let world = source.world().clone();
-    let seed = rand::random::<f64>();
+    let seed = rand::random::<i64>();
     let mut played_for = Vec::new();
 
     let sound_event = Sound::from_name(sound.path())

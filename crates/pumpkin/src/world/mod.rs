@@ -1242,7 +1242,7 @@ impl World {
         category: SoundCategory,
         position: &Vector3<f64>,
     ) {
-        let seed = rng().random::<f64>();
+        let seed = rng().random::<i64>();
         let packet = CSoundEffect::new(
             data_to_proto_sound(sound),
             category,
@@ -1263,7 +1263,7 @@ impl World {
         category: SoundCategory,
         position: &Vector3<f64>,
     ) {
-        let seed = rng().random::<f64>();
+        let seed = rng().random::<i64>();
         let packet = CSoundEffect::new(
             data_to_proto_sound(sound),
             category,
@@ -1295,7 +1295,7 @@ impl World {
         volume: f32,
         pitch: f32,
     ) {
-        let seed = rand::random::<f64>();
+        let seed = rand::random::<i64>();
         let packet = CSoundEffect::new(
             pumpkin_protocol::IdOr::Value(pumpkin_protocol::SoundEvent {
                 sound_name: sound_name.into(),
@@ -1379,7 +1379,7 @@ impl World {
         volume: f32,
         pitch: f32,
     ) {
-        let seed = rand::rng().random::<f64>();
+        let seed = rand::rng().random::<i64>();
         let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
 
         // Calculate the number of chunks the sound can be heard from based on its volume.
@@ -1406,7 +1406,7 @@ impl World {
         volume: f32,
         pitch: f32,
     ) {
-        let seed = rand::rng().random::<f64>();
+        let seed = rand::rng().random::<i64>();
         let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
 
         let audible_chunks = f64::from(volume.max(1.0)).ceil() as i32;

@@ -25,6 +25,7 @@ use super::experience_orb::ExperienceOrbEntity;
 use super::{Entity, EntityBase, NBTStorageInit};
 use crate::block::OnLandedUponArgs;
 use crate::entity::NBTStorage;
+use crate::entity::ageable::AgeableMob;
 use crate::entity::attributes::AttributeInstance;
 use crate::entity::attributes::Modifier;
 use crate::entity::attributes::ModifierOperation;
@@ -189,6 +190,25 @@ impl LivingEntity {
 
     fn hurt_sound_for_entity(entity_type: &'static EntityType) -> Sound {
         entity_type.hurt_sound.unwrap_or(Sound::EntityGenericHurt)
+    }
+
+    fn death_sound_for_entity(entity_type: &'static EntityType) -> Sound {
+        entity_type.death_sound.unwrap_or(Sound::EntityGenericDeath)
+    }
+
+    fn get_pitch(&self) -> f32 {
+        let is_baby = self
+            .as_any()
+            .downcast_ref::<&dyn AgeableMob>()
+            .map(|x| x.is_baby())
+            .unwrap_or_default();
+
+        let mut rng = rand::rng();
+        if is_baby {
+            return (rng.random::<f32>() - rng.random::<f32>()) * 0.2 + 1.5;
+        } else {
+            return (rng.random::<f32>() - rng.random::<f32>()) * 0.2 + 1.0;
+        }
     }
 
     pub fn new(entity: Entity) -> Self {
@@ -1728,6 +1748,13 @@ impl LivingEntity {
             self.update_death_stats(&*dyn_self, killer);
 
             // Plays the death sound
+            world.play_sound_fine(
+                self.death_sound(),
+                SoundCategory::Players,
+                &self.entity.pos.load(),
+                1.0,
+                self.get_pitch(),
+            );
             world.send_entity_status(&self.entity, EntityStatus::Death, Some(ActorEventID::Death));
             let looting_level;
             let tool = if let Some(cause_ent) = cause {
@@ -2308,6 +2335,10 @@ impl LivingEntity {
         self.entity.movement.load()
     }
 
+    fn death_sound(&self) -> Sound {
+        Self::death_sound_for_entity(self.entity.entity_type)
+    }
+
     fn hurt_sound(&self) -> Sound {
         if self.entity.entity_type == &EntityType::SLIME {
             SlimeEntity::hurt_sound_for_size(self.entity.data.load(Relaxed))
@@ -2825,10 +2856,14 @@ impl LivingEntity {
         );
 
         if play_sound {
-            world.play_sound(
+            let mut rng = rand::rng();
+
+            world.play_sound_fine(
                 self.hurt_sound(),
                 SoundCategory::Players,
                 &self.entity.pos.load(),
+                1.0,
+                self.get_pitch(),
             );
 
             if let Some(source) = source {

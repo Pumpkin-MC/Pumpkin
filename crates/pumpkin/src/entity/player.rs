@@ -2219,7 +2219,7 @@ impl Player {
         position: &Vector3<f64>,
         volume: f32,
         pitch: f32,
-        seed: f64,
+        seed: i64,
     ) {
         let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
         self.try_send_client_packet(&packet);
@@ -2232,7 +2232,7 @@ impl Player {
         position: &Vector3<f64>,
         volume: f32,
         pitch: f32,
-        seed: f64,
+        seed: i64,
     ) {
         let packet = CSoundEffect::new(IdOr::Value(sound), category, position, volume, pitch, seed);
         self.try_send_client_packet(&packet);
@@ -2267,7 +2267,7 @@ impl Player {
             position,
             volume,
             pitch,
-            rand::random::<f64>(),
+            rand::random::<i64>(),
         );
     }
 
