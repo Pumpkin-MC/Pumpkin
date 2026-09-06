@@ -20,6 +20,7 @@ use tracing::{debug, error, info, trace, warn};
 mod active_chunks;
 pub mod chunker;
 pub mod explosion;
+pub mod generation_cache;
 pub mod loot;
 pub mod map;
 pub mod portal;
