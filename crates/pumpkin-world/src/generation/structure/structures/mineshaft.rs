@@ -101,6 +101,31 @@ fn fill_mineshaft_box(
     }
 }
 
+#[expect(clippy::too_many_arguments)]
+fn for_each_maybe_box_position(
+    random: &mut RandomGenerator,
+    chance: f32,
+    min_x: i32,
+    min_y: i32,
+    min_z: i32,
+    max_x: i32,
+    max_y: i32,
+    max_z: i32,
+    mut place: impl FnMut(i32, i32, i32),
+) {
+    // StructurePiece.generateMaybeBox iterates Y, then X, then Z and consumes a
+    // float before any of its placement gates.
+    for y in min_y..=max_y {
+        for x in min_x..=max_x {
+            for z in min_z..=max_z {
+                if random.next_f32() <= chance {
+                    place(x, y, z);
+                }
+            }
+        }
+    }
+}
+
 pub struct MineshaftGenerator {
     pub is_mesa: bool,
 }
@@ -1088,33 +1113,25 @@ impl StructurePieceBase for MineShaftCorridor {
             air,
         );
 
-        for z in 0..=length {
-            for x in 0..=2 {
-                if random.next_f32() < 0.8 {
-                    add_mineshaft_block(
-                        &self.piece,
-                        self.shaft_type,
-                        chunk,
-                        air,
-                        x,
-                        2,
-                        z,
-                        chunk_box,
-                    );
-                }
-                if self.spider_corridor && random.next_f32() < 0.6 {
+        for_each_maybe_box_position(random, 0.8, 0, 2, 0, 2, 2, length, |x, y, z| {
+            add_mineshaft_block(&self.piece, self.shaft_type, chunk, air, x, y, z, chunk_box);
+        });
+
+        if self.spider_corridor {
+            for_each_maybe_box_position(random, 0.6, 0, 0, 0, 2, 1, length, |x, y, z| {
+                if self.piece.is_under_sea_level(chunk, x, y, z, chunk_box) {
                     add_mineshaft_block(
                         &self.piece,
                         self.shaft_type,
                         chunk,
                         Block::COBWEB.default_state,
                         x,
-                        0,
+                        y,
                         z,
                         chunk_box,
                     );
                 }
-            }
+            });
         }
 
         for section in 0..self.num_sections {
@@ -1772,8 +1789,9 @@ impl StructurePieceBase for MineShaftStairs {
 
 #[cfg(test)]
 mod tests {
-    use super::MineshaftType;
+    use super::{MineshaftType, for_each_maybe_box_position};
     use pumpkin_data::Block;
+    use pumpkin_util::random::{RandomGenerator, RandomImpl, legacy_rand::LegacyRand};
 
     #[test]
     fn mineshaft_can_be_replaced_excludes_its_own_building_blocks() {
@@ -1787,5 +1805,31 @@ mod tests {
             assert!(shaft_type.can_replace(Block::STONE.default_state));
             assert!(shaft_type.can_replace(Block::CAVE_AIR.default_state));
         }
+    }
+
+    #[test]
+    fn generate_maybe_box_draws_in_y_x_z_order_before_placement_gates() {
+        // Vanilla 26.2 StructurePiece.generateMaybeBox:
+        // for (y) for (x) for (z) if (random.nextFloat() > chance) continue.
+        let mut random = RandomGenerator::Legacy(LegacyRand::from_seed(0));
+        let mut accepted = Vec::new();
+        for_each_maybe_box_position(&mut random, 0.8, 0, 2, 0, 2, 2, 2, |x, y, z| {
+            accepted.push((x, y, z));
+        });
+
+        assert_eq!(
+            accepted,
+            [
+                (0, 2, 0),
+                (0, 2, 2),
+                (1, 2, 0),
+                (1, 2, 1),
+                (1, 2, 2),
+                (2, 2, 0),
+                (2, 2, 1),
+                (2, 2, 2),
+            ]
+        );
+        assert_eq!(random.next_f32(), 0.781_534_6);
     }
 }
