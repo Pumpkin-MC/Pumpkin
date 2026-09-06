@@ -105,7 +105,7 @@ struct_excessive_bools = "allow"
 unused_async_trait_impl = "allow"
 
 [workspace.package]
-version = "0.1.0-dev+26.2-26.45"
+version = "0.1.0+26.2-26.45"
 edition = "2024"
 rust-version = "1.96"
 license = "GPL-3.0"
@@ -147,7 +147,7 @@ serde_json = { version = "1.0", default-features = false, features = ["std"] }
 tempfile = { version = "3.27.0", default-features = false }
 proc-macro-error2 = { version = "2", default-features = false }
 aes = { version = "0.9", default-features = false }
-async-compression = { version = "0.4.43", default-features = false }
+async-compression = { version = "0.4.44", default-features = false }
 base64 = { version = "0.23.1", default-features = false, features = ["std"] }
 bitflags = { version = "2.13.1", default-features = false, features = ["std"] }
 cesu8 = { version = "1.1", default-features = false }
@@ -166,7 +166,7 @@ indexmap = { version = "2.14", default-features = false, features = ["std"] }
 itertools = { version = "0.15.0", default-features = false, features = ["use_std"] }
 libc = { version = "0.2", default-features = false }
 libloading = { version = "0.9", default-features = false, features = ["std"] }
-lru = { version = "0.18.3", default-features = false }
+lru = { version = "0.18.4", default-features = false }
 lz4-java-wrc = { version = "0.2.0", default-features = false, features = ["lz4_flex"] }
 md5 = { version = "0.8", default-features = false }
 num-bigint = { version = "0.5", default-features = false, features = ["std"] }
@@ -226,7 +226,7 @@ wasmtime-wasi-http = { git = "https://github.com/bytecodealliance/wasmtime", rev
 # needed for interacting with wasmtime-wasi-http - keep in sync
 hyper = { version = "^1.11", default-features = false }
 axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }
-webrtc = { version = "0.20.3" }
+webrtc = { version = "0.20.5" }
 async-trait = "0.1"
 wit-bindgen = { version = "0.61", default-features = false, features = ["macros"] }
 
@@ -234,6 +234,6 @@ postcard = { version = "1.1", default-features = false, features = ["alloc"] }
 tracing-serde-structured = { version = "0.4", default-features = false }
 wasmparser = { version = "0.258", default-features = false }
 wasm-encoder = { version = "0.258", default-features = false, features = ["component-model", "std"] }
-webpki-root-certs = { version = "1.0.8", default-features = false }
+webpki-root-certs = { version = "1.0.9", default-features = false }
 # ring-only: must match the provider the rest of the tree (wasmtime-wasi-http, rtc) uses
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
