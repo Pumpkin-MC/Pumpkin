@@ -126,6 +126,10 @@ fn for_each_maybe_box_position(
     }
 }
 
+fn is_supporting_box(min_x: i32, max_x: i32, mut is_air: impl FnMut(i32) -> bool) -> bool {
+    (min_x..=max_x).all(|x| !is_air(x))
+}
+
 pub struct MineshaftGenerator {
     pub is_mesa: bool,
 }
@@ -902,6 +906,14 @@ impl MineShaftCorridor {
         x1: i32,
         random: &mut RandomGenerator,
     ) {
+        if !is_supporting_box(x0, x1, |x| {
+            self.piece
+                .get_block_at(chunk, x, y1 + 1, z, chunk_box)
+                .is_air()
+        }) {
+            return;
+        }
+
         let planks = self.shaft_type.planks();
         let fence = self.shaft_type.fence();
 
@@ -1789,7 +1801,7 @@ impl StructurePieceBase for MineShaftStairs {
 
 #[cfg(test)]
 mod tests {
-    use super::{MineshaftType, for_each_maybe_box_position};
+    use super::{MineshaftType, for_each_maybe_box_position, is_supporting_box};
     use pumpkin_data::Block;
     use pumpkin_util::random::{RandomGenerator, RandomImpl, legacy_rand::LegacyRand};
 
@@ -1831,5 +1843,13 @@ mod tests {
             ]
         );
         assert_eq!(random.next_f32(), 0.781_534_6);
+    }
+
+    #[test]
+    fn corridor_support_requires_a_complete_non_air_ceiling() {
+        // Vanilla 26.2 MineShaftPiece.isSupportingBox:
+        // for (x = minX; x <= maxX; x++) if (getBlock(x, y + 1, z).isAir()) return false.
+        assert!(is_supporting_box(0, 2, |_| false));
+        assert!(!is_supporting_box(0, 2, |x| x == 1));
     }
 }
