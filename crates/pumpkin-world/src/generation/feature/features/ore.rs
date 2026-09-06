@@ -36,10 +36,12 @@ impl OreFeature {
         let g = self.size as f32 / 8.0f32;
         let i = f32::midpoint(self.size as f32 / 16.0f32 * 2.0, 1.0).ceil() as i32;
 
-        let d = pos.0.x as f64 + f.sin() as f64 * g as f64;
-        let e = pos.0.x as f64 - f.sin() as f64 * g as f64;
-        let h = pos.0.z as f64 + f.cos() as f64 * g as f64; // Use f.cos() for Math.cos(f)
-        let j = pos.0.z as f64 - f.cos() as f64 * g as f64;
+        let (sin_spread, cos_spread) = Self::vein_spread(f, g);
+
+        let d = pos.0.x as f64 + sin_spread;
+        let e = pos.0.x as f64 - sin_spread;
+        let h = pos.0.z as f64 + cos_spread;
+        let j = pos.0.z as f64 - cos_spread;
 
         let l = pos.0.y as f64 + random.next_bounded_i32(3) as f64 - 2.0;
         let m = pos.0.y as f64 + random.next_bounded_i32(3) as f64 - 2.0;
@@ -203,6 +205,23 @@ impl OreFeature {
         placed_blocks_count > 0
     }
 
+    /// The two ends of the vein axis, as vanilla `OreFeature.place` offsets them:
+    ///
+    /// ```text
+    /// double x0 = origin.getX() + Math.sin(dir) * spreadXY;
+    /// double z0 = origin.getZ() + Math.cos(dir) * spreadXY;
+    /// ```
+    ///
+    /// `Math.sin`/`Math.cos` take a `double`, so the `float` angle is widened *before* the sine.
+    /// That is a different function from the `Mth.sin` lookup table `doPlace` uses a few lines
+    /// later — the same method really does call both.
+    #[must_use]
+    pub fn vein_spread(dir: f32, spread_xy: f32) -> (f64, f64) {
+        let dir = f64::from(dir);
+        let spread_xy = f64::from(spread_xy);
+        (dir.sin() * spread_xy, dir.cos() * spread_xy)
+    }
+
     /// Radius of one node of the vein, exactly as vanilla `OreFeature.doPlace` computes it:
     ///
     /// ```text
@@ -296,6 +315,56 @@ mod tests {
                 expected
             );
         }
+    }
+
+    /// Reference values produced by running vanilla's `Math.sin(dir) * spreadXY` /
+    /// `Math.cos(dir) * spreadXY` on a JVM (`spreadXY = size / 8.0F`), as raw `double` bits.
+    #[test]
+    fn vein_spread_matches_vanilla_place() {
+        // (dir, size, sin*spread bits, cos*spread bits)
+        let cases: [(f32, i32, u64, u64); 8] = [
+            (0.0, 33, 0x0000_0000_0000_0000, 0x4010_8000_0000_0000),
+            (0.5, 33, 0x3fff_a45f_b7ed_5e20, 0x400c_f5d1_468e_593a),
+            (0.5, 8, 0x3fde_aee8_744b_05f0, 0x3fec_1528_065b_7d50),
+            (1.2345, 33, 0x400f_26c5_7166_4dc2, 0x3ff5_c790_472b_94a0),
+            (1.2345, 64, 0x401e_351c_8cfe_5aeb, 0x4005_1e9b_6bcd_2b46),
+            (2.718_281_7, 9, 0x3fdd_9385_aa8f_3df0, 0xbff0_6945_0c92_7123),
+            (
+                2.718_281_7,
+                64,
+                0x400a_4a3d_ecf1_1a9c,
+                0xc01d_2cec_8820_c922,
+            ),
+            (
+                core::f32::consts::PI,
+                33,
+                0xbe98_3362_fdee_653c,
+                0xc010_7fff_ffff_ffee,
+            ),
+        ];
+        for (dir, size, want_sin, want_cos) in cases {
+            let spread_xy = size as f32 / 8.0f32;
+            let (sin_spread, cos_spread) = OreFeature::vein_spread(dir, spread_xy);
+            assert_eq!(
+                sin_spread.to_bits(),
+                want_sin,
+                "dir={dir} size={size}: sin got {sin_spread}"
+            );
+            assert_eq!(
+                cos_spread.to_bits(),
+                want_cos,
+                "dir={dir} size={size}: cos got {cos_spread}"
+            );
+        }
+    }
+
+    /// The old form took the sine in `f32` and widened afterwards, which is a different number:
+    /// vanilla `3.893_931_280_073_702_3` vs `3.893_931_180_238_723_8` for dir=1.2345, size=33.
+    #[test]
+    fn vein_spread_differs_from_f32_sine() {
+        let (sin_spread, _) = OreFeature::vein_spread(1.2345, 33.0 / 8.0);
+        let old = f64::from(1.2345f32.sin()) * f64::from(33.0f32 / 8.0f32);
+        assert!((sin_spread - old).abs() > 1e-9);
     }
 
     /// The naive all-`f32` form with an accurate sine, which Pumpkin used before, disagrees with
