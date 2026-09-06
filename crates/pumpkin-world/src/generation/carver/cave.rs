@@ -1,5 +1,6 @@
 use super::{CarveRun, Carver, overworld_carve_state, place_carved_block};
 use pumpkin_data::carver::{CarverAdditionalConfig, CarverConfig, HeightProvider};
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
@@ -280,7 +281,9 @@ impl CaveCarver {
         let x_index_max = ((x + horizontal_radius).floor() as i32 - chunk_min_x).min(15);
 
         let is_overworld = run.ctx.carver_aquifer.is_some();
-        let protected_blocks_on_top = i32::from(!is_overworld);
+        // Vanilla `Carver` excludes the top 7 generation blocks from carving;
+        // only the Nether path applies it here.
+        let protected_blocks_on_top = 7 * i32::from(!is_overworld);
         let max_y = max_y.min(
             (run.chunk.generation_bottom_y() as i32 + run.chunk.generation_height() as i32)
                 - 1
@@ -341,6 +344,7 @@ impl CaveCarver {
     ) -> bool {
         let state = run.chunk.get_block_state(&Vector3::new(x, y, z));
         let block = state.to_block();
+        let overworld = run.ctx.carver_aquifer.is_some();
 
         if block.id == pumpkin_data::Block::GRASS_BLOCK.id
             || block.id == pumpkin_data::Block::MYCELIUM.id
@@ -348,12 +352,14 @@ impl CaveCarver {
             *has_grass = true;
         }
 
+        if !overworld && !block.has_tag(&tag::Block::MINECRAFT_NETHER_CARVER_REPLACEABLES) {
+            return false;
+        }
+
         let Some((state, should_schedule_fluid_update)) = overworld_carve_state(run, x, y, z)
         else {
             return false;
         };
-
-        let overworld = run.ctx.carver_aquifer.is_some();
 
         place_carved_block(
             run,
@@ -427,7 +433,7 @@ pub fn get_height(p: &HeightProvider, random: &mut RandomGenerator, min_y: i8, h
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pumpkin_data::carver::CAVE;
+    use pumpkin_data::carver::{CAVE, NETHER_CAVE};
     use pumpkin_data::{Block, BlockStateId, dimension::Dimension};
 
     type Run<'a, 'b> = super::super::CarveRun<'a, 'b>;
@@ -516,5 +522,58 @@ mod tests {
         }
 
         None
+    }
+
+    #[test]
+    fn nether_roof_blocks_are_protected() {
+        // Production Nether runs have no carver aquifer (the NETHER noise
+        // settings disable aquifers), so mirror that here.
+        super::super::with_carve_run_options(Dimension::THE_NETHER, None, false, |run| {
+            for y in 121..=127 {
+                run.chunk
+                    .set_block_state(8, y, 8, Block::NETHERRACK.default_state);
+            }
+
+            CaveCarver::carve_ellipsoid(run, &NETHER_CAVE, 8.5, 124.0, 8.5, 8.0, 8.0, -1.0);
+
+            for y in 121..=127 {
+                assert_eq!(
+                    block_id(run, 8, y, 8),
+                    Block::NETHERRACK.default_state.id,
+                    "nether roof block at Y={y} should be protected from carving",
+                );
+            }
+        });
+    }
+
+    #[test]
+    fn nether_bedrock_is_not_carved() {
+        // Production Nether runs have no carver aquifer (the NETHER noise
+        // settings disable aquifers), so mirror that here.
+        super::super::with_carve_run_options(Dimension::THE_NETHER, None, false, |run| {
+            // Bedrock sits well inside the carve region, below the protected roof.
+            run.chunk
+                .set_block_state(8, 100, 8, Block::BEDROCK.default_state);
+            for (x, z) in [(7, 8), (9, 8), (8, 7), (8, 9)] {
+                run.chunk
+                    .set_block_state(x, 100, z, Block::NETHERRACK.default_state);
+            }
+
+            CaveCarver::carve_ellipsoid(run, &NETHER_CAVE, 8.5, 100.0, 8.5, 8.0, 8.0, -1.0);
+
+            assert_eq!(
+                block_id(run, 8, 100, 8),
+                Block::BEDROCK.default_state.id,
+                "bedrock is not in the nether carver replaceables tag and must survive",
+            );
+            // Sanity check: the ellipsoid actually reached this spot.
+            for (x, z) in [(7, 8), (9, 8), (8, 7), (8, 9)] {
+                assert_ne!(
+                    block_id(run, x, 100, z),
+                    Block::NETHERRACK.default_state.id,
+                    "neighboring netherrack at ({x}, 100, {z}) should have been carved",
+                );
+            }
+        });
     }
 }
