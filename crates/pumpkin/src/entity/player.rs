@@ -7572,6 +7572,18 @@ impl InventoryPlayer for Player {
         self.increment_stat(category, stat_id, amount);
     }
 
+    fn play_block_sound(&self, sound: Sound, pitch: f32) {
+        if let Some(pos) = self.open_container_pos.load() {
+            self.world().play_sound_fine(
+                sound,
+                SoundCategory::Blocks,
+                &pos.to_centered_f64(),
+                1.0,
+                pitch,
+            );
+        }
+    }
+
     fn fire_prepare_item_enchant_event(
         &self,
         item: &ItemStack,
