@@ -312,20 +312,55 @@ impl WorldAquiferSampler {
 
         let p = &self.packed_positions;
 
+        // Vanilla `Aquifer.NoiseBasedAquifer.computeSubstance` visits the twelve candidate
+        // aquifer centres as `for x1 in 0..=1 { for y1 in -1..=1 { for z1 in 0..=1 } } }`,
+        // i.e. x-major, then y, then z. The visiting order is only observable through the
+        // `>=` tie-breaking of the four-nearest insertion sort below, but it *is* observable,
+        // so keep it identical.
         Some([
-            p[i11 + 2],
-            p[i10 + 2],
-            p[i01 + 2],
-            p[i00 + 2],
-            p[i11 + 1],
-            p[i10 + 1],
-            p[i01 + 1],
-            p[i00 + 1],
-            p[i11],
-            p[i10],
-            p[i01],
-            p[i00],
+            p[i00],     // (x  , y-1, z  )
+            p[i01],     // (x  , y-1, z+1)
+            p[i00 + 1], // (x  , y  , z  )
+            p[i01 + 1], // (x  , y  , z+1)
+            p[i00 + 2], // (x  , y+1, z  )
+            p[i01 + 2], // (x  , y+1, z+1)
+            p[i10],     // (x+1, y-1, z  )
+            p[i11],     // (x+1, y-1, z+1)
+            p[i10 + 1], // (x+1, y  , z  )
+            p[i11 + 1], // (x+1, y  , z+1)
+            p[i10 + 2], // (x+1, y+1, z  )
+            p[i11 + 2], // (x+1, y+1, z+1)
         ])
+    }
+
+    /// Vanilla's four-nearest insertion sort from `Aquifer.NoiseBasedAquifer.computeSubstance`:
+    ///
+    /// ```java
+    /// if (distanceSqr1 >= newDistance) { ...shift 1..3 down...; closestIndex1 = index; }
+    /// else if (distanceSqr2 >= newDistance) { ...shift 2..3 down...; closestIndex2 = index; }
+    /// else if (distanceSqr3 >= newDistance) { closestIndex4 = closestIndex3; closestIndex3 = index; }
+    /// else if (distanceSqr4 >= newDistance) { closestIndex4 = index; }
+    /// ```
+    ///
+    /// The comparison is `>=`, so a candidate that ties an already stored distance takes the
+    /// *earlier* slot and pushes the stored one back.
+    const fn insert_nearest(nearest: &mut [(i64, i32); 4], packed: i64, distance_sqr: i32) {
+        let entry = (packed, distance_sqr);
+        if nearest[0].1 >= distance_sqr {
+            nearest[3] = nearest[2];
+            nearest[2] = nearest[1];
+            nearest[1] = nearest[0];
+            nearest[0] = entry;
+        } else if nearest[1].1 >= distance_sqr {
+            nearest[3] = nearest[2];
+            nearest[2] = nearest[1];
+            nearest[1] = entry;
+        } else if nearest[2].1 >= distance_sqr {
+            nearest[3] = nearest[2];
+            nearest[2] = entry;
+        } else if nearest[3].1 >= distance_sqr {
+            nearest[3] = entry;
+        }
     }
 
     #[inline]
@@ -605,35 +640,12 @@ impl WorldAquiferSampler {
 
         let mut nearest = [(0i64, i32::MAX); 4];
 
-        macro_rules! process {
-            ($packed:expr) => {{
-                let packed = $packed;
-                let dx = block_pos::unpack_x(packed) - sample_x;
-                let dy = block_pos::unpack_y(packed) - sample_y;
-                let dz = block_pos::unpack_z(packed) - sample_z;
-                let h = dx * dx + dy * dy + dz * dz;
-
-                if nearest[3].1 > h {
-                    nearest[3] = (packed, h);
-                    if nearest[2].1 > h {
-                        nearest[3] = nearest[2];
-                        nearest[2] = (packed, h);
-                    }
-                    if nearest[1].1 > h {
-                        nearest[2] = nearest[1];
-                        nearest[1] = (packed, h);
-                    }
-                    if nearest[0].1 > h {
-                        nearest[1] = nearest[0];
-                        nearest[0] = (packed, h);
-                    }
-                }
-            }};
-        }
-
-        // Same insertion order as the original array literal; sort behaviour is preserved.
         for packed in random_positions {
-            process!(packed);
+            let dx = block_pos::unpack_x(packed) - sample_x;
+            let dy = block_pos::unpack_y(packed) - sample_y;
+            let dz = block_pos::unpack_z(packed) - sample_z;
+            let h = dx * dx + dy * dy + dz * dz;
+            Self::insert_nearest(&mut nearest, packed, h);
         }
 
         let fluid_level2 = self.get_water_level(nearest[0].0, router, height_estimator);
@@ -909,6 +921,59 @@ mod random_positions_and_hypot {
     fn create_carver_aquifer() -> CarverAquiferSampler<'static> {
         let settings = NoiseSettings::from_dimension(&Dimension::OVERWORLD);
         CarverAquiferSampler::new(7, 4, &PROTO_ROUTER, &RANDOM_CONFIG, settings)
+    }
+
+    /// `Aquifer.NoiseBasedAquifer.computeSubstance` keeps the four nearest aquifer centres with
+    /// `if (distanceSqr1 >= newDistance) {...} else if (distanceSqr2 >= newDistance) {...} ...`.
+    /// Because the comparison is `>=` and not `>`, a candidate whose squared distance ties an
+    /// already stored one takes the *earlier* slot and pushes the stored candidate back.
+    #[test]
+    fn insert_nearest_matches_vanilla_tie_breaking() {
+        let mut nearest = [(0i64, i32::MAX); 4];
+        for (packed, distance) in [(10i64, 5i32), (11, 7), (12, 9), (13, 11)] {
+            WorldAquiferSampler::insert_nearest(&mut nearest, packed, distance);
+        }
+        assert_eq!(nearest, [(10, 5), (11, 7), (12, 9), (13, 11)]);
+
+        // Ties the closest entry: vanilla takes the first branch, so the newcomer becomes
+        // `closestIndex1` and everything else shifts one slot back.
+        WorldAquiferSampler::insert_nearest(&mut nearest, 20, 5);
+        assert_eq!(nearest, [(20, 5), (10, 5), (11, 7), (12, 9)]);
+
+        // Ties the second entry: vanilla falls into the second branch.
+        WorldAquiferSampler::insert_nearest(&mut nearest, 21, 5);
+        assert_eq!(nearest, [(21, 5), (20, 5), (10, 5), (11, 7)]);
+
+        // Larger than every stored distance: vanilla drops it.
+        WorldAquiferSampler::insert_nearest(&mut nearest, 22, 100);
+        assert_eq!(nearest, [(21, 5), (20, 5), (10, 5), (11, 7)]);
+    }
+
+    /// The twelve candidate centres must be visited x-major, then y, then z, exactly as
+    /// `for (int x1 = 0; x1 <= 1; x1++) for (int y1 = -1; y1 <= 1; y1++) for (int z1 = 0; z1 <= 1; z1++)`
+    /// in `computeSubstance`; the order is observable through the `>=` tie-breaking above.
+    #[test]
+    fn random_positions_are_returned_in_vanilla_visit_order() {
+        let sampler = create_aquifer(&PROTO_ROUTER).0;
+        let (x, y, z) = (
+            sampler.start_x + 1,
+            sampler.start_y + 1,
+            sampler.start_z + 1,
+        );
+        let got = sampler.random_positions_for_pos(x, y, z).unwrap();
+
+        let mut expected = Vec::new();
+        for dx in 0..=1 {
+            for dy in -1..=1 {
+                for dz in 0..=1 {
+                    let index = sampler
+                        .checked_packed_position_index(x + dx, y + dy, z + dz)
+                        .unwrap();
+                    expected.push(sampler.packed_positions[index]);
+                }
+            }
+        }
+        assert_eq!(got.to_vec(), expected);
     }
 
     #[test]
