@@ -345,7 +345,7 @@ impl StructurePiece {
         }
     }
 
-    fn is_replaceable_by_structures(state: &BlockState, block: &Block) -> bool {
+    pub(crate) fn is_replaceable_by_structures(state: &BlockState, block: &Block) -> bool {
         state.is_air()
             || state.is_liquid()
             || block == &Block::GLOW_LICHEN

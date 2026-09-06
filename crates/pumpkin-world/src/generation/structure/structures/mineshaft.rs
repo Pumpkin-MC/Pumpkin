@@ -230,6 +230,44 @@ fn is_in_invalid_liquid_location(
     })
 }
 
+/// Vanilla `Block.canSupportCenter(level, pos, Direction.DOWN)` combined with the
+/// `!(stateAbove.getBlock() instanceof FallingBlock)` test of
+/// `MineShaftCorridor.canHangChainBelow`. The 26.2 `FallingBlock` subclasses are
+/// `AnvilBlock`, `ColoredFallingBlock`, `ConcretePowderBlock`, `DragonEggBlock`
+/// and `SandBlock`.
+fn is_falling_block(block: &Block) -> bool {
+    matches!(
+        block.id,
+        id if id == Block::ANVIL.id
+            || id == Block::CHIPPED_ANVIL.id
+            || id == Block::DAMAGED_ANVIL.id
+            || id == Block::DRAGON_EGG.id
+            || id == Block::SAND.id
+            || id == Block::RED_SAND.id
+            || id == Block::GRAVEL.id
+            || id == Block::WHITE_CONCRETE_POWDER.id
+            || id == Block::ORANGE_CONCRETE_POWDER.id
+            || id == Block::MAGENTA_CONCRETE_POWDER.id
+            || id == Block::LIGHT_BLUE_CONCRETE_POWDER.id
+            || id == Block::YELLOW_CONCRETE_POWDER.id
+            || id == Block::LIME_CONCRETE_POWDER.id
+            || id == Block::PINK_CONCRETE_POWDER.id
+            || id == Block::GRAY_CONCRETE_POWDER.id
+            || id == Block::LIGHT_GRAY_CONCRETE_POWDER.id
+            || id == Block::CYAN_CONCRETE_POWDER.id
+            || id == Block::PURPLE_CONCRETE_POWDER.id
+            || id == Block::BLUE_CONCRETE_POWDER.id
+            || id == Block::BROWN_CONCRETE_POWDER.id
+            || id == Block::GREEN_CONCRETE_POWDER.id
+            || id == Block::RED_CONCRETE_POWDER.id
+            || id == Block::BLACK_CONCRETE_POWDER.id
+    )
+}
+
+fn can_hang_chain_below(state: &BlockState, block: &Block) -> bool {
+    state.is_center_solid(DataBlockDirection::Down) && !is_falling_block(block)
+}
+
 pub struct MineshaftGenerator {
     pub is_mesa: bool,
 }
@@ -1175,9 +1213,15 @@ impl MineShaftCorridor {
                 let below_y = world_y - dist;
                 let state_below =
                     chunk.get_block_state(&Vector3::new(world_pos.x, below_y, world_pos.z));
-                let empty_below =
-                    state_below.to_state().is_air() || state_below.to_block_id() == Block::WATER.id;
-                if !empty_below && state_below.to_block_id() != Block::LAVA.id {
+                let empty_below = StructurePiece::is_replaceable_by_structures(
+                    state_below.to_state(),
+                    state_below.to_block(),
+                ) && state_below.to_block_id() != Block::LAVA.id;
+                if !empty_below
+                    && state_below
+                        .to_state()
+                        .is_side_solid(DataBlockDirection::Up)
+                {
                     for py in (below_y + 1)..world_y {
                         chunk.set_block_state(world_pos.x, py, world_pos.z, self.shaft_type.wood());
                     }
@@ -1190,8 +1234,11 @@ impl MineShaftCorridor {
                 let above_y = world_y + dist;
                 let state_above =
                     chunk.get_block_state(&Vector3::new(world_pos.x, above_y, world_pos.z));
-                let empty_above = state_above.to_state().is_air();
-                if !empty_above {
+                let empty_above = StructurePiece::is_replaceable_by_structures(
+                    state_above.to_state(),
+                    state_above.to_block(),
+                );
+                if !empty_above && can_hang_chain_below(state_above.to_state(), state_above.to_block()) {
                     chunk.set_block_state(
                         world_pos.x,
                         world_y + 1,
@@ -1986,8 +2033,8 @@ impl StructurePieceBase for MineShaftStairs {
 #[cfg(test)]
 mod tests {
     use super::{
-        MineshaftType, boundary_matches, for_each_maybe_box_position, is_supporting_box,
-        passes_cobweb_random_gate, places_floor_planks, rail_chance,
+        MineshaftType, boundary_matches, for_each_maybe_box_position, is_falling_block,
+        is_supporting_box, passes_cobweb_random_gate, places_floor_planks, rail_chance,
     };
     use pumpkin_data::Block;
     use pumpkin_util::random::{RandomGenerator, RandomImpl, legacy_rand::LegacyRand};
@@ -2114,5 +2161,26 @@ mod tests {
         // i.e. the two wall columns of the 3-wide corridor, in that order.
         let x = 0;
         assert_eq!([x, x + 2], [0, 2]);
+    }
+
+    #[test]
+    fn chains_do_not_hang_from_falling_blocks() {
+        // Vanilla 26.2 MineShaftCorridor.canHangChainBelow rejects any
+        // `stateAbove.getBlock() instanceof FallingBlock`; the FallingBlock
+        // subclasses in 26.2 are AnvilBlock, ColoredFallingBlock,
+        // ConcretePowderBlock, DragonEggBlock and SandBlock.
+        for block in [
+            &Block::SAND,
+            &Block::RED_SAND,
+            &Block::GRAVEL,
+            &Block::ANVIL,
+            &Block::DRAGON_EGG,
+            &Block::BLACK_CONCRETE_POWDER,
+        ] {
+            assert!(is_falling_block(block), "{} should fall", block.name);
+        }
+        for block in [&Block::STONE, &Block::DEEPSLATE, &Block::DARK_OAK_PLANKS] {
+            assert!(!is_falling_block(block), "{} should not fall", block.name);
+        }
     }
 }
