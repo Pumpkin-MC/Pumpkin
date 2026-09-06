@@ -1422,11 +1422,11 @@ impl ProtoChunk {
                 }
 
                 match instance {
-                    StructureInstance::Start(pos) => tasks.push(pos.collector.clone()),
+                    StructureInstance::Start(pos) => tasks.push((*id, pos.collector.clone())),
                     StructureInstance::Reference(collector) => {
                         let collector_arc = collector.clone();
-                        if !tasks.iter().any(|t| Arc::ptr_eq(t, &collector_arc)) {
-                            tasks.push(collector_arc);
+                        if !tasks.iter().any(|(_, t)| Arc::ptr_eq(t, &collector_arc)) {
+                            tasks.push((*id, collector_arc));
                         }
                     }
                 }
@@ -1461,15 +1461,18 @@ impl ProtoChunk {
                                         .intersects_raw_xz(start_x, start_z, end_x, end_z)
                                     {
                                         let collector_arc = pos.collector.clone();
-                                        if !tasks.iter().any(|t| Arc::ptr_eq(t, &collector_arc)) {
-                                            tasks.push(collector_arc);
+                                        if !tasks
+                                            .iter()
+                                            .any(|(_, t)| Arc::ptr_eq(t, &collector_arc))
+                                        {
+                                            tasks.push((*id, collector_arc));
                                         }
                                     }
                                 }
                                 StructureInstance::Reference(collector) => {
                                     let collector_arc = collector.clone();
-                                    if !tasks.iter().any(|t| Arc::ptr_eq(t, &collector_arc)) {
-                                        tasks.push(collector_arc);
+                                    if !tasks.iter().any(|(_, t)| Arc::ptr_eq(t, &collector_arc)) {
+                                        tasks.push((*id, collector_arc));
                                     }
                                 }
                             }
@@ -1479,15 +1482,27 @@ impl ProtoChunk {
             }
         }
 
-        let decorator_seed = get_decorator_seed(population_seed, 0, step as u64);
-        let mut random = RandomGenerator::Worldgen(WorldgenRandom::from_seed(decorator_seed));
-
+        // Vanilla `ChunkGenerator.applyBiomeDecoration` walks the structure registry
+        // once per decoration step and reseeds before each structure:
+        //     for (Structure s : structuresByStep.getOrDefault(stepIndex, List.of())) {
+        //         random.setFeatureSeed(decorationSeed, index, stepIndex);
+        //         startsForStructure(sectionPos, s).forEach(start -> start.placeInChunk(..., random, ...));
+        //         index++;
+        //     }
+        // `index` is the structure's position inside its step's list in registry
+        // order, i.e. resource-location order, and it is counted for every
+        // structure of the step whether or not the chunk holds a start of it.
         let chunk = cache.get_center_chunk_mut();
-        for collector_arc in tasks {
-            let mut collector = collector_arc
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            collector.generate_in_chunk(chunk, block_registry, &mut random, world_seed);
+        for (structure_index, id) in structures_in_step(step) {
+            let decorator_seed = get_decorator_seed(population_seed, structure_index, step as u64);
+            let mut random = RandomGenerator::Worldgen(WorldgenRandom::from_seed(decorator_seed));
+
+            for (_, collector_arc) in tasks.iter().filter(|(task_id, _)| *task_id == id) {
+                let mut collector = collector_arc
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                collector.generate_in_chunk(chunk, block_registry, &mut random, world_seed);
+            }
         }
     }
 
@@ -1914,5 +1929,58 @@ impl GenerationCache for ProtoChunk {
     }
     fn get_sea_level(&self) -> i32 {
         Self::get_sea_level(self)
+    }
+}
+
+/// The structures of one decoration step, paired with the index vanilla uses to
+/// derive their feature seed.
+///
+/// `ChunkGenerator.applyBiomeDecoration` groups the whole structure registry by
+/// `structure.step().ordinal()` and walks each step's list in registry order,
+/// counting one index per structure whether or not the chunk holds a start of it:
+///
+///     int index = 0;
+///     for (Structure s : structuresByStep.getOrDefault(stepIndex, List.of())) {
+///         random.setFeatureSeed(decorationSeed, index, stepIndex);
+///         ...
+///         index++;
+///     }
+///
+/// The structure registry is data-driven, so its iteration order is the
+/// resource-location order that `StructureKeys::all_names` is generated in.
+fn structures_in_step(step: usize) -> impl Iterator<Item = (u64, StructureKeys)> {
+    StructureKeys::all_names()
+        .iter()
+        .filter_map(|name| StructureKeys::from_name(name))
+        .filter(move |id| Structure::get(id).step.ordinal() == step)
+        .enumerate()
+        .map(|(index, id)| (index as u64, id))
+}
+
+#[cfg(test)]
+mod structure_step_tests {
+    use super::structures_in_step;
+    use pumpkin_data::structures::{GenerationStep, StructureKeys};
+
+    #[test]
+    fn underground_structures_are_indexed_in_registry_order() {
+        // Vanilla 26.2 `assets/datapacks/26_2/data/minecraft/worldgen/structure`:
+        // buried_treasure, mineshaft, mineshaft_mesa, trail_ruins and trial_chambers
+        // all declare "step": "underground_structures", and the data-driven registry
+        // iterates them in resource-location order, so
+        // `ChunkGenerator.applyBiomeDecoration`'s per-step `index` runs 0..4 in that
+        // order. `mineshaft_mesa` is 2, not 0.
+        let step = GenerationStep::UndergroundStructures.ordinal();
+        let listed: Vec<_> = structures_in_step(step).collect();
+        assert_eq!(
+            listed,
+            vec![
+                (0, StructureKeys::BuriedTreasure),
+                (1, StructureKeys::Mineshaft),
+                (2, StructureKeys::MineshaftMesa),
+                (3, StructureKeys::TrailRuins),
+                (4, StructureKeys::TrialChambers),
+            ]
+        );
     }
 }
