@@ -1939,12 +1939,14 @@ impl GenerationCache for ProtoChunk {
 /// `structure.step().ordinal()` and walks each step's list in registry order,
 /// counting one index per structure whether or not the chunk holds a start of it:
 ///
-///     int index = 0;
-///     for (Structure s : structuresByStep.getOrDefault(stepIndex, List.of())) {
-///         random.setFeatureSeed(decorationSeed, index, stepIndex);
-///         ...
-///         index++;
-///     }
+/// ```text
+/// int index = 0;
+/// for (Structure s : structuresByStep.getOrDefault(stepIndex, List.of())) {
+///     random.setFeatureSeed(decorationSeed, index, stepIndex);
+///     ...
+///     index++;
+/// }
+/// ```
 ///
 /// The structure registry is data-driven, so its iteration order is the
 /// resource-location order that `StructureKeys::all_names` is generated in.
