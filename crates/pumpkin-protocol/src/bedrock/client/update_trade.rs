@@ -1,3 +1,5 @@
+// Last verified for v2169
+
 use pumpkin_macros::packet;
 use pumpkin_nbt::compound::NbtCompound;
 

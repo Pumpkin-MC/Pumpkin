@@ -1,9 +1,8 @@
-use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::{BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block;
 
 use crate::{
-    block::{BlockBehaviour, BlockFuture, OnPlaceArgs},
+    block::{BlockBehaviour, OnPlaceArgs, PathComputationType},
     entity::EntityBase,
 };
 
@@ -13,13 +12,14 @@ type EndPortalFrameProperties = pumpkin_data::block_properties::EndPortalFrameLi
 pub struct EndPortalFrameBlock;
 
 impl BlockBehaviour for EndPortalFrameBlock {
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            let mut end_portal_frame_props = EndPortalFrameProperties::default(args.block);
-            end_portal_frame_props.facing =
-                args.player.get_entity().get_horizontal_facing().opposite();
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        let mut end_portal_frame_props = EndPortalFrameProperties::default(args.block);
+        end_portal_frame_props.facing = args.player.get_entity().get_horizontal_facing().opposite();
 
-            end_portal_frame_props.to_state_id(args.block)
-        })
+        end_portal_frame_props.to_state_id(args.block)
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }

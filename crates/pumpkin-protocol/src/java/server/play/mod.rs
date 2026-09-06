@@ -148,3 +148,9 @@ pub use set_structure_block::*;
 
 mod spectate_entity;
 pub use spectate_entity::*;
+
+mod change_difficulty;
+pub use change_difficulty::*;
+
+mod chat_command_signed;
+pub use chat_command_signed::*;

@@ -1,4 +1,3 @@
-use pumpkin_protocol::bedrock::server::text::SText;
 use pumpkin_util::{Hand, PermissionLvl};
 use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, VerifyingKey};
 use rsa::signature::Verifier;
@@ -35,11 +34,10 @@ use crate::plugin::player::player_toggle_sneak_event::PlayerToggleSneakEvent;
 
 use crate::block::entities::command_block::CommandBlockEntity;
 use crate::block::entities::jigsaw_block::JigsawBlockEntity;
-use crate::block::entities::sign::SignBlockEntity;
 use crate::plugin::player::player_toggle_sprint_event::PlayerToggleSprintEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{BlockBreakingProgress, World, chunker};
-use pumpkin_data::block_properties::{BlockProperties, CommandBlockLikeProperties};
+use pumpkin_data::block_properties::CommandBlockLikeProperties;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
     BlocksAttacksImpl, ConsumableImpl, DataComponentImpl, EquipmentSlot, EquippableImpl, FoodImpl,
@@ -57,15 +55,14 @@ use pumpkin_protocol::bedrock::client::CMovePlayer;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_protocol::java::client::play::{
-    CBlockUpdate, CCommandSuggestions, CEntityPositionSync, CHeadRot, COpenSignEditor,
-    CPingResponse, CPlayerInfoUpdate, CPlayerPosition, CSetCamera, CSetSelectedSlot,
-    CSystemChatMessage, CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot, InitChat,
-    PlayerAction,
+    CBlockUpdate, CCommandSuggestions, CEntityPositionSync, CHeadRot, CPingResponse,
+    CPlayerInfoUpdate, CPlayerPosition, CSetCamera, CSetSelectedSlot, CUpdateEntityPos,
+    CUpdateEntityPosRot, CUpdateEntityRot, InitChat, PlayerAction, PlayerInfoFlags,
 };
 use pumpkin_protocol::java::server::play::{
     Action, ActionType, CommandBlockMode, FLAG_ON_GROUND, SAttack, SBundleItemSelected,
     SChangeGameMode, SChatCommand, SChatMessage, SChunkBatch, SClientCommand,
-    SClientInformationPlay, SCloseContainer, SCommandSuggestion, SConfirmTeleport,
+    SClientInformationPlay, SCommandSuggestion, SConfirmTeleport,
     SCookieResponse as SPCookieResponse, SEditBook, SInteract, SJigsawGenerate, SKeepAlive,
     SMoveVehicle, SPaddleBoat, SPickItemFromBlock, SPickItemFromEntity, SPlaceRecipe,
     SPlayPingRequest, SPlayerAbilities, SPlayerAction, SPlayerCommand, SPlayerInput,
@@ -80,7 +77,6 @@ use pumpkin_util::math::{polynomial_rolling_hash, position::BlockPos, wrap_degre
 use pumpkin_util::{GameMode, text::TextComponent};
 use pumpkin_world::generation::structure::structures::jigsaw::JigsawJointType;
 use pumpkin_world::world::BlockFlags;
-use tokio::sync::Mutex;
 
 /// In secure chat mode, Player will be kicked if they send a chat message with a timestamp that is older than this (in ms)
 /// Vanilla: 2 minutes
@@ -219,6 +215,7 @@ impl PumpkinError for ChatError {
 
 pub mod attack;
 pub mod bundle_item_selected;
+pub mod change_difficulty;
 pub mod change_game_mode;
 pub mod chat_ack;
 pub mod chat_command;
@@ -258,6 +255,7 @@ pub mod recipe_book_seen_recipe;
 pub mod resource_pack_response;
 pub mod seen_advancement;
 pub mod select_trade;
+pub mod set_beacon;
 pub mod set_command_block;
 pub mod set_command_minecart;
 pub mod set_creative_slot;

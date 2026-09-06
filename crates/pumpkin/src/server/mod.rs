@@ -3,7 +3,7 @@ use crate::command::commands::default_dispatcher;
 use crate::command::commands::defaultgamemode::DefaultGamemode;
 use crate::data::VanillaData;
 use crate::data::player_server::ServerPlayerData;
-use crate::entity::{EntityBase, NBTStorage};
+use crate::entity::NBTStorage;
 use crate::item::registry::ItemRegistry;
 use crate::net::authentication::fetch_mojang_public_keys;
 use crate::net::{ClientPlatform, DisconnectReason, EncryptionError, GameProfile, PlayerConfig};
@@ -23,7 +23,6 @@ use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
 use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
 use pumpkin_data::dimension::Dimension;
-use pumpkin_data::entity::EntityType;
 use pumpkin_util::permission::PermissionManager;
 use pumpkin_util::text::color::NamedColor;
 use pumpkin_world::dimension::into_level;
@@ -31,7 +30,6 @@ use pumpkin_world::generation::generator::GeneratorInit;
 use pumpkin_world::world::WorldPortalExt;
 use tracing::{debug, error, info, warn};
 
-use crate::command::CommandSender;
 use pumpkin_protocol::java::client::login::CEncryptionRequest;
 use pumpkin_protocol::java::client::play::{CChangeDifficulty, CTabList};
 use pumpkin_protocol::{ClientPacket, java::client::config::CPluginMessage};
@@ -41,16 +39,16 @@ use pumpkin_world::world_info::anvil::{
     AnvilLevelInfo, LEVEL_DAT_BACKUP_FILE_NAME, LEVEL_DAT_FILE_NAME,
 };
 use pumpkin_world::world_info::{LevelData, WorldInfoError, WorldInfoReader, WorldInfoWriter};
-use rand::seq::{IndexedRandom, SliceRandom};
+use rand::seq::IndexedRandom;
+use rayon::prelude::*;
 use rsa::RsaPublicKey;
-use std::collections::HashSet;
 use std::fs;
 use std::net::IpAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32};
 use std::{future::Future, sync::atomic::Ordering, time::Duration};
-use tokio::sync::{Mutex, OnceCell};
-use tokio::task::{JoinHandle, JoinSet};
+use tokio::sync::OnceCell;
+use tokio::task::JoinHandle;
 use tokio_util::task::TaskTracker;
 
 mod connection_cache;
@@ -60,14 +58,12 @@ mod key_store;
 pub mod recipe;
 pub mod scheduler;
 pub mod seasonal_events;
+pub mod server_test_manager;
 pub mod tick_rate_manager;
 pub mod ticker;
 
 pub use recipe::RecipeManager;
 
-use crate::command::args::entities::{
-    EntityFilter, EntityFilterSort, EntitySelectorType, TargetSelector, ValueCondition,
-};
 use crate::data::advancement_data::AdvancementManager;
 use crate::server::scheduler::TaskScheduler;
 
@@ -91,7 +87,7 @@ pub struct Server {
     /// Cached Bedrock server private key (process-lifetime). Generated on first Bedrock login and reused.
     pub bedrock_private_key: OnceCell<Arc<pumpkin_util::p384::ecdsa::SigningKey>>,
     /// Manages server status information.
-    listing: Mutex<CachedStatus>,
+    listing: std::sync::Mutex<CachedStatus>,
     /// Saves server branding information.
     branding: CachedBranding,
     /// Saves and dispatches commands to appropriate handlers.
@@ -107,6 +103,7 @@ pub struct Server {
     /// Assigns unique IDs to containers.
     container_id: AtomicU32,
     pub recipe_manager: Arc<recipe::RecipeManager>,
+    pub datapack_manager: Arc<crate::data::datapack::DatapackManager>,
     pub enchantment_manager: Arc<enchantment::EnchantmentManager>,
     /// Assigns unique IDs to maps.
     map_id: AtomicI32,
@@ -114,13 +111,20 @@ pub struct Server {
     /// Pulled from Mojang API on startup
     pub mojang_public_keys: ArcSwap<Vec<RsaPublicKey>>,
     /// The server's custom bossbars
-    pub bossbars: Mutex<CustomBossbars>,
+    pub bossbars: std::sync::Mutex<CustomBossbars>,
     /// Manages all maps on the server
     pub map_manager: MapManager,
     /// The default gamemode when a player joins the server (reset every restart)
-    pub defaultgamemode: Mutex<DefaultGamemode>,
+    pub defaultgamemode: std::sync::Mutex<DefaultGamemode>,
     /// Manages player data storage
     pub player_data_storage: ServerPlayerData,
+    /// Command storage for `/data` command
+    pub command_storage:
+        std::sync::Mutex<std::collections::HashMap<String, pumpkin_nbt::compound::NbtCompound>>,
+    /// Global server stopwatches
+    pub stopwatches: std::sync::Mutex<crate::world::stopwatches::Stopwatches>,
+    /// Global server random sequences
+    pub random_sequences: std::sync::Mutex<crate::world::random_sequences::RandomSequences>,
     // Manages player advancement
     pub advancement_manager: Arc<AdvancementManager>,
     // Whether the server whitelist is on or off
@@ -128,7 +132,7 @@ pub struct Server {
     /// Manages the server's tick rate, freezing, and sprinting
     pub tick_rate_manager: Arc<ServerTickRateManager>,
     /// Stores the duration of the last 100 ticks for performance analysis
-    pub tick_times_nanos: Mutex<[i64; 100]>,
+    pub tick_times_nanos: std::sync::Mutex<[i64; 100]>,
     /// Aggregated tick times for efficient rolling average calculation
     pub aggregated_tick_times_nanos: AtomicI64,
     /// Total number of ticks processed by the server
@@ -141,8 +145,10 @@ pub struct Server {
     pub player_idle_timeout: AtomicI32,
     /// Manages scheduled tasks (e.g. from plugins)
     pub task_scheduler: Arc<TaskScheduler>,
+    /// Manages scheduled datapack functions (`/schedule`)
+    pub scheduled_functions: Arc<crate::server::scheduler::ScheduledFunctionQueue>,
     tasks: TaskTracker,
-    runtime: tokio::runtime::Handle,
+    pub runtime: tokio::runtime::Handle,
 
     // world stuff which maybe should be put into a struct
     pub level_info: Arc<ArcSwap<LevelData>>,
@@ -162,7 +168,6 @@ impl Server {
         // First register the default commands. After that, plugins can put in their own.
         let command_dispatcher = ArcSwap::from_pointee(default_dispatcher(
             &permission_manager,
-            &basic_config,
             &advanced_config.commands,
         ));
 
@@ -225,12 +230,12 @@ impl Server {
         let seed = level_info.world_gen_settings.seed;
         let level_info = Arc::new(ArcSwap::new(Arc::new(level_info)));
 
-        let listing = Mutex::new(CachedStatus::new(
+        let listing = std::sync::Mutex::new(CachedStatus::new(
             &basic_config,
             &advanced_config.networking.java.motd,
             advanced_config.networking.java.max_players,
         ));
-        let defaultgamemode = Mutex::new(DefaultGamemode {
+        let defaultgamemode = std::sync::Mutex::new(DefaultGamemode {
             gamemode: basic_config.default_gamemode,
         });
         let players_dir = world_path.join("players");
@@ -280,6 +285,7 @@ impl Server {
             permission_manager,
             container_id: 0.into(),
             recipe_manager: Arc::new(recipe::RecipeManager::new()),
+            datapack_manager: Arc::new(crate::data::datapack::DatapackManager::new()),
             enchantment_manager: Arc::new(enchantment::EnchantmentManager::new()),
             map_id: level_info.load().map_id.into(),
             worlds: ArcSwap::from_pointee(vec![]),
@@ -292,20 +298,26 @@ impl Server {
             bedrock_private_key: OnceCell::new(),
             listing,
             branding: CachedBranding::new(),
-            bossbars: Mutex::new(CustomBossbars::new()),
+            bossbars: std::sync::Mutex::new(CustomBossbars::new()),
             map_manager: MapManager::new(),
             defaultgamemode,
             player_data_storage,
+            command_storage: std::sync::Mutex::new(std::collections::HashMap::new()),
+            stopwatches: std::sync::Mutex::new(crate::world::stopwatches::Stopwatches::new()),
+            random_sequences: std::sync::Mutex::new(
+                crate::world::random_sequences::RandomSequences::new(),
+            ),
             advancement_manager,
             white_list,
             tick_rate_manager,
-            tick_times_nanos: Mutex::new([0; 100]),
+            tick_times_nanos: std::sync::Mutex::new([0; 100]),
             aggregated_tick_times_nanos: AtomicI64::new(0),
             tick_count: AtomicI32::new(0),
             debug_profiler: debug_profiler::DebugProfiler::new(),
             tasks: TaskTracker::new(),
             runtime: tokio::runtime::Handle::current(),
             task_scheduler: Arc::new(TaskScheduler::new()),
+            scheduled_functions: Arc::new(crate::server::scheduler::ScheduledFunctionQueue::new()),
             server_guid: rand::random(),
             player_idle_timeout: AtomicI32::new(0),
             mojang_public_keys: ArcSwap::from_pointee(Vec::new()),
@@ -315,42 +327,28 @@ impl Server {
         };
         let server = Arc::new(server);
 
-        let gen_pool = Arc::new(
-            rayon::ThreadPoolBuilder::new()
-                .thread_name(|i| format!("Gen-Pool-{i}"))
-                .build()
-                .unwrap_or_else(|err| {
-                    error!("Failed to build generation thread pool: {err}");
-                    std::process::exit(1);
-                }),
-        );
-
         // Fetch / generate keys in background tasks to avoid blocking startup
         let server_clone = server.clone();
-        tokio::spawn(async move {
-            let key_store = tokio::task::spawn_blocking(|| Arc::new(KeyStore::new()))
-                .await
-                .unwrap_or_else(|_| Arc::new(KeyStore::new()));
+        server.spawn_task(async move {
+            let key_store = Arc::new(KeyStore::new());
             let _ = server_clone.key_store.set(key_store);
         });
 
         if server.basic_config.allow_chat_reports {
             let server_clone = server.clone();
-            tokio::spawn(async move {
+            server.spawn_task(async move {
                 let auth_config = server_clone
                     .advanced_config
                     .networking
                     .java
                     .authentication
                     .clone();
-                let keys = tokio::task::spawn_blocking(move || {
-                    fetch_mojang_public_keys(&auth_config).unwrap_or_else(|e| {
+                let keys = fetch_mojang_public_keys(&auth_config)
+                    .await
+                    .unwrap_or_else(|e| {
                         error!("Failed to fetch Mojang keys: {e}");
                         Vec::new()
-                    })
-                })
-                .await
-                .unwrap_or_default();
+                    });
                 server_clone.mojang_public_keys.store(Arc::new(keys));
             });
         }
@@ -364,29 +362,23 @@ impl Server {
                 .enabled
         {
             let server_clone = server.clone();
-            tokio::spawn(async move {
+            server.spawn_task(async move {
                 let auth = server_clone
                     .advanced_config
                     .networking
                     .bedrock
                     .authentication
                     .clone();
-                let keys = match tokio::task::spawn_blocking(move || {
-                    pumpkin_util::jwt::fetch_oidc_jwks(
-                        auth.url.as_deref(),
-                        auth.connect_timeout,
-                        auth.read_timeout,
-                    )
-                })
+                let keys = match pumpkin_util::jwt::fetch_oidc_jwks(
+                    auth.url.as_deref(),
+                    auth.connect_timeout,
+                    auth.read_timeout,
+                )
                 .await
                 {
-                    Ok(Ok(keys)) => keys,
-                    Ok(Err(error)) => {
+                    Ok(keys) => keys,
+                    Err(error) => {
                         error!("Failed to fetch Bedrock OIDC keys: {error}");
-                        (String::new(), pumpkin_util::jwt::Jwks { keys: Vec::new() })
-                    }
-                    Err(join_err) => {
-                        error!("Bedrock OIDC key task failed: {join_err}");
                         (String::new(), pumpkin_util::jwt::Jwks { keys: Vec::new() })
                     }
                 };
@@ -394,39 +386,25 @@ impl Server {
             });
         }
 
-        let world_loader = |dim: Dimension| {
-            let path = world_path.clone();
-            let registry = block_registry.clone();
-            let l_info = server.level_info.clone(); // Access from struct
-            let weak = Arc::downgrade(&server);
-            let config = Arc::new(server.advanced_config.world.clone());
-            let pool = gen_pool.clone();
-
-            tokio::task::spawn_blocking(move || {
-                info!(
-                    "Loading {}",
-                    TextComponent::text(dim.minecraft_name.to_string())
-                        .color_named(NamedColor::DarkGreen)
-                        .to_pretty_console()
-                );
-                let level = into_level(dim.clone(), &config, path, seed, Some(pool));
-                let world = Arc::new(World::load(level.clone(), l_info, dim, registry, weak));
-                let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
-                level.world_portal.store(Arc::new(Some(portal)));
-                world
-            })
-        };
-
-        info!("Starting parallel world load...");
-        let mut world_futures = Vec::new();
-        for dim in &server.dimensions {
-            world_futures.push(world_loader(dim.clone()));
-        }
-
-        let worlds_results = futures::future::join_all(world_futures).await;
-
         let mut worlds_vec = Vec::new();
-        for world in worlds_results.into_iter().flatten() {
+        for dim in &server.dimensions {
+            info!(
+                "Loading {}",
+                TextComponent::text(dim.minecraft_name.to_string())
+                    .color_named(NamedColor::DarkGreen)
+                    .to_pretty_console()
+            );
+            let config = Arc::new(server.advanced_config.world.clone());
+            let level = into_level(dim.clone(), &config, world_path.clone(), seed);
+            let world = Arc::new(World::load(
+                level.clone(),
+                server.level_info.clone(),
+                dim.clone(),
+                block_registry.clone(),
+                Arc::downgrade(&server),
+            ));
+            let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
+            level.world_portal.store(Arc::new(Some(portal)));
             worlds_vec.push(world);
         }
 
@@ -449,6 +427,17 @@ impl Server {
         server.worlds.store(Arc::new(worlds_vec));
 
         info!("All worlds loaded successfully.");
+
+        let enabled_packs = server.level_info.load().data_packs.enabled.clone();
+        server
+            .datapack_manager
+            .load_all(&world_path, &enabled_packs, &server.recipe_manager);
+
+        let source = crate::command::CommandSender::Console.into_source(&server);
+        let _ = server
+            .datapack_manager
+            .execute_function(&server, &source, "#minecraft:load");
+
         server
     }
 
@@ -475,7 +464,7 @@ impl Server {
             })
     }
 
-    pub async fn create_world(self: &Arc<Self>, name: String, dimension: Dimension) -> Arc<World> {
+    pub fn create_world(self: &Arc<Self>, name: String, dimension: Dimension) -> Arc<World> {
         {
             let worlds = self.worlds.load();
             let world = worlds
@@ -487,46 +476,28 @@ impl Server {
             }
         }
 
-        let server = self.clone();
-        let name_clone = name.clone();
-        tokio::task::spawn_blocking(move || {
-            let world_path = server.basic_config.get_world_path().join(name_clone);
-            let registry = server.block_registry.clone();
-            let l_info = server.level_info.clone();
-            let weak = Arc::downgrade(&server);
-            let config = Arc::new(server.advanced_config.world.clone());
-            let seed = server.level_info.load().world_gen_settings.seed;
+        let world_path = self.basic_config.get_world_path().join(name);
+        let registry = self.block_registry.clone();
+        let l_info = self.level_info.clone();
+        let weak = Arc::downgrade(self);
+        let config = Arc::new(self.advanced_config.world.clone());
+        let seed = self.level_info.load().world_gen_settings.seed;
 
-            // TODO: gen_pool should be reused
-            let level = pumpkin_world::dimension::into_level(
-                dimension.clone(),
-                &config,
-                world_path,
-                seed,
-                None,
-            );
-            let world: World = World::load(level.clone(), l_info, dimension, registry, weak);
-            let world = Arc::new(world);
-            let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
-            level.world_portal.store(Arc::new(Some(portal)));
-            server.worlds.rcu(|worlds| {
-                let mut new_worlds = (**worlds).clone();
-                new_worlds.push(world.clone());
-                new_worlds
-            });
-            let mut event =
-                crate::plugin::api::events::world::world_init::WorldInitEvent::new(world.clone());
-            tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current()
-                    .block_on(server.plugin_manager.fire(&server, &mut event));
-            });
-            world
-        })
-        .await
-        .unwrap_or_else(|_| {
-            error!("World creation failed");
-            std::process::exit(1);
-        })
+        let level =
+            pumpkin_world::dimension::into_level(dimension.clone(), &config, world_path, seed);
+        let world: World = World::load(level.clone(), l_info, dimension, registry, weak);
+        let world = Arc::new(world);
+        let portal: Arc<dyn WorldPortalExt> = Arc::new(WorldPortal(world.clone()));
+        level.world_portal.store(Arc::new(Some(portal)));
+        self.worlds.rcu(|worlds| {
+            let mut new_worlds = (**worlds).clone();
+            new_worlds.push(world.clone());
+            new_worlds
+        });
+        let mut event =
+            crate::plugin::api::events::world::world_init::WorldInitEvent::new(world.clone());
+        self.plugin_manager.fire_blocking(self, &mut event);
+        world
     }
 
     pub async fn unload_world(&self, name: &str) -> Result<(), String> {
@@ -562,8 +533,44 @@ impl Server {
         Ok(())
     }
 
+    pub fn save_world_info(&self) -> Result<(), WorldInfoError> {
+        let level_data = self.level_info.load();
+        self.world_info_writer
+            .write_world_info(&level_data, &self.basic_config.get_world_path())
+    }
+
+    pub fn reload_datapacks(&self, server: &Arc<Self>) {
+        let enabled_packs = self.level_info.load().data_packs.enabled.clone();
+        let world_path = self.basic_config.get_world_path();
+        self.datapack_manager
+            .load_all(&world_path, &enabled_packs, &self.recipe_manager);
+
+        let source = crate::command::CommandSender::Console.into_source(server);
+        let _ = self
+            .datapack_manager
+            .execute_function(server, &source, "#minecraft:load");
+
+        let dynamic_recipes = self.recipe_manager.get_dynamic_recipes_internal();
+        for player in self.get_all_players() {
+            if let crate::net::ClientPlatform::Java(java_client) = player.client.as_ref() {
+                let add_packet = pumpkin_protocol::java::client::play::CRecipeBookAdd::new(
+                    true,
+                    &dynamic_recipes,
+                );
+                if let Ok(data) = java_client.serialize_packet(&add_packet) {
+                    java_client.try_enqueue_packet(data);
+                }
+            }
+        }
+    }
+
     pub async fn save_all(&self) -> Result<(), String> {
-        if let Err(err) = self.player_data_storage.save_all_players(self).await {
+        if let Err(err) = self.save_world_info() {
+            error!("Failed to save world info: {err}");
+            return Err(format!("Failed to save world info: {err}"));
+        }
+
+        if let Err(err) = self.player_data_storage.save_all_players(self) {
             error!("Failed to save player data: {err}");
             return Err(format!("Failed to save player data: {err}"));
         }
@@ -611,46 +618,48 @@ impl Server {
     /// # Note
     ///
     /// You still have to spawn the `Player` in a `World` to let them join and make them visible.
-    pub async fn add_player(
+    pub fn add_player(
         self: &Arc<Self>,
         client: Arc<ClientPlatform>,
         profile: GameProfile,
         config: Option<PlayerConfig>,
     ) -> Option<(Arc<Player>, Arc<World>)> {
-        let gamemode = self.defaultgamemode.lock().await.gamemode;
+        let gamemode = self
+            .defaultgamemode
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .gamemode;
 
         let first_world = self.worlds.load().first().cloned()?;
 
-        let (world, nbt) =
-            if let Ok(Some(data)) = self.player_data_storage.load_data(&profile.id).await {
-                if let Some(dimension_key) = data.get_string("Dimension") {
-                    if let Some(dimension) = Dimension::from_name(dimension_key) {
-                        let world = self.get_world_from_dimension(dimension);
-                        (world, Some(data))
-                    } else {
-                        warn!("Invalid dimension key in player data: {dimension_key}");
-                        (first_world, Some(data))
-                    }
+        let (world, nbt) = if let Ok(Some(data)) = self.player_data_storage.load_data(&profile.id) {
+            if let Some(dimension_key) = data.get_string("Dimension") {
+                if let Some(dimension) = Dimension::from_name(dimension_key) {
+                    let world = self.get_world_from_dimension(dimension);
+                    (world, Some(data))
                 } else {
-                    // Player data exists but doesn't have a "Dimension" key.
+                    warn!("Invalid dimension key in player data: {dimension_key}");
                     (first_world, Some(data))
                 }
             } else {
-                // No player data found or an error occurred, default to the Overworld.
-                (first_world, None)
-            };
+                // Player data exists but doesn't have a "Dimension" key.
+                (first_world, Some(data))
+            }
+        } else {
+            // No player data found or an error occurred, default to the Overworld.
+            (first_world, None)
+        };
 
         let mut player = Player::new(
             client,
             profile,
             config.clone().unwrap_or_default(),
-            world.clone(),
+            &world,
             gamemode,
-        )
-        .await;
+        );
 
         if let Some(mut nbt_data) = nbt {
-            player.read_nbt(&mut nbt_data).await;
+            player.read_nbt(&mut nbt_data);
             // The data file itself proves this is a returning player. Older Bedrock
             // sessions could persist HasPlayedBefore as false and mask a valid Pos.
             player.has_played_before.store(true, Ordering::Relaxed);
@@ -659,55 +668,64 @@ impl Server {
         // Wrap in Arc after data is loaded
         let player = Arc::new(player);
         {
-            let mut advancements = player.advancements.lock().await;
-            if let Err(e) = advancements.load().await {
+            let mut advancements = player
+                .advancements
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Err(e) = advancements.load() {
                 warn!("Error loading player {}: {e}", player.gameprofile.id);
             }
             advancements.player = Arc::downgrade(&player);
         };
 
-        send_cancellable! {{
+        send_cancellable_blocking! {{
             self;
             &mut PlayerLoginEvent::new(player.clone(), TextComponent::text("You have been kicked from the server"));
             'after: {
-                player.screen_handler_sync_handler.store_player(player.clone()).await;
-                if world
-                    .add_player(&player)
-                    .is_ok() {
-                    let mut user_cache = self.data.user_cache.write().await;
-                    user_cache.upsert(player.gameprofile.id, player.gameprofile.name.clone());
+                player.screen_handler_sync_handler.store_player(player.clone());
+                world.add_player(&player).is_ok().then(|| {
+                    {
+                        let mut user_cache = self
+                            .data
+                            .user_cache
+                            .write()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        user_cache.upsert(player.gameprofile.id, player.gameprofile.name.clone());
+                    };
 
                     // TODO: Config if we want increase online
                     if let Some(config) = config {
                         // TODO: Config so we can also just ignore this hehe
                         if config.server_listing {
-                            self.listing.lock().await.add_player(&player);
+                            self.listing
+                                .lock()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                                .add_player(&player);
                         }
                     }
 
-                    Some((player, world.clone()))
-                } else {
-                    None
-                }
+                    (player, world)
+                })
             }
 
             'cancelled: {
-                player.kick(DisconnectReason::Kicked, event.kick_message).await;
+                player.kick(DisconnectReason::Kicked, &event.kick_message);
                 None
             }
         }}
     }
 
-    pub async fn remove_player(&self, player: &Player) {
-        player
-            .increment_stat(
-                pumpkin_data::statistic::StatisticCategory::Custom,
-                pumpkin_data::statistic::CustomStatistic::LeaveGame as i32,
-                1,
-            )
-            .await;
+    pub fn remove_player(&self, player: &Player) {
+        player.increment_stat(
+            pumpkin_data::statistic::StatisticCategory::Custom,
+            pumpkin_data::statistic::CustomStatistic::LeaveGame as i32,
+            1,
+        );
         // TODO: Config if we want decrease online
-        self.listing.lock().await.remove_player(player);
+        self.listing
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove_player(player);
     }
 
     pub async fn shutdown(&self) {
@@ -745,40 +763,64 @@ impl Server {
         }
     }
 
-    pub async fn broadcast_tab_list_header_footer(
-        &self,
-        header: &TextComponent,
-        footer: &TextComponent,
-    ) {
+    /// Broadcasts custom server links to all players on the server.
+    pub fn broadcast_server_links(&self, links: &[pumpkin_protocol::Link<'_>]) {
+        let packet = pumpkin_protocol::java::client::play::CPlayServerLinks::new(links);
+        self.broadcast_packet_all(&packet);
+    }
+
+    pub fn broadcast_tab_list_header_footer(&self, header: &TextComponent, footer: &TextComponent) {
         let packet = CTabList::new(header, footer);
         for world in self.worlds.load().iter() {
             for player in world.players.load().iter() {
-                *player.tab_list_header.lock().await = header.clone();
-                *player.tab_list_footer.lock().await = footer.clone();
+                *player
+                    .tab_list_header
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = header.clone();
+                *player
+                    .tab_list_footer
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = footer.clone();
             }
             world.broadcast_packet_all(&packet);
         }
     }
 
-    pub async fn broadcast_message(
+    pub fn broadcast_message(
         self: &Arc<Self>,
         message: &TextComponent,
         sender_name: &TextComponent,
         chat_type: u8,
         target_name: Option<&TextComponent>,
     ) {
-        send_cancellable! {{
-            self;
-            ServerBroadcastEvent::new(message.clone(), sender_name.clone());
-
-            'after: {
-                for world in self.worlds.load().iter() {
-                    world
-                        .broadcast_message(&event.message, &event.sender, chat_type, target_name)
-                        .await;
-                }
+        let mut event = ServerBroadcastEvent::new(message.clone(), sender_name.clone());
+        self.plugin_manager.fire_blocking(self, &mut event);
+        if !event.cancelled {
+            for world in self.worlds.load().iter() {
+                world.broadcast_message(&event.message, &event.sender, chat_type, target_name);
             }
-        }}
+        }
+    }
+
+    pub fn broadcast_chat_message(
+        self: &Arc<Self>,
+        message: &crate::net::chat::PlayerChatMessage,
+        is_filtered: impl Fn(&crate::entity::player::Player) -> bool,
+        sender_player: Option<&Arc<crate::entity::player::Player>>,
+        chat_type: pumpkin_protocol::codec::var_int::VarInt,
+        sender_name: &TextComponent,
+        target_name: Option<&TextComponent>,
+    ) {
+        for world in self.worlds.load().iter() {
+            world.broadcast_chat_message(
+                message,
+                &is_filtered,
+                sender_player,
+                chat_type,
+                sender_name,
+                target_name,
+            );
+        }
     }
 
     /// Gets the current difficulty of the server.
@@ -801,7 +843,7 @@ impl Server {
     /// # Note
     ///
     /// This function does not handle the actual mob spawn options update, which is a TODO item for future implementation.
-    pub async fn set_difficulty(&self, difficulty: Difficulty, force_update: bool) {
+    pub fn set_difficulty(&self, difficulty: Difficulty, force_update: bool) {
         let current_info = self.level_info.load();
         if current_info.difficulty_locked && !force_update {
             return;
@@ -821,12 +863,30 @@ impl Server {
 
         for world in self.worlds.load().iter() {
             world.set_difficulty(difficulty);
-            world
-                .broadcast_editioned(
-                    &CChangeDifficulty::new(difficulty as u8, locked),
-                    &pumpkin_protocol::bedrock::client::CSetDifficulty::new(difficulty as u32),
-                )
-                .await;
+            world.broadcast_editioned(
+                &CChangeDifficulty::new(difficulty as u8, locked),
+                &pumpkin_protocol::bedrock::client::CSetDifficulty {
+                    difficulty: (difficulty as u32).into(),
+                },
+            );
+        }
+    }
+
+    /// Sets the difficulty lock status of the server and broadcasts the update to all players.
+    pub fn set_difficulty_locked(&self, locked: bool) {
+        let current_info = self.level_info.load();
+        let mut new_info = (**current_info).clone();
+        new_info.difficulty_locked = locked;
+        let difficulty = new_info.difficulty;
+        self.level_info.store(Arc::new(new_info));
+
+        for world in self.worlds.load().iter() {
+            world.broadcast_editioned(
+                &CChangeDifficulty::new(difficulty as u8, locked),
+                &pumpkin_protocol::bedrock::client::CSetDifficulty {
+                    difficulty: (difficulty as u32).into(),
+                },
+            );
         }
     }
 
@@ -964,8 +1024,20 @@ impl Server {
         self.branding.get_branding()
     }
 
-    pub const fn get_status(&self) -> &Mutex<CachedStatus> {
+    pub const fn get_status(&self) -> &std::sync::Mutex<CachedStatus> {
         &self.listing
+    }
+
+    async fn get_or_init_key_store(&self) -> &Arc<KeyStore> {
+        self.key_store
+            .get_or_init(|| async {
+                let (tx, rx) = tokio::sync::oneshot::channel();
+                rayon::spawn(move || {
+                    let _ = tx.send(Arc::new(KeyStore::new()));
+                });
+                rx.await.unwrap_or_else(|_| Arc::new(KeyStore::new()))
+            })
+            .await
     }
 
     pub async fn encryption_request<'a>(
@@ -973,89 +1045,89 @@ impl Server {
         verification_token: &'a [u8; 4],
         should_authenticate: bool,
     ) -> CEncryptionRequest<'a> {
-        self.key_store
-            .get_or_init(|| async { Arc::new(KeyStore::new()) })
-            .await
-            .encryption_request("", verification_token, should_authenticate)
+        self.get_or_init_key_store().await.encryption_request(
+            "",
+            verification_token,
+            should_authenticate,
+        )
     }
 
     pub async fn decrypt(&self, data: &[u8]) -> Result<Vec<u8>, EncryptionError> {
-        self.key_store
-            .get_or_init(|| async { Arc::new(KeyStore::new()) })
-            .await
-            .decrypt(data)
+        let key_store = self.get_or_init_key_store().await.clone();
+        let data = data.to_vec();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        rayon::spawn(move || {
+            let _ = tx.send(key_store.decrypt(&data));
+        });
+        rx.await.map_err(|_| EncryptionError::FailedDecrypt)?
     }
 
-    pub async fn digest_secret(&self, secret: &[u8]) -> String {
-        self.key_store
-            .get_or_init(|| async { Arc::new(KeyStore::new()) })
-            .await
-            .get_digest(secret)
+    pub fn digest_secret(&self, secret: &[u8]) -> String {
+        self.key_store.get().map_or_else(
+            || KeyStore::new().get_digest(secret),
+            |key_store| key_store.get_digest(secret),
+        )
     }
 
     /// Main server tick method. This now handles both player/network ticking (which always runs)
     /// and world/game logic ticking (which is affected by freeze state).
-    pub async fn tick(self: &Arc<Self>) {
+    pub fn tick(self: &Arc<Self>) {
         if self.tick_rate_manager.runs_normally() || self.tick_rate_manager.is_sprinting() {
-            self.tick_worlds().await;
+            self.tick_worlds();
             // Always run player and network ticking, even when game is frozen
         } else {
-            self.tick_players_and_network().await;
+            self.tick_players_and_network();
         }
     }
 
     /// Ticks essential server functions that must run even when the game is frozen.
     /// This includes player ticking (network, keep-alives) and flushing world updates to clients.
-    pub async fn tick_players_and_network(self: &Arc<Self>) {
+    pub fn tick_players_and_network(self: &Arc<Self>) {
         let worlds = self.worlds.load();
+        let handle = self.runtime.clone();
 
         for world in worlds.iter() {
-            world.flush_block_updates().await;
-            world.flush_synced_block_events().await;
-        }
+            world.flush_block_updates();
+            world.flush_synced_block_events();
 
-        let mut set = JoinSet::new();
-        for world in worlds.iter() {
             let players = world.players.load();
-            for player in players.iter() {
-                let player_clone = player.clone();
-                let server_clone = self.clone();
-                set.spawn(async move {
-                    player_clone.tick(&server_clone).await;
-                });
-            }
-        }
-        set.join_all().await;
-    }
-    /// Ticks the game logic for all worlds. This is the part that is affected by `/tick freeze`.
-    pub async fn tick_worlds(self: &Arc<Self>) {
-        self.task_scheduler.tick(self).await;
-
-        let mut set = JoinSet::new();
-
-        for world in self.worlds.load().iter() {
-            let world = world.clone();
-            let server = self.clone();
-
-            set.spawn(async move {
-                world.tick(server).await;
+            let player_handle = handle.clone();
+            players.par_iter().for_each(|player| {
+                let _guard = player_handle.enter();
+                player.tick(self);
             });
         }
+    }
 
-        set.join_all().await;
+    /// Ticks the game logic for all worlds. This is the part that is affected by `/tick freeze`.
+    pub fn tick_worlds(self: &Arc<Self>) {
+        self.task_scheduler.tick(self);
+        self.scheduled_functions.tick(
+            self,
+            self.tick_count.load(std::sync::atomic::Ordering::Relaxed) as u64,
+        );
+
+        let worlds = self.worlds.load();
+        let handle = self.runtime.clone();
+
+        worlds.par_iter().for_each(|world| {
+            let _guard = handle.enter();
+            world.tick(self);
+        });
 
         // Global tasks
-        if let Err(e) = self.player_data_storage.tick(self).await {
-            error!("Error ticking player data: {e}");
-        }
+        self.player_data_storage.tick(self);
     }
 
     /// Updates the tick time statistics with the duration of the last tick.
-    pub async fn update_tick_times(&self, tick_duration_nanos: i64) {
+    pub fn update_tick_times(&self, tick_duration_nanos: i64) {
         let tick_count = self.tick_count.fetch_add(1, Ordering::Relaxed);
         let index = (tick_count % 100) as usize;
 
-        let mut tick_times = self.tick_times_nanos.lock().await;
+        let mut tick_times = self
+            .tick_times_nanos
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let old_time = tick_times[index];
         tick_times[index] = tick_duration_nanos;
         drop(tick_times);
@@ -1116,209 +1188,11 @@ impl Server {
     }
 
     /// Returns a copy of the last 100 tick times.
-    pub async fn get_tick_times_nanos_copy(&self) -> [i64; 100] {
-        *self.tick_times_nanos.lock().await
-    }
-
-    #[allow(clippy::too_many_lines, clippy::option_if_let_else)]
-    pub fn select_players(
-        &self,
-        target_selector: &TargetSelector,
-        source: Option<&CommandSender>,
-    ) -> Vec<Arc<Player>> {
-        let mut players = match &target_selector.selector_type {
-            EntitySelectorType::Source => source
-                .and_then(CommandSender::as_player)
-                .map_or_else(Vec::new, |player| vec![player]),
-            EntitySelectorType::NearestPlayer
-            | EntitySelectorType::NearestEntity
-            | EntitySelectorType::RandomPlayer
-            | EntitySelectorType::AllPlayers
-            | EntitySelectorType::AllEntities => self.get_all_players(),
-            EntitySelectorType::NamedPlayer(name) => self
-                .get_player_by_name(name)
-                .map_or_else(Vec::new, |player| vec![player]),
-            EntitySelectorType::Uuid(uuid) => self
-                .get_player_by_uuid(*uuid)
-                .map_or_else(Vec::new, |player| vec![player]),
-        };
-
-        let player_type = &EntityType::PLAYER;
-        let type_included = target_selector
-            .conditions
-            .iter()
-            .filter_map(|f| {
-                if let EntityFilter::Type(ValueCondition::Equals(entity_type)) = f {
-                    Some(*entity_type)
-                } else {
-                    None
-                }
-            })
-            .collect::<HashSet<_>>();
-        let type_excluded = target_selector
-            .conditions
-            .iter()
-            .filter_map(|f| {
-                if let EntityFilter::Type(ValueCondition::NotEquals(entity_type)) = f {
-                    Some(*entity_type)
-                } else {
-                    None
-                }
-            })
-            .collect::<HashSet<_>>();
-
-        players.retain(|_| {
-            (type_excluded.is_empty() || !type_excluded.contains(player_type))
-                && (type_included.is_empty() || type_included.contains(player_type))
-        });
-
-        let limit = target_selector.get_limit();
-        if limit == 0 {
-            return Vec::new();
-        }
-
-        match target_selector
-            .get_sort()
-            .unwrap_or(EntityFilterSort::Arbitrary)
-        {
-            EntityFilterSort::Arbitrary => players.into_iter().take(limit).collect(),
-            EntityFilterSort::Random => {
-                players.shuffle(&mut rand::rng());
-                players.into_iter().take(limit).collect()
-            }
-            EntityFilterSort::Nearest | EntityFilterSort::Furthest => {
-                let center = source.and_then(CommandSender::position).unwrap_or_default();
-                let nearest_first = target_selector
-                    .get_sort()
-                    .is_none_or(|sort| sort == EntityFilterSort::Nearest);
-                players.sort_by(|a, b| {
-                    let a_distance = a.get_entity().pos.load().squared_distance_to_vec(&center);
-                    let b_distance = b.get_entity().pos.load().squared_distance_to_vec(&center);
-                    if nearest_first {
-                        a_distance
-                            .partial_cmp(&b_distance)
-                            .unwrap_or(core::cmp::Ordering::Equal)
-                    } else {
-                        b_distance
-                            .partial_cmp(&a_distance)
-                            .unwrap_or(core::cmp::Ordering::Equal)
-                    }
-                });
-                players.into_iter().take(limit).collect()
-            }
-        }
-    }
-
-    #[allow(clippy::too_many_lines, clippy::option_if_let_else)]
-    pub fn select_entities(
-        &self,
-        target_selector: &TargetSelector,
-        source: Option<&CommandSender>,
-    ) -> Vec<Arc<dyn EntityBase>> {
-        let all_entities_and_players = || {
-            let mut entities = Vec::new();
-            for world in self.worlds.load().iter() {
-                entities.extend(world.entities.load().iter().cloned());
-                entities.extend(
-                    world
-                        .players
-                        .load()
-                        .iter()
-                        .cloned()
-                        .map(|player| player as Arc<dyn EntityBase>),
-                );
-            }
-            entities
-        };
-        let all_players_as_entities = || {
-            self.get_all_players()
-                .into_iter()
-                .map(|player| player as Arc<dyn EntityBase>)
-                .collect::<Vec<_>>()
-        };
-
-        let mut entities = match &target_selector.selector_type {
-            EntitySelectorType::Source => source
-                .and_then(CommandSender::as_player)
-                .map_or_else(Vec::new, |player| vec![player as Arc<dyn EntityBase>]),
-            EntitySelectorType::NearestPlayer
-            | EntitySelectorType::RandomPlayer
-            | EntitySelectorType::AllPlayers => all_players_as_entities(),
-            EntitySelectorType::NearestEntity | EntitySelectorType::AllEntities => {
-                all_entities_and_players()
-            }
-            EntitySelectorType::NamedPlayer(name) => self
-                .get_player_by_name(name)
-                .map_or_else(Vec::new, |player| vec![player as Arc<dyn EntityBase>]),
-            EntitySelectorType::Uuid(uuid) => self
-                .get_player_by_uuid(*uuid)
-                .map_or_else(Vec::new, |player| vec![player as Arc<dyn EntityBase>]),
-        };
-
-        let type_included = target_selector
-            .conditions
-            .iter()
-            .filter_map(|f| {
-                if let EntityFilter::Type(ValueCondition::Equals(entity_type)) = f {
-                    Some(*entity_type)
-                } else {
-                    None
-                }
-            })
-            .collect::<HashSet<_>>();
-        let type_excluded = target_selector
-            .conditions
-            .iter()
-            .filter_map(|f| {
-                if let EntityFilter::Type(ValueCondition::NotEquals(entity_type)) = f {
-                    Some(*entity_type)
-                } else {
-                    None
-                }
-            })
-            .collect::<HashSet<_>>();
-        entities.retain(|entity| {
-            // Filter by entity type
-            (type_excluded.is_empty() || !type_excluded.contains(&entity.get_entity().entity_type))
-                && (type_included.is_empty()
-                    || type_included.contains(&entity.get_entity().entity_type))
-        });
-
-        let limit = target_selector.get_limit();
-        if limit == 0 {
-            return vec![];
-        }
-
-        match target_selector
-            .get_sort()
-            .unwrap_or(EntityFilterSort::Arbitrary)
-        {
-            EntityFilterSort::Arbitrary => entities.into_iter().take(limit).collect(),
-            EntityFilterSort::Random => {
-                entities.shuffle(&mut rand::rng());
-                entities.into_iter().take(limit).collect()
-            }
-            EntityFilterSort::Nearest | EntityFilterSort::Furthest => {
-                let center = source.and_then(CommandSender::position).unwrap_or_default();
-                let nearest_first = target_selector
-                    .get_sort()
-                    .is_none_or(|sort| sort == EntityFilterSort::Nearest);
-                entities.sort_by(|a, b| {
-                    let a_distance = a.get_entity().pos.load().squared_distance_to_vec(&center);
-                    let b_distance = b.get_entity().pos.load().squared_distance_to_vec(&center);
-                    if nearest_first {
-                        a_distance
-                            .partial_cmp(&b_distance)
-                            .unwrap_or(core::cmp::Ordering::Equal)
-                    } else {
-                        b_distance
-                            .partial_cmp(&a_distance)
-                            .unwrap_or(core::cmp::Ordering::Equal)
-                    }
-                });
-                entities.into_iter().take(limit).collect()
-            }
-        }
+    pub fn get_tick_times_nanos_copy(&self) -> [i64; 100] {
+        *self
+            .tick_times_nanos
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     pub async fn register_plugin_config(&self, mgr: Arc<PluginConfigManager>) {

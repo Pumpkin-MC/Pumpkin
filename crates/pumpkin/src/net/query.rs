@@ -145,7 +145,6 @@ async fn handle_packet(
                         let plugins = server
                             .plugin_manager
                             .active_plugins()
-                            .await
                             .into_iter()
                             .map(|meta| meta.name)
                             .reduce(|acc, name| format!("{acc}, {name}"))

@@ -1,3 +1,5 @@
+// Last verified for v2169
+
 use pumpkin_macros::packet;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
@@ -8,14 +10,17 @@ use crate::serial::PacketWrite;
 #[derive(PacketWrite)]
 #[packet(56)]
 pub struct CBlockActorData {
-    pub position: BlockPos,
-    pub data: NbtCompound,
+    pub block_position: BlockPos,
+    pub actor_data_tags: NbtCompound,
 }
 
 impl CBlockActorData {
     #[must_use]
-    pub const fn new(position: BlockPos, data: NbtCompound) -> Self {
-        Self { position, data }
+    pub const fn new(block_position: BlockPos, actor_data_tags: NbtCompound) -> Self {
+        Self {
+            block_position,
+            actor_data_tags,
+        }
     }
 }
 
@@ -37,9 +42,12 @@ mod tests {
         data.put_byte("color", 11);
 
         let mut encoded = Vec::new();
-        CBlockActorData::new(BlockPos::new(1, 64, -2), data)
-            .write(&mut encoded)
-            .unwrap();
+        CBlockActorData {
+            block_position: BlockPos::new(1, 64, -2),
+            actor_data_tags: data,
+        }
+        .write(&mut encoded)
+        .unwrap();
 
         assert_eq!(&encoded[..4], &[2, 128, 1, 3]);
         let mut reader = NbtReadHelperBedrock::new(Cursor::new(&encoded[4..]));

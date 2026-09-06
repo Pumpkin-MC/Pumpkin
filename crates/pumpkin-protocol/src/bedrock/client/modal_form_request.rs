@@ -1,3 +1,5 @@
+// Last verified for v2169
+
 use crate::{codec::var_uint::VarUInt, serial::PacketWrite};
 use pumpkin_macros::packet;
 
@@ -5,5 +7,5 @@ use pumpkin_macros::packet;
 #[derive(PacketWrite)]
 pub struct CModalFormRequest {
     pub form_id: VarUInt,
-    pub form_data: String,
+    pub form_ui_json: String,
 }

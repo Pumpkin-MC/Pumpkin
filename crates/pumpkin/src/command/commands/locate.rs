@@ -23,7 +23,7 @@ use crate::command::argument_types::resource_or_tag::{
     STRUCTURE_REGISTRY,
 };
 use crate::command::context::command_context::CommandContext;
-use crate::command::errors::error_types::{CommandErrorType, LiteralCommandErrorType};
+use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 
@@ -67,11 +67,6 @@ static POI_NOT_FOUND_ERROR_TYPE: CommandErrorType<1> = CommandErrorType::new(
     translation::java::COMMANDS_LOCATE_POI_NOT_FOUND,
     translation::java::COMMANDS_LOCATE_POI_NOT_FOUND,
 );
-
-/// Raised if a blocking search task panics or is cancelled instead of
-/// running to completion. Purely internal, so it has no translation.
-static SEARCH_FAILED_ERROR_TYPE: LiteralCommandErrorType =
-    LiteralCommandErrorType::new("The locate search failed unexpectedly");
 
 /// Builds the clickable green `[x, ~, z]` (or `[x, y, z]` when `absolute_y`)
 /// coordinates component used by vanilla's locate feedback.
@@ -129,7 +124,7 @@ fn absolute_distance(origin: &BlockPos, target: &BlockPos) -> i32 {
     (dx * dx + dy * dy + dz * dz).sqrt().floor().max(0.0) as i32
 }
 
-async fn send_success(
+fn send_success(
     context: &CommandContext<'_>,
     java_key: &'static str,
     bedrock_key: &'static str,
@@ -138,238 +133,215 @@ async fn send_success(
     absolute_y: bool,
     distance: i32,
 ) {
-    context
-        .source
-        .send_feedback(
-            TextComponent::translate_cross(
-                java_key,
-                bedrock_key,
-                [
-                    TextComponent::text(name),
-                    coordinates_text(target, absolute_y),
-                    TextComponent::text(distance.to_string()),
-                ],
-            ),
-            false,
-        )
-        .await;
+    context.source.send_feedback(
+        TextComponent::translate_cross(
+            java_key,
+            bedrock_key,
+            [
+                TextComponent::text(name),
+                coordinates_text(target, absolute_y),
+                TextComponent::text(distance.to_string()),
+            ],
+        ),
+        false,
+    );
 }
 
 struct LocateStructureExecutor;
 
 impl CommandExecutor for LocateStructureExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let searched = context.get_argument::<ResourceOrTag>(ARG_STRUCTURE)?;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let searched = context.get_argument::<ResourceOrTag>(ARG_STRUCTURE)?;
 
-            // The generator's placement data models vanilla's structure sets,
-            // so ids resolve against those. There is no structure tag data,
-            // hence tags cannot name any known structure (yet).
-            let set = if let ResourceOrTag::Resource(id) = searched
-                && id.is_vanilla()
-            {
-                StructureSet::get(id.path())
-            } else {
-                None
-            };
+        // The generator's placement data models vanilla's structure sets,
+        // so ids resolve against those. There is no structure tag data,
+        // hence tags cannot name any known structure (yet).
+        let set = if let ResourceOrTag::Resource(id) = searched
+            && id.is_vanilla()
+        {
+            StructureSet::get(id.path())
+        } else {
+            None
+        };
 
-            let Some(set) = set else {
-                return Err(STRUCTURE_INVALID_ERROR_TYPE
-                    .create_without_context(TextComponent::text(searched.printable())));
-            };
+        let Some(set) = set else {
+            return Err(STRUCTURE_INVALID_ERROR_TYPE
+                .create_without_context(TextComponent::text(searched.printable())));
+        };
 
-            let origin = BlockPos::floored_v(context.source.position);
+        let origin = BlockPos::floored_v(context.source.position);
 
-            let world = context.source.world();
-            let seed = world.level.seed.0;
-            let world_gen = world.level.world_gen.load_full();
+        let world = context.source.world();
+        let seed = world.level.seed.0;
+        let world_gen = world.level.world_gen.load_full();
 
-            // Scanning up to `STRUCTURE_SEARCH_RADIUS` regions of placement
-            // data is CPU-bound just like the biome spiral, so keep it off
-            // the async workers too.
-            let found = tokio::task::spawn_blocking(move || {
-                match &set.placement.placement_type {
-                    // Strongholds come out of the pre-computed ring cache, which
-                    // already holds positions they really occupy.
-                    StructurePlacementType::ConcentricRings(_) => {
-                        world_gen.global_structure_cache().and_then(|global_cache| {
-                            find_nearest_structure(
-                                origin,
-                                &[&set.placement],
-                                STRUCTURE_SEARCH_RADIUS,
-                                seed as i64,
-                                global_cache,
-                            )
-                        })
-                    }
-                    // Everything else is spread over a grid whose candidate chunks
-                    // are only *possible* sites: the biome at a candidate can still
-                    // reject every structure in the set. Resolving the start makes
-                    // sure the reported position actually holds one.
-                    StructurePlacementType::RandomSpread(_) => {
-                        let targets: Vec<StructureKeys> =
-                            set.structures.iter().map(|entry| entry.structure).collect();
-                        find_nearest_structure_start(
-                            origin,
-                            set,
-                            &targets,
-                            STRUCTURE_SEARCH_RADIUS,
-                            &world_gen,
-                        )
-                    }
-                }
-            })
-            .await
-            .map_err(|_| SEARCH_FAILED_ERROR_TYPE.create_without_context())?;
+        let found = match &set.placement.placement_type {
+            // Strongholds come out of the pre-computed ring cache, which
+            // already holds positions they really occupy.
+            StructurePlacementType::ConcentricRings(_) => {
+                world_gen.global_structure_cache().and_then(|global_cache| {
+                    find_nearest_structure(
+                        origin,
+                        &[&set.placement],
+                        STRUCTURE_SEARCH_RADIUS,
+                        seed as i64,
+                        global_cache,
+                    )
+                })
+            }
+            // Everything else is spread over a grid whose candidate chunks
+            // are only *possible* sites: the biome at a candidate can still
+            // reject every structure in the set. Resolving the start makes
+            // sure the reported position actually holds one.
+            StructurePlacementType::RandomSpread(_) => {
+                let targets: Vec<StructureKeys> =
+                    set.structures.iter().map(|entry| entry.structure).collect();
+                find_nearest_structure_start(
+                    origin,
+                    set,
+                    &targets,
+                    STRUCTURE_SEARCH_RADIUS,
+                    &world_gen,
+                )
+            }
+        };
 
-            let Some(target) = found else {
-                return Err(STRUCTURE_NOT_FOUND_ERROR_TYPE
-                    .create_without_context(TextComponent::text(searched.printable())));
-            };
+        let Some(target) = found else {
+            return Err(STRUCTURE_NOT_FOUND_ERROR_TYPE
+                .create_without_context(TextComponent::text(searched.printable())));
+        };
 
-            let distance = horizontal_distance(&origin, &target);
-            send_success(
-                context,
-                translation::java::COMMANDS_LOCATE_STRUCTURE_SUCCESS,
-                translation::bedrock::COMMANDS_LOCATE_STRUCTURE_SUCCESS,
-                searched.printable(),
-                &target,
-                false,
-                distance,
-            )
-            .await;
+        let distance = horizontal_distance(&origin, &target);
+        send_success(
+            context,
+            translation::java::COMMANDS_LOCATE_STRUCTURE_SUCCESS,
+            translation::bedrock::COMMANDS_LOCATE_STRUCTURE_SUCCESS,
+            searched.printable(),
+            &target,
+            false,
+            distance,
+        );
 
-            Ok(distance)
-        })
+        Ok(distance)
     }
 }
 
 struct LocateBiomeExecutor;
 
 impl CommandExecutor for LocateBiomeExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let searched = context.get_argument::<ResourceOrTag>(ARG_BIOME)?.clone();
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let searched = context.get_argument::<ResourceOrTag>(ARG_BIOME)?.clone();
 
-            let targets: FxHashSet<u8> = match &searched {
-                ResourceOrTag::Resource(id) => Biome::from_name(id.path())
-                    .map(|biome| biome.id)
+        let targets: FxHashSet<u8> = match &searched {
+            ResourceOrTag::Resource(id) => Biome::from_name(id.path())
+                .map(|biome| biome.id)
+                .into_iter()
+                .collect(),
+            ResourceOrTag::Tag(id) => {
+                tag::get_tag_values(RegistryKey::WorldgenBiome, &id.to_string())
                     .into_iter()
-                    .collect(),
-                ResourceOrTag::Tag(id) => {
-                    tag::get_tag_values(RegistryKey::WorldgenBiome, &id.to_string())
-                        .into_iter()
-                        .flatten()
-                        .filter_map(|name| Biome::from_name(name))
-                        .map(|biome| biome.id)
-                        .collect()
-                }
-            };
-
-            let not_found = || {
-                BIOME_NOT_FOUND_ERROR_TYPE
-                    .create_without_context(TextComponent::text(searched.printable()))
-            };
-            if targets.is_empty() {
-                return Err(not_found());
+                    .flatten()
+                    .filter_map(|name| Biome::from_name(name))
+                    .map(|biome| biome.id)
+                    .collect()
             }
+        };
 
-            let origin = BlockPos::floored_v(context.source.position);
-            let world = context.source.world().clone();
-            let world_gen = world.level.world_gen.load_full();
+        let not_found = || {
+            BIOME_NOT_FOUND_ERROR_TYPE
+                .create_without_context(TextComponent::text(searched.printable()))
+        };
+        if targets.is_empty() {
+            return Err(not_found());
+        }
 
-            // The spiral scan can probe hundreds of thousands of noise
-            // points when the biome is rare, so keep it off the async
-            // workers.
-            let found = tokio::task::spawn_blocking(move || {
-                find_closest_biome_3d(
-                    &world_gen,
-                    origin,
-                    &targets,
-                    BIOME_SEARCH_RADIUS,
-                    BIOME_SEARCH_HORIZONTAL_STEP,
-                    BIOME_SEARCH_VERTICAL_STEP,
-                )
-            })
-            .await
-            .map_err(|_| SEARCH_FAILED_ERROR_TYPE.create_without_context())?;
+        let origin = BlockPos::floored_v(context.source.position);
+        let world = context.source.world().clone();
+        let world_gen = world.level.world_gen.load_full();
 
-            let Some((target, biome)) = found else {
-                return Err(not_found());
-            };
+        let found = find_closest_biome_3d(
+            &world_gen,
+            origin,
+            &targets,
+            BIOME_SEARCH_RADIUS,
+            BIOME_SEARCH_HORIZONTAL_STEP,
+            BIOME_SEARCH_VERTICAL_STEP,
+        );
 
-            let distance = absolute_distance(&origin, &target);
-            send_success(
-                context,
-                translation::java::COMMANDS_LOCATE_BIOME_SUCCESS,
-                translation::bedrock::COMMANDS_LOCATE_BIOME_SUCCESS,
-                result_name(&searched, &format!("minecraft:{}", biome.registry_id)),
-                &target,
-                true,
-                distance,
-            )
-            .await;
+        let Some((target, biome)) = found else {
+            return Err(not_found());
+        };
 
-            Ok(distance)
-        })
+        let distance = absolute_distance(&origin, &target);
+        send_success(
+            context,
+            translation::java::COMMANDS_LOCATE_BIOME_SUCCESS,
+            translation::bedrock::COMMANDS_LOCATE_BIOME_SUCCESS,
+            result_name(&searched, &format!("minecraft:{}", biome.registry_id)),
+            &target,
+            true,
+            distance,
+        );
+
+        Ok(distance)
     }
 }
 
 struct LocatePoiExecutor;
 
 impl CommandExecutor for LocatePoiExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let searched = context.get_argument::<ResourceOrTag>(ARG_POI)?;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let searched = context.get_argument::<ResourceOrTag>(ARG_POI)?;
 
-            // POI entries store namespaced type ids, tag data uses bare
-            // vanilla names; normalize everything to `namespace:path`.
-            let targets: FxHashSet<String> = match searched {
-                ResourceOrTag::Resource(id) => std::iter::once(id.to_string()).collect(),
-                ResourceOrTag::Tag(id) => {
-                    tag::get_tag_values(RegistryKey::PointOfInterestType, &id.to_string())
-                        .into_iter()
-                        .flatten()
-                        .map(|name| {
-                            if name.contains(':') {
-                                (*name).to_string()
-                            } else {
-                                format!("minecraft:{name}")
-                            }
-                        })
-                        .collect()
-                }
-            };
+        // POI entries store namespaced type ids, tag data uses bare
+        // vanilla names; normalize everything to `namespace:path`.
+        let targets: FxHashSet<String> = match searched {
+            ResourceOrTag::Resource(id) => std::iter::once(id.to_string()).collect(),
+            ResourceOrTag::Tag(id) => {
+                tag::get_tag_values(RegistryKey::PointOfInterestType, &id.to_string())
+                    .into_iter()
+                    .flatten()
+                    .map(|name| {
+                        if name.contains(':') {
+                            (*name).to_string()
+                        } else {
+                            format!("minecraft:{name}")
+                        }
+                    })
+                    .collect()
+            }
+        };
 
-            let origin = BlockPos::floored_v(context.source.position);
-            let world = context.source.world().clone();
+        let origin = BlockPos::floored_v(context.source.position);
+        let world = context.source.world().clone();
 
-            let found = {
-                let mut poi_storage = world.portal_poi.lock().await;
-                poi_storage.find_closest_matching(origin, POI_SEARCH_RADIUS, |poi_type| {
-                    targets.contains(poi_type)
-                })
-            };
+        let found = {
+            let mut poi_storage = world
+                .portal_poi
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            poi_storage.find_closest_matching(origin, POI_SEARCH_RADIUS, |poi_type| {
+                targets.contains(poi_type)
+            })
+        };
 
-            let Some((target, poi_type)) = found else {
-                return Err(POI_NOT_FOUND_ERROR_TYPE
-                    .create_without_context(TextComponent::text(searched.printable())));
-            };
+        let Some((target, poi_type)) = found else {
+            return Err(POI_NOT_FOUND_ERROR_TYPE
+                .create_without_context(TextComponent::text(searched.printable())));
+        };
 
-            let distance = horizontal_distance(&origin, &target);
-            send_success(
-                context,
-                translation::java::COMMANDS_LOCATE_POI_SUCCESS,
-                translation::java::COMMANDS_LOCATE_POI_SUCCESS,
-                result_name(searched, &poi_type),
-                &target,
-                false,
-                distance,
-            )
-            .await;
+        let distance = horizontal_distance(&origin, &target);
+        send_success(
+            context,
+            translation::java::COMMANDS_LOCATE_POI_SUCCESS,
+            translation::java::COMMANDS_LOCATE_POI_SUCCESS,
+            result_name(searched, &poi_type),
+            &target,
+            false,
+            distance,
+        );
 
-            Ok(distance)
-        })
+        Ok(distance)
     }
 }
 

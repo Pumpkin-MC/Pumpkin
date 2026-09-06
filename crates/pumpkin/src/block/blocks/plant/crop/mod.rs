@@ -4,16 +4,13 @@ use pumpkin_data::{
     Block,
     BlockDirection::{East, North, South, West},
     BlockStateId,
-    block_properties::{BlockProperties, FarmlandLikeProperties, WheatLikeProperties},
+    block_properties::{FarmlandLikeProperties, WheatLikeProperties},
 };
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use rand::RngExt;
 
-use crate::{
-    block::blocks::plant::PlantBlockBase, plugin::api::events::block::block_grow::BlockGrowEvent,
-    world::World,
-};
+use crate::{block::blocks::plant::PlantBlockBase, world::World};
 
 type CropProperties = WheatLikeProperties;
 type FarmlandProperties = FarmlandLikeProperties;
@@ -22,6 +19,7 @@ pub mod beetroot;
 pub mod carrot;
 pub mod gourds;
 pub mod nether_wart;
+pub mod pitcher_crop;
 pub mod potatoes;
 pub mod sweet_berry_bush;
 pub mod torch_flower;
@@ -37,13 +35,13 @@ trait CropBlockBase: PlantBlockBase {
         7
     }
 
-    fn get_age(&self, state: BlockStateId, block: &Block) -> i32 {
-        let props = CropProperties::from_state_id(state, block);
+    fn get_age(&self, state: BlockStateId, _block: &Block) -> i32 {
+        let props = CropProperties::from_state_id(state);
         i32::from(props.age)
     }
 
     fn state_with_age(&self, block: &Block, state: BlockStateId, age: i32) -> BlockStateId {
-        let mut props = CropProperties::from_state_id(state, block);
+        let mut props = CropProperties::from_state_id(state);
         props.age = age as u8;
         props.to_state_id(block)
     }
@@ -57,52 +55,48 @@ trait CropBlockBase: PlantBlockBase {
         self.get_age(state, block) < self.max_age()
     }
 
-    async fn perform_bonemeal(&self, world: &Arc<World>, pos: &BlockPos) {
+    fn perform_bonemeal(&self, world: &Arc<World>, pos: &BlockPos) {
         let (block, state) = world.get_block_and_state_id(pos);
         let age = self.get_age(state, block);
         let new_age = (age + self.bonemeal_age_increase()).min(self.max_age());
-        world
-            .set_block_state(
-                pos,
-                self.state_with_age(block, state, new_age),
-                BlockFlags::NOTIFY_LISTENERS,
-            )
-            .await;
+        world.set_block_state(
+            pos,
+            self.state_with_age(block, state, new_age),
+            BlockFlags::NOTIFY_LISTENERS,
+        );
     }
 
-    async fn random_tick(&self, world: &Arc<World>, pos: &BlockPos) {
+    fn random_tick(&self, world: &Arc<World>, pos: &BlockPos) {
         let (block, state) = world.get_block_and_state_id(pos);
         let age = self.get_age(state, block);
         if age < self.max_age() {
-            let f = get_available_moisture(world, pos, block).await;
+            let f = get_available_moisture(world, pos, block);
             if rand::rng().random_range(0..=(25.0 / f).floor() as i64) == 0 {
-                let mut new_state_id = self.state_with_age(block, state, age + 1);
+                let new_state_id = self.state_with_age(block, state, age + 1);
                 if let Some(server) = world.server.upgrade() {
-                    let mut event = BlockGrowEvent::new(
-                        world.clone(),
-                        block,
-                        state,
-                        Block::from_state_id(new_state_id),
-                        new_state_id,
-                        *pos,
-                    );
-                    server.plugin_manager.fire(&server, &mut event).await;
+                    let mut event =
+                        crate::plugin::api::events::block::block_grow::BlockGrowEvent::new(
+                            world.clone(),
+                            block,
+                            state,
+                            block,
+                            new_state_id,
+                            *pos,
+                        );
+                    server.plugin_manager.fire_blocking(&server, &mut event);
                     if event.cancelled {
                         return;
                     }
-                    new_state_id = event.new_state_id;
+                    world.set_block_state(pos, event.new_state_id, BlockFlags::NOTIFY_LISTENERS);
+                } else {
+                    world.set_block_state(pos, new_state_id, BlockFlags::NOTIFY_LISTENERS);
                 }
-                world
-                    .set_block_state(pos, new_state_id, BlockFlags::NOTIFY_NEIGHBORS)
-                    .await;
             }
         }
     }
-
-    //TODO add impl for light level
 }
 
-pub async fn get_available_moisture(world: &Arc<World>, pos: &BlockPos, block: &Block) -> f32 {
+pub fn get_available_moisture(world: &World, pos: &BlockPos, block: &Block) -> f32 {
     let mut moisture = 1.0;
     let down_pos = pos.down();
 
@@ -114,7 +108,7 @@ pub async fn get_available_moisture(world: &Arc<World>, pos: &BlockPos, block: &
                 world.get_block_and_state_id(&down_pos.offset(Vector3 { x: dx, y: 0, z: dz }));
             if block == &Block::FARMLAND {
                 local_moisture = 1.0;
-                let props = FarmlandProperties::from_state_id(block_state, block);
+                let props = FarmlandProperties::from_state_id(block_state);
                 if props.moisture != 0 {
                     local_moisture = 3.0;
                 }

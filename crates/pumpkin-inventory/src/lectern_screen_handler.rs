@@ -2,8 +2,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use crate::screen_handler::{
-    InventoryPlayer, ItemStackFuture, ScreenHandler, ScreenHandlerBehaviour, ScreenHandlerFuture,
-    ScreenProperty, offer_or_drop_stack,
+    InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour, ScreenProperty, offer_or_drop_stack,
 };
 use crate::slot::NormalSlot;
 
@@ -19,10 +18,10 @@ pub trait LecternController: Send + Sync {
     fn current_page(&self) -> i32;
 
     /// Clamps and persists `page`, emitting a redstone pulse when it changes.
-    fn set_page(&self, page: i32) -> ScreenHandlerFuture<'_, ()>;
+    fn set_page(&self, page: i32);
 
     /// Restores the bookless block state after the book was taken.
-    fn on_book_taken(&self) -> ScreenHandlerFuture<'_, ()>;
+    fn on_book_taken(&self);
 }
 
 /// Exposes the current page as container property 0 (see `window_property::Lectern`).
@@ -91,53 +90,37 @@ impl ScreenHandler for LecternScreenHandler {
         &mut self.behaviour
     }
 
-    fn on_button_click<'a>(
-        &'a mut self,
-        player: &'a dyn InventoryPlayer,
-        id: i32,
-    ) -> ScreenHandlerFuture<'a, bool> {
-        Box::pin(async move {
-            match id {
-                Self::PREVIOUS_PAGE_BUTTON_ID => {
-                    self.controller
-                        .set_page(self.controller.current_page() - 1)
-                        .await;
-                    true
-                }
-                Self::NEXT_PAGE_BUTTON_ID => {
-                    self.controller
-                        .set_page(self.controller.current_page() + 1)
-                        .await;
-                    true
-                }
-                Self::TAKE_BOOK_BUTTON_ID => {
-                    let stack = self.inventory.remove_stack(0).await;
-                    if stack.is_empty() {
-                        return false;
-                    }
-                    self.inventory.mark_dirty();
-                    self.controller.on_book_taken().await;
-                    offer_or_drop_stack(player, stack).await;
-                    self.send_content_updates().await;
-                    true
-                }
-                _ if id >= Self::JUMP_TO_PAGE_OFFSET => {
-                    self.controller
-                        .set_page(id - Self::JUMP_TO_PAGE_OFFSET)
-                        .await;
-                    true
-                }
-                _ => false,
+    fn on_button_click(&mut self, player: &dyn InventoryPlayer, id: i32) -> bool {
+        match id {
+            Self::PREVIOUS_PAGE_BUTTON_ID => {
+                self.controller.set_page(self.controller.current_page() - 1);
+                true
             }
-        })
+            Self::NEXT_PAGE_BUTTON_ID => {
+                self.controller.set_page(self.controller.current_page() + 1);
+                true
+            }
+            Self::TAKE_BOOK_BUTTON_ID => {
+                let stack = self.inventory.remove_stack(0);
+                if stack.is_empty() {
+                    return false;
+                }
+                self.inventory.mark_dirty();
+                self.controller.on_book_taken();
+                offer_or_drop_stack(player, stack);
+                self.send_content_updates();
+                true
+            }
+            _ if id >= Self::JUMP_TO_PAGE_OFFSET => {
+                self.controller.set_page(id - Self::JUMP_TO_PAGE_OFFSET);
+                true
+            }
+            _ => false,
+        }
     }
 
-    fn quick_move<'a>(
-        &'a mut self,
-        _player: &'a dyn InventoryPlayer,
-        _slot_index: i32,
-    ) -> ItemStackFuture<'a> {
+    fn quick_move(&mut self, _player: &dyn InventoryPlayer, _slot_index: i32) -> ItemStack {
         // The lectern screen has no player slots, so nothing can be shift-clicked.
-        Box::pin(async move { ItemStack::EMPTY.clone() })
+        ItemStack::EMPTY.clone()
     }
 }

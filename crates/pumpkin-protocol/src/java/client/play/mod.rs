@@ -293,3 +293,36 @@ pub use tag_query::*;
 
 mod update_tags;
 pub use update_tags::*;
+
+mod set_chunk_cache_radius;
+pub use set_chunk_cache_radius::*;
+
+mod set_simulation_distance;
+pub use set_simulation_distance::*;
+
+mod move_vehicle;
+pub use move_vehicle::*;
+
+mod recipe_book_remove;
+pub use recipe_book_remove::*;
+
+mod update_recipes;
+pub use update_recipes::*;
+
+mod debug_block_value;
+pub use debug_block_value::*;
+
+mod debug_chunk_value;
+pub use debug_chunk_value::*;
+
+mod debug_entity_value;
+pub use debug_entity_value::*;
+
+mod debug_event;
+pub use debug_event::*;
+
+mod game_test_highlight_pos;
+pub use game_test_highlight_pos::*;
+
+mod test_instance_block_status;
+pub use test_instance_block_status::*;

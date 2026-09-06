@@ -29,3 +29,23 @@ impl AttributeModifier {
         Self::new(id, amount, ModifierOperation::MultiplyTotal)
     }
 }
+
+use crate::wit::pumpkin::plugin::attributes::Attribute;
+use crate::wit::pumpkin::plugin::enchantments::AttributeModifierSlot;
+use crate::wit::pumpkin::plugin::item_stack::ItemAttributeModifier;
+
+impl ItemAttributeModifier {
+    /// Creates a new item attribute modifier for a specific equipment slot.
+    #[must_use]
+    pub const fn new(
+        attribute: Attribute,
+        modifier: AttributeModifier,
+        slot: AttributeModifierSlot,
+    ) -> Self {
+        Self {
+            attribute,
+            modifier,
+            slot,
+        }
+    }
+}

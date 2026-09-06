@@ -1,3 +1,5 @@
+// Last verified for v2169
+
 use std::io::{Error, Read, Write};
 
 use pumpkin_macros::packet;
@@ -11,79 +13,79 @@ use crate::{
 #[derive(Debug, PacketRead, PacketWrite)]
 #[packet(27)]
 pub struct SActorEvent {
-    pub entity_runtime_id: VarULong,
-    pub event_type: ActorEventType,
-    pub event_data: VarInt,
+    pub target_runtime_id: VarULong,
+    pub event_id: ActorEventID,
+    pub data: VarInt,
     pub fire_at_position: Option<Vector3<f32>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
-pub enum ActorEventType {
-    None = 0,
-    Jump = 1,
-    Hurt = 2,
-    Death = 3,
-    StartAttacking = 4,
-    StopAttacking = 5,
-    TamingFailed = 6,
-    TamingSucceeded = 7,
-    ShakeWetness = 8,
+pub enum ActorEventID {
+    None,
+    Jump,
+    Hurt,
+    Death,
+    StartAttacking,
+    StopAttacking,
+    TamingFailed,
+    TamingSucceeded,
+    ShakeWetness,
     EatGrass = 10,
-    FishhookBubble = 11,
-    FishhookFishPosition = 12,
-    FishhookHookTime = 13,
-    FishhookTease = 14,
-    SquidFleeing = 15,
-    ZombieConverting = 16,
-    PlayAmbient = 17,
-    SpawnAlive = 18,
-    StartOfferFlower = 19,
-    StopOfferFlower = 20,
-    LoveHearts = 21,
-    VillagerAngry = 22,
-    VillagerHappy = 23,
-    WitchHatMagic = 24,
-    FireworksExplode = 25,
-    InLoveHearts = 26,
-    SilverfishMergeAnimation = 27,
-    GuardianAttackSound = 28,
-    DrinkPotion = 29,
-    ThrowPotion = 30,
-    CartWithPrimeTNT = 31,
-    PrimeCreeper = 32,
-    AirSupply = 33,
-    AddPlayerLevels = 34,
-    GuardianMiningFatigue = 35,
-    AgentSwingArm = 36,
-    DragonStartDeathAnim = 37,
-    GroundDust = 38,
-    Shake = 39,
+    FishhookBubble,
+    FishhookFishPos,
+    FishhookHookTime,
+    FishhookTease,
+    SquidFleeing,
+    ZombieConverting,
+    PlayAmbient,
+    SpawnAlive,
+    StartOfferFlower,
+    StopOfferFlower,
+    LoveHearts,
+    VillagerAngry,
+    VillagerHappy,
+    WitchHatMagic,
+    FireworksExplode,
+    InLoveHearts,
+    SilverfishMergeAnimation,
+    GuardianAttackSound,
+    DrinkPotion,
+    ThrowPotion,
+    PrimeTNTCart,
+    PrimeCreeper,
+    AirSupply,
+    DeprecatedAddPlayerLevels,
+    GuardianMiningFatigue,
+    AgentSwingArm,
+    DragonStartDeathAnim,
+    GroundDust,
+    Shake,
     Feed = 57,
     BabyAge = 60,
-    InstantDeath = 61,
-    NotifyTrade = 62,
-    LeashDestroyed = 63,
-    CaravanUpdated = 64,
-    TalismanActivate = 65,
-    UpdateStructureFeature = 66,
-    PlayerSpawnedMob = 67,
-    Puke = 68,
-    UpdateStackSize = 69,
-    StartSwimming = 70,
-    BalloonPop = 71,
-    TreasureHunt = 72,
-    SummonAgent = 73,
-    FinishedChargingItem = 74,
+    InstantDeath,
+    NotifyTrade,
+    LeashDestroyed,
+    CaravanUpdated,
+    TalismanActivate,
+    DeprecatedUpdateStructureFeature,
+    PlayerSpawnedMob,
+    Puke,
+    UpdateStackSize,
+    StartSwimming,
+    BalloonPop,
+    TreasureHunt,
+    SummonAgent,
+    FinishedChargingItem,
     ActorGrowUp = 76,
-    VibrationDetected = 77,
-    DrinkMilk = 78,
-    ShakeWetnessStop = 79,
-    KineticDamageDealt = 80,
-    HurtWithoutReceivingDamage = 81,
+    VibrationDetected,
+    DrinkMilk,
+    ShakeWetnessStop,
+    KineticDamageDealt,
+    HurtWithoutReceivingDamage,
 }
 
-impl PacketRead for ActorEventType {
+impl PacketRead for ActorEventID {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         Ok(match u8::read(reader)? {
             0 => Self::None,
@@ -97,7 +99,7 @@ impl PacketRead for ActorEventType {
             8 => Self::ShakeWetness,
             10 => Self::EatGrass,
             11 => Self::FishhookBubble,
-            12 => Self::FishhookFishPosition,
+            12 => Self::FishhookFishPos,
             13 => Self::FishhookHookTime,
             14 => Self::FishhookTease,
             15 => Self::SquidFleeing,
@@ -116,10 +118,10 @@ impl PacketRead for ActorEventType {
             28 => Self::GuardianAttackSound,
             29 => Self::DrinkPotion,
             30 => Self::ThrowPotion,
-            31 => Self::CartWithPrimeTNT,
+            31 => Self::PrimeTNTCart,
             32 => Self::PrimeCreeper,
             33 => Self::AirSupply,
-            34 => Self::AddPlayerLevels,
+            34 => Self::DeprecatedAddPlayerLevels,
             35 => Self::GuardianMiningFatigue,
             36 => Self::AgentSwingArm,
             37 => Self::DragonStartDeathAnim,
@@ -132,7 +134,7 @@ impl PacketRead for ActorEventType {
             63 => Self::LeashDestroyed,
             64 => Self::CaravanUpdated,
             65 => Self::TalismanActivate,
-            66 => Self::UpdateStructureFeature,
+            66 => Self::DeprecatedUpdateStructureFeature,
             67 => Self::PlayerSpawnedMob,
             68 => Self::Puke,
             69 => Self::UpdateStackSize,
@@ -152,7 +154,7 @@ impl PacketRead for ActorEventType {
     }
 }
 
-impl PacketWrite for ActorEventType {
+impl PacketWrite for ActorEventID {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         (*self as u8).write(writer)
     }
@@ -166,21 +168,21 @@ mod tests {
     fn reads_feed_event() {
         let packet = SActorEvent::read(&mut b"\x019\x80\x80\x90\x11\0".as_slice()).unwrap();
 
-        assert_eq!(packet.entity_runtime_id, VarULong(1));
-        assert_eq!(packet.event_type, ActorEventType::Feed);
-        assert_eq!(packet.event_data, VarInt(17_956_864));
+        assert_eq!(packet.target_runtime_id, VarULong(1));
+        assert_eq!(packet.event_id, ActorEventID::Feed);
+        assert_eq!(packet.data, VarInt(17_956_864));
         assert_eq!(packet.fire_at_position, None);
     }
 
     #[test]
     fn feed_event_wire_value_is_bidirectional() {
         let mut encoded = Vec::new();
-        ActorEventType::Feed.write(&mut encoded).unwrap();
+        ActorEventID::Feed.write(&mut encoded).unwrap();
 
         assert_eq!(encoded, [57]);
         assert_eq!(
-            ActorEventType::read(&mut encoded.as_slice()).unwrap(),
-            ActorEventType::Feed
+            ActorEventID::read(&mut encoded.as_slice()).unwrap(),
+            ActorEventID::Feed
         );
     }
 }

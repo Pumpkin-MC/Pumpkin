@@ -5,17 +5,14 @@ use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::position::BlockPos;
 use std::{
     any::Any,
-    future::Future,
-    pin::Pin,
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicBool, AtomicUsize, Ordering},
     },
 };
-use tokio::sync::Mutex;
 
 use crate::block::entities::BlockEntity;
-use pumpkin_world::inventory::{Clearable, Inventory, InventoryFuture};
+use pumpkin_world::inventory::{Clearable, Inventory};
 
 pub struct LecternBlockEntity {
     pub position: BlockPos,
@@ -57,19 +54,17 @@ impl BlockEntity for LecternBlockEntity {
         }
     }
 
-    fn write_nbt<'a>(
-        &'a self,
-        nbt: &'a mut NbtCompound,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            let book = self.book.lock().await;
-            if !book.is_empty() {
-                let mut book_nbt = NbtCompound::default();
-                book.write_item_stack(&mut book_nbt);
-                nbt.put_compound("Book", book_nbt);
-            }
-            nbt.put_int("Page", self.page.load(Ordering::Relaxed) as i32);
-        })
+    fn write_nbt(&self, nbt: &mut NbtCompound) {
+        let book = self
+            .book
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !book.is_empty() {
+            let mut book_nbt = NbtCompound::default();
+            book.write_item_stack(&mut book_nbt);
+            nbt.put_compound("Book", book_nbt);
+        }
+        nbt.put_int("Page", self.page.load(Ordering::Relaxed) as i32);
     }
 
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
@@ -129,15 +124,23 @@ impl LecternBlockEntity {
             .map_or(0, |pages| pages as i32)
     }
 
-    pub async fn page_count(&self) -> i32 {
-        Self::page_count_of(&*self.book.lock().await)
+    pub fn page_count(&self) -> i32 {
+        Self::page_count_of(
+            &self
+                .book
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        )
     }
 
     /// Vanilla comparator output: `floor(page / (page_count - 1) * 14) + 1`,
     /// or `0` without a book. Single-page books emit `1` (`0 / 0` is `NaN`,
     /// which vanilla's `MathHelper.floor` turns into `0`).
-    pub async fn comparator_output(&self) -> u8 {
-        let book = self.book.lock().await;
+    pub fn comparator_output(&self) -> u8 {
+        let book = self
+            .book
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if book.is_empty() {
             return 0;
         }
@@ -155,43 +158,52 @@ impl Inventory for LecternBlockEntity {
         1
     }
 
-    fn is_empty(&self) -> InventoryFuture<'_, bool> {
-        Box::pin(async move { self.book.lock().await.is_empty() })
+    fn is_empty(&self) -> bool {
+        self.book
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_empty()
     }
 
-    fn get_stack(&self, _slot: usize) -> InventoryFuture<'_, ItemStack> {
-        Box::pin(async move { self.book.lock().await.clone() })
+    fn get_stack(&self, _slot: usize) -> ItemStack {
+        self.book
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
-    fn remove_stack(&self, _slot: usize) -> InventoryFuture<'_, ItemStack> {
-        Box::pin(async move {
-            let mut removed = ItemStack::EMPTY.clone();
-            let mut guard = self.book.lock().await;
-            std::mem::swap(&mut removed, &mut *guard);
-            self.mark_dirty();
-            removed
-        })
+    fn remove_stack(&self, _slot: usize) -> ItemStack {
+        let mut removed = ItemStack::EMPTY.clone();
+        let mut guard = self
+            .book
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        std::mem::swap(&mut removed, &mut *guard);
+        self.mark_dirty();
+        removed
     }
 
-    fn remove_stack_specific(&self, _slot: usize, amount: u8) -> InventoryFuture<'_, ItemStack> {
-        Box::pin(async move {
-            let mut stack = self.book.lock().await;
-            if stack.is_empty() {
-                return ItemStack::EMPTY.clone();
-            }
-            let res = stack.split(amount);
-            self.mark_dirty();
-            res
-        })
+    fn remove_stack_specific(&self, _slot: usize, amount: u8) -> ItemStack {
+        let mut stack = self
+            .book
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if stack.is_empty() {
+            return ItemStack::EMPTY.clone();
+        }
+        let res = stack.split(amount);
+        self.mark_dirty();
+        res
     }
 
-    fn set_stack(&self, _slot: usize, stack: ItemStack) -> InventoryFuture<'_, ()> {
-        Box::pin(async move {
-            *self.book.lock().await = stack;
-            // A freshly placed book always opens on its first page.
-            self.page.store(0, Ordering::Relaxed);
-            self.mark_dirty();
-        })
+    fn set_stack(&self, _slot: usize, stack: ItemStack) {
+        *self
+            .book
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = stack;
+        // A freshly placed book always opens on its first page.
+        self.page.store(0, Ordering::Relaxed);
+        self.mark_dirty();
     }
 
     fn mark_dirty(&self) {
@@ -204,10 +216,11 @@ impl Inventory for LecternBlockEntity {
 }
 
 impl Clearable for LecternBlockEntity {
-    fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
-        Box::pin(async move {
-            *self.book.lock().await = ItemStack::EMPTY.clone();
-            self.mark_dirty();
-        })
+    fn clear(&self) {
+        *self
+            .book
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = ItemStack::EMPTY.clone();
+        self.mark_dirty();
     }
 }

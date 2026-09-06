@@ -102,6 +102,24 @@ impl VillagerPoiStorage {
         sites.sort_unstable_by_key(|(distance, _)| *distance);
         sites.into_iter().map(|(_, position)| position).collect()
     }
+
+    #[must_use]
+    pub fn get_nearest_job_site(&self, origin: BlockPos, radius: i32) -> Option<BlockPos> {
+        let radius_squared = i64::from(radius).pow(2);
+        let mut closest = None;
+        let mut closest_dist = radius_squared;
+
+        for position in self.job_sites.keys() {
+            let delta = position.0 - origin.0;
+            let distance_squared =
+                i64::from(delta.x).pow(2) + i64::from(delta.y).pow(2) + i64::from(delta.z).pow(2);
+            if distance_squared <= closest_dist {
+                closest = Some(*position);
+                closest_dist = distance_squared;
+            }
+        }
+        closest
+    }
 }
 
 #[must_use]

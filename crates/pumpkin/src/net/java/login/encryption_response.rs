@@ -1,13 +1,51 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
 
+fn may_omit_verify_token(version: JavaMinecraftVersion) -> bool {
+    (JavaMinecraftVersion::V_1_19_3..JavaMinecraftVersion::V_1_20_2).contains(&version)
+}
+
 impl PendingConnection {
-    pub async fn handle_encryption_response(
+    async fn verify_encryption_token(
         &mut self,
         server: &Server,
+        token: &[u8],
+    ) -> Result<(), EncryptionError> {
+        let Some(expected) = self.verify_token.take() else {
+            return Err(EncryptionError::NoPendingVerifyToken);
+        };
+
+        if token.is_empty() && may_omit_verify_token(self.version.load()) {
+            return Ok(());
+        }
+
+        let decrypted = server.decrypt(token).await?;
+        if decrypted.as_slice() == expected.as_slice() {
+            Ok(())
+        } else {
+            Err(EncryptionError::VerifyTokenMismatch)
+        }
+    }
+
+    pub async fn handle_encryption_response(
+        &mut self,
+        server: &Arc<Server>,
         encryption_response: SEncryptionResponse,
     ) -> Option<PacketHandlerResult> {
         debug!("Handling encryption");
+        if let Err(error) = self
+            .verify_encryption_token(server, &encryption_response.verify_token)
+            .await
+        {
+            debug!(
+                "Rejecting encryption response from '{}': {error}",
+                self.address
+            );
+            self.kick(TextComponent::text("Failed to verify encryption token"))
+                .await;
+            return Some(PacketHandlerResult::Stop);
+        }
+
         let Ok(shared_secret) = server.decrypt(&encryption_response.shared_secret).await else {
             self.kick(TextComponent::text("Failed to decrypt shared secret"))
                 .await;
@@ -108,9 +146,26 @@ impl PendingConnection {
 
     pub(super) async fn finish_login(
         &mut self,
-        server: &Server,
+        server: &Arc<Server>,
         profile: &GameProfile,
     ) -> Option<PacketHandlerResult> {
+        let mut pre_login_event =
+            crate::plugin::api::events::player::async_player_pre_login::AsyncPlayerPreLoginEvent {
+                player_name: profile.name.clone(),
+                player_uuid: profile.id,
+                ip_address: self.address,
+                kick_message: TextComponent::text("Disconnected"),
+                cancelled: false,
+            };
+        server
+            .plugin_manager
+            .fire(server, &mut pre_login_event)
+            .await;
+        if pre_login_event.cancelled {
+            self.kick(pre_login_event.kick_message).await;
+            return Some(PacketHandlerResult::Stop);
+        }
+
         let props = profile.properties.load();
         let packet = CLoginSuccess::new(
             &profile.id,
@@ -139,14 +194,15 @@ impl PendingConnection {
         shared_secret: &[u8],
         username: &str,
     ) -> Result<GameProfile, AuthError> {
-        let hash = server.digest_secret(shared_secret).await;
+        let hash = server.digest_secret(shared_secret);
         let ip = self.address.ip();
         let profile = authentication::authenticate(
             username,
             &hash,
             &ip,
             &server.advanced_config.networking.java.authentication,
-        )?;
+        )
+        .await?;
 
         if let Some(actions) = &profile.profile_actions {
             if server
@@ -189,5 +245,24 @@ impl PendingConnection {
             .map_err(AuthError::TextureError)?;
         }
         Ok(profile)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_util::version::JavaMinecraftVersion;
+
+    use super::may_omit_verify_token;
+
+    #[test]
+    fn only_profile_key_versions_may_omit_the_verify_token() {
+        assert!(!may_omit_verify_token(JavaMinecraftVersion::V_1_19_1));
+        assert!(may_omit_verify_token(JavaMinecraftVersion::V_1_19_3));
+        assert!(may_omit_verify_token(JavaMinecraftVersion::V_1_19_4));
+        assert!(may_omit_verify_token(JavaMinecraftVersion::V_1_20));
+        assert!(!may_omit_verify_token(JavaMinecraftVersion::V_1_20_2));
+        assert!(!may_omit_verify_token(
+            pumpkin_data::packet::CURRENT_MC_VERSION
+        ));
     }
 }

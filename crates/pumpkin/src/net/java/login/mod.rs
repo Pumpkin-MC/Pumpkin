@@ -9,7 +9,6 @@ use pumpkin_protocol::{
         },
         login::{CLoginSuccess, CSetCompression},
     },
-    java::server::config::SKnownPacks,
     java::server::login::{
         SEncryptionResponse, SLoginCookieResponse, SLoginPluginResponse, SLoginStart,
     },
@@ -21,7 +20,7 @@ use uuid::Uuid;
 
 use crate::{
     net::{
-        GameProfile, PacketHandlerResult,
+        EncryptionError, GameProfile, PacketHandlerResult,
         authentication::{self, AuthError},
         can_not_join, is_valid_player_name,
         java::pending::PendingConnection,

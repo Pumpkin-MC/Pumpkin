@@ -6,6 +6,11 @@ use pumpkin_nbt::tag::NbtTag;
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct DyeImpl;
+impl DyeImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for DyeImpl {
     default_impl!(Dye);
 }
@@ -31,6 +36,11 @@ impl DataComponentImpl for DyedColorImpl {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct MapColorImpl;
+impl MapColorImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for MapColorImpl {
     default_impl!(MapColor);
 }
@@ -56,13 +66,64 @@ impl DataComponentImpl for MapIdImpl {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct MapDecorationsImpl;
+impl MapDecorationsImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for MapDecorationsImpl {
     default_impl!(MapDecorations);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct MapPostProcessingImpl;
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub enum MapPostProcessing {
+    Lock = 0,
+    Scale = 1,
+}
+
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Default)]
+pub struct MapPostProcessingImpl {
+    pub processing: Option<MapPostProcessing>,
+}
+
+impl MapPostProcessingImpl {
+    pub const SCALE: Self = Self {
+        processing: Some(MapPostProcessing::Scale),
+    };
+    pub const LOCK: Self = Self {
+        processing: Some(MapPostProcessing::Lock),
+    };
+
+    #[must_use]
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        if let Some(val) = data.extract_int() {
+            let processing = match val {
+                0 => Some(MapPostProcessing::Lock),
+                1 => Some(MapPostProcessing::Scale),
+                _ => None,
+            };
+            Some(Self { processing })
+        } else if let Some(val) = data.extract_string() {
+            let processing = match val {
+                "lock" => Some(MapPostProcessing::Lock),
+                "scale" => Some(MapPostProcessing::Scale),
+                _ => None,
+            };
+            Some(Self { processing })
+        } else {
+            None
+        }
+    }
+}
+
 impl DataComponentImpl for MapPostProcessingImpl {
+    fn write_data(&self) -> NbtTag {
+        match self.processing {
+            Some(MapPostProcessing::Lock) => NbtTag::Int(0),
+            Some(MapPostProcessing::Scale) => NbtTag::Int(1),
+            None => NbtTag::Int(0),
+        }
+    }
     default_impl!(MapPostProcessing);
 }
 
@@ -544,12 +605,28 @@ impl DataComponentImpl for ProfileImpl {
 pub struct JukeboxPlayableImpl {
     pub song: &'static str,
 }
+impl JukeboxPlayableImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        let song = compound.get_string("song")?;
+        let static_song = crate::jukebox_song::JukeboxSong::from_name(
+            song.strip_prefix("minecraft:").unwrap_or(song),
+        )
+        .map_or("", |s| s.to_name());
+        Some(Self { song: static_song })
+    }
+}
 impl DataComponentImpl for JukeboxPlayableImpl {
     default_impl!(JukeboxPlayable);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct RecipesImpl;
+impl RecipesImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for RecipesImpl {
     default_impl!(Recipes);
 }

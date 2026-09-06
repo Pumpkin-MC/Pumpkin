@@ -16,7 +16,7 @@ use pumpkin_protocol::{
         client::config::{CFeatureFlags, CFinishConfig, CKnownPacks, CRegistryData, CUpdateTags},
         server::config::{
             ResourcePackResponseResult, SClientInformationConfig, SConfigCookieResponse,
-            SConfigResourcePack, SKeepAlive, SKnownPacks, SPluginMessage,
+            SConfigResourcePack, SKeepAlive, SPluginMessage,
         },
     },
 };

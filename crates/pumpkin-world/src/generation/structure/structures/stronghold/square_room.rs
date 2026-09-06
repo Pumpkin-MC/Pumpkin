@@ -1,6 +1,6 @@
 use pumpkin_data::{
     Block, BlockState,
-    block_properties::{BlockProperties, HorizontalFacing, LadderLikeProperties},
+    block_properties::{HorizontalFacing, LadderLikeProperties},
 };
 use pumpkin_util::{
     BlockDirection,
@@ -29,8 +29,8 @@ use crate::world::WorldPortalExt;
 const CROSSING_LOOT_TABLE: &str = "minecraft:chests/stronghold_crossing";
 
 pub struct SquareRoomPiece {
-    piece: StrongholdPiece,
-    room_type: u32,
+    pub piece: StrongholdPiece,
+    pub room_type: u32,
 }
 
 impl SquareRoomPiece {

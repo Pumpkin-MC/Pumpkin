@@ -26,6 +26,7 @@ default = [
     "game_rules",
     "entity",
     "dimension",
+    "environment_attribute",
     "enchantment",
     "world",
     "scoreboard",
@@ -41,7 +42,8 @@ default = [
     "structures",
     "potion",
     "recipe_remainder",
-    "chunk_gen_settings",
+    "material_rule",
+    "noise_settings",
     "advancement",
     "carver",
     "villager",
@@ -52,9 +54,13 @@ default = [
     "bedrock_biome",
     "map_color",
     "map_decoration",
-    "dye_color"
+    "dye_color",
+    "block_transformer",
+    "trial_spawner",
 ]
 
+trial_spawner = []
+block_transformer = ["block", "sound", "world", "tag"]
 map_color = []
 map_decoration = []
 dye_color = []
@@ -80,6 +86,7 @@ game_event = []
 game_rules = []
 entity = ["entity_pose", "entity_status", "entity_type", "spawn_egg"]
 dimension = []
+environment_attribute = []
 enchantment = []
 world = ["world_event", "message_type"]
 scoreboard = []
@@ -94,7 +101,9 @@ effect = []
 structures = []
 potion = ["potion_brewing"]
 recipe_remainder = []
-chunk_gen_settings = []
+material_rule = []
+noise_settings = []
+chunk_gen_settings = ["noise_settings", "material_rule"]
 carver = []
 villager = ["item", "sound"]
 slot_ranges = []

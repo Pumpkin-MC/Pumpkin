@@ -58,7 +58,7 @@ pub const MAX_DEPTH: i32 = 20;
 /// Dynamic lookup for Pool Aliases introduced in 1.20+ (e.g. Trial Chambers spawner/contents aliases).
 #[derive(Debug, Clone, Default)]
 pub struct PoolAliasLookup {
-    aliases: HashMap<String, Vec<(String, u32)>>,
+    aliases: HashMap<String, String>,
 }
 
 impl PoolAliasLookup {
@@ -69,38 +69,111 @@ impl PoolAliasLookup {
         }
     }
 
-    pub fn add_direct(&mut self, alias: String, target: String) {
-        self.aliases.insert(alias, vec![(target, 1)]);
+    #[must_use]
+    pub fn from_bindings(
+        bindings: &[pumpkin_data::structures::PoolAliasBinding],
+        random: &mut RandomGenerator,
+    ) -> Self {
+        let mut lookup = Self::new();
+        for binding in bindings {
+            lookup.add_binding(binding, random);
+        }
+        lookup
     }
 
-    pub fn add_random(&mut self, alias: String, targets: Vec<(String, u32)>) {
-        self.aliases.insert(alias, targets);
+    fn add_binding(
+        &mut self,
+        binding: &pumpkin_data::structures::PoolAliasBinding,
+        random: &mut RandomGenerator,
+    ) {
+        use pumpkin_data::structures::PoolAliasBinding;
+        match binding {
+            PoolAliasBinding::Direct { alias, target } => {
+                self.add_direct((*alias).to_string(), (*target).to_string());
+            }
+            PoolAliasBinding::Random { alias, targets } => {
+                if let Some(target) = Self::pick_weighted(targets, random, |t| t.weight) {
+                    self.add_direct((*alias).to_string(), target.target.to_string());
+                }
+            }
+            PoolAliasBinding::RandomGroup { groups } => {
+                if let Some(group) = Self::pick_weighted(groups, random, |g| g.weight) {
+                    for b in group.bindings {
+                        self.add_binding(b, random);
+                    }
+                }
+            }
+        }
+    }
+
+    fn pick_weighted<'a, T>(
+        items: &'a [T],
+        random: &mut RandomGenerator,
+        get_weight: impl Fn(&T) -> u32,
+    ) -> Option<&'a T> {
+        if items.is_empty() {
+            return None;
+        }
+        let total_weight: u32 = items.iter().map(&get_weight).sum();
+        if total_weight == 0 {
+            return items.first();
+        }
+        let mut r = random.next_bounded_i32(total_weight as i32) as u32;
+        for item in items {
+            let w = get_weight(item);
+            if r < w {
+                return Some(item);
+            }
+            r -= w;
+        }
+        items.first()
+    }
+
+    pub fn add_direct(&mut self, alias: String, target: String) {
+        if let Some(stripped) = alias.strip_prefix("minecraft:") {
+            self.aliases.insert(stripped.to_string(), target.clone());
+        } else {
+            self.aliases
+                .insert(format!("minecraft:{alias}"), target.clone());
+        }
+        self.aliases.insert(alias, target);
+    }
+
+    pub fn add_random(
+        &mut self,
+        alias: String,
+        targets: &[(String, u32)],
+        random: &mut RandomGenerator,
+    ) {
+        if targets.is_empty() {
+            return;
+        }
+        let total_weight: u32 = targets.iter().map(|(_, w)| *w).sum();
+        if total_weight == 0 {
+            if let Some((target, _)) = targets.first() {
+                self.add_direct(alias, target.clone());
+            }
+            return;
+        }
+        let mut r = random.next_bounded_i32(total_weight as i32) as u32;
+        for (target, weight) in targets {
+            if r < *weight {
+                self.add_direct(alias, target.clone());
+                return;
+            }
+            r -= *weight;
+        }
+        if let Some((target, _)) = targets.first() {
+            self.add_direct(alias, target.clone());
+        }
     }
 
     #[must_use]
-    pub fn lookup<'a>(&'a self, id: &'a str, random: &mut RandomGenerator) -> &'a str {
-        if let Some(targets) = self.aliases.get(id) {
-            if targets.is_empty() {
-                return id;
-            }
-            if targets.len() == 1 {
-                return &targets[0].0;
-            }
-            let total_weight: u32 = targets.iter().map(|(_, w)| *w).sum();
-            if total_weight == 0 {
-                return &targets[0].0;
-            }
-            let mut r = random.next_bounded_i32(total_weight as i32) as u32;
-            for (target, weight) in targets {
-                if r < *weight {
-                    return target.as_str();
-                }
-                r -= *weight;
-            }
-            &targets[0].0
-        } else {
-            id
+    pub fn lookup<'a>(&'a self, mut id: &'a str, _random: &mut RandomGenerator) -> &'a str {
+        while let Some(target) = self.aliases.get(id) {
+            id = target.as_str();
         }
+        id
     }
 }
 

@@ -8,7 +8,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::{CEntityPositionSync, Metadata};
+use pumpkin_protocol::java::client::play::CEntityPositionSync;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
@@ -18,17 +18,16 @@ use crate::entity::ai::goal::active_target::ActiveTargetGoal;
 use crate::entity::ai::goal::look_around::RandomLookAroundGoal;
 use crate::entity::ai::goal::look_at_entity::LookAtEntityGoal;
 use crate::entity::ai::goal::revenge::RevengeGoal;
-use crate::entity::ai::goal::{Controls, Goal, GoalFuture};
+use crate::entity::ai::goal::{Controls, Goal};
 use crate::entity::mob::{Mob, MobEntity};
 use crate::entity::projectile::shulker_bullet::ShulkerBulletEntity;
-use crate::entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture};
+use crate::entity::{Entity, EntityBase};
 
 const DEFAULT_ATTACH_FACE: BlockDirection = BlockDirection::Down;
 const NO_COLOR: u8 = 16;
 const PEEK_PER_TICK: f32 = 0.05;
 const MAX_TELEPORT_DISTANCE: i32 = 8;
 
-/// Axis type for bullet creation (the bullet cannot start moving along this axis)
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Axis {
     X = 0,
@@ -36,7 +35,6 @@ pub enum Axis {
     Z = 2,
 }
 
-/// Local extension trait so we can add helpers to the external `BlockDirection` type.
 trait BlockDirectionExt {
     fn axis_of(self) -> Axis;
 }
@@ -56,7 +54,6 @@ pub struct ShulkerEntity {
     attach_face: AtomicU8,
     peek_amount: AtomicU8,
     color: AtomicU8,
-    /// Visual interpolation
     current_peek_amount: AtomicCell<f32>,
     prev_peek_amount: AtomicCell<f32>,
 }
@@ -113,16 +110,25 @@ impl ShulkerEntity {
             .unwrap_or(DEFAULT_ATTACH_FACE)
     }
 
-    fn set_attach_face(&self, face: BlockDirection) {
+    pub fn set_attach_face(&self, face: BlockDirection) {
         self.attach_face.store(face as u8, Ordering::Relaxed);
         let entity = &self.mob_entity.living_entity.entity;
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::shulker::ATTACH_FACE_ID,
-                VarInt(face as i32),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::shulker::ATTACH_FACE_ID,
+            VarInt(face as i32),
         );
+    }
+
+    pub fn get_color(&self) -> Option<u8> {
+        let c = self.color.load(Ordering::Relaxed);
+        if c == NO_COLOR { None } else { Some(c) }
+    }
+
+    pub fn set_color(&self, color: Option<u8>) {
+        let val = color.unwrap_or(NO_COLOR);
+        self.color.store(val, Ordering::Relaxed);
+        let entity = &self.mob_entity.living_entity.entity;
+        entity.set_synced_data(pumpkin_data::tracked_data::shulker::COLOR, val as i8);
     }
 
     pub fn get_raw_peek(&self) -> u8 {
@@ -135,7 +141,6 @@ impl ShulkerEntity {
         let pos = entity.pos.load();
 
         if amount == 0 {
-            // Closed from open state
             world.play_sound_fine(
                 Sound::EntityShulkerClose,
                 SoundCategory::Hostile,
@@ -144,7 +149,6 @@ impl ShulkerEntity {
                 1.0,
             );
         } else if self.peek_amount.load(Ordering::Relaxed) == 0 {
-            // Opened from closed state
             world.play_sound_fine(
                 Sound::EntityShulkerOpen,
                 SoundCategory::Hostile,
@@ -156,21 +160,13 @@ impl ShulkerEntity {
 
         self.peek_amount.store(amount, Ordering::Relaxed);
 
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::shulker::PEEK_ID,
-                amount,
-            )],
-            None,
-        );
+        entity.set_synced_data(pumpkin_data::tracked_data::shulker::PEEK_ID, amount);
     }
 
     pub fn is_closed(&self) -> bool {
         self.peek_amount.load(Ordering::Relaxed) == 0
     }
 
-    /// Advances `current_peek_amount` toward target by `PEEK_PER_TICK`.
-    /// Returns true if the value changed.
     fn update_peek_amount(&self) -> bool {
         let current = self.current_peek_amount.load();
         self.prev_peek_amount.store(current);
@@ -190,8 +186,6 @@ impl ShulkerEntity {
         true
     }
 
-    /// Returns `Some(direction)` if the neighbour block in that direction from
-    /// `pos` is solid (the shulker can attach there).
     fn find_attachable_face(&self, pos: &BlockPos) -> Option<BlockDirection> {
         let entity = &self.mob_entity.living_entity.entity;
         let world = entity.world.load();
@@ -205,43 +199,34 @@ impl ShulkerEntity {
         None
     }
 
-    /// Check whether the shulker can stay where it is.
-    /// The block at `pos` must be free (air) and the block in the `face` direction from `pos` must be solid.
     fn can_stay_at(&self, pos: &BlockPos, face: BlockDirection) -> bool {
         let entity = &self.mob_entity.living_entity.entity;
         let world = entity.world.load();
 
-        // Shulker's own block must not be occupied
         let own_state = world.get_block_state(pos);
         if !own_state.is_air() {
             return false;
         }
 
-        // The block the shulker is attached to must still be solid
         let neighbour = pos.offset_direction(face);
         let state = world.get_block_state(&neighbour);
         state.is_solid()
     }
 
-    /// Try to find a new attachment point, cascading to a random teleport.
-    async fn find_new_attachment(&self) {
+    fn find_new_attachment(&self) {
         let pos = self.mob_entity.living_entity.entity.block_pos.load();
         if let Some(dir) = self.find_attachable_face(&pos) {
             self.set_attach_face(dir);
         } else {
-            self.teleport_somewhere().await;
+            self.teleport_somewhere();
         }
     }
 
-    /// Attempt to teleport to a random nearby location where the shulker can attach.
-    /// Returns `true` on success.
-    pub async fn teleport_somewhere(&self) -> bool {
+    pub fn teleport_somewhere(&self) -> bool {
         let entity = &self.mob_entity.living_entity.entity;
         let base_pos = entity.block_pos.load();
         let world = entity.world.load();
 
-        // Collect all random offsets up-front so ThreadRng (which is !Send) is
-        // dropped before any .await boundary.
         let candidates: Vec<(i32, i32, i32)> = {
             let mut rng = rand::rng();
             (0..20)
@@ -258,7 +243,6 @@ impl ShulkerEntity {
         for (dx, dy, dz) in candidates {
             let candidate = BlockPos::new(base_pos.0.x + dx, base_pos.0.y + dy, base_pos.0.z + dz);
 
-            // Target block must be air and there must be an attachable adjacent solid face.
             let candidate_state = world.get_block_state(&candidate);
             if !candidate_state.is_air() {
                 continue;
@@ -297,9 +281,8 @@ impl ShulkerEntity {
                     1.0,
                 );
 
-                // Close the shulker and drop the current target after teleport.
                 self.set_raw_peek(0);
-                self.mob_entity.target.lock().await.take();
+                self.mob_entity.set_target(None);
 
                 return true;
             }
@@ -307,47 +290,36 @@ impl ShulkerEntity {
         false
     }
 
-    pub async fn on_shulker_damage(&self, _damage_type: DamageType) {
+    pub fn on_shulker_damage(&self) {
         let living = &self.mob_entity.living_entity;
         let health = living.health.load();
         let max = living.get_max_health();
 
-        // Teleport at half-health (random 1-in-4 chance)
         if health < max * 0.5 && rand::rng().random_range(0..4) == 0 {
-            self.teleport_somewhere().await;
+            self.teleport_somewhere();
         }
-
-        // pre_damage for arrow blocking below.
-    }
-}
-
-impl NBTStorage for ShulkerEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
-            nbt.put_byte("AttachFace", self.attach_face.load(Ordering::Relaxed) as i8);
-            nbt.put_byte("PeekAmount", self.peek_amount.load(Ordering::Relaxed) as i8);
-            nbt.put_byte("Color", self.color.load(Ordering::Relaxed) as i8);
-        })
-    }
-
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
-            if let Some(face) = nbt.get_byte("AttachFace") {
-                self.attach_face.store(face as u8, Ordering::Relaxed);
-            }
-            if let Some(peek) = nbt.get_byte("PeekAmount") {
-                self.peek_amount.store(peek as u8, Ordering::Relaxed);
-            }
-            if let Some(color) = nbt.get_byte("Color") {
-                self.color.store(color as u8, Ordering::Relaxed);
-            }
-        })
     }
 }
 
 impl Mob for ShulkerEntity {
+    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_byte("AttachFace", self.attach_face.load(Ordering::Relaxed) as i8);
+        nbt.put_byte("PeekAmount", self.peek_amount.load(Ordering::Relaxed) as i8);
+        nbt.put_byte("Color", self.color.load(Ordering::Relaxed) as i8);
+    }
+
+    fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        if let Some(face) = nbt.get_byte("AttachFace") {
+            self.attach_face.store(face as u8, Ordering::Relaxed);
+        }
+        if let Some(peek) = nbt.get_byte("PeekAmount") {
+            self.peek_amount.store(peek as u8, Ordering::Relaxed);
+        }
+        if let Some(color) = nbt.get_byte("Color") {
+            self.color.store(color as u8, Ordering::Relaxed);
+        }
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
@@ -356,53 +328,35 @@ impl Mob for ShulkerEntity {
         0.0
     }
 
-    fn mob_tick<'a>(&'a self, _caller: &'a Arc<dyn EntityBase>) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            let entity = &self.mob_entity.living_entity.entity;
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
+        let entity = &self.mob_entity.living_entity.entity;
 
-            if !entity.is_alive() {
-                return;
-            }
+        if !entity.is_alive() {
+            return;
+        }
 
-            entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
+        entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
 
-            // Advance peek interpolation
-            self.update_peek_amount();
+        self.update_peek_amount();
 
-            // Ensure the current attachment face still has a solid block behind it.
-            let pos = entity.block_pos.load();
-            let face = self.get_attach_face();
-            if !self.can_stay_at(&pos, face) {
-                self.find_new_attachment().await;
-            }
-        })
+        let pos = entity.block_pos.load();
+        let face = self.get_attach_face();
+        if !self.can_stay_at(&pos, face) {
+            self.find_new_attachment();
+        }
     }
 
-    fn on_damage<'a>(
-        &'a self,
-        damage_type: DamageType,
-        _source: Option<&'a dyn EntityBase>,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            self.on_shulker_damage(damage_type).await;
-        })
+    fn on_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) {
+        self.on_shulker_damage();
     }
 
-    /// When closed, block arrows entirely.
-    fn pre_damage<'a>(
-        &'a self,
-        damage_type: DamageType,
-        _source: Option<&'a dyn EntityBase>,
-    ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async move {
-            if self.is_closed() && damage_type == DamageType::ARROW {
-                return false;
-            }
-            true
-        })
+    fn pre_damage(&self, damage_type: DamageType, _source: Option<&dyn EntityBase>) -> bool {
+        if self.is_closed() && damage_type == DamageType::ARROW {
+            return false;
+        }
+        true
     }
 
-    /// Apply armor modifier (20 armor) reduction when closed.
     fn modify_incoming_damage(&self, amount: f32, damage_type: DamageType) -> f32 {
         if self.is_closed() && !crate::entity::living::bypasses_armor_durability(&damage_type) {
             const ARMOR: f32 = 20.0;
@@ -433,98 +387,80 @@ impl Goal for ShulkerAttackGoal {
         Controls::MOVE | Controls::LOOK
     }
 
-    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async {
-            let target = mob.get_mob_entity().target.lock().await;
-            target
-                .as_ref()
-                .is_some_and(|t| t.get_living_entity().is_some_and(|l| l.entity.is_alive()))
-        })
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        let target = mob.get_mob_entity().get_target();
+        target
+            .as_ref()
+            .is_some_and(|t| t.get_living_entity().is_some_and(|l| l.entity.is_alive()))
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async {
-            let target = mob.get_mob_entity().target.lock().await;
-            target
-                .as_ref()
-                .is_some_and(|t| t.get_living_entity().is_some_and(|l| l.entity.is_alive()))
-        })
+    fn should_continue(&self, mob: &dyn Mob) -> bool {
+        let target = mob.get_mob_entity().get_target();
+        target
+            .as_ref()
+            .is_some_and(|t| t.get_living_entity().is_some_and(|l| l.entity.is_alive()))
     }
 
-    fn start<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            self.attack_cooldown.store(20, Ordering::Relaxed);
-            self.shulker.set_raw_peek(100);
-        })
+    fn start(&mut self, _mob: &dyn Mob) {
+        self.attack_cooldown.store(20, Ordering::Relaxed);
+        self.shulker.set_raw_peek(100);
     }
 
-    fn stop<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            self.shulker.set_raw_peek(0);
-        })
+    fn stop(&mut self, _mob: &dyn Mob) {
+        self.shulker.set_raw_peek(0);
     }
 
     fn should_run_every_tick(&self) -> bool {
         true
     }
 
-    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            let mob_entity = mob.get_mob_entity();
-            let target_arc = {
-                let guard = mob_entity.target.lock().await;
-                guard.clone()
-            };
+    fn tick(&mut self, mob: &dyn Mob) {
+        let mob_entity = mob.get_mob_entity();
+        let target_arc = mob_entity.get_target();
 
-            let Some(target) = target_arc else {
-                return;
-            };
+        let Some(target) = target_arc else {
+            return;
+        };
 
-            if !target.get_entity().is_alive() {
-                return;
-            }
+        if !target.get_entity().is_alive() {
+            return;
+        }
 
-            let entity = &mob_entity.living_entity.entity;
-            let shulker_pos = entity.pos.load();
+        let entity = &mob_entity.living_entity.entity;
+        let shulker_pos = entity.pos.load();
+        let target_pos = target.get_entity().pos.load();
+        let dist_sq = shulker_pos.squared_distance_to_vec(&target_pos);
+
+        if dist_sq > 400.0 {
+            mob_entity.set_target(None);
+            return;
+        }
+
+        let cooldown = self.attack_cooldown.fetch_sub(1, Ordering::Relaxed) - 1;
+        if cooldown <= 0 {
+            let new_cd = 20 + mob.get_random().random_range(0..5) * 10;
+            self.attack_cooldown.store(new_cd, Ordering::Relaxed);
+
+            let world = entity.world.load();
             let target_pos = target.get_entity().pos.load();
-            let dist_sq = shulker_pos.squared_distance_to_vec(&target_pos);
+            let bullet = ShulkerBulletEntity::new(
+                entity,
+                target.get_entity().entity_id,
+                target_pos,
+                self.shulker.get_attach_face().axis_of(),
+            );
+            world.spawn_entity_non_save(Arc::new(bullet));
 
-            // De-target if too far (>20 blocks)
-            if dist_sq > 400.0 {
-                mob_entity.target.lock().await.take();
-                return;
-            }
-
-            let cooldown = self.attack_cooldown.fetch_sub(1, Ordering::Relaxed) - 1;
-            if cooldown <= 0 {
-                // Reset cooldown
-                let new_cd = 20 + mob.get_random().random_range(0..5) * 10;
-                self.attack_cooldown.store(new_cd, Ordering::Relaxed);
-
-                // Spawn bullet
-                let world = entity.world.load();
-                let target_pos = target.get_entity().pos.load();
-                let bullet = ShulkerBulletEntity::new(
-                    entity,
-                    target.get_entity().entity_id,
-                    target_pos,
-                    self.shulker.get_attach_face().axis_of(),
-                );
-                let bullet_arc = Arc::new(bullet);
-                world.spawn_entity(bullet_arc).await;
-
-                // Shoot sound (random pitch)
-                let pitch = 1.0
-                    + (mob.get_random().random::<f32>() - mob.get_random().random::<f32>()) * 0.2;
-                world.play_sound_fine(
-                    Sound::EntityShulkerShoot,
-                    SoundCategory::Hostile,
-                    &shulker_pos,
-                    2.0,
-                    pitch,
-                );
-            }
-        })
+            let pitch =
+                1.0 + (mob.get_random().random::<f32>() - mob.get_random().random::<f32>()) * 0.2;
+            world.play_sound_fine(
+                Sound::EntityShulkerShoot,
+                SoundCategory::Hostile,
+                &shulker_pos,
+                2.0,
+                pitch,
+            );
+        }
     }
 }
 
@@ -543,49 +479,39 @@ impl ShulkerPeekGoal {
 }
 
 impl Goal for ShulkerPeekGoal {
-    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async {
-            let has_target = mob.get_mob_entity().target.lock().await.is_some();
-            if has_target {
-                return false;
-            }
-            if mob.get_random().random_range(0..40) != 0 {
-                return false;
-            }
-            let pos = mob.get_mob_entity().living_entity.entity.block_pos.load();
-            let face = self.shulker.get_attach_face();
-            self.shulker.can_stay_at(&pos, face)
-        })
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        let has_target = mob.get_mob_entity().get_target().is_some();
+        if has_target {
+            return false;
+        }
+        if mob.get_random().random_range(0..40) != 0 {
+            return false;
+        }
+        let pos = mob.get_mob_entity().living_entity.entity.block_pos.load();
+        let face = self.shulker.get_attach_face();
+        self.shulker.can_stay_at(&pos, face)
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async {
-            let has_target = mob.get_mob_entity().target.lock().await.is_some();
-            !has_target && self.peek_time.load(Ordering::Relaxed) > 0
-        })
+    fn should_continue(&self, mob: &dyn Mob) -> bool {
+        let has_target = mob.get_mob_entity().get_target().is_some();
+        !has_target && self.peek_time.load(Ordering::Relaxed) > 0
     }
 
-    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            let duration = 20 * (1 + mob.get_random().random_range(0..3));
-            self.peek_time.store(duration, Ordering::Relaxed);
-            self.shulker.set_raw_peek(30);
-        })
+    fn start(&mut self, mob: &dyn Mob) {
+        let duration = 20 * (1 + mob.get_random().random_range(0..3));
+        self.peek_time.store(duration, Ordering::Relaxed);
+        self.shulker.set_raw_peek(30);
     }
 
-    fn stop<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            let has_target = self.shulker.mob_entity.target.lock().await.is_some();
-            if !has_target {
-                self.shulker.set_raw_peek(0);
-            }
-        })
+    fn stop(&mut self, _mob: &dyn Mob) {
+        let has_target = self.shulker.mob_entity.get_target().is_some();
+        if !has_target {
+            self.shulker.set_raw_peek(0);
+        }
     }
 
-    fn tick<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            self.peek_time.fetch_sub(1, Ordering::Relaxed);
-        })
+    fn tick(&mut self, _mob: &dyn Mob) {
+        self.peek_time.fetch_sub(1, Ordering::Relaxed);
     }
 }
 

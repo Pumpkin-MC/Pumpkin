@@ -1,5 +1,24 @@
+use pumpkin_protocol::bedrock::client::PackIdVersion;
+
 #[allow(clippy::wildcard_imports)]
 use super::*;
+
+/// Builds the name a Bedrock player is known by on the server.
+///
+/// Bedrock gamertags may contain spaces, which cannot be typed as a command argument,
+/// and may collide with a Java account name on a cross-play server. `prefix` is
+/// prepended as-is (empty means no prefix) and, when `replace_spaces` is set, spaces
+/// become underscores.
+fn build_username(display_name: &str, prefix: &str, replace_spaces: bool) -> String {
+    let mut name = String::with_capacity(prefix.len() + display_name.len());
+    name.push_str(prefix);
+    if replace_spaces {
+        name.extend(display_name.chars().map(|c| if c == ' ' { '_' } else { c }));
+    } else {
+        name.push_str(display_name);
+    }
+    name
+}
 
 impl BedrockClient {
     pub async fn handle_login(
@@ -19,7 +38,7 @@ impl BedrockClient {
         let player_data = if server.advanced_config.networking.bedrock.online_mode {
             match auth_payload.authentication_type {
                 AuthenticationType::Full => {
-                    verify_oidc_token_path(server, &auth_payload.token, false)?
+                    verify_oidc_token_path(server, &auth_payload.token, false).await?
                 }
                 AuthenticationType::SelfSigned => {
                     if server
@@ -32,7 +51,7 @@ impl BedrockClient {
                         return Err(LoginError::SelfSignedNotAllowed);
                     }
 
-                    verify_oidc_token_path(server, &auth_payload.token, true)?
+                    verify_oidc_token_path(server, &auth_payload.token, true).await?
                 }
                 AuthenticationType::Guest => {
                     return Err(LoginError::GuestUnimplemented);
@@ -56,13 +75,16 @@ impl BedrockClient {
             .map_err(|_| LoginError::DecodeExtraError)?;
         let client_data: ClientData = serde_json::from_slice(&payload_bytes)?;
 
-        let real_name = player_data.display_name;
-        // IMPORTANT: Bedrock allows spaces in names. While we could support this, it would significantly complicate parsing player arguments in commands, so we don't
-        let under_score_name = real_name.replace(' ', "_");
+        let bedrock_config = &server.advanced_config.networking.bedrock;
+        let name = build_username(
+            &player_data.display_name,
+            &bedrock_config.username_prefix,
+            bedrock_config.replace_username_spaces,
+        );
 
         let profile = GameProfile {
             id: Uuid::parse_str(&player_data.uuid).map_err(|_| LoginError::InvalidUuid)?,
-            name: under_score_name,
+            name,
             properties: ArcSwap::new(Arc::new(Vec::new())),
             profile_actions: None,
         };
@@ -86,17 +108,16 @@ impl BedrockClient {
         let mut entries = Vec::new();
         if br_config.enabled {
             for pack in &br_config.packs {
-                entries.push(ResourcePackEntry {
-                    uuid: pack.uuid,
-                    version: pack.version.clone(),
-                    size: pack.size,
-                    download_url: pack.download_url.clone(),
+                entries.push(PackInfoData {
+                    pack_id_version: PackIdVersion::new(pack.uuid, pack.version.clone()),
+                    pack_size: pack.size,
+                    cdn_url: pack.download_url.clone(),
                     content_key: pack.content_key.clone(),
-                    sub_pack_name: pack.sub_pack_name.clone(),
-                    content_id: pack.content_id.clone(),
+                    subpack_name: pack.sub_pack_name.clone(),
+                    content_identity: pack.content_id.clone(),
                     has_scripts: pack.has_scripts,
-                    addon_pack: pack.addon_pack,
-                    rtx_enabled: pack.rtx_enabled,
+                    is_addon_pack: pack.addon_pack,
+                    is_ray_tracing_capable: pack.rtx_enabled,
                 });
             }
         }
@@ -105,9 +126,8 @@ impl BedrockClient {
             resource_pack_required: br_config.force,
             has_addon_packs: false,
             has_scripts: false,
-            is_vibrant_visuals_force_disabled: false,
-            world_template_id: uuid::Uuid::nil(),
-            world_template_version: String::new(),
+            force_disable_vibrant_visuals: false,
+            world_template_id_and_version: PackIdVersion::new(uuid::Uuid::nil(), String::new()),
             resource_packs: entries,
         };
         self.enqueue_client_packet(&packs_info).await;
@@ -121,5 +141,30 @@ impl BedrockClient {
             .store(std::sync::Arc::new(Some(std::sync::Arc::new(client_data))));
 
         Ok(PacketHandlerResult::ReadyToPlay(profile, new_config))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_username;
+
+    #[test]
+    fn spaces_become_underscores_by_default() {
+        assert_eq!(build_username("Some Player", "", true), "Some_Player");
+    }
+
+    #[test]
+    fn spaces_are_kept_when_replacement_is_disabled() {
+        assert_eq!(build_username("Some Player", "", false), "Some Player");
+    }
+
+    #[test]
+    fn prefix_is_prepended() {
+        assert_eq!(build_username("Some Player", ".", true), ".Some_Player");
+    }
+
+    #[test]
+    fn empty_prefix_leaves_the_name_unchanged() {
+        assert_eq!(build_username("Steve", "", true), "Steve");
     }
 }

@@ -301,6 +301,8 @@ impl ClientPacket for CSpawnEntity {
                 data = VarInt(5);
             } else if self.r#type.0 == i32::from(EntityType::COMMAND_BLOCK_MINECART.id) {
                 data = VarInt(6);
+            } else if self.r#type.0 == i32::from(EntityType::ITEM.id) {
+                data = VarInt(1);
             }
         }
 

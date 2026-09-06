@@ -23,33 +23,28 @@ const ALREADY_OFF_ERROR_TYPE: CommandErrorType<0> = CommandErrorType::new(
 struct SaveOffExecutor;
 
 impl CommandExecutor for SaveOffExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let mut any_disabled = false;
-            for world in context.server().worlds.load().iter() {
-                if world.level.save_enabled.swap(false, Relaxed) {
-                    any_disabled = true;
-                }
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let mut any_disabled = false;
+        for world in context.server().worlds.load().iter() {
+            if world.level.save_enabled.swap(false, Relaxed) {
+                any_disabled = true;
             }
+        }
 
-            if !any_disabled {
-                return Err(ALREADY_OFF_ERROR_TYPE.create_without_context());
-            }
+        if !any_disabled {
+            return Err(ALREADY_OFF_ERROR_TYPE.create_without_context());
+        }
 
-            context
-                .source
-                .send_feedback(
-                    TextComponent::translate_cross(
-                        translation::java::COMMANDS_SAVE_DISABLED,
-                        translation::bedrock::COMMANDS_SAVE_DISABLED,
-                        [],
-                    ),
-                    true,
-                )
-                .await;
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_SAVE_DISABLED,
+                translation::bedrock::COMMANDS_SAVE_DISABLED,
+                [],
+            ),
+            true,
+        );
 
-            Ok(1)
-        })
+        Ok(1)
     }
 }
 

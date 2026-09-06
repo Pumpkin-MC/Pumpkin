@@ -15,7 +15,7 @@ pub struct BlendingData {
 
 impl BlendingData {
     #[must_use]
-    pub fn get_height(&self, cell_x: i32, _cell_y: i32, cell_z: i32) -> f64 {
+    pub fn get_height(&self, cell_x: i32, cell_z: i32) -> f64 {
         if !(0..16).contains(&cell_x) || !(0..16).contains(&cell_z) {
             return f64::MAX;
         }
@@ -81,7 +81,7 @@ impl BlendingData {
         }
     }
 
-    pub fn iterate_biomes<F>(&self, quart_x: i32, _quart_y: i32, quart_z: i32, mut consumer: F)
+    pub fn iterate_biomes<F>(&self, quart_x: i32, quart_z: i32, mut consumer: F)
     where
         F: FnMut(i32, i32, &'static Biome),
     {

@@ -10,11 +10,16 @@ impl JavaClient {
         packet: &SLockDifficulty,
     ) {
         if player.permission_lvl.load() >= PermissionLvl::Two {
+            server.set_difficulty_locked(packet.locked);
             info!(
-                "Player {} requested difficulty lock: {}",
+                "Player {} locked difficulty: {}",
                 player.gameprofile.name, packet.locked
             );
-            let _ = server;
+        } else {
+            warn!(
+                "Player {} tried to lock difficulty without required permissions",
+                player.gameprofile.name
+            );
         }
     }
 }

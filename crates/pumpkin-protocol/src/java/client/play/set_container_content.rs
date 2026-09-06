@@ -2,7 +2,8 @@ use std::io::Write;
 
 use crate::VarInt;
 use crate::codec::item_stack_seralizer::ItemStackSerializer;
-use crate::{ClientPacket, WritingError, ser::NetworkWriteExt};
+use crate::ser::{NetworkReadExt, ReadingError};
+use crate::{ClientPacket, ServerPacket, WritingError, ser::NetworkWriteExt};
 
 use pumpkin_data::packet::clientbound::play::CONTAINER_SET_CONTENT;
 use pumpkin_macros::java_packet;
@@ -70,5 +71,41 @@ impl ClientPacket for CSetContainerContent<'_> {
         }
 
         Ok(())
+    }
+}
+
+impl<'a> ServerPacket<'a> for CSetContainerContent<'a> {
+    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let window_id = bytebuf.get_container_id(version)?;
+        let state_id = if *version >= JavaMinecraftVersion::V_1_17_1 {
+            bytebuf.get_var_int()?
+        } else {
+            VarInt(0)
+        };
+        let count = if *version >= JavaMinecraftVersion::V_1_17_1 {
+            bytebuf.get_var_int()?.0
+        } else {
+            i32::from(bytebuf.get_i16_be()?)
+        };
+        if !(0..=4096).contains(&count) {
+            return Err(ReadingError::Message("Slot count out of bounds".into()));
+        }
+        let mut slot_data = Vec::with_capacity(count as usize);
+        for _ in 0..count {
+            slot_data.push(ItemStackSerializer::read_with_version(bytebuf, version)?);
+        }
+        let carried_item = if *version >= JavaMinecraftVersion::V_1_17_1 {
+            ItemStackSerializer::read_with_version(bytebuf, version)?
+        } else {
+            ItemStackSerializer(std::borrow::Cow::Borrowed(
+                pumpkin_data::item_stack::ItemStack::EMPTY,
+            ))
+        };
+        Ok(Self {
+            window_id,
+            state_id,
+            slot_data: Box::leak(slot_data.into_boxed_slice()),
+            carried_item: Box::leak(Box::new(carried_item)),
+        })
     }
 }

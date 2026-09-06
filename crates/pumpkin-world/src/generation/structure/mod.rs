@@ -81,7 +81,8 @@ pub fn generate_structure_position(
             let (Some(start_pool), Some(size)) = (structure.start_pool, structure.size) else {
                 return None;
             };
-            let mut generator = JigsawGenerator::new(start_pool, size);
+            let mut generator =
+                JigsawGenerator::new(start_pool, size).with_pool_aliases(structure.pool_aliases);
             if structure.use_expansion_hack.unwrap_or(false) {
                 generator = generator.with_expansion_hack(true);
             }
@@ -92,7 +93,9 @@ pub fn generate_structure_position(
         }
         StructureKeys::Shipwreck | StructureKeys::ShipwreckBeached => {
             let generator = ShipwreckGenerator {
-                is_beached: *key == StructureKeys::ShipwreckBeached,
+                is_beached: structure
+                    .is_beached
+                    .unwrap_or(*key == StructureKeys::ShipwreckBeached),
             };
             generator.get_structure_position(context)
         }
@@ -108,7 +111,9 @@ pub fn generate_structure_position(
         }
         StructureKeys::OceanRuinCold | StructureKeys::OceanRuinWarm => {
             let generator = OceanRuinGenerator {
-                is_warm: *key == StructureKeys::OceanRuinWarm,
+                is_warm: structure
+                    .biome_temp
+                    .map_or(*key == StructureKeys::OceanRuinWarm, |t| t == "warm"),
             };
             generator.get_structure_position(context)
         }
@@ -117,7 +122,9 @@ pub fn generate_structure_position(
         StructureKeys::Monument => OceanMonumentGenerator.get_structure_position(context),
         StructureKeys::Mineshaft | StructureKeys::MineshaftMesa => {
             let generator = MineshaftGenerator {
-                is_mesa: *key == StructureKeys::MineshaftMesa,
+                is_mesa: structure
+                    .mineshaft_type
+                    .map_or(*key == StructureKeys::MineshaftMesa, |t| t == "mesa"),
             };
             generator.get_structure_position(context)
         }

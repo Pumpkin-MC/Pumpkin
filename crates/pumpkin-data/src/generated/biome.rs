@@ -9300,7 +9300,7 @@ impl ParameterPoint {
     }
 }
 #[must_use]
-pub fn target(
+pub const fn target(
     temperature: f32,
     humidity: f32,
     continentalness: f32,
@@ -9318,7 +9318,7 @@ pub fn target(
     )
 }
 #[must_use]
-pub fn parameters(
+pub const fn parameters(
     temperature: f32,
     humidity: f32,
     continentalness: f32,

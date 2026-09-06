@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity,
     mob::{Mob, MobEntity, skeleton::SkeletonEntityBase},
 };
 
@@ -16,8 +16,6 @@ impl WitherSkeletonEntity {
         Arc::new(skeleton)
     }
 }
-
-impl NBTStorage for WitherSkeletonEntity {}
 
 impl Mob for WitherSkeletonEntity {
     fn get_mob_entity(&self) -> &MobEntity {

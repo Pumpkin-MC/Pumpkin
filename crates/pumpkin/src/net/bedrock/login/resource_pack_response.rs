@@ -4,13 +4,13 @@ use super::*;
 impl BedrockClient {
     pub async fn handle_resource_pack_response(
         &self,
-        packet: SResourcePackResponse,
+        packet: SResourcePackClientResponse,
         server: &Arc<Server>,
     ) {
         // TODO: warn & ignore if the player is already spawned in
 
         match packet.response {
-            SResourcePackResponse::STATUS_REFUSED => {
+            SResourcePackClientResponse::STATUS_REFUSED => {
                 debug!("Bedrock: SResourcePackResponse::STATUS_REFUSED");
                 self.kick(
                     DisconnectReason::ResourcePackProblem,
@@ -18,11 +18,11 @@ impl BedrockClient {
                 )
                 .await;
             }
-            SResourcePackResponse::STATUS_SEND_PACKS => {
+            SResourcePackClientResponse::STATUS_SEND_PACKS => {
                 debug!("Bedrock: SResourcePackResponse::STATUS_SEND_PACKS");
                 // TODO: send packs
             }
-            SResourcePackResponse::STATUS_HAVE_ALL_PACKS => {
+            SResourcePackClientResponse::STATUS_HAVE_ALL_PACKS => {
                 debug!("Bedrock: SResourcePackResponse::STATUS_HAVE_ALL_PACKS");
                 let br_config = &server.advanced_config.resource_pack.bedrock;
                 // Convert your config packs into protocol stack entries
@@ -30,8 +30,8 @@ impl BedrockClient {
                     br_config
                         .packs
                         .iter()
-                        .map(|pack| ResourcePackStackEntry {
-                            uuid: pack.uuid.to_string(),
+                        .map(|pack| PackInstanceId {
+                            pack_id: pack.uuid.to_string(),
                             version: pack.version.clone(),
                             sub_pack_name: String::new(),
                         })
@@ -40,19 +40,19 @@ impl BedrockClient {
                     Vec::new()
                 };
 
-                self.enqueue_client_packet(&CResourcePackStackPacket::new(
-                    br_config.force,
-                    resource_packs,
-                    CURRENT_BEDROCK_MC_VERSION.to_string(),
-                    Experiments {
-                        names_size: 0,
+                self.enqueue_client_packet(&CResourcePackStackPacket {
+                    texture_pack_required: br_config.force,
+                    texture_pack_list: resource_packs,
+                    base_game_version: CURRENT_BEDROCK_MC_VERSION.to_string(),
+                    experiments: Experiments {
+                        toggles: Vec::new(),
                         experiments_ever_toggled: false,
                     },
-                    false,
-                ))
+                    include_editor_packs: false,
+                })
                 .await;
             }
-            SResourcePackResponse::STATUS_COMPLETED => {
+            SResourcePackClientResponse::STATUS_COMPLETED => {
                 debug!("Bedrock: SResourcePackResponse::STATUS_COMPLETED");
                 let player = self.player.load_full();
                 if let Some(player) = player.as_ref() {

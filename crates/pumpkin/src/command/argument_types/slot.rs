@@ -9,7 +9,6 @@ use pumpkin_data::slot_ranges::{
 };
 use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
-use std::pin::Pin;
 
 pub const UNKNOWN_SLOT_ERROR_TYPE: CommandErrorType<1> = CommandErrorType::new(
     translation::java::SLOT_UNKNOWN,
@@ -45,16 +44,14 @@ impl ArgumentType for SlotArgumentType {
         JavaClientArgumentType::ItemSlot
     }
 
-    fn list_suggestions<'a>(
-        &'a self,
-        _context: &'a CommandContext,
+    fn list_suggestions(
+        &self,
+        _context: &CommandContext,
         builder: SuggestionsBuilder,
-    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
-        Box::pin(async move {
-            builder
-                .filter_and_suggest(&SLOT_RANGE_SINGLE_SLOT_NAMES)
-                .build()
-        })
+    ) -> Suggestions {
+        builder
+            .filter_and_suggest(&SLOT_RANGE_SINGLE_SLOT_NAMES)
+            .build()
     }
 
     fn examples(&self) -> Vec<String> {
@@ -84,12 +81,12 @@ impl ArgumentType for SlotsArgumentType {
         JavaClientArgumentType::ItemSlots
     }
 
-    fn list_suggestions<'a>(
-        &'a self,
-        _context: &'a CommandContext,
+    fn list_suggestions(
+        &self,
+        _context: &CommandContext,
         builder: SuggestionsBuilder,
-    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
-        Box::pin(async move { builder.filter_and_suggest(&SLOT_RANGE_ALL_NAMES).build() })
+    ) -> Suggestions {
+        builder.filter_and_suggest(&SLOT_RANGE_ALL_NAMES).build()
     }
 
     fn examples(&self) -> Vec<String> {

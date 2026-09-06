@@ -258,6 +258,7 @@ pub struct BranchPosition {
 }
 
 impl BranchPosition {
+    #[must_use]
     pub const fn new(pos: BlockPos, end_y: i32) -> Self {
         Self {
             node: TreeNode {
@@ -269,6 +270,7 @@ impl BranchPosition {
         }
     }
 
+    #[must_use]
     pub const fn get_end_y(&self) -> i32 {
         self.end_y
     }

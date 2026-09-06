@@ -67,6 +67,7 @@ pub struct PendingConnection {
     pub config: Option<PlayerConfig>,
     pub brand: Option<String>,
     pub packet_limiter: PacketRateLimiter,
+    pub verify_token: Option<[u8; 4]>,
 }
 
 impl PendingConnection {
@@ -91,6 +92,7 @@ impl PendingConnection {
             config: None,
             brand: None,
             packet_limiter,
+            verify_token: None,
         }
     }
 
@@ -311,7 +313,7 @@ impl PendingConnection {
 
     async fn handle_login_packet(
         &mut self,
-        server: &Server,
+        server: &Arc<Server>,
         packet: &RawPacket,
     ) -> Result<Option<PacketHandlerResult>, ReadingError> {
         debug!("Handling login group");
@@ -416,8 +418,7 @@ impl PendingConnection {
                 }
             }
             id if id == SKnownPacks::to_id(version) => {
-                self.handle_known_packs(SKnownPacks::read(&mut payload, &version)?, server)
-                    .await;
+                self.handle_known_packs().await;
                 Ok(None)
             }
             id if id == SConfigResourcePack::to_id(version) => {

@@ -3,8 +3,7 @@ use pumpkin_data::{Block, BlockDirection};
 use pumpkin_macros::pumpkin_block;
 
 use crate::block::{
-    BlockBehaviour, BlockFuture, CanPlaceAtArgs, CanUpdateAtArgs, GetStateForNeighborUpdateArgs,
-    OnPlaceArgs,
+    BlockBehaviour, CanPlaceAtArgs, CanUpdateAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
 };
 
 use super::segmented::Segmented;
@@ -24,23 +23,21 @@ impl BlockBehaviour for LeafLitterBlock {
         Segmented::can_update_at(self, args)
     }
 
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move { Segmented::on_place(self, args).await })
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        Segmented::on_place(self, args)
     }
 
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            if args.direction == BlockDirection::Down {
-                let block_below_state = args.world.get_block_state(&args.position.down());
-                if !block_below_state.is_side_solid(BlockDirection::Up) {
-                    return Block::AIR.default_state.id;
-                }
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        if args.direction == BlockDirection::Down {
+            let block_below_state = args.world.get_block_state(&args.position.down());
+            if !block_below_state.is_side_solid(BlockDirection::Up) {
+                return Block::AIR.default_state.id;
             }
-            args.state_id
-        })
+        }
+        args.state_id
     }
 }
 

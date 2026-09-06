@@ -6,8 +6,6 @@ pub mod async_player_pre_login;
 pub mod bedrock_form_response;
 /// Player main hand change event.
 pub mod changed_main_hand;
-/// Custom inventory click action event.
-pub mod custom_click_action;
 /// Egg throw event.
 pub mod egg_throw;
 /// Experience change event.
@@ -155,7 +153,6 @@ pub use async_player_chat::*;
 pub use async_player_pre_login::*;
 pub use bedrock_form_response::*;
 pub use changed_main_hand::*;
-pub use custom_click_action::*;
 pub use egg_throw::*;
 pub use exp_change::*;
 pub use fish::*;

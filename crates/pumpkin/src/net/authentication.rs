@@ -3,11 +3,11 @@ use std::{collections::HashMap, net::IpAddr};
 use base64::{Engine, engine::general_purpose};
 use pumpkin_config::{AuthenticationConfig, networking::auth::TextureConfig};
 use pumpkin_protocol::Property;
+use reqwest::{StatusCode, Url};
 use rsa::RsaPublicKey;
 use rsa::pkcs8::DecodePublicKey;
 use serde::Deserialize;
 use thiserror::Error;
-use ureq::http::{StatusCode, Uri};
 use uuid::Uuid;
 
 use super::GameProfile;
@@ -54,16 +54,16 @@ const MOJANG_PROFILE_BY_NAME_URL: &str =
 const MOJANG_PROFILE_BY_UUID_URL: &str =
     "https://sessionserver.mojang.com/session/minecraft/profile/{uuid}?unsigned=false";
 
-fn create_agent(auth_config: &AuthenticationConfig) -> ureq::Agent {
-    let config = ureq::Agent::config_builder()
-        .timeout_connect(Some(std::time::Duration::from_millis(
+fn create_client(auth_config: &AuthenticationConfig) -> reqwest::Client {
+    pumpkin_util::client_builder()
+        .connect_timeout(std::time::Duration::from_millis(
             auth_config.connect_timeout as u64,
-        )))
-        .timeout_recv_response(Some(std::time::Duration::from_millis(
+        ))
+        .timeout(std::time::Duration::from_millis(
             auth_config.read_timeout as u64,
-        )))
-        .build();
-    config.into()
+        ))
+        .build()
+        .unwrap_or_default()
 }
 
 fn format_auth_url(url_template: &str, username: &str, server_hash: &str, ip: &IpAddr) -> String {
@@ -87,7 +87,7 @@ fn format_auth_url(url_template: &str, username: &str, server_hash: &str, ip: &I
 /// 3. Pumpkin attempts to authenticate the player against the primary auth server, falling back to secondary auth servers if the primary is down.
 ///
 /// See <https://pumpkinmc.org/developer/networking/authentication>
-pub fn authenticate(
+pub async fn authenticate(
     username: &str,
     server_hash: &str,
     ip: &IpAddr,
@@ -111,7 +111,7 @@ pub fn authenticate(
         candidate_urls.push(fallback.as_str());
     }
 
-    let agent = create_agent(auth_config);
+    let client = create_client(auth_config);
 
     let mut unverified_count = 0;
     let mut last_unknown_status = None;
@@ -119,7 +119,7 @@ pub fn authenticate(
     for url_template in candidate_urls {
         let address = format_auth_url(url_template, username, server_hash, ip);
 
-        let mut response = match agent.get(&address).call() {
+        let response = match client.get(&address).send().await {
             Ok(resp) => resp,
             Err(err) => {
                 tracing::warn!(
@@ -136,7 +136,7 @@ pub fn authenticate(
         }
 
         match status {
-            StatusCode::OK => match response.body_mut().read_json::<GameProfile>() {
+            StatusCode::OK => match response.json::<GameProfile>().await {
                 Ok(profile) => return Ok(profile),
                 Err(err) => {
                     tracing::warn!("Failed to parse GameProfile response from '{address}': {err}");
@@ -167,41 +167,35 @@ pub fn validate_textures(property: &Property, config: &TextureConfig) -> Result<
     let textures: ProfileTextures =
         serde_json::from_slice(&from64).map_err(|e| TextureError::JSONError(e.to_string()))?;
     for texture in textures.textures {
-        let url = texture
-            .1
-            .url
-            .parse()
-            .map_err(|_| TextureError::InvalidURL)?;
+        let url = Url::parse(&texture.1.url).map_err(|_| TextureError::InvalidURL)?;
         is_texture_url_valid(&url, config)?;
     }
     Ok(())
 }
 
-pub fn is_texture_url_valid(url: &Uri, config: &TextureConfig) -> Result<(), TextureError> {
-    let Some(scheme) = url.scheme() else {
-        return Err(TextureError::InvalidURL);
-    };
+pub fn is_texture_url_valid(url: &Url, config: &TextureConfig) -> Result<(), TextureError> {
+    let scheme = url.scheme();
     if !config
         .allowed_url_schemes
         .iter()
-        .any(|allowed_scheme| scheme.as_str().ends_with(allowed_scheme))
+        .any(|allowed_scheme| scheme.ends_with(allowed_scheme))
     {
         return Err(TextureError::DisallowedUrlScheme(scheme.to_string()));
     }
-    let Some(domain) = url.authority() else {
+    let Some(domain) = url.domain() else {
         return Err(TextureError::InvalidURL);
     };
     if !config
         .allowed_url_domains
         .iter()
-        .any(|allowed_domain| domain.as_str().ends_with(allowed_domain))
+        .any(|allowed_domain| domain.ends_with(allowed_domain))
     {
         return Err(TextureError::DisallowedUrlDomain(domain.to_string()));
     }
     Ok(())
 }
 
-pub fn fetch_mojang_public_keys(
+pub async fn fetch_mojang_public_keys(
     auth_config: &AuthenticationConfig,
 ) -> Result<Vec<RsaPublicKey>, AuthError> {
     let services_url = auth_config
@@ -211,10 +205,11 @@ pub fn fetch_mojang_public_keys(
 
     let url = format!("{services_url}/publickeys");
 
-    let agent = create_agent(auth_config);
-    let mut response = agent
+    let client = create_client(auth_config);
+    let response = client
         .get(&url)
-        .call()
+        .send()
+        .await
         .map_err(|_| AuthError::FailedResponse)?;
 
     match response.status() {
@@ -223,10 +218,8 @@ pub fn fetch_mojang_public_keys(
         other => Err(AuthError::UnknownStatusCode(other))?,
     }
 
-    let public_keys: MojangPublicKeys = response
-        .body_mut()
-        .read_json()
-        .map_err(|_| AuthError::FailedParse)?;
+    let public_keys: MojangPublicKeys =
+        response.json().await.map_err(|_| AuthError::FailedParse)?;
 
     let as_rsa_keys = public_keys
         .player_certificate_keys
@@ -248,7 +241,7 @@ struct MojangProfileByNameResponse {
     name: String,
 }
 
-pub fn lookup_profile_by_name(
+pub async fn lookup_profile_by_name(
     name: &str,
     auth_config: &AuthenticationConfig,
 ) -> Result<Option<(Uuid, String)>, AuthError> {
@@ -263,7 +256,7 @@ pub fn lookup_profile_by_name(
         candidate_urls.push(fallback.as_str());
     }
 
-    let agent = create_agent(auth_config);
+    let client = create_client(auth_config);
 
     let mut not_found_count = 0;
     let mut last_unknown_status = None;
@@ -271,7 +264,7 @@ pub fn lookup_profile_by_name(
     for url_template in candidate_urls {
         let address = url_template.replace("{username}", name);
 
-        let mut response = match agent.get(&address).call() {
+        let response = match client.get(&address).send().await {
             Ok(resp) => resp,
             Err(err) => {
                 tracing::warn!(
@@ -288,10 +281,7 @@ pub fn lookup_profile_by_name(
         }
 
         match status {
-            StatusCode::OK => match response
-                .body_mut()
-                .read_json::<MojangProfileByNameResponse>()
-            {
+            StatusCode::OK => match response.json::<MojangProfileByNameResponse>().await {
                 Ok(profile) => {
                     let parsed_uuid =
                         Uuid::parse_str(&profile.id).map_err(|_| AuthError::FailedParse)?;
@@ -321,7 +311,20 @@ pub fn lookup_profile_by_name(
     }
 }
 
-pub fn fetch_profile_by_uuid(
+pub fn lookup_profile_by_name_blocking(
+    name: &str,
+    auth_config: &AuthenticationConfig,
+) -> Result<Option<(Uuid, String)>, AuthError> {
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        tokio::task::block_in_place(|| handle.block_on(lookup_profile_by_name(name, auth_config)))
+    } else {
+        tokio::runtime::Runtime::new()
+            .map_err(|_e| AuthError::FailedParse)?
+            .block_on(lookup_profile_by_name(name, auth_config))
+    }
+}
+
+pub async fn fetch_profile_by_uuid(
     uuid: Uuid,
     auth_config: &AuthenticationConfig,
 ) -> Result<Option<GameProfile>, AuthError> {
@@ -336,7 +339,7 @@ pub fn fetch_profile_by_uuid(
         candidate_urls.push(fallback.as_str());
     }
 
-    let agent = create_agent(auth_config);
+    let client = create_client(auth_config);
 
     let mut not_found_count = 0;
     let mut last_unknown_status = None;
@@ -348,7 +351,7 @@ pub fn fetch_profile_by_uuid(
             .replace("{uuid}", &uuid_simple)
             .replace("{uuid_hyphenated}", &uuid.to_string());
 
-        let mut response = match agent.get(&address).call() {
+        let response = match client.get(&address).send().await {
             Ok(resp) => resp,
             Err(err) => {
                 tracing::warn!("Profile fetch server at '{address}' is down or unreachable: {err}");
@@ -363,7 +366,7 @@ pub fn fetch_profile_by_uuid(
         }
 
         match status {
-            StatusCode::OK => match response.body_mut().read_json::<GameProfile>() {
+            StatusCode::OK => match response.json::<GameProfile>().await {
                 Ok(profile) => return Ok(Some(profile)),
                 Err(err) => {
                     tracing::warn!("Failed to parse GameProfile response from '{address}': {err}");

@@ -1,5 +1,5 @@
 use super::{Controls, Goal};
-use crate::entity::ai::goal::GoalFuture;
+
 use crate::entity::ai::target_predicate::TargetPredicate;
 use crate::entity::mob::Mob;
 use crate::entity::predicate::EntityPredicate;
@@ -60,16 +60,10 @@ impl LookAtEntityGoal {
         target_predicate.base_max_distance = range as f64; // TODO
         if target_type == &EntityType::PLAYER {
             target_predicate.set_predicate(move |living_entity, _world| {
-                let mob_weak = mob_weak.clone();
-                async move {
-                    if let Some(mob_arc) = mob_weak.upgrade() {
-                        let predicate = EntityPredicate::Rides(mob_arc.get_entity());
-                        predicate.test(&living_entity.entity).await
-                    } else {
-                        // MobEntity is destroyed
-                        false
-                    }
-                }
+                mob_weak.upgrade().is_some_and(|mob_arc| {
+                    let predicate = EntityPredicate::Rides(mob_arc.get_entity());
+                    predicate.test(&living_entity.entity)
+                })
             });
         }
         target_predicate
@@ -77,88 +71,81 @@ impl LookAtEntityGoal {
 }
 
 impl Goal for LookAtEntityGoal {
-    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async {
-            if mob.get_random().random::<f32>() >= self.chance {
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        if mob.get_random().random::<f32>() >= self.chance {
+            return false;
+        }
+
+        let mob_entity = mob.get_mob_entity();
+
+        {
+            let mob_target = mob_entity
+                .target
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if mob_target.is_some() {
+                self.target.clone_from(&mob_target);
+            }
+        }
+
+        let world = mob_entity.living_entity.entity.world.load();
+        let mob_pos = mob_entity.living_entity.entity.pos.load();
+
+        if *self.target_type == EntityType::PLAYER {
+            self.target = world
+                .get_closest_player(mob_pos, self.range.into())
+                .map(|p: Arc<Player>| p as Arc<dyn EntityBase>);
+        } else {
+            self.target =
+                world.get_closest_entity(mob_pos, self.range.into(), Some(&[self.target_type]));
+        }
+
+        self.target.is_some()
+    }
+
+    fn should_continue(&self, mob: &dyn Mob) -> bool {
+        let mob_entity = mob.get_mob_entity();
+        if let Some(target) = &self.target {
+            if !target.get_entity().is_alive() {
                 return false;
             }
-
-            let mob_entity = mob.get_mob_entity();
-
-            {
-                let mob_target = mob_entity.target.lock().await;
-                if mob_target.is_some() {
-                    self.target.clone_from(&mob_target);
-                }
-            }
-
-            let world = mob_entity.living_entity.entity.world.load();
             let mob_pos = mob_entity.living_entity.entity.pos.load();
+            let target_pos = target.get_entity().pos.load();
+            if mob_pos.squared_distance_to_vec(&target_pos) as f32 > (self.range * self.range) {
+                return false;
+            }
+            return self.look_time > 0;
+        }
+        false
+    }
 
-            if *self.target_type == EntityType::PLAYER {
-                self.target = world
-                    .get_closest_player(mob_pos, self.range.into())
-                    .map(|p: Arc<Player>| p as Arc<dyn EntityBase>);
+    fn start(&mut self, mob: &dyn Mob) {
+        self.look_time = self.get_tick_count(40 + mob.get_random().random_range(0..40));
+    }
+
+    fn stop(&mut self, _mob: &dyn Mob) {
+        self.target = None;
+    }
+
+    fn tick(&mut self, mob: &dyn Mob) {
+        let mob_entity = mob.get_mob_entity();
+        if let Some(target) = &self.target
+            && target.get_entity().is_alive()
+        {
+            let target_entity = target.get_entity();
+            let target_pos = target_entity.pos.load();
+            let look_y = if self.look_forward {
+                mob_entity.living_entity.entity.get_eye_y()
             } else {
-                self.target =
-                    world.get_closest_entity(mob_pos, self.range.into(), Some(&[self.target_type]));
-            }
-
-            self.target.is_some()
-        })
-    }
-
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async {
-            let mob_entity = mob.get_mob_entity();
-            if let Some(target) = &self.target {
-                if !target.get_entity().is_alive() {
-                    return false;
-                }
-                let mob_pos = mob_entity.living_entity.entity.pos.load();
-                let target_pos = target.get_entity().pos.load();
-                if mob_pos.squared_distance_to_vec(&target_pos) as f32 > (self.range * self.range) {
-                    return false;
-                }
-                return self.look_time > 0;
-            }
-            false
-        })
-    }
-
-    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async {
-            self.look_time = self.get_tick_count(40 + mob.get_random().random_range(0..40));
-        })
-    }
-
-    fn stop<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async {
-            self.target = None;
-        })
-    }
-
-    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async {
-            let mob_entity = mob.get_mob_entity();
-            if let Some(target) = &self.target
-                && target.get_entity().is_alive()
-            {
-                let target_entity = target.get_entity();
-                let target_pos = target_entity.pos.load();
-                let look_y = if self.look_forward {
-                    mob_entity.living_entity.entity.get_eye_y()
-                } else {
-                    target_entity.get_eye_y()
-                };
-                mob_entity
-                    .look_control
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .look_at(mob, target_pos.x, look_y, target_pos.z);
-                self.look_time -= 1;
-            }
-        })
+                target_entity.get_eye_y()
+            };
+            mob_entity
+                .look_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .look_at(mob, target_pos.x, look_y, target_pos.z);
+            self.look_time -= 1;
+        }
     }
 
     fn controls(&self) -> Controls {
