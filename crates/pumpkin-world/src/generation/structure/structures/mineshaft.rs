@@ -149,6 +149,38 @@ const fn rail_chance(is_interior: bool) -> f32 {
     if is_interior { 0.7 } else { 0.9 }
 }
 
+/// Vanilla `MineshaftPieces$MineShaftPiece.setPlanksBlock`: the floor block is
+/// only planked when the position is *interior* (the block above it still sits
+/// under the `OCEAN_FLOOR_WG` heightmap) and the existing block's upward face is
+/// not sturdy. It writes with `level.setBlock`, so `canBeReplaced` does not apply.
+const fn places_floor_planks(is_interior: bool, existing_up_face_sturdy: bool) -> bool {
+    is_interior && !existing_up_face_sturdy
+}
+
+fn set_planks_block(
+    piece: &StructurePiece,
+    chunk: &mut ProtoChunk,
+    chunk_box: &BlockBox,
+    planks: &'static BlockState,
+    x: i32,
+    y: i32,
+    z: i32,
+) {
+    let is_interior = piece.is_under_sea_level(chunk, x, y, z, chunk_box);
+    if !is_interior {
+        return;
+    }
+
+    let pos = piece.offset_pos(x, y, z);
+    let sturdy = chunk
+        .get_block_state(&pos)
+        .to_state()
+        .is_side_solid(DataBlockDirection::Up);
+    if places_floor_planks(is_interior, sturdy) {
+        chunk.set_block_state(pos.x, pos.y, pos.z, planks);
+    }
+}
+
 fn boundary_matches(
     piece_box: &BlockBox,
     chunk_box: &BlockBox,
@@ -1353,13 +1385,7 @@ impl StructurePieceBase for MineShaftCorridor {
 
         for x in 0..=2 {
             for z in 0..=length {
-                let world_pos = self.piece.offset_pos(x, -1, z);
-                if chunk_box.contains_pos(&world_pos) {
-                    let below = chunk.get_block_state(&world_pos);
-                    if below.to_state().is_air() {
-                        chunk.set_block_state(world_pos.x, world_pos.y, world_pos.z, planks);
-                    }
-                }
+                set_planks_block(&self.piece, chunk, chunk_box, planks, x, -1, z);
             }
         }
 
@@ -1778,12 +1804,7 @@ impl StructurePieceBase for MineShaftCrossing {
         let floor_y = bb.min.y - 1;
         for x in bb.min.x..=bb.max.x {
             for z in bb.min.z..=bb.max.z {
-                if chunk_box.contains(x, floor_y, z) {
-                    let state = chunk.get_block_state(&Vector3::new(x, floor_y, z));
-                    if state.to_state().is_air() {
-                        chunk.set_block_state(x, floor_y, z, planks);
-                    }
-                }
+                set_planks_block(&self.piece, chunk, chunk_box, planks, x, floor_y, z);
             }
         }
     }
@@ -1941,8 +1962,8 @@ impl StructurePieceBase for MineShaftStairs {
 #[cfg(test)]
 mod tests {
     use super::{
-        MineshaftType, for_each_maybe_box_position, is_supporting_box, passes_cobweb_random_gate,
-        boundary_matches, rail_chance,
+        MineshaftType, boundary_matches, for_each_maybe_box_position, is_supporting_box,
+        passes_cobweb_random_gate, places_floor_planks, rail_chance,
     };
     use pumpkin_data::Block;
     use pumpkin_util::random::{RandomGenerator, RandomImpl, legacy_rand::LegacyRand};
@@ -2046,5 +2067,19 @@ mod tests {
         assert!(!boundary_matches(&piece, &chunk, |x, y, z| {
             x == 11 && y == 21 && z == 31
         }));
+    }
+
+    #[test]
+    fn floor_planks_need_interior_and_a_non_sturdy_top_face() {
+        // Vanilla 26.2 MineShaftPiece.setPlanksBlock:
+        //   if (this.isInterior(level, x, y, z, chunkBB)) {
+        //       BlockState existingState = level.getBlockState(pos);
+        //       if (!existingState.isFaceSturdy(level, pos, Direction.UP)) { setBlock(planks) }
+        //   }
+        // so both a non-interior position and a sturdy upward face suppress the plank.
+        assert!(places_floor_planks(true, false));
+        assert!(!places_floor_planks(true, true));
+        assert!(!places_floor_planks(false, false));
+        assert!(!places_floor_planks(false, true));
     }
 }
