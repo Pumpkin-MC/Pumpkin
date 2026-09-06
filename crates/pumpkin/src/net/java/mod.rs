@@ -1,5 +1,5 @@
 use pumpkin_protocol::java::client::play::{
-    CChunkBatchEnd, CChunkBatchStart, CChunkData, CLightUpdate, CPlayDisconnect,
+    CAddResourcePack, CChunkBatchEnd, CChunkBatchStart, CChunkData, CLightUpdate, CPlayDisconnect,
 };
 use pumpkin_world::level::SyncChunk;
 use std::net::SocketAddr;
@@ -61,7 +61,7 @@ pub mod play;
 pub mod recipe_helper;
 pub mod status;
 
-use arc_swap::ArcSwap;
+use arc_swap::{ArcSwap, ArcSwapOption};
 use pending::PendingConnection;
 
 use crate::entity::player::Player;
@@ -90,6 +90,16 @@ pub struct JavaClient {
     pub brand: ArcSwap<Option<String>>,
     /// Associated player reference. Lock-free `ArcSwap`.
     pub player: ArcSwap<Option<Arc<Player>>>,
+    /// Aggregate Bedrock skin pack loaded for this Java session.
+    pub bedrock_skin_pack: ArcSwapOption<crate::net::bedrock::skin_pack::BedrockSkinPack>,
+    /// A newer aggregate Bedrock skin pack currently being downloaded.
+    pending_bedrock_skin_pack:
+        tokio::sync::Mutex<Option<Arc<crate::net::bedrock::skin_pack::BedrockSkinPack>>>,
+    /// Last attempted revision, including optional packs the client rejected.
+    last_bedrock_skin_pack_offer: AtomicCell<Option<uuid::Uuid>>,
+    /// Actual proxy actors presented to this client, separate from pack eligibility.
+    pub(crate) bedrock_mannequins: std::sync::Mutex<std::collections::HashSet<i32>>,
+    pub(crate) bedrock_skin_refresh_pending: AtomicBool,
     /// A collection of tasks associated with this client. The tasks await completion when removing the client.
     tasks: TaskTracker,
     rt_handle: tokio::runtime::Handle,
@@ -135,6 +145,24 @@ pub enum OutgoingPacketType {
 struct OutgoingPacket {
     data: Bytes,
     completion: Option<oneshot::Sender<()>>,
+}
+
+#[cfg(test)]
+pub(crate) struct TestJavaPacketQueue {
+    receiver: UnboundedReceiver<OutgoingPacket>,
+    pending_bytes: Arc<AtomicUsize>,
+}
+
+#[cfg(test)]
+impl TestJavaPacketQueue {
+    pub(crate) fn drain(&mut self) -> Vec<Bytes> {
+        let mut packets = Vec::new();
+        while let Ok(packet) = self.receiver.try_recv() {
+            decrement_pending_bytes(&self.pending_bytes, packet.data.len());
+            packets.push(packet.data);
+        }
+        packets
+    }
 }
 
 const MAX_FRAME_BATCH_DATA_SIZE: usize = MAX_PACKET_SIZE as usize;
@@ -250,6 +278,11 @@ impl JavaClient {
             network_reader: std::sync::Mutex::new(Some(pending.network_reader)),
             brand: ArcSwap::from_pointee(pending.brand),
             player: ArcSwap::from_pointee(None),
+            bedrock_skin_pack: ArcSwapOption::from(pending.bedrock_skin_pack),
+            pending_bedrock_skin_pack: tokio::sync::Mutex::new(None),
+            last_bedrock_skin_pack_offer: AtomicCell::new(pending.last_bedrock_skin_pack_offer),
+            bedrock_mannequins: std::sync::Mutex::new(std::collections::HashSet::new()),
+            bedrock_skin_refresh_pending: AtomicBool::new(false),
             wait_for_keep_alive: AtomicBool::new(false),
             keep_alive_id: AtomicCell::new(0),
             last_keep_alive_time: AtomicCell::new(Instant::now()),
@@ -262,6 +295,79 @@ impl JavaClient {
 
     pub fn set_player(&self, player: Arc<Player>) {
         self.player.store(Arc::new(Some(player)));
+    }
+
+    /// Close the configuration-to-play gap after publication and initial spawning.
+    pub async fn reconcile_bedrock_skin_pack(&self, server: &Server) {
+        if let Some(pack) = server.bedrock_skin_packs.current().await {
+            self.push_bedrock_skin_pack(server, pack).await;
+        }
+    }
+
+    pub async fn push_bedrock_skin_pack(
+        &self,
+        server: &Server,
+        pack: Arc<crate::net::bedrock::skin_pack::BedrockSkinPack>,
+    ) {
+        let config = &server.advanced_config.networking.bedrock.skins;
+        if !config.java_resource_pack
+            || !server.bedrock_skin_pack_endpoint.load(Ordering::Acquire)
+            || self.version.load() < JavaMinecraftVersion::V_26_1
+            || self.is_closed()
+        {
+            return;
+        }
+
+        self.offer_bedrock_skin_pack(
+            &server.bedrock_skin_packs,
+            pack,
+            server
+                .advanced_config
+                .networking
+                .bedrock
+                .nethernet
+                .address
+                .port(),
+            config.resource_pack_url.as_deref(),
+        )
+        .await;
+    }
+
+    async fn offer_bedrock_skin_pack(
+        &self,
+        packs: &crate::net::bedrock::skin_pack::BedrockSkinPacks,
+        pack: Arc<crate::net::bedrock::skin_pack::BedrockSkinPack>,
+        port: u16,
+        public_url: Option<&str>,
+    ) {
+        // Admission and completion share this lock: concurrent skin changes cannot
+        // overwrite an outstanding offer or leave an untracked pack on the client.
+        let mut pending = self.pending_bedrock_skin_pack.lock().await;
+        if pending.is_some() {
+            return;
+        }
+        // A previous broadcast may have waited behind a newer one.
+        let pack = packs.current().await.unwrap_or(pack);
+        if self.last_bedrock_skin_pack_offer.load() == Some(pack.id)
+            || self
+                .bedrock_skin_pack
+                .load_full()
+                .is_some_and(|loaded| loaded.id == pack.id)
+        {
+            return;
+        }
+        let url = crate::net::bedrock::skin_pack::resource_url(
+            &self.server_address,
+            port,
+            public_url,
+            pack.id,
+        );
+        let packet = CAddResourcePack::new(&pack.id, &url, &pack.hash, false, None);
+        if let Ok(data) = self.serialize_packet(&packet) {
+            self.last_bedrock_skin_pack_offer.store(Some(pack.id));
+            *pending = Some(pack);
+            self.enqueue_packet(data).await;
+        }
     }
 
     pub async fn progress_player_packets(&self, player: &Arc<Player>, server: &Arc<Server>) {
@@ -366,6 +472,18 @@ impl JavaClient {
     pub async fn await_tasks(&self) {
         self.tasks.close();
         self.tasks.wait().await;
+    }
+
+    /// Observes the normal FIFO without starting its network writer in tests.
+    #[cfg(test)]
+    pub(crate) fn take_outgoing_packets_for_test(&mut self) -> TestJavaPacketQueue {
+        TestJavaPacketQueue {
+            receiver: self
+                .outgoing_packet_queue_recv
+                .take()
+                .expect("test owns outgoing queue"),
+            pending_bytes: self.pending_bytes.clone(),
+        }
     }
 
     /// Spawns a task associated with this client. All tasks spawned with this method are awaited

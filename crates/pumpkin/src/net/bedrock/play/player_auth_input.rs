@@ -1,5 +1,6 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use crate::net::ClientPlatform;
 use pumpkin_data::entity::EntityPose;
 
 impl BedrockClient {
@@ -32,26 +33,47 @@ impl BedrockClient {
 
         let new_pitch = packet.pitch;
         let new_yaw = packet.yaw;
+        let new_head_yaw = packet.head_yaw;
 
         let old_pitch = entity.pitch.load();
         let old_yaw = entity.yaw.load();
+        let old_head_yaw = entity.head_yaw.load();
 
         let pos_changed = new_pos != old_pos;
-        let rot_changed = new_pitch != old_pitch || new_yaw != old_yaw;
+        let body_rot_changed = new_pitch != old_pitch || new_yaw != old_yaw;
+        let head_rot_changed = new_head_yaw != old_head_yaw;
+        let rot_changed = body_rot_changed || head_rot_changed;
 
         if pos_changed || rot_changed {
             let world = player.world();
+            let mannequin_viewers: Vec<_> = world
+                .players
+                .load()
+                .iter()
+                .filter(|viewer| {
+                    matches!(viewer.client.as_ref(), ClientPlatform::Java(client)
+                        if player.uses_bedrock_mannequin(client))
+                })
+                .cloned()
+                .collect();
+            let mut relative_exclusions = vec![player.gameprofile.id];
+            relative_exclusions
+                .extend(mannequin_viewers.iter().map(|viewer| viewer.gameprofile.id));
 
             if pos_changed {
                 player.get_entity().set_pos(new_pos);
             }
-            if rot_changed {
+            if body_rot_changed {
                 entity.pitch.store(new_pitch);
                 entity.yaw.store(new_yaw);
+            }
+            if head_rot_changed {
+                entity.head_yaw.store(new_head_yaw);
             }
 
             let je_yaw = (new_yaw * 256.0 / 360.0).rem_euclid(256.0);
             let je_pitch = (new_pitch * 256.0 / 360.0).rem_euclid(256.0);
+            let je_head_yaw = (new_head_yaw * 256.0 / 360.0).rem_euclid(256.0);
 
             let delta = pumpkin_util::math::vector3::Vector3::new(
                 new_pos.x - old_pos.x,
@@ -68,7 +90,7 @@ impl BedrockClient {
                 ),
                 new_pitch,
                 new_yaw,
-                new_yaw, // Head yaw
+                new_head_yaw,
                 pumpkin_protocol::bedrock::client::CMovePlayer::MODE_NORMAL,
                 on_ground,
                 pumpkin_protocol::codec::var_ulong::VarULong(0),
@@ -78,20 +100,21 @@ impl BedrockClient {
             );
 
             if pos_changed && delta.length_squared() >= 64.0 {
-                world.broadcast_packet_except(
-                    &[player.gameprofile.id],
+                world.broadcast_realtime_packet_except_editioned(
+                    &relative_exclusions,
                     &pumpkin_protocol::java::client::play::CEntityPositionSync::new(
                         player.entity_id().into(),
                         new_pos,
                         pumpkin_util::math::vector3::Vector3::new(0.0, 0.0, 0.0),
-                        je_yaw,
-                        je_pitch,
+                        new_yaw,
+                        new_pitch,
                         on_ground,
                     ),
+                    &bedrock_move_packet,
                 );
             } else if pos_changed && rot_changed {
-                world.broadcast_packet_except_editioned(
-                    &[player.gameprofile.id],
+                world.broadcast_realtime_packet_except_editioned(
+                    &relative_exclusions,
                     &pumpkin_protocol::java::client::play::CUpdateEntityPosRot::new(
                         player.entity_id().into(),
                         pumpkin_util::math::vector3::Vector3::new(
@@ -106,8 +129,8 @@ impl BedrockClient {
                     &bedrock_move_packet,
                 );
             } else if pos_changed {
-                world.broadcast_packet_except_editioned(
-                    &[player.gameprofile.id],
+                world.broadcast_realtime_packet_except_editioned(
+                    &relative_exclusions,
                     &pumpkin_protocol::java::client::play::CUpdateEntityPos::new(
                         player.entity_id().into(),
                         pumpkin_util::math::vector3::Vector3::new(
@@ -120,8 +143,8 @@ impl BedrockClient {
                     &bedrock_move_packet,
                 );
             } else if rot_changed {
-                world.broadcast_packet_except_editioned(
-                    &[player.gameprofile.id],
+                world.broadcast_realtime_packet_except_editioned(
+                    &relative_exclusions,
                     &pumpkin_protocol::java::client::play::CUpdateEntityRot::new(
                         player.entity_id().into(),
                         je_yaw as u8,   // Use converted Java byte
@@ -132,13 +155,32 @@ impl BedrockClient {
                 );
             }
 
-            if rot_changed {
-                world.broadcast_packet_except(
+            // Mannequins do not share the normal player movement prediction. Keep
+            // their authoritative position in sync without changing legacy clients.
+            if let Some(tracked) = world.entity_tracker.get_tracked_entity(player.entity_id()) {
+                let movement = pumpkin_protocol::java::client::play::CEntityPositionSync::new(
+                    player.entity_id().into(),
+                    new_pos,
+                    packet.delta.to_f64(),
+                    new_yaw,
+                    new_pitch,
+                    on_ground,
+                );
+                for viewer in mannequin_viewers {
+                    if viewer.can_receive_realtime_updates()
+                        && tracked.seen_by.contains(&viewer.gameprofile.id)
+                    {
+                        viewer.try_send_client_packet(&movement);
+                    }
+                }
+            }
+
+            if head_rot_changed {
+                world.broadcast_realtime_packet_except(
                     &[player.gameprofile.id],
-                    // Adjust to `CHeadRot` if that is what your crate currently calls it
                     &pumpkin_protocol::java::client::play::CHeadRot::new(
                         player.entity_id().into(),
-                        je_yaw as u8,
+                        je_head_yaw as u8,
                     ),
                 );
             }

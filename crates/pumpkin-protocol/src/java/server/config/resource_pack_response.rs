@@ -9,6 +9,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::VarInt;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ResourcePackResponseResult {
     DownloadSuccess,
     DownloadFail,
@@ -64,16 +65,57 @@ impl crate::ClientPacket for SConfigResourcePack {
 impl SConfigResourcePack {
     #[must_use]
     pub const fn response_result(&self) -> ResourcePackResponseResult {
-        match self.result.0 {
-            0 => ResourcePackResponseResult::DownloadSuccess,
-            1 => ResourcePackResponseResult::Declined,
-            2 => ResourcePackResponseResult::DownloadFail,
-            3 => ResourcePackResponseResult::Accepted,
-            4 => ResourcePackResponseResult::Downloaded,
-            5 => ResourcePackResponseResult::InvalidUrl,
-            6 => ResourcePackResponseResult::ReloadFailed,
-            7 => ResourcePackResponseResult::Discarded,
-            x => ResourcePackResponseResult::Unknown(x),
+        ResourcePackResponseResult::from_id(self.result.0)
+    }
+}
+
+impl ResourcePackResponseResult {
+    #[must_use]
+    pub const fn from_id(id: i32) -> Self {
+        match id {
+            0 => Self::DownloadSuccess,
+            1 => Self::Declined,
+            2 => Self::DownloadFail,
+            3 => Self::Accepted,
+            4 => Self::Downloaded,
+            5 => Self::InvalidUrl,
+            6 => Self::ReloadFailed,
+            7 => Self::Discarded,
+            x => Self::Unknown(x),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn configuration_responses_omit_pack_uuid_before_1_20_3() {
+        let mut payload = [0].as_slice();
+        let response =
+            SConfigResourcePack::read(&mut payload, &JavaMinecraftVersion::V_1_20_2).unwrap();
+        assert_eq!(response.uuid, uuid::Uuid::nil());
+        assert_eq!(
+            response.response_result(),
+            ResourcePackResponseResult::DownloadSuccess
+        );
+        assert!(payload.is_empty());
+    }
+
+    #[test]
+    fn configuration_responses_identify_each_modern_pack() {
+        let id = uuid::Uuid::from_u128(1);
+        let mut bytes = id.as_bytes().to_vec();
+        bytes.push(1);
+        let mut payload = bytes.as_slice();
+        let response =
+            SConfigResourcePack::read(&mut payload, &JavaMinecraftVersion::V_26_2).unwrap();
+        assert_eq!(response.uuid, id);
+        assert_eq!(
+            response.response_result(),
+            ResourcePackResponseResult::Declined
+        );
+        assert!(payload.is_empty());
     }
 }

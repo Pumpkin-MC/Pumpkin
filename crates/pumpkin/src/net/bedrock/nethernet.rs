@@ -17,7 +17,7 @@ use axum::{
     extract::{ConnectInfo, DefaultBodyLimit, Path, State},
     http::{
         HeaderMap, HeaderValue, StatusCode,
-        header::{CONTENT_TYPE, HOST},
+        header::{CACHE_CONTROL, CONTENT_TYPE, HOST},
     },
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -50,6 +50,7 @@ use webrtc::{
     },
 };
 
+use super::skin_pack::BedrockSkinPacks;
 use crate::STOP_INTERRUPT;
 use crate::net::bedrock::status::IceSocket;
 
@@ -88,9 +89,11 @@ struct EndpointState {
     ice_local_addr: SocketAddr,
     external_ip: Option<IpAddr>,
     ice_router: Arc<IceRouter>,
+    skin_packs: Arc<BedrockSkinPacks>,
 }
 
 impl NetherNetListener {
+    #[expect(clippy::too_many_arguments)]
     pub async fn bind(
         address: SocketAddr,
         ice_socket: IceSocket,
@@ -99,6 +102,7 @@ impl NetherNetListener {
         require_client_identity: bool,
         oidc_verifier: Option<Arc<OnceCell<(String, Jwks)>>>,
         stun_servers: Vec<String>,
+        skin_packs: Arc<BedrockSkinPacks>,
     ) -> std::io::Result<Self> {
         let listener = TcpListener::bind(address).await?;
         let local_addr = listener.local_addr()?;
@@ -114,10 +118,12 @@ impl NetherNetListener {
             ice_local_addr,
             external_ip,
             ice_router,
+            skin_packs,
         };
         let router = Router::new()
             .route("/v1/join", get(ping))
             .route("/v1/join/{network_id}", post(join))
+            .route("/v1/skin-packs/{pack_id}", get(skin_pack))
             .layer(DefaultBodyLimit::max(MAX_SDP_SIZE))
             .with_state(state.clone());
 
@@ -198,6 +204,24 @@ pub fn load_or_create_identity_key(path: &FsPath) -> std::io::Result<Arc<Signing
 async fn ping(ConnectInfo(address): ConnectInfo<SocketAddr>) -> StatusCode {
     trace!(%address, "Accepted NetherNet capability probe");
     StatusCode::OK
+}
+
+async fn skin_pack(
+    State(state): State<EndpointState>,
+    Path(pack_id): Path<uuid::Uuid>,
+) -> Response {
+    let Some(pack) = state.skin_packs.get(pack_id).await else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let mut response = (StatusCode::OK, pack.data.clone()).into_response();
+    response
+        .headers_mut()
+        .insert(CONTENT_TYPE, HeaderValue::from_static("application/zip"));
+    response.headers_mut().insert(
+        CACHE_CONTROL,
+        HeaderValue::from_static("public, max-age=31536000, immutable"),
+    );
+    response
 }
 
 async fn join(
@@ -534,6 +558,28 @@ pub struct NetherNetSession {
 }
 
 impl NetherNetSession {
+    /// Creates an unnegotiated loopback transport without discovery or external ICE servers.
+    #[cfg(test)]
+    pub(crate) async fn new_for_test() -> Self {
+        struct TestPeerEventHandler;
+
+        #[async_trait]
+        impl PeerConnectionEventHandler for TestPeerEventHandler {}
+
+        let address = SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, 0));
+        let peer = Box::pin(
+            PeerConnectionBuilder::new()
+                .with_configuration(RTCConfigurationBuilder::default().build())
+                .with_handler(Arc::new(TestPeerEventHandler))
+                .with_udp_addrs(vec![address])
+                .build(),
+        )
+        .await
+        .expect("unconnected loopback test peer");
+        let (incoming, _) = mpsc::channel(1);
+        Self::new(Arc::new(peer), None, address, incoming)
+    }
+
     fn new(
         peer: Arc<dyn PeerConnection>,
         client_public_key: Option<PublicKey>,

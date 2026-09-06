@@ -142,6 +142,14 @@ impl SynchedEntityData {
     }
 
     pub fn pack_dirty_for_version(&self, version: &JavaMinecraftVersion) -> Option<Box<[u8]>> {
+        self.pack_dirty_for_version_filtered(version, |_| true)
+    }
+
+    pub fn pack_dirty_for_version_filtered(
+        &self,
+        version: &JavaMinecraftVersion,
+        include: impl Fn(TrackedData) -> bool,
+    ) -> Option<Box<[u8]>> {
         if !self.is_dirty.load(Ordering::Acquire) {
             return None;
         }
@@ -154,7 +162,7 @@ impl SynchedEntityData {
         let mut has_any = false;
 
         for item in items.values() {
-            if item.dirty {
+            if item.dirty && include(item.tracked) {
                 let before_len = buf.len();
                 if item
                     .serializer
@@ -190,6 +198,14 @@ impl SynchedEntityData {
         &self,
         version: &JavaMinecraftVersion,
     ) -> Option<Box<[u8]>> {
+        self.get_non_default_values_for_version_filtered(version, |_| true)
+    }
+
+    pub fn get_non_default_values_for_version_filtered(
+        &self,
+        version: &JavaMinecraftVersion,
+        include: impl Fn(TrackedData) -> bool,
+    ) -> Option<Box<[u8]>> {
         let items = self
             .items
             .lock()
@@ -198,7 +214,7 @@ impl SynchedEntityData {
         let mut has_any = false;
 
         for item in items.values() {
-            if !item.is_default {
+            if !item.is_default && include(item.tracked) {
                 let before_len = buf.len();
                 if item
                     .serializer
@@ -217,5 +233,63 @@ impl SynchedEntityData {
 
         buf.put_u8(255);
         Some(buf.into_boxed_slice())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::entity::player::mannequin_shared_metadata;
+    use pumpkin_data::tracked_data::player;
+
+    #[test]
+    fn mannequin_snapshot_and_updates_exclude_player_only_fields_and_gravity() {
+        let data = SynchedEntityData::new();
+        let version = JavaMinecraftVersion::V_26_2;
+        data.set(player::PLAYER_MODE_CUSTOMISATION, 0x7fu8);
+        // These indices mean profile and immovability on the Java mannequin.
+        data.set(player::DATA_PLAYER_ABSORPTION_ID, 4.0f32);
+        data.set(player::DATA_SCORE_ID, 10i32);
+        // The proxy's no-gravity setting must not be replaced by the real player's.
+        data.set(player::NO_GRAVITY, false);
+
+        let mut expected = Vec::new();
+        Metadata::new(player::PLAYER_MODE_CUSTOMISATION, 0x7fu8)
+            .write(&mut expected, &version)
+            .unwrap();
+        expected.push(255);
+
+        assert_eq!(
+            data.get_non_default_values_for_version_filtered(&version, mannequin_shared_metadata)
+                .unwrap()
+                .as_ref(),
+            expected,
+        );
+        assert_eq!(
+            data.pack_dirty_for_version_filtered(&version, mannequin_shared_metadata)
+                .unwrap()
+                .as_ref(),
+            expected,
+        );
+        // Filtering one representation must not discard updates for ordinary player viewers.
+        assert!(data.pack_dirty_for_version(&version).unwrap().len() > expected.len());
+        data.clear_dirty();
+        assert!(data.pack_dirty_for_version(&version).is_none());
+    }
+
+    #[test]
+    fn mannequin_ignores_updates_containing_only_incompatible_metadata() {
+        let data = SynchedEntityData::new();
+        let version = JavaMinecraftVersion::V_26_2;
+        data.set(player::DATA_PLAYER_ABSORPTION_ID, 8.0f32);
+        assert!(
+            data.pack_dirty_for_version_filtered(&version, mannequin_shared_metadata)
+                .is_none()
+        );
+        assert!(
+            data.get_non_default_values_for_version_filtered(&version, mannequin_shared_metadata)
+                .is_none()
+        );
+        assert!(data.pack_dirty_for_version(&version).is_some());
     }
 }

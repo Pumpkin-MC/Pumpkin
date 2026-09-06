@@ -441,6 +441,41 @@ impl MetadataSerializer for [f32; 4] {
     }
 }
 
+/// A 26.x mannequin profile whose body texture is supplied by a resource pack.
+pub struct MannequinProfile<'a> {
+    pub uuid: &'a uuid::Uuid,
+    pub name: &'a str,
+    pub body_texture: &'a str,
+    pub cape_texture: Option<&'a str>,
+    pub slim: bool,
+}
+
+impl MetadataSerializer for MannequinProfile<'_> {
+    fn write_metadata(
+        &self,
+        writer: &mut impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
+        // ResolvableProfile full GameProfile branch.
+        writer.write_bool(true)?;
+        writer.write_uuid(self.uuid)?;
+        writer.write_string(self.name)?;
+        writer.write_var_int(&VarInt(0))?;
+        // PlayerSkin.Patch: body, cape, elytra, model.
+        writer.write_bool(true)?;
+        writer.write_string(self.body_texture)?;
+        if let Some(cape_texture) = self.cape_texture {
+            writer.write_bool(true)?;
+            writer.write_string(cape_texture)?;
+        } else {
+            writer.write_bool(false)?;
+        }
+        writer.write_bool(false)?;
+        writer.write_bool(true)?;
+        writer.write_bool(self.slim)
+    }
+}
+
 impl MetadataSerializer for pumpkin_util::math::position::BlockPos {
     fn write_metadata(
         &self,
@@ -523,7 +558,7 @@ mod tests {
 
     use crate::{VarInt, ser::NetworkWriteExt};
 
-    use super::{Metadata, MetadataSerializer};
+    use super::{MannequinProfile, Metadata, MetadataSerializer};
 
     struct ParticleMetadata {
         particle_id: VarInt,
@@ -614,5 +649,55 @@ mod tests {
         pos.write_metadata(&mut buf_legacy, &JavaMinecraftVersion::V_1_8)
             .unwrap();
         assert_eq!(buf_legacy.len(), 12); // 3 * i32 (12 bytes)
+    }
+
+    #[test]
+    fn mannequin_profile_uses_the_26_x_resource_texture_patch() {
+        let version = JavaMinecraftVersion::V_26_2;
+        let uuid = uuid::Uuid::nil();
+        let profile = Metadata::new(
+            pumpkin_data::tracked_data::mannequin::DATA_PROFILE,
+            MannequinProfile {
+                uuid: &uuid,
+                name: "BedrockPlayer",
+                body_texture: "pumpkin:bedrock_skins/test",
+                cape_texture: None,
+                slim: true,
+            },
+        );
+        let mut bytes = Vec::new();
+        profile.write(&mut bytes, &version).unwrap();
+
+        assert_eq!(bytes[0], 17);
+        assert_eq!(bytes[1], 41);
+        let asset = b"pumpkin:bedrock_skins/test";
+        assert!(bytes.windows(asset.len()).any(|v| v == asset));
+        assert_eq!(&bytes[bytes.len() - 4..], &[0, 0, 1, 1]);
+    }
+
+    #[test]
+    fn mannequin_profile_can_reference_a_separate_cape_texture() {
+        let version = JavaMinecraftVersion::V_26_2;
+        let uuid = uuid::Uuid::nil();
+        let profile = Metadata::new(
+            pumpkin_data::tracked_data::mannequin::DATA_PROFILE,
+            MannequinProfile {
+                uuid: &uuid,
+                name: "BedrockPlayer",
+                body_texture: "pumpkin:bedrock_skins/test",
+                cape_texture: Some("pumpkin:bedrock_skins/test_cape"),
+                slim: false,
+            },
+        );
+        let mut bytes = Vec::new();
+        profile.write(&mut bytes, &version).unwrap();
+
+        for asset in [
+            b"pumpkin:bedrock_skins/test".as_slice(),
+            b"pumpkin:bedrock_skins/test_cape".as_slice(),
+        ] {
+            assert!(bytes.windows(asset.len()).any(|value| value == asset));
+        }
+        assert_eq!(&bytes[bytes.len() - 3..], &[0, 1, 0]);
     }
 }

@@ -33,3 +33,26 @@ impl ClientPacket for CRemoveResourcePack<'_> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn removes_only_the_superseded_skin_pack() {
+        let id = uuid::Uuid::from_u128(0x0011_2233_4455_6677_8899_aabb_ccdd_eeff);
+        let mut encoded = Vec::new();
+        CRemoveResourcePack::new(Some(&id))
+            .write_packet_data(&mut encoded, &JavaMinecraftVersion::V_26_2)
+            .unwrap();
+        let mut expected = vec![1];
+        expected.extend_from_slice(id.as_bytes());
+        assert_eq!(encoded, expected);
+
+        let mut all_packs = Vec::new();
+        CRemoveResourcePack::new(None)
+            .write_packet_data(&mut all_packs, &JavaMinecraftVersion::V_26_2)
+            .unwrap();
+        assert_eq!(all_packs, [0]);
+    }
+}

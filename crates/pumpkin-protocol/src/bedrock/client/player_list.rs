@@ -1,9 +1,9 @@
 use crate::{
     codec::{var_long::VarLong, var_uint::VarUInt},
-    serial::PacketWrite,
+    serial::{PacketRead, PacketWrite},
 };
 use pumpkin_macros::packet;
-use std::io::{Error, Write};
+use std::io::{Error, ErrorKind, Read, Write};
 use uuid::Uuid;
 
 use super::common::BuildPlatform;
@@ -15,6 +15,8 @@ const DEFAULT_SKIN_GEOMETRY: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../assets/bedrock/player_geometry.json"
 ));
+const MAX_SKIN_BLOB_SIZE: usize = 1024 * 1024;
+const MAX_SKIN_COLLECTION_SIZE: usize = 128;
 
 #[packet(63)]
 pub struct CPlayerList {
@@ -203,6 +205,76 @@ impl PacketWrite for Skin {
     }
 }
 
+impl PacketRead for Skin {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        let skin_id = String::read(reader)?;
+        let play_fab_id = String::read(reader)?;
+        let resource_patch = read_skin_blob(reader)?;
+        let image_width = u32::read(reader)?;
+        let image_height = u32::read(reader)?;
+        let skin_data = read_skin_blob(reader)?;
+        let animations = read_skin_collection(reader, SkinAnimation::read)?;
+        let cape_width = u32::read(reader)?;
+        let cape_height = u32::read(reader)?;
+        let cape_data = read_skin_blob(reader)?;
+        let geometry_data = read_skin_blob(reader)?;
+        let geometry_data_engine_version = read_skin_blob(reader)?;
+        let animation_data = read_skin_blob(reader)?;
+        let cape_id = String::read(reader)?;
+        let full_id = String::read(reader)?;
+        let arm_size = match u8::read(reader)? {
+            0 => "slim",
+            1 => "wide",
+            value => {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    format!("invalid Bedrock skin arm size {value}"),
+                ));
+            }
+        }
+        .to_string();
+        let skin_color = format!("#{:08x}", i32::read(reader)? as u32);
+        let persona_pieces = read_skin_collection(reader, PersonaPiece::read)?;
+        let piece_tint_colors = read_skin_collection(reader, PieceTintColor::read)?;
+        let is_premium = bool::read(reader)?;
+        let is_persona = bool::read(reader)?;
+        let persona_cape_on_classic = bool::read(reader)?;
+        let is_primary_user = bool::read(reader)?;
+        let override_appearance = bool::read(reader)?;
+        let is_trusted = String::read(reader)?.eq_ignore_ascii_case("true");
+        let profile_hash = String::read(reader)?;
+
+        Ok(Self {
+            skin_id,
+            play_fab_id,
+            resource_patch,
+            image_width,
+            image_height,
+            skin_data,
+            animations,
+            cape_width,
+            cape_height,
+            cape_data,
+            geometry_data,
+            animation_data,
+            geometry_data_engine_version,
+            cape_id,
+            full_id,
+            arm_size,
+            skin_color,
+            persona_pieces,
+            piece_tint_colors,
+            is_premium,
+            is_persona,
+            persona_cape_on_classic,
+            is_primary_user,
+            override_appearance,
+            is_trusted,
+            profile_hash,
+        })
+    }
+}
+
 #[derive(Clone)]
 pub struct SkinAnimation {
     pub image_width: u32,
@@ -225,6 +297,19 @@ impl PacketWrite for SkinAnimation {
     }
 }
 
+impl PacketRead for SkinAnimation {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        Ok(Self {
+            image_width: u32::read(reader)?,
+            image_height: u32::read(reader)?,
+            image_data: read_skin_blob(reader)?,
+            animation_type: VarUInt::read(reader)?.0,
+            frames: f32::read(reader)?,
+            expression_type: VarUInt::read(reader)?.0,
+        })
+    }
+}
+
 #[derive(Clone, PacketWrite)]
 pub struct PersonaPiece {
     pub piece_id: String,
@@ -234,27 +319,73 @@ pub struct PersonaPiece {
     pub product_id: String,
 }
 
+impl PacketRead for PersonaPiece {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        Ok(Self {
+            piece_id: String::read(reader)?,
+            piece_type: i32::read(reader)?,
+            pack_id: Uuid::read(reader)?,
+            is_default: bool::read(reader)?,
+            product_id: String::read(reader)?,
+        })
+    }
+}
+
 #[derive(Clone)]
 pub struct PieceTintColor {
-    pub piece_type: String,
+    pub piece_type: i32,
     pub colors: [i32; 4],
 }
 
 impl PacketWrite for PieceTintColor {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        let piece_type = if self.piece_type == "persona_hand" {
-            "hands"
-        } else {
-            self.piece_type
-                .strip_prefix("persona_")
-                .unwrap_or(&self.piece_type)
-        };
-        piece_type.write(writer)?;
+        self.piece_type.write(writer)?;
         for color in self.colors {
             color.write(writer)?;
         }
         Ok(())
     }
+}
+
+impl PacketRead for PieceTintColor {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        Ok(Self {
+            piece_type: i32::read(reader)?,
+            colors: [
+                i32::read(reader)?,
+                i32::read(reader)?,
+                i32::read(reader)?,
+                i32::read(reader)?,
+            ],
+        })
+    }
+}
+
+fn read_skin_blob<R: Read>(reader: &mut R) -> Result<Vec<u8>, Error> {
+    let length = VarUInt::read(reader)?.0 as usize;
+    if length > MAX_SKIN_BLOB_SIZE {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            "Bedrock skin field exceeds the size limit",
+        ));
+    }
+    let mut value = vec![0; length];
+    reader.read_exact(&mut value)?;
+    Ok(value)
+}
+
+fn read_skin_collection<R: Read, T>(
+    reader: &mut R,
+    read: impl Fn(&mut R) -> Result<T, Error>,
+) -> Result<Vec<T>, Error> {
+    let length = VarUInt::read(reader)?.0 as usize;
+    if length > MAX_SKIN_COLLECTION_SIZE {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            "Bedrock skin collection exceeds the size limit",
+        ));
+    }
+    (0..length).map(|_| read(reader)).collect()
 }
 
 fn parse_color(color: &str) -> i32 {
@@ -265,6 +396,8 @@ fn parse_color(color: &str) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::{DEFAULT_SKIN_GEOMETRY, SLIM_SKIN_RESOURCE_PATCH, Skin, WIDE_SKIN_RESOURCE_PATCH};
+    use crate::serial::{PacketRead, PacketWrite};
+    use std::io::Cursor;
 
     #[test]
     fn fallback_skin_contains_the_geometry_it_references() {
@@ -291,5 +424,28 @@ mod tests {
             String::from_utf8_lossy(&skin.geometry_data)
                 .contains(r#""identifier":"geometry.humanoid.customSlim""#)
         );
+    }
+
+    #[test]
+    fn skin_survives_network_roundtrip() {
+        let mut skin = Skin::steve();
+        skin.set_slim(true);
+        skin.cape_width = 2;
+        skin.cape_height = 1;
+        skin.cape_data = vec![255; 8];
+        skin.cape_id = "test-cape".to_string();
+
+        let mut encoded = Vec::new();
+        skin.write(&mut encoded).unwrap();
+        let mut reader = Cursor::new(&encoded);
+        let decoded = Skin::read(&mut reader).unwrap();
+
+        assert_eq!(reader.position() as usize, encoded.len());
+        assert_eq!(decoded.skin_id, skin.skin_id);
+        assert_eq!(decoded.skin_data, skin.skin_data);
+        assert_eq!(decoded.arm_size, "slim");
+        assert_eq!(decoded.cape_data, skin.cape_data);
+        assert_eq!(decoded.cape_id, skin.cape_id);
+        assert!(decoded.is_trusted);
     }
 }

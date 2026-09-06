@@ -64,6 +64,9 @@ pub mod server;
 pub mod telemetry;
 pub mod world;
 
+#[cfg(test)]
+mod test_support;
+
 pub struct LoggingConfig {
     pub color: bool,
     pub threads: bool,
@@ -345,6 +348,9 @@ impl PumpkinServer {
 
         let (bedrock_status, ice_socket) = Self::bind_bedrock_status(&server).await;
         let nethernet_listener = Self::bind_nethernet(&server, ice_socket).await;
+        server
+            .bedrock_skin_pack_endpoint
+            .store(nethernet_listener.is_some(), Ordering::Release);
 
         Self {
             server,
@@ -384,6 +390,7 @@ impl PumpkinServer {
             config.online_mode,
             oidc_verifier,
             config.nethernet.stun_servers.clone(),
+            server.bedrock_skin_packs.clone(),
         )
         .await
         {
@@ -604,6 +611,7 @@ impl PumpkinServer {
                                          .await;
 
                                      if let ClientPlatform::Java(client) = player.client.as_ref() {
+                                         client.reconcile_bedrock_skin_pack(&server_clone).await;
                                          client.progress_player_packets(&player, &server_clone).await;
 
                                          // Close when done
