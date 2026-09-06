@@ -178,6 +178,12 @@ impl BlockAccessor for Cache {
 }
 
 impl GenerationCache for Cache {
+    fn contains_chunk(&self, chunk_x: i32, chunk_z: i32) -> bool {
+        let dx = chunk_x - self.x;
+        let dz = chunk_z - self.z;
+        dx >= 0 && dx < self.size && dz >= 0 && dz < self.size
+    }
+
     fn get_chunk_mut(&mut self, chunk_x: i32, chunk_z: i32) -> Option<&mut ProtoChunk> {
         let dx = chunk_x - self.x;
         let dz = chunk_z - self.z;

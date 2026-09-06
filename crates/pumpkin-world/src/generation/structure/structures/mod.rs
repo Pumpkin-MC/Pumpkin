@@ -458,9 +458,13 @@ impl StructurePiece {
         //     world.schedule_fluid_tick(&block_pos, fluid_state.fluid(), 0);
         // }
 
-        // if block.needs_post_processing() {
-        //     world.mark_block_for_post_processing(&block_pos);
-        // }
+        // `StructurePiece.placeBlock`: `if (SHAPE_CHECK_BLOCKS.contains(blockState.getBlock()))
+        // level.getChunk(pos).markPosForPostProcessing(pos);`. Pieces only ever write into the
+        // chunk currently being decorated (`generate_in_chunk` clips them to its column), so
+        // `getChunk(pos)` is this chunk.
+        if crate::generation::post_processing::needs_shape_check(block.id) {
+            world.mark_pos_for_post_processing(block_pos);
+        }
     }
 
     /// Reorients a chest block state based on solid render neighbors, matching vanilla `StructurePiece.reorient`.

@@ -80,6 +80,12 @@ pub trait GenerationCache: HeightLimitView + BlockAccessor {
 
     fn try_get_proto_chunk(&self, chunk_x: i32, chunk_z: i32) -> Option<&ProtoChunk>;
 
+    /// Whether reads and writes at that chunk position land in this cache's window.
+    ///
+    /// `WorldGenRegion.getBlockState` throws outside the region; Pumpkin's caches quietly
+    /// answer `AIR`, so anything replaying vanilla's post-`FEATURES` passes has to ask first.
+    fn contains_chunk(&self, chunk_x: i32, chunk_z: i32) -> bool;
+
     fn get_block_state(&self, pos: &Vector3<i32>) -> BlockStateId;
     fn get_fluid_and_fluid_state(&self, position: &Vector3<i32>) -> (Fluid, FluidState);
     fn set_block_state(&mut self, pos: &Vector3<i32>, block_state: &BlockState);
@@ -1178,15 +1184,17 @@ impl ProtoChunk {
         cache.get_center_chunk_mut().stage = StagedChunkEnum::Features;
 
         // Vanilla runs `LevelChunk.postProcessGeneration` when the chunk reaches `FULL`, which
-        // needs all nine neighbours past `FEATURES`. Pumpkin has no such step, so the marks are
-        // drained here: for the chunk that just finished, and for any neighbour that is already
-        // done and therefore would never look at its list again.
+        // needs all nine neighbours past `FEATURES`. Pumpkin has no such step, so every chunk of
+        // the window that is done gets its marks replayed here, not just the one that finished:
+        // a fence on a shared border only sees its neighbour's mineshaft once that neighbour has
+        // been decorated, and the replay is what lets it see it.
         for chunk_x in center_x - 1..=center_x + 1 {
             for chunk_z in center_z - 1..=center_z + 1 {
-                if let Some(chunk) = cache.get_chunk_mut(chunk_x, chunk_z)
-                    && chunk.stage >= StagedChunkEnum::Features
+                if cache
+                    .get_chunk(chunk_x, chunk_z)
+                    .is_some_and(|chunk| chunk.stage >= StagedChunkEnum::Features)
                 {
-                    super::post_processing::post_process_generation(chunk);
+                    super::post_processing::post_process_generation(cache, chunk_x, chunk_z);
                 }
             }
         }
@@ -1629,6 +1637,10 @@ impl BlockPlacer for ProtoChunk {
 }
 
 impl GenerationCache for ProtoChunk {
+    fn contains_chunk(&self, chunk_x: i32, chunk_z: i32) -> bool {
+        chunk_x == self.x && chunk_z == self.z
+    }
+
     fn get_center_chunk_mut(&mut self) -> &mut ProtoChunk {
         self
     }

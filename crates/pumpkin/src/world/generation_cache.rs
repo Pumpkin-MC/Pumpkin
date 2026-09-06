@@ -131,6 +131,11 @@ impl GenerationCache for WorldGenerationCache {
         None
     }
 
+    fn contains_chunk(&self, _chunk_x: i32, _chunk_z: i32) -> bool {
+        // Reads and writes go through the live world, so every chunk position is answered.
+        true
+    }
+
     fn get_block_state(&self, pos: &Vector3<i32>) -> BlockStateId {
         self.read(&BlockPos(*pos))
     }
