@@ -32,8 +32,8 @@ impl DynamicLightEngine {
 
 impl DynamicLightEngine {
     /// Checks if there is an open sky above the given position (no opaque blocks blocking sky light).
-    fn has_open_sky_above(level: &Arc<Level>, pos: &BlockPos) -> bool {
-        let max_y = 319; // Maximum build height in Minecraft, can be adjusted if needed
+    fn has_open_sky_above(&self, level: &Arc<Level>, pos: &BlockPos) -> bool {
+        let max_y = self.max_y - 1;
         let mut current_pos = *pos;
 
         // Scan upward until we hit sky or an opaque block
@@ -413,7 +413,7 @@ impl DynamicLightEngine {
             0
         } else {
             // Check if there's open sky above
-            let has_sky = Self::has_open_sky_above(level, &pos);
+            let has_sky = self.has_open_sky_above(level, &pos);
 
             if has_sky {
                 // Direct sunlight, reduced by opacity
