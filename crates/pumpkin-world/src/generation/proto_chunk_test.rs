@@ -307,6 +307,63 @@ mod test {
         }
     }
 
+    /// Vanilla `FossilFeature.place` reads a neighbouring column through the region:
+    ///
+    /// ```java
+    /// lowestSurfaceY = Math.min(lowestSurfaceY,
+    ///     level.getHeight(Heightmap.Types.OCEAN_FLOOR_WG, lowCorner.getX() + xscan, lowCorner.getZ() + zscan));
+    /// ```
+    ///
+    /// `WorldGenRegion.getHeight` forwards to the chunk holding that column, and
+    /// `OCEAN_FLOOR_WG` / `WORLD_SURFACE_WG` are live on every proto chunk of the region:
+    /// noise and the carvers maintained them. Only the chunk being decorated has the four
+    /// `FINAL_HEIGHTMAPS` primed (`ChunkStatusTasks.generateFeatures`). Pumpkin's multi-chunk
+    /// cache used to answer both `*_WG` maps out of the final maps, so any column outside the
+    /// centre chunk reported `minY - 1`.
+    #[test]
+    fn the_worldgen_heightmaps_are_live_on_every_chunk_of_the_cache() {
+        use crate::chunk_system::{Chunk, generation_cache::Cache};
+        use crate::generation::proto_chunk::GenerationCache;
+        use pumpkin_util::HeightMap;
+
+        let seed = Seed(13579);
+        let world_gen = get_world_gen(seed, Dimension::OVERWORLD, false, Vec::new(), String::new());
+        let WorldGenerator::Noise(generator) = &*world_gen else {
+            unreachable!()
+        };
+
+        let mut cache = Cache::new(-1, -1, 3);
+        for chunk_x in -1..=1 {
+            for chunk_z in -1..=1 {
+                let mut chunk = ProtoChunk::new(chunk_x, chunk_z, &world_gen);
+                chunk.step_to_biomes(generator);
+                chunk.stage = StagedChunkEnum::StructureReferences;
+                chunk.step_to_noise(generator);
+                let surface_biomes = surface_biomes(&world_gen, chunk_x, chunk_z);
+                chunk.step_to_surface(generator, &surface_biomes);
+                chunk.stage = StagedChunkEnum::Carvers;
+                cache.chunks.push(Chunk::Proto(Box::new(chunk)));
+            }
+        }
+        // Exactly what `generate_features_and_structure` does before the first feature runs.
+        cache.get_center_chunk_mut().prime_final_heightmaps();
+
+        let bottom = cache.get_center_chunk().bottom_y() as i32;
+        for (x, z) in [(0, 0), (-16, 0), (0, -16), (24, 24), (-3, 20)] {
+            let wg = cache.get_top_y(&HeightMap::OceanFloorWg, x, z);
+            assert!(
+                wg > bottom,
+                "OCEAN_FLOOR_WG at ({x}, {z}) is {wg}; the worldgen heightmap must be live \
+                 outside the decorated chunk, not the unprimed final map ({bottom})"
+            );
+            let surface = cache.get_top_y(&HeightMap::WorldSurfaceWg, x, z);
+            assert!(
+                surface >= wg,
+                "WORLD_SURFACE_WG ({surface}) at ({x}, {z}) must sit at or above OCEAN_FLOOR_WG ({wg})"
+            );
+        }
+    }
+
     /// Vanilla `Heightmap.update` lowers a map when the block it was pointing at is replaced
     /// by one the map does not match:
     ///
