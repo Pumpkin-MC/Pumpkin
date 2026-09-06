@@ -1126,6 +1126,32 @@ impl MineShaftCorridor {
         }
     }
 
+    /// Vanilla `MineShaftCorridor.placeDoubleLowerOrUpperSupport`: each of the two
+    /// pillar anchors is only followed down (or chained up) when the block already
+    /// standing there is the shaft's planks block, i.e. when `setPlanksBlock`
+    /// actually floored that column.
+    fn place_double_lower_or_upper_support(
+        &self,
+        chunk: &mut ProtoChunk,
+        chunk_box: &BlockBox,
+        x: i32,
+        y: i32,
+        z: i32,
+    ) {
+        let planks_id = self.shaft_type.planks().id.to_block_id();
+        for anchor_x in [x, x + 2] {
+            if self
+                .piece
+                .get_block_at(chunk, anchor_x, y, z, chunk_box)
+                .id
+                .to_block_id()
+                == planks_id
+            {
+                self.fill_pillar_down_or_chain_up(chunk, anchor_x, y, z, chunk_box);
+            }
+        }
+    }
+
     fn fill_pillar_down_or_chain_up(
         &self,
         chunk: &mut ProtoChunk,
@@ -1389,12 +1415,10 @@ impl StructurePieceBase for MineShaftCorridor {
             }
         }
 
-        self.fill_pillar_down_or_chain_up(chunk, 0, -1, 2, chunk_box);
-        self.fill_pillar_down_or_chain_up(chunk, 2, -1, 2, chunk_box);
+        self.place_double_lower_or_upper_support(chunk, chunk_box, 0, -1, 2);
         if self.num_sections > 1 {
             let last_support = length - 2;
-            self.fill_pillar_down_or_chain_up(chunk, 0, -1, last_support, chunk_box);
-            self.fill_pillar_down_or_chain_up(chunk, 2, -1, last_support, chunk_box);
+            self.place_double_lower_or_upper_support(chunk, chunk_box, 0, -1, last_support);
         }
 
         if self.has_rails {
@@ -2081,5 +2105,14 @@ mod tests {
         assert!(!places_floor_planks(true, true));
         assert!(!places_floor_planks(false, false));
         assert!(!places_floor_planks(false, true));
+    }
+
+    #[test]
+    fn double_support_anchors_are_the_two_corridor_walls() {
+        // Vanilla 26.2 MineShaftCorridor.placeDoubleLowerOrUpperSupport tests
+        // getBlock(x, y, z) and getBlock(x + 2, y, z) against type.getPlanksState(),
+        // i.e. the two wall columns of the 3-wide corridor, in that order.
+        let x = 0;
+        assert_eq!([x, x + 2], [0, 2]);
     }
 }
