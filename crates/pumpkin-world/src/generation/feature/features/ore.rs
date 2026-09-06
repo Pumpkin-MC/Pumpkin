@@ -2,7 +2,7 @@ use core::f32;
 
 use pumpkin_data::{BlockDirection, BlockState, BlockStateId};
 use pumpkin_util::{
-    math::{lerp, position::BlockPos, vector3::Vector3},
+    math::{self, lerp, position::BlockPos, vector3::Vector3},
     random::{RandomGenerator, RandomImpl},
 };
 
@@ -90,12 +90,12 @@ impl OreFeature {
             let e = lerp(f as f64, start_y, end_y);
             let g = lerp(f as f64, start_z, end_z);
             let h = random.next_f64() * j as f64 / 16.0;
-            let l = f32::midpoint(((f32::consts::PI * f).sin() + 1.0) * h as f32, 1.0);
+            let l = Self::node_radius(f, h);
 
             ds[k as usize * 4] = d;
             ds[k as usize * 4 + 1] = e;
             ds[k as usize * 4 + 2] = g;
-            ds[k as usize * 4 + 3] = l as f64;
+            ds[k as usize * 4 + 3] = l;
         }
 
         for k in 0..(j - 1) {
@@ -203,6 +203,27 @@ impl OreFeature {
         placed_blocks_count > 0
     }
 
+    /// Radius of one node of the vein, exactly as vanilla `OreFeature.doPlace` computes it:
+    ///
+    /// ```text
+    /// double r = ((Mth.sin((float) Math.PI * step) + 1.0F) * ss + 1.0) / 2.0;
+    /// ```
+    ///
+    /// Two details matter for bit-for-bit parity:
+    /// * `Mth.sin` is the 65536-entry lookup table (`pumpkin_util::math::sin`), not an accurate
+    ///   sine — its error is around 1e-4, which is enough to gain or lose a shell of blocks.
+    /// * only `Mth.sin(..) + 1.0F` is `float`; `* ss` widens to `double`, and the `+ 1.0` and
+    ///   `/ 2.0` are `double` too. Java rounds the multiply and the add separately, so this must
+    ///   not be contracted into a `mul_add`.
+    #[must_use]
+    #[expect(
+        clippy::manual_midpoint,
+        reason = "kept in vanilla's grouping: only `sin(..) + 1.0F` is float, the rest is double"
+    )]
+    pub fn node_radius(step: f32, ss: f64) -> f64 {
+        (f64::from(math::sin(f32::consts::PI * step) + 1.0) * ss + 1.0) / 2.0
+    }
+
     pub fn should_place<T: GenerationCache>(
         discard_chance: f32,
         chunk: &T,
@@ -240,5 +261,54 @@ impl OreFeature {
             }
         }
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::OreFeature;
+
+    /// Reference values produced by running vanilla's own expression
+    /// `((Mth.sin((float) Math.PI * step) + 1.0F) * ss + 1.0) / 2.0` on a JVM
+    /// (`step = (float) i / size`), printed as raw `double` bits.
+    #[test]
+    fn node_radius_matches_vanilla_do_place() {
+        // (size, i, ss, expected raw f64 bits)
+        let cases: [(i32, i32, f64, u64); 9] = [
+            (33, 0, 1.9375, 0x3ff7_8000_0000_0000),
+            (33, 1, 0.5, 0x3fe8_c27c_4000_0000),
+            (33, 7, 1.9375, 0x4000_8a4f_4e00_0000),
+            (33, 16, 0.314_159_265_358_979_3, 0x3fea_0c21_d7c6_5b3e),
+            (33, 32, 1.0, 0x3ff0_c2ae_4000_0000),
+            (64, 7, 0.5, 0x3fea_b1f3_5000_0000),
+            (64, 16, 1.9375, 0x4001_3ae6_6300_0000),
+            (64, 32, 0.314_159_265_358_979_3, 0x3fea_0d97_bb4e_7870),
+            (9, 7, 1.9375, 0x4000_bb52_ad00_0000),
+        ];
+        for (size, i, ss, expected) in cases {
+            let step = i as f32 / size as f32;
+            let actual = OreFeature::node_radius(step, ss);
+            assert_eq!(
+                actual.to_bits(),
+                expected,
+                "size={size} i={i} ss={ss}: got {actual} ({:#018x}), want {:#018x}",
+                actual.to_bits(),
+                expected
+            );
+        }
+    }
+
+    /// The naive all-`f32` form with an accurate sine, which Pumpkin used before, disagrees with
+    /// vanilla by more than a ULP — enough to move the ellipsoid boundary by a whole block.
+    #[test]
+    fn node_radius_differs_from_naive_f32_form() {
+        let step = 7.0f32 / 33.0f32;
+        let ss = 1.9375f64;
+        let naive = f32::midpoint(
+            ((core::f32::consts::PI * step).sin() + 1.0) * ss as f32,
+            1.0,
+        );
+        let vanilla = OreFeature::node_radius(step, ss);
+        assert!((f64::from(naive) - vanilla).abs() > 1e-6);
     }
 }
