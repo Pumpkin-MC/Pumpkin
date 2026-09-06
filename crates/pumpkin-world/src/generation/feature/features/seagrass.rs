@@ -30,10 +30,40 @@ impl SeagrassFeature {
         let y = chunk.ocean_floor_height_exclusive(pos.0.x + x, pos.0.z + z);
         let grass_pos = BlockPos::new(pos.0.x + x, y, pos.0.z + z);
 
-        if GenerationCache::get_block_state(chunk, &grass_pos.0).to_block_id() == Block::WATER
-            && Self::can_survive(chunk, grass_pos)
+        // Vanilla draws the tall/short coin as soon as the target is water, *before* the
+        // survivability check, and reports success for any surviving spot even when the tall
+        // variant found no water above it:
+        //
+        // ```java
+        // if (level.getBlockState(blockPos).is(Blocks.WATER)) {
+        //     boolean bl2 = random.nextDouble() < config.probability;
+        //     BlockState blockState = bl2
+        //         ? Blocks.TALL_SEAGRASS.defaultBlockState()
+        //         : Blocks.SEAGRASS.defaultBlockState();
+        //     if (blockState.canSurvive(level, blockPos)) {
+        //         if (bl2) {
+        //             BlockState blockState2 = blockState.setValue(TallSeagrassBlock.HALF, DoubleBlockHalf.UPPER);
+        //             BlockPos blockPos2 = blockPos.above();
+        //             if (level.getBlockState(blockPos2).is(Blocks.WATER)) {
+        //                 level.setBlock(blockPos, blockState, 2);
+        //                 level.setBlock(blockPos2, blockState2, 2);
+        //             }
+        //         } else {
+        //             level.setBlock(blockPos, blockState, 2);
+        //         }
+        //         bl = true;
+        //     }
+        // }
+        // ```
+        //
+        // Skipping the `nextDouble` on the ocean floor blocks that cannot hold seagrass left
+        // every later draw of the feature one behind.
+        let target_is_water =
+            GenerationCache::get_block_state(chunk, &grass_pos.0).to_block_id() == Block::WATER;
+        let can_survive = target_is_water && Self::can_survive(chunk, grass_pos);
+        if let Some(is_tall) =
+            Self::choose_variant(random, self.probability, target_is_water, can_survive)
         {
-            let is_tall = random.next_f64() < self.probability as f64;
             if is_tall {
                 let above = grass_pos.up();
                 if GenerationCache::get_block_state(chunk, &above.0).to_block_id() == Block::WATER {
@@ -45,15 +75,33 @@ impl SeagrassFeature {
 
                     chunk.set_block_state(&grass_pos.0, Block::TALL_SEAGRASS.default_state);
                     chunk.set_block_state(&above.0, upper_state);
-                    placed_any = true;
                 }
             } else {
                 chunk.set_block_state(&grass_pos.0, Block::SEAGRASS.default_state);
-                placed_any = true;
             }
+            placed_any = true;
         }
 
         placed_any
+    }
+
+    /// The RNG-consuming half of vanilla's `SeagrassFeature.place`, split out so its draw
+    /// order can be pinned by a test.
+    ///
+    /// `nextDouble` is spent whenever the target block is water, *before* `canSurvive` is
+    /// consulted, and not at all when the target is not water. Returns `None` when nothing is
+    /// placed, `Some(is_tall)` otherwise.
+    fn choose_variant(
+        random: &mut RandomGenerator,
+        probability: f32,
+        target_is_water: bool,
+        can_survive: bool,
+    ) -> Option<bool> {
+        if !target_is_water {
+            return None;
+        }
+        let is_tall = random.next_f64() < f64::from(probability);
+        can_survive.then_some(is_tall)
     }
 
     fn can_survive<T: GenerationCache>(chunk: &T, pos: BlockPos) -> bool {
@@ -66,5 +114,54 @@ impl SeagrassFeature {
         }
 
         below_state.to_state().is_side_solid(BlockDirection::Up)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_util::random::{RandomGenerator, RandomImpl, xoroshiro128::Xoroshiro};
+
+    use super::SeagrassFeature;
+
+    /// Vanilla spends the `nextDouble` on every water target, even one the seagrass cannot
+    /// survive on, and spends none when the target is not water:
+    ///
+    /// ```java
+    /// if (level.getBlockState(blockPos).is(Blocks.WATER)) {
+    ///     boolean bl2 = random.nextDouble() < config.probability;
+    ///     ...
+    ///     if (blockState.canSurvive(level, blockPos)) { ... }
+    /// }
+    /// ```
+    #[test]
+    fn the_tall_coin_is_drawn_before_the_survivability_check() {
+        // Not water: no draw at all.
+        let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(13579));
+        let mut reference = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(13579));
+        assert_eq!(
+            SeagrassFeature::choose_variant(&mut random, 0.3, false, false),
+            None
+        );
+        assert_eq!(random.next_i64(), reference.next_i64());
+
+        // Water but nothing to stand on: the coin is still drawn, only the placement is lost.
+        let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(13579));
+        let mut reference = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(13579));
+        reference.next_f64();
+        assert_eq!(
+            SeagrassFeature::choose_variant(&mut random, 0.3, true, false),
+            None
+        );
+        assert_eq!(random.next_i64(), reference.next_i64());
+
+        // Water with support: the same single draw, and the coin decides tall vs short.
+        let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(13579));
+        let mut reference = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(13579));
+        let expected = reference.next_f64() < 0.3;
+        assert_eq!(
+            SeagrassFeature::choose_variant(&mut random, 0.3, true, true),
+            Some(expected)
+        );
+        assert_eq!(random.next_i64(), reference.next_i64());
     }
 }
