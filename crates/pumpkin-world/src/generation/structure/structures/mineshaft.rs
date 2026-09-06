@@ -1432,7 +1432,11 @@ impl StructurePieceBase for MineShaftCorridor {
             if self.spider_corridor && !self.has_placed_spider {
                 let spawner_z = z - 1 + random.next_bounded_i32(3);
                 let spawner_pos = self.piece.offset_pos(1, 0, spawner_z);
-                if chunk_box.contains_pos(&spawner_pos) {
+                if chunk_box.contains_pos(&spawner_pos)
+                    && self
+                        .piece
+                        .is_under_sea_level(chunk, 1, 0, spawner_z, chunk_box)
+                {
                     self.has_placed_spider = true;
                     chunk.set_block_state(
                         spawner_pos.x,
