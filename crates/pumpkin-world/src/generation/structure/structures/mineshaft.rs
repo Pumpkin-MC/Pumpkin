@@ -1036,7 +1036,7 @@ impl MineShaftCorridor {
         }
     }
 
-    #[expect(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments, clippy::too_many_lines)]
     fn place_support(
         &self,
         chunk: &mut ProtoChunk,
@@ -1217,11 +1217,7 @@ impl MineShaftCorridor {
                     state_below.to_state(),
                     state_below.to_block(),
                 ) && state_below.to_block_id() != Block::LAVA.id;
-                if !empty_below
-                    && state_below
-                        .to_state()
-                        .is_side_solid(DataBlockDirection::Up)
-                {
+                if !empty_below && state_below.to_state().is_side_solid(DataBlockDirection::Up) {
                     for py in (below_y + 1)..world_y {
                         chunk.set_block_state(world_pos.x, py, world_pos.z, self.shaft_type.wood());
                     }
@@ -1238,7 +1234,9 @@ impl MineShaftCorridor {
                     state_above.to_state(),
                     state_above.to_block(),
                 );
-                if !empty_above && can_hang_chain_below(state_above.to_state(), state_above.to_block()) {
+                if !empty_above
+                    && can_hang_chain_below(state_above.to_state(), state_above.to_block())
+                {
                     chunk.set_block_state(
                         world_pos.x,
                         world_y + 1,
@@ -1262,6 +1260,7 @@ impl MineShaftCorridor {
         }
     }
 
+    #[expect(clippy::too_many_arguments)]
     fn maybe_place_cobweb(
         &self,
         chunk: &mut ProtoChunk,
