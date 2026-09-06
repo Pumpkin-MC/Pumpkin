@@ -3386,7 +3386,7 @@ dependencies = [
  "time",
  "tokio",
  "tokio-util",
- "toml 1.1.4+spec-1.1.0",
+ "toml",
  "tracing",
  "tracing-serde-structured",
  "tracing-subscriber",

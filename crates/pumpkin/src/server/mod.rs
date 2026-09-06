@@ -47,8 +47,8 @@ use std::net::IpAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU32};
 use std::{future::Future, sync::atomic::Ordering, time::Duration};
-use tokio::sync::OnceCell;
-use tokio::task::JoinHandle;
+use tokio::sync::{Mutex, OnceCell};
+use tokio::task::{JoinHandle, JoinSet};
 use tokio_util::task::TaskTracker;
 
 mod connection_cache;

@@ -13,11 +13,7 @@ use wasmtime_wasi_http::{
 };
 
 use crate::{
-    command::{
-        CommandSender,
-        args::ConsumedArgs,
-        tree::{CommandTree, builder::NonLeafNodeBuilder},
-    },
+    command::CommandSender,
     entity::{EntityBase, player::Player},
     plugin::{
         Context,
