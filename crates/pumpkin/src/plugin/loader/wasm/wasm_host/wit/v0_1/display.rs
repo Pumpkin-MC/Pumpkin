@@ -557,7 +557,7 @@ impl HostItemDisplayEntity for PluginHostState {
         item: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
         let stack = if let Some(item_res_val) = item {
-            self.get(&item_res_val)?.lock().await.clone()
+            self.take(item_res_val)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::new(0, &pumpkin_data::item::Item::AIR)
         };
@@ -832,7 +832,7 @@ impl HostInteractionEntity for PluginHostState {
         &mut self,
         interaction: Resource<InteractionEntity>,
     ) -> wasmtime::Result<Option<Uuid>> {
-        let action = self.get(&interaction)?.get_last_attacker();
+        let action = self.get(&interaction)?.get_target();
         Ok(action.map(|a| Uuid::to_wit(&a.player)))
     }
 

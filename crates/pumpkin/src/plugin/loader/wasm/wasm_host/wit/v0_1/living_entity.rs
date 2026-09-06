@@ -398,15 +398,15 @@ impl HostLivingEntity for PluginHostState {
         slot: WitEquipmentSlot,
         stack: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
+        let item_stack = if let Some(stack_res) = stack {
+            self.take(stack_res)?.lock().await.clone()
+        } else {
+            pumpkin_data::item_stack::ItemStack::EMPTY.clone()
+        };
+
         let entity = self.get(&this)?;
         if let Some(living) = entity.get_living_entity() {
             let slot = from_wit_equipment_slot(slot);
-            let item_stack = if let Some(stack_res) = stack {
-                self.get(&stack_res)?.lock().await.clone()
-            } else {
-                pumpkin_data::item_stack::ItemStack::EMPTY.clone()
-            };
-
             {
                 let mut equipment = living
                     .entity_equipment
