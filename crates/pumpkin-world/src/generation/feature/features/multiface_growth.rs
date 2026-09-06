@@ -39,10 +39,9 @@ impl MultifaceGrowthFeature {
         for search_direction in shuffled_dirs {
             let placement_directions =
                 self.get_shuffled_directions_except(random, search_direction.opposite());
-            let mut cur_pos = pos;
 
             for _ in 0..self.search_range {
-                cur_pos = cur_pos.offset(search_direction.to_offset());
+                let cur_pos = Self::search_position(pos, search_direction);
                 let block_id = GenerationCache::get_block_state(chunk, &cur_pos.0).to_block_id();
                 if !Self::is_air_or_water(chunk, cur_pos) && block_id != self.place_block {
                     break;
@@ -55,6 +54,25 @@ impl MultifaceGrowthFeature {
         }
 
         false
+    }
+
+    /// The position vanilla probes on iteration `i` of the search loop.
+    ///
+    /// `MultifaceGrowthFeature.place` keeps the cursor as a `MutableBlockPos` but re-seeds it
+    /// from the *origin* on every iteration:
+    ///
+    /// ```java
+    /// for (int i = 0; i < config.searchRange; i++) {
+    ///     mutableBlockPos.setWithOffset(blockPos, direction);   // blockPos, not mutableBlockPos
+    ///     ...
+    /// }
+    /// ```
+    ///
+    /// so the search never walks away from `origin + direction`, whatever `search_range` says,
+    /// and the loop just re-tests the same block. Advancing the cursor instead (what Pumpkin
+    /// used to do) let glow lichen attach up to 20 blocks from where vanilla put it.
+    fn search_position(origin: BlockPos, direction: BlockDirection) -> BlockPos {
+        origin.offset(direction.to_offset())
     }
 
     fn place_growth_if_possible<T: GenerationCache>(
@@ -152,5 +170,42 @@ impl MultifaceGrowthFeature {
     fn is_air_or_water<T: GenerationCache>(chunk: &T, pos: BlockPos) -> bool {
         let id = GenerationCache::get_block_state(chunk, &pos.0).to_block_id();
         id == Block::AIR.id || id == Block::WATER.id
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_data::BlockDirection;
+    use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+
+    use super::MultifaceGrowthFeature;
+
+    /// `glow_lichen` has `search_range: 20`, but vanilla's loop re-offsets from the origin
+    /// every iteration, so all 20 probes land on the same block, one step from the origin.
+    #[test]
+    fn search_never_walks_away_from_the_origin() {
+        let origin = BlockPos(Vector3::new(7, 42, -3));
+        for direction in [
+            BlockDirection::Up,
+            BlockDirection::Down,
+            BlockDirection::North,
+            BlockDirection::South,
+            BlockDirection::East,
+            BlockDirection::West,
+        ] {
+            let offset = direction.to_offset();
+            let expected = BlockPos(Vector3::new(
+                origin.0.x + offset.x,
+                origin.0.y + offset.y,
+                origin.0.z + offset.z,
+            ));
+            for _ in 0..20 {
+                assert_eq!(
+                    MultifaceGrowthFeature::search_position(origin, direction),
+                    expected,
+                    "probe for {direction:?} moved away from origin + direction"
+                );
+            }
+        }
     }
 }
