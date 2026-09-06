@@ -49,8 +49,7 @@ const SHAPE_CHECK_BLOCKS: [BlockId; 12] = [
 /// `SHAPE_CHECK_BLOCKS.contains(blockState.getBlock())`.
 #[must_use]
 pub fn needs_shape_check(state: BlockStateId) -> bool {
-    let block = state.to_block_id();
-    SHAPE_CHECK_BLOCKS.iter().any(|&id| id == block)
+    SHAPE_CHECK_BLOCKS.contains(&state.to_block_id())
 }
 
 /// `BlockBehaviour.UPDATE_SHAPE_ORDER` (`BlockBehaviour.java:85`).
@@ -76,18 +75,80 @@ fn update_from_neighbour_shapes<C: GenerationCache + ?Sized>(
         let offset = direction.to_offset();
         let neighbour_pos = Vector3::new(pos.x + offset.x, pos.y + offset.y, pos.z + offset.z);
         let neighbour = GenerationCache::get_block_state(cache, &neighbour_pos);
-        new_state = update_shape(new_state, direction, neighbour);
+        new_state = update_shape(new_state, pos, direction, neighbour, cache);
     }
     new_state
 }
 
 /// `BlockState.updateShape`, restricted to the overrides worldgen can reach.
 ///
-/// Only `FenceBlock.updateShape` (`FenceBlock.java:99`) is ported: the other
+/// `FenceBlock.updateShape` (`FenceBlock.java:99`) and, for the two mushrooms,
+/// `VegetationBlock.updateShape` (`VegetationBlock.java:28`) are ported; the other
 /// `SHAPE_CHECK_BLOCKS` (torch, wall torch, ladder, iron bars) keep the placed state, which is
 /// what Pumpkin did before this pass existed.
 #[must_use]
-fn update_shape(
+fn update_shape<C: GenerationCache + ?Sized>(
+    state: BlockStateId,
+    pos: Vector3<i32>,
+    direction: BlockDirection,
+    neighbour: BlockStateId,
+    cache: &C,
+) -> BlockStateId {
+    let block = state.to_block_id();
+    if block == Block::BROWN_MUSHROOM || block == Block::RED_MUSHROOM {
+        // `!state.canSurvive(level, pos) ? Blocks.AIR.defaultBlockState() : super.updateShape(..)`
+        return if mushroom_can_survive(cache, pos) {
+            state
+        } else {
+            Block::AIR.default_state.id
+        };
+    }
+    fence_update_shape(state, direction, neighbour)
+}
+
+/// `MushroomBlock.canSurvive` (`MushroomBlock.java:83`):
+/// `below.is(OVERRIDES_MUSHROOM_LIGHT_REQUIREMENT) ? true
+///  : level.getRawBrightness(pos, 0) < 13 && this.mayPlaceOn(below, level, belowPos)`,
+/// with `MushroomBlock.mayPlaceOn` = `state.isSolidRender()`.
+#[must_use]
+fn mushroom_can_survive<C: GenerationCache + ?Sized>(cache: &C, pos: Vector3<i32>) -> bool {
+    let below_pos = Vector3::new(pos.x, pos.y - 1, pos.z);
+    let below = GenerationCache::get_block_state(cache, &below_pos);
+    if below
+        .to_block()
+        .has_tag(&tag::Block::MINECRAFT_OVERRIDES_MUSHROOM_LIGHT_REQUIREMENT)
+    {
+        return true;
+    }
+    raw_brightness(cache, pos) < 13 && BlockState::from_id(below).is_solid_render()
+}
+
+/// `LevelReader.getRawBrightness(pos, 0)` = `max(blockLight, skyLight)`.
+///
+/// Vanilla answers this from the light engine, which has run by the time a chunk reaches
+/// `FULL`. Pumpkin has no light at the feature stage, so only the one value the sky light
+/// engine reaches without propagating is modelled: a column of nothing but air above `pos`
+/// is sky light 15, exactly. Every other position answers 0, which keeps the block — the
+/// state Pumpkin had before this pass, never a removal vanilla did not make.
+#[must_use]
+fn raw_brightness<C: GenerationCache + ?Sized>(cache: &C, pos: Vector3<i32>) -> u8 {
+    let top = i32::from(cache.top_y());
+    for y in pos.y + 1..top {
+        if !BlockState::from_id(GenerationCache::get_block_state(
+            cache,
+            &Vector3::new(pos.x, y, pos.z),
+        ))
+        .is_air()
+        {
+            return 0;
+        }
+    }
+    15
+}
+
+/// `FenceBlock.updateShape` (`FenceBlock.java:99`).
+#[must_use]
+fn fence_update_shape(
     state: BlockStateId,
     direction: BlockDirection,
     neighbour: BlockStateId,
@@ -164,6 +225,11 @@ pub fn post_process_pos(state: BlockStateId, pos: Vector3<i32>) -> Option<Vector
     // `Blocks::postProcessAbove`, registered on `MAGMA_BLOCK` and `SOUL_SAND`.
     if block == Block::MAGMA_BLOCK || block == Block::SOUL_SAND {
         return Some(Vector3::new(pos.x, pos.y + 1, pos.z));
+    }
+    // `Blocks::postProcessSelf`, registered on `BROWN_MUSHROOM` (`Blocks.java:1015`) and
+    // `RED_MUSHROOM` (`Blocks.java:1027`).
+    if block == Block::BROWN_MUSHROOM || block == Block::RED_MUSHROOM {
+        return Some(pos);
     }
     None
 }
@@ -321,6 +387,37 @@ mod tests {
         assert_eq!(post_process_pos(Block::WATER.default_state.id, pos), None);
     }
 
+    /// `Blocks.BROWN_MUSHROOM` (`Blocks.java:1015`) and `Blocks.RED_MUSHROOM`
+    /// (`Blocks.java:1027`) are registered with `.postProcess(Blocks::postProcessSelf)`, which
+    /// returns the position itself.
+    #[test]
+    fn the_mushrooms_mark_themselves() {
+        let pos = Vector3::new(-127, 64, 33);
+        assert_eq!(
+            post_process_pos(Block::BROWN_MUSHROOM.default_state.id, pos),
+            Some(pos)
+        );
+        assert_eq!(
+            post_process_pos(Block::RED_MUSHROOM.default_state.id, pos),
+            Some(pos)
+        );
+    }
+
+    /// `MushroomBlock.canSurvive` (`MushroomBlock.java:83`) short-circuits to `true` only for
+    /// `BlockTags.OVERRIDES_MUSHROOM_LIGHT_REQUIREMENT` — mycelium, podzol and the two nyliums.
+    /// On anything else, `mayPlaceOn` (`state.isSolidRender()`) passes for the sand these seven
+    /// worldgen mushrooms stand on, so `getRawBrightness(pos, 0) < 13` is what decides, and
+    /// under open sky it does not hold.
+    #[test]
+    fn only_the_light_requirement_can_remove_a_mushroom_from_sand() {
+        for block in [Block::MYCELIUM, Block::PODZOL] {
+            assert!(block.has_tag(&tag::Block::MINECRAFT_OVERRIDES_MUSHROOM_LIGHT_REQUIREMENT));
+        }
+        assert!(!Block::SAND.has_tag(&tag::Block::MINECRAFT_OVERRIDES_MUSHROOM_LIGHT_REQUIREMENT));
+        assert!(BlockState::from_id(Block::SAND.default_state.id).is_solid_render());
+        assert!(!BlockState::from_id(Block::AIR.default_state.id).is_solid_render());
+    }
+
     /// `BubbleColumnBlock` calls `registerDefaultState(stateDefinition.any().setValue(DRAG_DOWN,
     /// true))`, and `getColumnState` picks `DRAG_DOWN=true` over magma
     /// (`ENABLES_BUBBLE_COLUMN_DRAG_DOWN`) and `DRAG_DOWN=false` over soul sand
@@ -395,6 +492,7 @@ mod tests {
         );
     }
 
+    #[expect(clippy::fn_params_excessive_bools)]
     fn fence(north: bool, east: bool, south: bool, west: bool) -> BlockStateId {
         OakFenceLikeProperties {
             north,
@@ -414,7 +512,7 @@ mod tests {
     fn fence_update_shape_follows_the_neighbour() {
         // A sturdy face connects.
         assert_eq!(
-            update_shape(
+            fence_update_shape(
                 fence(false, false, false, false),
                 BlockDirection::East,
                 Block::ORANGE_TERRACOTTA.default_state.id,
@@ -423,7 +521,7 @@ mod tests {
         );
         // Cave air does not, and it also clears a connection the piece placed.
         assert_eq!(
-            update_shape(
+            fence_update_shape(
                 fence(false, true, false, false),
                 BlockDirection::East,
                 Block::CAVE_AIR.default_state.id,
@@ -432,7 +530,7 @@ mod tests {
         );
         // `isSameFence`: another wooden fence connects even though its face is not sturdy...
         assert_eq!(
-            update_shape(
+            fence_update_shape(
                 fence(false, false, false, false),
                 BlockDirection::North,
                 Block::OAK_FENCE.default_state.id,
@@ -441,7 +539,7 @@ mod tests {
         );
         // ...but the nether brick fence is not in `WOODEN_FENCES`, so it does not.
         assert_eq!(
-            update_shape(
+            fence_update_shape(
                 fence(false, false, false, false),
                 BlockDirection::North,
                 Block::NETHER_BRICK_FENCE.default_state.id,
@@ -450,7 +548,7 @@ mod tests {
         );
         // `isExceptionForConnection`: a pumpkin has a sturdy face and still does not connect.
         assert_eq!(
-            update_shape(
+            fence_update_shape(
                 fence(false, false, false, false),
                 BlockDirection::South,
                 Block::PUMPKIN.default_state.id,
@@ -459,7 +557,7 @@ mod tests {
         );
         // `directionToNeighbour.getAxis().isHorizontal()` gates the whole thing.
         assert_eq!(
-            update_shape(
+            fence_update_shape(
                 fence(false, false, false, false),
                 BlockDirection::Up,
                 Block::ORANGE_TERRACOTTA.default_state.id,
@@ -468,7 +566,7 @@ mod tests {
         );
         // Non-fences take the `super.updateShape` identity branch here.
         assert_eq!(
-            update_shape(
+            fence_update_shape(
                 Block::DARK_OAK_PLANKS.default_state.id,
                 BlockDirection::East,
                 Block::ORANGE_TERRACOTTA.default_state.id,
