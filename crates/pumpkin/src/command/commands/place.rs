@@ -27,13 +27,15 @@ use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::world::block_placer::WorldBlockPlacer;
 use pumpkin_world::generation::feature::configured_features::CONFIGURED_FEATURES;
 use pumpkin_world::generation::feature::placed_features::{Feature, PLACED_FEATURES};
-use pumpkin_world::generation::structure::structures::StructureGeneratorContext;
+use pumpkin_world::generation::generator::WorldGenerator;
+use pumpkin_world::generation::structure::height_sampler::NoiseHeightSampler;
 use pumpkin_world::generation::structure::structures::jigsaw::{
     PoolElementStructurePiece, place_pool_element_templates,
 };
 use pumpkin_world::generation::structure::structures::jigsaw_placement::{
     DimensionPadding, JigsawPlacement, LiquidSettings, MaxDistance, PoolAliasLookup,
 };
+use pumpkin_world::generation::structure::structures::{HeightSampler, StructureGeneratorContext};
 use pumpkin_world::generation::structure::template::BlockPlacer;
 
 use pumpkin_util::PermissionLvl;
@@ -347,6 +349,12 @@ impl CommandExecutor for PlaceStructureExecutor {
                 (piece_count, placer)
             } else {
                 let random = RandomGenerator::Legacy(LegacyRand::from_seed(seed));
+                // Structures that pick their own Y (nether fossils) need the base noise
+                // column to scan, the same one worldgen hands them.
+                let mut height_sampler = match world_gen.as_ref() {
+                    WorldGenerator::Noise(noise_gen) => Some(NoiseHeightSampler::new(noise_gen)),
+                    _ => None,
+                };
 
                 let position = pumpkin_world::generation::structure::generate_structure_position(
                     &key,
@@ -359,7 +367,9 @@ impl CommandExecutor for PlaceStructureExecutor {
                         sea_level: settings.sea_level,
                         min_y: world_gen.dimension().min_y,
                         generation_height: settings.shape.height,
-                        height_sampler: None,
+                        height_sampler: height_sampler
+                            .as_mut()
+                            .map(|sampler| sampler as &mut dyn HeightSampler),
                         structure_key: Some(key),
                     },
                 )

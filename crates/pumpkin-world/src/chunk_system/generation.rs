@@ -183,6 +183,64 @@ mod tests {
         }
     }
 
+    /// The Nether ceiling is beard-carved around every structure start, so a fossil
+    /// whose start Y was picked from the built chunk anchored itself to its own beard
+    /// pocket and replaced the bedrock roof. This seed/chunk reproduced that.
+    #[test]
+    fn nether_fossils_stay_below_the_bedrock_roof() {
+        let seed = Seed(1_789_192_880_694_109_906);
+        let block_registry = Arc::new(BlockRegistry);
+        let world_gen = get_world_gen(
+            seed,
+            Dimension::THE_NETHER,
+            false,
+            Vec::new(),
+            String::new(),
+        );
+
+        let surface = generate_single_chunk(
+            &world_gen,
+            block_registry.as_ref(),
+            -10,
+            20,
+            StagedChunkEnum::Surface,
+        );
+        let features = generate_single_chunk(
+            &world_gen,
+            block_registry.as_ref(),
+            -10,
+            20,
+            StagedChunkEnum::Features,
+        );
+        let (super::Chunk::Proto(surface), super::Chunk::Proto(features)) = (surface, features)
+        else {
+            panic!("features stage should return a proto chunk");
+        };
+
+        let mut bones = 0;
+        for x in -160..-144 {
+            for z in 320..336 {
+                for y in 0..128 {
+                    let pos = pumpkin_util::math::vector3::Vector3::new(x, y, z);
+                    let surface_block = surface.get_block_state(&pos).to_block_id();
+                    let feature_block = features.get_block_state(&pos).to_block_id();
+                    if feature_block == pumpkin_data::Block::BONE_BLOCK.id {
+                        bones += 1;
+                    }
+                    if surface_block == pumpkin_data::Block::BEDROCK.id {
+                        assert_eq!(
+                            feature_block,
+                            pumpkin_data::Block::BEDROCK.id,
+                            "fossil replaced bedrock at {pos:?}"
+                        );
+                    }
+                }
+            }
+        }
+
+        assert!(bones > 0, "reference chunk contains no fossil");
+    }
+
     #[test]
     fn generate_chunk_should_return() {
         let dimension = Dimension::OVERWORLD;

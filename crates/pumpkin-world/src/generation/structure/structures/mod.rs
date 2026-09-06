@@ -835,6 +835,20 @@ pub trait HeightSampler {
     fn estimate_ocean_floor_height(&mut self, block_x: i32, block_z: i32) -> i32 {
         self.estimate_height(block_x, block_z)
     }
+
+    /// Vanilla `ChunkGenerator::getBaseColumn`: the state raw noise puts at this
+    /// position, before surface rules, carvers, structures and the beardifier touch
+    /// the chunk. Out-of-range Y reads as air, like vanilla's `NoiseColumn`.
+    ///
+    /// `None` means this sampler cannot see the column at all.
+    fn base_column_state(
+        &mut self,
+        _block_x: i32,
+        _block_y: i32,
+        _block_z: i32,
+    ) -> Option<&'static BlockState> {
+        None
+    }
 }
 
 impl HeightSampler

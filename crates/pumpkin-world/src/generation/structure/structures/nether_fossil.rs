@@ -15,8 +15,8 @@ use crate::{
         structure::{
             piece::StructurePieceType,
             structures::{
-                StructureGenerator, StructureGeneratorContext, StructurePiece, StructurePieceBase,
-                StructurePiecesCollector, StructurePosition, WorldPortalExt,
+                HeightSampler, StructureGenerator, StructureGeneratorContext, StructurePiece,
+                StructurePieceBase, StructurePiecesCollector, StructurePosition, WorldPortalExt,
             },
             template::{
                 BlockStateResolver, StructurePlaceSettings, StructureTemplate, get_template,
@@ -76,6 +76,20 @@ impl StructureGenerator for NetherFossilGenerator {
                 context.generation_height,
             );
 
+        // Vanilla decides the fossil's Y right here, scanning the *base* noise column:
+        // surface rules, carvers and the beardifier (this structure is `beard_thin`)
+        // have not run yet. Deciding it later, from the built chunk, anchors the fossil
+        // to the beard pocket its own start box carved into the Nether ceiling.
+        let anchor_y = match context.height_sampler.as_deref_mut() {
+            // Samplers without base-column access keep the sampled height.
+            Some(sampler) => match find_anchor(sampler, x, z, initial_y, context.sea_level) {
+                ColumnScan::NoSampler => initial_y,
+                ColumnScan::Anchor(y) => y,
+                ColumnScan::NoSpot => return None,
+            },
+            None => initial_y,
+        };
+
         let rotation_index = context.random.next_bounded_i32(4) as u8;
         let rotation = Rotation::from_index(rotation_index);
 
@@ -83,25 +97,59 @@ impl StructureGenerator for NetherFossilGenerator {
         let template_name = FOSSILS[template_index];
 
         let template = get_template(template_name)?;
-        let position = Vector3::new(x, initial_y, z);
+        let position = Vector3::new(x, anchor_y, z);
 
         let mut collector = StructurePiecesCollector::default();
 
-        let piece = NetherFossilPiece::new(
-            template,
-            template_name.to_string(),
-            position,
-            rotation,
-            initial_y,
-            context.sea_level,
-        );
+        let piece = NetherFossilPiece::new(template, template_name.to_string(), position, rotation);
 
         collector.add_piece(Box::new(piece));
 
         Some(StructurePosition {
-            start_pos: BlockPos::new(x, initial_y, z),
+            start_pos: BlockPos::new(x, anchor_y, z),
             collector: Arc::new(collector.into()),
         })
+    }
+}
+
+enum ColumnScan {
+    /// The sampler cannot see the base column, so the caller keeps its own height.
+    NoSampler,
+    Anchor(i32),
+    /// The scan reached sea level: vanilla generates no fossil here.
+    NoSpot,
+}
+
+/// Vanilla's downward scan for a spot to drop a fossil on: the first air block sitting
+/// on soul sand or an upward-solid face.
+fn find_anchor(
+    sampler: &mut dyn HeightSampler,
+    x: i32,
+    z: i32,
+    start_y: i32,
+    sea_level: i32,
+) -> ColumnScan {
+    let mut y = start_y;
+    while y > sea_level {
+        let (Some(upper), Some(lower)) = (
+            sampler.base_column_state(x, y, z),
+            sampler.base_column_state(x, y - 1, z),
+        ) else {
+            return ColumnScan::NoSampler;
+        };
+        y -= 1;
+        if upper.is_air()
+            && (Block::from_state_id(lower.id) == &Block::SOUL_SAND
+                || lower.is_side_solid(BlockDirection::Up))
+        {
+            break;
+        }
+    }
+
+    if y > sea_level {
+        ColumnScan::Anchor(y)
+    } else {
+        ColumnScan::NoSpot
     }
 }
 
@@ -111,8 +159,6 @@ pub struct NetherFossilPiece {
     pub template_name: String,
     pub place_settings: StructurePlaceSettings,
     pub template_position: Vector3<i32>,
-    pub initial_y: i32,
-    pub sea_level: i32,
 }
 
 impl NetherFossilPiece {
@@ -122,8 +168,6 @@ impl NetherFossilPiece {
         template_name: String,
         template_position: Vector3<i32>,
         rotation: Rotation,
-        initial_y: i32,
-        sea_level: i32,
     ) -> Self {
         let place_settings = make_settings(rotation);
         let bounding_box = template.get_bounding_box(&place_settings, template_position);
@@ -134,34 +178,7 @@ impl NetherFossilPiece {
             template_name,
             place_settings,
             template_position,
-            initial_y,
-            sea_level,
         }
-    }
-
-    /// Vanilla column scan: search downward from `initial_y` for air above (soul sand OR solid block).
-    /// Returns the Y of the support block, or None if no valid position found above sea level.
-    fn find_placement_y(&self, chunk: &ProtoChunk) -> Option<i32> {
-        let origin = self.template_position;
-        let mut y = self.initial_y;
-
-        while y > self.sea_level {
-            let upper = chunk.get_block_state(&Vector3::new(origin.x, y, origin.z));
-            y -= 1;
-            let lower = chunk.get_block_state(&Vector3::new(origin.x, y, origin.z));
-
-            let upper_state = BlockState::from_id(upper);
-            let lower_state = BlockState::from_id(lower);
-
-            if upper_state.is_air()
-                && (Block::from_state_id(lower) == &Block::SOUL_SAND
-                    || lower_state.is_side_solid(BlockDirection::Up))
-            {
-                break;
-            }
-        }
-
-        if y <= self.sea_level { None } else { Some(y) }
     }
 
     fn place_blocks(&self, chunk: &mut ProtoChunk, chunk_box: &BlockBox) {
@@ -276,15 +293,6 @@ impl StructurePieceBase for NetherFossilPiece {
         seed: i64,
         chunk_box: &BlockBox,
     ) {
-        let Some(placement_y) = self.find_placement_y(chunk) else {
-            return;
-        };
-
-        self.template_position.y = placement_y;
-        self.piece.bounding_box = self
-            .template
-            .get_bounding_box(&self.place_settings, self.template_position);
-
         let fossil_bb = self.piece.bounding_box;
         let mut enlarged_box = *chunk_box;
         enlarged_box.encompass(&fossil_bb);
