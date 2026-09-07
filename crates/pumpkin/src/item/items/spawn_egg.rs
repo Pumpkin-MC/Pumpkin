@@ -133,15 +133,25 @@ impl ItemBehaviour for SpawnEggItem {
         if let Some(entity_type) = entity_from_egg(item.item.id) {
             let world = player.world();
 
-            if let Some(block_entity) = player.world().get_block_entity(&location)
-                && let Some(spawner) = block_entity
+            if let Some(block_entity) = player.world().get_block_entity(&location) {
+                if let Some(spawner) = block_entity
                     .as_any()
                     .downcast_ref::<MobSpawnerBlockEntity>()
-            {
-                spawner.set_entity_type(entity_type);
-                world.update_block_entity(&block_entity);
-                item.decrement_unless_creative(player.gamemode.load(), 1);
-                return;
+                {
+                    spawner.set_entity_type(entity_type);
+                    world.update_block_entity(&block_entity);
+                    item.decrement_unless_creative(player.gamemode.load(), 1);
+                    return;
+                }
+                if let Some(trial_spawner) = block_entity
+                    .as_any()
+                    .downcast_ref::<crate::block::entities::trial_spawner::TrialSpawnerBlockEntity>()
+                {
+                    trial_spawner.set_entity_type(entity_type, &world);
+                    world.update_block_entity(&block_entity);
+                    item.decrement_unless_creative(player.gamemode.load(), 1);
+                    return;
+                }
             }
 
             let target_state = world.get_block_state(&location);
@@ -184,13 +194,8 @@ impl ItemBehaviour for SpawnEggItem {
             mob.get_entity()
                 .age
                 .store(-24000, std::sync::atomic::Ordering::Relaxed);
-            mob.get_entity().send_meta_data(
-                &[pumpkin_protocol::java::client::play::Metadata::new(
-                    pumpkin_data::tracked_data::ageable_mob::DATA_BABY_ID,
-                    true,
-                )],
-                None,
-            );
+            mob.get_entity()
+                .set_synced_data(pumpkin_data::tracked_data::ageable_mob::DATA_BABY_ID, true);
             apply_entity_variant(item, mob.as_ref());
             world.spawn_entity(mob);
             item.decrement_unless_creative(player.gamemode.load(), 1);

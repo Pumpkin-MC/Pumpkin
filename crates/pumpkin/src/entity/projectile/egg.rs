@@ -11,7 +11,6 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
-use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::vector3::Vector3;
 use uuid::Uuid;
 
@@ -75,12 +74,9 @@ impl EntityBase for EggEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         // Sync the item stack so the client renders the correct color/variant
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::egg::ITEM_STACK,
-                &ItemStackSerializer::from(stack.clone()),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::egg::ITEM_STACK,
+            ItemStackSerializer::from(stack.clone()),
         );
     }
 

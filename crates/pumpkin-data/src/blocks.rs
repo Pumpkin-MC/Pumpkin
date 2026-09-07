@@ -195,6 +195,26 @@ impl Block {
         })
     }
 
+    #[must_use]
+    pub fn state_from_properties(
+        &'static self,
+        properties: &[(&str, &str)],
+    ) -> Option<&'static BlockState> {
+        self.states.iter().find(|state| {
+            let Some(state_properties) = self.properties(state.id) else {
+                return properties.is_empty();
+            };
+            let state_properties = state_properties.to_props();
+
+            state_properties.len() == properties.len()
+                && properties.iter().all(|(name, value)| {
+                    state_properties.iter().any(|(state_name, state_value)| {
+                        *state_name == *name && *state_value == *value
+                    })
+                })
+        })
+    }
+
     /// Returns whether this block is solid (based on default state)
     #[must_use]
     pub const fn is_solid(&self) -> bool {
@@ -208,21 +228,61 @@ impl Block {
     }
 
     #[must_use]
-    pub const fn mirror(
+    pub fn mirror(
         &self,
         id: BlockStateId,
-        _mirror: crate::block_rotation::Mirror,
+        mirror: crate::block_rotation::Mirror,
     ) -> &'static BlockState {
-        BlockState::from_id(id)
+        if mirror == crate::block_rotation::Mirror::None || self.states.len() <= 1 {
+            return BlockState::from_id(id);
+        }
+        if let Some(props) = self.properties(id) {
+            let props_vec = props.to_props();
+            let transformed = crate::block_rotation::transform_block_properties(
+                self.name,
+                &props_vec,
+                crate::block_rotation::Rotation::None,
+                mirror,
+            );
+            let transformed_refs: Vec<(&str, &str)> = transformed
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.as_str()))
+                .collect();
+            let new_props = self.from_properties(&transformed_refs);
+            let new_state_id = new_props.to_state_id(self);
+            BlockState::from_id(new_state_id)
+        } else {
+            BlockState::from_id(id)
+        }
     }
 
     #[must_use]
-    pub const fn rotate(
+    pub fn rotate(
         &self,
         id: BlockStateId,
-        _rotation: crate::block_rotation::Rotation,
+        rotation: crate::block_rotation::Rotation,
     ) -> &'static BlockState {
-        BlockState::from_id(id)
+        if rotation == crate::block_rotation::Rotation::None || self.states.len() <= 1 {
+            return BlockState::from_id(id);
+        }
+        if let Some(props) = self.properties(id) {
+            let props_vec = props.to_props();
+            let transformed = crate::block_rotation::transform_block_properties(
+                self.name,
+                &props_vec,
+                rotation,
+                crate::block_rotation::Mirror::None,
+            );
+            let transformed_refs: Vec<(&str, &str)> = transformed
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.as_str()))
+                .collect();
+            let new_props = self.from_properties(&transformed_refs);
+            let new_state_id = new_props.to_state_id(self);
+            BlockState::from_id(new_state_id)
+        } else {
+            BlockState::from_id(id)
+        }
     }
 }
 

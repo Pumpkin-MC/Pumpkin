@@ -101,6 +101,7 @@ pub mod passive;
 pub mod player;
 pub mod projectile;
 pub mod projectile_deflection;
+pub mod synched_entity_data;
 pub mod tnt;
 pub mod r#type;
 pub mod vehicle;
@@ -205,10 +206,8 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         if is_baby {
             let mut bedrock_meta = SyncedActorDataList::new();
             bedrock_meta.set_flag(entity_data_key::FLAGS, entity_data_flag::BABY as u8, true);
-            entity.send_meta_data(
-                &[Metadata::new(tracked_data::ageable_mob::DATA_BABY_ID, true)],
-                Some(&bedrock_meta),
-            );
+            entity.set_synced_data(tracked_data::ageable_mob::DATA_BABY_ID, true);
+            entity.send_bedrock_actor_data(&bedrock_meta);
         }
     }
     fn set_variant_name(&self, _name: &str) {}
@@ -306,6 +305,14 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     }
 
     fn java_spawn_metadata(&self, version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
+        if version < JavaMinecraftVersion::V_1_9 {
+            let entity = self.get_entity();
+            let shared_flags = entity.flags.load(Ordering::Relaxed);
+            return (shared_flags != 0).then(|| {
+                // (0 << 5) | 0 = 0 (type: byte, index: 0 flags), value, 127 (terminator)
+                Box::<[u8]>::from([0x00u8, shared_flags as u8, 127u8])
+            });
+        }
         self.get_mob().map_or_else(
             || {
                 let entity = self.get_entity();
@@ -383,7 +390,9 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             if let Ok(data) = client.serialize_packet(&spawn_packet) {
                 client.try_enqueue_packet(data);
             }
-            if let Some(meta) = metadata {
+            if let Some(meta) = metadata
+                && (version >= JavaMinecraftVersion::V_1_9 || meta.last().copied() == Some(127))
+            {
                 let meta_packet = CSetEntityMetadata::new(entity.entity_id.into(), meta);
                 if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
                     client.try_enqueue_packet(meta_data);
@@ -878,6 +887,7 @@ pub struct Entity {
     pub bedrock_flags_two: std::sync::atomic::AtomicI64,
     /// If true, the entity bypasses physics, collisions, and block effects (e.g. spectator, markers, display entities)
     pub no_physics: AtomicBool,
+    pub synched_data: synched_entity_data::SynchedEntityData,
     /// Multiplies movement for one tick before being reset
     pub movement_multiplier: AtomicCell<Vector3<f64>>,
     /// Determines whether the entity's velocity needs to be sent
@@ -1013,6 +1023,7 @@ impl Entity {
             has_no_gravity: AtomicBool::new(false),
             scoreboard_tags: std::sync::Mutex::new(HashSet::new()),
             no_physics: AtomicBool::new(false),
+            synched_data: synched_entity_data::SynchedEntityData::new(),
             movement_multiplier: AtomicCell::new(Vector3::default()),
             velocity_dirty: AtomicBool::new(true),
             removed: AtomicBool::new(false),
@@ -1142,13 +1153,8 @@ impl Entity {
             entity_data_flag::ALWAYS_SHOW_NAME as u8,
             visible,
         );
-        self.send_meta_data(
-            &[Metadata::new(
-                tracked_data::entity::DATA_CUSTOM_NAME,
-                Some(name),
-            )],
-            Some(&bedrock_meta),
-        );
+        self.set_synced_data(tracked_data::entity::DATA_CUSTOM_NAME, Some(name));
+        self.send_bedrock_actor_data(&bedrock_meta);
     }
 
     pub fn set_custom_name_visible(&self, visible: bool) {
@@ -1170,13 +1176,8 @@ impl Entity {
             entity_data_flag::ALWAYS_SHOW_NAME as u8,
             visible,
         );
-        self.send_meta_data(
-            &[Metadata::new(
-                tracked_data::entity::DATA_CUSTOM_NAME_VISIBLE,
-                visible,
-            )],
-            Some(&bedrock_meta),
-        );
+        self.set_synced_data(tracked_data::entity::DATA_CUSTOM_NAME_VISIBLE, visible);
+        self.send_bedrock_actor_data(&bedrock_meta);
     }
 
     pub fn is_silent(&self) -> bool {
@@ -1185,10 +1186,7 @@ impl Entity {
 
     pub fn set_silent(&self, silent: bool) {
         self.silent.store(silent, Ordering::Relaxed);
-        self.send_meta_data(
-            &[Metadata::new(tracked_data::entity::DATA_SILENT, silent)],
-            None,
-        );
+        self.set_synced_data(tracked_data::entity::DATA_SILENT, silent);
     }
 
     pub fn has_no_gravity(&self) -> bool {
@@ -1197,13 +1195,7 @@ impl Entity {
 
     pub fn set_has_no_gravity(&self, no_gravity: bool) {
         self.has_no_gravity.store(no_gravity, Ordering::Relaxed);
-        self.send_meta_data(
-            &[Metadata::new(
-                tracked_data::entity::DATA_NO_GRAVITY,
-                no_gravity,
-            )],
-            None,
-        );
+        self.set_synced_data(tracked_data::entity::DATA_NO_GRAVITY, no_gravity);
     }
 
     pub fn send_velocity(&self) {
@@ -2038,7 +2030,7 @@ impl Entity {
                 .on_entity_collision_fluid(fluid, caller);
         }
 
-        let lava_speed = if world.dimension == Dimension::THE_NETHER {
+        let lava_speed = if world.dimension.fast_lava {
             0.007
         } else {
             0.002_333_333
@@ -2618,13 +2610,11 @@ impl Entity {
                 entity_data_key::FREEZING_EFFECT_STRENGTH,
                 MetadataValue::Float(new_frozen_ticks as f32),
             );
-            self.send_meta_data(
-                &[Metadata::new(
-                    tracked_data::entity::DATA_TICKS_FROZEN,
-                    VarInt(new_frozen_ticks),
-                )],
-                Some(&bedrock_meta),
+            self.set_synced_data(
+                tracked_data::entity::DATA_TICKS_FROZEN,
+                VarInt(new_frozen_ticks),
             );
+            self.send_bedrock_actor_data(&bedrock_meta);
         }
 
         // Vanilla parity: full-freeze damage is tick-phase based.
@@ -2648,13 +2638,11 @@ impl Entity {
             entity_data_key::FREEZING_EFFECT_STRENGTH,
             MetadataValue::Float(new_frozen_ticks as f32),
         );
-        self.send_meta_data(
-            &[Metadata::new(
-                tracked_data::entity::DATA_TICKS_FROZEN,
-                VarInt(new_frozen_ticks),
-            )],
-            Some(&bedrock_meta),
+        self.set_synced_data(
+            tracked_data::entity::DATA_TICKS_FROZEN,
+            VarInt(new_frozen_ticks),
         );
+        self.send_bedrock_actor_data(&bedrock_meta);
     }
 
     /// Returns the number of ticks the entity has been frozen.
@@ -2969,13 +2957,7 @@ impl Entity {
             self.flags.fetch_and(!mask, Ordering::Relaxed) & !mask
         };
 
-        self.send_meta_data(
-            &[Metadata::new(
-                tracked_data::entity::DATA_SHARED_FLAGS_ID,
-                new_je_flags,
-            )],
-            None,
-        );
+        self.set_synced_data(tracked_data::entity::DATA_SHARED_FLAGS_ID, new_je_flags);
 
         if let Some(bedrock_flag) = flag.to_bedrock() {
             let (key, index) = if bedrock_flag >= 64 {
@@ -3031,26 +3013,31 @@ impl Entity {
             .play_sound(sound, SoundCategory::Neutral, &self.pos.load());
     }
 
-    pub fn send_meta_data<T: MetadataSerializer>(
+    pub fn set_synced_data<T: MetadataSerializer + Clone + Send + Sync + 'static>(
         &self,
-        meta: &[Metadata<T>],
-        bedrock_meta: Option<&SyncedActorDataList>,
-    ) {
+        tracked: pumpkin_data::tracked_data::TrackedData,
+        value: T,
+    ) -> bool {
+        if self.synched_data.set(tracked, value) {
+            self.send_dirty_entity_data();
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn send_bedrock_actor_data(&self, bedrock_meta: &SyncedActorDataList) {
         let world = self.world.load();
         let players = world.players.load();
-
-        let mut java_recipients = Vec::new();
         let mut bedrock_recipients = Vec::new();
 
         if let Some(tracked) = world.entity_tracker.get_tracked_entity(self.entity_id) {
             for player in players.iter() {
-                if tracked.seen_by.contains(&player.gameprofile.id)
-                    || player.entity_id() == self.entity_id
+                if (tracked.seen_by.contains(&player.gameprofile.id)
+                    || player.entity_id() == self.entity_id)
+                    && let ClientPlatform::Bedrock(client) = player.client.as_ref()
                 {
-                    match player.client.as_ref() {
-                        ClientPlatform::Java(_) => java_recipients.push(player),
-                        ClientPlatform::Bedrock(client) => bedrock_recipients.push(client),
-                    }
+                    bedrock_recipients.push(client);
                 }
             }
         } else {
@@ -3059,51 +3046,86 @@ impl Entity {
                 let center = player.get_entity().chunk_pos.load();
                 let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
 
-                if is_within_view_distance(chunk_pos, center, view_distance) {
-                    match player.client.as_ref() {
-                        ClientPlatform::Java(_) => java_recipients.push(player),
-                        ClientPlatform::Bedrock(client) => bedrock_recipients.push(client),
-                    }
+                if is_within_view_distance(chunk_pos, center, view_distance)
+                    && let ClientPlatform::Bedrock(client) = player.client.as_ref()
+                {
+                    bedrock_recipients.push(client);
                 }
             }
+        }
+
+        let packet = CSetActorData {
+            target_runtime_id: VarULong(self.entity_id as u64),
+            actor_data: SyncedActorDataList(bedrock_meta.0.clone()),
+            synced_properties: PropertySyncData {
+                int_entries_list: std::collections::HashMap::new(),
+                float_entries_list: std::collections::HashMap::new(),
+            },
+            tick: VarULong(0),
+        };
+        for recipient in bedrock_recipients {
+            if let Ok(packet_data) = recipient.serialize_packet(&packet) {
+                recipient.try_enqueue_packet(packet_data);
+            }
+        }
+    }
+
+    pub fn send_dirty_entity_data(&self) {
+        if !self.synched_data.is_dirty() {
+            return;
+        }
+
+        let world = self.world.load();
+        let players = world.players.load();
+
+        let mut java_recipients = Vec::new();
+
+        if let Some(tracked) = world.entity_tracker.get_tracked_entity(self.entity_id) {
+            for player in players.iter() {
+                if (tracked.seen_by.contains(&player.gameprofile.id)
+                    || player.entity_id() == self.entity_id)
+                    && let ClientPlatform::Java(_) = player.client.as_ref()
+                {
+                    java_recipients.push(player);
+                }
+            }
+        } else {
+            let chunk_pos = self.chunk_pos.load();
+            for player in players.iter() {
+                let center = player.get_entity().chunk_pos.load();
+                let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
+
+                if is_within_view_distance(chunk_pos, center, view_distance)
+                    && let ClientPlatform::Java(_) = player.client.as_ref()
+                {
+                    java_recipients.push(player);
+                }
+            }
+        }
+
+        if java_recipients.is_empty() {
+            return;
         }
 
         let recipients_by_version =
             World::collect_java_recipients_by_version(java_recipients.into_iter());
 
         for (version, recipients) in recipients_by_version {
-            if version < JavaMinecraftVersion::V_1_21 {
+            // TODO: Support older versions
+            if version < JavaMinecraftVersion::V_26_2 {
                 continue;
             }
-            let mut buf = Vec::new();
-            for m in meta {
-                let _ = m.write(&mut buf, &version);
-            }
-            buf.put_u8(255);
-            let packet = CSetEntityMetadata::new(self.entity_id.into(), buf.into());
-            if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version) {
-                for recipient in recipients {
-                    recipient.try_enqueue_packet(packet_data.clone());
+            if let Some(buf) = self.synched_data.pack_dirty_for_version(&version) {
+                let packet = CSetEntityMetadata::new(self.entity_id.into(), buf);
+                if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version)
+                {
+                    for recipient in recipients {
+                        recipient.try_enqueue_packet(packet_data.clone());
+                    }
                 }
             }
         }
-
-        if let Some(bedrock_meta) = bedrock_meta {
-            let packet = CSetActorData {
-                target_runtime_id: VarULong(self.entity_id as u64),
-                actor_data: SyncedActorDataList(bedrock_meta.0.clone()),
-                synced_properties: PropertySyncData {
-                    int_entries_list: std::collections::HashMap::new(),
-                    float_entries_list: std::collections::HashMap::new(),
-                },
-                tick: VarULong(0),
-            };
-            for recipient in bedrock_recipients {
-                if let Ok(packet_data) = recipient.serialize_packet(&packet) {
-                    recipient.try_enqueue_packet(packet_data);
-                }
-            }
-        }
+        self.synched_data.clear_dirty();
     }
 
     pub fn set_pose(&self, pose: EntityPose) {
@@ -3142,10 +3164,8 @@ impl Entity {
             entity_data_key::HEIGHT,
             MetadataValue::Float(dimension.height),
         );
-        self.send_meta_data(
-            &[Metadata::new(tracked_data::entity::DATA_POSE, VarInt(pose))],
-            Some(&bedrock_meta),
-        );
+        self.set_synced_data(tracked_data::entity::DATA_POSE, VarInt(pose));
+        self.send_bedrock_actor_data(&bedrock_meta);
     }
 
     /// Checks if the entity is invulnerable to the given damage type, considering both general invulnerability and specific immunities.
@@ -3346,6 +3366,24 @@ impl Entity {
 
     pub fn leash_to(&self, holder: Arc<dyn EntityBase>) {
         let holder_entity_id = holder.get_entity().entity_id;
+        let world = self.world.load();
+        if let Some(server) = world.server.upgrade()
+            && let Some(player) = holder.get_player()
+            && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
+        {
+            let mut event =
+                crate::plugin::api::events::player::player_leash_entity::PlayerLeashEntityEvent {
+                    player: player_arc,
+                    entity_id: self.entity_id,
+                    holder_id: holder_entity_id,
+                    cancelled: false,
+                };
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return;
+            }
+        }
+
         *self
             .leashed_to
             .lock()
@@ -3377,6 +3415,19 @@ impl Entity {
     }
 
     pub fn unleash(&self) {
+        let world = self.world.load();
+        if let Some(server) = world.server.upgrade() {
+            let mut event =
+                crate::plugin::api::events::entity::entity_unleash::EntityUnleashEvent::new(
+                    self.entity_id,
+                    "unleashed".to_string(),
+                );
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return;
+            }
+        }
+
         let old_holder = self
             .leashed_to
             .lock()
@@ -3384,6 +3435,19 @@ impl Entity {
             .take();
         if old_holder.is_none() {
             return;
+        }
+
+        if let Some(holder) = &old_holder
+            && let Some(server) = world.server.upgrade()
+            && let Some(player) = holder.get_player()
+            && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
+        {
+            let mut event = crate::plugin::api::events::player::player_unleash_entity::PlayerUnleashEntityEvent {
+                player: player_arc,
+                entity_id: self.entity_id,
+                cancelled: false,
+            };
+            server.plugin_manager.fire_blocking(&server, &mut event);
         }
 
         let je_packet =

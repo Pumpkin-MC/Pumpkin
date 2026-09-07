@@ -242,6 +242,22 @@ pub trait NbtReadHelper<'a> {
     fn get_i32(&mut self) -> Result<i32>;
     /// Reads a 64-bit signed integer.
     fn get_i64(&mut self) -> Result<i64>;
+    /// Reads an array of 32-bit signed integers.
+    fn get_i32_array(&mut self, len: usize) -> Result<Vec<i32>> {
+        let mut values = Vec::with_capacity(len.min(4096));
+        for _ in 0..len {
+            values.push(self.get_i32()?);
+        }
+        Ok(values)
+    }
+    /// Reads an array of 64-bit signed integers.
+    fn get_i64_array(&mut self, len: usize) -> Result<Vec<i64>> {
+        let mut values = Vec::with_capacity(len.min(4096));
+        for _ in 0..len {
+            values.push(self.get_i64()?);
+        }
+        Ok(values)
+    }
     /// Reads a 32-bit floating-point number.
     fn get_f32(&mut self) -> Result<f32>;
     /// Reads a 64-bit floating-point number.
@@ -316,6 +332,42 @@ impl<'a, D: NbtDataSource<'a>> NbtReadHelper<'a> for NbtReadHelperJava<D> {
         let mut buf = [0u8; 8];
         self.reader.read_bytes(&mut buf)?;
         Ok(i64::from_be_bytes(buf))
+    }
+    fn get_i32_array(&mut self, len: usize) -> Result<Vec<i32>> {
+        let byte_len = len
+            .checked_mul(std::mem::size_of::<i32>())
+            .ok_or(Error::LargeLength(len))?;
+        let mut values = Vec::<i32>::with_capacity(len);
+        // SAFETY: The vector has capacity for `byte_len` bytes, and `u8` accepts
+        // every bit pattern. Its length remains zero until the read succeeds.
+        let bytes =
+            unsafe { std::slice::from_raw_parts_mut(values.as_mut_ptr().cast::<u8>(), byte_len) };
+        self.reader.read_bytes(bytes)?;
+        // SAFETY: Every byte of all `len` elements was initialized by `read_bytes`,
+        // and every bit pattern is a valid `i32`.
+        unsafe { values.set_len(len) };
+        for value in &mut values {
+            *value = value.to_be();
+        }
+        Ok(values)
+    }
+    fn get_i64_array(&mut self, len: usize) -> Result<Vec<i64>> {
+        let byte_len = len
+            .checked_mul(std::mem::size_of::<i64>())
+            .ok_or(Error::LargeLength(len))?;
+        let mut values = Vec::<i64>::with_capacity(len);
+        // SAFETY: The vector has capacity for `byte_len` bytes, and `u8` accepts
+        // every bit pattern. Its length remains zero until the read succeeds.
+        let bytes =
+            unsafe { std::slice::from_raw_parts_mut(values.as_mut_ptr().cast::<u8>(), byte_len) };
+        self.reader.read_bytes(bytes)?;
+        // SAFETY: Every byte of all `len` elements was initialized by `read_bytes`,
+        // and every bit pattern is a valid `i64`.
+        unsafe { values.set_len(len) };
+        for value in &mut values {
+            *value = value.to_be();
+        }
+        Ok(values)
     }
     fn get_f32(&mut self) -> Result<f32> {
         let mut buf = [0u8; 4];
@@ -429,5 +481,25 @@ impl<'a, D: NbtDataSource<'a>> NbtReadHelper<'a> for NbtReadHelperBedrock<D> {
 
     fn get_byte_array(&mut self, len: usize) -> Result<Cow<'a, [i8]>> {
         self.reader.read_byte_array(len)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Cursor;
+
+    use super::{NbtReadHelper, NbtReadHelperJava};
+
+    #[test]
+    fn java_numeric_arrays_decode_big_endian_values() {
+        let ints = [i32::MIN, -1, 0, 1, i32::MAX];
+        let int_bytes: Vec<u8> = ints.iter().flat_map(|value| value.to_be_bytes()).collect();
+        let mut reader = NbtReadHelperJava::new(Cursor::new(int_bytes.as_slice()));
+        assert_eq!(reader.get_i32_array(ints.len()).unwrap(), ints);
+
+        let longs = [i64::MIN, -1, 0, 1, i64::MAX];
+        let long_bytes: Vec<u8> = longs.iter().flat_map(|value| value.to_be_bytes()).collect();
+        let mut reader = NbtReadHelperJava::new(Cursor::new(long_bytes.as_slice()));
+        assert_eq!(reader.get_i64_array(longs.len()).unwrap(), longs);
     }
 }

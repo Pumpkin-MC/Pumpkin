@@ -326,25 +326,15 @@ impl ArrowEntity {
     pub fn set_critical(&self, critical: bool) {
         self.is_critical.store(critical, Ordering::Relaxed);
         let flags = self.get_flags();
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::abstract_arrow::ID_FLAGS,
-                flags,
-            )],
-            None,
-        );
+        self.entity
+            .set_synced_data(pumpkin_data::tracked_data::abstract_arrow::ID_FLAGS, flags);
     }
 
     pub fn set_no_physics(&self, no_physics: bool) {
         self.no_physics.store(no_physics, Ordering::Relaxed);
         let flags = self.get_flags();
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::abstract_arrow::ID_FLAGS,
-                flags,
-            )],
-            None,
-        );
+        self.entity
+            .set_synced_data(pumpkin_data::tracked_data::abstract_arrow::ID_FLAGS, flags);
     }
 
     #[must_use]
@@ -363,12 +353,9 @@ impl ArrowEntity {
 
     pub fn set_pierce_level(&self, level: u8) {
         self.pierce_level.store(level, Ordering::Relaxed);
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::abstract_arrow::PIERCE_LEVEL,
-                level,
-            )],
-            None,
+        self.entity.set_synced_data(
+            pumpkin_data::tracked_data::abstract_arrow::PIERCE_LEVEL,
+            level,
         );
     }
 
@@ -476,22 +463,14 @@ impl EntityBase for ArrowEntity {
         let in_ground = self.in_ground.load(Ordering::Relaxed);
 
         if entity.entity_type.id == EntityType::SPECTRAL_ARROW.id {
-            entity.send_meta_data(
-                &[
-                    Metadata::new(pumpkin_data::tracked_data::spectral_arrow::ID_FLAGS, flags),
-                    Metadata::new(
-                        pumpkin_data::tracked_data::spectral_arrow::PIERCE_LEVEL,
-                        pierce,
-                    ),
-                ],
-                None,
+            entity.set_synced_data(pumpkin_data::tracked_data::spectral_arrow::ID_FLAGS, flags);
+            entity.set_synced_data(
+                pumpkin_data::tracked_data::spectral_arrow::PIERCE_LEVEL,
+                pierce,
             );
-            entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::spectral_arrow::IN_GROUND,
-                    in_ground,
-                )],
-                None,
+            entity.set_synced_data(
+                pumpkin_data::tracked_data::spectral_arrow::IN_GROUND,
+                in_ground,
             );
         } else {
             let item_stack = self
@@ -499,27 +478,10 @@ impl EntityBase for ArrowEntity {
                 .read()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let color = Self::get_effect_color(&item_stack);
-            entity.send_meta_data(
-                &[
-                    Metadata::new(pumpkin_data::tracked_data::arrow::ID_FLAGS, flags),
-                    Metadata::new(pumpkin_data::tracked_data::arrow::PIERCE_LEVEL, pierce),
-                ],
-                None,
-            );
-            entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::arrow::IN_GROUND,
-                    in_ground,
-                )],
-                None,
-            );
-            entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::arrow::ID_EFFECT_COLOR,
-                    color,
-                )],
-                None,
-            );
+            entity.set_synced_data(pumpkin_data::tracked_data::arrow::ID_FLAGS, flags);
+            entity.set_synced_data(pumpkin_data::tracked_data::arrow::PIERCE_LEVEL, pierce);
+            entity.set_synced_data(pumpkin_data::tracked_data::arrow::IN_GROUND, in_ground);
+            entity.set_synced_data(pumpkin_data::tracked_data::arrow::ID_EFFECT_COLOR, color);
         }
 
         if self.is_on_fire() {
@@ -635,12 +597,9 @@ impl EntityBase for ArrowEntity {
                 let block = world.get_block(&pos);
                 if block.is_air() {
                     self.in_ground.store(false, Ordering::Relaxed);
-                    entity.send_meta_data(
-                        &[Metadata::new(
-                            pumpkin_data::tracked_data::abstract_arrow::IN_GROUND,
-                            false,
-                        )],
-                        None,
+                    entity.set_synced_data(
+                        pumpkin_data::tracked_data::abstract_arrow::IN_GROUND,
+                        false,
                     );
                     let mut vel = entity.velocity.load();
                     vel.x *= rand::random::<f64>() * 0.2;
@@ -901,13 +860,7 @@ impl EntityBase for ArrowEntity {
                 entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
 
                 // Notify client that arrow is in ground
-                entity.send_meta_data(
-                    &[Metadata::new(
-                        pumpkin_data::tracked_data::abstract_arrow::IN_GROUND,
-                        true,
-                    )],
-                    None,
-                );
+                entity.set_synced_data(pumpkin_data::tracked_data::abstract_arrow::IN_GROUND, true);
 
                 // Play sound with vanilla pitch formula
                 let sound_pitch = 1.2 / (rand::random::<f32>() * 0.2 + 0.9);
@@ -1058,6 +1011,19 @@ impl EntityBase for ArrowEntity {
             ArrowPickup::Disallowed => return,
             ArrowPickup::CreativeOnly if !player.is_creative() => return,
             _ => {}
+        }
+
+        if let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id)
+            && let Some(server) = player.world().server.upgrade()
+        {
+            let mut event = crate::plugin::api::events::player::player_pickup_arrow::PlayerPickupArrowEvent::new(
+                player_arc,
+                self.entity.entity_id,
+            );
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return;
+            }
         }
 
         // Try to insert an arrow into the player's inventory

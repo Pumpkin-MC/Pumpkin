@@ -16,7 +16,7 @@ use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot, Metadata};
+use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot};
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
@@ -89,17 +89,6 @@ pub struct MobEntity {
     last_sent_pitch: AtomicU8,
     last_sent_head_yaw: AtomicU8,
 }
-
-/// Tick boundaries (both inclusive) when monsters do not burn in sunlight (26.1).
-///
-/// Sourced from `data/minecraft/timeline/day.json` — `monsters_burn` keyframes:
-/// `value=false` at tick 12542 (dusk), `value=true` at tick 23460 (dawn).
-///
-/// TODO: Replace with `EnvironmentAttributes::MONSTERS_BURN` lookup once the
-/// `EnvironmentAttributeSystem` is implemented in `pumpkin-data`.
-pub(crate) const NIGHT_START: i64 = 12542;
-pub(crate) const NIGHT_END: i64 = 23459;
-
 impl MobEntity {
     const AI_DISABLED_FLAG: u8 = 1;
     const LEFT_HANDED_FLAG: u8 = 2;
@@ -330,10 +319,9 @@ impl MobEntity {
         if new_b != old_b {
             self.mob_flags.store(new_b, Ordering::Relaxed);
 
-            self.living_entity.entity.send_meta_data(
-                &[Metadata::new(tracked_data::mob::DATA_MOB_FLAGS_ID, new_b)],
-                None,
-            );
+            self.living_entity
+                .entity
+                .set_synced_data(tracked_data::mob::DATA_MOB_FLAGS_ID, new_b);
         }
     }
 
@@ -536,22 +524,16 @@ impl MobEntity {
         let world_arc = entity.world.load();
         let world = world_arc.as_ref();
 
-        // Night boundary from data/minecraft/timeline/day.json — monsters_burn keyframes:
-        // value=false at tick 12542 (dusk), value=true at tick 23460 (dawn).
-        // TODO: read directly from EnvironmentAttributes::MONSTERS_BURN once implemented.
-
-        let day_time = world.get_time_of_day() % 24000;
-        if (NIGHT_START..=NIGHT_END).contains(&day_time) {
+        let eye_block_pos = entity.get_eye_pos().to_block_pos();
+        if !world.monsters_burn(&eye_block_pos) {
             return false;
         }
 
         // Vanilla: getLightLevelDependentMagicValue() — sky light at eye pos, scaled 0–1.
-        let eye_block_pos = entity.get_eye_pos();
         let brightness = world
             .level
             .light_engine
-            .get_sky_light_level(&world.level, &eye_block_pos.to_block_pos())
-            as f32
+            .get_sky_light_level(&world.level, &eye_block_pos) as f32
             / 15.0;
 
         if brightness <= 0.5 {
@@ -667,6 +649,14 @@ impl MobEntity {
 pub trait Mob: EntityBase + Send + Sync {
     fn get_random(&self) -> rand::rngs::ThreadRng {
         rand::rng()
+    }
+
+    fn requires_custom_persistence(&self) -> bool {
+        false
+    }
+
+    fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
+        true
     }
 
     fn get_max_look_yaw_change(&self) -> f32 {
@@ -1052,10 +1042,7 @@ pub trait Mob: EntityBase + Send + Sync {
         let entity = self.get_entity();
         let is_baby = entity.age.load(std::sync::atomic::Ordering::Relaxed) < 0;
         if is_baby {
-            entity.send_meta_data(
-                &[Metadata::new(tracked_data::ageable_mob::DATA_BABY_ID, true)],
-                None,
-            );
+            entity.set_synced_data(tracked_data::ageable_mob::DATA_BABY_ID, true);
         }
     }
 

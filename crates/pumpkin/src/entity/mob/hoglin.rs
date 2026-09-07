@@ -2,11 +2,9 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::attributes::Attributes;
-use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
@@ -114,19 +112,16 @@ impl HoglinEntity {
     pub fn set_immune_to_zombification(&self, immune: bool) {
         self.immune_to_zombification
             .store(immune, Ordering::Relaxed);
-        self.mob_entity.living_entity.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::hoglin::DATA_IMMUNE_TO_ZOMBIFICATION,
-                immune,
-            )],
-            None,
+        self.mob_entity.living_entity.entity.set_synced_data(
+            pumpkin_data::tracked_data::hoglin::DATA_IMMUNE_TO_ZOMBIFICATION,
+            immune,
         );
     }
 
     pub fn is_converting(&self, world: &World) -> bool {
         !self.is_immune_to_zombification()
             && !self.mob_entity.is_no_ai()
-            && world.dimension.minecraft_name != Dimension::THE_NETHER.minecraft_name
+            && world.dimension.piglins_zombify
     }
 
     fn convert_to_zoglin(&self) {

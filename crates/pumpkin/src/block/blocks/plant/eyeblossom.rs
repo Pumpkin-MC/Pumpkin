@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use pumpkin_data::{
     Block, BlockId, BlockStateId,
-    dimension::Dimension,
     effect::StatusEffect,
     entity::EntityType,
     particle::Particle,
@@ -117,17 +116,7 @@ impl PlantBlockBase for EyeblossomBlock {}
 
 pub fn try_changing_state(world: &Arc<World>, current_block: &Block, pos: &BlockPos) -> bool {
     let is_open = current_block == &Block::OPEN_EYEBLOSSOM;
-    let should_be_open = if world.dimension == Dimension::OVERWORLD
-        || world.dimension == Dimension::OVERWORLD_CAVES
-    {
-        world
-            .level_time
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_night()
-    } else {
-        is_open
-    };
+    let should_be_open = world.eyeblossom_open(pos).unwrap_or(is_open);
 
     if should_be_open == is_open {
         return false;

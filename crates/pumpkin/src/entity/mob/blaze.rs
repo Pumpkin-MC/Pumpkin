@@ -3,7 +3,6 @@ use std::sync::{Arc, Weak};
 
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
-use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
@@ -78,13 +77,10 @@ impl BlazeEntity {
     pub fn set_charged(&self, charged: bool) {
         self.is_charged.store(charged, Ordering::Relaxed);
         let flags = i8::from(charged);
-        self.entity.living_entity.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::blaze::DATA_FLAGS_ID,
-                flags,
-            )],
-            None,
-        );
+        self.entity
+            .living_entity
+            .entity
+            .set_synced_data(pumpkin_data::tracked_data::blaze::DATA_FLAGS_ID, flags);
     }
 }
 

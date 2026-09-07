@@ -37,13 +37,26 @@ impl BlockBehaviour for SweetBerryBushBlock {
         match props.age {
             2 | 3 => {
                 let index = props.age;
-                props.age = 1;
                 let count: u8 = rand::rng().random_range((index - 1)..=(index));
-                for _ in 0..count {
-                    args.world.drop_stack(
-                        args.position,
-                        ItemStack::new(1, &Item::SWEET_BERRIES), //
-                    );
+                let mut drops = vec![ItemStack::new(count, &Item::SWEET_BERRIES)];
+                if let Some(player_arc) = args.world.get_player_by_uuid(args.player.gameprofile.id)
+                    && let Some(server) = args.world.server.upgrade()
+                {
+                    let mut event = crate::plugin::api::events::player::player_harvest_block::PlayerHarvestBlockEvent {
+                        player: player_arc,
+                        block_pos: *args.position,
+                        harvested_items: drops.clone(),
+                        cancelled: false,
+                    };
+                    server.plugin_manager.fire_blocking(&server, &mut event);
+                    if event.cancelled {
+                        return BlockActionResult::Pass;
+                    }
+                    drops = event.harvested_items;
+                }
+                props.age = 1;
+                for stack in drops {
+                    args.world.drop_stack(args.position, stack);
                 }
                 args.world.set_block_state(
                     args.position,

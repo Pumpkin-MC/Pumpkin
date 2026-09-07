@@ -10,7 +10,6 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::vector3::Vector3;
 use uuid::Uuid;
 
@@ -76,13 +75,7 @@ impl AllayEntity {
     pub fn set_dancing(&self, dancing: bool) {
         self.dancing.store(dancing, Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::allay::DATA_DANCING,
-                dancing,
-            )],
-            None,
-        );
+        entity.set_synced_data(pumpkin_data::tracked_data::allay::DATA_DANCING, dancing);
     }
 
     #[must_use]
@@ -93,12 +86,9 @@ impl AllayEntity {
     pub fn set_can_duplicate(&self, can_duplicate: bool) {
         self.can_duplicate.store(can_duplicate, Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::allay::DATA_CAN_DUPLICATE,
-                can_duplicate,
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::allay::DATA_CAN_DUPLICATE,
+            can_duplicate,
         );
     }
 }
@@ -144,19 +134,13 @@ impl Mob for AllayEntity {
 
     fn mob_init_data_tracker(&self) {
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::allay::DATA_DANCING,
-                self.is_dancing(),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::allay::DATA_DANCING,
+            self.is_dancing(),
         );
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::allay::DATA_CAN_DUPLICATE,
-                self.can_duplicate(),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::allay::DATA_CAN_DUPLICATE,
+            self.can_duplicate(),
         );
     }
 

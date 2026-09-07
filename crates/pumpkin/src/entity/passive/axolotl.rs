@@ -10,7 +10,6 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::Metadata;
 use rand::RngExt;
 
 use crate::entity::{
@@ -184,12 +183,9 @@ impl AxolotlEntity {
     pub fn set_variant(&self, variant: AxolotlVariant) {
         self.variant.store(variant.id(), Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::axolotl::DATA_VARIANT,
-                VarInt(variant.id()),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::axolotl::DATA_VARIANT,
+            VarInt(variant.id()),
         );
     }
 
@@ -201,12 +197,9 @@ impl AxolotlEntity {
     pub fn set_playing_dead(&self, playing_dead: bool) {
         self.playing_dead.store(playing_dead, Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::axolotl::DATA_PLAYING_DEAD,
-                playing_dead,
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::axolotl::DATA_PLAYING_DEAD,
+            playing_dead,
         );
     }
 
@@ -218,12 +211,9 @@ impl AxolotlEntity {
     pub fn set_from_bucket(&self, from_bucket: bool) {
         self.from_bucket.store(from_bucket, Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::axolotl::FROM_BUCKET,
-                from_bucket,
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::axolotl::FROM_BUCKET,
+            from_bucket,
         );
     }
 }
@@ -286,34 +276,19 @@ impl Mob for AxolotlEntity {
         let entity = self.get_entity();
         let is_baby = entity.age.load(Ordering::Relaxed) < 0;
         if is_baby {
-            entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::axolotl::DATA_BABY_ID,
-                    true,
-                )],
-                None,
-            );
+            entity.set_synced_data(pumpkin_data::tracked_data::axolotl::DATA_BABY_ID, true);
         }
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::axolotl::DATA_VARIANT,
-                VarInt(self.get_variant().id()),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::axolotl::DATA_VARIANT,
+            VarInt(self.get_variant().id()),
         );
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::axolotl::DATA_PLAYING_DEAD,
-                self.is_playing_dead(),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::axolotl::DATA_PLAYING_DEAD,
+            self.is_playing_dead(),
         );
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::axolotl::FROM_BUCKET,
-                self.is_from_bucket(),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::axolotl::FROM_BUCKET,
+            self.is_from_bucket(),
         );
     }
 
@@ -321,9 +296,21 @@ impl Mob for AxolotlEntity {
         let item = item_stack.get_item();
 
         if item == &Item::WATER_BUCKET {
-            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
             let entity = self.get_entity();
             let world = entity.world.load();
+            if let Some(server) = world.server.upgrade() {
+                let mut event = crate::plugin::api::events::player::player_bucket_entity::PlayerBucketEntityEvent {
+                    player: player.clone(),
+                    entity_id: entity.entity_id,
+                    bucket_item: "axolotl_bucket".to_string(),
+                    cancelled: false,
+                };
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return false;
+                }
+            }
+            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
             let pos = entity.pos.load();
             world.play_sound(Sound::ItemBucketFillAxolotl, SoundCategory::Neutral, &pos);
             entity.remove();

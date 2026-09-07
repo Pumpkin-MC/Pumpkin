@@ -658,6 +658,8 @@ mod tests {
             _amount: i32,
         ) {
         }
+
+        fn play_block_sound(&self, _sound: pumpkin_data::sound::Sound, _pitch: f32) {}
     }
 
     #[test]

@@ -8,7 +8,7 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::{CEntityPositionSync, Metadata};
+use pumpkin_protocol::java::client::play::CEntityPositionSync;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
@@ -113,12 +113,9 @@ impl ShulkerEntity {
     pub fn set_attach_face(&self, face: BlockDirection) {
         self.attach_face.store(face as u8, Ordering::Relaxed);
         let entity = &self.mob_entity.living_entity.entity;
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::shulker::ATTACH_FACE_ID,
-                VarInt(face as i32),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::shulker::ATTACH_FACE_ID,
+            VarInt(face as i32),
         );
     }
 
@@ -131,13 +128,7 @@ impl ShulkerEntity {
         let val = color.unwrap_or(NO_COLOR);
         self.color.store(val, Ordering::Relaxed);
         let entity = &self.mob_entity.living_entity.entity;
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::shulker::COLOR,
-                val as i8,
-            )],
-            None,
-        );
+        entity.set_synced_data(pumpkin_data::tracked_data::shulker::COLOR, val as i8);
     }
 
     pub fn get_raw_peek(&self) -> u8 {
@@ -169,13 +160,7 @@ impl ShulkerEntity {
 
         self.peek_amount.store(amount, Ordering::Relaxed);
 
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::shulker::PEEK_ID,
-                amount,
-            )],
-            None,
-        );
+        entity.set_synced_data(pumpkin_data::tracked_data::shulker::PEEK_ID, amount);
     }
 
     pub fn is_closed(&self) -> bool {

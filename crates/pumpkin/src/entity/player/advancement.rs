@@ -214,6 +214,31 @@ pub struct PlayerAdvancement {
     pub player: Weak<Player>,
 }
 
+/// The state changes produced by awarding an advancement criterion.
+///
+/// Completion side effects are deliberately deferred until after the caller releases the
+/// player's advancement lock.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[must_use]
+pub(crate) struct AdvancementAward {
+    awarded: bool,
+    completed: bool,
+}
+
+impl AdvancementAward {
+    #[must_use]
+    pub(crate) const fn awarded(self) -> bool {
+        self.awarded
+    }
+
+    pub(crate) const fn combine(self, other: Self) -> Self {
+        Self {
+            awarded: self.awarded || other.awarded,
+            completed: self.completed || other.completed,
+        }
+    }
+}
+
 /// Errors that can occur when saving or loading advancement data.
 #[derive(Debug, thiserror::Error)]
 pub enum AdvancementDataError {
@@ -399,60 +424,78 @@ impl PlayerAdvancement {
         player.add_experience_points(reward.experience);
     }
 
-    /// award a criterion of an advancement to the player, updating its status to complete and granting rewards if applicable.
-    pub fn award(&mut self, advancement: &'static Advancement, criterion: &str) -> bool {
-        //TODO call and creates Events for plugins
-        let mut result = false;
-        let Some(player) = self.player.upgrade() else {
-            return false;
-        };
+    /// Records a criterion award while the player's advancement state is locked.
+    ///
+    /// Call [`Self::finish_award`] after releasing the lock so completion events and rewards can
+    /// safely re-enter advancement APIs.
+    pub(crate) fn award(
+        &mut self,
+        advancement: &'static Advancement,
+        criterion: &str,
+    ) -> AdvancementAward {
+        let mut result = AdvancementAward::default();
         let progress = self.progress.get_mut_or_start_progress(advancement);
         let was_done = progress.is_done();
         if progress.grant_progress(criterion) {
-            result = true;
+            result.awarded = true;
             self.progress_changed.insert(advancement);
             if !was_done && progress.is_done() {
-                if let Some(server) = player.world().server.upgrade() {
-                    let mut event =
-                        crate::plugin::api::events::player::player_advancement_done::PlayerAdvancementDoneEvent::new(
-                            player.clone(),
-                            advancement.id.to_string(),
-                        );
-                    server.plugin_manager.fire_blocking(&server, &mut event);
-                }
-                Self::grant_reward(&player, advancement.reward);
-                if let Some(display) = advancement.display
-                    && display.announce_to_chat
-                    && player
-                        .world()
-                        .level_info
-                        .load()
-                        .game_rules
-                        .show_advancement_messages
-                {
-                    let player_name = player.get_display_name();
-                    let je_component = TextComponent::translate(
-                        display.frame_type.get_translation(),
-                        [player_name.clone(), advancement.name()],
-                    );
-                    let je_packet = CSystemChatMessage::new(&je_component, false);
-
-                    let be_packet = SText::translation(
-                        translation::bedrock::CHAT_TYPE_ACHIEVEMENT.to_string(),
-                        vec![
-                            player_name.0.to_bedrock_string(),
-                            display.get_title().0.to_bedrock_string(),
-                        ],
-                    );
-
-                    player.world().broadcast_editioned(&je_packet, &be_packet);
-                }
+                result.completed = true;
             }
         }
         if !was_done && progress.is_done() {
             self.mark_for_visibility_update(advancement);
         }
         result
+    }
+
+    /// Runs the callback-producing side effects of a completed award.
+    ///
+    /// This must only be called after releasing the player's advancement lock.
+    pub(crate) fn finish_award(
+        player: &Arc<Player>,
+        advancement: &'static Advancement,
+        result: AdvancementAward,
+    ) {
+        if !result.completed {
+            return;
+        }
+
+        if let Some(server) = player.world().server.upgrade() {
+            let mut event =
+                crate::plugin::api::events::player::player_advancement_done::PlayerAdvancementDoneEvent::new(
+                    player.clone(),
+                    advancement.id.to_string(),
+                );
+            server.plugin_manager.fire_blocking(&server, &mut event);
+        }
+        Self::grant_reward(player, advancement.reward);
+        if let Some(display) = advancement.display
+            && display.announce_to_chat
+            && player
+                .world()
+                .level_info
+                .load()
+                .game_rules
+                .show_advancement_messages
+        {
+            let player_name = player.get_display_name();
+            let je_component = TextComponent::translate(
+                display.frame_type.get_translation(),
+                [player_name.clone(), advancement.name()],
+            );
+            let je_packet = CSystemChatMessage::new(&je_component, false);
+
+            let be_packet = SText::translation(
+                translation::bedrock::CHAT_TYPE_ACHIEVEMENT.to_string(),
+                vec![
+                    player_name.0.to_bedrock_string(),
+                    display.get_title().0.to_bedrock_string(),
+                ],
+            );
+
+            player.world().broadcast_editioned(&je_packet, &be_packet);
+        }
     }
 
     /// Revokes a previously awarded advancement, clearing its progress state.

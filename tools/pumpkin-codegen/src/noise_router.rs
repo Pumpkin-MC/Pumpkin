@@ -47,6 +47,27 @@ impl<'de> Deserialize<'de> for HashableF32 {
     }
 }
 
+#[derive(Clone, Copy)]
+struct HashableF64(pub f64);
+
+impl Hash for HashableF64 {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.to_le_bytes().hash(state);
+    }
+}
+
+impl ToTokens for HashableF64 {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        self.0.to_tokens(tokens);
+    }
+}
+
+impl<'de> Deserialize<'de> for HashableF64 {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        f64::deserialize(deserializer).map(Self)
+    }
+}
+
 /// Deserialized representation of a cubic spline used inside density functions.
 #[derive(Deserialize, Hash, Clone)]
 #[serde(tag = "_type", content = "value")]
@@ -288,22 +309,23 @@ impl Tiling {
 /// Caching or interpolation wrapper applied around an inner density function.
 #[derive(Copy, Clone, Deserialize, PartialEq, Eq, Hash)]
 enum WrapperType {
-    Interpolated,
-    #[serde(rename(deserialize = "FlatCache"))]
-    CacheFlat,
-    Cache2D,
-    CacheOnce,
-    CellCache,
+    Interpolated { cell_size_xz: i32, cell_size_y: i32 },
+    Cache,
 }
 
 impl WrapperType {
     fn into_token_stream(self) -> TokenStream {
         match self {
-            Self::Interpolated => quote! { WrapperType::Interpolated },
-            Self::CacheFlat => quote! { WrapperType::CacheFlat },
-            Self::Cache2D => quote! { WrapperType::Cache2D },
-            Self::CacheOnce => quote! { WrapperType::CacheOnce },
-            Self::CellCache => quote! { WrapperType::CellCache },
+            Self::Interpolated {
+                cell_size_xz,
+                cell_size_y,
+            } => quote! {
+                WrapperType::Interpolated {
+                    cell_size_xz: #cell_size_xz,
+                    cell_size_y: #cell_size_y,
+                }
+            },
+            Self::Cache => quote! { WrapperType::Cache },
         }
     }
 }
@@ -313,35 +335,33 @@ struct NoiseData {
     #[serde(rename(deserialize = "noise"))]
     noise_id: String,
     #[serde(rename(deserialize = "xzScale"))]
-    xz_scale: HashableF32,
+    xz_scale: HashableF64,
     #[serde(rename(deserialize = "yScale"))]
-    y_scale: HashableF32,
+    y_scale: HashableF64,
 }
 
 #[derive(Deserialize, Hash, Clone)]
 struct ShiftedNoiseData {
     #[serde(rename(deserialize = "xzScale"))]
-    xz_scale: HashableF32,
+    xz_scale: HashableF64,
     #[serde(rename(deserialize = "yScale"))]
-    y_scale: HashableF32,
+    y_scale: HashableF64,
     #[serde(rename(deserialize = "noise"))]
     noise_id: String,
 }
 
 #[derive(Deserialize, Hash, Clone)]
 struct InterpolatedNoiseSamplerData {
-    #[serde(rename(deserialize = "scaledXzScale"))]
-    scaled_xz_scale: HashableF32,
-    #[serde(rename(deserialize = "scaledYScale"))]
-    scaled_y_scale: HashableF32,
+    #[serde(rename(deserialize = "xzScale"))]
+    xz_scale: HashableF64,
+    #[serde(rename(deserialize = "yScale"))]
+    y_scale: HashableF64,
     #[serde(rename(deserialize = "xzFactor"))]
-    xz_factor: HashableF32,
+    xz_factor: HashableF64,
     #[serde(rename(deserialize = "yFactor"))]
-    y_factor: HashableF32,
+    y_factor: HashableF64,
     #[serde(rename(deserialize = "smearScaleMultiplier"))]
-    smear_scale_multiplier: HashableF32,
-    #[serde(rename(deserialize = "maxValue"))]
-    max_value: HashableF32,
+    smear_scale_multiplier: HashableF64,
 }
 
 #[derive(Deserialize, Hash, Clone)]
@@ -566,7 +586,266 @@ enum DensityFunctionRepr {
     },
 }
 
+const AXIS_X: u8 = 1;
+const AXIS_Y: u8 = 2;
+const AXIS_Z: u8 = 4;
+const AXES_XZ: u8 = AXIS_X | AXIS_Z;
+const AXES_ALL: u8 = AXIS_X | AXIS_Y | AXIS_Z;
+
+impl Axis {
+    const fn as_axes(self) -> u8 {
+        match self {
+            Self::X => AXIS_X,
+            Self::Y => AXIS_Y,
+            Self::Z => AXIS_Z,
+        }
+    }
+}
+
+fn noise_domain_axes(xz_scale: f64, y_scale: f64) -> u8 {
+    let mut axes = AXES_ALL;
+    if y_scale == 0.0 {
+        axes &= !AXIS_Y;
+    }
+    if xz_scale == 0.0 {
+        axes &= !AXES_XZ;
+    }
+    axes
+}
+
+impl SplineRepr {
+    fn for_each_function(&mut self, f: &mut dyn FnMut(&mut DensityFunctionRepr)) {
+        if let Self::Standard {
+            location_function,
+            values,
+            ..
+        } = self
+        {
+            f(location_function);
+            for value in values.iter_mut() {
+                value.for_each_function(f);
+            }
+        }
+    }
+
+    fn domain_axes(&self) -> u8 {
+        match self {
+            Self::Fixed { .. } => 0,
+            Self::Standard {
+                location_function,
+                values,
+                ..
+            } => values
+                .iter()
+                .fold(location_function.domain_axes(), |axes, value| {
+                    axes | value.domain_axes()
+                }),
+        }
+    }
+}
+
 impl DensityFunctionRepr {
+    fn domain_axes(&self) -> u8 {
+        match self {
+            Self::Constant { .. } => 0,
+            Self::BlendAlpha
+            | Self::BlendOffset
+            | Self::EndIslands
+            | Self::ShiftA { .. }
+            | Self::ShiftB { .. } => AXES_XZ,
+            Self::Beardifier
+            | Self::InterpolatedNoiseSampler { .. }
+            | Self::DistanceToPoint { .. } => AXES_ALL,
+            Self::ClampedYGradient { .. } => AXIS_Y,
+            Self::Gradient { data } => data.axis.as_axes(),
+            Self::Noise { data } => noise_domain_axes(data.xz_scale.0, data.y_scale.0),
+            Self::ShiftedNoise {
+                shift_x,
+                shift_y,
+                shift_z,
+                data,
+            } => {
+                noise_domain_axes(data.xz_scale.0, data.y_scale.0)
+                    | shift_x.domain_axes()
+                    | shift_y.domain_axes()
+                    | shift_z.domain_axes()
+            }
+            Self::BlendDensity { input }
+            | Self::Wrapper { input, .. }
+            | Self::Linear { input, .. }
+            | Self::Unary { input, .. }
+            | Self::Clamp { input, .. } => input.domain_axes(),
+            Self::Slice { axis, input, .. } => input.domain_axes() & !axis.as_axes(),
+            Self::FindTopSurface {
+                density,
+                upper_bound,
+                ..
+            } => (density.domain_axes() | upper_bound.domain_axes()) & !AXIS_Y,
+            Self::IntervalSelect {
+                input, functions, ..
+            } => functions
+                .iter()
+                .fold(input.domain_axes(), |axes, f| axes | f.domain_axes()),
+            Self::Lerp {
+                alpha,
+                first,
+                second,
+            } => alpha.domain_axes() | first.domain_axes() | second.domain_axes(),
+            Self::Rounding {
+                input, multiple, ..
+            } => input.domain_axes() | multiple.domain_axes(),
+            Self::Binary {
+                argument1,
+                argument2,
+                ..
+            } => argument1.domain_axes() | argument2.domain_axes(),
+            Self::RangeChoice {
+                input,
+                when_in_range,
+                when_out_range,
+                ..
+            } => input.domain_axes() | when_in_range.domain_axes() | when_out_range.domain_axes(),
+            Self::Spline { spline, .. } => spline.domain_axes(),
+        }
+    }
+
+    fn is_cache(&self) -> bool {
+        matches!(
+            self,
+            Self::Wrapper {
+                wrapper: WrapperType::Cache,
+                ..
+            }
+        )
+    }
+
+    fn for_each_child(&mut self, f: &mut dyn FnMut(&mut Self)) {
+        match self {
+            Self::Beardifier
+            | Self::BlendAlpha
+            | Self::BlendOffset
+            | Self::EndIslands
+            | Self::Noise { .. }
+            | Self::ShiftA { .. }
+            | Self::ShiftB { .. }
+            | Self::InterpolatedNoiseSampler { .. }
+            | Self::Constant { .. }
+            | Self::ClampedYGradient { .. }
+            | Self::Gradient { .. }
+            | Self::DistanceToPoint { .. } => {}
+            Self::BlendDensity { input }
+            | Self::Wrapper { input, .. }
+            | Self::Linear { input, .. }
+            | Self::Unary { input, .. }
+            | Self::Clamp { input, .. }
+            | Self::Slice { input, .. } => f(input),
+            Self::FindTopSurface {
+                density,
+                upper_bound,
+                ..
+            } => {
+                f(density);
+                f(upper_bound);
+            }
+            Self::ShiftedNoise {
+                shift_x,
+                shift_y,
+                shift_z,
+                ..
+            } => {
+                f(shift_x);
+                f(shift_y);
+                f(shift_z);
+            }
+            Self::IntervalSelect {
+                input, functions, ..
+            } => {
+                f(input);
+                for function in functions.iter_mut() {
+                    f(function);
+                }
+            }
+            Self::Lerp {
+                alpha,
+                first,
+                second,
+            } => {
+                f(alpha);
+                f(first);
+                f(second);
+            }
+            Self::Rounding {
+                input, multiple, ..
+            } => {
+                f(input);
+                f(multiple);
+            }
+            Self::Binary {
+                argument1,
+                argument2,
+                ..
+            } => {
+                f(argument1);
+                f(argument2);
+            }
+            Self::RangeChoice {
+                input,
+                when_in_range,
+                when_out_range,
+                ..
+            } => {
+                f(input);
+                f(when_in_range);
+                f(when_out_range);
+            }
+            Self::Spline { spline, .. } => spline.for_each_function(f),
+        }
+    }
+
+    fn existing_removed_axes(&self) -> u8 {
+        let mut axes = 0;
+        let mut function = self;
+        while let Self::Slice { axis, input, .. } = function {
+            axes |= axis.as_axes();
+            function = input;
+        }
+        axes
+    }
+
+    fn remove_axes(&mut self, axes: u8) {
+        let filtered = axes & !self.existing_removed_axes();
+        for (bit, axis) in [(AXIS_X, Axis::X), (AXIS_Z, Axis::Z), (AXIS_Y, Axis::Y)] {
+            if filtered & bit != 0 {
+                let input = std::mem::replace(
+                    self,
+                    Self::Constant {
+                        value: HashableF32(0.0),
+                    },
+                );
+                *self = Self::Slice {
+                    axis,
+                    coordinate: 0,
+                    input: Box::new(input),
+                };
+            }
+        }
+    }
+
+    fn slice_uniform_axes(&mut self, parent_axes: u8) {
+        if matches!(
+            self,
+            Self::Constant { .. } | Self::Gradient { .. } | Self::ClampedYGradient { .. }
+        ) {
+            return;
+        }
+        let axes = self.domain_axes();
+        let child_parent_axes = if self.is_cache() { AXES_ALL } else { axes };
+        self.for_each_child(&mut |child| child.slice_uniform_axes(child_parent_axes));
+        if parent_axes != axes {
+            self.remove_axes(parent_axes & !axes);
+        }
+    }
+
     fn optimize(&mut self) {
         match self {
             Self::BlendDensity { input } => input.optimize(),
@@ -1054,7 +1333,7 @@ impl DensityFunctionRepr {
                 quote! {
                     #[inline(always)]
                     pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f32 {
-                        ctx.sample_noise(DoublePerlinNoiseParameters::#noise_id, pos.x as f32 * #xz_scale, pos.y as f32 * #y_scale, pos.z as f32 * #xz_scale)
+                        ctx.sample_noise(DoublePerlinNoiseParameters::#noise_id, f64::from(pos.x) * #xz_scale, f64::from(pos.y) * #y_scale, f64::from(pos.z) * #xz_scale)
                     }
                 }
             }
@@ -1658,8 +1937,8 @@ impl DensityFunctionRepr {
                 }
             }
             Self::InterpolatedNoiseSampler { data } => {
-                let scaled_xz_scale = &data.scaled_xz_scale;
-                let scaled_y_scale = &data.scaled_y_scale;
+                let xz_scale = &data.xz_scale;
+                let y_scale = &data.y_scale;
                 let xz_factor = &data.xz_factor;
                 let y_factor = &data.y_factor;
                 let smear_scale_multiplier = &data.smear_scale_multiplier;
@@ -1667,8 +1946,8 @@ impl DensityFunctionRepr {
                 quote! {
                     BaseNoiseFunctionComponent::InterpolatedNoiseSampler {
                         data: &InterpolatedNoiseSamplerData {
-                            scaled_xz_scale: #scaled_xz_scale,
-                            scaled_y_scale: #scaled_y_scale,
+                            xz_scale: #xz_scale,
+                            y_scale: #y_scale,
                             xz_factor: #xz_factor,
                             y_factor: #y_factor,
                             smear_scale_multiplier: #smear_scale_multiplier,
@@ -1724,6 +2003,25 @@ struct NoiseRouterRepr {
 }
 
 impl NoiseRouterRepr {
+    fn slice_uniform_axes(&mut self) {
+        self.barrier_noise.slice_uniform_axes(AXES_ALL);
+        self.fluid_level_floodedness_noise
+            .slice_uniform_axes(AXES_ALL);
+        self.fluid_level_spread_noise.slice_uniform_axes(AXES_ALL);
+        self.lava_noise.slice_uniform_axes(AXES_ALL);
+        self.temperature.slice_uniform_axes(AXES_ALL);
+        self.vegetation.slice_uniform_axes(AXES_ALL);
+        self.continents.slice_uniform_axes(AXES_ALL);
+        self.erosion.slice_uniform_axes(AXES_ALL);
+        self.depth.slice_uniform_axes(AXES_ALL);
+        self.ridges.slice_uniform_axes(AXES_ALL);
+        self.preliminary_surface_level.slice_uniform_axes(AXES_ALL);
+        self.final_density.slice_uniform_axes(AXES_ALL);
+        self.vein_toggle.slice_uniform_axes(AXES_ALL);
+        self.vein_ridged.slice_uniform_axes(AXES_ALL);
+        self.vein_gap.slice_uniform_axes(AXES_ALL);
+    }
+
     fn optimize(&mut self) {
         self.barrier_noise.optimize();
         self.fluid_level_floodedness_noise.optimize();
@@ -1744,6 +2042,7 @@ impl NoiseRouterRepr {
 
     fn into_token_stream_compiled(mut self, dim_name: &str) -> (TokenStream, TokenStream) {
         self.optimize();
+        self.slice_uniform_axes();
 
         let mut noise_component_stack = Vec::new();
         let mut noise_nodes = Vec::new();
@@ -2130,22 +2429,13 @@ fn parse_vanilla_df(base_df_dir: &std::path::Path, val: &serde_json::Value) -> D
                         .get("smear_scale_multiplier")
                         .and_then(|v| v.as_f64())
                         .unwrap_or(8.0);
-                    let max_value = obj
-                        .get("max_value")
-                        .and_then(|v| v.as_f64())
-                        .unwrap_or(f64::INFINITY);
-
-                    let scaled_xz_scale = xz_scale;
-                    let scaled_y_scale = y_scale * (y_factor / xz_factor);
-
                     DensityFunctionRepr::InterpolatedNoiseSampler {
                         data: InterpolatedNoiseSamplerData {
-                            scaled_xz_scale: HashableF32((scaled_xz_scale) as f32),
-                            scaled_y_scale: HashableF32((scaled_y_scale) as f32),
-                            xz_factor: HashableF32((xz_factor) as f32),
-                            y_factor: HashableF32((y_factor) as f32),
-                            smear_scale_multiplier: HashableF32((smear_scale_multiplier) as f32),
-                            max_value: HashableF32((max_value) as f32),
+                            xz_scale: HashableF64(xz_scale),
+                            y_scale: HashableF64(y_scale),
+                            xz_factor: HashableF64(xz_factor),
+                            y_factor: HashableF64(y_factor),
+                            smear_scale_multiplier: HashableF64(smear_scale_multiplier),
                         },
                     }
                 }
@@ -2383,16 +2673,16 @@ fn parse_vanilla_df(base_df_dir: &std::path::Path, val: &serde_json::Value) -> D
                             shift_z: Box::new(shift_z),
                             data: ShiftedNoiseData {
                                 noise_id: clean_noise_name(noise_name),
-                                xz_scale: HashableF32((xz_scale) as f32),
-                                y_scale: HashableF32((y_scale) as f32),
+                                xz_scale: HashableF64(xz_scale),
+                                y_scale: HashableF64(y_scale),
                             },
                         }
                     } else {
                         DensityFunctionRepr::Noise {
                             data: NoiseData {
                                 noise_id: clean_noise_name(noise_name),
-                                xz_scale: HashableF32((xz_scale) as f32),
-                                y_scale: HashableF32((y_scale) as f32),
+                                xz_scale: HashableF64(xz_scale),
+                                y_scale: HashableF64(y_scale),
                             },
                         }
                     }
@@ -2416,8 +2706,8 @@ fn parse_vanilla_df(base_df_dir: &std::path::Path, val: &serde_json::Value) -> D
                         shift_z: Box::new(shift_z),
                         data: ShiftedNoiseData {
                             noise_id: clean_noise_name(noise_name),
-                            xz_scale: HashableF32((xz_scale) as f32),
-                            y_scale: HashableF32((y_scale) as f32),
+                            xz_scale: HashableF64(xz_scale),
+                            y_scale: HashableF64(y_scale),
                         },
                     }
                 }
@@ -2468,20 +2758,28 @@ fn parse_vanilla_df(base_df_dir: &std::path::Path, val: &serde_json::Value) -> D
                 "beardifier" => DensityFunctionRepr::Beardifier,
                 "cache" | "interpolated" | "flat_cache" | "cache_flat" | "cache_2d"
                 | "cache_once" | "cache_all_in_cell" => {
-                    let wrapper = match clean_type {
-                        "interpolated" => WrapperType::Interpolated,
-                        "flat_cache" | "cache_flat" => WrapperType::CacheFlat,
-                        "cache_2d" => WrapperType::Cache2D,
-                        "cache_once" | "cache" => WrapperType::CacheOnce,
-                        "cache_all_in_cell" => WrapperType::CellCache,
-                        _ => unreachable!(),
-                    };
                     let input = parse_vanilla_df(
                         base_df_dir,
                         obj.get("input")
                             .or_else(|| obj.get("argument"))
                             .expect("Missing input/argument"),
                     );
+                    let wrapper = if clean_type == "interpolated" {
+                        let cell_size_xz =
+                            obj.get("cell_size_xz")
+                                .and_then(|v| v.as_i64())
+                                .expect("Missing cell_size_xz") as i32;
+                        let cell_size_y =
+                            obj.get("cell_size_y")
+                                .and_then(|v| v.as_i64())
+                                .expect("Missing cell_size_y") as i32;
+                        WrapperType::Interpolated {
+                            cell_size_xz,
+                            cell_size_y,
+                        }
+                    } else {
+                        WrapperType::Cache
+                    };
                     DensityFunctionRepr::Wrapper {
                         input: Box::new(input),
                         wrapper,
@@ -2673,25 +2971,9 @@ fn load_vanilla_noise_routers() -> NoiseRouterReprs {
     }
 }
 
-macro_rules! fix_final_density {
-    ($router:expr) => {{
-        $router.final_density = DensityFunctionRepr::Wrapper {
-            input: Box::new($router.final_density),
-            wrapper: WrapperType::CellCache,
-        };
-    }};
-}
-
 /// Reads vanilla datapack noise_settings and density_function files and emits the complete noise-router constants `TokenStream`.
 pub fn build() -> TokenStream {
     let mut reprs: NoiseRouterReprs = load_vanilla_noise_routers();
-
-    fix_final_density!(reprs.overworld);
-    fix_final_density!(reprs.overworld_amplified);
-    fix_final_density!(reprs.overworld_large_biomes);
-    fix_final_density!(reprs.nether);
-    fix_final_density!(reprs.end);
-    fix_final_density!(reprs.end_islands);
 
     let _ = reprs.overworld_amplified;
     let _ = reprs.overworld_large_biomes;
@@ -2706,10 +2988,10 @@ pub fn build() -> TokenStream {
         use crate::chunk::DoublePerlinNoiseParameters;
 
         pub trait NoiseEvaluationContext {
-            fn sample_noise(&mut self, noise_id: DoublePerlinNoiseParameters, x: f32, y: f32, z: f32) -> f32;
+            fn sample_noise(&mut self, noise_id: DoublePerlinNoiseParameters, x: f64, y: f64, z: f64) -> f32;
             fn sample_shift_a(&mut self, noise_id: DoublePerlinNoiseParameters, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f32;
             fn sample_shift_b(&mut self, noise_id: DoublePerlinNoiseParameters, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f32;
-            fn sample_shifted_noise(&mut self, noise_id: DoublePerlinNoiseParameters, shift_x: f32, shift_y: f32, shift_z: f32, xz_scale: f32, y_scale: f32) -> f32;
+            fn sample_shifted_noise(&mut self, noise_id: DoublePerlinNoiseParameters, shift_x: f32, shift_y: f32, shift_z: f32, xz_scale: f64, y_scale: f64) -> f32;
             fn sample_interpolated_noise(&mut self, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f32;
             fn sample_beardifier(&mut self, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f32;
             fn sample_blend_alpha(&mut self, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f32;
@@ -2727,8 +3009,8 @@ pub fn build() -> TokenStream {
 
         pub struct NoiseData {
             pub noise_id: DoublePerlinNoiseParameters,
-            pub xz_scale: f32,
-            pub y_scale: f32,
+            pub xz_scale: f64,
+            pub y_scale: f64,
         }
 
         pub struct FindTopSurfaceData {
@@ -2737,17 +3019,17 @@ pub fn build() -> TokenStream {
         }
 
         pub struct ShiftedNoiseData {
-            pub xz_scale: f32,
-            pub y_scale: f32,
+            pub xz_scale: f64,
+            pub y_scale: f64,
             pub noise_id: DoublePerlinNoiseParameters,
         }
 
         pub struct InterpolatedNoiseSamplerData {
-            pub scaled_xz_scale: f32,
-            pub scaled_y_scale: f32,
-            pub xz_factor: f32,
-            pub y_factor: f32,
-            pub smear_scale_multiplier: f32,
+            pub xz_scale: f64,
+            pub y_scale: f64,
+            pub xz_factor: f64,
+            pub y_factor: f64,
+            pub smear_scale_multiplier: f64,
         }
 
         pub struct ClampedYGradientData {
@@ -2948,13 +3230,10 @@ pub fn build() -> TokenStream {
             Fixed { value: f32 },
         }
 
-        #[derive(Copy, Clone)]
+        #[derive(Copy, Clone, PartialEq, Eq)]
         pub enum WrapperType {
-            Interpolated,
-            CacheFlat,
-            Cache2D,
-            CacheOnce,
-            CellCache,
+            Interpolated { cell_size_xz: i32, cell_size_y: i32 },
+            Cache,
         }
 
         pub enum BaseNoiseFunctionComponent {
