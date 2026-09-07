@@ -16,9 +16,10 @@ use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::world::WorldEvent;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::Difficulty;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Weak};
 
 pub mod drowned;
@@ -30,18 +31,28 @@ pub mod zombie_villager;
 pub struct ZombieEntityBase {
     pub mob_entity: MobEntity,
     pub can_break_doors: AtomicBool,
+    /// `Zombie.inWaterTime`, `-1` when dry.
+    pub in_water_time: AtomicI32,
+    /// `Zombie.conversionTime`, `-1` when not converting.
+    pub drowned_conversion_time: AtomicI32,
 }
 
 impl ZombieEntityBase {
+    pub const IN_WATER_CONVERSION_DELAY: i32 = 600;
+    pub const UNDER_WATER_CONVERSION_TIME: i32 = 300;
+
     pub fn new(entity: Entity) -> Arc<Self> {
         Self::with_can_break_doors(entity, false)
     }
 
+    /// Shared zombie AI, optionally with door breaking.
     pub fn with_can_break_doors(entity: Entity, can_break_doors: bool) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let zombie = Self {
             mob_entity,
             can_break_doors: AtomicBool::new(can_break_doors),
+            in_water_time: AtomicI32::new(-1),
+            drowned_conversion_time: AtomicI32::new(-1),
         };
         let mob_arc = Arc::new(zombie);
         let mob_weak: Weak<dyn Mob> = {
@@ -99,6 +110,76 @@ impl ZombieEntityBase {
     #[must_use]
     pub fn can_break_doors(&self) -> bool {
         self.can_break_doors.load(Ordering::Relaxed)
+    }
+
+    /// `Zombie.isUnderWaterConverting`.
+    #[must_use]
+    pub fn is_under_water_converting(&self) -> bool {
+        self.drowned_conversion_time.load(Ordering::Relaxed) >= 0
+    }
+
+    /// `Zombie.startUnderWaterConversion`.
+    pub fn start_under_water_conversion(&self, ticks: i32) {
+        self.drowned_conversion_time
+            .store(ticks.max(0), Ordering::Relaxed);
+        self.mob_entity.living_entity.entity.set_synced_data(
+            pumpkin_data::tracked_data::zombie::DATA_DROWNED_CONVERSION_ID,
+            true,
+        );
+    }
+
+    /// `Zombie.tick` water conversion. Becomes `target` after the timers expire.
+    pub fn tick_water_conversion(&self, target: &'static EntityType, sound_event: WorldEvent) {
+        let entity = &self.mob_entity.living_entity.entity;
+        if !entity.is_alive() || self.mob_entity.is_no_ai() {
+            return;
+        }
+
+        if self.is_under_water_converting() {
+            let remaining = self.drowned_conversion_time.fetch_sub(1, Ordering::Relaxed) - 1;
+            if remaining < 0 {
+                self.convert_to_zombie_type(target);
+                if !entity.is_silent() {
+                    entity
+                        .world
+                        .load()
+                        .sync_world_event(sound_event, entity.block_pos.load(), 0);
+                }
+            }
+        } else if entity.is_submerged_in_water() {
+            let time = self.in_water_time.fetch_add(1, Ordering::Relaxed) + 1;
+            if time >= Self::IN_WATER_CONVERSION_DELAY {
+                self.start_under_water_conversion(Self::UNDER_WATER_CONVERSION_TIME);
+            }
+        } else {
+            self.in_water_time.store(-1, Ordering::Relaxed);
+        }
+    }
+
+    /// `Zombie.convertToZombieType`.
+    fn convert_to_zombie_type(&self, target: &'static EntityType) {
+        let entity = &self.mob_entity.living_entity.entity;
+        let world = entity.world.load();
+
+        let converted = crate::entity::r#type::from_type(
+            target,
+            entity.pos.load(),
+            &world,
+            uuid::Uuid::new_v4(),
+        );
+        self.mob_entity.copy_conversion_state(converted.as_ref());
+        if self.can_break_doors()
+            && let Some(converted_mob) = converted.get_mob()
+        {
+            let mut nbt = NbtCompound::new();
+            nbt.put_bool("CanBreakDoors", true);
+            converted_mob.mob_read_nbt(&nbt);
+        }
+
+        world.spawn_entity(converted.clone());
+        self.mob_entity
+            .copy_conversion_equipment(converted.as_ref());
+        entity.remove();
     }
 
     pub fn set_can_break_doors(&self, can_break_doors: bool, mob: &dyn Mob) {
@@ -196,15 +277,35 @@ impl Mob for ZombieEntityBase {
         }
     }
 
+    /// Writes `CanBreakDoors`, `InWaterTime`, `DrownedConversionTime`.
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         if self.can_break_doors() {
             nbt.put_bool("CanBreakDoors", true);
         }
+        let in_water_time = if self.mob_entity.living_entity.entity.is_in_water() {
+            self.in_water_time.load(Ordering::Relaxed)
+        } else {
+            -1
+        };
+        nbt.put_int("InWaterTime", in_water_time);
+        nbt.put_int(
+            "DrownedConversionTime",
+            self.drowned_conversion_time.load(Ordering::Relaxed),
+        );
     }
 
+    /// Reads `CanBreakDoors`, `InWaterTime`, `DrownedConversionTime`.
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
         if let Some(can_break_doors) = nbt.get_bool("CanBreakDoors") {
             self.set_can_break_doors(can_break_doors, self);
+        }
+        if let Some(in_water_time) = nbt.get_int("InWaterTime") {
+            self.in_water_time.store(in_water_time, Ordering::Relaxed);
+        }
+        if let Some(conversion_time) = nbt.get_int("DrownedConversionTime")
+            && conversion_time > -1
+        {
+            self.start_under_water_conversion(conversion_time);
         }
     }
 }

@@ -2,9 +2,11 @@ use std::sync::Arc;
 
 use crate::entity::mob::zombie::ZombieEntityBase;
 use crate::entity::{
-    Entity,
+    Entity, EntityBase,
     mob::{Mob, MobEntity},
 };
+use pumpkin_data::entity::EntityType;
+use pumpkin_data::world::WorldEvent;
 use pumpkin_nbt::compound::NbtCompound;
 
 pub struct HuskEntity {
@@ -29,6 +31,12 @@ impl HuskEntity {
 impl Mob for HuskEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity.mob_entity
+    }
+
+    /// `Husk.doUnderWaterConversion`.
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
+        self.entity
+            .tick_water_conversion(&EntityType::ZOMBIE, WorldEvent::SoundHuskToZombie);
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {

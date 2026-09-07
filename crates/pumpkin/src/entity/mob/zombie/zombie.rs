@@ -1,8 +1,10 @@
-use crate::entity::Entity;
 use crate::entity::mob::equipment::RegionalDifficulty;
 use crate::entity::mob::zombie::ZombieEntityBase;
 use crate::entity::mob::{Mob, MobEntity};
+use crate::entity::{Entity, EntityBase};
 use crate::world::World;
+use pumpkin_data::entity::EntityType;
+use pumpkin_data::world::WorldEvent;
 use pumpkin_nbt::compound::NbtCompound;
 use std::sync::Arc;
 
@@ -28,6 +30,12 @@ impl ZombieEntity {
 impl Mob for ZombieEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity.mob_entity
+    }
+
+    /// `Zombie.tick`.
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
+        self.entity
+            .tick_water_conversion(&EntityType::DROWNED, WorldEvent::SoundZombieToDrowned);
     }
 
     fn populate_default_equipment_slots(

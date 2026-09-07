@@ -12,6 +12,7 @@ use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::potion::Effect;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
 use pumpkin_data::{Block, BlockDirection};
@@ -221,6 +222,119 @@ impl MobEntity {
 
     pub fn set_no_ai(&self, no_ai: bool) {
         self.set_mob_flag(Self::AI_DISABLED_FLAG, no_ai);
+    }
+
+    /// `ConversionType.convertCommon`. Call before spawn. Health is not copied.
+    pub fn copy_conversion_state(&self, converted: &dyn EntityBase) {
+        let living = &self.living_entity;
+        let entity = &living.entity;
+        let target = converted.get_entity();
+
+        target.set_rotation(entity.yaw.load(), entity.pitch.load());
+        target.head_yaw.store(entity.head_yaw.load());
+        target.velocity.store(entity.velocity.load());
+        target.age.store(entity.age.load(Relaxed), Relaxed);
+        target.silent.store(entity.is_silent(), Relaxed);
+        target
+            .invulnerable
+            .store(entity.invulnerable.load(Relaxed), Relaxed);
+        target
+            .has_no_gravity
+            .store(entity.has_no_gravity(), Relaxed);
+        target
+            .portal_cooldown
+            .store(entity.portal_cooldown.load(Relaxed), Relaxed);
+        target
+            .fire_ticks
+            .store(entity.fire_ticks.load(Relaxed), Relaxed);
+        if let Some(custom_name) = &**entity.custom_name.load() {
+            target.set_custom_name(custom_name.clone());
+            target
+                .custom_name_visible
+                .store(entity.custom_name_visible.load(Relaxed), Relaxed);
+        }
+        let tags = entity
+            .scoreboard_tags
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        *target
+            .scoreboard_tags
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = tags;
+
+        if let Some(target_living) = converted.get_living_entity() {
+            target_living.set_absorption(living.absorption.load());
+            let effects: Vec<Effect> = living
+                .active_effects
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .values()
+                .cloned()
+                .collect();
+            for effect in effects {
+                target_living.add_effect(effect);
+            }
+        }
+
+        if let Some(target_mob) = converted.get_mob() {
+            let target_mob_entity = target_mob.get_mob_entity();
+            target_mob_entity.set_no_ai(self.is_no_ai());
+            target_mob_entity
+                .persistence_required
+                .store(self.persistence_required.load(Relaxed), Relaxed);
+            target_mob_entity.set_can_pick_up_loot(self.can_pick_up_loot());
+        }
+    }
+
+    /// `ConversionParams.keepEquipment`. Call after spawn; replaces rolled gear.
+    pub fn copy_conversion_equipment(&self, converted: &dyn EntityBase) {
+        let Some(target_living) = converted.get_living_entity() else {
+            return;
+        };
+        let living = &self.living_entity;
+
+        let src: Vec<(EquipmentSlot, ItemStack)> = living
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .equipment
+            .iter()
+            .map(|(slot, item)| (slot.clone(), item.clone()))
+            .collect();
+        let src_drop_chances = living
+            .equipment_drop_chances
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+
+        let mut changes = Vec::new();
+        let mut dst = target_living
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut dst_drop_chances = target_living
+            .equipment_drop_chances
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let stale: Vec<EquipmentSlot> = dst
+            .equipment
+            .keys()
+            .filter(|slot| !src.iter().any(|(s, _)| s == *slot))
+            .cloned()
+            .collect();
+        for slot in stale {
+            dst.put(&slot, ItemStack::EMPTY.clone());
+            changes.push((slot, ItemStack::EMPTY.clone()));
+        }
+        for (slot, item) in src {
+            dst.put(&slot, item.clone());
+            changes.push((slot, item));
+        }
+        *dst_drop_chances = src_drop_chances;
+        drop(dst);
+        drop(dst_drop_chances);
+        target_living.send_equipment_changes(&changes);
     }
 
     pub fn is_no_ai(&self) -> bool {
