@@ -76,6 +76,16 @@ impl AgeableMob for TadpoleEntity {
 }
 
 impl Mob for TadpoleEntity {
+    /// Water animals never drown.
+    fn can_breathe_underwater(&self) -> bool {
+        true
+    }
+
+    /// `WaterAnimal.handleAirSupply`.
+    fn dries_out_on_land(&self) -> bool {
+        true
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }

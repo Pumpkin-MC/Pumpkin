@@ -128,6 +128,11 @@ impl ZombieEntityBase {
 }
 
 impl Mob for ZombieEntityBase {
+    /// Zombies do not drown.
+    fn can_breathe_underwater(&self) -> bool {
+        true
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

@@ -128,6 +128,7 @@ use crate::world::World;
 use pumpkin_data::Block;
 use std::sync::atomic::AtomicBool;
 
+/// Builds the entity for `entity_type` at `position`.
 #[expect(clippy::too_many_lines)]
 pub fn from_type(
     entity_type: &'static EntityType,
@@ -339,6 +340,13 @@ pub fn from_type(
             }
         }
     };
+
+    if let (Some(living), Some(mob_impl)) = (mob.get_living_entity(), mob.get_mob()) {
+        living.breath.air_supply.store(
+            mob_impl.max_air_supply(),
+            std::sync::atomic::Ordering::Relaxed,
+        );
+    }
 
     mob
 }

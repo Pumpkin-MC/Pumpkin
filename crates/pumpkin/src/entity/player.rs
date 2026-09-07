@@ -306,7 +306,6 @@ use crate::server::Server;
 use crate::world::{BlockBreakingProgress, World};
 use bytes::Bytes;
 
-use super::breath::BreathManager;
 use super::combat::{self, AttackType, player_attack_sound};
 use super::hunger::HungerManager;
 use super::item::ItemEntity;
@@ -411,8 +410,6 @@ pub struct Player {
     pub respawn_point: std::sync::Mutex<Option<RespawnPoint>>,
     /// The player's sleep status
     pub sleeping_since: AtomicCell<Option<u8>>,
-    /// Manages the player's breath level
-    pub breath_manager: BreathManager,
     /// Manages the player's hunger level.
     pub hunger_manager: HungerManager,
     /// The ID of the currently open container (if any).
@@ -619,6 +616,7 @@ impl Player {
         Some(skin)
     }
 
+    /// New player for a connected client.
     #[expect(clippy::too_many_lines, clippy::items_after_statements)]
     pub fn new(
         client: Arc<ClientPlatform>,
@@ -718,7 +716,6 @@ impl Player {
             gameprofile,
             client,
             awaiting_teleport: Mutex::new(None),
-            breath_manager: BreathManager::default(),
             // TODO: Load this from previous instance
             hunger_manager: HungerManager::default(),
             current_block_destroy_stage: AtomicI32::new(-1),
@@ -2486,6 +2483,7 @@ impl Player {
         }
     }
 
+    /// `ServerPlayer.tick`.
     #[expect(clippy::too_many_lines)]
     pub fn tick<'a>(&'a self, server: &'a Server) {
         self.process_inbound_packets();
@@ -2705,7 +2703,6 @@ impl Player {
 
         self.living_entity.tick(self, server);
 
-        self.breath_manager.tick(self);
         self.hunger_manager.tick(self);
 
         // Vanilla updates pose in PlayerEntity#tick after super.tick().
@@ -4483,6 +4480,7 @@ impl Player {
         );
     }
 
+    /// Handles player death.
     pub fn handle_killed(&self, death_msg: &TextComponent) {
         self.trigger_advancement(
             crate::entity::player::advancement::trigger::AdvancementTrigger::PlayerKilled,
@@ -4515,7 +4513,7 @@ impl Player {
         }
 
         // Reset air supply & drowning ticks on death
-        self.breath_manager.reset(self);
+        self.living_entity.breath.reset(self.get_entity());
 
         if matches!(self.client.as_ref(), ClientPlatform::Java(_)) {
             self.set_client_loaded(false);
@@ -6574,6 +6572,7 @@ impl EntityBase for Player {
         self
     }
 
+    /// Writes player-only tags.
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_int("DataVersion", DATA_VERSION);
         self.inventory.write_nbt(nbt);
@@ -6611,20 +6610,7 @@ impl EntityBase for Player {
         // Store food level, saturation, exhaustion, and tick timer
         self.hunger_manager.write_nbt(nbt);
 
-        let air_supply = self
-            .breath_manager
-            .air_supply
-            .load(Ordering::Relaxed)
-            .clamp(0, super::breath::MAX_AIR);
-        nbt.put_short("Air", air_supply as i16);
-        nbt.put_int("AirSupply", air_supply);
-        nbt.put_int(
-            "DrowningTick",
-            self.breath_manager
-                .drowning_tick
-                .load(Ordering::Relaxed)
-                .clamp(0, super::breath::DROWNING_INTERVAL - 1),
-        );
+        self.living_entity.breath.write_nbt(nbt);
 
         nbt.put_string(
             "Dimension",
@@ -6679,6 +6665,7 @@ impl EntityBase for Player {
             .write_nbt(nbt);
     }
 
+    /// Reads player-only tags.
     #[expect(clippy::too_many_lines)]
     fn read_custom_nbt(&self, nbt: &NbtCompound) {
         self.inventory.read_nbt_non_mut(nbt);
@@ -6778,21 +6765,9 @@ impl EntityBase for Player {
 
         self.hunger_manager.read_nbt_non_mut(nbt);
 
-        if let Some(air) = nbt
-            .get_short("Air")
-            .map(i32::from)
-            .or_else(|| nbt.get_int("AirSupply"))
-        {
-            self.breath_manager
-                .air_supply
-                .store(air.clamp(0, super::breath::MAX_AIR), Ordering::Relaxed);
-        }
-        if let Some(tick) = nbt.get_int("DrowningTick") {
-            self.breath_manager.drowning_tick.store(
-                tick.clamp(0, super::breath::DROWNING_INTERVAL - 1),
-                Ordering::Relaxed,
-            );
-        }
+        self.living_entity
+            .breath
+            .read_nbt(nbt, super::breath::MAX_AIR);
 
         // Load any saved spawnpoint data (both vanilla "respawn" compound and legacy SpawnX/SpawnY/SpawnZ)
         if let Some(respawn_compound) = nbt.get_compound("respawn") {

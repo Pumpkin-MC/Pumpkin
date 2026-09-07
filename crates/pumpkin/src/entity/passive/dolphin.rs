@@ -89,6 +89,16 @@ impl DolphinEntity {
 }
 
 impl Mob for DolphinEntity {
+    /// `Dolphin.getMaxAirSupply`.
+    fn max_air_supply(&self) -> i32 {
+        4800
+    }
+
+    /// `Dolphin.increaseAirSupply`.
+    fn increase_air_supply(&self, _current: i32) -> i32 {
+        4800
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_bool("GotFish", self.got_fish());
         nbt.put_int("Moistness", self.moistness_level.load(Ordering::Relaxed));

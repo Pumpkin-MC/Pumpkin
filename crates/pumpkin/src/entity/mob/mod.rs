@@ -677,6 +677,31 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    /// `LivingEntity.canBreatheUnderwater`: no air is lost while submerged.
+    fn can_breathe_underwater(&self) -> bool {
+        false
+    }
+
+    /// `WaterAnimal.handleAirSupply`: lose air out of water.
+    fn dries_out_on_land(&self) -> bool {
+        false
+    }
+
+    /// `LivingEntity.getMaxAirSupply`.
+    fn max_air_supply(&self) -> i32 {
+        crate::entity::breath::MAX_AIR
+    }
+
+    /// `LivingEntity.increaseAirSupply`.
+    fn increase_air_supply(&self, current: i32) -> i32 {
+        (current + crate::entity::breath::AIR_RECOVERY_RATE).min(self.max_air_supply())
+    }
+
+    /// Rain counts as water for [`Mob::dries_out_on_land`].
+    fn rehydrates_in_rain(&self) -> bool {
+        false
+    }
+
     /// Metadata which must accompany this mob whenever it is spawned for a Java client.
     fn mob_java_spawn_metadata(&self, _version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
         None

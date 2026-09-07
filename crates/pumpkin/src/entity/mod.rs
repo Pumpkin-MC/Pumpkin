@@ -141,10 +141,15 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     fn write_custom_nbt(&self, _nbt: &mut NbtCompound) {}
 
+    /// Reads base, living and custom tags.
     fn read_nbt_non_mut(&self, nbt: &NbtCompound) {
         self.get_entity().read_nbt_non_mut(nbt);
         if let Some(living) = self.get_living_entity() {
             living.read_living_nbt_non_mut(nbt);
+            let max_air = self
+                .get_mob()
+                .map_or(breath::MAX_AIR, mob::Mob::max_air_supply);
+            living.breath.read_nbt(nbt, max_air);
         }
         self.read_custom_nbt(nbt);
     }
@@ -2767,6 +2772,42 @@ impl Entity {
     #[must_use]
     pub fn is_under_water(&self) -> bool {
         self.is_in_water() && self.is_submerged_in_water()
+    }
+
+    /// `Entity.isInBubbleColumn`.
+    #[must_use]
+    pub fn is_in_bubble_column(&self) -> bool {
+        self.world.load().get_block(&self.block_pos.load()) == &Block::BUBBLE_COLUMN
+    }
+
+    /// `Entity.isInRain`.
+    #[must_use]
+    pub fn is_in_rain(&self) -> bool {
+        let world = self.world.load();
+        let feet = self.block_pos.load();
+        if world.is_raining_at(&feet) {
+            return true;
+        }
+        let top_y = self.bounding_box.load().max.y.floor() as i32;
+        world.is_raining_at(&BlockPos::new(feet.0.x, top_y, feet.0.z))
+    }
+
+    /// `Entity.isInWaterOrRain`.
+    #[must_use]
+    pub fn is_in_water_or_rain(&self) -> bool {
+        self.is_in_water() || self.is_in_rain()
+    }
+
+    /// `Entity.isInWaterOrBubble`.
+    #[must_use]
+    pub fn is_in_water_or_bubble(&self) -> bool {
+        self.is_in_water() || self.is_in_bubble_column()
+    }
+
+    /// `Entity.isInWaterRainOrBubble`.
+    #[must_use]
+    pub fn is_in_water_rain_or_bubble(&self) -> bool {
+        self.is_in_water_or_rain() || self.is_in_bubble_column()
     }
 
     #[must_use]

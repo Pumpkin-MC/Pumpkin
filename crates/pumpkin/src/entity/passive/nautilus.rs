@@ -221,6 +221,16 @@ impl Animal for NautilusEntity {
 }
 
 impl Mob for NautilusEntity {
+    /// Water animals never drown.
+    fn can_breathe_underwater(&self) -> bool {
+        true
+    }
+
+    /// `WaterAnimal.handleAirSupply`.
+    fn dries_out_on_land(&self) -> bool {
+        true
+    }
+
     fn as_animal(&self) -> Option<&dyn Animal> {
         Some(self)
     }

@@ -21,6 +21,7 @@ use std::sync::atomic::{
 };
 use tracing::warn;
 
+use super::breath::BreathManager;
 use super::experience_orb::ExperienceOrbEntity;
 use super::{Entity, EntityBase, NBTStorageInit};
 use crate::block::OnLandedUponArgs;
@@ -73,6 +74,8 @@ use std::sync::RwLock;
 pub struct LivingEntity {
     /// The underlying entity object, providing basic entity information and functionality.
     pub entity: Entity,
+    /// Air supply, drowning and dry-out damage (`LivingEntity.baseTick`).
+    pub breath: BreathManager,
     /// Tracks the remaining time until the entity can regenerate health.
     pub hurt_cooldown: AtomicI32,
     /// Stores the amount of damage the entity last received.
@@ -191,6 +194,7 @@ impl LivingEntity {
         entity_type.hurt_sound.unwrap_or(Sound::EntityGenericHurt)
     }
 
+    /// New living entity with default attributes.
     pub fn new(entity: Entity) -> Self {
         let water_movement_speed_multiplier = if entity.entity_type == &EntityType::POLAR_BEAR {
             0.98
@@ -246,6 +250,7 @@ impl LivingEntity {
             movement_input: AtomicCell::new(Vector3::default()),
             water_movement_speed_multiplier,
             last_block_pos: AtomicCell::new(None),
+            breath: BreathManager::default(),
         }
     }
 
@@ -2318,6 +2323,7 @@ impl LivingEntity {
 }
 
 impl LivingEntity {
+    /// Writes living-entity tags.
     pub fn write_living_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put("Health", NbtTag::Float(self.health.load()));
         // Avoid persisting a lethal fall distance when the entity is dead to prevent death loops
@@ -2332,6 +2338,7 @@ impl LivingEntity {
         nbt.put_short("HurtTime", self.hurt_cooldown.load(Relaxed).max(0) as i16);
         nbt.put_short("DeathTime", i16::from(self.death_time.load(Relaxed)));
         nbt.put_bool("FallFlying", self.entity.is_fall_flying());
+        self.breath.write_nbt(nbt);
         {
             let effects_vec: Vec<pumpkin_data::potion::Effect> = {
                 let effects = self
@@ -2985,6 +2992,7 @@ impl EntityBase for LivingEntity {
         self.get_attribute_value(&Attributes::GRAVITY)
     }
 
+    /// `LivingEntity.tick`.
     #[allow(clippy::too_many_lines)]
     fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         self.entity.tick(caller, server);
@@ -3005,6 +3013,10 @@ impl EntityBase for LivingEntity {
                 caller.damage(caller, 1.0, DamageType::IN_WALL);
             }
             self.entity.tick_frozen(caller);
+        }
+
+        if is_alive {
+            self.breath.tick(self, caller);
         }
 
         // TODO
