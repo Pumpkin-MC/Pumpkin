@@ -60,6 +60,31 @@ impl Default for BedrockAuthenticationConfig {
     }
 }
 
+/// Controls which Bedrock player skins Pumpkin accepts and rebroadcasts.
+#[derive(Deserialize, Serialize, Clone)]
+#[serde(default)]
+pub struct BedrockSkinConfig {
+    /// Whether Java clients receive the generated Bedrock skin resource pack.
+    pub java_resource_pack: bool,
+    /// Optional public base URL for the generated skin-pack endpoint.
+    pub resource_pack_url: Option<String>,
+    /// Only accept skins the Bedrock client marks as trusted.
+    pub trusted_only: bool,
+    /// Minimum time between accepted skin changes from one player.
+    pub change_cooldown_seconds: u64,
+}
+
+impl Default for BedrockSkinConfig {
+    fn default() -> Self {
+        Self {
+            java_resource_pack: true,
+            resource_pack_url: None,
+            trusted_only: true,
+            change_cooldown_seconds: 5,
+        }
+    }
+}
+
 /// Configuration for Bedrock Edition client connections.
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(default)]
@@ -92,6 +117,8 @@ pub struct BedrockConfig {
     pub chunk_caching: bool,
     /// Packet rate limiting settings.
     pub packet_limiter: PacketLimiterConfig,
+    /// Player skin validation and rate-limit settings.
+    pub skins: BedrockSkinConfig,
 }
 
 impl Default for BedrockConfig {
@@ -112,6 +139,7 @@ impl Default for BedrockConfig {
             nethernet: NetherNetConfig::default(),
             chunk_caching: true,
             packet_limiter: PacketLimiterConfig::default(),
+            skins: BedrockSkinConfig::default(),
         }
     }
 }

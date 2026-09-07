@@ -333,6 +333,30 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     }
 
     fn send_bedrock_spawn_packet(&self, client: &BedrockClient) {
+        if let Some(player) = self.get_player() {
+            // Tracking can spawn a player again after they leave and re-enter view.
+            // Bedrock needs their skin registration followed by AddPlayer each time.
+            let (player_list, add_player) = World::bedrock_player_spawn_packets(player);
+            if let (Ok(player_list), Ok(add_player)) = (
+                client.serialize_packet(&player_list),
+                client.serialize_packet(&add_player),
+            ) {
+                client.try_enqueue_packet(player_list);
+                client.try_enqueue_packet(add_player);
+                let held_item = player.inventory.held_item();
+                client.try_enqueue_client_packet(
+                    &pumpkin_protocol::bedrock::client::CMobEquipment {
+                        target_runtime_id: (player.entity_id() as u64).into(),
+                        item: (&held_item).into(),
+                        slot: 0,
+                        selected_slot: 0,
+                        container_id: 0,
+                    },
+                );
+            }
+            return;
+        }
+
         let entity = self.get_entity();
         let runtime_id = entity.entity_id as u64;
         let identifier = self
@@ -369,6 +393,20 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     fn send_java_spawn_packet(&self, client: &JavaClient) {
         let entity = self.get_entity();
+        if let Some(player) = self.get_player()
+            && matches!(player.client.as_ref(), ClientPlatform::Bedrock(_))
+        {
+            World::send_java_player_spawn(
+                client,
+                player,
+                entity.pos.load(),
+                entity.pitch.load(),
+                entity.yaw.load(),
+                entity.head_yaw.load(),
+                entity.velocity.load(),
+            );
+            return;
+        }
         let version = client.version.load();
         let is_mob = entity.entity_type.mob || self.get_mob().is_some();
         let metadata = self.java_spawn_metadata(version);
@@ -3110,18 +3148,50 @@ impl Entity {
         let recipients_by_version =
             World::collect_java_recipients_by_version(java_recipients.into_iter());
 
+        let bedrock_player = self.entity_type == &EntityType::PLAYER
+            && world
+                .get_player_by_id(self.entity_id)
+                .is_some_and(|subject| {
+                    matches!(subject.client.as_ref(), ClientPlatform::Bedrock(_))
+                });
         for (version, recipients) in recipients_by_version {
             // TODO: Support older versions
             if version < JavaMinecraftVersion::V_26_2 {
                 continue;
             }
-            if let Some(buf) = self.synched_data.pack_dirty_for_version(&version) {
-                let packet = CSetEntityMetadata::new(self.entity_id.into(), buf);
-                if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version)
-                {
-                    for recipient in recipients {
-                        recipient.try_enqueue_packet(packet_data.clone());
+            let serialize = |metadata: Option<Box<[u8]>>| {
+                metadata.and_then(|buf| {
+                    JavaClient::serialize_packet_for_version(
+                        &CSetEntityMetadata::new(self.entity_id.into(), buf),
+                        version,
+                    )
+                    .ok()
+                })
+            };
+            let normal = serialize(self.synched_data.pack_dirty_for_version(&version));
+            if bedrock_player {
+                let mannequin =
+                    serialize(self.synched_data.pack_dirty_for_version_filtered(
+                        &version,
+                        player::mannequin_shared_metadata,
+                    ));
+                for recipient in recipients {
+                    let presentation = recipient
+                        .bedrock_mannequins
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    let packet = if presentation.contains(&self.entity_id) {
+                        &mannequin
+                    } else {
+                        &normal
+                    };
+                    if let Some(packet) = packet {
+                        recipient.try_enqueue_packet(packet.clone());
                     }
+                }
+            } else if let Some(packet) = normal {
+                for recipient in recipients {
+                    recipient.try_enqueue_packet(packet.clone());
                 }
             }
         }

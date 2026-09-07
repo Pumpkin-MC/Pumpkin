@@ -1,5 +1,6 @@
 pub mod nethernet;
 pub mod play;
+pub mod skin_pack;
 pub mod status;
 use crossbeam::atomic::AtomicCell;
 use std::{
@@ -35,8 +36,8 @@ use pumpkin_protocol::{
             interact::SInteract, inventory_transaction::SInventoryTransaction,
             loading_screen::SLoadingScreen, login::SLogin, mob_equipment::SMobEquipment,
             packet_violation_warning::SPacketViolationWarning, player_action::SPlayerAction,
-            player_auth_input::SPlayerAuthInput, request_ability::SRequestAbility,
-            request_chunk_radius::SRequestChunkRadius,
+            player_auth_input::SPlayerAuthInput, player_skin::SPlayerSkin,
+            request_ability::SRequestAbility, request_chunk_radius::SRequestChunkRadius,
             request_network_settings::SRequestNetworkSettings,
             resource_pack_client_response::SResourcePackClientResponse, respawn::SRespawn,
             set_local_player_as_initialized::SSetLocalPlayerAsInitialized,
@@ -123,6 +124,8 @@ pub struct BedrockClient {
     pub next_form_id: AtomicU32,
     pub inventory_opened: AtomicBool,
     pub client_cache_supported: AtomicBool,
+    /// Claims the initial spawn before resource-pack completion starts asynchronous work.
+    resource_pack_completed: AtomicBool,
     pub blob_cache: std::sync::Mutex<HashMap<u64, Vec<u8>>>,
     /// An notifier that is triggered when this client is closed.
     close_token: CancellationToken,
@@ -164,6 +167,7 @@ impl BedrockClient {
             next_form_id: AtomicU32::new(0),
             inventory_opened: AtomicBool::new(false),
             client_cache_supported: AtomicBool::new(false),
+            resource_pack_completed: AtomicBool::new(false),
             blob_cache: std::sync::Mutex::new(HashMap::new()),
             close_token: CancellationToken::new(),
             last_seen: Arc::new(AtomicCell::new(std::time::Instant::now())),
@@ -449,6 +453,19 @@ impl BedrockClient {
 
     pub fn set_player(&self, player: Arc<Player>) {
         self.player.store(Arc::new(Some(player)));
+    }
+
+    /// Observes the normal FIFO without starting its network writer in tests.
+    #[cfg(test)]
+    pub(crate) async fn drain_outgoing_packets_for_test(&self) -> Vec<Bytes> {
+        let mut receiver = self.outgoing_packet_queue_recv.lock().await;
+        let receiver = receiver.as_mut().expect("test owns outgoing queue");
+        let mut packets = Vec::new();
+        while let Ok(packet) = receiver.try_recv() {
+            decrement_pending_bytes(&self.pending_bytes, packet.data.len());
+            packets.push(packet.data);
+        }
+        packets
     }
 
     #[allow(clippy::unused_async)]
@@ -809,6 +826,15 @@ impl BedrockClient {
             SRespawn::PACKET_ID => {
                 let packet = SRespawn::read(reader)?;
                 self.handle_respawn(player, &packet);
+            }
+            SPlayerSkin::PACKET_ID => {
+                let packet = SPlayerSkin::read(reader)?;
+                let client = self.clone();
+                let player = player.clone();
+                let server_c = server.clone();
+                server.spawn_task(async move {
+                    client.handle_player_skin(&player, &server_c, packet).await;
+                });
             }
             SAnimate::PACKET_ID => {
                 self.handle_animate(player, &SAnimate::read(reader)?);

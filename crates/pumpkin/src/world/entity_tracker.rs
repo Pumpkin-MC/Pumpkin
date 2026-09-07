@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, atomic::Ordering};
 
 use bytes::BufMut;
 use crossbeam::atomic::AtomicCell;
@@ -25,6 +25,10 @@ use crate::net::ClientPlatform;
 use crate::net::java::JavaClient;
 use crate::world::World;
 use crate::world::chunker::{get_view_distance, is_within_view_distance};
+
+#[cfg(test)]
+#[path = "entity_tracker_tests.rs"]
+mod tests;
 
 pub struct TrackedEntity {
     pub entity: Arc<dyn EntityBase>,
@@ -97,6 +101,19 @@ impl TrackedEntity {
 
     pub fn update_player(&self, player: &Arc<Player>, _world: &World) {
         if player.get_entity().entity_id == self.entity_id {
+            return;
+        }
+
+        // Join code registers player-list skins before the tracker creates actors.
+        // Do not pair at the placeholder spawn position or while the Bedrock
+        // recipient is still initializing its world.
+        if matches!(player.client.as_ref(), ClientPlatform::Bedrock(_))
+            && let Some(subject) = self.entity.get_player()
+            && (!subject
+                .bedrock_player_tracking_ready
+                .load(Ordering::Acquire)
+                || !player.bedrock_player_tracking_ready.load(Ordering::Acquire))
+        {
             return;
         }
 
@@ -201,13 +218,20 @@ impl TrackedEntity {
 
         if let ClientPlatform::Java(client) = player.client.as_ref() {
             let version = client.version.load();
+            let presentation = client
+                .bedrock_mannequins
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mannequin = presentation.contains(&self.entity_id);
             // TODO: Support older versions
             if version >= JavaMinecraftVersion::V_26_2
                 && let Some(non_default) = self
                     .entity
                     .get_entity()
                     .synched_data
-                    .get_non_default_values_for_version(&version)
+                    .get_non_default_values_for_version_filtered(&version, |data| {
+                        !mannequin || crate::entity::player::mannequin_shared_metadata(data)
+                    })
             {
                 let packet = CSetEntityMetadata::new(self.entity_id.into(), non_default);
                 if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version)
@@ -277,8 +301,13 @@ impl TrackedEntity {
         let entity_ids = [self.entity_id.into()];
         match player.client.as_ref() {
             ClientPlatform::Java(client) => {
+                let mut presentation = client
+                    .bedrock_mannequins
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 let packet = CRemoveEntities::new(&entity_ids);
                 if let Ok(data) = client.serialize_packet(&packet) {
+                    presentation.remove(&self.entity_id);
                     client.try_enqueue_packet(data);
                 }
             }
@@ -311,7 +340,18 @@ impl TrackedEntity {
         }
         let recipients_by_version =
             World::collect_java_recipients_by_version(java_recipients.into_iter());
-        World::broadcast_java_grouped(&je_packet, recipients_by_version);
+        for (version, recipients) in recipients_by_version {
+            if let Ok(data) = JavaClient::serialize_packet_for_version(&je_packet, version) {
+                for recipient in recipients {
+                    let mut presentation = recipient
+                        .bedrock_mannequins
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    presentation.remove(&self.entity_id);
+                    recipient.try_enqueue_packet(data.clone());
+                }
+            }
+        }
         World::broadcast_bedrock_grouped(&be_packet, bedrock_recipients.into_iter());
 
         self.seen_by.clear();
@@ -525,6 +565,13 @@ impl EntityTracker {
     pub fn remove_entity(&self, entity: &dyn EntityBase, world: &World) {
         let entity_id = entity.get_entity().entity_id;
         if let Some(player) = entity.get_player() {
+            if let Some(client) = player.client.java() {
+                client
+                    .bedrock_mannequins
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clear();
+            }
             let player_id = player.gameprofile.id;
             for entry in &self.entity_map {
                 entry.value().remove_player(&player_id);

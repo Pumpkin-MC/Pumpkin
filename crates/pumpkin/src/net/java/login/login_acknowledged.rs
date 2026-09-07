@@ -1,7 +1,50 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use std::sync::atomic::Ordering;
 
 impl PendingConnection {
+    pub(in crate::net::java) async fn send_bedrock_skin_pack(&mut self, server: &Server) {
+        let skin_config = &server.advanced_config.networking.bedrock.skins;
+        if !skin_config.java_resource_pack
+            || !server.bedrock_skin_pack_endpoint.load(Ordering::Acquire)
+            || self.version.load() < JavaMinecraftVersion::V_26_1
+        {
+            return;
+        }
+        let Some(pack) = server.bedrock_skin_packs.current().await else {
+            return;
+        };
+        if self.pending_bedrock_skin_pack.is_some()
+            || self.last_bedrock_skin_pack_offer == Some(pack.id)
+            || self
+                .bedrock_skin_pack
+                .as_ref()
+                .is_some_and(|loaded| loaded.id == pack.id)
+        {
+            return;
+        }
+        let port = server
+            .advanced_config
+            .networking
+            .bedrock
+            .nethernet
+            .address
+            .port();
+        let url = crate::net::bedrock::skin_pack::resource_url(
+            &self.server_address,
+            port,
+            skin_config.resource_pack_url.as_deref(),
+            pack.id,
+        );
+        self.send_packet_now(&CConfigAddResourcePack::new(
+            &pack.id, &url, &pack.hash, false, None,
+        ))
+        .await;
+        self.pending_resource_packs.insert(pack.id);
+        self.last_bedrock_skin_pack_offer = Some(pack.id);
+        self.pending_bedrock_skin_pack = Some(pack);
+    }
+
     pub async fn handle_login_acknowledged(
         &mut self,
         server: &Server,
@@ -96,13 +139,22 @@ impl PendingConnection {
             );
 
             self.send_packet_now(&resource_pack).await;
-        } else if self.version.load() >= JavaMinecraftVersion::V_1_20_5 {
+            self.pending_resource_packs.insert(uuid);
+        }
+        self.send_bedrock_skin_pack(server).await;
+        if self.pending_resource_packs.is_empty() {
+            self.continue_configuration_after_resource_packs().await;
+        }
+        debug!("login acknowledged");
+        None
+    }
+
+    pub(in crate::net::java) async fn continue_configuration_after_resource_packs(&mut self) {
+        if self.version.load() >= JavaMinecraftVersion::V_1_20_5 {
             self.send_known_packs().await;
         } else {
             self.handle_known_packs().await;
         }
-        debug!("login acknowledged");
-        None
     }
 
     pub async fn send_known_packs(&mut self) {

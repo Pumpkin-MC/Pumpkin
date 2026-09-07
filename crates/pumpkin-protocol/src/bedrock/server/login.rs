@@ -220,6 +220,8 @@ pub struct ClientData {
     pub animated_image_data: Vec<SkinAnimation>,
     #[serde(default)]
     pub skin_animation_data: String,
+    #[serde(rename = "ProfileHash", default)]
+    pub profile_hash: String,
     #[serde(default)]
     pub persona_pieces: Vec<PersonaPiece>,
     #[serde(rename = "PieceTintColors", default)]

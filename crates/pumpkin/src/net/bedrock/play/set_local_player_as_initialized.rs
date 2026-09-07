@@ -13,5 +13,7 @@ impl BedrockClient {
         );
         // This is sent when the client has finished loading and rendering the world.
         player.set_client_loaded(true);
+
+        player.world().start_bedrock_player_tracking(player);
     }
 }

@@ -245,9 +245,9 @@ impl PacketRead for SocketAddr {
 
 impl PacketRead for Uuid {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
-        let mut bytes = [0; 16];
-        reader.read_exact(&mut bytes)?;
-        Ok(Self::from_bytes(bytes))
+        let most = u64::read(reader)?;
+        let least = u64::read(reader)?;
+        Ok(Self::from_u64_pair(most, least))
     }
 }
 
@@ -422,12 +422,9 @@ impl<'a> PacketReadSlice<'a> for uuid::Uuid {
         if buf.len() < 16 {
             return Err(Error::new(ErrorKind::UnexpectedEof, "expected Uuid"));
         }
-        let (bytes, rest) = buf.split_at(16);
+        let (mut bytes, rest) = buf.split_at(16);
         *buf = rest;
-        let arr = bytes
-            .try_into()
-            .map_err(|_| Error::new(ErrorKind::InvalidData, "invalid Uuid slice"))?;
-        Ok(Self::from_bytes(arr))
+        Self::read(&mut bytes)
     }
 }
 
