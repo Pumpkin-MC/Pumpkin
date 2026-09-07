@@ -198,8 +198,8 @@ impl LivingEntity {
 
     fn get_pitch(&self) -> f32 {
         let is_baby = self
-            .as_any()
-            .downcast_ref::<&dyn AgeableMob>()
+            .get_mob()
+            .and_then(|x| x.as_ageable())
             .map(|x| x.is_baby())
             .unwrap_or_default();
 
