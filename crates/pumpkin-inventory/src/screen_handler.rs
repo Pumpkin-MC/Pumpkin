@@ -127,6 +127,14 @@ pub trait InventoryPlayer: Send + Sync {
     /// - `retain_ownership` - If true, the player keeps ownership (for pickup delay)
     fn drop_item(&self, item: ItemStack, retain_ownership: bool);
 
+    /// Returns whether `item` is allowed to be dropped from an open screen.
+    ///
+    /// Defaults to `true`, but the player implementation fires `PlayerDropItemEvent`
+    /// so plugins can cancel the drop.
+    fn can_drop_item(&self, _item: &ItemStack) -> bool {
+        true
+    }
+
     /// Gets the player's inventory.
     fn get_inventory(&self) -> Arc<PlayerInventory>;
 
@@ -909,7 +917,12 @@ pub trait ScreenHandler: Send + Sync {
             {
                 let slot = self.get_behaviour().slots[slot_index as usize].clone();
                 let prev_stack = slot.get_cloned_stack();
-                if !prev_stack.is_empty() {
+                let intended_drop = if button == 1 {
+                    prev_stack.clone()
+                } else {
+                    prev_stack.copy_with_count(1)
+                };
+                if !prev_stack.is_empty() && player.can_drop_item(&intended_drop) {
                     if button == 1 {
                         // Throw all
                         while slot
@@ -960,7 +973,12 @@ pub trait ScreenHandler: Send + Sync {
                     .cursor_stack
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if !cursor_stack.is_empty() {
+                let intended_drop = if click_type == MouseClick::Left {
+                    cursor_stack.clone()
+                } else {
+                    cursor_stack.copy_with_count(1)
+                };
+                if !cursor_stack.is_empty() && player.can_drop_item(&intended_drop) {
                     if click_type == MouseClick::Left {
                         player.drop_item(cursor_stack.clone(), true);
                         *cursor_stack = ItemStack::EMPTY.clone();

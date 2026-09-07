@@ -7259,6 +7259,25 @@ impl InventoryPlayer for Player {
         self.drop_item(item);
     }
 
+    /// Fires `PlayerDropItemEvent` so plugins can cancel a drop made from an
+    /// open screen (inventory, chest, custom GUI).
+    fn can_drop_item(&self, item: &ItemStack) -> bool {
+        let Some(server) = self.world().server.upgrade() else {
+            return true;
+        };
+        let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id) else {
+            return true;
+        };
+        let mut event =
+            crate::plugin::api::events::player::player_drop_item::PlayerDropItemEvent::new(
+                player_arc,
+                item.item.registry_key.to_string(),
+                item.item_count,
+            );
+        server.plugin_manager.fire_blocking(&server, &mut event);
+        !event.cancelled
+    }
+
     fn has_infinite_materials(&self) -> bool {
         self.gamemode.load() == GameMode::Creative
     }
