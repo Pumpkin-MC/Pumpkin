@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
 use crate::block::{
-    BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
+    BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnLandedUponArgs, OnPlaceArgs,
     OnScheduledTickArgs, PathComputationType, RandomTickArgs,
 };
 use crate::world::World;
 use pumpkin_data::block_properties::FarmlandLikeProperties;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
@@ -24,11 +25,43 @@ pub struct FarmlandBlock;
 impl BlockBehaviour for FarmlandBlock {
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         // TODO: push up entities
-        args.world.set_block_state(
-            args.position,
-            Block::DIRT.default_state.id,
-            BlockFlags::NOTIFY_ALL,
-        );
+        Self::turn_to_dirt(args.world, args.position);
+    }
+
+    fn on_landed_upon(&self, args: OnLandedUponArgs<'_>) {
+        if let Some(living) = args.entity.get_living_entity() {
+            living.handle_fall_damage(args.entity, args.fall_distance, 1.0);
+        }
+
+        // Vanilla `FarmBlock#fallOn`: a sufficiently large living entity
+        // landing on farmland may turn it into dirt. Players always trample;
+        // other mobs only when the mob griefing game rule is enabled.
+        let Some(living) = args.entity.get_living_entity() else {
+            return;
+        };
+        if args.entity.get_player().is_none()
+            && !args.world.level_info.load().game_rules.mob_griefing
+        {
+            return;
+        }
+        let [width, height] = living.entity.entity_type.dimension;
+        if f64::from(width) * f64::from(width) * f64::from(height) <= 0.512 {
+            return;
+        }
+        if rand::random::<f32>() >= args.fall_distance - 0.5 {
+            return;
+        }
+        let entity_pos = args.entity.get_entity().pos.load();
+        let pos = BlockPos(Vector3::new(
+            entity_pos.x.floor() as i32,
+            entity_pos.y.floor() as i32,
+            entity_pos.z.floor() as i32,
+        ));
+        let (block, _) = args.world.get_block_and_state(&pos);
+        if block == &Block::FARMLAND {
+            // TODO: push up entities
+            Self::turn_to_dirt(args.world, &pos);
+        }
     }
 
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
@@ -87,11 +120,7 @@ impl BlockBehaviour for FarmlandBlock {
                     .has_tag(&tag::Block::MINECRAFT_MAINTAINS_FARMLAND)
                 {
                     //TODO push entities up
-                    args.world.set_block_state(
-                        args.position,
-                        Block::DIRT.default_state.id,
-                        BlockFlags::NOTIFY_NEIGHBORS,
-                    );
+                    Self::turn_to_dirt(args.world, args.position);
                 }
             } else {
                 let mut new_moisture = (props.moisture as i32 - 1).clamp(0, 7);
@@ -125,6 +154,18 @@ impl BlockBehaviour for FarmlandBlock {
 fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
     let state = world.get_block_state(&block_pos.up());
     !state.is_solid() // TODO: add fence gate block
+}
+
+impl FarmlandBlock {
+    /// Vanilla `FarmBlock#turnToDirt`.
+    fn turn_to_dirt(world: &Arc<World>, position: &BlockPos) {
+        world.set_block_state(
+            position,
+            Block::DIRT.default_state.id,
+            BlockFlags::NOTIFY_ALL,
+        );
+        world.emit_game_event(GameEvent::BlockChange.name(), position.to_centered_f64());
+    }
 }
 
 fn is_water_nearby(world: &Arc<World>, block_pos: &BlockPos) -> bool {
