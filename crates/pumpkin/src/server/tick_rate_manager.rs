@@ -245,7 +245,7 @@ mod tests {
     #[test]
     fn clamp_tickrate_rejects_nan() {
         assert_eq!(clamp_tickrate(f32::NAN), MIN_TICKRATE);
-        // NaN reaching nanoseconds_for_rate would saturate the cast to a 0ns tick.
+        // NaN would cast to a 0ns tick.
         assert!(nanoseconds_for_rate(clamp_tickrate(f32::NAN)) > 0);
     }
 

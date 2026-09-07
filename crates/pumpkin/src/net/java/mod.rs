@@ -422,7 +422,7 @@ impl JavaClient {
         self.enqueue_packet_data(packet_data).await;
     }
 
-    /// Awaits a full FIFO instead of dropping, so ordered play packets never go missing.
+    /// Awaits a full FIFO instead of dropping the packet.
     pub async fn enqueue_packet_data(&self, packet_data: Bytes) {
         let Some(packet_len) = self.reserve_pending_bytes(&packet_data) else {
             return;
@@ -447,7 +447,7 @@ impl JavaClient {
         }
     }
 
-    /// `None` when the packet must be dropped: closed, or over the outbound byte cap.
+    /// `None` when the packet must be dropped.
     fn reserve_pending_bytes(&self, packet_data: &Bytes) -> Option<usize> {
         if self.close_token.is_cancelled() {
             return None;
@@ -570,7 +570,7 @@ impl JavaClient {
                 match err {
                     tokio::sync::mpsc::error::TrySendError::Full(_) => {
                         warn!(
-                            "Disconnect packet for client {} dropped: outgoing packet queue full. The client sees a bare connection close.",
+                            "Disconnect packet for client {} dropped: outgoing packet queue full",
                             self.id
                         );
                     }

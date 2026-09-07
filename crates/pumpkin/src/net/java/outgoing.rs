@@ -194,7 +194,7 @@ async fn frame_batch_maybe_offload<W: AsyncWrite + Unpin + Send + 'static>(
     }
 }
 
-/// Everything the writer loop shares but never mutates.
+/// Shared, never mutated by the writer loop.
 struct WriterCtx {
     close_token: CancellationToken,
     suspend_flushing: Arc<AtomicBool>,
@@ -203,11 +203,11 @@ struct WriterCtx {
     id: u64,
 }
 
-/// Buffered-write bookkeeping between two TCP flushes.
+/// Write state between two TCP flushes.
 struct FlushState {
-    /// Packets are in the `BufWriter` but not yet on the socket.
+    /// Written to the `BufWriter`, not flushed yet.
     unflushed: bool,
-    /// `send_packet_now` waiters, released once their bytes are flushed.
+    /// `send_packet_now` waiters, released on flush.
     pending_completions: Vec<oneshot::Sender<()>>,
     last_tcp_flush: Instant,
 }
@@ -247,7 +247,7 @@ impl FlushState {
         Some(did_flush)
     }
 
-    /// `false` on socket error, so the caller closes the connection.
+    /// `false` on socket error.
     async fn flush_and_stamp<W: AsyncWrite + Unpin>(
         &mut self,
         writer: &mut TCPNetworkEncoder<W>,
@@ -279,9 +279,9 @@ impl FlushState {
 /// What woke the writer loop.
 enum WriterStep {
     Packet(OutgoingPacket),
-    /// `resumeFlushing` fired; re-check the tick barrier.
+    /// `resumeFlushing` fired.
     Retry,
-    /// 50ms cadence elapsed with unflushed bytes.
+    /// 50ms elapsed with unflushed bytes.
     Flush,
     Stop,
 }

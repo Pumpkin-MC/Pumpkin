@@ -187,3 +187,52 @@ fn signed_nanos(later: Instant, earlier: Instant) -> i64 {
 fn nanos_to_duration(nanos: i64) -> Duration {
     Duration::from_nanos(nanos.max(0) as u64)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const TICK_20_TPS: i64 = NANOSECONDS_PER_SECOND / 20;
+
+    fn at(origin: Instant, nanos: i64) -> Instant {
+        origin + nanos_to_duration(nanos)
+    }
+
+    #[test]
+    fn on_time_tick_does_not_skip() {
+        let origin = Instant::now();
+        let (next, warning, skipped) = apply_overload_skip(origin, origin, None, TICK_20_TPS);
+        assert!(skipped.is_none());
+        assert_eq!(signed_nanos(next, origin), 0);
+        assert!(warning.is_none());
+    }
+
+    #[test]
+    fn short_lag_catch_up_does_not_skip() {
+        let origin = Instant::now();
+        let now = at(origin, 60 * NANOSECONDS_PER_MILLISECOND);
+        let (next, _, skipped) = apply_overload_skip(now, origin, None, TICK_20_TPS);
+        assert!(skipped.is_none());
+        assert_eq!(signed_nanos(next, origin), 0);
+    }
+
+    #[test]
+    fn overload_warning_is_rate_limited() {
+        let origin = Instant::now();
+        let now = at(origin, 3 * NANOSECONDS_PER_SECOND);
+        let just_warned = Some(origin);
+        let (_, _, skipped) = apply_overload_skip(now, origin, just_warned, TICK_20_TPS);
+        assert!(skipped.is_none());
+    }
+
+    #[test]
+    fn sprint_resets_deadline_to_now() {
+        let origin = Instant::now();
+        let now = at(origin, NANOSECONDS_PER_SECOND);
+        let (next, warning, skipped) = apply_overload_skip(now, origin, None, 0);
+        assert!(skipped.is_none());
+        assert_eq!(next, now);
+        // A sprint neither skipped nor warned.
+        assert_eq!(warning, None);
+    }
+}
