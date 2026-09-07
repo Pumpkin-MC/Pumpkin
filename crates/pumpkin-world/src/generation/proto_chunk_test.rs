@@ -103,6 +103,54 @@ mod test {
     }
 
     #[test]
+    fn nether_complex_references_use_selected_structure() {
+        use crate::generation::structure::placement::get_structure_chunk_in_region;
+        use pumpkin_data::structures::{StructureKeys, StructurePlacementType, StructureSet};
+
+        let seed = Seed(0);
+        let world_gen = get_world_gen(
+            seed,
+            Dimension::THE_NETHER,
+            false,
+            Vec::new(),
+            String::new(),
+        );
+        let WorldGenerator::Noise(generator) = &*world_gen else {
+            unreachable!()
+        };
+        let set = &StructureSet::NETHER_COMPLEXES;
+        let StructurePlacementType::RandomSpread(spread) = &set.placement.placement_type else {
+            unreachable!()
+        };
+
+        for region_x in 0..8 {
+            for region_z in 0..8 {
+                let (chunk_x, chunk_z) = get_structure_chunk_in_region(
+                    spread,
+                    seed.0 as i64,
+                    region_x,
+                    region_z,
+                    set.placement.salt,
+                );
+                let mut proto = ProtoChunk::new(chunk_x, chunk_z, &world_gen);
+                proto.step_to_biomes(generator);
+                proto.set_structure_starts(generator);
+
+                if !proto.has_structure(StructureKeys::BastionRemnant) {
+                    continue;
+                }
+
+                proto.set_structure_references(generator);
+                assert!(proto.has_structure(StructureKeys::BastionRemnant));
+                assert!(!proto.has_structure(StructureKeys::Fortress));
+                return;
+            }
+        }
+
+        panic!("no bastion remnant start found in sampled nether complex regions");
+    }
+
+    #[test]
     fn structure_references_are_rebuilt_when_resuming_generation() {
         use crate::chunk_system::chunk_state::Chunk;
         use pumpkin_config::lighting::LightingEngineConfig;
