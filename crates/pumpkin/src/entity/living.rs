@@ -31,6 +31,7 @@ use crate::entity::attributes::ModifierOperation;
 use crate::entity::combat::{CombatRules, CombatTracker, FallLocation, knockback_after_resistance};
 use crate::entity::mob::equipment::DEFAULT_EQUIPMENT_DROP_CHANCE;
 use crate::entity::mob::slime::SlimeEntity;
+use crate::entity::mob::sulfur_cube::SulfurCubeEntity;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
 use crate::server::Server;
 use crate::world::loot::LootContextParameters;
@@ -2311,6 +2312,8 @@ impl LivingEntity {
     fn hurt_sound(&self) -> Sound {
         if self.entity.entity_type == &EntityType::SLIME {
             SlimeEntity::hurt_sound_for_size(self.entity.data.load(Relaxed))
+        } else if self.entity.entity_type == &EntityType::SULFUR_CUBE {
+            SulfurCubeEntity::hurt_sound_for_size(self.entity.data.load(Relaxed))
         } else {
             Self::hurt_sound_for_entity(self.entity.entity_type)
         }
