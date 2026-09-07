@@ -174,25 +174,37 @@ fn get_chest_screen_handler_factory(
 
     let player_is_spectator = args.player.gamemode.load() == GameMode::Spectator;
 
-    // Unpack deferred loot table on first open (non-spectator only).
-    if !player_is_spectator
-        && let Some(ref entity) = first_chest
-        && let Some((loot_key, seed)) = entity.take_loot_table()
-        && let Some(table) = get_loot_table(&loot_key)
-        && let Some(inv) = entity.clone().get_inventory()
-    {
-        fill_chest_inventory(&inv, table, seed);
-        inv.mark_dirty();
-    }
-
-    let first_inventory = first_chest.and_then(BlockEntity::get_inventory)?;
-
     let chest_props = ChestLikeProperties::from_state_id(state);
     let connected_towards = match chest_props.r#type {
         ChestType::Single => None,
         ChestType::Left => Some(chest_props.facing.rotate_clockwise()),
         ChestType::Right => Some(chest_props.facing.rotate_counter_clockwise()),
     };
+
+    // Unpack deferred loot tables on first open (non-spectator only).
+    // Both halves of a double chest are unpacked at once, like vanilla's CompoundContainer.
+    if !player_is_spectator {
+        let unpack = |entity: &Arc<dyn BlockEntity>| {
+            if let Some((loot_key, seed)) = entity.take_loot_table()
+                && let Some(table) = get_loot_table(&loot_key)
+                && let Some(inv) = entity.clone().get_inventory()
+            {
+                fill_chest_inventory(&inv, table, seed);
+                inv.mark_dirty();
+            }
+        };
+        if let Some(ref entity) = first_chest {
+            unpack(entity);
+        }
+        if let Some(direction) = connected_towards
+            && let Some(second) =
+                args.world.get_block_entity(&args.position.offset(direction.to_offset()))
+        {
+            unpack(&second);
+        }
+    }
+
+    let first_inventory = first_chest.and_then(BlockEntity::get_inventory)?;
 
     if is_chest_blocked(args.world, args.position) {
         return None;
