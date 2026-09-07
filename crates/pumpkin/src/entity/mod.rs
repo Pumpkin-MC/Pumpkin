@@ -2769,6 +2769,36 @@ impl Entity {
         self.is_in_water() && self.is_submerged_in_water()
     }
 
+    /// `Entity.isInBubbleColumn`.
+    #[must_use]
+    pub fn is_in_bubble_column(&self) -> bool {
+        self.world.load().get_block(&self.block_pos.load()) == &Block::BUBBLE_COLUMN
+    }
+
+    /// `Entity.isInRain`.
+    #[must_use]
+    pub fn is_in_rain(&self) -> bool {
+        let world = self.world.load();
+        let feet = self.block_pos.load();
+        if world.is_raining_at(&feet) {
+            return true;
+        }
+        let top_y = self.bounding_box.load().max.y.floor() as i32;
+        world.is_raining_at(&BlockPos::new(feet.0.x, top_y, feet.0.z))
+    }
+
+    /// `Entity.isInWaterOrRain`.
+    #[must_use]
+    pub fn is_in_water_or_rain(&self) -> bool {
+        self.is_in_water() || self.is_in_rain()
+    }
+
+    /// `Entity.isInWaterRainOrBubble`.
+    #[must_use]
+    pub fn is_in_water_rain_or_bubble(&self) -> bool {
+        self.is_in_water_or_rain() || self.is_in_bubble_column()
+    }
+
     #[must_use]
     pub fn is_visually_crawling(&self) -> bool {
         self.is_visually_swimming() && !self.is_in_water()
