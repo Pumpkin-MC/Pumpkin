@@ -29,7 +29,7 @@ impl PendingConnection {
 
     pub async fn handle_encryption_response(
         &mut self,
-        server: &Server,
+        server: &Arc<Server>,
         encryption_response: SEncryptionResponse,
     ) -> Option<PacketHandlerResult> {
         debug!("Handling encryption");
@@ -146,9 +146,26 @@ impl PendingConnection {
 
     pub(super) async fn finish_login(
         &mut self,
-        server: &Server,
+        server: &Arc<Server>,
         profile: &GameProfile,
     ) -> Option<PacketHandlerResult> {
+        let mut pre_login_event =
+            crate::plugin::api::events::player::async_player_pre_login::AsyncPlayerPreLoginEvent {
+                player_name: profile.name.clone(),
+                player_uuid: profile.id,
+                ip_address: self.address,
+                kick_message: TextComponent::text("Disconnected"),
+                cancelled: false,
+            };
+        server
+            .plugin_manager
+            .fire(server, &mut pre_login_event)
+            .await;
+        if pre_login_event.cancelled {
+            self.kick(pre_login_event.kick_message).await;
+            return Some(PacketHandlerResult::Stop);
+        }
+
         let props = profile.properties.load();
         let packet = CLoginSuccess::new(
             &profile.id,

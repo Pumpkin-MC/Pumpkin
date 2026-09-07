@@ -6,7 +6,6 @@ use std::sync::{
 };
 
 use crate::block::entities::PropertyDelegate;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::potion_brewing::{ITEM_RECIPES, POTION_RECIPES};
@@ -107,6 +106,20 @@ impl BrewingStandBlockEntity {
 
         let ingredient_id = ingredient.get_item().id;
 
+        // Fire BrewEvent before mutating items
+        if let Some(server) = world.server.upgrade() {
+            let mut brew_event = crate::plugin::api::events::inventory::brew::BrewEvent::new(
+                self.position,
+                self.fuel.load(Ordering::Relaxed) as u8,
+            );
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut brew_event);
+            if brew_event.cancelled {
+                return;
+            }
+        }
+
         // Brew potion slots
         let mut ingredient_used = false;
         {
@@ -172,17 +185,6 @@ impl BrewingStandBlockEntity {
             return;
         }
 
-        // Fire BrewEvent
-        if let Some(server) = world.server.upgrade() {
-            let mut brew_event = crate::plugin::api::events::inventory::brew::BrewEvent::new(
-                self.position,
-                self.fuel.load(Ordering::Relaxed) as u8,
-            );
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut brew_event);
-        }
-
         // Check if remaining ingredient matches or clear it
         if let Ok(items) = self.items.read() {
             let remaining = &items[3];
@@ -227,6 +229,50 @@ impl BrewingStandBlockEntity {
 
         // Mark dirty to trigger update
         self.mark_dirty();
+    }
+
+    fn try_refill_fuel(&self, world: &Arc<crate::world::World>) -> bool {
+        let expected_fuel = if self.fuel.load(Ordering::Relaxed) <= 0
+            && let Ok(items) = self.items.try_read()
+            && !items[4].is_empty()
+            && items[4]
+                .get_item()
+                .has_tag(&tag::Item::MINECRAFT_BREWING_FUEL)
+        {
+            items[4].clone()
+        } else {
+            return false;
+        };
+
+        let fuel_power = if let Some(server) = world.server.upgrade() {
+            let mut fuel_event = crate::plugin::api::events::inventory::brewing_stand_fuel::BrewingStandFuelEvent::new(
+                self.position,
+                20,
+            );
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut fuel_event);
+
+            if fuel_event.cancelled {
+                return false;
+            }
+
+            fuel_event.fuel_power
+        } else {
+            20
+        };
+
+        if self.fuel.load(Ordering::Relaxed) <= 0
+            && let Ok(mut items) = self.items.try_write()
+            && !items[4].is_empty()
+            && items[4].are_equal(&expected_fuel)
+        {
+            self.fuel.store(i32::from(fuel_power), Ordering::Relaxed);
+            items[4].decrement(1);
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -357,10 +403,18 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
         let mut entity = Self::new(position);
 
         // Load brew time / fuel if present in NBT
-        if let Some(bt) = nbt.get_int("BrewTime") {
+        if let Some(bt) = nbt
+            .get_short("BrewTime")
+            .map(i32::from)
+            .or_else(|| nbt.get_int("BrewTime"))
+        {
             entity.brew_time.store(bt, Ordering::Relaxed);
         }
-        if let Some(f) = nbt.get_int("Fuel") {
+        if let Some(f) = nbt
+            .get_byte("Fuel")
+            .map(i32::from)
+            .or_else(|| nbt.get_int("Fuel"))
+        {
             entity.fuel.store(f, Ordering::Relaxed);
         }
 
@@ -401,8 +455,8 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
 
     fn write_nbt(&self, nbt: &mut NbtCompound) {
         // Persist brew state
-        nbt.put_int("BrewTime", self.brew_time.load(Ordering::Relaxed));
-        nbt.put_int("Fuel", self.fuel.load(Ordering::Relaxed));
+        nbt.put_short("BrewTime", self.brew_time.load(Ordering::Relaxed) as i16);
+        nbt.put_byte("Fuel", self.fuel.load(Ordering::Relaxed) as i8);
 
         // Save inventory contents to NBT
         self.write_inventory_nbt(nbt, true);
@@ -414,8 +468,8 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
-        nbt.put_int("BrewTime", self.brew_time.load(Ordering::Relaxed));
-        nbt.put_int("Fuel", self.fuel.load(Ordering::Relaxed));
+        nbt.put_short("BrewTime", self.brew_time.load(Ordering::Relaxed) as i16);
+        nbt.put_byte("Fuel", self.fuel.load(Ordering::Relaxed) as i8);
         if let Ok(items) = self.items.try_read() {
             sync_write_items_to_nbt(&*items, &mut nbt);
         }
@@ -434,30 +488,10 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
         self
     }
 
+    #[allow(clippy::too_many_lines)]
     fn tick(&self, world: &Arc<crate::world::World>) {
         // Refill fuel counter from fuel item if needed
-        let fuel_refilled = self.fuel.load(Ordering::Relaxed) <= 0
-            && if let Ok(mut items) = self.items.try_write()
-                && !items[4].is_empty()
-                && items[4]
-                    .get_item()
-                    .has_tag(&tag::Item::MINECRAFT_BREWING_FUEL)
-            {
-                if let Some(server) = world.server.upgrade() {
-                    let mut fuel_event = crate::plugin::api::events::inventory::brewing_stand_fuel::BrewingStandFuelEvent::new(
-                            self.position,
-                            20,
-                        );
-                    server
-                        .plugin_manager
-                        .fire_blocking(&server, &mut fuel_event);
-                }
-                self.fuel.store(20, Ordering::Relaxed);
-                items[4].decrement(1);
-                true
-            } else {
-                false
-            };
+        let fuel_refilled = self.try_refill_fuel(world);
 
         // Get current ingredient and check brewing state
         let Ok(items) = self.items.try_read() else {
@@ -486,9 +520,27 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
                 self.mark_dirty();
             }
         } else if brewable && self.fuel.load(Ordering::Relaxed) > 0 {
+            let brew_time = if let Some(server) = world.server.upgrade() {
+                let mut start_event =
+                    crate::plugin::api::events::block::brewing_start::BrewingStartEvent::new(
+                        self.position,
+                        world.clone(),
+                        400,
+                    );
+                server
+                    .plugin_manager
+                    .fire_blocking(&server, &mut start_event);
+                if start_event.cancelled {
+                    return;
+                }
+                start_event.brewing_time
+            } else {
+                400
+            };
+
             // Start new brewing cycle
             self.fuel.fetch_sub(1, Ordering::Relaxed);
-            self.brew_time.store(400, Ordering::Relaxed);
+            self.brew_time.store(brew_time, Ordering::Relaxed);
             *self
                 .ingredient_item
                 .lock()
@@ -527,9 +579,7 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
             let (block, state) = world.get_block_and_state(&self.position);
             // Use generated block properties helper to produce a new state id with the bits set
             let mut props =
-                pumpkin_data::block_properties::BrewingStandLikeProperties::from_state_id(
-                    state.id, block,
-                );
+                pumpkin_data::block_properties::BrewingStandLikeProperties::from_state_id(state.id);
             // Generated field names use raw identifiers for clarity
             props.r#has_bottle_0 = current[0];
             props.r#has_bottle_1 = current[1];

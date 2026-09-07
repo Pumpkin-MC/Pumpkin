@@ -14,10 +14,9 @@ use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
 use rustc_hash::FxHashMap;
 use std::sync::Arc;
-use std::sync::atomic::AtomicI32;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::{
-    AtomicBool, AtomicU8,
+    AtomicBool, AtomicI32, AtomicI64, AtomicU8,
     Ordering::{Relaxed, SeqCst},
 };
 use tracing::warn;
@@ -29,15 +28,14 @@ use crate::entity::NBTStorage;
 use crate::entity::attributes::AttributeInstance;
 use crate::entity::attributes::Modifier;
 use crate::entity::attributes::ModifierOperation;
-use crate::entity::combat::knockback_after_resistance;
+use crate::entity::combat::{CombatRules, CombatTracker, FallLocation, knockback_after_resistance};
 use crate::entity::mob::equipment::DEFAULT_EQUIPMENT_DROP_CHANCE;
 use crate::entity::mob::slime::SlimeEntity;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
 use crate::server::Server;
-use crate::world::loot::{LootContextParameters, LootTableExt};
+use crate::world::loot::LootContextParameters;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
-use pumpkin_data::damage::DeathMessageType;
 use pumpkin_data::data_component_impl::Operation;
 use pumpkin_data::data_component_impl::food::{ConsumableImpl, ConsumeEffect};
 use pumpkin_data::data_component_impl::{
@@ -49,7 +47,7 @@ use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item_stack::{DamageResult, ItemStack};
 use pumpkin_data::sound::SoundCategory;
-use pumpkin_data::{Block, Enchantment, translation};
+use pumpkin_data::{Block, Enchantment};
 use pumpkin_data::{damage::DamageType, sound::Sound};
 use pumpkin_inventory::entity_equipment::EntityEquipment;
 use pumpkin_nbt::compound::NbtCompound;
@@ -60,7 +58,7 @@ use pumpkin_protocol::java::client::play::{
 };
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
-    java::client::play::{CSetEquipment, Metadata, MetadataSerializer},
+    java::client::play::{CSetEquipment, MetadataSerializer},
     ser::{NetworkWriteExt, WritingError},
 };
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -86,6 +84,7 @@ pub struct LivingEntity {
     pub item_use_time: AtomicI32,
     pub item_in_use: std::sync::Mutex<Option<ItemStack>>,
     pub active_hand: std::sync::Mutex<Option<Hand>>,
+    pub recent_kinetic_enemies: std::sync::Mutex<FxHashMap<i32, i32>>,
     pub death_time: AtomicU8,
     /// Indicates whether the entity is dead. (`on_death` called)
     pub dead: AtomicBool,
@@ -116,18 +115,35 @@ pub struct LivingEntity {
     /// The tick at which this entity last attacked something (entity age).
     pub last_attack_time: AtomicI32,
 
+    /// Tracks combat entries, assisted falls, kill credit, and death messages.
+    pub combat_tracker: std::sync::Mutex<CombatTracker>,
+
+    /// The ID of the player that last hurt this entity.
+    pub last_hurt_by_player_id: AtomicI32,
+    /// The tick at which this entity was last hurt by a player.
+    pub last_hurt_by_player_time: AtomicI64,
+    /// The ID of the mob/entity that last hurt this entity.
+    pub last_hurt_by_mob_id: AtomicI32,
+    /// The tick at which this entity was last hurt by a mob/entity.
+    pub last_hurt_by_mob_time: AtomicI64,
+
     water_movement_speed_multiplier: f32,
     livings_flags: AtomicU8,
+
+    /// The last block position the entity occupied, used to trigger location changed effects.
+    pub last_block_pos: AtomicCell<Option<BlockPos>>,
 
     /// The attributes of the entity
     pub attributes: RwLock<FxHashMap<u8, AttributeInstance>>,
 }
 
+#[derive(Clone)]
 struct EffectParticle {
     particle_id: VarInt,
     color: i32,
 }
 
+#[derive(Clone)]
 struct EffectParticles(Vec<EffectParticle>);
 
 impl MetadataSerializer for EffectParticles {
@@ -208,6 +224,7 @@ impl LivingEntity {
             item_use_time: AtomicI32::new(0),
             item_in_use: std::sync::Mutex::new(None),
             active_hand: std::sync::Mutex::new(None),
+            recent_kinetic_enemies: std::sync::Mutex::new(FxHashMap::default()),
             livings_flags: AtomicU8::new(0),
             active_effects: std::sync::Mutex::new(FxHashMap::default()),
             entity_equipment: Arc::new(std::sync::Mutex::new(EntityEquipment::new())),
@@ -221,8 +238,82 @@ impl LivingEntity {
             last_attacked_time: AtomicI32::new(0),
             last_attacking_id: AtomicI32::new(0),
             last_attack_time: AtomicI32::new(0),
+            combat_tracker: std::sync::Mutex::new(CombatTracker::new()),
+            last_hurt_by_player_id: AtomicI32::new(0),
+            last_hurt_by_player_time: AtomicI64::new(0),
+            last_hurt_by_mob_id: AtomicI32::new(0),
+            last_hurt_by_mob_time: AtomicI64::new(0),
             movement_input: AtomicCell::new(Vector3::default()),
             water_movement_speed_multiplier,
+            last_block_pos: AtomicCell::new(None),
+        }
+    }
+
+    /// Returns the entity that should receive kill credit for this entity's death.
+    /// Following vanilla Java logic (`LivingEntity.getKillCredit`):
+    /// 1. Prioritize `last_hurt_by_player` if hurt within the last 100 ticks (5 seconds).
+    /// 2. Then `last_hurt_by_mob` if hurt within the last 100 ticks.
+    /// 3. Fall back to combat tracker's killer entry if available.
+    pub fn get_kill_credit(&self) -> Option<Arc<dyn EntityBase>> {
+        let world = self.entity.world.load();
+        let current_tick = world.level_info.load().day_time;
+
+        let player_id = self.last_hurt_by_player_id.load(Relaxed);
+        let player_time = self.last_hurt_by_player_time.load(Relaxed);
+        if player_id != 0
+            && (current_tick - player_time).abs() <= 100
+            && let Some(player) = world.get_entity_by_id(player_id)
+        {
+            return Some(player);
+        }
+
+        let mob_id = self.last_hurt_by_mob_id.load(Relaxed);
+        let mob_time = self.last_hurt_by_mob_time.load(Relaxed);
+        if mob_id != 0
+            && (current_tick - mob_time).abs() <= 100
+            && let Some(mob) = world.get_entity_by_id(mob_id)
+        {
+            return Some(mob);
+        }
+
+        let tracker = self
+            .combat_tracker
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(killer) = tracker.get_killer_entry()
+            && let Some(killer_id) = killer.attacker_id
+        {
+            return world.get_entity_by_id(killer_id);
+        }
+
+        None
+    }
+
+    /// Triggers location-based enchantment effects (e.g. Frost Walker) when the entity's block position changes.
+    pub fn on_changed_block(&self, caller: &dyn EntityBase, _pos: BlockPos) {
+        let pos_f64 = self.entity.pos.load();
+        if let Some(player) = caller.get_player() {
+            let boots = player.inventory.get_slot(36);
+            if !boots.is_empty() {
+                crate::enchantment::EnchantmentHelper::on_location_changed(
+                    &self.entity,
+                    &boots,
+                    pos_f64,
+                );
+            }
+        } else {
+            let boots = self
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get(&EquipmentSlot::FEET);
+            if !boots.is_empty() {
+                crate::enchantment::EnchantmentHelper::on_location_changed(
+                    &self.entity,
+                    &boots,
+                    pos_f64,
+                );
+            }
         }
     }
 
@@ -230,6 +321,23 @@ impl LivingEntity {
         if equipment.is_empty() {
             return;
         }
+
+        if equipment
+            .iter()
+            .any(|(slot, _)| *slot == EquipmentSlot::FEET)
+        {
+            let pos_f64 = self.entity.pos.load();
+            for (slot, stack) in equipment {
+                if *slot == EquipmentSlot::FEET && !stack.is_empty() {
+                    crate::enchantment::EnchantmentHelper::on_location_changed(
+                        &self.entity,
+                        stack,
+                        pos_f64,
+                    );
+                }
+            }
+        }
+
         let equipment_java: Vec<(i8, ItemStackSerializer)> = equipment
             .iter()
             .map(|(slot, stack)| {
@@ -243,6 +351,9 @@ impl LivingEntity {
 
         let mut sent_editioned = false;
         for (slot, stack) in equipment {
+            if *slot == EquipmentSlot::MAIN_HAND {
+                self.update_weapon_attributes(stack);
+            }
             if *slot == EquipmentSlot::MAIN_HAND || *slot == EquipmentSlot::OFF_HAND {
                 let window_id = if *slot == EquipmentSlot::OFF_HAND {
                     120
@@ -273,6 +384,64 @@ impl LivingEntity {
                 .world
                 .load()
                 .send_to_tracking_players(&self.entity, &je_packet);
+        }
+    }
+
+    /// Applies the held item's attack attribute modifiers to this entity's
+    /// attribute map and sends the changed attributes to clients. Without this
+    /// the client never sees the reduced attack speed and does not show the
+    /// crosshair attack indicator.
+    fn update_weapon_attributes(&self, stack: &ItemStack) {
+        let component = stack.get_data_component::<AttributeModifiersImpl>();
+
+        // Single pass over the item's modifiers, split by attribute.
+        let mut speed_modifiers: Vec<Modifier> = Vec::new();
+        let mut damage_modifiers: Vec<Modifier> = Vec::new();
+        for modifier in component
+            .into_iter()
+            .flat_map(|c| c.attribute_modifiers.iter())
+        {
+            let target = if modifier.r#type == &Attributes::ATTACK_SPEED {
+                &mut speed_modifiers
+            } else if modifier.r#type == &Attributes::ATTACK_DAMAGE {
+                &mut damage_modifiers
+            } else {
+                continue;
+            };
+            target.push(Modifier {
+                id: modifier.id.to_string(),
+                amount: modifier.amount,
+                operation: match modifier.operation {
+                    Operation::AddValue => ModifierOperation::Add,
+                    Operation::AddMultipliedBase => ModifierOperation::MultiplyBase,
+                    Operation::AddMultipliedTotal => ModifierOperation::MultiplyTotal,
+                },
+            });
+        }
+
+        let mut changed: Vec<Attributes> = Vec::new();
+        {
+            let mut attributes = self
+                .attributes
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for (attribute, modifiers) in [
+                (Attributes::ATTACK_SPEED, speed_modifiers),
+                (Attributes::ATTACK_DAMAGE, damage_modifiers),
+            ] {
+                let instance = attributes
+                    .entry(attribute.id)
+                    .or_insert_with(|| AttributeInstance::new(attribute.default_value));
+                if instance.modifiers == modifiers {
+                    continue;
+                }
+                instance.modifiers = modifiers;
+                instance.dirty.store(true, Ordering::Relaxed);
+                changed.push(attribute);
+            }
+        }
+        if !changed.is_empty() {
+            crate::entity::attributes::send_attribute_updates_for_living(self, changed);
         }
     }
 
@@ -319,6 +488,10 @@ impl LivingEntity {
             .active_hand
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(hand);
+        self.recent_kinetic_enemies
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
         self.set_living_flag(Self::USING_ITEM_FLAG, true);
         self.set_living_flag(Self::OFF_HAND_ACTIVE_FLAG, hand == Hand::Left);
     }
@@ -356,13 +529,11 @@ impl LivingEntity {
             meta
         });
 
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::living_entity::DATA_LIVING_ENTITY_FLAGS,
-                b,
-            )],
-            bedrock_meta.as_ref(),
-        );
+        self.entity
+            .set_synced_data(tracked_data::living_entity::DATA_LIVING_ENTITY_FLAGS, b);
+        if let Some(bedrock_meta) = &bedrock_meta {
+            self.entity.send_bedrock_actor_data(bedrock_meta);
+        }
     }
 
     pub fn clear_active_hand(&self) {
@@ -374,9 +545,28 @@ impl LivingEntity {
             .active_hand
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        self.recent_kinetic_enemies
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
         self.item_use_time.store(0, Ordering::Relaxed);
 
         self.set_living_flag(Self::USING_ITEM_FLAG, false);
+    }
+
+    pub fn was_recently_stabbed(&self, target_id: i32, now: i32, allowed_ticks: i32) -> bool {
+        self.recent_kinetic_enemies
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&target_id)
+            .is_some_and(|stabbed_at| now - stabbed_at < allowed_ticks)
+    }
+
+    pub fn remember_stabbed_entity(&self, target_id: i32, now: i32) {
+        self.recent_kinetic_enemies
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(target_id, now);
     }
 
     pub fn is_blocking(&self) -> bool {
@@ -431,13 +621,8 @@ impl LivingEntity {
         let clamped = health.max(0.0).min(max_health);
         self.health.store(clamped);
         // tell everyone entities health changed
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::living_entity::DATA_HEALTH_ID,
-                clamped,
-            )],
-            None,
-        );
+        self.entity
+            .set_synced_data(tracked_data::living_entity::DATA_HEALTH_ID, clamped);
     }
 
     /// Returns the current maximum health for this entity
@@ -485,13 +670,8 @@ impl LivingEntity {
 
         // Send absorption metadata for players (visual yellow hearts)
         if self.entity.entity_type == &EntityType::PLAYER {
-            self.entity.send_meta_data(
-                &[Metadata::new(
-                    tracked_data::player::DATA_PLAYER_ABSORPTION_ID,
-                    new_abs,
-                )],
-                None,
-            );
+            self.entity
+                .set_synced_data(tracked_data::player::DATA_PLAYER_ABSORPTION_ID, new_abs);
         }
     }
 
@@ -762,21 +942,11 @@ impl LivingEntity {
             .all(|effect| effect.ambient);
         drop(effects);
 
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::living_entity::EFFECT_PARTICLES,
-                particles,
-            )],
-            None,
-        );
+        self.entity
+            .set_synced_data(tracked_data::living_entity::EFFECT_PARTICLES, particles);
         if has_effects {
-            self.entity.send_meta_data(
-                &[Metadata::new(
-                    tracked_data::living_entity::EFFECT_AMBIENCE_ID,
-                    ambient,
-                )],
-                None,
-            );
+            self.entity
+                .set_synced_data(tracked_data::living_entity::EFFECT_AMBIENCE_ID, ambient);
         }
     }
 
@@ -1273,7 +1443,7 @@ impl LivingEntity {
         //     }
 
         //     if name == "OakTrapdoorLikeProperties" {
-        //         let trapdoor = OakTrapdoorLikeProperties::from_state_id(state.id, &block);
+        //         let trapdoor = OakTrapdoorLikeProperties::from_state_id(state.id);
 
         //         pos.0.y -= 1;
 
@@ -1284,7 +1454,7 @@ impl LivingEntity {
         //             .is_some_and(|down_props| down_props.name() == "LadderLikeProperties");
 
         //         if is_ladder {
-        //             let ladder = LadderLikeProperties::from_state_id(down_state.id, &down_block);
+        //             let ladder = LadderLikeProperties::from_state_id(down_state.id);
 
         //             if trapdoor.r#facing == ladder.r#facing {
         //                 self.climbing.store(true, Relaxed);
@@ -1405,6 +1575,9 @@ impl LivingEntity {
     ) {
         if ground {
             let fall_distance = self.fall_distance.swap(0.0);
+            if fall_distance > 0.0 {
+                self.on_changed_block(caller, self.entity.block_pos.load());
+            }
             if fall_distance <= 0.0
                 || dont_damage
                 || self.should_prevent_fall_damage()
@@ -1455,7 +1628,16 @@ impl LivingEntity {
             return;
         }
 
-        // Fetches the safe fall distance attribute
+        if fall_distance >= 2.0
+            && let Some(player) = caller.get_player()
+        {
+            player.increment_stat(
+                StatisticCategory::Custom,
+                CustomStatistic::FallOneCm as i32,
+                (fall_distance * 100.0).round() as i32,
+            );
+        }
+
         let safe_fall_distance = self.get_attribute_value(&Attributes::SAFE_FALL_DISTANCE) as f32;
         let unsafe_fall_distance = fall_distance + 1.0E-6 - safe_fall_distance;
 
@@ -1477,45 +1659,48 @@ impl LivingEntity {
         }
     }
 
+    #[allow(clippy::redundant_closure_for_method_calls)]
     pub fn get_death_message(
         dyn_self: &dyn EntityBase,
         damage_type: DamageType,
         source: Option<&dyn EntityBase>,
         cause: Option<&dyn EntityBase>,
     ) -> TextComponent {
-        match damage_type.death_message_type {
-            DeathMessageType::Default => {
-                if let Some(cause) = cause
-                    && source.is_some()
-                {
-                    TextComponent::translate_cross(
-                        format!("death.attack.{}.player", damage_type.message_id),
-                        format!("death.attack.{}.player", damage_type.message_id),
-                        [dyn_self.get_display_name(), cause.get_display_name()],
-                    )
-                } else {
-                    TextComponent::translate_cross(
-                        format!("death.attack.{}", damage_type.message_id),
-                        format!("death.attack.{}", damage_type.message_id),
-                        [dyn_self.get_display_name()],
-                    )
-                }
-            }
-            DeathMessageType::FallVariants => {
-                //TODO
-                TextComponent::translate_cross(
-                    translation::java::DEATH_FELL_ACCIDENT_GENERIC,
-                    translation::bedrock::DEATH_FELL_ACCIDENT_GENERIC,
-                    [dyn_self.get_display_name()],
-                )
-            }
-            DeathMessageType::IntentionalGameDesign => TextComponent::text("[")
-                .add_child(TextComponent::translate_cross(
-                    format!("death.attack.{}.message", damage_type.message_id),
-                    format!("death.attack.{}.message", damage_type.message_id),
-                    [dyn_self.get_display_name()],
-                ))
-                .add_child(TextComponent::text("]")),
+        let kill_credit = dyn_self.get_living_entity().and_then(Self::get_kill_credit);
+        let kill_credit_name = kill_credit.as_ref().map(|c| c.get_display_name());
+
+        if let Some(living) = dyn_self.get_living_entity() {
+            let tracker = living
+                .combat_tracker
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            return tracker.get_death_message(dyn_self.get_display_name(), kill_credit_name);
+        }
+
+        if let Some(cause) = cause
+            && source.is_some()
+        {
+            TextComponent::translate_cross(
+                format!("death.attack.{}", damage_type.message_id),
+                format!("death.attack.{}", damage_type.message_id),
+                [dyn_self.get_display_name(), cause.get_display_name()],
+            )
+        } else if let Some(killer) = cause
+            .or(source)
+            .map(|c| c.get_display_name())
+            .or(kill_credit_name)
+        {
+            TextComponent::translate_cross(
+                format!("death.attack.{}.player", damage_type.message_id),
+                format!("death.attack.{}.player", damage_type.message_id),
+                [dyn_self.get_display_name(), killer],
+            )
+        } else {
+            TextComponent::translate_cross(
+                format!("death.attack.{}", damage_type.message_id),
+                format!("death.attack.{}", damage_type.message_id),
+                [dyn_self.get_display_name()],
+            )
         }
     }
 
@@ -1537,8 +1722,10 @@ impl LivingEntity {
             self.movement_input.store(Vector3::default());
             self.jumping.store(false, Relaxed);
 
-            // Statistics updates
-            self.update_death_stats(&*dyn_self, cause);
+            let kill_credit = self.get_kill_credit();
+            let killer = cause.or(source).or(kill_credit.as_deref());
+
+            self.update_death_stats(&*dyn_self, killer);
 
             // Plays the death sound
             world.send_entity_status(&self.entity, EntityStatus::Death, Some(ActorEventID::Death));
@@ -1567,10 +1754,19 @@ impl LivingEntity {
             let is_raining = world.is_raining();
             let is_thundering = world.is_thundering();
 
+            let has_player_kill =
+                killer.is_some_and(|c| c.get_entity().entity_type == &EntityType::PLAYER) || {
+                    let tracker = self
+                        .combat_tracker
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    tracker.has_player_attacker()
+                };
+
             let params = LootContextParameters {
-                killed_by_player: cause.map(|c| c.get_entity().entity_type == &EntityType::PLAYER),
+                killed_by_player: Some(has_player_kill),
                 this_entity: Some(self.entity.entity_type),
-                killer_entity: cause.map(|c| c.get_entity().entity_type),
+                killer_entity: killer.map(|c| c.get_entity().entity_type),
                 direct_killer_entity: source.map(|s| s.get_entity().entity_type),
                 position: Some(self.entity.pos.load()),
                 world_time: world.level_info.load().day_time as u64,
@@ -1588,13 +1784,13 @@ impl LivingEntity {
             };
 
             // Drop loot
-            self.drop_loot(params.clone());
+            self.drop_loot(&params);
 
             // Award experience
             if params.killed_by_player.unwrap_or(false)
                 && world.level_info.load().game_rules.mob_drops
             {
-                let amount = dyn_self.get_experience_reward(cause);
+                let amount = dyn_self.get_experience_reward(killer);
                 if amount > 0 {
                     ExperienceOrbEntity::spawn(&world, self.entity.pos.load(), amount);
                 }
@@ -1686,27 +1882,55 @@ impl LivingEntity {
     ) {
         let world = self.entity.world.load();
         let show_death_messages = { world.level_info.load().game_rules.show_death_messages };
-        if self.entity.entity_type == &EntityType::PLAYER && show_death_messages {
-            //TODO: KillCredit
+        if self.entity.entity_type == &EntityType::PLAYER {
             let death_message = Self::get_death_message(dyn_self, damage_type, source, cause);
-            if let Some(server) = world.server.upgrade() {
+            let mut final_death_message = death_message;
+            if let Some(player) = dyn_self.get_player() {
+                if let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
+                    && let Some(server) = world.server.upgrade()
+                {
+                    let mut event =
+                        crate::plugin::api::events::entity::entity_death::PlayerDeathEvent::new(
+                            player_arc,
+                            final_death_message.clone(),
+                            0,
+                        );
+                    server.plugin_manager.fire_blocking(&server, &mut event);
+                    if event.cancelled {
+                        return;
+                    }
+                    final_death_message = event.death_message;
+                }
+
+                player.handle_killed(&final_death_message);
+            }
+
+            if show_death_messages && let Some(server) = world.server.upgrade() {
                 for player in server.get_all_players() {
-                    player.send_system_message(&death_message);
+                    player.send_system_message(&final_death_message);
                 }
             }
+        } else if self.entity.custom_name.load().is_some() {
+            let death_message = Self::get_death_message(dyn_self, damage_type, source, cause);
+            tracing::info!(
+                "Named entity {} died: {}",
+                dyn_self.get_display_name().to_pretty_console(),
+                death_message.to_pretty_console()
+            );
         }
     }
 
     fn update_death_stats(&self, dyn_self: &dyn EntityBase, cause: Option<&dyn EntityBase>) {
         if let Some(victim_player) = dyn_self.get_player() {
-            victim_player.increment_stat(
-                StatisticCategory::Custom,
-                CustomStatistic::Deaths as i32,
-                1,
-            );
+            victim_player.increment_custom_stat(CustomStatistic::Deaths, 1);
             victim_player.set_stat(
                 StatisticCategory::Custom,
                 CustomStatistic::TimeSinceDeath as i32,
+                0,
+            );
+            victim_player.set_stat(
+                StatisticCategory::Custom,
+                CustomStatistic::TimeSinceRest as i32,
                 0,
             );
             if let Some(killer_entity) = cause.map(EntityBase::get_entity) {
@@ -1719,6 +1943,11 @@ impl LivingEntity {
         }
 
         if let Some(killer_player) = cause.and_then(|c| c.get_player()) {
+            killer_player.increment_stat(
+                StatisticCategory::Killed,
+                self.entity.entity_type.id as i32,
+                1,
+            );
             if dyn_self.get_player().is_some() {
                 killer_player.increment_stat(
                     StatisticCategory::Custom,
@@ -1761,18 +1990,16 @@ impl LivingEntity {
                     );
                 }
             }
-            killer_player.increment_stat(
-                StatisticCategory::Killed,
-                self.entity.entity_type.id as i32,
-                1,
-            );
         }
     }
 
-    fn drop_loot(&self, params: LootContextParameters) {
-        if let Some(loot_table) = &self.get_entity().entity_type.loot_table {
+    fn drop_loot(&self, params: &LootContextParameters) {
+        let resource_name = self.get_entity().entity_type.resource_name;
+        let key = format!("minecraft:entities/{resource_name}");
+        if let Some(loot_table) = pumpkin_data::loot_table::get_loot_table(&key) {
+            let seed: i64 = rand::random();
             let pos = self.entity.block_pos.load();
-            for stack in loot_table.get_loot(params) {
+            for stack in crate::world::loot::generate_loot_with_context(loot_table, seed, params) {
                 self.entity.world.load().drop_stack(&pos, stack);
             }
         }
@@ -1943,9 +2170,17 @@ impl LivingEntity {
                 .is_none_or(|equippable| equippable.damage_on_hurt);
 
             if takes_damage {
+                let item_id = stack.item.id;
                 let slot_result = stack.damage_item(armor_damage);
                 if slot_result != pumpkin_data::item_stack::DamageResult::Untouched {
                     if slot_result == pumpkin_data::item_stack::DamageResult::Broken {
+                        if let Some(player) = caller.get_player() {
+                            player.increment_stat(
+                                pumpkin_data::statistic::StatisticCategory::Broken,
+                                item_id as i32,
+                                1,
+                            );
+                        }
                         let world = self.entity.world.load();
                         world.send_entity_status(
                             &self.entity,
@@ -2027,13 +2262,8 @@ impl LivingEntity {
         // Clear any absorption
         self.absorption.store(0.0);
         // Send health metadata
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::living_entity::DATA_HEALTH_ID,
-                max_health,
-            )],
-            None,
-        );
+        self.entity
+            .set_synced_data(tracked_data::living_entity::DATA_HEALTH_ID, max_health);
 
         self.reset_effects_and_attributes();
 
@@ -2182,6 +2412,165 @@ impl LivingEntity {
         // todo more...
     }
 
+    /// Calculates damage after armor reduction, mirroring vanilla `LivingEntity.getDamageAfterArmorAbsorb`.
+    pub fn get_damage_after_armor_absorb(
+        &self,
+        damage: f32,
+        damage_type: &DamageType,
+        attacker: Option<&dyn EntityBase>,
+    ) -> f32 {
+        if damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_ARMOR) {
+            return damage;
+        }
+
+        let mut armor = 0.0f32;
+        let mut toughness = 0.0f32;
+        {
+            let equipment_lock = self
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for slot in [
+                EquipmentSlot::HEAD,
+                EquipmentSlot::CHEST,
+                EquipmentSlot::LEGS,
+                EquipmentSlot::FEET,
+            ] {
+                if let Some(stack) = equipment_lock.equipment.get(&slot)
+                    && !stack.is_empty()
+                    && let Some(modifiers) = stack.get_data_component::<AttributeModifiersImpl>()
+                {
+                    for modifier in modifiers.attribute_modifiers.iter() {
+                        if modifier.r#type == &Attributes::ARMOR {
+                            armor += modifier.amount as f32;
+                        } else if modifier.r#type == &Attributes::ARMOR_TOUGHNESS {
+                            toughness += modifier.amount as f32;
+                        }
+                    }
+                }
+            }
+        }
+
+        let breach_level = attacker
+            .and_then(|att| {
+                let player = att.get_player()?;
+                let hand_stack = player
+                    .inventory()
+                    .get_stack_in_hand(pumpkin_util::Hand::Right);
+                let level = hand_stack.get_enchantment_level(&Enchantment::BREACH);
+                (level > 0).then_some(level as u32)
+            })
+            .unwrap_or(0);
+
+        CombatRules::get_damage_after_absorb(damage, armor, toughness, breach_level)
+    }
+
+    /// Calculates damage after magic/resistance/enchantment reduction, mirroring vanilla `LivingEntity.getDamageAfterMagicAbsorb`.
+    pub fn get_damage_after_magic_absorb(
+        &self,
+        mut damage: f32,
+        damage_type: &DamageType,
+        caller: &dyn EntityBase,
+        cause: Option<&dyn EntityBase>,
+    ) -> f32 {
+        if damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_EFFECTS) {
+            return damage;
+        }
+
+        // 1. Resistance Effect (evaluated before enchantments)
+        if !damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_RESISTANCE)
+            && let Some(effect) = self.get_effect(&StatusEffect::RESISTANCE)
+        {
+            let absorb_value = (effect.amplifier + 1) * 5;
+            let absorb = 25 - absorb_value;
+            let v = damage * absorb as f32;
+            let old_damage = damage;
+            damage = (v / 25.0).max(0.0);
+            let damage_resisted = old_damage - damage;
+            if damage_resisted > 0.0 {
+                if let Some(victim_player) = caller.get_player() {
+                    victim_player.increment_stat(
+                        StatisticCategory::Custom,
+                        CustomStatistic::DamageResisted as i32,
+                        (damage_resisted * 10.0).round() as i32,
+                    );
+                } else if let Some(attacker_player) = cause.and_then(|c| c.get_player()) {
+                    attacker_player.increment_stat(
+                        StatisticCategory::Custom,
+                        CustomStatistic::DamageDealtResisted as i32,
+                        (damage_resisted * 10.0).round() as i32,
+                    );
+                }
+            }
+        }
+
+        if damage <= 0.0 {
+            return 0.0;
+        }
+
+        // 2. Enchantment Protection
+        if damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_ENCHANTMENTS) {
+            return damage;
+        }
+
+        let is_fire_damage = damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_FIRE);
+        let mut epf = 0.0f32;
+        {
+            let equipment_lock = self
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for slot in [
+                EquipmentSlot::HEAD,
+                EquipmentSlot::CHEST,
+                EquipmentSlot::LEGS,
+                EquipmentSlot::FEET,
+            ] {
+                if let Some(stack) = equipment_lock.equipment.get(&slot)
+                    && !stack.is_empty()
+                    && let Some(enchantments) = stack.get_data_component::<EnchantmentsImpl>()
+                {
+                    for (enchantment, level) in enchantments.enchantment.iter() {
+                        let enc = *enchantment;
+                        let lvl = *level as f32;
+                        if enc == &Enchantment::PROTECTION {
+                            if !damage_type
+                                .has_tag(&tag::DamageType::MINECRAFT_BYPASSES_INVULNERABILITY)
+                                && damage_type != &DamageType::STARVE
+                                && damage_type != &DamageType::GENERIC_KILL
+                                && damage_type != &DamageType::OUT_OF_WORLD
+                            {
+                                epf += lvl;
+                            }
+                        } else if enc == &Enchantment::FIRE_PROTECTION {
+                            if is_fire_damage {
+                                epf += lvl * 2.0;
+                            }
+                        } else if enc == &Enchantment::BLAST_PROTECTION {
+                            if damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_EXPLOSION) {
+                                epf += lvl * 2.0;
+                            }
+                        } else if enc == &Enchantment::PROJECTILE_PROTECTION {
+                            if damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_PROJECTILE) {
+                                epf += lvl * 2.0;
+                            }
+                        } else if enc == &Enchantment::FEATHER_FALLING
+                            && damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_FALL)
+                        {
+                            epf += lvl * 3.0;
+                        }
+                    }
+                }
+            }
+        }
+
+        if epf > 0.0 {
+            damage = CombatRules::get_damage_after_magic_absorb(damage, epf);
+        }
+
+        damage
+    }
+
     #[allow(clippy::too_many_lines)]
     pub fn damage_with_context(
         &self,
@@ -2223,11 +2612,62 @@ impl LivingEntity {
         }
         amount = damage_event.damage;
 
+        if let Some(damager) = source.or(cause) {
+            let mut by_entity_event =
+                crate::plugin::api::events::entity::entity_damage_by_entity::EntityDamageByEntityEvent {
+                    entity_id: self.entity.entity_id,
+                    damager_id: damager.get_entity().entity_id,
+                    damage: amount,
+                    cause: format!("{damage_type:?}"),
+                    cancelled: false,
+                };
+            if let Some(server) = self.entity.world.load().server.upgrade() {
+                server
+                    .plugin_manager
+                    .fire_blocking(&server, &mut by_entity_event);
+            }
+            if by_entity_event.cancelled {
+                return false;
+            }
+            amount = by_entity_event.damage;
+        } else if position.is_some()
+            || matches!(
+                damage_type,
+                DamageType::CACTUS
+                    | DamageType::SWEET_BERRY_BUSH
+                    | DamageType::CAMPFIRE
+                    | DamageType::HOT_FLOOR
+                    | DamageType::STALAGMITE
+            )
+        {
+            let damager_pos = position.map(|p| {
+                BlockPos(Vector3::new(
+                    p.x.floor() as i32,
+                    p.y.floor() as i32,
+                    p.z.floor() as i32,
+                ))
+            });
+            let mut by_block_event =
+                crate::plugin::api::events::entity::entity_damage_by_block::EntityDamageByBlockEvent {
+                    entity_id: self.entity.entity_id,
+                    damager_pos,
+                    damage: amount,
+                    cause: format!("{damage_type:?}"),
+                    cancelled: false,
+                };
+            if let Some(server) = self.entity.world.load().server.upgrade() {
+                server
+                    .plugin_manager
+                    .fire_blocking(&server, &mut by_block_event);
+            }
+            if by_block_event.cancelled {
+                return false;
+            }
+            amount = by_block_event.damage;
+        }
+
         let world = self.entity.world.load();
-        let is_fire_damage = damage_type == DamageType::IN_FIRE
-            || damage_type == DamageType::ON_FIRE
-            || damage_type == DamageType::LAVA
-            || damage_type == DamageType::HOT_FLOOR;
+        let is_fire_damage = damage_type.has_tag(&tag::DamageType::MINECRAFT_IS_FIRE);
 
         // Fire damage can be prevented by either game rules or fire resistance
         if is_fire_damage {
@@ -2239,7 +2679,9 @@ impl LivingEntity {
             }
 
             // Check for fire resistance effect
-            if self.has_effect(&StatusEffect::FIRE_RESISTANCE) {
+            if self.has_effect(&StatusEffect::FIRE_RESISTANCE)
+                && !damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_EFFECTS)
+            {
                 return false;
             }
         }
@@ -2254,139 +2696,7 @@ impl LivingEntity {
             amount *= 5.0;
         }
 
-        // These damage types bypass the hurt cooldown and death protection
-        let bypasses_cooldown_protection =
-            damage_type == DamageType::GENERIC_KILL || damage_type == DamageType::OUT_OF_WORLD;
-
-        let mut damage_after_armor = amount;
-        if !bypasses_armor_durability(&damage_type) {
-            let mut armor = 0.0f32;
-            let mut toughness = 0.0f32;
-            {
-                let equipment_lock = self
-                    .entity_equipment
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                for slot in [
-                    EquipmentSlot::HEAD,
-                    EquipmentSlot::CHEST,
-                    EquipmentSlot::LEGS,
-                    EquipmentSlot::FEET,
-                ] {
-                    if let Some(stack) = equipment_lock.equipment.get(&slot)
-                        && !stack.is_empty()
-                        && let Some(modifiers) =
-                            stack.get_data_component::<AttributeModifiersImpl>()
-                    {
-                        for modifier in modifiers.attribute_modifiers.iter() {
-                            if modifier.r#type == &Attributes::ARMOR {
-                                armor += modifier.amount as f32;
-                            } else if modifier.r#type == &Attributes::ARMOR_TOUGHNESS {
-                                toughness += modifier.amount as f32;
-                            }
-                        }
-                    }
-                }
-            }
-            let value = 2.0f32 + toughness / 4.0;
-            let clamped_armor = (armor - damage_after_armor / value)
-                .max(armor / 5.0)
-                .min(20.0);
-            damage_after_armor *= 1.0 - clamped_armor / 25.0;
-        }
-
-        let mut damage_after_enchantments = damage_after_armor;
-        if damage_type != DamageType::OUT_OF_WORLD {
-            let mut epf = 0i32;
-            {
-                let equipment_lock = self
-                    .entity_equipment
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                for slot in [
-                    EquipmentSlot::HEAD,
-                    EquipmentSlot::CHEST,
-                    EquipmentSlot::LEGS,
-                    EquipmentSlot::FEET,
-                ] {
-                    if let Some(stack) = equipment_lock.equipment.get(&slot)
-                        && !stack.is_empty()
-                        && let Some(enchantments) = stack.get_data_component::<EnchantmentsImpl>()
-                    {
-                        for (enchantment, level) in enchantments.enchantment.iter() {
-                            let mut factor = 0;
-                            let enc = *enchantment;
-                            if enc == &Enchantment::PROTECTION {
-                                if damage_type != DamageType::DROWN
-                                    && damage_type != DamageType::STARVE
-                                    && damage_type != DamageType::GENERIC_KILL
-                                {
-                                    factor = *level;
-                                }
-                            } else if enc == &Enchantment::FIRE_PROTECTION {
-                                if is_fire_damage {
-                                    factor = *level * 2;
-                                }
-                            } else if enc == &Enchantment::BLAST_PROTECTION {
-                                if damage_type == DamageType::EXPLOSION
-                                    || damage_type == DamageType::PLAYER_EXPLOSION
-                                {
-                                    factor = *level * 2;
-                                }
-                            } else if enc == &Enchantment::PROJECTILE_PROTECTION {
-                                if damage_type == DamageType::ARROW
-                                    || damage_type == DamageType::MOB_PROJECTILE
-                                    || damage_type == DamageType::THROWN
-                                {
-                                    factor = (*level) * 2;
-                                }
-                            } else if enc == &Enchantment::FEATHER_FALLING
-                                && damage_type == DamageType::FALL
-                            {
-                                factor = (*level) * 4;
-                            }
-                            epf += factor;
-                        }
-                    }
-                }
-            }
-            epf = epf.min(20);
-            if epf > 0 {
-                damage_after_enchantments *= 1.0 - (epf as f32 * 0.04);
-            }
-        }
-
-        // Apply Resistance effect reduction (20% per level)
-        let resistance_reduction =
-            if !bypasses_cooldown_protection && damage_type != DamageType::STARVE {
-                self.get_effect(&StatusEffect::RESISTANCE)
-                    .map_or(0.0, |e| 0.2 * (e.amplifier + 1) as f32)
-            } else {
-                0.0
-            };
-
-        // Total damage after reductions
-        let effective_amount = damage_after_enchantments * (1.0 - resistance_reduction);
-
-        if resistance_reduction > 0.0 {
-            let resisted = damage_after_enchantments * resistance_reduction;
-            if let Some(player) = caller.get_player() {
-                player.increment_stat(
-                    StatisticCategory::Custom,
-                    CustomStatistic::DamageResisted as i32,
-                    (resisted * 10.0) as i32,
-                );
-            }
-            if let Some(attacker_player) = cause.and_then(|c| c.get_player()) {
-                attacker_player.increment_stat(
-                    StatisticCategory::Custom,
-                    CustomStatistic::DamageDealtResisted as i32,
-                    (resisted * 10.0) as i32,
-                );
-            }
-        }
-
-        // Check for shield blocking
+        // Check for shield blocking before armor/magic/cooldown
         if self.is_blocking()
             && !damage_type.has_tag(&tag::DamageType::MINECRAFT_BYPASSES_SHIELD)
             && let Some(pos) = position
@@ -2403,7 +2713,7 @@ impl LivingEntity {
                     player.increment_stat(
                         StatisticCategory::Custom,
                         CustomStatistic::DamageBlockedByShield as i32,
-                        (effective_amount * 10.0) as i32,
+                        (amount * 10.0).round() as i32,
                     );
                 }
 
@@ -2423,14 +2733,11 @@ impl LivingEntity {
                         .lock()
                         .unwrap_or_else(std::sync::PoisonError::into_inner);
                     if let Some(stack) = equipment_guard.equipment.get_mut(&slot) {
+                        let item_id = stack.item.id;
                         let durability_damage = (amount / 1.0).floor().max(1.0) as i32;
                         if stack.damage_item(durability_damage) == DamageResult::Broken {
                             if let Some(player) = caller.get_player() {
-                                player.increment_stat(
-                                    StatisticCategory::Broken,
-                                    stack.item.id as i32,
-                                    1,
-                                );
+                                player.increment_stat(StatisticCategory::Broken, item_id as i32, 1);
                             }
                             world.send_entity_status(
                                 &self.entity,
@@ -2450,6 +2757,21 @@ impl LivingEntity {
                 return false;
             }
         }
+
+        // Vanilla parity: 1. Armor absorb
+        let damage_after_armor =
+            self.get_damage_after_armor_absorb(amount, &damage_type, cause.or(source));
+
+        let effective_amount = self.get_damage_after_magic_absorb(
+            damage_after_armor,
+            &damage_type,
+            caller,
+            cause.or(source),
+        );
+
+        // These damage types bypass the hurt cooldown and death protection
+        let bypasses_cooldown_protection =
+            damage_type == DamageType::GENERIC_KILL || damage_type == DamageType::OUT_OF_WORLD;
 
         // Apply hurt cooldown logic
         let last_damage = self.last_damage_taken.load();
@@ -2521,34 +2843,30 @@ impl LivingEntity {
             }
         }
 
-        // Consume absorption first, then apply remaining damage to health
-        let mut remaining = damage_amount;
+        // Vanilla parity: actuallyHurt
+        let original_damage = damage_amount;
         let current_abs = self.absorption.load();
-        if current_abs > 0.0 {
-            let absorbed = current_abs.min(remaining);
+        let dmg_to_health = (original_damage - current_abs).max(0.0);
+        let absorbed_damage = original_damage - dmg_to_health;
+
+        if absorbed_damage > 0.0 {
+            let new_abs = (current_abs - absorbed_damage).max(0.0);
+            self.set_absorption(new_abs);
+
             if let Some(player) = caller.get_player() {
                 player.increment_stat(
                     StatisticCategory::Custom,
                     CustomStatistic::DamageAbsorbed as i32,
-                    (absorbed * 10.0) as i32,
+                    (absorbed_damage * 10.0).round() as i32,
                 );
             }
 
-            if let Some(attacker_player) = cause.and_then(|c| c.get_player()) {
+            if let Some(attacker_player) = cause.or(source).and_then(|c| c.get_player()) {
                 attacker_player.increment_stat(
                     StatisticCategory::Custom,
                     CustomStatistic::DamageDealtAbsorbed as i32,
-                    (absorbed * 10.0) as i32,
+                    (absorbed_damage * 10.0).round() as i32,
                 );
-            }
-
-            if current_abs >= remaining {
-                let new_abs = current_abs - remaining;
-                self.set_absorption(new_abs);
-                remaining = 0.0;
-            } else {
-                remaining -= current_abs;
-                self.set_absorption(0.0);
             }
 
             if let Some(attacker) = cause.or(source) {
@@ -2560,36 +2878,71 @@ impl LivingEntity {
         }
 
         let max_h = self.get_max_health();
-        let new_health = self.health.load() - remaining;
-        let clamped_health = new_health.max(0.0).min(max_h);
-        if remaining > 0.0 {
-            self.set_health(clamped_health);
+        let new_health = (self.health.load() - dmg_to_health).clamp(0.0, max_h);
 
+        if dmg_to_health > 0.0 {
             if let Some(player) = caller.get_player() {
+                if damage_type.exhaustion > 0.0 {
+                    player.add_exhaustion(damage_type.exhaustion);
+                }
                 player.increment_stat(
                     StatisticCategory::Custom,
                     CustomStatistic::DamageTaken as i32,
-                    (remaining * 10.0) as i32,
+                    (dmg_to_health * 10.0).round() as i32,
                 );
             }
 
-            if let Some(attacker_player) = cause.and_then(|c| c.get_player()) {
+            self.set_health(new_health);
+
+            if let Some(attacker_player) = cause.or(source).and_then(|c| c.get_player()) {
                 attacker_player.increment_stat(
                     StatisticCategory::Custom,
                     CustomStatistic::DamageDealt as i32,
-                    (remaining * 10.0) as i32,
+                    (dmg_to_health * 10.0).round() as i32,
                 );
             }
 
             if let Some(attacker) = cause.or(source) {
-                self.last_attacker_id
-                    .store(attacker.get_entity().entity_id, Relaxed);
+                let attacker_id = attacker.get_entity().entity_id;
+                self.last_attacker_id.store(attacker_id, Relaxed);
                 self.last_attacked_time
                     .store(self.entity.age.load(Relaxed), Relaxed);
+
+                let current_tick = world.level_info.load().day_time;
+                if attacker.get_player().is_some() {
+                    self.last_hurt_by_player_id.store(attacker_id, Relaxed);
+                    self.last_hurt_by_player_time.store(current_tick, Relaxed);
+                } else if attacker.get_living_entity().is_some() {
+                    self.last_hurt_by_mob_id.store(attacker_id, Relaxed);
+                    self.last_hurt_by_mob_time.store(current_tick, Relaxed);
+                }
             }
         }
 
-        if clamped_health <= 0.0 {
+        if dmg_to_health > 0.0 || absorbed_damage > 0.0 {
+            let current_tick = world.level_info.load().day_time;
+            let fall_location = FallLocation::get_current_fall_location(self, &world);
+            let fall_distance = self.fall_distance.load();
+
+            {
+                let mut tracker = self
+                    .combat_tracker
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                tracker.record_damage(
+                    current_tick,
+                    self.health.load() > 0.0 && !self.dead.load(Relaxed),
+                    fall_distance,
+                    fall_location,
+                    damage_type,
+                    effective_amount,
+                    source,
+                    cause,
+                );
+            }
+        }
+
+        if new_health <= 0.0 {
             let mut death_event =
                 crate::plugin::api::events::entity::entity_death::EntityDeathEvent::new(
                     self.entity.entity_id,
@@ -2600,11 +2953,7 @@ impl LivingEntity {
                     .plugin_manager
                     .fire_blocking(&server, &mut death_event);
             }
-            world.send_entity_status(
-                &self.entity,
-                pumpkin_data::entity::EntityStatus::Death,
-                None,
-            );
+            self.on_death(damage_type, source, cause);
         }
 
         true
@@ -2700,7 +3049,29 @@ impl EntityBase for LivingEntity {
             }
         }
 
+        let current_block_pos = self.entity.block_pos.load();
+        if is_alive && self.last_block_pos.load() != Some(current_block_pos) {
+            self.last_block_pos.store(Some(current_block_pos));
+            self.on_changed_block(caller, current_block_pos);
+        }
+
         self.tick_effects();
+
+        if let Some(player) = caller.get_player() {
+            let remaining_use_ticks = self.item_use_time.load(Ordering::Relaxed);
+            if remaining_use_ticks > 0 {
+                let item_in_use = self
+                    .item_in_use
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone();
+                if let Some(item) = item_in_use.as_ref() {
+                    server
+                        .item_registry
+                        .on_use_tick(item, player, remaining_use_ticks);
+                }
+            }
+        }
 
         // Current active item
         if self.item_use_time.load(Ordering::Relaxed) > 0
@@ -2834,9 +3205,18 @@ impl EntityBase for LivingEntity {
                 .fetch_update(Relaxed, Relaxed, |time| Some(time.saturating_add(1)))
                 .unwrap_or_else(|time| time)
                 .saturating_add(1);
-            // Players remain part of the world until their client requests a
-            // respawn. Removing one here breaks reconnecting while dead.
             if self.entity.entity_type == &EntityType::PLAYER {
+                // Bedrock keeps a dead remote player actor in its death pose.
+                // Remove Java players after the animation so respawn can
+                // recreate a live, interactable actor with the same identity.
+                if time == 10 {
+                    self.entity
+                        .world
+                        .load()
+                        .despawn_dead_java_player_for_bedrock(&self.entity);
+                }
+                // Players remain part of the world until their client requests a
+                // respawn. Removing one here breaks reconnecting while dead.
                 return;
             }
             // Only send death particles once (on the exact tick death_time reaches 20)
@@ -3247,7 +3627,7 @@ mod tests {
             show_icon: true,
             blend: false,
         };
-        let metadata = Metadata::new(
+        let metadata = pumpkin_protocol::java::client::play::Metadata::new(
             tracked_data::living_entity::EFFECT_PARTICLES,
             EffectParticles(vec![EffectParticle::from_effect(&effect)]),
         );

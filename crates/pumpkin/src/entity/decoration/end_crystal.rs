@@ -6,7 +6,6 @@ use pumpkin_data::{
     damage::DamageType,
     tag::{self, Taggable},
 };
-use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
 
 pub struct EndCrystalEntity {
@@ -29,12 +28,9 @@ impl EndCrystalEntity {
 
     pub fn set_show_bottom(&self, show_bottom: bool) {
         self.show_bottom.store(show_bottom, Ordering::Relaxed);
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::end_crystal::SHOW_BOTTOM,
-                show_bottom,
-            )],
-            None,
+        self.entity.set_synced_data(
+            pumpkin_data::tracked_data::end_crystal::SHOW_BOTTOM,
+            show_bottom,
         );
     }
 
@@ -47,12 +43,9 @@ impl EndCrystalEntity {
             .beam_target
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = beam_target;
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::end_crystal::BEAM_TARGET,
-                beam_target,
-            )],
-            None,
+        self.entity.set_synced_data(
+            pumpkin_data::tracked_data::end_crystal::BEAM_TARGET,
+            beam_target,
         );
     }
 

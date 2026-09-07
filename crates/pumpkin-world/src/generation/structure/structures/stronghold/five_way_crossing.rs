@@ -1,6 +1,6 @@
 use pumpkin_data::{
     Block, BlockState,
-    block_properties::{BlockProperties, ResinBrickSlabLikeProperties, SlabType},
+    block_properties::{ResinBrickSlabLikeProperties, SlabType},
 };
 use pumpkin_util::{
     BlockDirection,

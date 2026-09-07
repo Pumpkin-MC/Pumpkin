@@ -250,7 +250,7 @@ pub async fn fetch_oidc_jwks(
     read_timeout_ms: u32,
 ) -> Result<(String, Jwks), AuthError> {
     let url = discovery_url.unwrap_or(OIDC_DISCOVERY_URL);
-    let client = reqwest::Client::builder()
+    let client = crate::client_builder()
         .connect_timeout(std::time::Duration::from_millis(connect_timeout_ms as u64))
         .timeout(std::time::Duration::from_millis(read_timeout_ms as u64))
         .build()

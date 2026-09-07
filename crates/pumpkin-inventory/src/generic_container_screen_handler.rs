@@ -27,6 +27,7 @@ pub fn create_generic_9x3(
     sync_id: u8,
     player_inventory: &Arc<PlayerInventory>,
     inventory: Arc<dyn Inventory>,
+    player: &dyn InventoryPlayer,
 ) -> GenericContainerScreenHandler {
     GenericContainerScreenHandler::new(
         WindowType::Generic9x3,
@@ -35,6 +36,7 @@ pub fn create_generic_9x3(
         inventory,
         3,
         9,
+        player.is_spectator(),
     )
 }
 
@@ -45,6 +47,7 @@ pub fn create_generic_9x6(
     sync_id: u8,
     player_inventory: &Arc<PlayerInventory>,
     inventory: Arc<dyn Inventory>,
+    player: &dyn InventoryPlayer,
 ) -> GenericContainerScreenHandler {
     GenericContainerScreenHandler::new(
         WindowType::Generic9x6,
@@ -53,6 +56,7 @@ pub fn create_generic_9x6(
         inventory,
         6,
         9,
+        player.is_spectator(),
     )
 }
 
@@ -63,6 +67,7 @@ pub fn create_generic_3x3(
     sync_id: u8,
     player_inventory: &Arc<PlayerInventory>,
     inventory: Arc<dyn Inventory>,
+    player: &dyn InventoryPlayer,
 ) -> GenericContainerScreenHandler {
     GenericContainerScreenHandler::new(
         WindowType::Generic3x3,
@@ -71,6 +76,7 @@ pub fn create_generic_3x3(
         inventory,
         3,
         3,
+        player.is_spectator(),
     )
 }
 
@@ -79,6 +85,7 @@ pub fn create_crafter_3x3(
     sync_id: u8,
     player_inventory: &Arc<PlayerInventory>,
     inventory: Arc<dyn Inventory>,
+    player: &dyn InventoryPlayer,
 ) -> GenericContainerScreenHandler {
     GenericContainerScreenHandler::new(
         WindowType::Crafter3x3,
@@ -87,6 +94,7 @@ pub fn create_crafter_3x3(
         inventory,
         3,
         3,
+        player.is_spectator(),
     )
 }
 
@@ -97,6 +105,7 @@ pub fn create_hopper(
     sync_id: u8,
     player_inventory: &Arc<PlayerInventory>,
     inventory: Arc<dyn Inventory>,
+    player: &dyn InventoryPlayer,
 ) -> GenericContainerScreenHandler {
     GenericContainerScreenHandler::new(
         WindowType::Hopper,
@@ -105,6 +114,7 @@ pub fn create_hopper(
         inventory,
         1,
         5,
+        player.is_spectator(),
     )
 }
 
@@ -119,6 +129,8 @@ pub struct GenericContainerScreenHandler {
     pub rows: u8,
     /// Number of columns in the container grid.
     pub columns: u8,
+    /// Whether the opener is in spectator mode.
+    pub is_spectator: bool,
     /// Core screen handler behavior (slots, sync ID, listeners).
     behaviour: ScreenHandlerBehaviour,
 }
@@ -133,6 +145,7 @@ impl GenericContainerScreenHandler {
     /// - `inventory` - The container's inventory
     /// - `rows` - Number of rows in the container
     /// - `columns` - Number of columns in the container
+    /// - `is_spectator` - Whether the opener is a spectator
     fn new(
         screen_type: WindowType,
         sync_id: u8,
@@ -140,16 +153,19 @@ impl GenericContainerScreenHandler {
         inventory: Arc<dyn Inventory>,
         rows: u8,
         columns: u8,
+        is_spectator: bool,
     ) -> Self {
         let mut handler = Self {
             inventory,
             rows,
             columns,
+            is_spectator,
             behaviour: ScreenHandlerBehaviour::new(sync_id, Some(screen_type)),
         };
 
-        // TODO: Add player entity as a parameter
-        handler.inventory.on_open();
+        if !is_spectator {
+            handler.inventory.on_open();
+        }
 
         handler.add_inventory_slots();
         let player_inventory: Arc<dyn Inventory> = player_inventory.clone();
@@ -190,7 +206,9 @@ impl ScreenHandler for GenericContainerScreenHandler {
 
     fn on_closed(&mut self, player: &dyn InventoryPlayer) {
         self.default_on_closed(player);
-        self.inventory.on_close();
+        if !self.is_spectator && !player.is_spectator() {
+            self.inventory.on_close();
+        }
     }
 
     /// Quick move logic for generic containers.

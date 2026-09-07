@@ -1,7 +1,5 @@
 use pumpkin_data::{
-    Block, BlockDirection, BlockStateId,
-    block_properties::{BlockProperties, OakLeavesLikeProperties},
-    tag,
+    Block, BlockDirection, BlockStateId, block_properties::OakLeavesLikeProperties, tag,
     tag::Taggable,
 };
 use pumpkin_macros::pumpkin_block_from_tag;
@@ -11,8 +9,10 @@ use pumpkin_world::{
     world::{BlockAccessor, BlockFlags},
 };
 
+use crate::block::blocks::plant::mangrove_propagule::MangrovePropaguleBlock;
 use crate::block::{
-    BlockBehaviour, GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, RandomTickArgs,
+    BlockBehaviour, BonemealArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs,
+    RandomTickArgs,
 };
 
 pub const DECAY_DISTANCE: u8 = 7;
@@ -25,7 +25,7 @@ pub fn get_distance_at(block: &Block, state_id: BlockStateId) -> u8 {
     if block.has_tag(&tag::Block::MINECRAFT_PREVENTS_NEARBY_LEAF_DECAY) {
         0
     } else if block.has_tag(&tag::Block::MINECRAFT_LEAVES) {
-        OakLeavesLikeProperties::from_state_id(state_id, block).distance
+        OakLeavesLikeProperties::from_state_id(state_id).distance
     } else {
         DECAY_DISTANCE
     }
@@ -53,8 +53,7 @@ pub fn update_distance(
 
 impl BlockBehaviour for LeavesBlock {
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let mut props =
-            OakLeavesLikeProperties::from_state_id(args.block.default_state.id, args.block);
+        let mut props = OakLeavesLikeProperties::from_state_id(args.block.default_state.id);
         props.persistent = true;
         props.waterlogged = args.replacing.water_source();
         props = update_distance(args.world, args.position, props);
@@ -65,7 +64,7 @@ impl BlockBehaviour for LeavesBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        let current_props = OakLeavesLikeProperties::from_state_id(args.state_id, args.block);
+        let current_props = OakLeavesLikeProperties::from_state_id(args.state_id);
         if current_props.waterlogged {
             args.world.schedule_fluid_tick(
                 &pumpkin_data::fluid::Fluid::WATER,
@@ -89,7 +88,7 @@ impl BlockBehaviour for LeavesBlock {
 
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         let state_id = args.world.get_block_state_id(args.position);
-        let props = OakLeavesLikeProperties::from_state_id(state_id, args.block);
+        let props = OakLeavesLikeProperties::from_state_id(state_id);
         let updated_props = update_distance(&**args.world, args.position, props);
         let new_state_id = updated_props.to_state_id(args.block);
         if new_state_id != state_id {
@@ -100,10 +99,40 @@ impl BlockBehaviour for LeavesBlock {
 
     fn random_tick(&self, args: RandomTickArgs<'_>) {
         let state_id = args.world.get_block_state_id(args.position);
-        let props = OakLeavesLikeProperties::from_state_id(state_id, args.block);
+        let props = OakLeavesLikeProperties::from_state_id(state_id);
         if !props.persistent && props.distance == DECAY_DISTANCE {
+            if let Some(server) = args.world.server.upgrade() {
+                let mut event =
+                    crate::plugin::api::events::block::leaves_decay::LeavesDecayEvent::new(
+                        *args.position,
+                        args.world.clone(),
+                    );
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return;
+                }
+            }
             args.world
-                .break_block(args.position, None, BlockFlags::empty());
+                .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
+        }
+    }
+
+    fn is_valid_bonemeal_target(&self, args: BonemealArgs<'_>) -> bool {
+        args.block == &Block::MANGROVE_LEAVES
+            && args.world.get_block_state(&args.position.down()).is_air()
+    }
+
+    fn is_bonemeal_success(&self, args: BonemealArgs<'_>) -> bool {
+        args.block == &Block::MANGROVE_LEAVES
+    }
+
+    fn perform_bonemeal(&self, args: BonemealArgs<'_>) {
+        if args.block == &Block::MANGROVE_LEAVES {
+            args.world.set_block_state(
+                &args.position.down(),
+                MangrovePropaguleBlock::create_new_hanging_propagule(0),
+                BlockFlags::NOTIFY_ALL,
+            );
         }
     }
 }

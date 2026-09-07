@@ -3,15 +3,13 @@ use crate::block::blocks::plant::PlantBlockBase;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockBehaviour, CanPlaceAtArgs, CanUpdateAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
-    UseWithItemArgs,
+    PathComputationType, UseWithItemArgs,
 };
 use crate::entity::EntityBase;
-use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::entity::EntityPose;
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, BlockDirection, tag};
+use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
@@ -30,11 +28,8 @@ impl BlockBehaviour for SeaPickleBlock {
                     .world
                     .get_block(&args.position.down())
                     .has_tag(&tag::Block::MINECRAFT_CORAL_BLOCKS)
-                || !SeaPickleProperties::from_state_id(
-                    args.world.get_block_state_id(args.position),
-                    args.block,
-                )
-                .waterlogged
+                || !SeaPickleProperties::from_state_id(args.world.get_block_state_id(args.position))
+                    .waterlogged
             {
                 return BlockActionResult::Pass;
             }
@@ -101,7 +96,7 @@ impl BlockBehaviour for SeaPickleBlock {
         if args.player.get_entity().pose.load() != EntityPose::Crouching
             && let BlockIsReplacing::Itself(state_id) = args.replacing
         {
-            let mut sea_pickle_prop = SeaPickleProperties::from_state_id(state_id, args.block);
+            let mut sea_pickle_prop = SeaPickleProperties::from_state_id(state_id);
             if sea_pickle_prop.pickles < 4 {
                 sea_pickle_prop.pickles += 1;
             }
@@ -120,7 +115,7 @@ impl BlockBehaviour for SeaPickleBlock {
 
     fn can_update_at(&self, args: CanUpdateAtArgs<'_>) -> bool {
         args.player.get_entity().pose.load() != EntityPose::Crouching
-            && SeaPickleProperties::from_state_id(args.state_id, args.block).pickles < 4
+            && SeaPickleProperties::from_state_id(args.state_id).pickles < 4
     }
 
     fn get_state_for_neighbor_update(
@@ -133,6 +128,10 @@ impl BlockBehaviour for SeaPickleBlock {
             args.position,
             args.state_id,
         )
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
 

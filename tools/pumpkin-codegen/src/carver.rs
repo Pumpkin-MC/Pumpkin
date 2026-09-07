@@ -5,12 +5,10 @@ use std::collections::BTreeMap;
 use std::fs;
 
 pub fn build() -> TokenStream {
-    let dir = std::path::Path::new(
-        "../../assets/datapacks/26_2/data/minecraft/worldgen/configured_carver",
-    );
+    let dir = std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/worldgen/carver");
     let mut carvers: BTreeMap<String, Value> = BTreeMap::new();
     let mut entries: Vec<_> = fs::read_dir(dir)
-        .expect("Missing worldgen/configured_carver directory")
+        .expect("Missing worldgen/carver directory")
         .flatten()
         .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
         .collect();
@@ -19,7 +17,7 @@ pub fn build() -> TokenStream {
     for entry in entries {
         let path = entry.path();
         let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
-        let content = fs::read_to_string(&path).expect("Failed to read configured_carver file");
+        let content = fs::read_to_string(&path).expect("Failed to read carver file");
         let val: Value = serde_json::from_str(&content).expect("Failed to parse carver JSON");
         carvers.insert(stem, val);
     }
@@ -28,56 +26,46 @@ pub fn build() -> TokenStream {
 
     for (name, data) in carvers {
         let variant_name = format_ident!("{}", name.to_uppercase());
-        let config = &data["config"];
         let carver_type = data["type"].as_str().unwrap_or("");
 
-        let prob = config["probability"].as_f64().unwrap_or(0.0) as f32;
-        let y = value_to_height_provider(&config["y"]);
-        let y_scale = value_to_float_provider(&config["yScale"]);
-        let lava_level = value_to_y_offset(&config["lava_level"]);
-
-        let replaceable_str = config["replaceable"].as_str().unwrap_or("");
-        let replaceable = if let Some(tag_name) = replaceable_str.strip_prefix('#') {
-            let tag_name = tag_name.to_uppercase().replace([':', '.', '-'], "_");
-            let tag_ident = format_ident!("{}", tag_name);
-            quote! { crate::tag::Block::#tag_ident }
-        } else {
-            // Handle non-tag replaceables if any
-            quote! { crate::tag::Block::MINECRAFT_OVERWORLD_CARVER_REPLACEABLES }
-        };
+        let prob = data["probability"].as_f64().unwrap_or(0.0) as f32;
+        let y = value_to_height_provider(&data["y"]);
 
         let additional = match carver_type {
             "minecraft:cave" => {
+                let count = value_to_int_provider(&data["count"]);
                 let horizontal_radius_multiplier =
-                    value_to_float_provider(&config["horizontal_radius_multiplier"]);
+                    value_to_float_provider(&data["horizontal_radius_multiplier"]);
                 let vertical_radius_multiplier =
-                    value_to_float_provider(&config["vertical_radius_multiplier"]);
-                let floor_level = value_to_float_provider(&config["floor_level"]);
+                    value_to_float_provider(&data["vertical_radius_multiplier"]);
+                let floor_level = value_to_float_provider(&data["floor_level"]);
+                let room_vertical_radius_multiplier =
+                    value_to_float_provider(&data["room_vertical_radius_multiplier"]);
+                let start_vertical_radius_multiplier =
+                    if data.get("start_vertical_radius_multiplier").is_some() {
+                        value_to_float_provider(&data["start_vertical_radius_multiplier"])
+                    } else {
+                        quote! { FloatProvider::Constant(1.0) }
+                    };
+                let thickness = value_to_float_provider(&data["thickness"]);
+                let weird_thickness_bias = data["weird_thickness_bias"].as_bool().unwrap_or(false);
+
                 quote! {
                     CarverAdditionalConfig::Cave(CaveCarverConfig {
+                        count: #count,
                         horizontal_radius_multiplier: #horizontal_radius_multiplier,
                         vertical_radius_multiplier: #vertical_radius_multiplier,
                         floor_level: #floor_level,
-                    })
-                }
-            }
-            "minecraft:nether_cave" => {
-                let horizontal_radius_multiplier =
-                    value_to_float_provider(&config["horizontal_radius_multiplier"]);
-                let vertical_radius_multiplier =
-                    value_to_float_provider(&config["vertical_radius_multiplier"]);
-                let floor_level = value_to_float_provider(&config["floor_level"]);
-                quote! {
-                    CarverAdditionalConfig::NetherCave(CaveCarverConfig {
-                        horizontal_radius_multiplier: #horizontal_radius_multiplier,
-                        vertical_radius_multiplier: #vertical_radius_multiplier,
-                        floor_level: #floor_level,
+                        room_vertical_radius_multiplier: #room_vertical_radius_multiplier,
+                        start_vertical_radius_multiplier: #start_vertical_radius_multiplier,
+                        thickness: #thickness,
+                        weird_thickness_bias: #weird_thickness_bias,
                     })
                 }
             }
             "minecraft:canyon" => {
-                let vertical_rotation = value_to_float_provider(&config["vertical_rotation"]);
-                let shape = &config["shape"];
+                let vertical_rotation = value_to_float_provider(&data["vertical_rotation"]);
+                let shape = &data["shape"];
                 let distance_factor = value_to_float_provider(&shape["distance_factor"]);
                 let thickness = value_to_float_provider(&shape["thickness"]);
                 let width_smoothness = shape["width_smoothness"].as_i64().unwrap_or(0) as i32;
@@ -89,6 +77,7 @@ pub fn build() -> TokenStream {
                 let vertical_radius_center_factor = shape["vertical_radius_center_factor"]
                     .as_f64()
                     .unwrap_or(0.0) as f32;
+                let y_scale = shape["y_scale"].as_f64().unwrap_or(0.0) as f32;
 
                 quote! {
                     CarverAdditionalConfig::Canyon(CanyonCarverConfig {
@@ -100,6 +89,7 @@ pub fn build() -> TokenStream {
                             horizontal_radius_factor: #horizontal_radius_factor,
                             vertical_radius_default_factor: #vertical_radius_default_factor,
                             vertical_radius_center_factor: #vertical_radius_center_factor,
+                            y_scale: #y_scale,
                         }
                     })
                 }
@@ -111,17 +101,21 @@ pub fn build() -> TokenStream {
             pub const #variant_name: CarverConfig = CarverConfig {
                 probability: #prob,
                 y: #y,
-                y_scale: #y_scale,
-                lava_level: #lava_level,
-                replaceable: #replaceable,
                 additional: #additional,
             };
         });
     }
 
     quote! {
-        use pumpkin_util::math::float_provider::{FloatProvider, NormalFloatProvider, ConstantFloatProvider, UniformFloatProvider, TrapezoidFloatProvider, ClampedNormalFloatProvider};
-        use pumpkin_util::y_offset::{YOffset, Absolute, AboveBottom, BelowTop};
+        use pumpkin_util::math::float_provider::{
+            ClampedNormalFloatProvider, ConstantFloatProvider, FloatProvider, NormalFloatProvider,
+            TrapezoidFloatProvider, UniformFloatProvider,
+        };
+        use pumpkin_util::math::int_provider::{
+            BiasedToBottomIntProvider, ConstantIntProvider, IntProvider, NormalIntProvider,
+            UniformIntProvider, VeryBiasedToBottomIntProvider,
+        };
+        use pumpkin_util::y_offset::{AboveBottom, Absolute, BelowTop, YOffset};
 
         pub enum HeightProvider {
             Uniform(UniformHeightProvider),
@@ -147,18 +141,28 @@ pub fn build() -> TokenStream {
         }
 
         pub struct CaveCarverConfig {
+            pub count: IntProvider,
             pub horizontal_radius_multiplier: FloatProvider,
             pub vertical_radius_multiplier: FloatProvider,
             pub floor_level: FloatProvider,
+            pub room_vertical_radius_multiplier: FloatProvider,
+            pub start_vertical_radius_multiplier: FloatProvider,
+            pub thickness: FloatProvider,
+            pub weird_thickness_bias: bool,
         }
 
         impl CaveCarverConfig {
             #[must_use]
             pub const fn default() -> Self {
                 Self {
+                    count: IntProvider::Constant(1),
                     horizontal_radius_multiplier: FloatProvider::Constant(1.0),
                     vertical_radius_multiplier: FloatProvider::Constant(1.0),
                     floor_level: FloatProvider::Constant(-0.7),
+                    room_vertical_radius_multiplier: FloatProvider::Constant(0.5),
+                    start_vertical_radius_multiplier: FloatProvider::Constant(1.0),
+                    thickness: FloatProvider::Constant(1.0),
+                    weird_thickness_bias: false,
                 }
             }
         }
@@ -170,6 +174,7 @@ pub fn build() -> TokenStream {
             pub horizontal_radius_factor: FloatProvider,
             pub vertical_radius_default_factor: f32,
             pub vertical_radius_center_factor: f32,
+            pub y_scale: f32,
         }
 
         pub struct CanyonCarverConfig {
@@ -179,16 +184,12 @@ pub fn build() -> TokenStream {
 
         pub enum CarverAdditionalConfig {
             Cave(CaveCarverConfig),
-            NetherCave(CaveCarverConfig),
             Canyon(CanyonCarverConfig),
         }
 
         pub struct CarverConfig {
             pub probability: f32,
             pub y: HeightProvider,
-            pub y_scale: FloatProvider,
-            pub lava_level: YOffset,
-            pub replaceable: crate::tag::Tag,
             pub additional: CarverAdditionalConfig,
         }
 
@@ -197,13 +198,45 @@ pub fn build() -> TokenStream {
     }
 }
 
+fn value_to_int_provider(v: &Value) -> TokenStream {
+    if v.is_number() {
+        let i = v.as_i64().unwrap_or(0) as i32;
+        quote! { IntProvider::Constant(#i) }
+    } else {
+        let type_str = v["type"].as_str().unwrap_or("");
+        match type_str {
+            "minecraft:constant" => {
+                let val = v["value"].as_i64().unwrap_or(0) as i32;
+                quote! { IntProvider::Constant(#val) }
+            }
+            "minecraft:uniform" => {
+                let min = v["min_inclusive"].as_i64().unwrap_or(0) as i32;
+                let max = v["max_inclusive"].as_i64().unwrap_or(0) as i32;
+                quote! { IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider::new(#min, #max))) }
+            }
+            "minecraft:biased_to_bottom" => {
+                let min = v["min_inclusive"].as_i64().unwrap_or(0) as i32;
+                let max = v["max_inclusive"].as_i64().unwrap_or(0) as i32;
+                quote! { IntProvider::Object(NormalIntProvider::BiasedToBottom(BiasedToBottomIntProvider::new(#min, #max))) }
+            }
+            "minecraft:very_biased_to_bottom" => {
+                let min = v["min_inclusive"].as_i64().unwrap_or(0) as i32;
+                let max = v["max_inclusive"].as_i64().unwrap_or(0) as i32;
+                let inner = v["inner"].as_i64().unwrap_or(1) as i32;
+                quote! { IntProvider::Object(NormalIntProvider::VeryBiasedToBottom(VeryBiasedToBottomIntProvider::new(#min, #max, #inner))) }
+            }
+            _ => {
+                quote! { IntProvider::Constant(0) }
+            }
+        }
+    }
+}
+
 fn value_to_float_provider(v: &Value) -> TokenStream {
     if v.is_number() {
         let f = v.as_f64().unwrap_or(0.0) as f32;
         quote! { FloatProvider::Constant(#f) }
     } else {
-        // This is complex because we need to match the structure of FloatProvider in pumpkin-util
-        // For now, let's handle the common case of uniform
         let type_str = v["type"].as_str().unwrap_or("");
         match type_str {
             "minecraft:uniform" => {
@@ -222,7 +255,6 @@ fn value_to_float_provider(v: &Value) -> TokenStream {
                 quote! { FloatProvider::Object(NormalFloatProvider::Trapezoid(TrapezoidFloatProvider::new(#min, #max, #plateau))) }
             }
             _ => {
-                // Fallback to constant 0 if unknown
                 quote! { FloatProvider::Constant(0.0) }
             }
         }

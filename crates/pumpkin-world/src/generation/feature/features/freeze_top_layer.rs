@@ -4,8 +4,6 @@ use pumpkin_data::{Block, BlockState};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::RandomGenerator;
 
-const SEA_LEVEL: i32 = 63; // TODO: getSeaLevel() from the worldgen context instead of hardcoding
-
 pub struct FreezeTopLayerFeature;
 
 impl FreezeTopLayerFeature {
@@ -42,9 +40,10 @@ impl FreezeTopLayerFeature {
                 }
 
                 // Snow check
-                let top_temp = biome
-                    .weather
-                    .compute_temperature(x as f64, y, z as f64, SEA_LEVEL);
+                let top_temp =
+                    biome
+                        .weather
+                        .compute_temperature(x as f64, y, z as f64, chunk.get_sea_level());
 
                 if top_temp < 0.15 {
                     let top_raw = GenerationCache::get_block_state(chunk, &top_vec);

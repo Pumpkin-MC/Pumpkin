@@ -5,18 +5,18 @@ use crate::block::entities::lectern::LecternBlockEntity;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockBehaviour, BrokenArgs, EmitsRedstonePowerArgs, GetComparatorOutputArgs,
-    GetRedstonePowerArgs, NormalUseArgs, OnPlaceArgs, OnScheduledTickArgs, OnStateReplacedArgs,
-    PlacedArgs, UseWithItemArgs,
+    GetRedstonePowerArgs, GetScreenHandlerFactoryArgs, NormalUseArgs, OnPlaceArgs,
+    OnScheduledTickArgs, OnStateReplacedArgs, PathComputationType, PlacedArgs, UseWithItemArgs,
 };
 use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
 use crate::world::World;
-use pumpkin_data::block_properties::{BlockProperties, LecternLikeProperties};
+use pumpkin_data::block_properties::LecternLikeProperties;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::world::WorldEvent;
-use pumpkin_data::{Block, BlockDirection, BlockStateId, tag, translation};
+use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId, tag, translation};
 use pumpkin_inventory::lectern_screen_handler::{LecternController, LecternScreenHandler};
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
@@ -117,7 +117,7 @@ impl LecternBlock {
         if block != &Block::LECTERN {
             return;
         }
-        let mut props = LecternLikeProperties::from_state_id(state_id, block);
+        let mut props = LecternLikeProperties::from_state_id(state_id);
         props.powered = true;
         world.set_block_state(position, props.to_state_id(block), BlockFlags::NOTIFY_ALL);
         Self::update_neighbors_below(world, position);
@@ -136,7 +136,7 @@ impl LecternBlock {
         if block != &Block::LECTERN {
             return;
         }
-        let mut props = LecternLikeProperties::from_state_id(state_id, block);
+        let mut props = LecternLikeProperties::from_state_id(state_id);
         props.powered = false;
         props.has_book = has_book;
         world.set_block_state(position, props.to_state_id(block), BlockFlags::NOTIFY_ALL);
@@ -162,41 +162,50 @@ impl BlockBehaviour for LecternBlock {
     }
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        let props = LecternLikeProperties::from_state_id(
-            args.world.get_block_state(args.position).id,
-            args.block,
-        );
+        self.get_screen_handler_factory(GetScreenHandlerFactoryArgs {
+            server: args.server,
+            world: args.world,
+            block: args.block,
+            position: args.position,
+            player: args.player,
+        })
+        .map_or(BlockActionResult::Pass, |factory| {
+            args.player.increment_stat(
+                pumpkin_data::statistic::StatisticCategory::Custom,
+                pumpkin_data::statistic::CustomStatistic::InteractWithLectern as i32,
+                1,
+            );
+
+            args.player
+                .open_handled_screen(factory.as_ref(), Some(*args.position));
+
+            BlockActionResult::Success
+        })
+    }
+
+    fn get_screen_handler_factory(
+        &self,
+        args: GetScreenHandlerFactoryArgs<'_>,
+    ) -> Option<Box<dyn ScreenHandlerFactory>> {
+        let props =
+            LecternLikeProperties::from_state_id(args.world.get_block_state(args.position).id);
         if !props.has_book {
-            return BlockActionResult::Pass;
+            return None;
         }
 
-        let Some(block_entity) = args.world.get_block_entity(args.position) else {
-            return BlockActionResult::Pass;
-        };
-        let Some(inventory) = block_entity.get_inventory() else {
-            return BlockActionResult::Pass;
-        };
-
-        args.player.increment_stat(
-            pumpkin_data::statistic::StatisticCategory::Custom,
-            pumpkin_data::statistic::CustomStatistic::InteractWithLectern as i32,
-            1,
-        );
+        let block_entity = args.world.get_block_entity(args.position)?;
+        let inventory = block_entity.get_inventory()?;
 
         let controller = Arc::new(LecternPageController {
             world: args.world.clone(),
             position: *args.position,
             inventory: inventory.clone(),
         });
-        args.player.open_handled_screen(
-            &LecternScreenFactory {
-                inventory,
-                controller,
-            },
-            Some(*args.position),
-        );
 
-        BlockActionResult::Success
+        Some(Box::new(LecternScreenFactory {
+            inventory,
+            controller,
+        }))
     }
 
     fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
@@ -205,10 +214,8 @@ impl BlockBehaviour for LecternBlock {
             return BlockActionResult::PassToDefaultBlockAction;
         }
 
-        let props = LecternLikeProperties::from_state_id(
-            args.world.get_block_state(args.position).id,
-            args.block,
-        );
+        let props =
+            LecternLikeProperties::from_state_id(args.world.get_block_state(args.position).id);
         if props.has_book {
             // Fall through so `normal_use` opens the reading screen.
             return BlockActionResult::PassToDefaultBlockAction;
@@ -232,10 +239,8 @@ impl BlockBehaviour for LecternBlock {
     }
 
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        let mut props = LecternLikeProperties::from_state_id(
-            args.world.get_block_state(args.position).id,
-            args.block,
-        );
+        let mut props =
+            LecternLikeProperties::from_state_id(args.world.get_block_state(args.position).id);
         props.powered = false;
         args.world.set_block_state(
             args.position,
@@ -249,12 +254,12 @@ impl BlockBehaviour for LecternBlock {
     }
 
     fn get_weak_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
-        let props = LecternLikeProperties::from_state_id(args.state.id, args.block);
+        let props = LecternLikeProperties::from_state_id(args.state.id);
         if props.powered { 15 } else { 0 }
     }
 
     fn get_strong_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
-        let props = LecternLikeProperties::from_state_id(args.state.id, args.block);
+        let props = LecternLikeProperties::from_state_id(args.state.id);
         if props.powered && args.direction == BlockDirection::Up {
             15
         } else {
@@ -264,7 +269,7 @@ impl BlockBehaviour for LecternBlock {
 
     fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
         if !args.moved {
-            let props = LecternLikeProperties::from_state_id(args.old_state_id, args.block);
+            let props = LecternLikeProperties::from_state_id(args.old_state_id);
             if props.powered {
                 Self::update_neighbors_below(args.world, args.position);
             }
@@ -301,5 +306,9 @@ impl BlockBehaviour for LecternBlock {
         } else {
             Some(0)
         }
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }

@@ -8,7 +8,6 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::GameMode;
 
 use crate::entity::{
@@ -93,13 +92,7 @@ impl IronGolemEntity {
         self.player_created.store(value, Ordering::Relaxed);
         let entity = self.get_entity();
         let flag: u8 = u8::from(value);
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::iron_golem::FLAGS_ID,
-                flag,
-            )],
-            None,
-        );
+        entity.set_synced_data(pumpkin_data::tracked_data::iron_golem::FLAGS_ID, flag);
     }
 
     pub fn offer_flower(&self, offer: bool) {
@@ -150,13 +143,7 @@ impl Mob for IronGolemEntity {
     fn mob_init_data_tracker(&self) {
         let entity = self.get_entity();
         let flag: u8 = u8::from(self.is_player_created());
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::iron_golem::FLAGS_ID,
-                flag,
-            )],
-            None,
-        );
+        entity.set_synced_data(pumpkin_data::tracked_data::iron_golem::FLAGS_ID, flag);
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {

@@ -1,3 +1,5 @@
+use pumpkin_data::fluid::Fluid;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{Block, BlockId, BlockState};
 
 use pumpkin_data::BlockStateId;
@@ -7,7 +9,7 @@ use pumpkin_util::random::{RandomGenerator, get_seed, xoroshiro128::Xoroshiro};
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::entity::player::Player;
 use crate::world::World;
-use crate::world::loot::{LootContextParameters, LootTableExt};
+use crate::world::loot::LootContextParameters;
 use std::sync::Arc;
 
 pub mod blocks;
@@ -22,11 +24,20 @@ use crate::server::Server;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_rotation::{Mirror, Rotation};
 use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_inventory::screen_handler::ScreenHandlerFactory;
 use pumpkin_protocol::java::server::play::SUseItemOn;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PathComputationType {
+    Land,
+    Water,
+    Air,
+}
 
 pub trait BlockMetadata {
     fn ids() -> Box<[BlockId]>;
@@ -76,11 +87,20 @@ pub trait BlockBehaviour: Send + Sync {
         BlockActionResult::Pass
     }
 
+    fn get_screen_handler_factory(
+        &self,
+        _args: GetScreenHandlerFactoryArgs<'_>,
+    ) -> Option<Box<dyn ScreenHandlerFactory>> {
+        None
+    }
+
     fn use_with_item(&self, _args: UseWithItemArgs<'_>) -> BlockActionResult {
         BlockActionResult::PassToDefaultBlockAction
     }
 
     fn on_entity_collision(&self, _args: OnEntityCollisionArgs<'_>) {}
+
+    fn on_projectile_hit(&self, _args: OnProjectileHitArgs<'_>) {}
 
     /// Called when an entity is standing on / walking over the top face of this block.
     fn on_entity_step(&self, _args: OnEntityStepArgs<'_>) {}
@@ -183,6 +203,17 @@ pub trait BlockBehaviour: Send + Sync {
     ) -> &'static BlockState {
         block.rotate(state_id, rotation)
     }
+
+    fn is_pathfindable(&self, state: &BlockState, computation_type: PathComputationType) -> bool {
+        match computation_type {
+            PathComputationType::Water => {
+                state.is_waterlogged()
+                    || Fluid::from_state_id(state.id)
+                        .is_some_and(|f| f.has_tag(&tag::Fluid::MINECRAFT_WATER))
+            }
+            PathComputationType::Land | PathComputationType::Air => !state.is_full_cube(),
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -200,6 +231,15 @@ pub struct NormalUseArgs<'a> {
     pub position: &'a BlockPos,
     pub player: &'a Arc<Player>,
     pub hit: &'a BlockHitResult<'a>,
+}
+
+#[derive(Clone, Copy)]
+pub struct GetScreenHandlerFactoryArgs<'a> {
+    pub server: &'a Server,
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub position: &'a BlockPos,
+    pub player: &'a Arc<Player>,
 }
 
 pub struct UseWithItemArgs<'a> {
@@ -225,6 +265,16 @@ pub struct OnEntityCollisionArgs<'a> {
     pub state: &'a BlockState,
     pub position: &'a BlockPos,
     pub entity: &'a dyn EntityBase,
+}
+
+pub struct OnProjectileHitArgs<'a> {
+    pub server: &'a Server,
+    pub world: &'a Arc<World>,
+    pub block: &'a Block,
+    pub state: &'a BlockState,
+    pub position: &'a BlockPos,
+    pub projectile: &'a dyn EntityBase,
+    pub hit_pos: &'a Vector3<f64>,
 }
 
 pub struct OnEntityStepArgs<'a> {
@@ -406,10 +456,16 @@ pub fn drop_loot(
     block: &Block,
     pos: &BlockPos,
     experience: bool,
-    params: LootContextParameters,
+    params: &LootContextParameters,
 ) {
-    if let Some(loot_table) = &block.loot_table {
-        let items = loot_table.get_loot(params);
+    let key = format!("minecraft:blocks/{}", block.name);
+    if let Some(loot_table) = pumpkin_data::loot_table::get_loot_table(&key) {
+        let seed: i64 = rand::random();
+        let mut items = crate::world::loot::generate_loot_with_context(loot_table, seed, params);
+        if block.has_tag(&tag::Block::MINECRAFT_LEAVES) {
+            // TODO: Re-enable apple and stick drops for leaves once table bonus/drop chances are properly implemented
+            items.retain(|stack| stack.item != &Item::APPLE && stack.item != &Item::STICK);
+        }
         if !items.is_empty() {
             let mut event = crate::plugin::block::block_drop_item::BlockDropItemEvent {
                 block_pos: *pos,
@@ -429,10 +485,17 @@ pub fn drop_loot(
         }
     }
 
-    if experience && let Some(experience) = &block.experience {
+    let has_silk_touch = params.tool.as_ref().is_some_and(|tool| {
+        pumpkin_data::Enchantment::from_name("silk_touch")
+            .is_some_and(|e| tool.get_enchantment_level(e) > 0)
+    });
+
+    if experience
+        && !has_silk_touch
+        && let Some(experience) = &block.experience
+    {
         let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
         let amount = experience.experience.get(&mut random);
-        // TODO: Silk touch gives no exp
         if amount > 0 {
             let mut event = crate::plugin::block::block_exp::BlockExpEvent {
                 block_pos: *pos,

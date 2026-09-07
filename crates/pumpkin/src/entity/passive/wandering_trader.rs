@@ -43,7 +43,7 @@ use crate::entity::ai::goal::wander_around::WanderAroundGoal;
 use crate::entity::ai::goal::{Controls, Goal};
 use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::experience_orb::ExperienceOrbEntity;
-use crate::entity::mob::{Mob, MobEntity, NIGHT_END, NIGHT_START};
+use crate::entity::mob::{Mob, MobEntity};
 use crate::entity::player::Player;
 use crate::entity::{Entity, EntityBase};
 use crate::world::World;
@@ -1103,8 +1103,8 @@ impl Goal for WanderingTraderUseItemGoal {
             return false;
         }
         let world = trader.mob_entity.living_entity.entity.world.load();
-        let day_time = world.get_time_of_day() % 24000;
-        let is_dark = (NIGHT_START..=NIGHT_END).contains(&day_time);
+        let is_dark = world.is_dark_outside();
+        let is_bright = world.is_bright_outside();
         let is_invisible = trader
             .mob_entity
             .living_entity
@@ -1114,7 +1114,7 @@ impl Goal for WanderingTraderUseItemGoal {
             self.goal_type = Some(PotionGoalType::Invisibility);
             return true;
         }
-        if !is_dark && is_invisible {
+        if is_bright && is_invisible {
             self.goal_type = Some(PotionGoalType::Milk);
             return true;
         }
@@ -1277,7 +1277,7 @@ mod tests {
     #[test]
     fn invisibility_potion_item_stack_creation() {
         let potion = create_invisibility_potion();
-        assert!(potion.item == &Item::POTION);
+        assert_eq!(potion.item, &Item::POTION);
         assert_eq!(potion.item_count, 1);
         assert!(!potion.patch.is_empty());
     }

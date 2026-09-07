@@ -324,6 +324,71 @@ fn recipe_matches(
     }
 }
 
+#[must_use]
+pub fn match_crafting_recipe(
+    inventory: &dyn RecipeInputInventory,
+    provider: Option<&dyn RecipeProvider>,
+) -> Option<RecipeResult> {
+    let mut count: usize = 0;
+    let inventory_width = inventory.get_width();
+    let mut top_x = 9;
+    let mut top_y = 9;
+    let mut bottom_x = 0;
+    let mut bottom_y = 0;
+    for i in 0..inventory.size() {
+        let x = i % inventory_width;
+        let y = i / inventory_width;
+        let slot = inventory.get_stack(i);
+        if !slot.is_empty() {
+            top_x = top_x.min(x);
+            top_y = top_y.min(y);
+            bottom_x = bottom_x.max(x);
+            bottom_y = bottom_y.max(y);
+            count += 1;
+        }
+    }
+    if count == 0 {
+        return None;
+    }
+    let input_width = bottom_x + 1 - top_x;
+    let input_height = bottom_y + 1 - top_y;
+
+    for recipe in RECIPES_CRAFTING {
+        if let Some(result) = recipe_matches(
+            GenericRecipe::Vanilla(recipe),
+            input_height,
+            input_width,
+            top_x,
+            top_y,
+            count,
+            inventory,
+        ) {
+            return Some(result);
+        }
+    }
+
+    if let Some(provider) = provider {
+        let dynamic = provider.get_dynamic_recipes();
+        for recipe in &dynamic {
+            if let DynamicRecipe::Crafting(crafting) = recipe
+                && let Some(result) = recipe_matches(
+                    GenericRecipe::Dynamic(crafting),
+                    input_height,
+                    input_width,
+                    top_x,
+                    top_y,
+                    count,
+                    inventory,
+                )
+            {
+                return Some(result);
+            }
+        }
+    }
+
+    None
+}
+
 impl ResultSlot {
     pub fn new(
         inventory: Arc<dyn RecipeInputInventory>,
@@ -338,63 +403,7 @@ impl ResultSlot {
     }
 
     fn match_recipe(&self) -> Option<RecipeResult> {
-        let mut count: usize = 0;
-        let inventory_width = self.inventory.get_width();
-        let mut top_x = 9;
-        let mut top_y = 9;
-        let mut bottom_x = 0;
-        let mut bottom_y = 0;
-        for i in 0..self.inventory.size() {
-            let x = i % inventory_width;
-            let y = i / inventory_width;
-            let slot = self.inventory.get_stack(i);
-            if !slot.is_empty() {
-                top_x = top_x.min(x);
-                top_y = top_y.min(y);
-                bottom_x = bottom_x.max(x);
-                bottom_y = bottom_y.max(y);
-                count += 1;
-            }
-        }
-        if count == 0 {
-            return None;
-        }
-        let input_width = bottom_x + 1 - top_x;
-        let input_height = bottom_y + 1 - top_y;
-
-        for recipe in RECIPES_CRAFTING {
-            if let Some(result) = recipe_matches(
-                GenericRecipe::Vanilla(recipe),
-                input_height,
-                input_width,
-                top_x,
-                top_y,
-                count,
-                &*self.inventory,
-            ) {
-                return Some(result);
-            }
-        }
-
-        if let Some(provider) = &self.recipe_provider {
-            let dynamic = provider.get_dynamic_recipes();
-            for recipe in &dynamic {
-                if let DynamicRecipe::Crafting(crafting) = recipe
-                    && let Some(result) = recipe_matches(
-                        GenericRecipe::Dynamic(crafting),
-                        input_height,
-                        input_width,
-                        top_x,
-                        top_y,
-                        count,
-                        &*self.inventory,
-                    )
-                {
-                    return Some(result);
-                }
-            }
-        }
-        None
+        match_crafting_recipe(&*self.inventory, self.recipe_provider.as_deref())
     }
 
     fn refill_output(&self) -> ItemStack {

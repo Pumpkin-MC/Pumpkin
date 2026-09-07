@@ -6,9 +6,7 @@ use uuid::Uuid;
 use crate::block::blocks::bed::BedBlock;
 use pumpkin_data::Enchantment;
 use pumpkin_data::attributes::Attributes;
-use pumpkin_data::block_properties::{
-    BedPart, BlockProperties, WhiteBedLikeProperties as BedProperties,
-};
+use pumpkin_data::block_properties::{BedPart, WhiteBedLikeProperties as BedProperties};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityType};
 use pumpkin_data::item::{Item, JavaToBedrockItemMapping};
@@ -433,13 +431,12 @@ impl VillagerEntity {
 
         // Send initial metadata
         let bedrock_metadata = Self::bedrock_metadata(villager_data, 0);
-        mob_arc.get_entity().send_meta_data(
-            &[Metadata::new(
-                tracked_data::villager::VILLAGER_DATA,
-                villager_data,
-            )],
-            Some(&bedrock_metadata),
-        );
+        mob_arc
+            .get_entity()
+            .set_synced_data(tracked_data::villager::VILLAGER_DATA, villager_data);
+        mob_arc
+            .get_entity()
+            .send_bedrock_actor_data(&bedrock_metadata);
 
         mob_arc
     }
@@ -508,10 +505,9 @@ impl VillagerEntity {
             old_profession
         };
         let bedrock_metadata = Self::bedrock_metadata(data, self.xp.load(Ordering::Relaxed));
-        self.get_entity().send_meta_data(
-            &[Metadata::new(tracked_data::villager::VILLAGER_DATA, data)],
-            Some(&bedrock_metadata),
-        );
+        self.get_entity()
+            .set_synced_data(tracked_data::villager::VILLAGER_DATA, data);
+        self.get_entity().send_bedrock_actor_data(&bedrock_metadata);
 
         if old_profession != data.profession {
             self.offers
@@ -831,13 +827,9 @@ impl VillagerEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let bedrock_metadata = Self::bedrock_metadata(villager_data, current_xp);
-        self.get_entity().send_meta_data(
-            &[Metadata::new(
-                tracked_data::villager::VILLAGER_DATA,
-                villager_data,
-            )],
-            Some(&bedrock_metadata),
-        );
+        self.get_entity()
+            .set_synced_data(tracked_data::villager::VILLAGER_DATA, villager_data);
+        self.get_entity().send_bedrock_actor_data(&bedrock_metadata);
 
         if reward_exp {
             ExperienceOrbEntity::spawn(world, self.get_entity().pos.load(), xp_gain as u32);
@@ -1280,13 +1272,7 @@ impl VillagerEntity {
     pub fn set_unhappy(&self) {
         let entity = self.get_entity();
         self.unhappy_counter.store(40, Ordering::Relaxed);
-        entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::villager::UNHAPPY_COUNTER,
-                VarInt(40),
-            )],
-            None,
-        );
+        entity.set_synced_data(tracked_data::villager::UNHAPPY_COUNTER, VarInt(40));
         entity.world.load().send_entity_status(
             entity,
             pumpkin_data::entity::EntityStatus::VillagerAngry,
@@ -1550,12 +1536,9 @@ impl VillagerEntity {
             let unhappy_counter = unhappy_counter - 1;
             self.unhappy_counter
                 .store(unhappy_counter, Ordering::Relaxed);
-            self.get_entity().send_meta_data(
-                &[Metadata::new(
-                    tracked_data::villager::UNHAPPY_COUNTER,
-                    VarInt(unhappy_counter),
-                )],
-                None,
+            self.get_entity().set_synced_data(
+                tracked_data::villager::UNHAPPY_COUNTER,
+                VarInt(unhappy_counter),
             );
         }
         self.trade_sound_cooldown
@@ -1638,7 +1621,7 @@ impl VillagerEntity {
         if let Some(current_home) = self.get_home_pos() {
             let (block, state) = world.get_block_and_state(&current_home);
             let valid = if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_BEDS) {
-                let bed_props = BedProperties::from_state_id(state.id, block);
+                let bed_props = BedProperties::from_state_id(state.id);
                 bed_props.part == BedPart::Head
             } else {
                 false
@@ -1652,12 +1635,9 @@ impl VillagerEntity {
                 if is_sleeping {
                     // Wake up if bed was broken
                     self.get_entity().set_pose(EntityPose::Standing);
-                    self.get_entity().send_meta_data(
-                        &[Metadata::new(
-                            pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
-                            None::<BlockPos>,
-                        )],
-                        None,
+                    self.get_entity().set_synced_data(
+                        pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
+                        None::<BlockPos>,
                     );
                 }
             }
@@ -1700,7 +1680,7 @@ impl VillagerEntity {
             for p in BlockPos::iterate(start, end) {
                 let (block, state) = world.get_block_and_state(&p);
                 if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_BEDS) {
-                    let bed_props = BedProperties::from_state_id(state.id, block);
+                    let bed_props = BedProperties::from_state_id(state.id);
                     let bed_head_pos = if bed_props.part == BedPart::Head {
                         p
                     } else {
@@ -1745,18 +1725,15 @@ impl VillagerEntity {
                         // Within 2 blocks (squared distance 4.0)
                         let (block, state) = world.get_block_and_state(&home_pos);
                         if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_BEDS) {
-                            let bed_props = BedProperties::from_state_id(state.id, block);
+                            let bed_props = BedProperties::from_state_id(state.id);
                             if !bed_props.occupied {
                                 // Make bed occupied
                                 BedBlock::set_occupied(true, &world, block, &home_pos, state.id);
 
                                 self.get_entity().set_pose(EntityPose::Sleeping);
-                                self.get_entity().send_meta_data(
-                                    &[Metadata::new(
-                                        pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
-                                        Some(home_pos),
-                                    )],
-                                    None,
+                                self.get_entity().set_synced_data(
+                                    pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
+                                    Some(home_pos),
                                 );
                             }
                         }
@@ -1766,30 +1743,24 @@ impl VillagerEntity {
                 // It is day, wake up!
                 let (block, state) = world.get_block_and_state(&home_pos);
                 if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_BEDS) {
-                    let bed_props = BedProperties::from_state_id(state.id, block);
+                    let bed_props = BedProperties::from_state_id(state.id);
                     if bed_props.occupied {
                         BedBlock::set_occupied(false, &world, block, &home_pos, state.id);
                     }
                 }
 
                 self.get_entity().set_pose(EntityPose::Standing);
-                self.get_entity().send_meta_data(
-                    &[Metadata::new(
-                        pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
-                        None::<BlockPos>,
-                    )],
-                    None,
+                self.get_entity().set_synced_data(
+                    pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
+                    None::<BlockPos>,
                 );
             }
         } else if is_sleeping {
             // Wake up during the day
             self.get_entity().set_pose(EntityPose::Standing);
-            self.get_entity().send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
-                    None::<BlockPos>,
-                )],
-                None,
+            self.get_entity().set_synced_data(
+                pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
+                None::<BlockPos>,
             );
         }
 
@@ -2170,6 +2141,9 @@ impl Mob for VillagerEntity {
     }
 
     fn mob_java_spawn_metadata(&self, version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
+        if version < JavaMinecraftVersion::V_1_9 {
+            return None;
+        }
         let mut metadata = Vec::new();
         Metadata::new(
             tracked_data::villager::VILLAGER_DATA,
@@ -2251,15 +2225,10 @@ impl Mob for VillagerEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let bedrock_metadata = Self::bedrock_metadata(data, self.xp.load(Ordering::Relaxed));
-        entity.send_meta_data(
-            &[Metadata::new(tracked_data::villager::VILLAGER_DATA, data)],
-            Some(&bedrock_metadata),
-        );
+        entity.set_synced_data(tracked_data::villager::VILLAGER_DATA, data);
+        entity.send_bedrock_actor_data(&bedrock_metadata);
         if entity.age.load(Ordering::Relaxed) < 0 {
-            entity.send_meta_data(
-                &[Metadata::new(tracked_data::villager::BABY_ID, true)],
-                None,
-            );
+            entity.set_synced_data(tracked_data::villager::BABY_ID, true);
         }
     }
 
@@ -2444,8 +2413,8 @@ mod tests {
             .iter()
             .find(|trade| trade.modifier == VillagerTradeModifier::EnchantRandomly)
             .unwrap();
-        assert!(enchanted_book.wants.item == &Item::EMERALD);
-        assert!(enchanted_book.wants_b.unwrap().item == &Item::BOOK);
+        assert_eq!(enchanted_book.wants.item, &Item::EMERALD);
+        assert_eq!(enchanted_book.wants_b.unwrap().item, &Item::BOOK);
         assert_eq!(enchanted_book.price_multiplier, 0.2);
 
         let cartographer = VillagerProfession::Cartographer.trade_set(2).unwrap();

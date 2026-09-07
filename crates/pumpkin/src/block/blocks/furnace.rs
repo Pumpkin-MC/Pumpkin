@@ -5,10 +5,7 @@ use crate::block::entities::{
     PropertyDelegate, furnace::FurnaceBlockEntity, furnace_like_block_entity::ExperienceContainer,
 };
 use pumpkin_data::{
-    BlockStateId,
-    block_properties::{BlockProperties, FurnaceLikeProperties},
-    screen::WindowType,
-    translation,
+    BlockStateId, block_properties::FurnaceLikeProperties, screen::WindowType, translation,
 };
 use pumpkin_inventory::{
     furnace_like::furnace_like_screen_handler::FurnaceLikeScreenHandler,
@@ -20,8 +17,8 @@ use pumpkin_world::inventory::Inventory;
 
 use crate::{
     block::{
-        BlockBehaviour, BrokenArgs, GetComparatorOutputArgs, NormalUseArgs, OnPlaceArgs,
-        PlacedArgs, registry::BlockActionResult,
+        BlockBehaviour, BrokenArgs, GetComparatorOutputArgs, GetScreenHandlerFactoryArgs,
+        NormalUseArgs, OnPlaceArgs, PlacedArgs, registry::BlockActionResult,
     },
     entity::experience_orb::ExperienceOrbEntity,
 };
@@ -80,22 +77,37 @@ pub struct FurnaceBlock;
 
 impl BlockBehaviour for FurnaceBlock {
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        if let Some(block_entity) = args.world.get_block_entity(args.position)
-            && let Some(inventory) = block_entity.clone().get_inventory()
-            && let Some(property_delegate) = block_entity.clone().to_property_delegate()
-            && let Some(experience_container) = block_entity.to_experience_container()
-        {
+        if let Some(factory) = self.get_screen_handler_factory(GetScreenHandlerFactoryArgs {
+            server: args.server,
+            world: args.world,
+            block: args.block,
+            position: args.position,
+            player: args.player,
+        }) {
             args.player.increment_stat(
                 pumpkin_data::statistic::StatisticCategory::Custom,
                 pumpkin_data::statistic::CustomStatistic::InteractWithFurnace as i32,
                 1,
             );
-            let furnace_screen_factory =
-                FurnaceScreenFactory::new(inventory, property_delegate, experience_container);
             args.player
-                .open_handled_screen(&furnace_screen_factory, Some(*args.position));
+                .open_handled_screen(factory.as_ref(), Some(*args.position));
         }
         crate::block::registry::BlockActionResult::Consume
+    }
+
+    fn get_screen_handler_factory(
+        &self,
+        args: GetScreenHandlerFactoryArgs<'_>,
+    ) -> Option<Box<dyn ScreenHandlerFactory>> {
+        let block_entity = args.world.get_block_entity(args.position)?;
+        let inventory = block_entity.clone().get_inventory()?;
+        let property_delegate = block_entity.clone().to_property_delegate()?;
+        let experience_container = block_entity.to_experience_container()?;
+        Some(Box::new(FurnaceScreenFactory::new(
+            inventory,
+            property_delegate,
+            experience_container,
+        )))
     }
 
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {

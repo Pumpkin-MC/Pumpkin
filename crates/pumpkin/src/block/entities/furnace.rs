@@ -1,4 +1,3 @@
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_world::inventory::Inventory;
 
 use std::{

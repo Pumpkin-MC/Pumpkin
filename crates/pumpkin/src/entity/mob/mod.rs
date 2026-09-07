@@ -14,8 +14,9 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
+use pumpkin_data::{Block, BlockDirection};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot, Metadata};
+use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot};
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
@@ -27,7 +28,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 use rand::RngExt;
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
-use std::sync::atomic::{AtomicI32, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, Ordering};
 use uuid::Uuid;
 
 pub mod bat;
@@ -82,22 +83,12 @@ pub struct MobEntity {
     pub love_ticks: AtomicI32,
     pub breeding_cooldown: AtomicI32,
     pub breeder: AtomicCell<Option<Uuid>>,
+    pub persistence_required: AtomicBool,
     mob_flags: AtomicU8,
     last_sent_yaw: AtomicU8,
     last_sent_pitch: AtomicU8,
     last_sent_head_yaw: AtomicU8,
 }
-
-/// Tick boundaries (both inclusive) when monsters do not burn in sunlight (26.1).
-///
-/// Sourced from `data/minecraft/timeline/day.json` — `monsters_burn` keyframes:
-/// `value=false` at tick 12542 (dusk), `value=true` at tick 23460 (dawn).
-///
-/// TODO: Replace with `EnvironmentAttributes::MONSTERS_BURN` lookup once the
-/// `EnvironmentAttributeSystem` is implemented in `pumpkin-data`.
-pub(crate) const NIGHT_START: i64 = 12542;
-pub(crate) const NIGHT_END: i64 = 23459;
-
 impl MobEntity {
     const AI_DISABLED_FLAG: u8 = 1;
     const LEFT_HANDED_FLAG: u8 = 2;
@@ -178,6 +169,7 @@ impl MobEntity {
             love_ticks: AtomicI32::new(0),
             breeding_cooldown: AtomicI32::new(0),
             breeder: AtomicCell::new(None),
+            persistence_required: AtomicBool::new(false),
             mob_flags: AtomicU8::new(0),
             last_sent_yaw: AtomicU8::new(0),
             last_sent_pitch: AtomicU8::new(0),
@@ -265,6 +257,9 @@ impl MobEntity {
         if self.can_pick_up_loot() {
             nbt.put_bool("CanPickUpLoot", true);
         }
+        if self.persistence_required.load(Relaxed) {
+            nbt.put_bool("PersistenceRequired", true);
+        }
     }
 
     pub fn read_mob_nbt(&self, nbt: &NbtCompound) {
@@ -276,6 +271,10 @@ impl MobEntity {
         }
         if let Some(can_pick_up_loot) = nbt.get_bool("CanPickUpLoot") {
             self.set_can_pick_up_loot(can_pick_up_loot);
+        }
+        if let Some(persistence_required) = nbt.get_bool("PersistenceRequired") {
+            self.persistence_required
+                .store(persistence_required, Relaxed);
         }
     }
 
@@ -320,10 +319,9 @@ impl MobEntity {
         if new_b != old_b {
             self.mob_flags.store(new_b, Ordering::Relaxed);
 
-            self.living_entity.entity.send_meta_data(
-                &[Metadata::new(tracked_data::mob::DATA_MOB_FLAGS_ID, new_b)],
-                None,
-            );
+            self.living_entity
+                .entity
+                .set_synced_data(tracked_data::mob::DATA_MOB_FLAGS_ID, new_b);
         }
     }
 
@@ -386,6 +384,12 @@ impl MobEntity {
         current_brightness <= dimension.monster_spawn_light_level.get(&mut random) as u8
     }
 
+    pub fn check_mob_spawn_rules(world: &World, pos: &BlockPos) -> bool {
+        let below = pos.down();
+        let state = world.get_block_state(&below);
+        state.is_side_solid(BlockDirection::Up)
+    }
+
     pub fn check_monster_spawn_rules(world: &World, pos: &BlockPos, is_thundering: bool) -> bool {
         if world.level_info.load().difficulty == Difficulty::Peaceful {
             return false;
@@ -395,8 +399,53 @@ impl MobEntity {
             return false;
         }
 
-        //TODO:check_mob_spawn_rules(entity_type, world, spawn_reason, pos).await
-        true
+        Self::check_mob_spawn_rules(world, pos)
+    }
+
+    pub fn check_any_light_monster_spawn_rules(world: &World, pos: &BlockPos) -> bool {
+        if world.level_info.load().difficulty == Difficulty::Peaceful {
+            return false;
+        }
+
+        Self::check_mob_spawn_rules(world, pos)
+    }
+
+    pub fn check_surface_monsters_spawn_rules(
+        world: &World,
+        pos: &BlockPos,
+        is_thundering: bool,
+    ) -> bool {
+        Self::check_monster_spawn_rules(world, pos, is_thundering) && world.can_see_sky(pos)
+    }
+
+    pub fn check_animal_spawn_rules(world: &World, pos: &BlockPos) -> bool {
+        let below = pos.down();
+        world
+            .get_block(&below)
+            .has_tag(&tag::Block::MINECRAFT_ANIMALS_SPAWNABLE_ON)
+            && Self::is_bright_enough_to_spawn(world, pos)
+    }
+
+    pub fn is_bright_enough_to_spawn(world: &World, pos: &BlockPos) -> bool {
+        world.get_max_local_raw_brightness(pos) > 8
+    }
+
+    pub fn check_surface_water_animal_spawn_rules(world: &World, pos: &BlockPos) -> bool {
+        let sea_level = world.sea_level;
+        let min_spawn_level = sea_level - 13;
+        pos.0.y >= min_spawn_level
+            && pos.0.y <= sea_level
+            && world
+                .get_fluid(&pos.down())
+                .has_tag(&tag::Fluid::MINECRAFT_WATER)
+            && (world.get_block(&pos.up()) == &Block::WATER
+                || world
+                    .get_fluid(&pos.up())
+                    .has_tag(&tag::Fluid::MINECRAFT_WATER))
+    }
+
+    pub fn check_surface_ageable_water_creature_spawn_rules(world: &World, pos: &BlockPos) -> bool {
+        Self::check_surface_water_animal_spawn_rules(world, pos)
     }
 
     pub fn try_attack(&self, caller: &dyn EntityBase, target: &dyn EntityBase) {
@@ -475,22 +524,16 @@ impl MobEntity {
         let world_arc = entity.world.load();
         let world = world_arc.as_ref();
 
-        // Night boundary from data/minecraft/timeline/day.json — monsters_burn keyframes:
-        // value=false at tick 12542 (dusk), value=true at tick 23460 (dawn).
-        // TODO: read directly from EnvironmentAttributes::MONSTERS_BURN once implemented.
-
-        let day_time = world.get_time_of_day() % 24000;
-        if (NIGHT_START..=NIGHT_END).contains(&day_time) {
+        let eye_block_pos = entity.get_eye_pos().to_block_pos();
+        if !world.monsters_burn(&eye_block_pos) {
             return false;
         }
 
         // Vanilla: getLightLevelDependentMagicValue() — sky light at eye pos, scaled 0–1.
-        let eye_block_pos = entity.get_eye_pos();
         let brightness = world
             .level
             .light_engine
-            .get_sky_light_level(&world.level, &eye_block_pos.to_block_pos())
-            as f32
+            .get_sky_light_level(&world.level, &eye_block_pos) as f32
             / 15.0;
 
         if brightness <= 0.5 {
@@ -559,11 +602,61 @@ impl MobEntity {
 
         false
     }
+
+    pub fn check_despawn(&self, mob: &dyn Mob) {
+        let entity = &self.living_entity.entity;
+
+        if self.persistence_required.load(Relaxed) {
+            return;
+        }
+
+        if (**entity.custom_name.load()).is_some() {
+            return;
+        }
+
+        let world = entity.world.load();
+        let pos = entity.pos.load();
+        let players = world.players.load();
+
+        let nearest_dist_sq = players
+            .iter()
+            .filter(|p| p.gamemode.load() != pumpkin_util::GameMode::Spectator)
+            .map(|p| {
+                let pp = p.get_entity().pos.load();
+                let dx = pp.x - pos.x;
+                let dy = pp.y - pos.y;
+                let dz = pp.z - pos.z;
+                dx * dx + dy * dy + dz * dz
+            })
+            .fold(f64::MAX, f64::min);
+
+        if nearest_dist_sq == f64::MAX {
+            mob.get_entity().remove();
+            return;
+        }
+
+        if nearest_dist_sq > 128.0 * 128.0 {
+            mob.get_entity().remove();
+            return;
+        }
+
+        if nearest_dist_sq > 32.0 * 32.0 && rand::random::<i32>().wrapping_abs() % 800 == 0 {
+            mob.get_entity().remove();
+        }
+    }
 }
 
 pub trait Mob: EntityBase + Send + Sync {
     fn get_random(&self) -> rand::rngs::ThreadRng {
         rand::rng()
+    }
+
+    fn requires_custom_persistence(&self) -> bool {
+        false
+    }
+
+    fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
+        true
     }
 
     fn get_max_look_yaw_change(&self) -> f32 {
@@ -644,6 +737,8 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn on_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) {}
+
+    fn on_attack(&self, _target: &dyn EntityBase) {}
 
     fn on_eating_grass(&self) {}
 
@@ -947,10 +1042,7 @@ pub trait Mob: EntityBase + Send + Sync {
         let entity = self.get_entity();
         let is_baby = entity.age.load(std::sync::atomic::Ordering::Relaxed) < 0;
         if is_baby {
-            entity.send_meta_data(
-                &[Metadata::new(tracked_data::ageable_mob::DATA_BABY_ID, true)],
-                None,
-            );
+            entity.set_synced_data(tracked_data::ageable_mob::DATA_BABY_ID, true);
         }
     }
 
@@ -1031,6 +1123,8 @@ impl<T: Mob + Send + 'static> EntityBase for T {
                 );
             }
         }
+
+        mob_entity.check_despawn(self);
 
         self.mob_tick(caller);
 

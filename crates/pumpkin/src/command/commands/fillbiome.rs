@@ -1,4 +1,4 @@
-use crate::command::argument_builder::{ArgumentBuilder, argument, command};
+use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
 use crate::command::argument_types::coordinates::block_pos::{
     BlockPosArgumentType, OUT_OF_BOUNDS_ERROR_TYPE,
 };
@@ -67,7 +67,7 @@ impl CommandExecutor for FillBiomeExecutor {
         let target_biome = ResourceKeyArgument::get_biome(context, "biome")?;
 
         let replace_biome = if self.has_replace {
-            Some(ResourceKeyArgument::get_biome(context, "replace_biome")?)
+            Some(ResourceKeyArgument::get_biome(context, "filter")?)
         } else {
             None
         };
@@ -126,11 +126,19 @@ impl CommandExecutor for FillBiomeExecutor {
         let msg = TextComponent::translate_cross(
             translation::java::COMMANDS_FILLBIOME_SUCCESS_COUNT,
             translation::java::COMMANDS_FILLBIOME_SUCCESS_COUNT,
-            [TextComponent::text(changed_count.to_string())],
+            [
+                TextComponent::text(changed_count.to_string()),
+                TextComponent::text(min_x.to_string()),
+                TextComponent::text(min_y.to_string()),
+                TextComponent::text(min_z.to_string()),
+                TextComponent::text(max_x.to_string()),
+                TextComponent::text(max_y.to_string()),
+                TextComponent::text(max_z.to_string()),
+            ],
         );
         context.source.send_feedback(msg, true);
 
-        Ok(1)
+        Ok(changed_count)
     }
 }
 
@@ -147,8 +155,10 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                 argument("biome", ResourceKeyArgument(BIOME_REGISTRY))
                     .executes(FillBiomeExecutor { has_replace: false })
                     .then(
-                        argument("replace_biome", ResourceKeyArgument(BIOME_REGISTRY))
-                            .executes(FillBiomeExecutor { has_replace: true }),
+                        literal("replace").then(
+                            argument("filter", ResourceKeyArgument(BIOME_REGISTRY))
+                                .executes(FillBiomeExecutor { has_replace: true }),
+                        ),
                     ),
             ),
         ),

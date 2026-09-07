@@ -99,10 +99,8 @@ impl TemplateMirror {
     const fn state_mirror(self) -> Mirror {
         match self {
             Self::None => Mirror::None,
-            // Mojang names a Z reflection LEFT_RIGHT and an X reflection FRONT_BACK.
-            // Pumpkin names the axis being reflected, so the variants are exchanged.
-            Self::LeftRight => Mirror::FrontBack,
-            Self::FrontBack => Mirror::LeftRight,
+            Self::LeftRight => Mirror::LeftRight,
+            Self::FrontBack => Mirror::FrontBack,
         }
     }
 }
@@ -298,14 +296,14 @@ impl MansionTemplatePiece {
                 continue;
             }
 
-            let mut transformed = transformed_palette(palette, self.mirror, self.rotation);
+            let mut placed_entry = palette.clone();
             if chunk.get_block_state(&position).to_block_id() == Block::WATER.id
-                && property(&transformed, "waterlogged").is_some()
+                && property(&placed_entry, "waterlogged").is_some()
             {
-                set_property(&mut transformed, "waterlogged", "true");
+                set_property(&mut placed_entry, "waterlogged", "true");
             }
             let Some(state) = BlockStateResolver::resolve(
-                &transformed,
+                &placed_entry,
                 self.rotation,
                 self.mirror.state_mirror(),
             ) else {
@@ -510,48 +508,16 @@ fn transformed_palette(
     mirror: TemplateMirror,
     rotation: Rotation,
 ) -> PaletteEntry {
-    let mut palette = palette.clone();
-
-    if palette.name.ends_with("_stairs") {
-        let facing = property(&palette, "facing");
-        let shape = property(&palette, "shape");
-        let mirrored_shape = match (mirror, facing, shape) {
-            (TemplateMirror::LeftRight, Some("north" | "south"), Some("inner_left")) => {
-                Some("inner_right")
-            }
-            (TemplateMirror::LeftRight, Some("north" | "south"), Some("inner_right")) => {
-                Some("inner_left")
-            }
-            (TemplateMirror::LeftRight, Some("north" | "south"), Some("outer_left"))
-            | (TemplateMirror::FrontBack, Some("east" | "west"), Some("outer_left")) => {
-                Some("outer_right")
-            }
-            (TemplateMirror::LeftRight, Some("north" | "south"), Some("outer_right"))
-            | (TemplateMirror::FrontBack, Some("east" | "west"), Some("outer_right")) => {
-                Some("outer_left")
-            }
-            _ => None,
-        };
-        if let Some(shape) = mirrored_shape {
-            set_property(&mut palette, "shape", shape);
-        }
-    } else if palette.name.ends_with("_door") && mirror != TemplateMirror::None {
-        let hinge = match property(&palette, "hinge") {
-            Some("left") => Some("right"),
-            Some("right") => Some("left"),
-            _ => None,
-        };
-        if let Some(hinge) = hinge {
-            set_property(&mut palette, "hinge", hinge);
-        }
-    } else if palette.name == "minecraft:rail"
-        && let Some(shape) = property(&palette, "shape")
-        && let Some(shape) = transform_rail_shape(shape, mirror, rotation)
-    {
-        set_property(&mut palette, "shape", shape);
+    let properties = pumpkin_data::transform_block_properties(
+        &palette.name,
+        &palette.properties,
+        rotation,
+        mirror.state_mirror(),
+    );
+    PaletteEntry {
+        name: palette.name.clone(),
+        properties,
     }
-
-    palette
 }
 
 fn property<'a>(palette: &'a PaletteEntry, name: &str) -> Option<&'a str> {
@@ -565,70 +531,6 @@ fn set_property(palette: &mut PaletteEntry, name: &str, value: &str) {
     if let Some((_, current)) = palette.properties.iter_mut().find(|(key, _)| key == name) {
         value.clone_into(current);
     }
-}
-
-fn transform_rail_shape(
-    shape: &str,
-    mirror: TemplateMirror,
-    rotation: Rotation,
-) -> Option<&'static str> {
-    let ascending = shape.strip_prefix("ascending_");
-    if let Some(direction) = ascending.and_then(Direction::from_name) {
-        return Some(match transform_direction(direction, mirror, rotation) {
-            Direction::North => "ascending_north",
-            Direction::South => "ascending_south",
-            Direction::West => "ascending_west",
-            Direction::East => "ascending_east",
-            Direction::Up => return None,
-        });
-    }
-    let (first, second) = match shape {
-        "north_south" => (Direction::North, Direction::South),
-        "east_west" => (Direction::East, Direction::West),
-        "north_east" => (Direction::North, Direction::East),
-        "north_west" => (Direction::North, Direction::West),
-        "south_east" => (Direction::South, Direction::East),
-        "south_west" => (Direction::South, Direction::West),
-        _ => return None,
-    };
-    let first = transform_direction(first, mirror, rotation);
-    let second = transform_direction(second, mirror, rotation);
-    match (first, second) {
-        (Direction::North, Direction::South) | (Direction::South, Direction::North) => {
-            Some("north_south")
-        }
-        (Direction::East, Direction::West) | (Direction::West, Direction::East) => {
-            Some("east_west")
-        }
-        (Direction::North, Direction::East) | (Direction::East, Direction::North) => {
-            Some("north_east")
-        }
-        (Direction::North, Direction::West) | (Direction::West, Direction::North) => {
-            Some("north_west")
-        }
-        (Direction::South, Direction::East) | (Direction::East, Direction::South) => {
-            Some("south_east")
-        }
-        (Direction::South, Direction::West) | (Direction::West, Direction::South) => {
-            Some("south_west")
-        }
-        _ => None,
-    }
-}
-
-fn transform_direction(
-    direction: Direction,
-    mirror: TemplateMirror,
-    rotation: Rotation,
-) -> Direction {
-    let mirrored = match (mirror, direction) {
-        (TemplateMirror::LeftRight, Direction::North) => Direction::South,
-        (TemplateMirror::LeftRight, Direction::South) => Direction::North,
-        (TemplateMirror::FrontBack, Direction::East) => Direction::West,
-        (TemplateMirror::FrontBack, Direction::West) => Direction::East,
-        _ => direction,
-    };
-    rotation.rotate(mirrored)
 }
 
 const fn transform(

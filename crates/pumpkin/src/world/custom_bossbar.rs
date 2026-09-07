@@ -1,4 +1,3 @@
-use crate::command::args::GetCloned;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::bossbar::{Bossbar, BossbarColor, BossbarDivisions};
@@ -113,7 +112,7 @@ impl CustomBossbars {
         server: &Server,
         resource_location: String,
     ) -> Result<(), BossbarUpdateError> {
-        let bossbar = self.custom_bossbars.get_cloned(&resource_location);
+        let bossbar = self.custom_bossbars.get(&resource_location).cloned();
         if let Some(bossbar) = bossbar {
             self.custom_bossbars.remove(&resource_location);
 

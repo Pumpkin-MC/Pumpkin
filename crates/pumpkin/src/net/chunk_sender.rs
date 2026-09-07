@@ -160,7 +160,8 @@ impl ChunkSender {
         epoch: u32,
         version: JavaMinecraftVersion,
     ) -> Option<PreparedBatch> {
-        if self.in_flight_batches >= self.max_in_flight {
+        if version >= JavaMinecraftVersion::V_1_20_2 && self.in_flight_batches >= self.max_in_flight
+        {
             return None;
         }
 
@@ -294,18 +295,104 @@ impl ChunkSender {
                 && let ClientPlatform::Java(java_client) = client
             {
                 java_client.try_send_packet(&CChunkBatchEnd::new(sent_count as u16));
+                self.in_flight_batches = self.in_flight_batches.saturating_add(1);
             }
 
-            self.in_flight_batches = self.in_flight_batches.saturating_add(1);
             self.send_quota -= sent_count as f32;
         }
 
         dispatched_positions
+    }
+
+    /// Marks a prepared Bedrock batch as dispatched and returns its chunks for encoding.
+    ///
+    /// Bedrock chunks use a different encoder from Java chunks, but they must still move from
+    /// `pending_chunks` to `sent_chunks`. Otherwise the same batch is selected every tick and the
+    /// Bedrock login flow never reaches its minimum-chunk spawn threshold.
+    pub fn commit_bedrock_batch(
+        &mut self,
+        batch: &PreparedBatch,
+        current_epoch: u32,
+    ) -> Vec<SyncChunk> {
+        if current_epoch != batch.epoch_snapshot || batch.chunks.is_empty() {
+            return Vec::new();
+        }
+
+        let mut dispatched_chunks = Vec::with_capacity(batch.chunks.len());
+        for candidate in &batch.chunks {
+            if !self.pending_chunks.remove(&candidate.position) {
+                continue;
+            }
+
+            self.sent_chunks.insert(candidate.position);
+            dispatched_chunks.push(candidate.chunk.clone());
+        }
+
+        self.send_quota -= dispatched_chunks.len() as f32;
+        dispatched_chunks
     }
 }
 
 impl Default for ChunkSender {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bedrock_batch_moves_pending_chunks_to_sent() {
+        let position = Vector2::new(3, -2);
+        let chunk = ChunkData::empty_sync(position.x, position.y);
+        let batch = PreparedBatch {
+            chunks: vec![PreparedChunk {
+                position,
+                chunk: chunk.clone(),
+            }],
+            epoch_snapshot: 7,
+            target_version: JavaMinecraftVersion::V_1_20_2,
+        };
+        let mut sender = ChunkSender::new();
+        sender.enqueue_chunk(position);
+        sender.send_quota = 1.0;
+
+        let dispatched = sender.commit_bedrock_batch(&batch, 7);
+
+        assert_eq!(dispatched.len(), 1);
+        assert!(Arc::ptr_eq(&dispatched[0], &chunk));
+        assert!(!sender.pending_chunks.contains(&position));
+        assert!(sender.is_chunk_sent(&position));
+        assert_eq!(sender.sent_chunks_count(), 1);
+        assert_eq!(sender.send_quota, 0.0);
+
+        let repeated = sender.commit_bedrock_batch(&batch, 7);
+
+        assert!(repeated.is_empty());
+        assert_eq!(sender.sent_chunks_count(), 1);
+        assert_eq!(sender.send_quota, 0.0);
+    }
+
+    #[test]
+    fn bedrock_batch_ignores_a_stale_epoch() {
+        let position = Vector2::new(3, -2);
+        let batch = PreparedBatch {
+            chunks: vec![PreparedChunk {
+                position,
+                chunk: ChunkData::empty_sync(position.x, position.y),
+            }],
+            epoch_snapshot: 7,
+            target_version: JavaMinecraftVersion::V_1_20_2,
+        };
+        let mut sender = ChunkSender::new();
+        sender.enqueue_chunk(position);
+
+        let dispatched = sender.commit_bedrock_batch(&batch, 8);
+
+        assert!(dispatched.is_empty());
+        assert!(sender.pending_chunks.contains(&position));
+        assert_eq!(sender.sent_chunks_count(), 0);
     }
 }

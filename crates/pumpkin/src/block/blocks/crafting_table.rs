@@ -1,5 +1,5 @@
 use crate::block::registry::BlockActionResult;
-use crate::block::{BlockBehaviour, NormalUseArgs};
+use crate::block::{BlockBehaviour, GetScreenHandlerFactoryArgs, NormalUseArgs};
 
 use pumpkin_data::translation;
 use pumpkin_inventory::crafting::crafting_screen_handler::CraftingTableScreenHandler;
@@ -17,18 +17,31 @@ pub struct CraftingTableBlock;
 
 impl BlockBehaviour for CraftingTableBlock {
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        args.player.increment_stat(
-            pumpkin_data::statistic::StatisticCategory::Custom,
-            pumpkin_data::statistic::CustomStatistic::InteractWithCraftingTable as i32,
-            1,
-        );
-        let recipe_manager = args.server.recipe_manager.clone();
-        args.player.open_handled_screen(
-            &CraftingTableScreenFactory(recipe_manager),
-            Some(*args.position),
-        );
+        if let Some(factory) = self.get_screen_handler_factory(GetScreenHandlerFactoryArgs {
+            server: args.server,
+            world: args.world,
+            block: args.block,
+            position: args.position,
+            player: args.player,
+        }) {
+            args.player.increment_stat(
+                pumpkin_data::statistic::StatisticCategory::Custom,
+                pumpkin_data::statistic::CustomStatistic::InteractWithCraftingTable as i32,
+                1,
+            );
+            args.player
+                .open_handled_screen(factory.as_ref(), Some(*args.position));
+        }
 
         BlockActionResult::Success
+    }
+
+    fn get_screen_handler_factory(
+        &self,
+        args: GetScreenHandlerFactoryArgs<'_>,
+    ) -> Option<Box<dyn ScreenHandlerFactory>> {
+        let recipe_manager = args.server.recipe_manager.clone();
+        Some(Box::new(CraftingTableScreenFactory(recipe_manager)))
     }
 }
 

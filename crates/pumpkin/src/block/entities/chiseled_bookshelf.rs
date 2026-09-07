@@ -1,5 +1,5 @@
 use pumpkin_data::Block;
-use pumpkin_data::block_properties::{BlockProperties, ChiseledBookshelfLikeProperties};
+use pumpkin_data::block_properties::ChiseledBookshelfLikeProperties;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;

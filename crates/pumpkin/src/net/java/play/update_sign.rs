@@ -7,10 +7,22 @@ impl JavaClient {
         let Some(block_entity) = world.get_block_entity(&sign_data.location) else {
             return;
         };
-        let Some(sign_entity) = block_entity.as_any().downcast_ref::<SignBlockEntity>() else {
+        let Some(sign_entity) =
+            crate::block::entities::sign::SignEntityRef::from_block_entity(&*block_entity)
+        else {
             return;
         };
-        if sign_entity.is_waxed.load(Ordering::Relaxed) {
+        if sign_entity.is_waxed() {
+            return;
+        }
+
+        let currently_editing = *sign_entity
+            .currently_editing_player()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(editor_id) = currently_editing
+            && editor_id != player.gameprofile.id
+        {
             return;
         }
 
@@ -35,11 +47,7 @@ impl JavaClient {
             }
         }
 
-        let text = if sign_data.is_front_text {
-            &sign_entity.front_text
-        } else {
-            &sign_entity.back_text
-        };
+        let text = sign_entity.get_text(sign_data.is_front_text);
 
         *text
             .messages
@@ -51,7 +59,7 @@ impl JavaClient {
             sign_data.line_4.into(),
         ];
         *sign_entity
-            .currently_editing_player
+            .currently_editing_player()
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
         world.update_block_entity(&block_entity);

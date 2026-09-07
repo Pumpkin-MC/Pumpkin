@@ -31,6 +31,8 @@ rsa.workspace = true
 sha2.workspace = true
 crypto-bigint.workspace = true
 reqwest.workspace = true
+rustls.workspace = true
+webpki-root-certs.workspace = true
 
 [dev-dependencies]
 criterion = { workspace = true, features = ["html_reports"] }

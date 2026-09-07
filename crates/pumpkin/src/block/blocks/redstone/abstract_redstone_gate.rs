@@ -191,10 +191,10 @@ pub trait RedstoneGateBlock<T: Send + Sync + BlockProperties + RedstoneGateBlock
         let (target_block, target_state) =
             world.get_block_and_state(&pos.offset(facing.to_offset()));
         if target_block == &Block::COMPARATOR {
-            let props = ComparatorLikeProperties::from_state_id(target_state.id, target_block);
+            let props = ComparatorLikeProperties::from_state_id(target_state.id);
             props.facing != facing
         } else if target_block == &Block::REPEATER {
-            let props = RepeaterLikeProperties::from_state_id(target_state.id, target_block);
+            let props = RepeaterLikeProperties::from_state_id(target_state.id);
             props.facing != facing
         } else {
             false
@@ -225,7 +225,7 @@ pub fn get_power<T: BlockProperties + RedstoneGateBlockProperties + Send>(
         source_level
     } else {
         source_level.max(if source_block == &Block::REDSTONE_WIRE {
-            let props = RedstoneWireLikeProperties::from_state_id(source_state.id, source_block);
+            let props = RedstoneWireLikeProperties::from_state_id(source_state.id);
             props.power
         } else {
             0

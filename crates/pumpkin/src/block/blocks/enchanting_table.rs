@@ -3,8 +3,10 @@ use std::sync::Mutex;
 
 use crate::block::entities::enchanting_table::EnchantingTableBlockEntity;
 use crate::block::registry::BlockActionResult;
-use crate::block::{BlockBehaviour, NormalUseArgs, PlacedArgs};
-use pumpkin_data::{Block, BlockStateId, translation};
+use crate::block::{
+    BlockBehaviour, GetScreenHandlerFactoryArgs, NormalUseArgs, PathComputationType, PlacedArgs,
+};
+use pumpkin_data::{Block, BlockState, BlockStateId, translation};
 use pumpkin_inventory::enchanting::enchanting_screen_handler::EnchantingTableScreenHandler;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
@@ -25,6 +27,23 @@ impl BlockBehaviour for EnchantingTableBlock {
     }
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
+        if let Some(factory) = self.get_screen_handler_factory(GetScreenHandlerFactoryArgs {
+            server: args.server,
+            world: args.world,
+            block: args.block,
+            position: args.position,
+            player: args.player,
+        }) {
+            args.player
+                .open_handled_screen(factory.as_ref(), Some(*args.position));
+        }
+        BlockActionResult::Success
+    }
+
+    fn get_screen_handler_factory(
+        &self,
+        args: GetScreenHandlerFactoryArgs<'_>,
+    ) -> Option<Box<dyn ScreenHandlerFactory>> {
         let mut bookshelf_count = 0;
 
         for off_z in -1..=1 {
@@ -70,14 +89,14 @@ impl BlockBehaviour for EnchantingTableBlock {
         let bookshelf_count = bookshelf_count.min(15);
 
         let seed = args.player.enchantment_seed();
-        args.player.open_handled_screen(
-            &EnchantingTableScreenFactory {
-                bookshelf_count,
-                seed,
-            },
-            Some(*args.position),
-        );
-        BlockActionResult::Success
+        Some(Box::new(EnchantingTableScreenFactory {
+            bookshelf_count,
+            seed,
+        }))
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
 

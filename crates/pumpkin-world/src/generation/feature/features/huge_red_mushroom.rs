@@ -1,7 +1,4 @@
-use pumpkin_data::{
-    Block, BlockState,
-    block_properties::{BlockProperties, BrownMushroomBlockLikeProperties},
-};
+use pumpkin_data::{Block, BlockState, block_properties::BrownMushroomBlockLikeProperties};
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 
 use crate::generation::proto_chunk::GenerationCache;

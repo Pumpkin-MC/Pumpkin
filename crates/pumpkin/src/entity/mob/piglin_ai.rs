@@ -11,8 +11,6 @@ use crate::entity::Entity;
 use crate::entity::living::LivingEntity;
 use crate::entity::mob::piglin::PiglinEntity;
 
-/// Vanilla Piglin AI logic, bartering, reactions, and utilities.
-/// Mirrors `net.minecraft.world.entity.monster.piglin.PiglinAi`.
 pub struct PiglinAi;
 
 impl PiglinAi {
@@ -59,31 +57,65 @@ impl PiglinAi {
         rand::random::<f32>() < Self::PROBABILITY_OF_CELEBRATION_DANCE
     }
 
-    pub fn is_wearing_safe_armor(target: &LivingEntity) -> bool {
-        let Ok(equipment) = target.entity_equipment.try_lock() else {
+    #[must_use]
+    pub fn is_wearing_safe_armor(entity: &LivingEntity) -> bool {
+        let Ok(guard) = entity.entity_equipment.try_lock() else {
             return false;
         };
-        [
+
+        for slot in [
             EquipmentSlot::HEAD,
             EquipmentSlot::CHEST,
             EquipmentSlot::LEGS,
             EquipmentSlot::FEET,
-        ]
-        .iter()
-        .any(|slot| {
-            let stack = equipment.get(slot);
-            !stack.is_empty()
+        ] {
+            if let Some(stack) = guard.equipment.get(&slot)
+                && !stack.is_empty()
                 && (stack.item.has_tag(&tag::Item::MINECRAFT_PIGLIN_SAFE_ARMOR)
                     || stack.item.has_tag(&tag::Item::MINECRAFT_PIGLIN_LOVED))
-        })
+            {
+                return true;
+            }
+        }
+        false
+    }
+
+    #[must_use]
+    pub fn is_holding_loved_item(entity: &LivingEntity) -> bool {
+        let Ok(guard) = entity.entity_equipment.try_lock() else {
+            return false;
+        };
+        for slot in [EquipmentSlot::MAIN_HAND, EquipmentSlot::OFF_HAND] {
+            if let Some(stack) = guard.equipment.get(&slot)
+                && !stack.is_empty()
+                && Self::is_loved_item(stack)
+            {
+                return true;
+            }
+        }
+        false
+    }
+
+    #[must_use]
+    pub fn is_admiring_disabled(piglin: &PiglinEntity) -> bool {
+        piglin.is_admiring_disabled()
     }
 
     #[must_use]
     pub fn can_admire(piglin: &PiglinEntity, item_stack: &ItemStack) -> bool {
-        !piglin.is_admiring_disabled()
-            && !piglin.is_admiring()
-            && piglin.is_adult()
-            && Self::is_barter_currency(item_stack)
+        if item_stack.is_empty() || Self::is_admiring_disabled(piglin) {
+            return false;
+        }
+        if Self::is_barter_currency(item_stack) {
+            return piglin.is_adult() && !piglin.is_admiring();
+        }
+        if piglin.is_admiring() {
+            return false;
+        }
+        if Self::is_food(item_stack) {
+            return !piglin.has_eaten_recently();
+        }
+        Self::is_loved_item(item_stack)
     }
 
     #[must_use]
@@ -113,7 +145,6 @@ impl PiglinAi {
         Self::is_loved_item(item_stack)
     }
 
-    /// Generates randomized barter drop items matching vanilla `BuiltInLootTables.PIGLIN_BARTERING`.
     #[must_use]
     pub fn get_barter_response_items() -> Vec<ItemStack> {
         let roll = rand::random_range(0..459);
@@ -121,7 +152,7 @@ impl PiglinAi {
             0..5 => vec![ItemStack::new(1, &Item::ENCHANTED_BOOK)],
             5..13 => vec![ItemStack::new(1, &Item::IRON_BOOTS)],
             13..21 => vec![ItemStack::new(1, &Item::SPLASH_POTION)],
-            21..39 => vec![ItemStack::new(1, &Item::POTION)], // Potion / Water bottle
+            21..39 => vec![ItemStack::new(1, &Item::POTION)],
             39..49 => vec![ItemStack::new(
                 rand::random_range(10..=36),
                 &Item::IRON_NUGGET,

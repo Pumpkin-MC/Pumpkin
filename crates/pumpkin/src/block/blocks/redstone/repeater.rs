@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use pumpkin_data::{
     Block, BlockDirection, BlockState, BlockStateId, HorizontalFacingExt,
-    block_properties::{BlockProperties, HorizontalFacing},
+    block_properties::HorizontalFacing,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -30,7 +30,7 @@ impl BlockBehaviour for RepeaterBlock {
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         let state_id = RedstoneGateBlock::on_place(self, args.player, args.block);
 
-        let mut props = RepeaterProperties::from_state_id(state_id, args.block);
+        let mut props = RepeaterProperties::from_state_id(state_id);
         props.locked = self.is_locked(args.world, *args.position, state_id, args.block);
 
         props.to_state_id(args.block)
@@ -45,7 +45,7 @@ impl BlockBehaviour for RepeaterBlock {
         if self.is_locked(args.world, *args.position, state.id, block) {
             return;
         }
-        let mut props = RepeaterProperties::from_state_id(state.id, block);
+        let mut props = RepeaterProperties::from_state_id(state.id);
 
         let now_powered = props.powered;
         let should_be_powered = self.has_power(args.world, *args.position, state, block);
@@ -95,7 +95,7 @@ impl BlockBehaviour for RepeaterBlock {
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         let state = args.world.get_block_state(args.position);
-        let props = RepeaterProperties::from_state_id(state.id, args.block);
+        let props = RepeaterProperties::from_state_id(state.id);
         Self::on_use(props, args.world, *args.position, args.block);
 
         BlockActionResult::SuccessServer
@@ -110,7 +110,7 @@ impl BlockBehaviour for RepeaterBlock {
     }
 
     fn emits_redstone_power(&self, args: EmitsRedstonePowerArgs<'_>) -> bool {
-        let repeater_props = RepeaterProperties::from_state_id(args.state.id, args.block);
+        let repeater_props = RepeaterProperties::from_state_id(args.state.id);
         repeater_props.facing.to_block_direction() == args.direction
             || repeater_props.facing.to_block_direction() == args.direction.opposite()
     }
@@ -143,7 +143,7 @@ impl BlockBehaviour for RepeaterBlock {
         {
             return Block::AIR.default_state.id;
         }
-        let mut props = RepeaterProperties::from_state_id(args.state_id, args.block);
+        let mut props = RepeaterProperties::from_state_id(args.state_id);
         if args.direction.to_axis() != props.facing.to_block_direction().to_axis() {
             props.locked = self.is_locked(args.world, *args.position, args.state_id, args.block);
             return props.to_state_id(args.block);
@@ -183,7 +183,7 @@ impl RedstoneGateBlock<RepeaterProperties> for RepeaterBlock {
         if self.is_locked(world, pos, state.id, block) {
             return;
         }
-        let props = RepeaterProperties::from_state_id(state.id, block);
+        let props = RepeaterProperties::from_state_id(state.id);
         let powered = props.powered;
 
         // Note: The signature for has_power must be called without self, as it's a trait method.
@@ -208,8 +208,8 @@ impl RedstoneGateBlock<RepeaterProperties> for RepeaterBlock {
         }
     }
 
-    fn get_update_delay_internal(&self, state_id: BlockStateId, block: &Block) -> u8 {
-        let props = RepeaterProperties::from_state_id(state_id, block);
+    fn get_update_delay_internal(&self, state_id: BlockStateId, _block: &Block) -> u8 {
+        let props = RepeaterProperties::from_state_id(state_id);
         props.delay * 2
     }
 }
@@ -219,7 +219,7 @@ impl RepeaterBlock {
         let mut props = props;
         props.delay = if props.delay == 4 { 1 } else { props.delay + 1 };
         let state = props.to_state_id(block);
-        world.set_block_state(&block_pos, state, BlockFlags::empty());
+        world.set_block_state(&block_pos, state, BlockFlags::NOTIFY_ALL);
     }
 
     fn is_locked(

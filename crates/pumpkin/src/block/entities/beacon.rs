@@ -234,16 +234,32 @@ impl BlockEntity for BeaconBlockEntity {
         self.position
     }
 
-    fn from_nbt(nbt: &NbtCompound, position: BlockPos) -> Self
+    fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
     where
         Self: Sized,
     {
-        // Aligning to strict vanilla NBT tags
-        let primary = nbt.get_int("primary_effect").unwrap_or(-1);
-        let secondary = nbt.get_int("secondary_effect").unwrap_or(-1);
-        let levels = nbt.get_int("Levels").unwrap_or(0); // Vanilla uses capital L
+        let primary = nbt
+            .get_string("primary_effect")
+            .and_then(|s| {
+                StatusEffect::from_minecraft_name(s)
+                    .or_else(|| StatusEffect::from_name(s))
+                    .map(|e| e.id as i32)
+            })
+            .or_else(|| nbt.get_int("primary_effect"))
+            .unwrap_or(-1);
+        let secondary = nbt
+            .get_string("secondary_effect")
+            .and_then(|s| {
+                StatusEffect::from_minecraft_name(s)
+                    .or_else(|| StatusEffect::from_name(s))
+                    .map(|e| e.id as i32)
+            })
+            .or_else(|| nbt.get_int("secondary_effect"))
+            .unwrap_or(-1);
+        let levels = nbt.get_int("Levels").unwrap_or(0);
         let custom_name = nbt
             .get_string("CustomName")
+            .or_else(|| nbt.get_string("custom_name"))
             .map(std::string::ToString::to_string);
         let lock_key = nbt.get_string("Lock").map(std::string::ToString::to_string);
 
@@ -261,14 +277,22 @@ impl BlockEntity for BeaconBlockEntity {
     }
 
     fn write_nbt(&self, nbt: &mut NbtCompound) {
-        nbt.put_int(
-            "primary_effect",
-            self.primary_effect.load(Ordering::Relaxed),
-        );
-        nbt.put_int(
-            "secondary_effect",
-            self.secondary_effect.load(Ordering::Relaxed),
-        );
+        let primary = self.primary_effect.load(Ordering::Relaxed);
+        if primary >= 0 {
+            if let Some(eff) = <StatusEffect as IDSetContent>::from_id(primary as u16) {
+                nbt.put_string("primary_effect", eff.minecraft_name.to_string());
+            } else {
+                nbt.put_int("primary_effect", primary);
+            }
+        }
+        let secondary = self.secondary_effect.load(Ordering::Relaxed);
+        if secondary >= 0 {
+            if let Some(eff) = <StatusEffect as IDSetContent>::from_id(secondary as u16) {
+                nbt.put_string("secondary_effect", eff.minecraft_name.to_string());
+            } else {
+                nbt.put_int("secondary_effect", secondary);
+            }
+        }
         nbt.put_int("Levels", self.levels.load(Ordering::Relaxed));
 
         if let Some(name) = &*self
@@ -301,14 +325,22 @@ impl BlockEntity for BeaconBlockEntity {
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
-        nbt.put_int(
-            "primary_effect",
-            self.primary_effect.load(Ordering::Relaxed),
-        );
-        nbt.put_int(
-            "secondary_effect",
-            self.secondary_effect.load(Ordering::Relaxed),
-        );
+        let primary = self.primary_effect.load(Ordering::Relaxed);
+        if primary >= 0 {
+            if let Some(eff) = <StatusEffect as IDSetContent>::from_id(primary as u16) {
+                nbt.put_string("primary_effect", eff.minecraft_name.to_string());
+            } else {
+                nbt.put_int("primary_effect", primary);
+            }
+        }
+        let secondary = self.secondary_effect.load(Ordering::Relaxed);
+        if secondary >= 0 {
+            if let Some(eff) = <StatusEffect as IDSetContent>::from_id(secondary as u16) {
+                nbt.put_string("secondary_effect", eff.minecraft_name.to_string());
+            } else {
+                nbt.put_int("secondary_effect", secondary);
+            }
+        }
         nbt.put_int("Levels", self.levels.load(Ordering::Relaxed));
         if let Ok(name) = self.custom_name.try_lock()
             && let Some(ref name) = *name
