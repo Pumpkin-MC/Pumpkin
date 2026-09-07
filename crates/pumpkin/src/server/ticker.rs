@@ -192,7 +192,9 @@ const fn apply_overload_skip(
 }
 
 /// Vanilla `waitUntilNextTick` / `LockSupport.parkNanos`.
-/// TODO drain chunk/main-thread work here (vanilla `pollTask`) until the deadline.
+///
+/// Vanilla drains its server-thread queue here (`pollTask`). there is no such queue:
+/// that work runs on the runtime and keeps going while this thread parks.
 fn wait_until_next_tick(base: Instant, next_tick_nanos: i64) {
     loop {
         if STOP_INTERRUPT.is_cancelled() {
@@ -248,7 +250,10 @@ mod tests {
         let (behind_ms, ticks) = skipped.expect("the first overload always warns");
         assert_eq!((behind_ms, ticks), (3000, 60));
         assert_eq!(schedule.next_tick_nanos, 60 * TICK_20_TPS);
-        assert_eq!(schedule.last_overload_warning_nanos, schedule.next_tick_nanos);
+        assert_eq!(
+            schedule.last_overload_warning_nanos,
+            schedule.next_tick_nanos
+        );
     }
 
     #[test]
