@@ -133,6 +133,7 @@ fn player_placed_chest_impl(args: &PlayerPlacedArgs<'_>) {
     );
 }
 
+/// Computes the comparator output for a chest, combining both halves for double chests.
 fn get_chest_comparator_output(args: &GetComparatorOutputArgs<'_>) -> Option<u8> {
     let state = args.world.get_block_state_id(args.position);
     let first_chest = args.world.get_block_entity(args.position);
