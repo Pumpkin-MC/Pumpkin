@@ -603,34 +603,36 @@ impl HostEntity for PluginHostState {
         Ok(())
     }
 
+    /// Air supply, `0` for non-living entities.
     async fn get_remaining_air(&mut self, entity: Resource<Entity>) -> wasmtime::Result<i32> {
         let entity = entity_from_resource(self, &entity)?;
-        Ok(entity.get_player().map_or(0, |player| {
-            player
-                .breath_manager
+        Ok(entity.get_living_entity().map_or(0, |living| {
+            living
+                .breath
                 .air_supply
                 .load(std::sync::atomic::Ordering::Relaxed)
         }))
     }
 
+    /// Sets the air supply, clamped, through `EntityAirChangeEvent`.
     async fn set_remaining_air(
         &mut self,
         entity: Resource<Entity>,
         air: i32,
     ) -> wasmtime::Result<()> {
         let entity = entity_from_resource(self, &entity)?;
-        if let Some(player) = entity.get_player() {
-            player
-                .breath_manager
-                .air_supply
-                .store(air, std::sync::atomic::Ordering::Relaxed);
-            player.breath_manager.send_air_supply(player);
+        if let Some(living) = entity.get_living_entity() {
+            living.breath.set_air_supply(entity.as_ref(), air);
         }
         Ok(())
     }
 
-    async fn get_max_air(&mut self, _entity: Resource<Entity>) -> wasmtime::Result<i32> {
-        Ok(crate::entity::breath::MAX_AIR)
+    /// Maximum air supply.
+    async fn get_max_air(&mut self, entity: Resource<Entity>) -> wasmtime::Result<i32> {
+        let entity = entity_from_resource(self, &entity)?;
+        Ok(crate::entity::breath::BreathManager::max_air_supply(
+            entity.as_ref(),
+        ))
     }
 
     async fn remove(&mut self, entity: Resource<Entity>) -> wasmtime::Result<()> {

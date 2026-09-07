@@ -43,6 +43,11 @@ impl DrownedEntity {
 }
 
 impl Mob for DrownedEntity {
+    /// Drowned never drown.
+    fn can_breathe_underwater(&self) -> bool {
+        true
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.entity.mob_entity
     }

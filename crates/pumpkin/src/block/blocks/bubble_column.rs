@@ -161,6 +161,7 @@ fn bubble_column_velocity(
 }
 
 impl BlockBehaviour for BubbleColumnBlock {
+    /// Moves entities in the column and refills their air.
     fn on_entity_collision(&self, args: OnEntityCollisionArgs<'_>) {
         {
             if args.block != &Block::BUBBLE_COLUMN {
@@ -176,8 +177,8 @@ impl BlockBehaviour for BubbleColumnBlock {
                 at_surface,
             ));
 
-            if let Some(player) = args.entity.get_player() {
-                player.breath_manager.reset(player);
+            if let Some(living) = args.entity.get_living_entity() {
+                living.breath.reset(args.entity);
             }
         }
     }

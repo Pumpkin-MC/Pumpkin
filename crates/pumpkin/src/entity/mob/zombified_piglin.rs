@@ -77,6 +77,11 @@ impl ZombifiedPiglinEntity {
 }
 
 impl Mob for ZombifiedPiglinEntity {
+    /// Zombified piglins are zombies and do not take drowning damage.
+    fn can_breathe_underwater(&self) -> bool {
+        true
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }

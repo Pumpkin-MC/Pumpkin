@@ -107,6 +107,11 @@ impl Animal for TurtleEntity {
 }
 
 impl Mob for TurtleEntity {
+    /// Turtles never drown.
+    fn can_breathe_underwater(&self) -> bool {
+        true
+    }
+
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
