@@ -200,14 +200,13 @@ impl LivingEntity {
         let is_baby = self
             .get_mob()
             .and_then(|x| x.as_ageable())
-            .map(|x| x.is_baby())
-            .unwrap_or_default();
+            .is_some_and(|x| x.is_baby());
 
         let mut rng = rand::rng();
         if is_baby {
-            return (rng.random::<f32>() - rng.random::<f32>()) * 0.2 + 1.5;
+            (rng.random::<f32>() - rng.random::<f32>()) * 0.2 + 1.5
         } else {
-            return (rng.random::<f32>() - rng.random::<f32>()) * 0.2 + 1.0;
+            (rng.random::<f32>() - rng.random::<f32>()) * 0.2 + 1.0
         }
     }
 
@@ -1724,6 +1723,7 @@ impl LivingEntity {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn on_death(
         &self,
         damage_type: DamageType,
@@ -2856,8 +2856,6 @@ impl LivingEntity {
         );
 
         if play_sound {
-            let mut rng = rand::rng();
-
             world.play_sound_fine(
                 self.hurt_sound(),
                 SoundCategory::Players,
