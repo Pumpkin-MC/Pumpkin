@@ -5,7 +5,7 @@
 use std::collections::VecDeque;
 use std::sync::{
     Arc,
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 use std::time::{Duration, Instant};
 
@@ -22,6 +22,8 @@ use tokio::sync::{
 use tokio::time::MissedTickBehavior;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
+
+use crate::net::decrement_pending_bytes;
 
 /// `resumeFlushing` when the FIFO is full: cannot drop the tick barrier.
 #[derive(Clone)]
@@ -192,49 +194,111 @@ async fn frame_batch_maybe_offload<W: AsyncWrite + Unpin + Send + 'static>(
     }
 }
 
-fn complete_pending(pending_completions: &mut Vec<oneshot::Sender<()>>) {
-    for completion in pending_completions.drain(..) {
-        let _ = completion.send(());
-    }
+/// Everything the writer loop shares but never mutates.
+struct WriterCtx {
+    close_token: CancellationToken,
+    suspend_flushing: Arc<AtomicBool>,
+    tick_flush: TickFlush,
+    pending_bytes: Arc<AtomicUsize>,
+    id: u64,
 }
 
-/// `None` on socket error. `Some(true)` if TCP flush ran.
-async fn flush_writer<W: AsyncWrite + Unpin>(
-    writer: &mut TCPNetworkEncoder<W>,
-    unflushed: &mut bool,
-    pending_completions: &mut Vec<oneshot::Sender<()>>,
-    close_token: &CancellationToken,
-    id: u64,
-) -> Option<bool> {
-    let did_flush = *unflushed;
-    if did_flush {
-        if let Err(err) = writer.flush().await {
-            if !close_token.is_cancelled() {
-                warn!("Failed to flush packets for client {id}: {err}");
+/// Buffered-write bookkeeping between two TCP flushes.
+struct FlushState {
+    /// Packets are in the `BufWriter` but not yet on the socket.
+    unflushed: bool,
+    /// `send_packet_now` waiters, released once their bytes are flushed.
+    pending_completions: Vec<oneshot::Sender<()>>,
+    last_tcp_flush: Instant,
+}
+
+impl FlushState {
+    fn new() -> Self {
+        Self {
+            unflushed: false,
+            pending_completions: Vec::new(),
+            last_tcp_flush: Instant::now(),
+        }
+    }
+
+    fn complete_pending(&mut self) {
+        for completion in self.pending_completions.drain(..) {
+            let _ = completion.send(());
+        }
+    }
+
+    /// `None` on socket error. `Some(true)` if TCP flush ran.
+    async fn flush<W: AsyncWrite + Unpin>(
+        &mut self,
+        writer: &mut TCPNetworkEncoder<W>,
+        ctx: &WriterCtx,
+    ) -> Option<bool> {
+        let did_flush = self.unflushed;
+        if did_flush {
+            if let Err(err) = writer.flush().await {
+                if !ctx.close_token.is_cancelled() {
+                    warn!("Failed to flush packets for client {}: {err}", ctx.id);
+                }
+                return None;
             }
-            return None;
+            self.unflushed = false;
         }
-        *unflushed = false;
+        self.complete_pending();
+        Some(did_flush)
     }
-    complete_pending(pending_completions);
-    Some(did_flush)
+
+    /// `false` on socket error, so the caller closes the connection.
+    async fn flush_and_stamp<W: AsyncWrite + Unpin>(
+        &mut self,
+        writer: &mut TCPNetworkEncoder<W>,
+        ctx: &WriterCtx,
+    ) -> bool {
+        match self.flush(writer, ctx).await {
+            Some(true) => {
+                self.last_tcp_flush = Instant::now();
+                true
+            }
+            Some(false) => true,
+            None => false,
+        }
+    }
+
+    fn should_flush_now(
+        &self,
+        flush_request: FlushRequest,
+        disconnected: bool,
+        ctx: &WriterCtx,
+    ) -> bool {
+        let suspended = ctx.suspend_flushing.load(Ordering::Acquire);
+        let fallback_due =
+            self.unflushed && !suspended && self.last_tcp_flush.elapsed() >= TICK_FLUSH_INTERVAL;
+        flush_request.should_flush(suspended) || disconnected || fallback_due
+    }
 }
 
-async fn flush_and_stamp<W: AsyncWrite + Unpin>(
-    writer: &mut TCPNetworkEncoder<W>,
-    unflushed: &mut bool,
-    pending_completions: &mut Vec<oneshot::Sender<()>>,
-    close_token: &CancellationToken,
-    last_tcp_flush: &mut Instant,
-    id: u64,
-) -> bool {
-    match flush_writer(writer, unflushed, pending_completions, close_token, id).await {
-        Some(true) => {
-            *last_tcp_flush = Instant::now();
-            true
-        }
-        Some(false) => true,
-        None => false,
+/// What woke the writer loop.
+enum WriterStep {
+    Packet(OutgoingPacket),
+    /// `resumeFlushing` fired; re-check the tick barrier.
+    Retry,
+    /// 50ms cadence elapsed with unflushed bytes.
+    Flush,
+    Stop,
+}
+
+async fn next_step(
+    packet_receiver: &mut Receiver<OutgoingPacket>,
+    flush_interval: &mut tokio::time::Interval,
+    state: &FlushState,
+    ctx: &WriterCtx,
+) -> WriterStep {
+    tokio::select! {
+        biased;
+        () = ctx.close_token.cancelled() => WriterStep::Stop,
+        () = ctx.tick_flush.notify.notified() => WriterStep::Retry,
+        res = packet_receiver.recv() => res.map_or(WriterStep::Stop, WriterStep::Packet),
+        _ = flush_interval.tick(), if state.unflushed
+            && !ctx.suspend_flushing.load(Ordering::Acquire) => WriterStep::Flush,
     }
 }
 
@@ -281,10 +345,10 @@ fn drain_until_barrier(
 async fn write_queued_frames<W: AsyncWrite + Unpin + Send + 'static>(
     mut writer: TCPNetworkEncoder<W>,
     mut packets_to_frame: VecDeque<FramePacket>,
-    pending_completions: &mut Vec<oneshot::Sender<()>>,
-    close_token: &CancellationToken,
-    id: u64,
+    state: &mut FlushState,
+    ctx: &WriterCtx,
 ) -> Option<TCPNetworkEncoder<W>> {
+    let (close_token, id) = (&ctx.close_token, ctx.id);
     while !packets_to_frame.is_empty() {
         let frame_batch = take_frame_batch(&mut packets_to_frame);
         let (returned_writer, returned_batch, frame, frame_err) =
@@ -313,9 +377,12 @@ async fn write_queued_frames<W: AsyncWrite + Unpin + Send + 'static>(
             return None;
         }
 
+        let written_bytes: usize = returned_batch.iter().map(|packet| packet.data.len()).sum();
+        decrement_pending_bytes(&ctx.pending_bytes, written_bytes);
+
         for packet in returned_batch {
             if let Some(completion) = packet.completion {
-                pending_completions.push(completion);
+                state.pending_completions.push(completion);
             }
         }
     }
@@ -329,109 +396,71 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
     close_token: CancellationToken,
     suspend_flushing: Arc<AtomicBool>,
     tick_flush: TickFlush,
+    pending_bytes: Arc<AtomicUsize>,
     id: u64,
 ) {
+    let ctx = WriterCtx {
+        close_token,
+        suspend_flushing,
+        tick_flush,
+        pending_bytes,
+        id,
+    };
+    let mut state = FlushState::new();
+
     let mut flush_interval = tokio::time::interval(TICK_FLUSH_INTERVAL);
     flush_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
     // `interval` fires immediately; skip so an empty connection is not flushed.
     flush_interval.tick().await;
 
-    let mut unflushed = false;
-    let mut pending_completions = Vec::new();
-    let mut last_tcp_flush = Instant::now();
-
     loop {
-        if close_token.is_cancelled() {
+        if ctx.close_token.is_cancelled() {
             break;
         }
 
-        if tick_flush.take() {
-            if !flush_and_stamp(
-                &mut writer,
-                &mut unflushed,
-                &mut pending_completions,
-                &close_token,
-                &mut last_tcp_flush,
-                id,
-            )
-            .await
-            {
-                close_token.cancel();
+        // `resumeFlushing` when the barrier could not be enqueued.
+        if ctx.tick_flush.take() {
+            if !state.flush_and_stamp(&mut writer, &ctx).await {
+                ctx.close_token.cancel();
                 break;
             }
             continue;
         }
 
-        let recv_result = tokio::select! {
-            biased;
-            () = close_token.cancelled() => None,
-            () = tick_flush.notify.notified() => {
-                continue;
-            }
-            res = packet_receiver.recv() => res,
-            _ = flush_interval.tick(), if unflushed
-                && !suspend_flushing.load(Ordering::Acquire) =>
-            {
-                if !flush_and_stamp(
-                    &mut writer,
-                    &mut unflushed,
-                    &mut pending_completions,
-                    &close_token,
-                    &mut last_tcp_flush,
-                    id,
-                )
-                .await
-                {
-                    close_token.cancel();
+        let first = match next_step(&mut packet_receiver, &mut flush_interval, &state, &ctx).await {
+            WriterStep::Packet(packet) => packet,
+            WriterStep::Retry => continue,
+            WriterStep::Flush => {
+                if !state.flush_and_stamp(&mut writer, &ctx).await {
+                    ctx.close_token.cancel();
                     break;
                 }
                 continue;
             }
-        };
-
-        let Some(first) = recv_result else {
-            break;
+            WriterStep::Stop => break,
         };
 
         let (flush_request, packets_to_frame, disconnected) =
-            drain_until_barrier(first, &mut packet_receiver, &tick_flush);
+            drain_until_barrier(first, &mut packet_receiver, &ctx.tick_flush);
 
         if !packets_to_frame.is_empty() {
-            let Some(returned) = write_queued_frames(
-                writer,
-                packets_to_frame,
-                &mut pending_completions,
-                &close_token,
-                id,
-            )
-            .await
+            let Some(returned) =
+                write_queued_frames(writer, packets_to_frame, &mut state, &ctx).await
             else {
-                close_token.cancel();
+                ctx.close_token.cancel();
                 return;
             };
             writer = returned;
-            unflushed = true;
+            state.unflushed = true;
         }
 
-        let suspended = suspend_flushing.load(Ordering::Acquire);
-        let fallback_due =
-            unflushed && !suspended && last_tcp_flush.elapsed() >= TICK_FLUSH_INTERVAL;
-        if flush_request.should_flush(suspended) || disconnected || fallback_due {
-            if !flush_and_stamp(
-                &mut writer,
-                &mut unflushed,
-                &mut pending_completions,
-                &close_token,
-                &mut last_tcp_flush,
-                id,
-            )
-            .await
-            {
-                close_token.cancel();
+        if state.should_flush_now(flush_request, disconnected, &ctx) {
+            if !state.flush_and_stamp(&mut writer, &ctx).await {
+                ctx.close_token.cancel();
                 break;
             }
         } else {
-            complete_pending(&mut pending_completions);
+            state.complete_pending();
         }
 
         if disconnected {
@@ -446,7 +475,6 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
 mod tests {
     use super::*;
     use std::pin::Pin;
-    use std::sync::atomic::AtomicUsize;
     use std::task::{Context, Poll};
     struct RecordingWriter {
         writes: Arc<std::sync::Mutex<Vec<u8>>>,
@@ -493,6 +521,7 @@ mod tests {
             close,
             suspend,
             TickFlush::new(),
+            Arc::new(AtomicUsize::new(0)),
             0,
         )
         .await;
@@ -512,6 +541,7 @@ mod tests {
             close,
             suspend,
             tick_flush,
+            Arc::new(AtomicUsize::new(0)),
             0,
         )
         .await;

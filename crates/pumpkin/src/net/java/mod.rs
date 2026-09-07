@@ -3,7 +3,7 @@ use pumpkin_protocol::java::client::play::{
 };
 use pumpkin_world::level::SyncChunk;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use std::{io::Write, sync::Arc};
 
@@ -68,7 +68,8 @@ use pending::PendingConnection;
 
 use crate::entity::player::Player;
 use crate::net::{
-    ClientPlatform, GameProfile, PacketHandlerResult, PacketRateLimiter, PlayerConfig,
+    ClientPlatform, GameProfile, MAX_PENDING_BYTES, PacketHandlerResult, PacketRateLimiter,
+    PlayerConfig, decrement_pending_bytes,
 };
 use crate::plugin::api::events::world::chunk_send::ChunkSend;
 use crate::plugin::player::player_custom_payload::PlayerCustomPayloadEvent;
@@ -99,6 +100,8 @@ pub struct JavaClient {
     /// Per-connection FIFO of serialized packets (vanilla Netty eventLoop).
     outgoing_packet_queue_send: Sender<OutgoingPacket>,
     outgoing_packet_queue_recv: Option<Receiver<OutgoingPacket>>,
+    /// Tracks total buffered payload bytes in the outgoing queue.
+    pub pending_bytes: Arc<AtomicUsize>,
     /// The packet encoder for outgoing packets.
     network_writer: std::sync::Mutex<Option<TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>>>,
     /// The packet decoder for incoming packets.
@@ -146,6 +149,7 @@ impl JavaClient {
             rt_handle: tokio::runtime::Handle::current(),
             outgoing_packet_queue_send: send,
             outgoing_packet_queue_recv: Some(recv),
+            pending_bytes: Arc::new(AtomicUsize::new(0)),
             version: pending.version,
             network_writer: std::sync::Mutex::new(Some(pending.network_writer)),
             network_reader: std::sync::Mutex::new(Some(pending.network_reader)),
@@ -418,12 +422,18 @@ impl JavaClient {
         self.enqueue_packet_data(packet_data).await;
     }
 
+    /// Awaits a full FIFO instead of dropping, so ordered play packets never go missing.
     pub async fn enqueue_packet_data(&self, packet_data: Bytes) {
+        let Some(packet_len) = self.reserve_pending_bytes(&packet_data) else {
+            return;
+        };
+
         if let Err(err) = self
             .outgoing_packet_queue_send
             .send(OutgoingPacket::normal(packet_data))
             .await
         {
+            decrement_pending_bytes(&self.pending_bytes, packet_len);
             // This is expected to fail if we are closed
             if !self.close_token.is_cancelled() {
                 warn!(
@@ -437,15 +447,45 @@ impl JavaClient {
         }
     }
 
+    /// `None` when the packet must be dropped: closed, or over the outbound byte cap.
+    fn reserve_pending_bytes(&self, packet_data: &Bytes) -> Option<usize> {
+        if self.close_token.is_cancelled() {
+            return None;
+        }
+
+        let packet_len = packet_data.len();
+        let prev_bytes = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
+        let new_bytes = prev_bytes.saturating_add(packet_len);
+
+        if new_bytes > MAX_PENDING_BYTES {
+            decrement_pending_bytes(&self.pending_bytes, packet_len);
+            if !self.close_token.is_cancelled() {
+                warn!(
+                    "Client {} outbound packet buffer overflow ({} bytes > {} bytes). Closing connection.",
+                    self.id, new_bytes, MAX_PENDING_BYTES
+                );
+                self.close();
+            }
+            return None;
+        }
+
+        Some(packet_len)
+    }
+
     pub fn try_enqueue_packet(&self, packet_data: Bytes) {
         self.try_enqueue_packet_data(packet_data);
     }
 
     pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
+        let Some(packet_len) = self.reserve_pending_bytes(&packet_data) else {
+            return;
+        };
+
         if let Err(err) = self
             .outgoing_packet_queue_send
             .try_send(OutgoingPacket::normal(packet_data))
         {
+            decrement_pending_bytes(&self.pending_bytes, packet_len);
             match err {
                 tokio::sync::mpsc::error::TrySendError::Full(_) => {
                     // TODO Full drops the newest packet; drop oldest or coalesce to avoid desync.
@@ -455,11 +495,14 @@ impl JavaClient {
                     );
                 }
                 tokio::sync::mpsc::error::TrySendError::Closed(_) => {
+                    // This is expected to fail if we are closed
                     if !self.close_token.is_cancelled() {
                         warn!(
                             "Failed to add packet to the outgoing packet queue for client {}: channel closed",
                             self.id
                         );
+                        // We now need to close the connection to the client since the stream is in
+                        // an unknown state
                         self.close();
                     }
                 }
@@ -497,31 +540,38 @@ impl JavaClient {
     }
 
     pub fn try_kick(&self, reason: &TextComponent) {
-        match self.connection_state.load() {
+        let serialized = match self.connection_state.load() {
             ConnectionState::Login => {
                 let packet = CLoginDisconnect::new(
                     serde_json::to_string(&reason.0).unwrap_or_else(|_| String::new()),
                 );
-                if let Ok(data) = self.serialize_packet(&packet) {
-                    self.try_enqueue_packet(data);
-                }
+                self.serialize_packet(&packet).ok()
             }
             ConnectionState::Config => {
                 let reason_text = reason.clone().get_text();
                 let packet = CConfigDisconnect::new(&reason_text);
-                if let Ok(data) = self.serialize_packet(&packet) {
-                    self.try_enqueue_packet(data);
-                }
+                self.serialize_packet(&packet).ok()
             }
             ConnectionState::Play => {
                 let packet = CPlayDisconnect::new(reason);
-                if let Ok(data) = self.serialize_packet(&packet) {
-                    self.try_enqueue_packet(data);
-                }
+                self.serialize_packet(&packet).ok()
             }
-            _ => {}
+            _ => None,
+        };
+
+        if let Some(data) = serialized {
+            let packet_len = data.len();
+            let _ = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
+            if self
+                .outgoing_packet_queue_send
+                .try_send(OutgoingPacket::normal(data))
+                .is_err()
+            {
+                decrement_pending_bytes(&self.pending_bytes, packet_len);
+            }
         }
-        debug!("Closing connection for {}", self.id);
+        let reason_text = reason.clone().get_text();
+        warn!("Closing connection for {}: {reason_text}", self.id);
         self.close();
     }
 
@@ -547,7 +597,8 @@ impl JavaClient {
                 _ => {}
             }
         }
-        debug!("Closing connection for {}", self.id);
+        let reason_text = reason.clone().get_text();
+        warn!("Closing connection for {}: {reason_text}", self.id);
         self.close();
     }
 
@@ -559,6 +610,10 @@ impl JavaClient {
     /// `write_frame`d into the `BufWriter`. Does not wait for a TCP flush
     /// while `suspendFlushing` is set.
     pub async fn send_packet_now_data(&self, packet: Bytes) {
+        let Some(packet_len) = self.reserve_pending_bytes(&packet) else {
+            return;
+        };
+
         let (completion_tx, completion_rx) = oneshot::channel();
 
         if let Err(err) = self
@@ -566,6 +621,7 @@ impl JavaClient {
             .send(OutgoingPacket::high_priority(packet, completion_tx))
             .await
         {
+            decrement_pending_bytes(&self.pending_bytes, packet_len);
             // It is expected that the packet will fail if we are closed
             if !self.close_token.is_cancelled() {
                 warn!(
@@ -644,6 +700,7 @@ impl JavaClient {
             return;
         };
         let close_token = self.close_token.clone();
+        let pending_bytes = self.pending_bytes.clone();
         let Some(writer) = self
             .network_writer
             .lock()
@@ -662,6 +719,7 @@ impl JavaClient {
                 close_token,
                 suspend_flushing,
                 tick_flush,
+                pending_bytes,
                 id,
             )
             .await;

@@ -20,7 +20,7 @@ use crate::{
 use arc_swap::ArcSwap;
 use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
-use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
+use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_util::permission::PermissionManager;
 use pumpkin_util::text::color::NamedColor;
@@ -70,6 +70,7 @@ use crate::server::scheduler::TaskScheduler;
 pub struct Server {
     pub basic_config: BasicConfiguration,
     pub advanced_config: AdvancedConfiguration,
+    pub telemetry_config: TelemetryConfig,
 
     pub data: VanillaData,
 
@@ -160,6 +161,7 @@ impl Server {
     pub async fn new(
         basic_config: BasicConfiguration,
         advanced_config: AdvancedConfiguration,
+        telemetry_config: TelemetryConfig,
         vanilla_data: VanillaData,
     ) -> Arc<Self> {
         let permission_manager = Arc::new(PermissionManager::new());
@@ -278,6 +280,7 @@ impl Server {
         let server = Self {
             basic_config,
             advanced_config,
+            telemetry_config,
             data: vanilla_data,
             plugin_manager: Arc::new(PluginManager::new(verify_plugin_signatures)),
             permission_manager,
@@ -997,6 +1000,17 @@ impl Server {
             }
         }
         false
+    }
+
+    /// Returns the maximum number of players allowed on the server.
+    #[must_use]
+    pub const fn max_players(&self) -> u32 {
+        self.advanced_config.networking.java.max_players
+    }
+
+    /// Starts the background telemetry task if enabled in configuration.
+    pub fn start_telemetry(self: &Arc<Self>) {
+        crate::telemetry::start_telemetry(self.clone());
     }
 
     /// Generates a new container id.
