@@ -98,13 +98,8 @@ impl NautilusEntity {
     }
 
     pub fn hurt_sound(entity: &Entity) -> Sound {
-        let is_baby = entity
-            .age
-            .load(Ordering::Relaxed)
-            < 0;
-        let is_water = entity
-            .touching_water
-            .load(Ordering::Relaxed);
+        let is_baby = entity.age.load(Ordering::Relaxed) < 0;
+        let is_water = entity.touching_water.load(Ordering::Relaxed);
         if is_baby {
             if is_water {
                 Sound::EntityBabyNautilusHurt
@@ -118,7 +113,7 @@ impl NautilusEntity {
         }
     }
 
-    pub fn get_death_sound(entity: &Entity) -> Sound {
+    pub fn death_sound(entity: &Entity) -> Sound {
         let is_baby = entity.age.load(Ordering::Relaxed) < 0;
         let is_water = entity.touching_water.load(Ordering::Relaxed);
         if is_baby {
