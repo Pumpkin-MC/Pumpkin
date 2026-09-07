@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use crate::block::entities::sculk_shrieker::SculkShriekerBlockEntity;
-use crate::block::{BlockBehaviour, BlockMetadata, OnPlaceArgs, OnScheduledTickArgs};
+use crate::block::{
+    BlockBehaviour, BlockMetadata, OnEntityStepArgs, OnPlaceArgs, OnScheduledTickArgs,
+};
+use crate::entity::player::Player;
 use crate::world::World;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::{
@@ -88,6 +91,17 @@ impl BlockBehaviour for SculkShriekerBlock {
         props.shrieking = false;
         props.waterlogged = args.replacing.water_source();
         props.to_state_id(args.block)
+    }
+
+    fn on_entity_step(&self, args: OnEntityStepArgs<'_>) {
+        // Vanilla `SculkShriekerBlock#stepOn`: a player standing on the shrieker
+        // resonates it, unless they are stepping carefully (sneaking).
+        if args.entity.get_entity().is_sneaking() {
+            return;
+        }
+        if args.entity.cast_any().downcast_ref::<Player>().is_some() {
+            Self::try_activate(args.world, args.position);
+        }
     }
 
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
