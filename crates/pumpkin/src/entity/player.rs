@@ -3280,8 +3280,17 @@ impl Player {
             PermissionLvl::Three => EntityStatus::PermissionLevelAdmins,
             PermissionLvl::Four => EntityStatus::PermissionLevelOwners,
         };
-        self.world()
-            .send_entity_status(&self.living_entity.entity, status, None);
+        // The player may not have a tracking entry yet after changing dimensions.
+        // Permission levels belong to this connection, not to tracking clients.
+        if let ClientPlatform::Java(java) = self.client.as_ref() {
+            let packet = pumpkin_protocol::java::client::play::CEntityStatus::new(
+                self.living_entity.entity.entity_id,
+                status as i8,
+            );
+            if let Ok(data) = java.serialize_packet(&packet) {
+                java.try_enqueue_packet(data);
+            }
+        }
     }
 
     /// Sets the player's difficulty level.
