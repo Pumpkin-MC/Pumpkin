@@ -473,7 +473,23 @@ impl World {
         for id in removed_players {
             tracker.remove_player(id, &mut active_chunks);
         }
-        tracker.sync_forced_chunks(&forced_chunks, &mut active_chunks, &mut newly_active);
+        let (added_forced, removed_forced) =
+            tracker.sync_forced_chunks(&forced_chunks, &mut active_chunks, &mut newly_active);
+
+        if !added_forced.is_empty() || !removed_forced.is_empty() {
+            let mut chunk_loading = self
+                .level
+                .chunk_loading
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for pos in &added_forced {
+                chunk_loading.add_force_ticket(*pos);
+            }
+            for pos in &removed_forced {
+                chunk_loading.remove_force_ticket(*pos);
+            }
+            chunk_loading.send_change();
+        }
 
         for pos in newly_active {
             if self.level.is_chunk_loaded(&pos) && tracker.loaded_active_chunks.insert(pos) {
