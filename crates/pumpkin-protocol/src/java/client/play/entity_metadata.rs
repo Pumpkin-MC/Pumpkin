@@ -2,7 +2,6 @@ use std::io::{Cursor, Write};
 
 use pumpkin_data::{
     block_state_remap::remap_block_state_for_version,
-    item_id_remap::remap_item_id_for_version,
     meta_data_type::MetaDataType,
     packet::clientbound::play::SET_ENTITY_DATA,
     tracked_data::{TrackedData, TrackedId},
@@ -158,31 +157,6 @@ impl<T> Metadata<T> {
                 writer.write_var_int(&remapped_state)?;
             } else {
                 writer.write_i32(remapped_state.0)?;
-            }
-            return Ok(());
-        }
-
-        if self.r#type == MetaDataType::ITEM_STACK {
-            let mut serialized_value = Vec::new();
-            self.value.write_metadata(&mut serialized_value, version)?;
-
-            let mut cursor = Cursor::new(serialized_value);
-            let item_count = VarInt::decode(&mut cursor).map_err(|e| {
-                WritingError::Message(format!("Failed to decodeitem stack count: {e}"))
-            })?;
-
-            if item_count.0 <= 0 {
-                writer.write_var_int(&item_count)?;
-            } else {
-                let item_id = VarInt::decode(&mut cursor)
-                    .map_err(|e| WritingError::Message(format!("Failed to decode item id: {e}")))?;
-                let remapped_id = u16::try_from(item_id.0)
-                    .map_or(0, |id| remap_item_id_for_version(id, *version));
-                writer.write_var_int(&item_count)?;
-                writer.write_var_int(&VarInt(i32::from(remapped_id)))?;
-                let remainder_start = cursor.position() as usize;
-                let inner = cursor.into_inner();
-                writer.write_slice(&inner[remainder_start..])?;
             }
             return Ok(());
         }
@@ -580,6 +554,49 @@ mod tests {
 
         assert_eq!(particle_id, VarInt(29));
         assert_eq!(data, [0x12, 0x34, 0x56, 0x78]);
+    }
+
+    #[test]
+    fn item_stack_metadata_id_remaps_exactly_once_for_1_21_11() {
+        use std::borrow::Cow;
+
+        use pumpkin_data::{
+            item::Item, item_id_remap::remap_item_id_for_version, item_stack::ItemStack,
+        };
+
+        use crate::codec::item_stack_seralizer::ItemStackSerializer;
+
+        let version = JavaMinecraftVersion::V_1_21_11;
+        // `Item::SULFUR` (id 26) does not exist in 1.21.11, so its id is remapped.
+        let item = &Item::SULFUR;
+        let expected_id = remap_item_id_for_version(item.id, version);
+        assert_ne!(
+            expected_id, item.id,
+            "test item must have a non-identity remap for 1.21.11"
+        );
+
+        let metadata = Metadata::new(
+            pumpkin_data::tracked_data::item::DATA_ITEM,
+            ItemStackSerializer(Cow::Owned(ItemStack::new(3, item))),
+        );
+        let mut bytes = Vec::new();
+        metadata.write(&mut bytes, &version).unwrap();
+
+        assert_eq!(
+            bytes[0],
+            pumpkin_data::tracked_data::item::DATA_ITEM.get(&version)
+        );
+        assert_eq!(bytes[1], MetaDataType::ITEM_STACK.id(version) as u8);
+
+        let mut cursor = Cursor::new(&bytes[2..]);
+        let count = VarInt::decode(&mut cursor).unwrap();
+        let id = VarInt::decode(&mut cursor).unwrap();
+        assert_eq!(count, VarInt(3));
+        assert_eq!(
+            id,
+            VarInt(i32::from(expected_id)),
+            "item id must be remapped exactly once"
+        );
     }
 
     #[test]
