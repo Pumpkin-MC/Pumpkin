@@ -21,6 +21,10 @@ pub enum LootCondition {
     TableBonus {
         chances: &'static [f32],
     },
+    BlockStateProperty {
+        block: &'static str,
+        properties: &'static [(&'static str, &'static str)],
+    },
     AllOf(&'static [Self]),
 }
 

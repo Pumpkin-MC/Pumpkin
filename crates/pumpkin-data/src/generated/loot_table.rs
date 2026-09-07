@@ -711,7 +711,10 @@ static BLOCKS_ACACIA_DOOR_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:acacia_door",
+        properties: &[("half", "lower")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_ACACIA_DOOR_POOLS: &[LootPool] = &[LootPool {
@@ -1397,7 +1400,10 @@ static BLOCKS_BAMBOO_DOOR_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:bamboo_door",
+        properties: &[("half", "lower")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_BAMBOO_DOOR_POOLS: &[LootPool] = &[LootPool {
@@ -1768,7 +1774,10 @@ static BLOCKS_BEETROOTS_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::BlockStateProperty {
+            block: "minecraft:beetroots",
+            properties: &[("age", "3")],
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -1804,7 +1813,10 @@ static BLOCKS_BEETROOTS_POOLS: &[LootPool] = &[
         min_rolls: 1i32,
         max_rolls: 1i32,
         empty_weight: 0i32,
-        condition: LootCondition::None,
+        condition: LootCondition::BlockStateProperty {
+            block: "minecraft:beetroots",
+            properties: &[("age", "3")],
+        },
     },
 ];
 pub static BLOCKS_BEETROOTS: LootTable = LootTable {
@@ -1887,7 +1899,10 @@ static BLOCKS_BIRCH_DOOR_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:birch_door",
+        properties: &[("half", "lower")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_BIRCH_DOOR_POOLS: &[LootPool] = &[LootPool {
@@ -2212,7 +2227,10 @@ static BLOCKS_BLACK_BED_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:black_bed",
+        properties: &[("part", "head")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_BLACK_BED_POOLS: &[LootPool] = &[LootPool {
@@ -2536,7 +2554,10 @@ static BLOCKS_BLUE_BED_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:blue_bed",
+        properties: &[("part", "head")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_BLUE_BED_POOLS: &[LootPool] = &[LootPool {
@@ -3009,7 +3030,10 @@ static BLOCKS_BROWN_BED_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:brown_bed",
+        properties: &[("part", "head")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_BROWN_BED_POOLS: &[LootPool] = &[LootPool {
@@ -3530,7 +3554,10 @@ static BLOCKS_CARROTS_POOLS: &[LootPool] = &[
         min_rolls: 1i32,
         max_rolls: 1i32,
         empty_weight: 0i32,
-        condition: LootCondition::None,
+        condition: LootCondition::BlockStateProperty {
+            block: "minecraft:carrots",
+            properties: &[("age", "7")],
+        },
     },
 ];
 pub static BLOCKS_CARROTS: LootTable = LootTable {
@@ -3603,7 +3630,10 @@ static BLOCKS_CAVE_VINES_POOLS: &[LootPool] = &[LootPool {
     min_rolls: 1i32,
     max_rolls: 1i32,
     empty_weight: 0i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:cave_vines",
+        properties: &[("berries", "true")],
+    },
 }];
 pub static BLOCKS_CAVE_VINES: LootTable = LootTable {
     pools: BLOCKS_CAVE_VINES_POOLS,
@@ -3621,7 +3651,10 @@ static BLOCKS_CAVE_VINES_PLANT_POOLS: &[LootPool] = &[LootPool {
     min_rolls: 1i32,
     max_rolls: 1i32,
     empty_weight: 0i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:cave_vines_plant",
+        properties: &[("berries", "true")],
+    },
 }];
 pub static BLOCKS_CAVE_VINES_PLANT: LootTable = LootTable {
     pools: BLOCKS_CAVE_VINES_PLANT_POOLS,
@@ -3649,7 +3682,10 @@ static BLOCKS_CHERRY_DOOR_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:cherry_door",
+        properties: &[("half", "lower")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_CHERRY_DOOR_POOLS: &[LootPool] = &[LootPool {
@@ -4769,7 +4805,10 @@ static BLOCKS_COMPOSTER_POOLS: &[LootPool] = &[
         min_rolls: 1i32,
         max_rolls: 1i32,
         empty_weight: 0i32,
-        condition: LootCondition::None,
+        condition: LootCondition::BlockStateProperty {
+            block: "minecraft:composter",
+            properties: &[("level", "8")],
+        },
     },
 ];
 pub static BLOCKS_COMPOSTER: LootTable = LootTable {
@@ -4888,7 +4927,10 @@ static BLOCKS_COPPER_DOOR_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:copper_door",
+        properties: &[("half", "lower")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_COPPER_DOOR_POOLS: &[LootPool] = &[LootPool {
@@ -5232,7 +5274,10 @@ static BLOCKS_CRIMSON_DOOR_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:crimson_door",
+        properties: &[("half", "lower")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_CRIMSON_DOOR_POOLS: &[LootPool] = &[LootPool {
@@ -5695,7 +5740,10 @@ static BLOCKS_CYAN_BED_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:cyan_bed",
+        properties: &[("part", "head")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_CYAN_BED_POOLS: &[LootPool] = &[LootPool {
@@ -5965,7 +6013,10 @@ static BLOCKS_DARK_OAK_DOOR_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:dark_oak_door",
+        properties: &[("half", "lower")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_DARK_OAK_DOOR_POOLS: &[LootPool] = &[LootPool {
@@ -7691,7 +7742,10 @@ static BLOCKS_EXPOSED_COPPER_DOOR_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:exposed_copper_door",
+        properties: &[("half", "lower")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_EXPOSED_COPPER_DOOR_POOLS: &[LootPool] = &[LootPool {
@@ -8481,7 +8535,10 @@ static BLOCKS_GRAY_BED_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:gray_bed",
+        properties: &[("part", "head")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_GRAY_BED_POOLS: &[LootPool] = &[LootPool {
@@ -8715,7 +8772,10 @@ static BLOCKS_GREEN_BED_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:green_bed",
+        properties: &[("part", "head")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_GREEN_BED_POOLS: &[LootPool] = &[LootPool {
@@ -9340,7 +9400,10 @@ static BLOCKS_IRON_DOOR_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:iron_door",
+        properties: &[("half", "lower")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_IRON_DOOR_POOLS: &[LootPool] = &[LootPool {
@@ -9458,7 +9521,10 @@ static BLOCKS_JUNGLE_DOOR_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:jungle_door",
+        properties: &[("half", "lower")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_JUNGLE_DOOR_POOLS: &[LootPool] = &[LootPool {
@@ -9950,14 +10016,20 @@ static BLOCKS_LARGE_FERN_POOLS: &[LootPool] = &[
         min_rolls: 1i32,
         max_rolls: 1i32,
         empty_weight: 0i32,
-        condition: LootCondition::None,
+        condition: LootCondition::BlockStateProperty {
+            block: "minecraft:large_fern",
+            properties: &[("half", "lower")],
+        },
     },
     LootPool {
         entries: BLOCKS_LARGE_FERN_POOL1_ENTRIES,
         min_rolls: 1i32,
         max_rolls: 1i32,
         empty_weight: 0i32,
-        condition: LootCondition::None,
+        condition: LootCondition::BlockStateProperty {
+            block: "minecraft:large_fern",
+            properties: &[("half", "upper")],
+        },
     },
 ];
 pub static BLOCKS_LARGE_FERN: LootTable = LootTable {
@@ -10058,7 +10130,10 @@ static BLOCKS_LIGHT_BLUE_BED_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:light_blue_bed",
+        properties: &[("part", "head")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_LIGHT_BLUE_BED_POOLS: &[LootPool] = &[LootPool {
@@ -10292,7 +10367,10 @@ static BLOCKS_LIGHT_GRAY_BED_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:light_gray_bed",
+        properties: &[("part", "head")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_LIGHT_GRAY_BED_POOLS: &[LootPool] = &[LootPool {
@@ -10544,7 +10622,10 @@ static BLOCKS_LILAC_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:lilac",
+        properties: &[("half", "lower")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_LILAC_POOLS: &[LootPool] = &[LootPool {
@@ -10616,7 +10697,10 @@ static BLOCKS_LIME_BED_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:lime_bed",
+        properties: &[("part", "head")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_LIME_BED_POOLS: &[LootPool] = &[LootPool {
@@ -10886,7 +10970,10 @@ static BLOCKS_MAGENTA_BED_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:magenta_bed",
+        properties: &[("part", "head")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_MAGENTA_BED_POOLS: &[LootPool] = &[LootPool {
@@ -11138,7 +11225,10 @@ static BLOCKS_MANGROVE_DOOR_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:mangrove_door",
+        properties: &[("half", "lower")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_MANGROVE_DOOR_POOLS: &[LootPool] = &[LootPool {
@@ -11305,7 +11395,10 @@ static BLOCKS_MANGROVE_PROPAGULE_POOLS: &[LootPool] = &[LootPool {
     min_rolls: 1i32,
     max_rolls: 1i32,
     empty_weight: 0i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:mangrove_propagule",
+        properties: &[("age", "4")],
+    },
 }];
 pub static BLOCKS_MANGROVE_PROPAGULE: LootTable = LootTable {
     pools: BLOCKS_MANGROVE_PROPAGULE_POOLS,
@@ -12118,7 +12211,10 @@ static BLOCKS_OAK_DOOR_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:oak_door",
+        properties: &[("half", "lower")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_OAK_DOOR_POOLS: &[LootPool] = &[LootPool {
@@ -12541,7 +12637,10 @@ static BLOCKS_ORANGE_BED_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:orange_bed",
+        properties: &[("part", "head")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_ORANGE_BED_POOLS: &[LootPool] = &[LootPool {
@@ -12901,7 +13000,10 @@ static BLOCKS_OXIDIZED_COPPER_DOOR_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:oxidized_copper_door",
+        properties: &[("half", "lower")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_OXIDIZED_COPPER_DOOR_POOLS: &[LootPool] = &[LootPool {
@@ -13135,7 +13237,10 @@ static BLOCKS_PALE_MOSS_CARPET_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:pale_moss_carpet",
+        properties: &[("bottom", "true")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_PALE_MOSS_CARPET_POOLS: &[LootPool] = &[LootPool {
@@ -13171,7 +13276,10 @@ static BLOCKS_PALE_OAK_DOOR_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:pale_oak_door",
+        properties: &[("half", "lower")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_PALE_OAK_DOOR_POOLS: &[LootPool] = &[LootPool {
@@ -13496,7 +13604,10 @@ static BLOCKS_PEONY_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:peony",
+        properties: &[("half", "lower")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_PEONY_POOLS: &[LootPool] = &[LootPool {
@@ -13568,7 +13679,10 @@ static BLOCKS_PINK_BED_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:pink_bed",
+        properties: &[("part", "head")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_PINK_BED_POOLS: &[LootPool] = &[LootPool {
@@ -13839,7 +13953,16 @@ static BLOCKS_PITCHER_CROP_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::AllOf(&[
+            LootCondition::BlockStateProperty {
+                block: "minecraft:pitcher_crop",
+                properties: &[("age", "0")],
+            },
+            LootCondition::BlockStateProperty {
+                block: "minecraft:pitcher_crop",
+                properties: &[("half", "lower")],
+            },
+        ]),
         bonus_formula: None,
     },
     LootEntry {
@@ -13847,7 +13970,16 @@ static BLOCKS_PITCHER_CROP_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::AllOf(&[
+            LootCondition::BlockStateProperty {
+                block: "minecraft:pitcher_crop",
+                properties: &[("age", "1")],
+            },
+            LootCondition::BlockStateProperty {
+                block: "minecraft:pitcher_crop",
+                properties: &[("half", "lower")],
+            },
+        ]),
         bonus_formula: None,
     },
     LootEntry {
@@ -13855,7 +13987,16 @@ static BLOCKS_PITCHER_CROP_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::AllOf(&[
+            LootCondition::BlockStateProperty {
+                block: "minecraft:pitcher_crop",
+                properties: &[("age", "2")],
+            },
+            LootCondition::BlockStateProperty {
+                block: "minecraft:pitcher_crop",
+                properties: &[("half", "lower")],
+            },
+        ]),
         bonus_formula: None,
     },
     LootEntry {
@@ -13863,7 +14004,16 @@ static BLOCKS_PITCHER_CROP_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::AllOf(&[
+            LootCondition::BlockStateProperty {
+                block: "minecraft:pitcher_crop",
+                properties: &[("age", "3")],
+            },
+            LootCondition::BlockStateProperty {
+                block: "minecraft:pitcher_crop",
+                properties: &[("half", "lower")],
+            },
+        ]),
         bonus_formula: None,
     },
     LootEntry {
@@ -13871,7 +14021,16 @@ static BLOCKS_PITCHER_CROP_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::AllOf(&[
+            LootCondition::BlockStateProperty {
+                block: "minecraft:pitcher_crop",
+                properties: &[("age", "4")],
+            },
+            LootCondition::BlockStateProperty {
+                block: "minecraft:pitcher_crop",
+                properties: &[("half", "lower")],
+            },
+        ]),
         bonus_formula: None,
     },
 ];
@@ -13890,7 +14049,10 @@ static BLOCKS_PITCHER_PLANT_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:pitcher_plant",
+        properties: &[("half", "lower")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_PITCHER_PLANT_POOLS: &[LootPool] = &[LootPool {
@@ -14676,14 +14838,20 @@ static BLOCKS_POTATOES_POOLS: &[LootPool] = &[
         min_rolls: 1i32,
         max_rolls: 1i32,
         empty_weight: 0i32,
-        condition: LootCondition::None,
+        condition: LootCondition::BlockStateProperty {
+            block: "minecraft:potatoes",
+            properties: &[("age", "7")],
+        },
     },
     LootPool {
         entries: BLOCKS_POTATOES_POOL2_ENTRIES,
         min_rolls: 1i32,
         max_rolls: 1i32,
         empty_weight: 0i32,
-        condition: LootCondition::None,
+        condition: LootCondition::BlockStateProperty {
+            block: "minecraft:potatoes",
+            properties: &[("age", "7")],
+        },
     },
 ];
 pub static BLOCKS_POTATOES: LootTable = LootTable {
@@ -16262,7 +16430,10 @@ static BLOCKS_PURPLE_BED_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:purple_bed",
+        properties: &[("part", "head")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_PURPLE_BED_POOLS: &[LootPool] = &[LootPool {
@@ -16730,7 +16901,10 @@ static BLOCKS_RED_BED_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:red_bed",
+        properties: &[("part", "head")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_RED_BED_POOLS: &[LootPool] = &[LootPool {
@@ -17438,7 +17612,10 @@ static BLOCKS_ROSE_BUSH_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:rose_bush",
+        properties: &[("half", "lower")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_ROSE_BUSH_POOLS: &[LootPool] = &[LootPool {
@@ -18146,7 +18323,13 @@ static BLOCKS_SNOW_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouch,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouch,
+            LootCondition::BlockStateProperty {
+                block: "minecraft:snow",
+                properties: &[("layers", "1")],
+            },
+        ]),
         bonus_formula: None,
     },
     LootEntry {
@@ -18154,7 +18337,13 @@ static BLOCKS_SNOW_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 2i32,
         max_count: 2i32,
-        condition: LootCondition::NoSilkTouch,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouch,
+            LootCondition::BlockStateProperty {
+                block: "minecraft:snow",
+                properties: &[("layers", "2")],
+            },
+        ]),
         bonus_formula: None,
     },
     LootEntry {
@@ -18162,7 +18351,13 @@ static BLOCKS_SNOW_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 3i32,
         max_count: 3i32,
-        condition: LootCondition::NoSilkTouch,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouch,
+            LootCondition::BlockStateProperty {
+                block: "minecraft:snow",
+                properties: &[("layers", "3")],
+            },
+        ]),
         bonus_formula: None,
     },
     LootEntry {
@@ -18170,7 +18365,13 @@ static BLOCKS_SNOW_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 4i32,
         max_count: 4i32,
-        condition: LootCondition::NoSilkTouch,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouch,
+            LootCondition::BlockStateProperty {
+                block: "minecraft:snow",
+                properties: &[("layers", "4")],
+            },
+        ]),
         bonus_formula: None,
     },
     LootEntry {
@@ -18178,7 +18379,13 @@ static BLOCKS_SNOW_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 5i32,
         max_count: 5i32,
-        condition: LootCondition::NoSilkTouch,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouch,
+            LootCondition::BlockStateProperty {
+                block: "minecraft:snow",
+                properties: &[("layers", "5")],
+            },
+        ]),
         bonus_formula: None,
     },
     LootEntry {
@@ -18186,7 +18393,13 @@ static BLOCKS_SNOW_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 6i32,
         max_count: 6i32,
-        condition: LootCondition::NoSilkTouch,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouch,
+            LootCondition::BlockStateProperty {
+                block: "minecraft:snow",
+                properties: &[("layers", "6")],
+            },
+        ]),
         bonus_formula: None,
     },
     LootEntry {
@@ -18194,7 +18407,13 @@ static BLOCKS_SNOW_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 7i32,
         max_count: 7i32,
-        condition: LootCondition::NoSilkTouch,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouch,
+            LootCondition::BlockStateProperty {
+                block: "minecraft:snow",
+                properties: &[("layers", "7")],
+            },
+        ]),
         bonus_formula: None,
     },
     LootEntry {
@@ -18202,7 +18421,13 @@ static BLOCKS_SNOW_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 8i32,
         max_count: 8i32,
-        condition: LootCondition::NoSilkTouch,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouch,
+            LootCondition::BlockStateProperty {
+                block: "minecraft:snow",
+                properties: &[("layers", "8")],
+            },
+        ]),
         bonus_formula: None,
     },
     LootEntry {
@@ -18210,7 +18435,10 @@ static BLOCKS_SNOW_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::BlockStateProperty {
+            block: "minecraft:snow",
+            properties: &[("layers", "1")],
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -18218,7 +18446,10 @@ static BLOCKS_SNOW_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 2i32,
         max_count: 2i32,
-        condition: LootCondition::None,
+        condition: LootCondition::BlockStateProperty {
+            block: "minecraft:snow",
+            properties: &[("layers", "2")],
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -18226,7 +18457,10 @@ static BLOCKS_SNOW_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 3i32,
         max_count: 3i32,
-        condition: LootCondition::None,
+        condition: LootCondition::BlockStateProperty {
+            block: "minecraft:snow",
+            properties: &[("layers", "3")],
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -18234,7 +18468,10 @@ static BLOCKS_SNOW_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 4i32,
         max_count: 4i32,
-        condition: LootCondition::None,
+        condition: LootCondition::BlockStateProperty {
+            block: "minecraft:snow",
+            properties: &[("layers", "4")],
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -18242,7 +18479,10 @@ static BLOCKS_SNOW_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 5i32,
         max_count: 5i32,
-        condition: LootCondition::None,
+        condition: LootCondition::BlockStateProperty {
+            block: "minecraft:snow",
+            properties: &[("layers", "5")],
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -18250,7 +18490,10 @@ static BLOCKS_SNOW_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 6i32,
         max_count: 6i32,
-        condition: LootCondition::None,
+        condition: LootCondition::BlockStateProperty {
+            block: "minecraft:snow",
+            properties: &[("layers", "6")],
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -18258,7 +18501,10 @@ static BLOCKS_SNOW_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 7i32,
         max_count: 7i32,
-        condition: LootCondition::None,
+        condition: LootCondition::BlockStateProperty {
+            block: "minecraft:snow",
+            properties: &[("layers", "7")],
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -18478,7 +18724,10 @@ static BLOCKS_SPRUCE_DOOR_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:spruce_door",
+        properties: &[("half", "lower")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_SPRUCE_DOOR_POOLS: &[LootPool] = &[LootPool {
@@ -19590,7 +19839,10 @@ static BLOCKS_SUNFLOWER_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:sunflower",
+        properties: &[("half", "lower")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_SUNFLOWER_POOLS: &[LootPool] = &[LootPool {
@@ -19614,18 +19866,18 @@ pub static BLOCKS_SUSPICIOUS_SAND: LootTable = LootTable {
 static BLOCKS_SWEET_BERRY_BUSH_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     item: "minecraft:sweet_berries",
     weight: 1i32,
-    min_count: 1i32,
-    max_count: 1i32,
+    min_count: 2i32,
+    max_count: 3i32,
     condition: LootCondition::None,
-    bonus_formula: None,
+    bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
 }];
 static BLOCKS_SWEET_BERRY_BUSH_POOL1_ENTRIES: &[LootEntry] = &[LootEntry {
     item: "minecraft:sweet_berries",
     weight: 1i32,
     min_count: 1i32,
-    max_count: 1i32,
+    max_count: 2i32,
     condition: LootCondition::None,
-    bonus_formula: None,
+    bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
 }];
 static BLOCKS_SWEET_BERRY_BUSH_POOLS: &[LootPool] = &[
     LootPool {
@@ -19633,14 +19885,20 @@ static BLOCKS_SWEET_BERRY_BUSH_POOLS: &[LootPool] = &[
         min_rolls: 1i32,
         max_rolls: 1i32,
         empty_weight: 0i32,
-        condition: LootCondition::None,
+        condition: LootCondition::BlockStateProperty {
+            block: "minecraft:sweet_berry_bush",
+            properties: &[("age", "3")],
+        },
     },
     LootPool {
         entries: BLOCKS_SWEET_BERRY_BUSH_POOL1_ENTRIES,
         min_rolls: 1i32,
         max_rolls: 1i32,
         empty_weight: 0i32,
-        condition: LootCondition::None,
+        condition: LootCondition::BlockStateProperty {
+            block: "minecraft:sweet_berry_bush",
+            properties: &[("age", "2")],
+        },
     },
 ];
 pub static BLOCKS_SWEET_BERRY_BUSH: LootTable = LootTable {
@@ -19718,14 +19976,20 @@ static BLOCKS_TALL_GRASS_POOLS: &[LootPool] = &[
         min_rolls: 1i32,
         max_rolls: 1i32,
         empty_weight: 0i32,
-        condition: LootCondition::None,
+        condition: LootCondition::BlockStateProperty {
+            block: "minecraft:tall_grass",
+            properties: &[("half", "lower")],
+        },
     },
     LootPool {
         entries: BLOCKS_TALL_GRASS_POOL1_ENTRIES,
         min_rolls: 1i32,
         max_rolls: 1i32,
         empty_weight: 0i32,
-        condition: LootCondition::None,
+        condition: LootCondition::BlockStateProperty {
+            block: "minecraft:tall_grass",
+            properties: &[("half", "upper")],
+        },
     },
 ];
 pub static BLOCKS_TALL_GRASS: LootTable = LootTable {
@@ -19808,7 +20072,10 @@ static BLOCKS_TNT_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:tnt",
+        properties: &[("unstable", "false")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_TNT_POOLS: &[LootPool] = &[LootPool {
@@ -20291,7 +20558,10 @@ static BLOCKS_WARPED_DOOR_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:warped_door",
+        properties: &[("half", "lower")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_WARPED_DOOR_POOLS: &[LootPool] = &[LootPool {
@@ -20736,7 +21006,10 @@ static BLOCKS_WAXED_COPPER_DOOR_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:waxed_copper_door",
+        properties: &[("half", "lower")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_WAXED_COPPER_DOOR_POOLS: &[LootPool] = &[LootPool {
@@ -20988,7 +21261,10 @@ static BLOCKS_WAXED_EXPOSED_COPPER_DOOR_POOL0_ENTRIES: &[LootEntry] = &[LootEntr
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:waxed_exposed_copper_door",
+        properties: &[("half", "lower")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_WAXED_EXPOSED_COPPER_DOOR_POOLS: &[LootPool] = &[LootPool {
@@ -21276,7 +21552,10 @@ static BLOCKS_WAXED_OXIDIZED_COPPER_DOOR_POOL0_ENTRIES: &[LootEntry] = &[LootEnt
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:waxed_oxidized_copper_door",
+        properties: &[("half", "lower")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_WAXED_OXIDIZED_COPPER_DOOR_POOLS: &[LootPool] = &[LootPool {
@@ -21546,7 +21825,10 @@ static BLOCKS_WAXED_WEATHERED_COPPER_DOOR_POOL0_ENTRIES: &[LootEntry] = &[LootEn
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:waxed_weathered_copper_door",
+        properties: &[("half", "lower")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_WAXED_WEATHERED_COPPER_DOOR_POOLS: &[LootPool] = &[LootPool {
@@ -21816,7 +22098,10 @@ static BLOCKS_WEATHERED_COPPER_DOOR_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:weathered_copper_door",
+        properties: &[("half", "lower")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_WEATHERED_COPPER_DOOR_POOLS: &[LootPool] = &[LootPool {
@@ -22063,7 +22348,10 @@ static BLOCKS_WHEAT_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::BlockStateProperty {
+            block: "minecraft:wheat",
+            properties: &[("age", "7")],
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -22099,7 +22387,10 @@ static BLOCKS_WHEAT_POOLS: &[LootPool] = &[
         min_rolls: 1i32,
         max_rolls: 1i32,
         empty_weight: 0i32,
-        condition: LootCondition::None,
+        condition: LootCondition::BlockStateProperty {
+            block: "minecraft:wheat",
+            properties: &[("age", "7")],
+        },
     },
 ];
 pub static BLOCKS_WHEAT: LootTable = LootTable {
@@ -22128,7 +22419,10 @@ static BLOCKS_WHITE_BED_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:white_bed",
+        properties: &[("part", "head")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_WHITE_BED_POOLS: &[LootPool] = &[LootPool {
@@ -22434,7 +22728,10 @@ static BLOCKS_YELLOW_BED_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:yellow_bed",
+        properties: &[("part", "head")],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_YELLOW_BED_POOLS: &[LootPool] = &[LootPool {
@@ -34997,7 +35294,10 @@ static HARVEST_SWEET_BERRY_BUSH_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::BlockStateProperty {
+        block: "minecraft:sweet_berry_bush",
+        properties: &[("age", "3")],
+    },
     bonus_formula: None,
 }];
 static HARVEST_SWEET_BERRY_BUSH_POOL1_ENTRIES: &[LootEntry] = &[LootEntry {

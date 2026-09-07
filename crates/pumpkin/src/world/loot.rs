@@ -65,6 +65,23 @@ fn check_condition(
                 .get(index)
                 .is_some_and(|chance| rng.next_f32() < *chance)
         }
+        LootCondition::BlockStateProperty { block, properties } => {
+            params.block_state.is_some_and(|state| {
+                let block_def = pumpkin_data::Block::from_state_id(state.id);
+                if block_def.name != block.strip_prefix("minecraft:").unwrap_or(block) {
+                    return false;
+                }
+                if properties.is_empty() {
+                    return true;
+                }
+                let props = block_def.properties(state.id).map(|p| p.to_props());
+                properties.iter().all(|(key, value)| {
+                    props
+                        .as_deref()
+                        .is_some_and(|props| props.iter().any(|(k, v)| k == key && v == value))
+                })
+            })
+        }
         LootCondition::AllOf(conditions) => conditions
             .iter()
             .all(|c| check_condition(*c, has_silk_touch, has_shears, fortune_level, params, rng)),

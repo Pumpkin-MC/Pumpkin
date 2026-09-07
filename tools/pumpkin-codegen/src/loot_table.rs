@@ -1,4 +1,4 @@
-use std::{fs, path::Path};
+use std::{collections::BTreeMap, fs, path::Path};
 
 use heck::ToShoutySnakeCase;
 use proc_macro2::{Span, TokenStream};
@@ -112,6 +112,10 @@ struct ConditionStruct {
     term: Option<Box<ConditionStruct>>,
     #[serde(default)]
     terms: Option<Vec<ConditionStruct>>,
+    #[serde(default)]
+    block: Option<String>,
+    #[serde(default)]
+    properties: Option<BTreeMap<String, String>>,
 }
 
 fn parse_condition(cond: &ConditionStruct) -> LootCondition {
@@ -213,6 +217,25 @@ fn parse_condition(cond: &ConditionStruct) -> LootCondition {
                 LootCondition::None
             }
         }
+        "minecraft:block_state_property" => match &cond.block {
+            Some(block) if !block.is_empty() => {
+                let block: &'static str = Box::leak(block.clone().into_boxed_str());
+                let mut properties: Vec<(&'static str, &'static str)> = Vec::new();
+                if let Some(props) = &cond.properties {
+                    for (key, value) in props {
+                        properties.push((
+                            Box::leak(key.clone().into_boxed_str()),
+                            Box::leak(value.clone().into_boxed_str()),
+                        ));
+                    }
+                }
+                LootCondition::BlockStateProperty {
+                    block,
+                    properties: Box::leak(properties.into_boxed_slice()),
+                }
+            }
+            _ => LootCondition::None,
+        },
         _ => LootCondition::None,
     }
 }
@@ -287,6 +310,8 @@ struct PoolStruct {
     #[serde(default = "default_rolls")]
     rolls: RollsStruct,
     #[serde(default)]
+    functions: Vec<EntryFunctionStruct>,
+    #[serde(default)]
     conditions: Vec<ConditionStruct>,
 }
 
@@ -296,6 +321,8 @@ fn default_rolls() -> RollsStruct {
 
 #[derive(Deserialize, Clone, Debug)]
 struct ChestLootTableJson {
+    #[serde(default)]
+    functions: Vec<EntryFunctionStruct>,
     #[serde(default)]
     pools: Vec<PoolStruct>,
 }
@@ -320,15 +347,27 @@ struct ParsedEntry {
 fn extract_entries(
     entry: &PoolEntryStruct,
     inherited_condition: LootCondition,
+    pool_functions: &[EntryFunctionStruct],
+    table_functions: &[EntryFunctionStruct],
     out: &mut Vec<ParsedEntry>,
     empty_weight: &mut i32,
 ) {
-    extract_entries_with_depth(entry, inherited_condition, out, empty_weight, 0);
+    extract_entries_with_depth(
+        entry,
+        inherited_condition,
+        pool_functions,
+        table_functions,
+        out,
+        empty_weight,
+        0,
+    );
 }
 
 fn extract_entries_with_depth(
     entry: &PoolEntryStruct,
     inherited_condition: LootCondition,
+    pool_functions: &[EntryFunctionStruct],
+    table_functions: &[EntryFunctionStruct],
     out: &mut Vec<ParsedEntry>,
     empty_weight: &mut i32,
     depth: usize,
@@ -349,47 +388,49 @@ fn extract_entries_with_depth(
         }
         "minecraft:item" => {
             if let Some(name) = &entry.name {
-                let (min_count, max_count) = entry
-                    .functions
+                let function_layers = [entry.functions.as_slice(), pool_functions, table_functions];
+                let (min_count, max_count) = function_layers
                     .iter()
-                    .find(|f| f.function == "minecraft:set_count")
+                    .find_map(|fns| fns.iter().find(|f| f.function == "minecraft:set_count"))
                     .and_then(|f| f.count.as_ref())
                     .map(|c| (c.min(), c.max()))
                     .unwrap_or((1, 1));
 
-                let bonus_formula = entry.functions.iter().find_map(|f| {
-                    if f.function == "minecraft:apply_bonus" {
-                        match f.formula.as_deref() {
-                            Some("minecraft:ore_drops") => Some(LootBonusFormula::OreDrops),
-                            Some("minecraft:uniform_bonus_count") => {
-                                let mult = f
-                                    .parameters
-                                    .as_ref()
-                                    .and_then(|p| p.bonus_multiplier)
-                                    .unwrap_or(1);
-                                Some(LootBonusFormula::UniformBonusCount(mult))
+                let bonus_formula = function_layers.iter().find_map(|fns| {
+                    fns.iter().find_map(|f| {
+                        if f.function == "minecraft:apply_bonus" {
+                            match f.formula.as_deref() {
+                                Some("minecraft:ore_drops") => Some(LootBonusFormula::OreDrops),
+                                Some("minecraft:uniform_bonus_count") => {
+                                    let mult = f
+                                        .parameters
+                                        .as_ref()
+                                        .and_then(|p| p.bonus_multiplier)
+                                        .unwrap_or(1);
+                                    Some(LootBonusFormula::UniformBonusCount(mult))
+                                }
+                                Some("minecraft:binomial_with_bonus_count") => {
+                                    let extra =
+                                        f.parameters.as_ref().and_then(|p| p.extra).unwrap_or(0);
+                                    let prob = f
+                                        .parameters
+                                        .as_ref()
+                                        .and_then(|p| p.probability)
+                                        .unwrap_or(0.0);
+                                    Some(LootBonusFormula::BinomialWithBonusCount {
+                                        extra,
+                                        probability: prob,
+                                    })
+                                }
+                                _ => None,
                             }
-                            Some("minecraft:binomial_with_bonus_count") => {
-                                let extra =
-                                    f.parameters.as_ref().and_then(|p| p.extra).unwrap_or(0);
-                                let prob = f
-                                    .parameters
-                                    .as_ref()
-                                    .and_then(|p| p.probability)
-                                    .unwrap_or(0.0);
-                                Some(LootBonusFormula::BinomialWithBonusCount {
-                                    extra,
-                                    probability: prob,
-                                })
-                            }
-                            _ => None,
+                        } else if f.function == "minecraft:enchanted_count_increase" {
+                            let mult = f.count.as_ref().map_or(1, |c| c.max());
+                            Some(LootBonusFormula::UniformBonusCount(mult))
+                        } else {
+                            None
                         }
-                    } else if f.function == "minecraft:enchanted_count_increase" {
-                        let mult = f.count.as_ref().map_or(1, |c| c.max());
-                        Some(LootBonusFormula::UniformBonusCount(mult))
-                    } else {
-                        None
-                    }
+                    })
                 });
 
                 out.push(ParsedEntry {
@@ -450,6 +491,8 @@ fn extract_entries_with_depth(
                                 extract_entries_with_depth(
                                     child_entry,
                                     pool_cond,
+                                    &pool.functions,
+                                    &nested_table.functions,
                                     out,
                                     empty_weight,
                                     depth + 1,
@@ -472,6 +515,8 @@ fn extract_entries_with_depth(
                         extract_entries_with_depth(
                             child_entry,
                             pool_cond,
+                            &pool.functions,
+                            &nested_table.functions,
                             out,
                             empty_weight,
                             depth + 1,
@@ -501,6 +546,8 @@ fn extract_entries_with_depth(
                                     extract_entries_with_depth(
                                         child_entry,
                                         pool_cond,
+                                        &pool.functions,
+                                        &nested_table.functions,
                                         out,
                                         empty_weight,
                                         depth + 1,
@@ -539,12 +586,28 @@ fn extract_entries_with_depth(
                     entry_cond
                 };
 
-                extract_entries_with_depth(child, effective_cond, out, empty_weight, depth + 1);
+                extract_entries_with_depth(
+                    child,
+                    effective_cond,
+                    pool_functions,
+                    table_functions,
+                    out,
+                    empty_weight,
+                    depth + 1,
+                );
             }
         }
         "minecraft:sequence" | "minecraft:group" => {
             for child in &entry.children {
-                extract_entries_with_depth(child, entry_cond, out, empty_weight, depth + 1);
+                extract_entries_with_depth(
+                    child,
+                    entry_cond,
+                    pool_functions,
+                    table_functions,
+                    out,
+                    empty_weight,
+                    depth + 1,
+                );
             }
         }
         _ => {}
@@ -580,6 +643,23 @@ fn condition_to_tokens(cond: LootCondition) -> TokenStream {
         LootCondition::TableBonus { chances } => {
             let values = chances.iter();
             quote! { LootCondition::TableBonus { chances: &[#(#values),*] } }
+        }
+        LootCondition::BlockStateProperty { block, properties } => {
+            let block_lit = syn::LitStr::new(block, proc_macro2::Span::call_site());
+            let props: Vec<TokenStream> = properties
+                .iter()
+                .map(|(key, value)| {
+                    let key = syn::LitStr::new(key, proc_macro2::Span::call_site());
+                    let value = syn::LitStr::new(value, proc_macro2::Span::call_site());
+                    quote! { (#key, #value) }
+                })
+                .collect();
+            quote! {
+                LootCondition::BlockStateProperty {
+                    block: #block_lit,
+                    properties: &[#(#props),*],
+                }
+            }
         }
         LootCondition::AllOf(list) => {
             let tokens: Vec<TokenStream> = list.iter().copied().map(condition_to_tokens).collect();
@@ -625,6 +705,8 @@ fn emit_table(
             extract_entries(
                 entry,
                 LootCondition::None,
+                &pool.functions,
+                &table.functions,
                 &mut parsed_entries,
                 &mut empty_weight,
             );
@@ -694,7 +776,7 @@ fn collect_json_files(base: &Path, dir: &Path) -> Vec<(String, ChestLootTableJso
                 .unwrap()
                 .with_extension("")
                 .to_string_lossy()
-                .to_string();
+                .replace('\\', "/");
 
             let content = match fs::read_to_string(&path) {
                 Ok(c) => c,
