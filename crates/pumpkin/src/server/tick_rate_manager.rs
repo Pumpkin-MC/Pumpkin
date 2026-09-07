@@ -14,7 +14,11 @@ const MIN_TICKRATE: f32 = 1.0;
 /// Vanilla `TickCommand.MAX_TICKRATE`. Without this, `nanoseconds_per_tick` could truncates to 0.
 const MAX_TICKRATE: f32 = 10000.0;
 
+/// NaN falls back to the minimum.
 const fn clamp_tickrate(rate: f32) -> f32 {
+    if rate.is_nan() {
+        return MIN_TICKRATE;
+    }
     rate.clamp(MIN_TICKRATE, MAX_TICKRATE)
 }
 
@@ -231,5 +235,26 @@ impl ServerTickRateManager {
                 ))
                 .await;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MAX_TICKRATE, MIN_TICKRATE, clamp_tickrate, nanoseconds_for_rate};
+
+    #[test]
+    fn clamp_tickrate_rejects_nan() {
+        assert_eq!(clamp_tickrate(f32::NAN), MIN_TICKRATE);
+        // NaN reaching nanoseconds_for_rate would saturate the cast to a 0ns tick.
+        assert!(nanoseconds_for_rate(clamp_tickrate(f32::NAN)) > 0);
+    }
+
+    #[test]
+    fn clamp_tickrate_bounds_finite_rates() {
+        assert_eq!(clamp_tickrate(0.0), MIN_TICKRATE);
+        assert_eq!(clamp_tickrate(-5.0), MIN_TICKRATE);
+        assert_eq!(clamp_tickrate(f32::NEG_INFINITY), MIN_TICKRATE);
+        assert_eq!(clamp_tickrate(f32::INFINITY), MAX_TICKRATE);
+        assert_eq!(clamp_tickrate(20.0), 20.0);
     }
 }
