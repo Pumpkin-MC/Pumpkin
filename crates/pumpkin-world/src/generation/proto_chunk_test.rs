@@ -102,6 +102,7 @@ mod test {
         );
     }
 
+    /// Verifies that references use the structure selected for the shared Nether start.
     #[test]
     fn nether_complex_references_use_selected_structure() {
         use crate::generation::structure::placement::get_structure_chunk_in_region;
@@ -150,6 +151,7 @@ mod test {
         panic!("no bastion remnant start found in sampled nether complex regions");
     }
 
+    /// Verifies that structure references survive a partial-generation round trip.
     #[test]
     fn structure_references_are_rebuilt_when_resuming_generation() {
         use crate::chunk_system::chunk_state::Chunk;

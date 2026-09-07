@@ -1232,6 +1232,7 @@ impl ProtoChunk {
         }
     }
 
+    /// Returns every biome allowed by at least one structure in the set.
     #[must_use]
     pub fn get_allowed_biomes(set: &StructureSet) -> Vec<u16> {
         let mut allowed_biomes = Vec::new();
@@ -1250,6 +1251,7 @@ impl ProtoChunk {
         allowed_biomes
     }
 
+    /// Returns the deterministic weighted fallback order for structures in a set.
     fn weighted_structure_order(
         entries: &[WeightedEntry],
         seed: u64,
@@ -1282,6 +1284,7 @@ impl ProtoChunk {
         ordered
     }
 
+    /// Creates the structure starts owned by this chunk.
     pub fn set_structure_starts(&mut self, generator: &super::generator::VanillaGenerator) {
         debug_assert_eq!(self.stage, StagedChunkEnum::Biomes);
         let random_config = &generator.random_config;
@@ -1334,6 +1337,7 @@ impl ProtoChunk {
         self.stage = StagedChunkEnum::StructureStart;
     }
 
+    /// Attempts to create and store the selected structure start in this chunk.
     fn try_set_structure_start(
         &mut self,
         global_cache: &GlobalStructureCache,
@@ -1382,6 +1386,7 @@ impl ProtoChunk {
         false
     }
 
+    /// Adds references to nearby structure starts that intersect this chunk.
     #[expect(clippy::too_many_lines)]
     pub fn set_structure_references(&mut self, generator: &super::generator::VanillaGenerator) {
         debug_assert_eq!(self.stage, StagedChunkEnum::StructureStart);
