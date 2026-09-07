@@ -79,7 +79,7 @@ pub trait CustomChunkGenerator: Send + Sync {
 
 pub enum WorldGenerator {
     Noise(Box<VanillaGenerator>),
-    Flat(flat::FlatGenerator),
+    Flat(Box<flat::FlatGenerator>),
     Custom(Arc<dyn CustomChunkGenerator>),
 }
 

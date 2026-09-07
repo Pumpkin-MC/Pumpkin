@@ -12,7 +12,7 @@ use crate::command::suggestion::provider::{SuggestionProvider, SuggestionProvide
 use crate::command::suggestion::suggestions::SuggestionsBuilder;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
-use crate::entity::player::advancement::PlayerAdvancement;
+use crate::entity::player::advancement::{AdvancementAward, PlayerAdvancement};
 use pumpkin_data::advancement_data::AdvancementNode;
 use pumpkin_data::{ADVANCEMENT_TREE, Advancement, translation};
 use pumpkin_util::PermissionLvl;
@@ -97,30 +97,46 @@ impl Action {
         self,
         guard: &mut PlayerAdvancement,
         advancement: &'static Advancement,
-    ) -> bool {
+    ) -> (bool, AdvancementAward) {
         let progress = guard.progress.get_mut_or_start_progress(advancement);
         match self {
             Self::Grant => {
                 if progress.is_done() {
-                    return false;
+                    return (false, AdvancementAward::default());
                 }
                 let criteria: Vec<Arc<str>> = progress.get_remaining_criteria().collect();
+                let mut result = AdvancementAward::default();
                 for criterion in criteria {
-                    guard.award(advancement, &criterion);
+                    result = result.combine(guard.award(advancement, &criterion));
                 }
-                true
+                (true, result)
             }
             Self::Revoke => {
                 if !progress.has_progress() {
-                    return false;
+                    return (false, AdvancementAward::default());
                 }
                 let criteria: Vec<Arc<str>> = progress.get_completed_criteria().collect();
                 for criterion in criteria {
                     guard.revoke(advancement, &criterion);
                 }
-                true
+                (true, AdvancementAward::default())
             }
         }
+    }
+
+    fn perform_single(self, player: &Arc<Player>, advancement: &'static Advancement) -> bool {
+        let (performed, result) = {
+            let mut guard = player
+                .advancements
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            self.perform_single_inner(&mut guard, advancement)
+        };
+
+        if matches!(self, Self::Grant) {
+            PlayerAdvancement::finish_award(player, advancement, result);
+        }
+        performed
     }
 
     /// Performs the action (grant or revoke) on multiple advancements for a single player.
@@ -145,18 +161,22 @@ impl Action {
         advancements: &[&'static Advancement],
         show_advancement: bool,
     ) -> i32 {
-        let mut guard = player
-            .advancements
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if !show_advancement {
+            let mut guard = player
+                .advancements
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             guard.flush_dirty(player, true);
         }
         let count = advancements
             .iter()
-            .filter(|advancement| self.perform_single_inner(&mut guard, advancement))
+            .filter(|advancement| self.perform_single(player, advancement))
             .count() as i32;
         if !show_advancement {
+            let mut guard = player
+                .advancements
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             guard.flush_dirty(player, false);
         }
         count
@@ -168,14 +188,27 @@ impl Action {
         advancement: &'static Advancement,
         criterion: &str,
     ) -> bool {
-        let mut guard = player
-            .advancements
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        match self {
-            Self::Grant => guard.award(advancement, criterion),
-            Self::Revoke => guard.revoke(advancement, criterion),
+        let (performed, result) = {
+            let mut guard = player
+                .advancements
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            match self {
+                Self::Grant => {
+                    let result = guard.award(advancement, criterion);
+                    (result.awarded(), result)
+                }
+                Self::Revoke => (
+                    guard.revoke(advancement, criterion),
+                    AdvancementAward::default(),
+                ),
+            }
+        };
+
+        if matches!(self, Self::Grant) {
+            PlayerAdvancement::finish_award(player, advancement, result);
         }
+        performed
     }
 
     /// return the corresponding key of the action

@@ -133,6 +133,19 @@ impl CrafterBlock {
             world.set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_LISTENERS);
 
             let mut result_stack = ItemStack::new(recipe_result.count, item);
+            if let Some(server) = world.server.upgrade() {
+                let mut event =
+                    crate::plugin::api::events::block::crafter_craft::CrafterCraftEvent::new(
+                        *pos,
+                        world.clone(),
+                        result_stack.clone(),
+                    );
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return;
+                }
+                result_stack = event.result;
+            }
             Self::dispense_item(world, pos, crafter, &mut result_stack, props.orientation);
 
             for i in 0..CrafterBlockEntity::INVENTORY_SIZE {

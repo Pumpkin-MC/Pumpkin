@@ -792,7 +792,15 @@ static BLOCKS_ACACIA_LEAVES_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouchOrShears,
+            LootCondition::AllOf(&[
+                LootCondition::SurvivesExplosion,
+                LootCondition::TableBonus {
+                    chances: &[0.05f32, 0.0625f32, 0.083333336f32, 0.1f32],
+                },
+            ]),
+        ]),
         bonus_formula: None,
     },
 ];
@@ -801,7 +809,9 @@ static BLOCKS_ACACIA_LEAVES_POOL1_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 2i32,
-    condition: LootCondition::None,
+    condition: LootCondition::TableBonus {
+        chances: &[0.02f32, 0.022222223f32, 0.025f32, 0.033333335f32, 0.1f32],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_ACACIA_LEAVES_POOLS: &[LootPool] = &[
@@ -1269,7 +1279,15 @@ static BLOCKS_AZALEA_LEAVES_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouchOrShears,
+            LootCondition::AllOf(&[
+                LootCondition::SurvivesExplosion,
+                LootCondition::TableBonus {
+                    chances: &[0.05f32, 0.0625f32, 0.083333336f32, 0.1f32],
+                },
+            ]),
+        ]),
         bonus_formula: None,
     },
 ];
@@ -1278,7 +1296,9 @@ static BLOCKS_AZALEA_LEAVES_POOL1_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 2i32,
-    condition: LootCondition::None,
+    condition: LootCondition::TableBonus {
+        chances: &[0.02f32, 0.022222223f32, 0.025f32, 0.033333335f32, 0.1f32],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_AZALEA_LEAVES_POOLS: &[LootPool] = &[
@@ -1948,7 +1968,15 @@ static BLOCKS_BIRCH_LEAVES_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouchOrShears,
+            LootCondition::AllOf(&[
+                LootCondition::SurvivesExplosion,
+                LootCondition::TableBonus {
+                    chances: &[0.05f32, 0.0625f32, 0.083333336f32, 0.1f32],
+                },
+            ]),
+        ]),
         bonus_formula: None,
     },
 ];
@@ -1957,7 +1985,9 @@ static BLOCKS_BIRCH_LEAVES_POOL1_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 2i32,
-    condition: LootCondition::None,
+    condition: LootCondition::TableBonus {
+        chances: &[0.02f32, 0.022222223f32, 0.025f32, 0.033333335f32, 0.1f32],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_BIRCH_LEAVES_POOLS: &[LootPool] = &[
@@ -2831,7 +2861,10 @@ static BLOCKS_BRAIN_CORAL_BLOCK_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouch,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouch,
+            LootCondition::SurvivesExplosion,
+        ]),
         bonus_formula: None,
     },
 ];
@@ -3265,7 +3298,10 @@ static BLOCKS_BUBBLE_CORAL_BLOCK_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouch,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouch,
+            LootCondition::SurvivesExplosion,
+        ]),
         bonus_formula: None,
     },
 ];
@@ -3409,7 +3445,10 @@ static BLOCKS_CAMPFIRE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 2i32,
         max_count: 2i32,
-        condition: LootCondition::NoSilkTouch,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouch,
+            LootCondition::SurvivesExplosion,
+        ]),
         bonus_formula: None,
     },
 ];
@@ -3691,7 +3730,15 @@ static BLOCKS_CHERRY_LEAVES_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouchOrShears,
+            LootCondition::AllOf(&[
+                LootCondition::SurvivesExplosion,
+                LootCondition::TableBonus {
+                    chances: &[0.05f32, 0.0625f32, 0.083333336f32, 0.1f32],
+                },
+            ]),
+        ]),
         bonus_formula: None,
     },
 ];
@@ -3700,7 +3747,9 @@ static BLOCKS_CHERRY_LEAVES_POOL1_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 2i32,
-    condition: LootCondition::None,
+    condition: LootCondition::TableBonus {
+        chances: &[0.02f32, 0.022222223f32, 0.025f32, 0.033333335f32, 0.1f32],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_CHERRY_LEAVES_POOLS: &[LootPool] = &[
@@ -4638,7 +4687,10 @@ static BLOCKS_COBWEB_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouchOrShears,
+            LootCondition::SurvivesExplosion,
+        ]),
         bonus_formula: None,
     },
 ];
@@ -5297,7 +5349,10 @@ static BLOCKS_CRIMSON_NYLIUM_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouch,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouch,
+            LootCondition::SurvivesExplosion,
+        ]),
         bonus_formula: None,
     },
 ];
@@ -5991,7 +6046,15 @@ static BLOCKS_DARK_OAK_LEAVES_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouchOrShears,
+            LootCondition::AllOf(&[
+                LootCondition::SurvivesExplosion,
+                LootCondition::TableBonus {
+                    chances: &[0.05f32, 0.0625f32, 0.083333336f32, 0.1f32],
+                },
+            ]),
+        ]),
         bonus_formula: None,
     },
 ];
@@ -6000,7 +6063,9 @@ static BLOCKS_DARK_OAK_LEAVES_POOL1_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 2i32,
-    condition: LootCondition::None,
+    condition: LootCondition::TableBonus {
+        chances: &[0.02f32, 0.022222223f32, 0.025f32, 0.033333335f32, 0.1f32],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_DARK_OAK_LEAVES_POOL2_ENTRIES: &[LootEntry] = &[LootEntry {
@@ -6008,7 +6073,18 @@ static BLOCKS_DARK_OAK_LEAVES_POOL2_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::SurvivesExplosion,
+    condition: LootCondition::AllOf(&[
+        LootCondition::SurvivesExplosion,
+        LootCondition::TableBonus {
+            chances: &[
+                0.005f32,
+                0.0055555557f32,
+                0.00625f32,
+                0.008333334f32,
+                0.025f32,
+            ],
+        },
+    ]),
     bonus_formula: None,
 }];
 static BLOCKS_DARK_OAK_LEAVES_POOLS: &[LootPool] = &[
@@ -6619,7 +6695,10 @@ static BLOCKS_DEEPSLATE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouch,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouch,
+            LootCondition::SurvivesExplosion,
+        ]),
         bonus_formula: None,
     },
 ];
@@ -7801,7 +7880,10 @@ static BLOCKS_FERN_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouchOrShears,
+            LootCondition::RandomChance { chance: 0.125f32 },
+        ]),
         bonus_formula: Some(LootBonusFormula::UniformBonusCount(2i32)),
     },
 ];
@@ -7851,7 +7933,10 @@ static BLOCKS_FIRE_CORAL_BLOCK_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouch,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouch,
+            LootCondition::SurvivesExplosion,
+        ]),
         bonus_formula: None,
     },
 ];
@@ -7969,7 +8054,15 @@ static BLOCKS_FLOWERING_AZALEA_LEAVES_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouchOrShears,
+            LootCondition::AllOf(&[
+                LootCondition::SurvivesExplosion,
+                LootCondition::TableBonus {
+                    chances: &[0.05f32, 0.0625f32, 0.083333336f32, 0.1f32],
+                },
+            ]),
+        ]),
         bonus_formula: None,
     },
 ];
@@ -7978,7 +8071,9 @@ static BLOCKS_FLOWERING_AZALEA_LEAVES_POOL1_ENTRIES: &[LootEntry] = &[LootEntry 
     weight: 1i32,
     min_count: 1i32,
     max_count: 2i32,
-    condition: LootCondition::None,
+    condition: LootCondition::TableBonus {
+        chances: &[0.02f32, 0.022222223f32, 0.025f32, 0.033333335f32, 0.1f32],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_FLOWERING_AZALEA_LEAVES_POOLS: &[LootPool] = &[
@@ -8040,7 +8135,12 @@ static BLOCKS_GILDED_BLACKSTONE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 2i32,
         max_count: 5i32,
-        condition: LootCondition::NoSilkTouch,
+        condition: LootCondition::AllOf(&[
+            LootCondition::AllOf(&[LootCondition::NoSilkTouch, LootCondition::SurvivesExplosion]),
+            LootCondition::TableBonus {
+                chances: &[0.1f32, 0.14285715f32, 0.25f32, 1f32],
+            },
+        ]),
         bonus_formula: None,
     },
     LootEntry {
@@ -8048,7 +8148,10 @@ static BLOCKS_GILDED_BLACKSTONE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouch,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouch,
+            LootCondition::SurvivesExplosion,
+        ]),
         bonus_formula: None,
     },
 ];
@@ -8294,7 +8397,10 @@ static BLOCKS_GRASS_BLOCK_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouch,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouch,
+            LootCondition::SurvivesExplosion,
+        ]),
         bonus_formula: None,
     },
 ];
@@ -8322,7 +8428,12 @@ static BLOCKS_GRAVEL_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouch,
+        condition: LootCondition::AllOf(&[
+            LootCondition::AllOf(&[LootCondition::NoSilkTouch, LootCondition::SurvivesExplosion]),
+            LootCondition::TableBonus {
+                chances: &[0.1f32, 0.14285715f32, 0.25f32, 1f32],
+            },
+        ]),
         bonus_formula: None,
     },
     LootEntry {
@@ -8330,7 +8441,10 @@ static BLOCKS_GRAVEL_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouch,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouch,
+            LootCondition::SurvivesExplosion,
+        ]),
         bonus_formula: None,
     },
 ];
@@ -8988,7 +9102,10 @@ static BLOCKS_HORN_CORAL_BLOCK_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouch,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouch,
+            LootCondition::SurvivesExplosion,
+        ]),
         bonus_formula: None,
     },
 ];
@@ -9422,7 +9539,15 @@ static BLOCKS_JUNGLE_LEAVES_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouchOrShears,
+            LootCondition::AllOf(&[
+                LootCondition::SurvivesExplosion,
+                LootCondition::TableBonus {
+                    chances: &[0.025f32, 0.027777778f32, 0.03125f32, 0.041666668f32, 0.1f32],
+                },
+            ]),
+        ]),
         bonus_formula: None,
     },
 ];
@@ -9431,7 +9556,9 @@ static BLOCKS_JUNGLE_LEAVES_POOL1_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 2i32,
-    condition: LootCondition::None,
+    condition: LootCondition::TableBonus {
+        chances: &[0.02f32, 0.022222223f32, 0.025f32, 0.033333335f32, 0.1f32],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_JUNGLE_LEAVES_POOLS: &[LootPool] = &[
@@ -9783,7 +9910,13 @@ static BLOCKS_LARGE_FERN_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouchOrShears,
+            LootCondition::AllOf(&[
+                LootCondition::SurvivesExplosion,
+                LootCondition::RandomChance { chance: 0.125f32 },
+            ]),
+        ]),
         bonus_formula: None,
     },
 ];
@@ -9801,7 +9934,13 @@ static BLOCKS_LARGE_FERN_POOL1_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouchOrShears,
+            LootCondition::AllOf(&[
+                LootCondition::SurvivesExplosion,
+                LootCondition::RandomChance { chance: 0.125f32 },
+            ]),
+        ]),
         bonus_formula: None,
     },
 ];
@@ -11080,7 +11219,12 @@ static BLOCKS_MANGROVE_LEAVES_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 2i32,
-        condition: LootCondition::NoSilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouchOrShears,
+            LootCondition::TableBonus {
+                chances: &[0.02f32, 0.022222223f32, 0.025f32, 0.033333335f32, 0.1f32],
+            },
+        ]),
         bonus_formula: None,
     },
 ];
@@ -11676,7 +11820,10 @@ static BLOCKS_MYCELIUM_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouch,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouch,
+            LootCondition::SurvivesExplosion,
+        ]),
         bonus_formula: None,
     },
 ];
@@ -12052,7 +12199,15 @@ static BLOCKS_OAK_LEAVES_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouchOrShears,
+            LootCondition::AllOf(&[
+                LootCondition::SurvivesExplosion,
+                LootCondition::TableBonus {
+                    chances: &[0.05f32, 0.0625f32, 0.083333336f32, 0.1f32],
+                },
+            ]),
+        ]),
         bonus_formula: None,
     },
 ];
@@ -12061,7 +12216,9 @@ static BLOCKS_OAK_LEAVES_POOL1_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 2i32,
-    condition: LootCondition::None,
+    condition: LootCondition::TableBonus {
+        chances: &[0.02f32, 0.022222223f32, 0.025f32, 0.033333335f32, 0.1f32],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_OAK_LEAVES_POOL2_ENTRIES: &[LootEntry] = &[LootEntry {
@@ -12069,7 +12226,18 @@ static BLOCKS_OAK_LEAVES_POOL2_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 1i32,
-    condition: LootCondition::SurvivesExplosion,
+    condition: LootCondition::AllOf(&[
+        LootCondition::SurvivesExplosion,
+        LootCondition::TableBonus {
+            chances: &[
+                0.005f32,
+                0.0055555557f32,
+                0.00625f32,
+                0.008333334f32,
+                0.025f32,
+            ],
+        },
+    ]),
     bonus_formula: None,
 }];
 static BLOCKS_OAK_LEAVES_POOLS: &[LootPool] = &[
@@ -13084,7 +13252,15 @@ static BLOCKS_PALE_OAK_LEAVES_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouchOrShears,
+            LootCondition::AllOf(&[
+                LootCondition::SurvivesExplosion,
+                LootCondition::TableBonus {
+                    chances: &[0.05f32, 0.0625f32, 0.083333336f32, 0.1f32],
+                },
+            ]),
+        ]),
         bonus_formula: None,
     },
 ];
@@ -13093,7 +13269,9 @@ static BLOCKS_PALE_OAK_LEAVES_POOL1_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 2i32,
-    condition: LootCondition::None,
+    condition: LootCondition::TableBonus {
+        chances: &[0.02f32, 0.022222223f32, 0.025f32, 0.033333335f32, 0.1f32],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_PALE_OAK_LEAVES_POOLS: &[LootPool] = &[
@@ -13757,7 +13935,10 @@ static BLOCKS_PODZOL_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouch,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouch,
+            LootCondition::SurvivesExplosion,
+        ]),
         bonus_formula: None,
     },
 ];
@@ -17564,7 +17745,10 @@ static BLOCKS_SHORT_GRASS_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouchOrShears,
+            LootCondition::RandomChance { chance: 0.125f32 },
+        ]),
         bonus_formula: Some(LootBonusFormula::UniformBonusCount(2i32)),
     },
 ];
@@ -18138,7 +18322,10 @@ static BLOCKS_SOUL_CAMPFIRE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouch,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouch,
+            LootCondition::SurvivesExplosion,
+        ]),
         bonus_formula: None,
     },
 ];
@@ -18372,7 +18559,15 @@ static BLOCKS_SPRUCE_LEAVES_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouchOrShears,
+            LootCondition::AllOf(&[
+                LootCondition::SurvivesExplosion,
+                LootCondition::TableBonus {
+                    chances: &[0.05f32, 0.0625f32, 0.083333336f32, 0.1f32],
+                },
+            ]),
+        ]),
         bonus_formula: None,
     },
 ];
@@ -18381,7 +18576,9 @@ static BLOCKS_SPRUCE_LEAVES_POOL1_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 1i32,
     max_count: 2i32,
-    condition: LootCondition::None,
+    condition: LootCondition::TableBonus {
+        chances: &[0.02f32, 0.022222223f32, 0.025f32, 0.033333335f32, 0.1f32],
+    },
     bonus_formula: None,
 }];
 static BLOCKS_SPRUCE_LEAVES_POOLS: &[LootPool] = &[
@@ -18615,7 +18812,10 @@ static BLOCKS_STONE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouch,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouch,
+            LootCondition::SurvivesExplosion,
+        ]),
         bonus_formula: None,
     },
 ];
@@ -19478,7 +19678,13 @@ static BLOCKS_TALL_GRASS_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouchOrShears,
+            LootCondition::AllOf(&[
+                LootCondition::SurvivesExplosion,
+                LootCondition::RandomChance { chance: 0.125f32 },
+            ]),
+        ]),
         bonus_formula: None,
     },
 ];
@@ -19496,7 +19702,13 @@ static BLOCKS_TALL_GRASS_POOL1_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouchOrShears,
+            LootCondition::AllOf(&[
+                LootCondition::SurvivesExplosion,
+                LootCondition::RandomChance { chance: 0.125f32 },
+            ]),
+        ]),
         bonus_formula: None,
     },
 ];
@@ -19753,7 +19965,10 @@ static BLOCKS_TUBE_CORAL_BLOCK_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouch,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouch,
+            LootCondition::SurvivesExplosion,
+        ]),
         bonus_formula: None,
     },
 ];
@@ -19961,7 +20176,12 @@ static BLOCKS_TWISTING_VINES_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouchOrShears,
+            LootCondition::TableBonus {
+                chances: &[0.33f32, 0.55f32, 0.77f32, 1f32],
+            },
+        ]),
         bonus_formula: None,
     },
 ];
@@ -19989,7 +20209,12 @@ static BLOCKS_TWISTING_VINES_PLANT_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouchOrShears,
+            LootCondition::TableBonus {
+                chances: &[0.33f32, 0.55f32, 0.77f32, 1f32],
+            },
+        ]),
         bonus_formula: None,
     },
 ];
@@ -20183,7 +20408,10 @@ static BLOCKS_WARPED_NYLIUM_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouch,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouch,
+            LootCondition::SurvivesExplosion,
+        ]),
         bonus_formula: None,
     },
 ];
@@ -21759,7 +21987,12 @@ static BLOCKS_WEEPING_VINES_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouchOrShears,
+            LootCondition::TableBonus {
+                chances: &[0.33f32, 0.55f32, 0.77f32, 1f32],
+            },
+        ]),
         bonus_formula: None,
     },
 ];
@@ -21787,7 +22020,12 @@ static BLOCKS_WEEPING_VINES_PLANT_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::NoSilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::NoSilkTouchOrShears,
+            LootCondition::TableBonus {
+                chances: &[0.33f32, 0.55f32, 0.77f32, 1f32],
+            },
+        ]),
         bonus_formula: None,
     },
 ];

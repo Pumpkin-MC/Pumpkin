@@ -9,7 +9,10 @@ use pumpkin_world::level::SyncChunk;
 use std::{
     net::SocketAddr,
     num::NonZero,
-    sync::{Arc, atomic::Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 
 use pumpkin_data::translation;
@@ -119,6 +122,17 @@ pub enum PacketHandlerResult {
     ReadyToPlay(GameProfile, PlayerConfig),
 }
 
+/// Maximum payload bytes that may be queued for a client before it is considered stalled/overflowing and disconnected.
+pub const MAX_PENDING_BYTES: usize = 64 * 1024 * 1024; // 64 MB
+
+/// Defensively decrement an atomic pending byte counter without underflowing.
+#[inline]
+pub fn decrement_pending_bytes(pending_bytes: &AtomicUsize, bytes: usize) {
+    let _ = pending_bytes.fetch_update(Ordering::Release, Ordering::Relaxed, |val| {
+        Some(val.saturating_sub(bytes))
+    });
+}
+
 /// This is just a Wrapper for both Java & Bedrock connections
 #[expect(clippy::large_enum_variant)]
 pub enum ClientPlatform {
@@ -173,6 +187,14 @@ impl ClientPlatform {
         match self {
             Self::Java(_) => BedrockMinecraftVersion::Unknown,
             Self::Bedrock(bedrock) => bedrock.version.load(),
+        }
+    }
+
+    #[must_use]
+    pub fn pending_bytes(&self) -> usize {
+        match self {
+            Self::Java(java) => java.pending_bytes.load(Ordering::Relaxed),
+            Self::Bedrock(bedrock) => bedrock.pending_bytes.load(Ordering::Relaxed),
         }
     }
 
@@ -693,5 +715,19 @@ mod tests {
             !is_valid_player_name(&name),
             "Name containing DEL (127) should be invalid"
         );
+    }
+
+    #[test]
+    fn decrement_pending_bytes_saturating() {
+        use super::decrement_pending_bytes;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let counter = AtomicUsize::new(100);
+        decrement_pending_bytes(&counter, 40);
+        assert_eq!(counter.load(Ordering::Relaxed), 60);
+
+        // Underflow protection: decrementing more than current value should clamp to 0
+        decrement_pending_bytes(&counter, 100);
+        assert_eq!(counter.load(Ordering::Relaxed), 0);
     }
 }

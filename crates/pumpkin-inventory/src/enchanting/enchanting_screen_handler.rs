@@ -6,6 +6,7 @@ use pumpkin_data::data_component_impl::EnchantableImpl;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::screen::WindowType;
+use pumpkin_data::sound::Sound;
 use pumpkin_data::statistic::{CustomStatistic, StatisticCategory};
 use pumpkin_data::tag::{Enchantment as EnchantmentTag, Taggable};
 use pumpkin_util::random::{RandomImpl, legacy_rand::LegacyRand};
@@ -385,6 +386,10 @@ impl ScreenHandler for EnchantingTableScreenHandler {
 
         self.update_enchantments(player);
         self.send_content_updates();
+
+        // Vanilla plays the table use sound at a random pitch in [0.9, 1.0)
+        let pitch = rand::random::<f32>().mul_add(0.1, 0.9);
+        player.play_block_sound(Sound::BlockEnchantmentTableUse, pitch);
 
         player.increment_stat(
             StatisticCategory::Custom,

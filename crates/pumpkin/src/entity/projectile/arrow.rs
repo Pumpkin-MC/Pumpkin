@@ -1013,6 +1013,19 @@ impl EntityBase for ArrowEntity {
             _ => {}
         }
 
+        if let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id)
+            && let Some(server) = player.world().server.upgrade()
+        {
+            let mut event = crate::plugin::api::events::player::player_pickup_arrow::PlayerPickupArrowEvent::new(
+                player_arc,
+                self.entity.entity_id,
+            );
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return;
+            }
+        }
+
         // Try to insert an arrow into the player's inventory
         let item_stack = self
             .item_stack

@@ -34,9 +34,9 @@ pub fn get_world_gen(
     flat_biome: String,
 ) -> Box<generator::WorldGenerator> {
     if is_flat {
-        Box::new(generator::WorldGenerator::Flat(
+        Box::new(generator::WorldGenerator::Flat(Box::new(
             generator::flat::FlatGenerator::new(seed, dimension, flat_layers, flat_biome),
-        ))
+        )))
     } else {
         Box::new(generator::WorldGenerator::Noise(Box::new(
             VanillaGenerator::new(seed, dimension),

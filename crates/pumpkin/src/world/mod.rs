@@ -20,6 +20,7 @@ use tracing::{debug, error, info, trace, warn};
 mod active_chunks;
 pub mod chunker;
 pub mod explosion;
+pub mod generation_cache;
 pub mod loot;
 pub mod map;
 pub mod portal;
@@ -169,9 +170,13 @@ pub mod custom_bossbar;
 pub mod dragon_fight;
 pub mod end_podium;
 pub mod entity_tracker;
+pub mod environment;
 pub mod natural_spawner;
 pub mod scoreboard;
 pub mod weather;
+
+pub use environment::EnvironmentAttributes;
+pub use pumpkin_data::environment_attribute::{Activity, MoonPhase};
 
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
 use pumpkin_config::lighting::LightingEngineConfig;
@@ -3404,6 +3409,8 @@ impl World {
             ))
             .await;
 
+        self.pair_new_player_with_tracked_entities(player);
+
         // Send the current ticking state to the new player so they are in sync.
         server.tick_rate_manager.update_joining_player(player).await;
 
@@ -4213,6 +4220,87 @@ impl World {
         }
     }
 
+    pub(crate) fn despawn_dead_java_player_for_bedrock(&self, subject: &Entity) {
+        let Some(player) = self.get_player_by_id(subject.entity_id) else {
+            return;
+        };
+        if matches!(player.client.as_ref(), ClientPlatform::Java(_)) {
+            self.broadcast_to_chunk_bedrock(
+                subject.chunk_pos.load(),
+                &CRemoveActor::new(VarLong(subject.entity_id.into())),
+            );
+        }
+    }
+
+    async fn refresh_java_player_for_bedrock(&self, subject: &Player) {
+        if !matches!(subject.client.as_ref(), ClientPlatform::Java(_)) {
+            return;
+        }
+
+        let entity = subject.get_entity();
+        let entity_id = subject.entity_id();
+        let position = entity.pos.load();
+        let velocity = entity.velocity.load();
+        let player_list = CPlayerList {
+            action: CPlayerList::ACTION_ADD,
+            entries: vec![PlayerListEntry {
+                uuid: subject.gameprofile.id,
+                entity_unique_id: VarLong(entity_id.into()),
+                username: subject.gameprofile.name.clone(),
+                xuid: String::new(),
+                platform_chat_id: String::new(),
+                build_platform: BuildPlatform::Unknown,
+                skin: (**subject.bedrock_skin.load()).clone(),
+                is_teacher: false,
+                is_host: false,
+                is_sub_client: false,
+                player_color: [0; 4],
+            }],
+        };
+        let add_player = CAddPlayer {
+            uuid: subject.gameprofile.id,
+            player_name: subject.gameprofile.name.clone(),
+            target_runtime_id: VarULong(entity_id as u64),
+            platform_chat_id: String::new(),
+            position: Vector3::new(position.x as f32, position.y as f32, position.z as f32),
+            velocity: Vector3::new(velocity.x as f32, velocity.y as f32, velocity.z as f32),
+            rotation: Vector2::new(entity.pitch.load(), entity.yaw.load()),
+            y_head_rotation: entity.head_yaw.load(),
+            carried_item: NetworkItemStackDescriptor::default(),
+            player_game_type: subject.gamemode.load().into(),
+            entity_data: entity.bedrock_metadata(),
+            synced_properties: PropertySyncData::default(),
+            abilities_data: pumpkin_protocol::bedrock::client::SerializedAbilitiesData {
+                target_player_raw_id: entity_id as i64,
+                player_permissions:
+                    pumpkin_protocol::bedrock::client::PlayerPermissionLevel::Visitor,
+                command_permissions: pumpkin_protocol::bedrock::client::CommandPermissionLevel::Any,
+                layers: vec![
+                    pumpkin_protocol::bedrock::client::SerializedAbilitiesDataSerializedLayer {
+                        serialized_layer: 0,
+                        abilities_set: 0,
+                        ability_value: 0,
+                        fly_speed: 0.05,
+                        vertical_fly_speed: 0.05,
+                        walk_speed: 0.1,
+                    },
+                ],
+            },
+            actor_links: Vec::new(),
+            device_id: String::new(),
+            build_platform: BuildPlatform::Unknown,
+        };
+        let remove = CRemoveActor::new(VarLong(entity_id.into()));
+
+        for recipient in self.players.load().iter() {
+            if let ClientPlatform::Bedrock(client) = recipient.client.as_ref() {
+                client.send_packet(&remove).await;
+                client.send_packet(&player_list).await;
+                client.send_packet(&add_player).await;
+            }
+        }
+    }
+
     #[allow(clippy::too_many_lines)]
     pub async fn respawn_player(self: &Arc<Self>, player: &Arc<Player>, alive: bool) {
         let last_pos = player.get_entity().last_pos.load();
@@ -4499,6 +4587,8 @@ impl World {
 
         // Send teleport packet after at least the center chunk was delivered
         player.request_teleport(position, yaw, pitch);
+
+        target_world.refresh_java_player_for_bedrock(player).await;
     }
 
     /// Returns true if enough players are sleeping and we should skip the night.
@@ -4981,6 +5071,12 @@ impl World {
         Ok(())
     }
 
+    /// Must only be called after the player's own `CLogin` packet has been sent.
+    pub fn pair_new_player_with_tracked_entities(&self, player: &Arc<Player>) {
+        self.entity_tracker
+            .pair_new_player_with_tracked_entities(player, self);
+    }
+
     /// Removes a player from the world and broadcasts a disconnect message if enabled.
     ///
     /// This function removes a player from the world based on their `Player` reference.
@@ -5349,8 +5445,10 @@ impl World {
             }
 
             if flags.contains(BlockFlags::NOTIFY_NEIGHBORS) {
-                self.update_neighbors(position, None);
-                // TODO: updateNeighbourForOutputSignal if blockState.hasAnalogOutputSignal()
+                self.update_neighbors_at(position, old_block, None);
+                if block_state_id.has_analog_output_signal() {
+                    self.update_neighbour_for_output_signal(position, new_block);
+                }
             }
 
             if !flags.contains(BlockFlags::MOVED) {
@@ -5394,9 +5492,15 @@ impl World {
             }
         }
 
-        self.level
-            .light_engine
-            .update_lighting_at(&self.level, *position);
+        let old_state = replaced_block_state_id.to_state();
+        let new_state = block_state_id.to_state();
+        if pumpkin_world::lighting::LightEngine::has_different_light_properties(
+            old_state, new_state,
+        ) {
+            self.level
+                .light_engine
+                .update_lighting_at(&self.level, *position);
+        }
 
         replaced_block_state_id
     }
@@ -5457,10 +5561,111 @@ impl World {
         Some(self.set_block_state(position, new_state_id, flags))
     }
 
+    #[must_use]
+    pub const fn environment_attributes(&self) -> EnvironmentAttributes<'_> {
+        EnvironmentAttributes::new(self)
+    }
+
+    #[must_use]
+    pub fn get_sky_darken(&self) -> i32 {
+        let sky_light_level = self.environment_attributes().get_dimension_value_f32(
+            pumpkin_data::environment_attribute::EnvironmentAttribute::GameplaySkyLightLevel,
+        );
+        (15.0 - sky_light_level).clamp(0.0, 15.0) as i32
+    }
+
+    #[must_use]
+    pub fn is_bright_outside(&self) -> bool {
+        !self.dimension.has_fixed_time && self.get_sky_darken() < 4
+    }
+
+    #[must_use]
+    pub fn is_dark_outside(&self) -> bool {
+        !self.dimension.has_fixed_time && !self.is_bright_outside()
+    }
+
+    /// Checks if daylight burns undead monsters (`EnvironmentAttributes.MONSTERS_BURN`).
+    #[must_use]
+    pub fn monsters_burn(&self, pos: &BlockPos) -> bool {
+        self.environment_attributes().get_value_bool(
+            pumpkin_data::environment_attribute::EnvironmentAttribute::GameplayMonstersBurn,
+            pos,
+        )
+    }
+
+    /// Checks if bees should stay inside beehives/nests (`EnvironmentAttributes.BEES_STAY_IN_HIVE`).
+    #[must_use]
+    pub fn bees_stay_in_hive(&self, pos: &BlockPos) -> bool {
+        self.environment_attributes().get_value_bool(
+            pumpkin_data::environment_attribute::EnvironmentAttribute::GameplayBeesStayInHive,
+            pos,
+        )
+    }
+
+    /// Checks if a creaking heart is active (`EnvironmentAttributes.CREAKING_ACTIVE`).
+    #[must_use]
+    pub fn creaking_active(&self, pos: &BlockPos) -> bool {
+        self.environment_attributes().get_value_bool(
+            pumpkin_data::environment_attribute::EnvironmentAttribute::GameplayCreakingActive,
+            pos,
+        )
+    }
+
+    /// Checks if an eyeblossom flower should be open (`EnvironmentAttributes.EYEBLOSSOM_OPEN`).
+    #[must_use]
+    pub fn eyeblossom_open(&self, pos: &BlockPos) -> Option<bool> {
+        self.environment_attributes().get_value_tri_state(
+            pumpkin_data::environment_attribute::EnvironmentAttribute::GameplayEyeblossomOpen,
+            pos,
+        )
+    }
+
+    #[must_use]
+    pub fn get_effective_sky_brightness(&self, pos: &BlockPos) -> i32 {
+        let sky_light = self.get_sky_light_level(pos) as i32;
+        sky_light - self.get_sky_darken()
+    }
+
+    #[must_use]
+    pub fn get_sun_angle(&self, pos: &BlockPos) -> f32 {
+        let sun_angle_deg = self.environment_attributes().get_value_f32(
+            pumpkin_data::environment_attribute::EnvironmentAttribute::VisualSunAngle,
+            pos,
+        );
+        sun_angle_deg * (std::f32::consts::PI / 180.0)
+    }
+
+    #[must_use]
+    pub fn get_moon_phase(&self) -> MoonPhase {
+        self.environment_attributes()
+            .get_dimension_value_moon_phase()
+    }
+
+    #[must_use]
+    pub fn can_pillager_patrol_spawn(&self, pos: &BlockPos) -> bool {
+        self.environment_attributes().get_value_bool(
+            pumpkin_data::environment_attribute::EnvironmentAttribute::GameplayCanPillagerPatrolSpawn,
+            pos,
+        )
+    }
+
+    #[must_use]
+    pub fn surface_slime_spawn_chance(&self, pos: &BlockPos) -> f32 {
+        self.environment_attributes().get_value_f32(
+            pumpkin_data::environment_attribute::EnvironmentAttribute::GameplaySurfaceSlimeSpawnChance,
+            pos,
+        )
+    }
+
+    #[must_use]
+    pub fn villager_activity(&self, pos: &BlockPos, baby: bool) -> Activity {
+        self.environment_attributes().get_value_activity(baby, pos)
+    }
+
     pub fn get_max_local_raw_brightness(&self, pos: &BlockPos) -> u8 {
-        let sky_light = self.get_sky_light_level(pos);
+        let sky_light = (self.get_sky_light_level(pos) as i32 - self.get_sky_darken()).max(0) as u8;
         let block_light = self.get_block_light_level(pos).unwrap_or(0);
-        sky_light.max(block_light) // TODO: getSkyDarken
+        sky_light.max(block_light)
     }
 
     pub fn get_block_light_level(&self, position: &BlockPos) -> Option<u8> {
@@ -5888,13 +6093,13 @@ impl World {
         (Block::from_state_id(id), id)
     }
 
-    /// Updates neighboring blocks of a block
-    pub fn update_neighbors(
+    /// Updates neighboring blocks of a block with a specified source block
+    pub fn update_neighbors_at(
         self: &Arc<Self>,
         block_pos: &BlockPos,
+        source_block: &Block,
         except: Option<BlockDirection>,
     ) {
-        let source_block = self.get_block(block_pos);
         for direction in BlockDirection::update_order() {
             if except.is_some_and(|d| d == direction) {
                 continue;
@@ -5940,6 +6145,16 @@ impl World {
         }
     }
 
+    /// Updates neighboring blocks of a block
+    pub fn update_neighbors(
+        self: &Arc<Self>,
+        block_pos: &BlockPos,
+        except: Option<BlockDirection>,
+    ) {
+        let source_block = self.get_block(block_pos);
+        self.update_neighbors_at(block_pos, source_block, except);
+    }
+
     pub fn update_neighbor(self: &Arc<Self>, neighbor_block_pos: &BlockPos, source_block: &Block) {
         let neighbor_block = self.get_block(neighbor_block_pos);
 
@@ -5964,6 +6179,30 @@ impl World {
                 source_block,
                 notify: false,
             });
+        }
+    }
+
+    pub fn update_neighbour_for_output_signal(
+        self: &Arc<Self>,
+        pos: &BlockPos,
+        changed_block: &Block,
+    ) {
+        for direction in BlockDirection::horizontal() {
+            let mut relative_pos = pos.offset(direction.to_offset());
+            if self.is_loaded(&relative_pos) {
+                let state = self.get_block_state(&relative_pos);
+                if state.id.to_block() == &Block::COMPARATOR {
+                    self.update_neighbor(&relative_pos, changed_block);
+                } else if state.is_solid_block() {
+                    relative_pos = relative_pos.offset(direction.to_offset());
+                    if self.is_loaded(&relative_pos) {
+                        let second_state = self.get_block_state(&relative_pos);
+                        if second_state.id.to_block() == &Block::COMPARATOR {
+                            self.update_neighbor(&relative_pos, changed_block);
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -7216,6 +7455,82 @@ impl WorldPortalExt for WorldPortal {
             self.0.spawn_entity(entity);
         }
     }
+}
+
+struct CubicCurve {
+    a: f32,
+    b: f32,
+    c: f32,
+}
+
+impl CubicCurve {
+    fn new(v1: f32, v2: f32) -> Self {
+        Self {
+            a: 3.0 * v1 - 3.0 * v2 + 1.0,
+            b: -6.0 * v1 + 3.0 * v2,
+            c: 3.0 * v1,
+        }
+    }
+
+    fn sample(&self, t: f32) -> f32 {
+        ((self.a * t + self.b) * t + self.c) * t
+    }
+
+    fn sample_gradient(&self, t: f32) -> f32 {
+        (3.0 * self.a * t + 2.0 * self.b) * t + self.c
+    }
+}
+
+/// Calculates the celestial (sun) angle fraction in `[0.0, 1.0]`.
+/// Matches vanilla 26.2 `EnvironmentAttributes.SUN_ANGLE` easing with `symmetricCubicBezier(0.362, 0.241)`.
+#[must_use]
+pub fn calculate_celestial_angle(time_of_day: i64) -> f32 {
+    let ticks = time_of_day.rem_euclid(24000);
+    let alpha = if ticks < 6000 {
+        (ticks + 18000) as f32 / 24000.0
+    } else {
+        (ticks - 6000) as f32 / 24000.0
+    };
+
+    let x_curve = CubicCurve::new(0.362, 0.638);
+    let y_curve = CubicCurve::new(0.241, 0.759);
+
+    let mut t = alpha;
+    let mut solved = false;
+    for _ in 0..4 {
+        let error = x_curve.sample(t) - alpha;
+        if error.abs() < 1e-5 {
+            solved = true;
+            break;
+        }
+        let gradient = x_curve.sample_gradient(t);
+        if gradient < 1e-5 {
+            break;
+        }
+        t -= (error / gradient).clamp(-0.25, 0.25);
+    }
+
+    if !solved {
+        let mut t0 = 0.0f32;
+        let mut t1 = 1.0f32;
+        for _ in 0..64 {
+            if t0 >= t1 {
+                break;
+            }
+            let error = x_curve.sample(t) - alpha;
+            if error.abs() < 1e-5 {
+                break;
+            }
+            if error < 0.0 {
+                t0 = t;
+            } else {
+                t1 = t;
+            }
+            t = f32::midpoint(t1, t0);
+        }
+    }
+
+    y_curve.sample(t)
 }
 
 #[cfg(test)]

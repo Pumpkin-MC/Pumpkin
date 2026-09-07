@@ -155,6 +155,9 @@ impl Goal for BreakDoorGoal {
                 );
             if let Some(server) = world.server.upgrade() {
                 server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return;
+                }
             }
             world.set_block_state(&door_pos, BlockStateId::AIR, BlockFlags::NOTIFY_ALL);
             world.sync_world_event(

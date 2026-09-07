@@ -6,6 +6,7 @@ use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
 
+use crate::command::CommandSource;
 use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
 use crate::command::argument_types::FromStringReader;
 use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
@@ -50,7 +51,7 @@ const ERROR_CREATE_FAILED: CommandErrorType<1> = CommandErrorType::new(
 #[derive(Clone, Copy)]
 pub struct BossbarIdArgumentType;
 
-impl ArgumentType for BossbarIdArgumentType {
+impl ArgumentType<CommandSource> for BossbarIdArgumentType {
     type Item = String;
 
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {
@@ -85,7 +86,7 @@ pub struct BossbarColorArgumentType;
 
 const COLORS: [&str; 7] = ["blue", "green", "pink", "purple", "red", "white", "yellow"];
 
-impl ArgumentType for BossbarColorArgumentType {
+impl ArgumentType<CommandSource> for BossbarColorArgumentType {
     type Item = BossbarColor;
 
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {
@@ -138,7 +139,7 @@ const STYLES: [&str; 5] = [
     "progress",
 ];
 
-impl ArgumentType for BossbarStyleArgumentType {
+impl ArgumentType<CommandSource> for BossbarStyleArgumentType {
     type Item = BossbarDivisions;
 
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {

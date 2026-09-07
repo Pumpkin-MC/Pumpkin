@@ -313,7 +313,7 @@ impl PendingConnection {
 
     async fn handle_login_packet(
         &mut self,
-        server: &Server,
+        server: &Arc<Server>,
         packet: &RawPacket,
     ) -> Result<Option<PacketHandlerResult>, ReadingError> {
         debug!("Handling login group");

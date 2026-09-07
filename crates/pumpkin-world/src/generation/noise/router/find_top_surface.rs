@@ -69,7 +69,7 @@ impl StaticChunkNoiseFunctionComponentImpl for FindTopSurface {
     ) -> f32 {
         let upper = ChunkNoiseFunctionComponent::sample_from_stack(
             &mut component_stack[..=self.upper_bound_index],
-            pos,
+            &Vector3::new(pos.x, 0, pos.z),
         );
         self.find_surface_from(component_stack, pos.x, pos.z, upper)
     }
@@ -80,7 +80,7 @@ impl StaticChunkNoiseFunctionComponentImpl for FindTopSurface {
         buffer: &mut [f32],
         volume: &DensityVolume,
     ) {
-        if volume.size_y != 1 {
+        if volume.size_y != 1 || volume.min_block_y != 0 {
             let column_volume = DensityVolume::new(
                 volume.size_x,
                 1,
@@ -129,26 +129,15 @@ impl FindTopSurface {
         z: i32,
         upper: f32,
     ) -> f32 {
-        let density = ChunkNoiseFunctionComponent::sample_from_stack(
-            &mut component_stack[..=self.density_index],
-            &Vector3::new(x, upper.floor() as i32, z),
-        );
-        if density > 0.0 {
-            return upper;
-        }
-
         let cell_height = self.data.cell_height;
         let lower_bound = self.data.lower_bound;
 
-        // Snap upper bound down to nearest cell boundary, matching Java:
-        // int topY = Mth.floor(this.upperBound.compute(context) / this.cellHeight) * this.cellHeight
         let top_y = (upper / cell_height as f32).floor() as i32 * cell_height;
 
         if top_y <= lower_bound {
             return lower_bound as f32;
         }
 
-        // Walk downward in cellHeight steps, return the first Y where density > 0.0
         let mut y = top_y;
         while y >= lower_bound {
             let sample_pos = Vector3::new(x, y, z);
