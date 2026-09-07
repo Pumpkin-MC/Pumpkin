@@ -201,7 +201,7 @@ impl LivingEntity {
         let is_baby = self
             .get_mob()
             .and_then(|x| x.as_ageable())
-            .is_some_and(|x| x.is_baby());
+            .is_some_and(AgeableMob::is_baby);
 
         let mut rng = rand::rng();
         if is_baby {
