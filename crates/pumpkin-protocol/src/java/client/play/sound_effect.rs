@@ -97,7 +97,7 @@ impl ClientPacket for CSoundEffect {
         }
 
         if *version >= JavaMinecraftVersion::V_1_19 {
-            write.write_i64_be(self.seed as i64)?;
+            write.write_i64_be(self.seed)?;
         }
 
         Ok(())
