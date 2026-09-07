@@ -133,6 +133,7 @@ impl OutgoingPacket {
     }
 }
 
+/// A single oversized packet is framed alone.
 fn take_frame_batch(packets: &mut VecDeque<FramePacket>) -> Vec<FramePacket> {
     let mut batch = Vec::new();
     let mut data_len = 0usize;
@@ -166,6 +167,7 @@ fn frame_packet_batch<W: AsyncWrite + Unpin>(
     (writer, frame, frame_err)
 }
 
+/// Compressing batches are framed on a blocking task.
 async fn frame_batch_maybe_offload<W: AsyncWrite + Unpin + Send + 'static>(
     writer: TCPNetworkEncoder<W>,
     packet_batch: Vec<FramePacket>,
@@ -292,6 +294,7 @@ async fn next_step(
     state: &FlushState,
     ctx: &WriterCtx,
 ) -> WriterStep {
+    // Order: close, tick barrier, packets, 50ms fallback.
     tokio::select! {
         biased;
         () = ctx.close_token.cancelled() => WriterStep::Stop,
@@ -463,6 +466,7 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
             state.complete_pending();
         }
 
+        // Flushed above already, so skip the final flush.
         if disconnected {
             return;
         }

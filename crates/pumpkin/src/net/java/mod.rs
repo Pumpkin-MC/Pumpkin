@@ -453,6 +453,7 @@ impl JavaClient {
             return None;
         }
 
+        // Reserve first, release again if it does not fit.
         let packet_len = packet_data.len();
         let prev_bytes = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
         let new_bytes = prev_bytes.saturating_add(packet_len);

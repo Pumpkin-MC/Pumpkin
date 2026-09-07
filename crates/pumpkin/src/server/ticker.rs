@@ -137,11 +137,13 @@ fn apply_overload_skip(
     last_overload_warning: Option<Instant>,
     this_tick_nanos: i64,
 ) -> (Instant, Option<Instant>, Option<(i64, i64)>) {
+    // Sprint tick: reset the deadline, keep the warning clock.
     if this_tick_nanos <= 0 {
         return (now, last_overload_warning, None);
     }
 
     let behind_nanos = signed_nanos(now, next_tick);
+    // Vanilla measures from the scheduled tick. `i64::MAX` means never warned.
     let since_warning =
         last_overload_warning.map_or(i64::MAX, |warned| signed_nanos(next_tick, warned));
 
