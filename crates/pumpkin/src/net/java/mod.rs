@@ -562,12 +562,26 @@ impl JavaClient {
         if let Some(data) = serialized {
             let packet_len = data.len();
             let _ = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
-            if self
+            if let Err(err) = self
                 .outgoing_packet_queue_send
                 .try_send(OutgoingPacket::normal(data))
-                .is_err()
             {
                 decrement_pending_bytes(&self.pending_bytes, packet_len);
+                match err {
+                    tokio::sync::mpsc::error::TrySendError::Full(_) => {
+                        warn!(
+                            "Disconnect packet for client {} dropped: outgoing packet queue full. The client sees a bare connection close.",
+                            self.id
+                        );
+                    }
+                    // Expected: the writer task is already gone.
+                    tokio::sync::mpsc::error::TrySendError::Closed(_) => {
+                        debug!(
+                            "Disconnect packet for client {} dropped: outgoing packet queue closed",
+                            self.id
+                        );
+                    }
+                }
             }
         }
         let reason_text = reason.clone().get_text();
