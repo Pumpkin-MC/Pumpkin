@@ -166,6 +166,10 @@ fn get_chest_comparator_output(args: &GetComparatorOutputArgs<'_>) -> Option<u8>
     }
 }
 
+/// Returns a screen handler factory for opening a chest or double chest inventory.
+///
+/// Unpacks deferred loot tables on first open (for non-spectator players) and combines
+/// connected inventories for double chests if neither chest half is obstructed.
 fn get_chest_screen_handler_factory(
     args: GetScreenHandlerFactoryArgs<'_>,
 ) -> Option<Box<dyn ScreenHandlerFactory>> {
@@ -181,27 +185,19 @@ fn get_chest_screen_handler_factory(
         ChestType::Right => Some(chest_props.facing.rotate_counter_clockwise()),
     };
 
-    // Unpack deferred loot tables on first open (non-spectator only).
-    // Both halves of a double chest are unpacked at once, like vanilla's CompoundContainer.
-    if !player_is_spectator {
-        let unpack = |entity: &Arc<dyn BlockEntity>| {
-            if let Some((loot_key, seed)) = entity.take_loot_table()
-                && let Some(table) = get_loot_table(&loot_key)
-                && let Some(inv) = entity.clone().get_inventory()
-            {
-                fill_chest_inventory(&inv, table, seed);
-                inv.mark_dirty();
-            }
-        };
-        if let Some(ref entity) = first_chest {
-            unpack(entity);
-        }
-        if let Some(direction) = connected_towards
-            && let Some(second) =
-                args.world.get_block_entity(&args.position.offset(direction.to_offset()))
+    let unpack = |entity: &Arc<dyn BlockEntity>| {
+        if let Some((loot_key, seed)) = entity.take_loot_table()
+            && let Some(table) = get_loot_table(&loot_key)
+            && let Some(inv) = entity.clone().get_inventory()
         {
-            unpack(&second);
+            fill_chest_inventory(&inv, table, seed);
+            inv.mark_dirty();
         }
+    };
+
+    // Unpack deferred loot table on first open (non-spectator only).
+    if !player_is_spectator && let Some(ref entity) = first_chest {
+        unpack(entity);
     }
 
     let first_inventory = first_chest.and_then(BlockEntity::get_inventory)?;
@@ -215,6 +211,16 @@ fn get_chest_screen_handler_factory(
         if is_chest_blocked(args.world, &neighbor_pos) {
             return None;
         }
+    }
+
+    // Both halves of a double chest are unpacked at once, like vanilla's CompoundContainer.
+    if !player_is_spectator
+        && let Some(direction) = connected_towards
+        && let Some(second) = args
+            .world
+            .get_block_entity(&args.position.offset(direction.to_offset()))
+    {
+        unpack(&second);
     }
 
     let inventory = if let Some(direction) = connected_towards
