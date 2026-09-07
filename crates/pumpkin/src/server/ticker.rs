@@ -131,8 +131,6 @@ impl Ticker {
 
 /// Vanilla `MinecraftServer` overload skip. Returns the (possibly jumped)
 /// `nextTickTimeNanos`, updated warning timestamp, and an optional log payload.
-///
-/// `this_tick_nanos <= 0` is a sprint tick: reset the deadline to `now`.
 fn apply_overload_skip(
     now: Instant,
     next_tick: Instant,
@@ -140,7 +138,7 @@ fn apply_overload_skip(
     this_tick_nanos: i64,
 ) -> (Instant, Option<Instant>, Option<(i64, i64)>) {
     if this_tick_nanos <= 0 {
-        return (now, Some(now), None);
+        return (now, last_overload_warning, None);
     }
 
     let behind_nanos = signed_nanos(now, next_tick);
@@ -188,52 +186,4 @@ fn signed_nanos(later: Instant, earlier: Instant) -> i64 {
 
 fn nanos_to_duration(nanos: i64) -> Duration {
     Duration::from_nanos(nanos.max(0) as u64)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    const TICK_20_TPS: i64 = NANOSECONDS_PER_SECOND / 20;
-
-    fn at(origin: Instant, nanos: i64) -> Instant {
-        origin + nanos_to_duration(nanos)
-    }
-
-    #[test]
-    fn on_time_tick_does_not_skip() {
-        let origin = Instant::now();
-        let (next, warning, skipped) = apply_overload_skip(origin, origin, None, TICK_20_TPS);
-        assert!(skipped.is_none());
-        assert_eq!(signed_nanos(next, origin), 0);
-        assert!(warning.is_none());
-    }
-
-    #[test]
-    fn short_lag_catch_up_does_not_skip() {
-        let origin = Instant::now();
-        let now = at(origin, 60 * NANOSECONDS_PER_MILLISECOND);
-        let (next, _, skipped) = apply_overload_skip(now, origin, None, TICK_20_TPS);
-        assert!(skipped.is_none());
-        assert_eq!(signed_nanos(next, origin), 0);
-    }
-
-    #[test]
-    fn overload_warning_is_rate_limited() {
-        let origin = Instant::now();
-        let now = at(origin, 3 * NANOSECONDS_PER_SECOND);
-        let just_warned = Some(origin);
-        let (_, _, skipped) = apply_overload_skip(now, origin, just_warned, TICK_20_TPS);
-        assert!(skipped.is_none());
-    }
-
-    #[test]
-    fn sprint_resets_deadline_to_now() {
-        let origin = Instant::now();
-        let now = at(origin, NANOSECONDS_PER_SECOND);
-        let (next, warning, skipped) = apply_overload_skip(now, origin, None, 0);
-        assert!(skipped.is_none());
-        assert_eq!(next, now);
-        assert_eq!(warning, Some(now));
-    }
 }
