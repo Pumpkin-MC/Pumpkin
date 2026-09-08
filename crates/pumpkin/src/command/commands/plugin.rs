@@ -1,5 +1,5 @@
 use std::fmt::Write;
-use std::path::Path;
+use std::path::PathBuf;
 
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
@@ -13,10 +13,54 @@ use crate::command::context::command_context::CommandContext;
 use crate::command::context::command_source::CommandSource;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
+use crate::command::suggestion::provider::{SuggestionProvider, SuggestionProviderResult};
+use crate::command::suggestion::suggestions::SuggestionsBuilder;
 use crate::plugin::{PluginEntry, PluginStatus};
 
 const DESCRIPTION: &str = "Manage server plugins.";
 const PERMISSION: &str = "pumpkin:command.plugin";
+
+/// Which plugins a `<plugin>` argument completes to.
+enum Suggested {
+    /// Everything the manager knows, by name
+    Known,
+    /// Only what is running, for `unload`
+    Active,
+    /// Only what is not running, for `load`
+    Loadable,
+}
+
+struct PluginSuggestions(Suggested);
+
+impl SuggestionProvider for PluginSuggestions {
+    fn suggest(
+        &self,
+        context: &CommandContext,
+        builder: SuggestionsBuilder,
+    ) -> SuggestionProviderResult {
+        let manager = &context.server().plugin_manager;
+        let candidates = match self.0 {
+            Suggested::Known => manager.plugin_names(),
+            Suggested::Active => manager
+                .active_plugins()
+                .into_iter()
+                .map(|metadata| metadata.name)
+                .collect(),
+            Suggested::Loadable => manager.inactive_names(),
+        };
+
+        // The argument is a quotable phrase, so anything with a space has to come back quoted
+        builder
+            .filter_and_suggest_iter(candidates.into_iter().map(|candidate| {
+                if candidate.contains(' ') {
+                    format!("\"{candidate}\"")
+                } else {
+                    candidate
+                }
+            }))
+            .build()
+    }
+}
 
 /// Green while running, yellow while starting, red for everything that is not.
 pub(super) const fn status_color(status: &PluginStatus) -> NamedColor {
@@ -125,31 +169,38 @@ struct LoadExecutor;
 
 impl CommandExecutor for LoadExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
-        let plugin_name = StringArgumentType::get(context, "plugin")?.to_string();
+        let argument = StringArgumentType::get(context, "plugin")?.to_string();
         let server_arc = context.server().clone();
 
-        if server_arc.plugin_manager.is_plugin_active(&plugin_name) {
-            context.source.send_feedback(
-                TextComponent::text(format!("Plugin {plugin_name} is already loaded")),
-                false,
-            );
-            return Ok(1);
-        }
-
         let source_clone = context.source.clone();
-        let plugin_name_clone = plugin_name;
         let server_clone = server_arc.clone();
         server_arc.spawn_task(async move {
+            // Takes a name like the other subcommands, a path is only needed for a file the
+            // manager has never seen
+            let entry = server_clone.plugin_manager.plugin_entry(&argument).await;
+            let (name, path) = entry.as_ref().map_or_else(
+                || (argument.clone(), PathBuf::from(&argument)),
+                |entry| (entry.name().into_owned(), entry.path.clone()),
+            );
+
+            if entry.is_some_and(|entry| entry.status.is_active()) {
+                source_clone.send_feedback(
+                    TextComponent::text(format!("Plugin {name} is already loaded")),
+                    false,
+                );
+                return;
+            }
+
             let result = server_clone
                 .plugin_manager
-                .try_load_plugin(&server_clone, Path::new(&plugin_name_clone))
+                .try_load_plugin(&server_clone, &path)
                 .await
-                .map_err(|e| format!("Failed to load plugin {plugin_name_clone}: {e}"));
+                .map_err(|e| format!("Failed to load plugin {name}: {e}"));
 
             send_result(
                 &source_clone,
                 result,
-                format!("Plugin {plugin_name_clone} loaded successfully"),
+                format!("Plugin {name} loaded successfully"),
             );
         });
 
@@ -383,18 +434,34 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
             .requires(PERMISSION)
             .then(literal("list").executes(ListExecutor))
             // Quotable rather than a single word: `load` takes a path, and names can contain spaces
-            .then(literal("load").then(
-                argument("plugin", StringArgumentType::QuotablePhrase).executes(LoadExecutor),
-            ))
-            .then(literal("unload").then(
-                argument("plugin", StringArgumentType::QuotablePhrase).executes(UnloadExecutor),
-            ))
-            .then(literal("reload").then(
-                argument("plugin", StringArgumentType::QuotablePhrase).executes(ReloadExecutor),
-            ))
-            .then(literal("info").then(
-                argument("plugin", StringArgumentType::QuotablePhrase).executes(InfoExecutor),
-            ))
+            .then(
+                literal("load").then(
+                    argument("plugin", StringArgumentType::QuotablePhrase)
+                        .suggests(PluginSuggestions(Suggested::Loadable))
+                        .executes(LoadExecutor),
+                ),
+            )
+            .then(
+                literal("unload").then(
+                    argument("plugin", StringArgumentType::QuotablePhrase)
+                        .suggests(PluginSuggestions(Suggested::Active))
+                        .executes(UnloadExecutor),
+                ),
+            )
+            .then(
+                literal("reload").then(
+                    argument("plugin", StringArgumentType::QuotablePhrase)
+                        .suggests(PluginSuggestions(Suggested::Known))
+                        .executes(ReloadExecutor),
+                ),
+            )
+            .then(
+                literal("info").then(
+                    argument("plugin", StringArgumentType::QuotablePhrase)
+                        .suggests(PluginSuggestions(Suggested::Known))
+                        .executes(InfoExecutor),
+                ),
+            )
             .then(
                 literal("hotreload")
                     .then(literal("enable").executes(HotReloadExecutor(true)))

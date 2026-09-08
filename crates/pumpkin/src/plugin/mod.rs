@@ -268,7 +268,7 @@ pub struct PluginManager {
     handlers: Arc<ArcSwap<HandlerMap>>,
     unloaded_files: RwLock<HashSet<PathBuf>>,
     /// Plugin files that are known but not running, by path
-    inactive: RwLock<HashMap<PathBuf, PluginEntry>>,
+    inactive: SyncRwLock<HashMap<PathBuf, PluginEntry>>,
     services: Arc<RwLock<HashMap<String, Arc<dyn Payload>>>>,
     // Plugin state tracking
     plugin_states: RwLock<HashMap<String, PluginState>>,
@@ -327,7 +327,7 @@ impl PluginManager {
             ]),
             handlers: Arc::new(ArcSwap::from_pointee(HashMap::new())),
             unloaded_files: RwLock::new(HashSet::new()),
-            inactive: RwLock::new(HashMap::new()),
+            inactive: SyncRwLock::new(HashMap::new()),
             services: Arc::new(RwLock::new(HashMap::new())),
             plugin_states: RwLock::new(HashMap::new()),
             state_notify: Arc::new(Notify::new()),
@@ -698,7 +698,11 @@ impl PluginManager {
                         .write()
                         .await
                         .insert(plugin_name.clone(), PluginState::Loaded);
-                    self_ref_clone.inactive.write().await.remove(&plugin_path);
+                    self_ref_clone
+                        .inactive
+                        .write()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .remove(&plugin_path);
                     state_notify.notify_waiters();
 
                     info!("Loaded {} ({})", metadata.name, metadata.version);
@@ -748,13 +752,11 @@ impl PluginManager {
                         .await
                         .insert(plugin_name.clone(), PluginState::Failed(error_msg.clone()));
                     // Keep it listed with its error, so it can be tried again
-                    self_ref_clone
-                        .mark_inactive(
-                            &plugin_path,
-                            Some(&metadata),
-                            PluginStatus::Failed(error_msg.clone()),
-                        )
-                        .await;
+                    self_ref_clone.mark_inactive(
+                        &plugin_path,
+                        Some(&metadata),
+                        PluginStatus::Failed(error_msg.clone()),
+                    );
                     state_notify.notify_waiters();
 
                     error!("Failed to initialize plugin {plugin_name}: {error_msg}",);
@@ -796,8 +798,7 @@ impl PluginManager {
                 .extension()
                 .is_some_and(|ext| ext.eq_ignore_ascii_case("deactivated"))
             {
-                self.mark_inactive(&path, None, PluginStatus::Disabled)
-                    .await;
+                self.mark_inactive(&path, None, PluginStatus::Disabled);
                 continue;
             }
 
@@ -815,8 +816,7 @@ impl PluginManager {
                                     "Plugin \"{}\" is disabled in configuration, skipping.",
                                     metadata.name
                                 );
-                                self.mark_inactive(&path, Some(&metadata), PluginStatus::Disabled)
-                                    .await;
+                                self.mark_inactive(&path, Some(&metadata), PluginStatus::Disabled);
                                 loader_found = true;
                                 break;
                             }
@@ -840,8 +840,7 @@ impl PluginManager {
                                         &path,
                                         Some(&metadata),
                                         PluginStatus::Unsigned,
-                                    )
-                                    .await;
+                                    );
                                     loader_found = true;
                                     break;
                                 }
@@ -859,8 +858,7 @@ impl PluginManager {
                         Err(err) => {
                             error!("Failed to load plugin from {:?}: {}", path, err);
                             // No metadata -> the file never named itself
-                            self.mark_inactive(&path, None, PluginStatus::Failed(err.to_string()))
-                                .await;
+                            self.mark_inactive(&path, None, PluginStatus::Failed(err.to_string()));
                             loader_found = true;
                         }
                     }
@@ -915,8 +913,7 @@ impl PluginManager {
                         "Permission denied for plugin \"{}\", skipping loading.",
                         metadata.name
                     );
-                    self.mark_inactive(&path, Some(&metadata), PluginStatus::PermissionDenied)
-                        .await;
+                    self.mark_inactive(&path, Some(&metadata), PluginStatus::PermissionDenied);
                     continue;
                 }
 
@@ -1040,8 +1037,7 @@ impl PluginManager {
                     Err(err) => {
                         error!("Failed to load plugin from {:?}: {}", path, err);
                         // No metadata -> the file never named itself
-                        self.mark_inactive(path, None, PluginStatus::Failed(err.to_string()))
-                            .await;
+                        self.mark_inactive(path, None, PluginStatus::Failed(err.to_string()));
                         return Err(err.into());
                     }
                 };
@@ -1088,8 +1084,7 @@ impl PluginManager {
                         "Permission denied for plugin \"{}\", skipping loading.",
                         metadata.name
                     );
-                    self.mark_inactive(path, Some(&metadata), PluginStatus::PermissionDenied)
-                        .await;
+                    self.mark_inactive(path, Some(&metadata), PluginStatus::PermissionDenied);
                     return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
                         "Permission denied".to_string(),
                     )));
@@ -1240,8 +1235,14 @@ impl PluginManager {
         };
         drop(states);
 
-        for entry in self.inactive.read().await.values() {
-            push_unless_known(&mut entries, entry.clone());
+        {
+            let inactive = self
+                .inactive
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for entry in inactive.values() {
+                push_unless_known(&mut entries, entry.clone());
+            }
         }
 
         for path in self.unloaded_files.read().await.iter() {
@@ -1275,22 +1276,66 @@ impl PluginManager {
     }
 
     /// Records why a plugin file is not running, so it can be reported and not only logged.
-    async fn mark_inactive(
-        &self,
-        path: &Path,
-        metadata: Option<&PluginMetadata>,
-        status: PluginStatus,
-    ) {
-        self.inactive.write().await.insert(
-            path.to_path_buf(),
-            PluginEntry {
-                metadata: metadata.cloned(),
-                path: path.to_path_buf(),
-                status,
-                // Nothing is resident, so there is nothing that could block a load
-                can_unload: true,
-            },
-        );
+    fn mark_inactive(&self, path: &Path, metadata: Option<&PluginMetadata>, status: PluginStatus) {
+        self.inactive
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(
+                path.to_path_buf(),
+                PluginEntry {
+                    metadata: metadata.cloned(),
+                    path: path.to_path_buf(),
+                    status,
+                    // Nothing is resident, so there is nothing that could block a load
+                    can_unload: true,
+                },
+            );
+    }
+
+    /// Names of every plugin the manager knows, running or not, for command completion.
+    #[must_use]
+    pub fn plugin_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = {
+            let plugins = self
+                .plugins
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            plugins.iter().map(|p| p.metadata.name.clone()).collect()
+        };
+
+        let inactive_names: Vec<String> = {
+            let inactive = self
+                .inactive
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            inactive
+                .values()
+                .map(|entry| entry.name().into_owned())
+                .collect()
+        };
+        names.extend(inactive_names);
+
+        names.sort();
+        names.dedup();
+        names
+    }
+
+    /// Names of plugins that are known but not running, for completing `load`.
+    #[must_use]
+    pub fn inactive_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = {
+            let inactive = self
+                .inactive
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            inactive
+                .values()
+                .map(|entry| entry.name().into_owned())
+                .collect()
+        };
+
+        names.sort();
+        names
     }
 
     /// Unload a plugin by name
@@ -1319,8 +1364,7 @@ impl PluginManager {
                 plugin.loader.unload(data).await?;
             }
             // Dropped from `plugins`, so remember it here or it vanishes from every view
-            self.mark_inactive(&plugin.path, Some(&plugin.metadata), PluginStatus::Unloaded)
-                .await;
+            self.mark_inactive(&plugin.path, Some(&plugin.metadata), PluginStatus::Unloaded);
         } else {
             plugin.is_active = false;
             self.plugins
