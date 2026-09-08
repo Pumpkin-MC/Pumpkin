@@ -13,6 +13,7 @@ use crate::block::{
 use crate::block::entities::shulker_box::ShulkerBoxBlockEntity;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::translation;
+use pumpkin_inventory::Inventory;
 use pumpkin_inventory::generic_container_screen_handler::create_generic_9x3;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
@@ -20,7 +21,6 @@ use pumpkin_inventory::screen_handler::{
 };
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::inventory::Inventory;
 
 struct ShulkerBoxScreenFactory(Arc<dyn Inventory>);
 

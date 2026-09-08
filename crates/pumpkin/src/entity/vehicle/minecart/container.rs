@@ -9,10 +9,10 @@ use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
     InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
 };
+use pumpkin_inventory::{Clearable, Inventory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::inventory::{Clearable, Inventory};
 
 use crate::entity::{Entity, player::Player};
 use crate::world::loot::fill_chest_inventory;
@@ -273,8 +273,8 @@ mod tests {
     use super::MinecartInventory;
     use pumpkin_data::item::Item;
     use pumpkin_data::item_stack::ItemStack;
+    use pumpkin_inventory::Inventory;
     use pumpkin_nbt::compound::NbtCompound;
-    use pumpkin_world::inventory::Inventory;
 
     #[test]
     fn deferred_mineshaft_loot_is_preserved_until_unpacked() {
