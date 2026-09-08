@@ -351,13 +351,17 @@ impl PluginManager {
                 .collect()
         };
 
+        // Keep unloading the rest even if one fails, but report the failure so a caller
+        // like `reload_all_plugins` does not rescan while a plugin's resources are still resident
+        let mut first_error = None;
         for name in plugin_names {
             if let Err(e) = self.unload_plugin(&name).await {
                 error!("Failed to unload plugin {name}: {e}");
+                first_error.get_or_insert(e);
             }
         }
 
-        Ok(())
+        first_error.map_or(Ok(()), Err)
     }
 
     /// Unload everything that can be unloaded, then rescan the plugin directory.
