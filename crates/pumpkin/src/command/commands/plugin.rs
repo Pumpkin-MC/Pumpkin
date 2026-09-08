@@ -1,3 +1,4 @@
+use std::fmt::Write;
 use std::path::Path;
 
 use pumpkin_util::PermissionLvl;
@@ -9,56 +10,112 @@ use pumpkin_util::text::hover::HoverEvent;
 use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
 use crate::command::argument_types::core::string::StringArgumentType;
 use crate::command::context::command_context::CommandContext;
+use crate::command::context::command_source::CommandSource;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
+use crate::plugin::{PluginEntry, PluginStatus};
 
 const DESCRIPTION: &str = "Manage server plugins.";
 const PERMISSION: &str = "pumpkin:command.plugin";
+
+/// Green while running, yellow while starting, red for everything that is not.
+pub(super) const fn status_color(status: &PluginStatus) -> NamedColor {
+    match status {
+        PluginStatus::Active => NamedColor::Green,
+        PluginStatus::Loading => NamedColor::Yellow,
+        _ => NamedColor::Red,
+    }
+}
+
+/// plugin Tooltip -> tells about itself, plus why it is not running.
+pub(super) fn hover_text(entry: &PluginEntry) -> String {
+    let mut text = entry.metadata.as_ref().map_or_else(
+        || format!("File: {}", entry.path.display()),
+        |metadata| {
+            format!(
+                "Version: {}\nAuthors: {}\nDescription: {}",
+                metadata.version,
+                metadata.authors.join(", "),
+                metadata.description
+            )
+        },
+    );
+
+    if !entry.status.is_active() {
+        let _ = write!(text, "\nStatus: {}", entry.status);
+    }
+
+    text
+}
+
+/// Sends the outcome of a plugin operation, green on success and red on failure.
+fn send_result(source: &CommandSource, result: Result<(), String>, success: String) {
+    match result {
+        Ok(()) => source.send_feedback(
+            TextComponent::text(success).color_named(NamedColor::Green),
+            true,
+        ),
+        Err(message) => source.send_feedback(
+            TextComponent::text(message).color_named(NamedColor::Red),
+            false,
+        ),
+    }
+}
 
 struct ListExecutor;
 
 impl CommandExecutor for ListExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let server_arc = context.server().clone();
-        let plugins = server_arc.plugin_manager.active_plugins();
-        let loaded_plugins = server_arc.plugin_manager.loaded_plugins();
+        let source_clone = context.source.clone();
+        let server_clone = server_arc.clone();
 
-        let mut message = TextComponent::text(format!("Plugins ({}):", loaded_plugins.len()))
-            .color_named(NamedColor::Gold)
-            .add_child(TextComponent::text("\n"));
+        server_arc.spawn_task(async move {
+            let entries = server_clone.plugin_manager.plugin_entries().await;
+            let active = entries.iter().filter(|e| e.status.is_active()).count();
 
-        for (i, plugin) in plugins.iter().enumerate() {
-            let metadata = plugin;
-            let version = metadata
-                .version
-                .strip_prefix('v')
-                .unwrap_or(&metadata.version);
-            let line = if i == plugins.len() - 1 {
-                format!("- {} (v{version})", metadata.name)
-            } else {
-                format!("- {} (v{version})\n", metadata.name)
-            };
-            let hover_text = format!(
-                "Version: {}\nAuthors: {}\nDescription: {}",
-                metadata.version,
-                metadata.authors.join(", "),
-                metadata.description
-            );
-            let mut plugin_component = TextComponent::text(line)
-                .color_named(NamedColor::Green)
-                .hover_event(HoverEvent::show_text(TextComponent::text(hover_text)));
+            let mut message = TextComponent::text(format!("Plugins ({active}/{}):", entries.len()))
+                .color_named(NamedColor::Gold)
+                .add_child(TextComponent::text("\n"));
 
-            if !metadata.permissions.is_empty() {
-                plugin_component = plugin_component.add_child(
-                    TextComponent::text(format!(" (Permissions: {:?})", metadata.permissions))
-                        .color_named(NamedColor::Gray),
+            for (i, entry) in entries.iter().enumerate() {
+                let name = entry.name();
+                let line = entry.metadata.as_ref().map_or_else(
+                    || format!("- {name}"),
+                    |metadata| {
+                        let version = metadata
+                            .version
+                            .strip_prefix('v')
+                            .unwrap_or(&metadata.version);
+                        format!("- {name} (v{version})")
+                    },
                 );
+                let line = if i == entries.len() - 1 {
+                    line
+                } else {
+                    format!("{line}\n")
+                };
+
+                let mut plugin_component = TextComponent::text(line)
+                    .color_named(status_color(&entry.status))
+                    .hover_event(HoverEvent::show_text(TextComponent::text(hover_text(
+                        entry,
+                    ))));
+
+                if let Some(metadata) = &entry.metadata
+                    && !metadata.permissions.is_empty()
+                {
+                    plugin_component = plugin_component.add_child(
+                        TextComponent::text(format!(" (Permissions: {:?})", metadata.permissions))
+                            .color_named(NamedColor::Gray),
+                    );
+                }
+
+                message = message.add_child(plugin_component);
             }
 
-            message = message.add_child(plugin_component);
-        }
-
-        context.source.send_feedback(message, false);
+            source_clone.send_feedback(message, false);
+        });
 
         Ok(1)
     }
@@ -86,27 +143,14 @@ impl CommandExecutor for LoadExecutor {
             let result = server_clone
                 .plugin_manager
                 .try_load_plugin(&server_clone, Path::new(&plugin_name_clone))
-                .await;
+                .await
+                .map_err(|e| format!("Failed to load plugin {plugin_name_clone}: {e}"));
 
-            match result {
-                Ok(()) => {
-                    source_clone.send_feedback(
-                        TextComponent::text(format!(
-                            "Plugin {plugin_name_clone} loaded successfully"
-                        ))
-                        .color_named(NamedColor::Green),
-                        true,
-                    );
-                }
-                Err(e) => {
-                    source_clone.send_feedback(
-                        TextComponent::text(format!(
-                            "Failed to load plugin {plugin_name_clone}: {e}"
-                        )),
-                        false,
-                    );
-                }
-            }
+            send_result(
+                &source_clone,
+                result,
+                format!("Plugin {plugin_name_clone} loaded successfully"),
+            );
         });
 
         Ok(1)
@@ -135,27 +179,145 @@ impl CommandExecutor for UnloadExecutor {
             let result = server_clone
                 .plugin_manager
                 .unload_plugin(&plugin_name_clone)
-                .await;
+                .await
+                .map_err(|e| format!("Failed to unload plugin {plugin_name_clone}: {e}"));
 
-            match result {
-                Ok(()) => {
-                    source_clone.send_feedback(
-                        TextComponent::text(format!(
-                            "Plugin {plugin_name_clone} unloaded successfully"
-                        ))
-                        .color_named(NamedColor::Green),
-                        true,
-                    );
-                }
-                Err(e) => {
-                    source_clone.send_feedback(
-                        TextComponent::text(format!(
-                            "Failed to unload plugin {plugin_name_clone}: {e}"
-                        )),
-                        false,
-                    );
-                }
+            send_result(
+                &source_clone,
+                result,
+                format!("Plugin {plugin_name_clone} unloaded successfully"),
+            );
+        });
+
+        Ok(1)
+    }
+}
+
+struct ReloadExecutor;
+
+impl CommandExecutor for ReloadExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let plugin_name = StringArgumentType::get(context, "plugin")?.to_string();
+        let server_arc = context.server().clone();
+
+        let source_clone = context.source.clone();
+        let server_clone = server_arc.clone();
+        server_arc.spawn_task(async move {
+            // The manager has no reload: unload takes a name, load takes the file it came from
+            let Some(entry) = server_clone.plugin_manager.plugin_entry(&plugin_name).await else {
+                source_clone.send_feedback(
+                    TextComponent::text(format!("Plugin {plugin_name} is not known"))
+                        .color_named(NamedColor::Red),
+                    false,
+                );
+                return;
+            };
+
+            // Loading it a second time would leave two copies registered
+            if !entry.can_unload {
+                source_clone.send_feedback(
+                    TextComponent::text(format!(
+                        "Plugin {plugin_name} cannot be unloaded at runtime, restart the server"
+                    ))
+                    .color_named(NamedColor::Red),
+                    false,
+                );
+                return;
             }
+
+            if server_clone.plugin_manager.is_plugin_loaded(&plugin_name)
+                && let Err(e) = server_clone
+                    .plugin_manager
+                    .unload_plugin(&plugin_name)
+                    .await
+            {
+                source_clone.send_feedback(
+                    TextComponent::text(format!("Failed to unload plugin {plugin_name}: {e}"))
+                        .color_named(NamedColor::Red),
+                    false,
+                );
+                return;
+            }
+
+            let result = server_clone
+                .plugin_manager
+                .try_load_plugin(&server_clone, &entry.path)
+                .await
+                // The plugin is unloaded at this point, so say so
+                .map_err(|e| {
+                    format!("Plugin {plugin_name} was unloaded but could not be loaded again: {e}")
+                });
+
+            send_result(
+                &source_clone,
+                result,
+                format!("Plugin {plugin_name} reloaded successfully"),
+            );
+        });
+
+        Ok(1)
+    }
+}
+
+/// One gray detail line appended to a `/plugin info` message.
+fn info_line(message: TextComponent, text: String) -> TextComponent {
+    message
+        .add_child(TextComponent::text("\n"))
+        .add_child(TextComponent::text(text).color_named(NamedColor::Gray))
+}
+
+/// Full `/plugin info` message for one entry: name, status, path, and metadata when there is any.
+fn info_message(entry: &PluginEntry) -> TextComponent {
+    let mut message = TextComponent::text(entry.name().into_owned())
+        .color_named(NamedColor::Gold)
+        .add_child(TextComponent::text("\n"))
+        .add_child(
+            TextComponent::text(format!("Status: {}", entry.status))
+                .color_named(status_color(&entry.status)),
+        );
+    message = info_line(message, format!("Path: {}", entry.path.display()));
+
+    let Some(metadata) = &entry.metadata else {
+        return message;
+    };
+
+    message = info_line(message, format!("Version: {}", metadata.version));
+    message = info_line(message, format!("Authors: {}", metadata.authors.join(", ")));
+    message = info_line(message, format!("Description: {}", metadata.description));
+
+    if !metadata.dependencies.is_empty() {
+        message = info_line(
+            message,
+            format!("Dependencies: {}", metadata.dependencies.join(", ")),
+        );
+    }
+    if !metadata.permissions.is_empty() {
+        message = info_line(message, format!("Permissions: {:?}", metadata.permissions));
+    }
+
+    message
+}
+
+struct InfoExecutor;
+
+impl CommandExecutor for InfoExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let plugin_name = StringArgumentType::get(context, "plugin")?.to_string();
+        let server_arc = context.server().clone();
+
+        let source_clone = context.source.clone();
+        let server_clone = server_arc.clone();
+        server_arc.spawn_task(async move {
+            let Some(entry) = server_clone.plugin_manager.plugin_entry(&plugin_name).await else {
+                source_clone.send_feedback(
+                    TextComponent::text(format!("Plugin {plugin_name} is not known"))
+                        .color_named(NamedColor::Red),
+                    false,
+                );
+                return;
+            };
+
+            source_clone.send_feedback(info_message(&entry), false);
         });
 
         Ok(1)
@@ -220,16 +382,19 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         command("plugin", DESCRIPTION)
             .requires(PERMISSION)
             .then(literal("list").executes(ListExecutor))
-            .then(
-                literal("load").then(
-                    argument("plugin", StringArgumentType::SingleWord).executes(LoadExecutor),
-                ),
-            )
-            .then(
-                literal("unload").then(
-                    argument("plugin", StringArgumentType::SingleWord).executes(UnloadExecutor),
-                ),
-            )
+            // Quotable rather than a single word: `load` takes a path, and names can contain spaces
+            .then(literal("load").then(
+                argument("plugin", StringArgumentType::QuotablePhrase).executes(LoadExecutor),
+            ))
+            .then(literal("unload").then(
+                argument("plugin", StringArgumentType::QuotablePhrase).executes(UnloadExecutor),
+            ))
+            .then(literal("reload").then(
+                argument("plugin", StringArgumentType::QuotablePhrase).executes(ReloadExecutor),
+            ))
+            .then(literal("info").then(
+                argument("plugin", StringArgumentType::QuotablePhrase).executes(InfoExecutor),
+            ))
             .then(
                 literal("hotreload")
                     .then(literal("enable").executes(HotReloadExecutor(true)))
