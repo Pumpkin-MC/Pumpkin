@@ -220,6 +220,7 @@ use crate::block::blocks::jukebox::JukeboxBlock;
 use crate::block::blocks::ladder::LadderBlock;
 use crate::block::blocks::lanterns::LanternBlock;
 use crate::block::blocks::lectern::LecternBlock;
+use crate::block::blocks::netherrack::NetherrackBlock;
 use crate::block::blocks::respawn_anchor::RespawnAnchorBlock;
 use crate::block::blocks::rooted_dirt::RootedDirtBlock;
 use crate::block::blocks::shulker_box::ShulkerBoxBlock;
@@ -407,6 +408,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(RootedDirtBlock);
     manager.register(NyliumBlock);
     manager.register(BubbleColumnBlock);
+    manager.register(NetherrackBlock);
 
     manager.register(FallingBlock);
 
