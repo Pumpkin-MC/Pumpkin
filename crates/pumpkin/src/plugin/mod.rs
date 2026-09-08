@@ -360,6 +360,32 @@ impl PluginManager {
         Ok(())
     }
 
+    /// Unload everything that can be unloaded, then rescan the plugin directory.
+    ///
+    /// Picks up files added since the last scan, which is what separates it from reloading
+    /// plugins one by one.
+    pub async fn reload_all_plugins(
+        self: &Arc<Self>,
+        server: &Arc<Server>,
+    ) -> Result<(), ManagerError> {
+        self.unload_all_plugins().await?;
+        self.prune_missing_files().await;
+        self.load_plugins(server).await?;
+        Ok(())
+    }
+
+    /// Forget plugin files that are gone from disk, so a rescan stops listing them.
+    async fn prune_missing_files(&self) {
+        self.inactive
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .retain(|path, _| path.exists());
+        self.unloaded_files
+            .write()
+            .await
+            .retain(|path| path.exists());
+    }
+
     /// Add a new plugin loader implementation
     pub async fn add_loader(self: &Arc<Self>, server: &Arc<Server>, loader: Arc<dyn PluginLoader>) {
         self.loaders.write().await.push(loader);
@@ -717,6 +743,11 @@ impl PluginManager {
                 Err(e) => {
                     // Handle initialization failure
                     let error_msg = format!("Initialization failed: {e}");
+                    // on_load may have registered handlers, commands or permissions before
+                    // failing partway through, leaving them would block every future load
+                    self_ref_clone.unregister_handlers(&plugin_name);
+                    context.unregister_commands();
+                    context.unregister_permissions();
                     let _ = instance.on_unload(context).await;
 
                     // Get the loader data before removing the plugin
@@ -808,6 +839,12 @@ impl PluginManager {
                 if loader.can_load(&path) {
                     match loader.load(&path).await {
                         Ok((instance, metadata, loader_data)) => {
+                            // A rescan must not register a second copy of something still resident
+                            if self.is_plugin_loaded(&metadata.name) {
+                                loader_found = true;
+                                break;
+                            }
+
                             let plugin_override =
                                 server.advanced_config.plugins.overrides.get(&metadata.name);
 
@@ -1354,6 +1391,7 @@ impl PluginManager {
 
         self.unregister_handlers(name);
         plugin.context.unregister_commands();
+        plugin.context.unregister_permissions();
 
         if let Some(instance) = plugin.instance.take() {
             instance.on_unload(plugin.context.clone()).await.ok();

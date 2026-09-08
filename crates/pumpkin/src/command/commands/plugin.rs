@@ -375,6 +375,50 @@ impl CommandExecutor for InfoExecutor {
     }
 }
 
+struct ReloadAllExecutor;
+
+impl CommandExecutor for ReloadAllExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let server_arc = context.server().clone();
+
+        let source_clone = context.source.clone();
+        let server_clone = server_arc.clone();
+        server_arc.spawn_task(async move {
+            if let Err(e) = server_clone
+                .plugin_manager
+                .reload_all_plugins(&server_clone)
+                .await
+            {
+                source_clone.send_feedback(
+                    TextComponent::text(format!("Failed to reload plugins: {e}"))
+                        .color_named(NamedColor::Red),
+                    false,
+                );
+                return;
+            }
+
+            let entries = server_clone.plugin_manager.plugin_entries().await;
+            let active = entries.iter().filter(|e| e.status.is_active()).count();
+            let inactive = entries.len() - active;
+
+            // Which ones are not running is what `/plugins` is for
+            let (color, note) = if inactive == 0 {
+                (NamedColor::Green, String::new())
+            } else {
+                (NamedColor::Yellow, format!(", {inactive} not running"))
+            };
+
+            source_clone.send_feedback(
+                TextComponent::text(format!("Reloaded plugins: {active} active{note}"))
+                    .color_named(color),
+                true,
+            );
+        });
+
+        Ok(1)
+    }
+}
+
 struct HotReloadExecutor(bool);
 
 impl CommandExecutor for HotReloadExecutor {
@@ -462,6 +506,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                         .executes(InfoExecutor),
                 ),
             )
+            .then(literal("reloadall").executes(ReloadAllExecutor))
             .then(
                 literal("hotreload")
                     .then(literal("enable").executes(HotReloadExecutor(true)))
