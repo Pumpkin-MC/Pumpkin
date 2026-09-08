@@ -110,21 +110,87 @@ pub(super) fn game_event_from_key(key: &str) -> Option<GameEvent> {
 /// Whether any block along the straight line between the source and the
 /// destination occludes vibration signals (wool), mirroring vanilla
 /// `VibrationSystem#isOccluded` closely enough for gameplay purposes.
+///
+/// Uses a voxel traversal (Amanatides–Woo) so every voxel the segment passes
+/// through is visited — fixed-interval sampling can miss thin overlaps.
 fn is_occluded(world: &World, source: Vector3<f64>, dest: Vector3<f64>) -> bool {
     let direction = dest - source;
-    let distance = direction.length();
-    if distance < f64::EPSILON {
+    if direction.length_squared() < f64::EPSILON {
         return false;
     }
 
-    let steps = (distance / 0.5).ceil() as i32;
-    for i in 0..=steps {
-        let t = f64::from(i) / f64::from(steps);
-        let sample = source + direction * t;
-        let pos = BlockPos::containing_vec(sample);
-        let block = world.get_block(&pos);
+    let mut current = BlockPos::containing_vec(source);
+    let end = BlockPos::containing_vec(dest);
+    let step = Vector3::new(
+        direction.x.signum() as i32,
+        direction.y.signum() as i32,
+        direction.z.signum() as i32,
+    );
+    // Fraction of the direction vector at which we cross the next voxel
+    // boundary on each axis; 1/abs(d), or infinity when d == 0.
+    let t_delta = Vector3::new(
+        if direction.x == 0.0 {
+            f64::INFINITY
+        } else {
+            1.0 / direction.x.abs()
+        },
+        if direction.y == 0.0 {
+            f64::INFINITY
+        } else {
+            1.0 / direction.y.abs()
+        },
+        if direction.z == 0.0 {
+            f64::INFINITY
+        } else {
+            1.0 / direction.z.abs()
+        },
+    );
+    // Distance along the direction vector to the first boundary crossing.
+    let mut t_max = Vector3::new(
+        if direction.x == 0.0 {
+            f64::INFINITY
+        } else if step.x > 0 {
+            (f64::from(current.0.x + 1) - source.x) / direction.x
+        } else {
+            (source.x - f64::from(current.0.x)) / -direction.x
+        },
+        if direction.y == 0.0 {
+            f64::INFINITY
+        } else if step.y > 0 {
+            (f64::from(current.0.y + 1) - source.y) / direction.y
+        } else {
+            (source.y - f64::from(current.0.y)) / -direction.y
+        },
+        if direction.z == 0.0 {
+            f64::INFINITY
+        } else if step.z > 0 {
+            (f64::from(current.0.z + 1) - source.z) / direction.z
+        } else {
+            (source.z - f64::from(current.0.z)) / -direction.z
+        },
+    );
+
+    let mut t = 0.0;
+    while t <= 1.0 {
+        let block = world.get_block(&current);
         if block.has_tag(&tag::Block::MINECRAFT_OCCLUDES_VIBRATION_SIGNALS) {
             return true;
+        }
+        if current == end {
+            break;
+        }
+        if t_max.x < t_max.y && t_max.x < t_max.z {
+            current.0.x += step.x;
+            t = t_max.x;
+            t_max.x += t_delta.x;
+        } else if t_max.y < t_max.z {
+            current.0.y += step.y;
+            t = t_max.y;
+            t_max.y += t_delta.y;
+        } else {
+            current.0.z += step.z;
+            t = t_max.z;
+            t_max.z += t_delta.z;
         }
     }
     false

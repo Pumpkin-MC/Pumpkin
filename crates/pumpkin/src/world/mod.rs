@@ -7070,16 +7070,19 @@ impl World {
     }
 
     pub fn emit_game_event(self: &Arc<Self>, event_key: impl Into<String>, position: Vector3<f64>) {
-        let key = event_key.into();
         let mut event = crate::plugin::api::events::world::generic_game::GenericGameEvent::new(
-            key.clone(),
+            event_key.into(),
             position,
         );
         if let Some(server) = self.server.upgrade() {
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
-        if let Some(event) = vibration::game_event_from_key(&key) {
-            vibration::dispatch(self, event, position);
+        if event.cancelled {
+            return;
+        }
+        // Plugins may have rewritten the event, so dispatch with the final values.
+        if let Some(game_event) = vibration::game_event_from_key(&event.event_key) {
+            vibration::dispatch(self, game_event, event.position);
         }
     }
 

@@ -3050,7 +3050,12 @@ impl EntityBase for LivingEntity {
             // walking unless the entity is sneaking (sneaking entities are in the
             // `minecraft:ignore_vibrations_sneaking` tag and are skipped).
             if !caller.get_entity().is_sneaking()
-                && caller.get_entity().velocity.load().length_squared() > 0.0001
+                && caller
+                    .get_entity()
+                    .velocity
+                    .load()
+                    .horizontal_length_squared()
+                    > 0.0001
             {
                 world.emit_game_event(GameEvent::Step.name(), caller.get_entity().pos.load());
             }
