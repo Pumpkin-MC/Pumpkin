@@ -169,15 +169,13 @@ impl JavaClient {
 
         // Broadcast the break entity status before the slot sync; the client
         // needs the old item texture in the slot for break particles.
-        if !before.is_empty() && after.is_empty() {
+        if before.is_damageable() && after.is_empty() {
             let slot = if slot_index == player.inventory.get_selected_slot() as usize {
                 &EquipmentSlot::MAIN_HAND
             } else {
                 &EquipmentSlot::OFF_HAND
             };
-            if before.is_damageable() {
-                player.increment_stat(StatisticCategory::Broken, before.item.id as i32, 1);
-            }
+            player.increment_stat(StatisticCategory::Broken, before.item.id as i32, 1);
             player.world().send_entity_status(
                 player.get_entity(),
                 equipment_break_status(slot),
