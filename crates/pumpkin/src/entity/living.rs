@@ -191,6 +191,18 @@ impl LivingEntity {
         entity_type.hurt_sound.unwrap_or(Sound::EntityGenericHurt)
     }
 
+    fn death_sound_for_entity(entity_type: &'static EntityType) -> Sound {
+        let name = match entity_type.resource_name {
+            "mooshroom" => "cow",
+            "cave_spider" => "spider",
+            "giant" => "zombie",
+            "pufferfish" => "puffer_fish",
+            "trader_llama" => "llama",
+            other => other,
+        };
+        Sound::from_name(&format!("entity.{name}.death")).unwrap_or(Sound::EntityGenericDeath)
+    }
+
     pub fn new(entity: Entity) -> Self {
         let water_movement_speed_multiplier = if entity.entity_type == &EntityType::POLAR_BEAR {
             0.98
@@ -1727,7 +1739,7 @@ impl LivingEntity {
 
             self.update_death_stats(&*dyn_self, killer);
 
-            // Plays the death sound
+            // Plays the death animation
             world.send_entity_status(&self.entity, EntityStatus::Death, Some(ActorEventID::Death));
             let looting_level;
             let tool = if let Some(cause_ent) = cause {
@@ -2824,25 +2836,16 @@ impl LivingEntity {
             position,
         );
 
-        if play_sound {
-            world.play_sound(
-                self.hurt_sound(),
-                SoundCategory::Players,
-                &self.entity.pos.load(),
-            );
-
-            if let Some(source) = source {
-                let source_pos = source.get_entity().pos.load();
-                let target_pos = self.entity.pos.load();
-                let dx = source_pos.x - target_pos.x;
-                let dz = source_pos.z - target_pos.z;
-                let resistance = self.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE);
-                self.entity
-                    .apply_knockback(knockback_after_resistance(0.4, resistance), dx, dz);
-                self.entity.send_velocity();
-            }
+        if play_sound && let Some(source) = source {
+            let source_pos = source.get_entity().pos.load();
+            let target_pos = self.entity.pos.load();
+            let dx = source_pos.x - target_pos.x;
+            let dz = source_pos.z - target_pos.z;
+            let resistance = self.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE);
+            self.entity
+                .apply_knockback(knockback_after_resistance(0.4, resistance), dx, dz);
+            self.entity.send_velocity();
         }
-
         // Vanilla parity: actuallyHurt
         let original_damage = damage_amount;
         let current_abs = self.absorption.load();
@@ -2879,6 +2882,16 @@ impl LivingEntity {
 
         let max_h = self.get_max_health();
         let new_health = (self.health.load() - dmg_to_health).clamp(0.0, max_h);
+
+        if play_sound {
+            let sound = if new_health <= 0.0 {
+                Self::death_sound_for_entity(self.entity.entity_type)
+            } else {
+                self.hurt_sound()
+            };
+
+            world.play_sound(sound, SoundCategory::Players, &self.entity.pos.load());
+        }
 
         if dmg_to_health > 0.0 {
             if let Some(player) = caller.get_player() {
@@ -3222,11 +3235,10 @@ impl EntityBase for LivingEntity {
             // Only send death particles once (on the exact tick death_time reaches 20)
             // and then remove the entity, preventing entity_event spam.
             if time == 20 && !self.entity.removed.swap(true, Ordering::Relaxed) {
-                self.entity.world.load().send_entity_status(
-                    &self.entity,
-                    EntityStatus::Death,
-                    Some(ActorEventID::Death),
-                );
+                self.entity
+                    .world
+                    .load()
+                    .send_entity_status(&self.entity, EntityStatus::Poof, None);
                 self.entity.remove();
             }
         }
@@ -3587,6 +3599,38 @@ mod tests {
         assert_eq!(
             LivingEntity::hurt_sound_for_entity(&EntityType::ENDERMAN),
             Sound::EntityEndermanHurt
+        );
+    }
+
+    #[test]
+    fn death_sound_for_entity_uses_cow_death_sound() {
+        assert_eq!(
+            LivingEntity::death_sound_for_entity(&EntityType::COW),
+            Sound::EntityCowDeath
+        );
+    }
+
+    #[test]
+    fn death_sound_for_entity_uses_mooshroom_death_sound() {
+        assert_eq!(
+            LivingEntity::death_sound_for_entity(&EntityType::MOOSHROOM),
+            Sound::EntityCowDeath
+        );
+    }
+
+    #[test]
+    fn death_sound_for_entity_uses_pufferfish_death_sound() {
+        assert_eq!(
+            LivingEntity::death_sound_for_entity(&EntityType::PUFFERFISH),
+            Sound::EntityPufferFishDeath
+        );
+    }
+
+    #[test]
+    fn death_sound_for_entity_uses_armor_stand_death_sound() {
+        assert_eq!(
+            LivingEntity::death_sound_for_entity(&EntityType::ARMOR_STAND),
+            Sound::EntityGenericDeath
         );
     }
 
