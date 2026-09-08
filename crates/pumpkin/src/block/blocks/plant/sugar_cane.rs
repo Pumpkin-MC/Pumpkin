@@ -78,11 +78,9 @@ fn can_place_at(block_accessor: &dyn BlockAccessor, block_pos: &BlockPos) -> boo
             let side = block_pos.down().offset(direction.to_offset());
             let (block, state) = block_accessor.get_block_and_state(&side);
             // Vanilla `SugarCaneBlock.canSurvive` takes *either* side, and reads the fluid
-            // tag off the fluid state, not off the block:
-            //
-            //     FluidState fluidState = level.getFluidState(blockPos);
-            //     if (fluidState.is(FluidTags.SUPPORTS_SUGAR_CANE_ADJACENTLY)
-            //         || blockState2.is(BlockTags.SUPPORTS_SUGAR_CANE_ADJACENTLY)) return true;
+            // tag off the fluid state, not off the block: the side counts when its fluid state
+            // carries the `supports_sugar_cane_adjacently` *fluid* tag, or its block state
+            // carries the block tag of the same name.
             //
             // `#minecraft:supports_sugar_cane_adjacently` is `#minecraft:water` as a fluid
             // tag and `{minecraft:frosted_ice}` as a block tag, so asking one block to carry
