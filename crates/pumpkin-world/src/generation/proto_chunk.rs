@@ -1250,12 +1250,8 @@ impl ProtoChunk {
         }
 
         // Vanilla `ChunkGenerator.applyBiomeDecoration` walks the structure registry
-        // once per decoration step and reseeds before each structure:
-        //     for (Structure s : structuresByStep.getOrDefault(stepIndex, List.of())) {
-        //         random.setFeatureSeed(decorationSeed, index, stepIndex);
-        //         startsForStructure(sectionPos, s).forEach(start -> start.placeInChunk(..., random, ...));
-        //         index++;
-        //     }
+        // once per decoration step, reseeding the feature random from the decoration seed, the
+        // running index and the step index before placing that structure's starts in the chunk.
         // `index` is the structure's position inside its step's list in registry
         // order, i.e. resource-location order, and it is counted for every
         // structure of the step whether or not the chunk holds a start of it.
@@ -1704,16 +1700,8 @@ impl GenerationCache for ProtoChunk {
 ///
 /// `ChunkGenerator.applyBiomeDecoration` groups the whole structure registry by
 /// `structure.step().ordinal()` and walks each step's list in registry order,
-/// counting one index per structure whether or not the chunk holds a start of it:
-///
-/// ```text
-/// int index = 0;
-/// for (Structure s : structuresByStep.getOrDefault(stepIndex, List.of())) {
-///     random.setFeatureSeed(decorationSeed, index, stepIndex);
-///     ...
-///     index++;
-/// }
-/// ```
+/// seeding the feature random from the decoration seed, the running index and the step index,
+/// and counting one index per structure whether or not the chunk holds a start of it.
 ///
 /// The structure registry is data-driven, so its iteration order is the
 /// resource-location order that `StructureKeys::all_names` is generated in.

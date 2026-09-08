@@ -151,14 +151,8 @@ pub const fn seed_slime_chunk(x: i32, z: i32, seed: u64, salt: u64) -> u64 {
 ///
 /// This is vanilla's `WorldgenRandom.setLargeFeatureSeed(seed, chunkX, chunkZ)`, which is
 /// shared by the carvers, the structure `GenerationContext` random and the `legacy_type_3`
-/// structure frequency reduction:
-///
-/// ```text
-/// this.setSeed(seed);
-/// long xScale = this.nextLong();
-/// long zScale = this.nextLong();
-/// this.setSeed(chunkX * xScale ^ chunkZ * zScale ^ seed);
-/// ```
+/// structure frequency reduction. It seeds with the world seed, draws two longs as the X and Z
+/// scales, and re-seeds with `chunk_x * x_scale ^ chunk_z * z_scale ^ seed`.
 ///
 /// Not to be confused with `setDecorationSeed`, which ORs the scales with 1 and *adds* the
 /// two products (see `get_population_seed`).
