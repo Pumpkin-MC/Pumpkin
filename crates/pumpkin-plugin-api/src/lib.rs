@@ -79,6 +79,8 @@ use std::sync::OnceLock;
 pub mod block;
 /// Plugin command registration and handling utilities.
 pub mod commands;
+/// Plugin configuration.
+pub mod config;
 /// Datapack management and query utilities.
 pub mod datapack;
 /// Display and interaction entity utilities and builders.

@@ -19,6 +19,7 @@ pub mod boss_bar;
 #[allow(clippy::unused_async_trait_impl)]
 pub mod commands;
 pub mod common;
+pub mod config;
 #[allow(clippy::unused_async_trait_impl)]
 pub mod context;
 #[allow(clippy::unused_async_trait_impl)]
@@ -202,10 +203,8 @@ pub async fn init_plugin(
         permissions: metadata.permissions,
     };
 
-    store
-        .data_mut()
-        .permissions
-        .clone_from(&metadata.permissions);
+    let store_data = store.data_mut();
+    store_data.permissions.clone_from(&metadata.permissions);
 
     Ok((PluginInstance::V0_1(plugin), store, metadata))
 }

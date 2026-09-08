@@ -14,16 +14,17 @@ use wasmtime_wasi_http::{
 
 use crate::{
     command::CommandSender,
-    entity::EntityBase,
-    entity::player::Player,
+    entity::{EntityBase, player::Player},
     plugin::{
         Context,
         api::gui::PluginGui,
-        loader::wasm::wasm_host::{WasmPlugin, args::OwnedArg},
+        loader::wasm::wasm_host::{WasmPlugin, args::OwnedArg, state::config::PluginConfigManager},
     },
     server::{RecipeManager, Server},
     world::World,
 };
+
+pub mod config;
 
 pub struct WasmCommand {
     pub names: Vec<String>,
@@ -141,6 +142,7 @@ pub type BanManagerResource = WasmResource<Arc<Server>>;
 pub type WhitelistManagerResource = WasmResource<Arc<Server>>;
 pub type DatapackManagerResource = WasmResource<Arc<Server>>;
 pub type BlockEntityResource = WasmResource<Arc<dyn crate::block::entities::BlockEntity>>;
+pub type ConfigResource = WasmResource<Arc<PluginConfigManager>>;
 
 #[derive(Clone)]
 pub enum InventoryProvider {
@@ -379,6 +381,16 @@ impl PluginHostState {
         let resource = self.resource_table.push(CommandSenderResource {
             provider: command_sender,
         })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
+    pub fn add_config<T>(
+        &mut self,
+        config: Arc<PluginConfigManager>,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(ConfigResource { provider: config })?;
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
 
