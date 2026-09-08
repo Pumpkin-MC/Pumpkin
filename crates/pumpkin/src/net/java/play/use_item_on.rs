@@ -263,6 +263,11 @@ impl JavaClient {
                     final_block_pos,
                     VarInt(i32::from(new_state.as_u16())),
                 ));
+                // Vanilla `BlockItem#place`: placing a block emits a block place game event.
+                player.world().emit_game_event(
+                    pumpkin_data::game_event::GameEvent::BlockPlace.name(),
+                    final_block_pos.to_centered_f64(),
+                );
                 Ok(true)
             }
             Ok(None) => Ok(false),
