@@ -79,7 +79,7 @@ pub trait CustomChunkGenerator: Send + Sync {
 
 pub enum WorldGenerator {
     Noise(Box<VanillaGenerator>),
-    Flat(flat::FlatGenerator),
+    Flat(Box<flat::FlatGenerator>),
     Custom(Arc<dyn CustomChunkGenerator>),
 }
 
@@ -145,11 +145,9 @@ impl VanillaGenerator {
         if self.settings.spawn_target.is_empty() {
             return pumpkin_util::math::position::BlockPos::ZERO;
         }
-        let options = crate::generation::noise::router::multi_noise_sampler::MultiNoiseSamplerBuilderOptions::new(1, 1, 1);
         let mut sampler =
             crate::generation::noise::router::multi_noise_sampler::MultiNoiseSampler::generate(
                 &self.base_router.multi_noise,
-                &options,
             );
         crate::biome::position_finder::SpawnFinder::find_spawn_position(
             self.settings.spawn_target,

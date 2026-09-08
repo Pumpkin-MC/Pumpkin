@@ -18,6 +18,7 @@ use crate::{
     world::WorldPortalExt,
 };
 use arc_swap::ArcSwap;
+use crossbeam::queue::SegQueue;
 use dashmap::{DashMap, Entry};
 use pumpkin_config::{chunk::ChunkConfig, lighting::LightingEngineConfig, world::LevelConfig};
 use pumpkin_data::biome::Biome;
@@ -50,6 +51,12 @@ use tokio_util::task::TaskTracker;
 pub type SyncChunk = Arc<ChunkData>;
 pub type SyncEntityChunk = Arc<ChunkEntityData>;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LoadedChunkChange {
+    Loaded(Vector2<i32>),
+    Unloaded(Vector2<i32>),
+}
+
 pub type ChunkSaver =
     LevelFileIO<LinearV2File<ChunkData>, AnvilChunkFile<ChunkData>, PumpFile<ChunkData>>;
 
@@ -80,6 +87,7 @@ pub struct Level {
     // Chunks that are paired with chunk watchers. When a chunk is no longer watched, it is removed
     // from the loaded chunks map and sent to the underlying ChunkIO
     pub loaded_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
+    pub(crate) loaded_chunk_changes: Arc<SegQueue<LoadedChunkChange>>,
     loaded_entity_chunks: Arc<DashMap<Vector2<i32>, SyncEntityChunk>>,
     pub chunks_with_scheduled_ticks: Arc<dashmap::DashSet<Vector2<i32>>>,
     pub chunk_loading: Mutex<ChunkLoading>,
@@ -263,6 +271,7 @@ impl Level {
             entity_saver,
             schedule_tick_counts: AtomicU64::new(0),
             loaded_chunks: Arc::new(DashMap::new()),
+            loaded_chunk_changes: Arc::new(SegQueue::new()),
             loaded_entity_chunks: Arc::new(DashMap::new()),
             chunks_with_scheduled_ticks: Arc::new(dashmap::DashSet::new()),
             chunk_loading: Mutex::new(ChunkLoading::new(level_channel.clone())),
@@ -634,8 +643,15 @@ impl Level {
             return res;
         }
         let chunk = self.fetch_chunk(pos).await;
-        self.loaded_chunks.insert(pos, chunk.clone());
+        if self.loaded_chunks.insert(pos, chunk.clone()).is_none() {
+            self.loaded_chunk_changes
+                .push(LoadedChunkChange::Loaded(pos));
+        }
         f(&chunk)
+    }
+
+    pub fn loaded_chunk_changes(&self) -> impl Iterator<Item = LoadedChunkChange> + '_ {
+        std::iter::from_fn(|| self.loaded_chunk_changes.pop())
     }
 
     async fn fetch_chunk(self: &Arc<Self>, pos: Vector2<i32>) -> SyncChunk {
@@ -646,7 +662,7 @@ impl Level {
                 .chunk_loading
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            lock.add_ticket(pos, 31);
+            lock.add_ticket(pos, ChunkLoading::FULL_CHUNK_LEVEL);
             lock.send_change();
         };
 
@@ -659,7 +675,7 @@ impl Level {
                 .chunk_loading
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            lock.remove_ticket(pos, 31);
+            lock.remove_ticket(pos, ChunkLoading::FULL_CHUNK_LEVEL);
             lock.send_change();
         };
 

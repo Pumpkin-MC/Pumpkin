@@ -620,6 +620,8 @@ mod tests {
                 self.traded.fetch_add(amount, Ordering::Relaxed);
             }
         }
+
+        fn play_block_sound(&self, _sound: pumpkin_data::sound::Sound, _pitch: f32) {}
     }
 
     fn inventories() -> (Arc<PlayerInventory>, Arc<SimpleInventory>) {
