@@ -334,13 +334,9 @@ impl WorldAquiferSampler {
     }
 
     /// Vanilla's four-nearest insertion sort from `Aquifer.NoiseBasedAquifer.computeSubstance`:
-    ///
-    /// ```java
-    /// if (distanceSqr1 >= newDistance) { ...shift 1..3 down...; closestIndex1 = index; }
-    /// else if (distanceSqr2 >= newDistance) { ...shift 2..3 down...; closestIndex2 = index; }
-    /// else if (distanceSqr3 >= newDistance) { closestIndex4 = closestIndex3; closestIndex3 = index; }
-    /// else if (distanceSqr4 >= newDistance) { closestIndex4 = index; }
-    /// ```
+    /// the new distance is tested against the four stored ones in slot order, and the first slot
+    /// whose stored distance is not smaller takes the candidate, shifting every slot below it
+    /// one place back.
     ///
     /// The comparison is `>=`, so a candidate that ties an already stored distance takes the
     /// *earlier* slot and pushes the stored one back.
@@ -923,10 +919,9 @@ mod random_positions_and_hypot {
         CarverAquiferSampler::new(7, 4, &PROTO_ROUTER, &RANDOM_CONFIG, settings)
     }
 
-    /// `Aquifer.NoiseBasedAquifer.computeSubstance` keeps the four nearest aquifer centres with
-    /// `if (distanceSqr1 >= newDistance) {...} else if (distanceSqr2 >= newDistance) {...} ...`.
-    /// Because the comparison is `>=` and not `>`, a candidate whose squared distance ties an
-    /// already stored one takes the *earlier* slot and pushes the stored candidate back.
+    /// `Aquifer.NoiseBasedAquifer.computeSubstance` tests a candidate against its four stored
+    /// distances with `>=`, not `>`, so one that ties an already stored distance takes the
+    /// *earlier* slot and pushes the stored candidate back.
     #[test]
     fn insert_nearest_matches_vanilla_tie_breaking() {
         let mut nearest = [(0i64, i32::MAX); 4];
@@ -949,9 +944,9 @@ mod random_positions_and_hypot {
         assert_eq!(nearest, [(21, 5), (20, 5), (10, 5), (11, 7)]);
     }
 
-    /// The twelve candidate centres must be visited x-major, then y, then z, exactly as
-    /// `for (int x1 = 0; x1 <= 1; x1++) for (int y1 = -1; y1 <= 1; y1++) for (int z1 = 0; z1 <= 1; z1++)`
-    /// in `computeSubstance`; the order is observable through the `>=` tie-breaking above.
+    /// The twelve candidate centres must be visited x-major, then y, then z — `computeSubstance`
+    /// runs X over 0..=1 outermost, Y over -1..=1, and Z over 0..=1 innermost; the order is
+    /// observable through the `>=` tie-breaking above.
     #[test]
     fn random_positions_are_returned_in_vanilla_visit_order() {
         let sampler = create_aquifer(&PROTO_ROUTER).0;

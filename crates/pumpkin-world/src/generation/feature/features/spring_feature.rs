@@ -115,11 +115,8 @@ mod tests {
 
     use super::BlockWrapper;
 
-    /// `spring_lava_overworld.json` lists its `valid_blocks` with the `minecraft:` namespace,
-    /// and vanilla resolves them into a `HolderSet<Block>` before
-    /// `SpringFeature.place` asks `level.getBlockState(origin.above()).is(config.validBlocks)`.
-    /// Comparing the namespaced id against the bare `Block::name` never matched, so no
-    /// overworld spring was ever placed.
+    /// `spring_lava_overworld.json` lists its `valid_blocks` namespaced, and vanilla resolves
+    /// them through the block registry before testing the block above the origin against them.
     #[test]
     fn namespaced_ids_resolve_to_blocks() {
         let valid = BlockWrapper::Multi(
