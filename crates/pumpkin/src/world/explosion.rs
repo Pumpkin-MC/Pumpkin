@@ -14,7 +14,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     block::{ExplodeArgs, drop_loot},
-    entity::{Entity, EntityBase, player::Player},
+    entity::{Entity, EntityBase},
     world::loot::LootContextParameters,
 };
 
@@ -445,9 +445,12 @@ impl Explosion {
                 (1.0 - distance) * exposure * knockback_multiplier * (1.0 - knockback_resistance);
             let knockback = direction * knockback_power;
 
-            // Spectator: ignored above. Creative: no `push` and no `CExplosion` impulse
-            // (`Player.hurtServer` already skips damage via invulnerable).
-            if entity_base.get_player().is_some_and(Player::is_creative) {
+            // Spectator: ignored above. Creative only stays put while flying, matching vanilla's
+            // `hitPlayers` check, still works on the ground.
+            if entity_base
+                .get_player()
+                .is_some_and(|player| player.is_creative() && player.is_flying())
+            {
                 continue;
             }
 
