@@ -12,15 +12,16 @@ use pumpkin_util::text::TextComponent;
 
 use super::container::{self, MinecartInventory};
 
+#[derive(Clone)]
 pub(super) struct HopperMinecart {
-    enabled: AtomicBool,
+    enabled: Arc<AtomicBool>,
     inventory: Arc<MinecartInventory>,
 }
 
 impl HopperMinecart {
     pub(super) fn new() -> Self {
         Self {
-            enabled: AtomicBool::new(true),
+            enabled: Arc::new(AtomicBool::new(true)),
             inventory: Arc::new(MinecartInventory::new(5)),
         }
     }
@@ -33,7 +34,7 @@ impl HopperMinecart {
         self.enabled.store(enabled, Ordering::Relaxed);
     }
 
-    pub(super) async fn tick(&self, entity: &Entity) {
+    pub(super) fn tick(&self, entity: &Entity) {
         if !self.enabled.load(Ordering::Relaxed) {
             return;
         }
@@ -41,24 +42,23 @@ impl HopperMinecart {
         let world = entity.world.load();
         let pos = entity.pos.load();
         let source_pos = BlockPos::floored(pos.x, pos.y + 1.5, pos.z);
+        let inventory = &self.inventory;
+        let cart_box = entity.bounding_box.load().expand(0.25, 0.0, 0.25);
+
         if let Some(block_entity) = world.get_block_entity(&source_pos)
             && let Some(source) = block_entity.get_inventory()
         {
             for slot in 0..source.size() {
-                let stack = source.get_stack(slot).await;
-                if stack.is_empty()
-                    || !source.can_transfer_to(self.inventory.as_ref(), slot, &stack)
-                {
+                let stack = source.get_stack(slot);
+                if stack.is_empty() || !source.can_transfer_to(inventory.as_ref(), slot, &stack) {
                     continue;
                 }
                 let backup = stack.clone();
-                let one = source.remove_stack_specific(slot, 1).await;
-                if HopperBlockEntity::add_one_item(source.as_ref(), self.inventory.as_ref(), one)
-                    .await
-                {
+                let one = source.remove_stack_specific(slot, 1);
+                if HopperBlockEntity::add_one_item(source.as_ref(), inventory.as_ref(), &one) {
                     return;
                 }
-                source.set_stack(slot, backup).await;
+                source.set_stack(slot, backup);
             }
             return;
         }
@@ -67,45 +67,60 @@ impl HopperMinecart {
             Vector3::new(pos.x - 0.5, pos.y + 0.6875, pos.z - 0.5),
             Vector3::new(pos.x + 0.5, pos.y + 2.0, pos.z + 0.5),
         );
-        if self.pick_up_item(entity, &suction_box).await {
+        if Self::pick_up_item_internal(&world, inventory, &suction_box) {
             return;
         }
-        let cart_box = entity.bounding_box.load().expand(0.25, 0.0, 0.25);
-        self.pick_up_item(entity, &cart_box).await;
+        Self::pick_up_item_internal(&world, inventory, &cart_box);
     }
 
-    async fn pick_up_item(&self, entity: &Entity, search_box: &BoundingBox) -> bool {
-        let world = entity.world.load();
+    fn pick_up_item_internal(
+        world: &Arc<crate::world::World>,
+        inventory: &Arc<MinecartInventory>,
+        search_box: &BoundingBox,
+    ) -> bool {
         for entity in world.get_entities_at_box(search_box) {
             let Some(item) = entity.get_item_entity() else {
                 continue;
             };
-            let mut stack = item.get_item_stack().lock().await;
-            if stack.is_empty() {
-                continue;
-            }
-            let backup = stack.clone();
-            let one = stack.split(1);
-            if HopperBlockEntity::add_one_item(
-                self.inventory.as_ref(),
-                self.inventory.as_ref(),
-                one,
-            )
-            .await
-            {
+            let (backup, one) = {
+                let mut stack = item
+                    .get_item_stack()
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 if stack.is_empty() {
-                    item.get_entity().remove().await;
+                    continue;
+                }
+                (stack.clone(), stack.split(1))
+            };
+            if HopperBlockEntity::add_one_item(inventory.as_ref(), inventory.as_ref(), &one) {
+                let is_empty = {
+                    let stack = item
+                        .get_item_stack()
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    stack.is_empty()
+                };
+                if is_empty {
+                    item.get_entity().remove();
                 }
                 return true;
             }
+            let mut stack = item
+                .get_item_stack()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             *stack = backup;
         }
         false
     }
 
-    pub(super) async fn interact(&self, entity: &Entity, player: &Arc<Player>) -> bool {
+    pub(super) fn interact(
+        &self,
+        custom_name: Option<TextComponent>,
+        player: &Arc<Player>,
+    ) -> bool {
         container::open(
-            entity,
+            custom_name,
             player,
             &self.inventory,
             TextComponent::translate_cross(
@@ -115,16 +130,15 @@ impl HopperMinecart {
             ),
             true,
         )
-        .await
     }
 
-    pub(super) async fn write_nbt(&self, nbt: &mut NbtCompound) {
-        self.inventory.write_nbt(nbt).await;
+    pub(super) fn write_nbt(&self, nbt: &mut NbtCompound) {
+        self.inventory.write_nbt(nbt);
         nbt.put_bool("Enabled", self.enabled.load(Ordering::Relaxed));
     }
 
-    pub(super) async fn read_nbt(&self, nbt: &NbtCompound) {
-        self.inventory.read_nbt(nbt).await;
+    pub(super) fn read_nbt(&self, nbt: &NbtCompound) {
+        self.inventory.read_nbt(nbt);
         self.enabled
             .store(nbt.get_bool("Enabled").unwrap_or(true), Ordering::Relaxed);
     }

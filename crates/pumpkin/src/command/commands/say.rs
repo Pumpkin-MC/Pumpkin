@@ -18,22 +18,17 @@ const ARG_MESSAGE: &str = "message";
 struct Executor;
 
 impl CommandExecutor for Executor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let msg = context.get_argument::<String>(ARG_MESSAGE)?;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let msg = context.get_argument::<String>(ARG_MESSAGE)?;
 
-            context
-                .server()
-                .broadcast_message(
-                    &TextComponent::text(msg.clone()),
-                    &context.source.display_name,
-                    SAY_COMMAND,
-                    None,
-                )
-                .await;
+        context.server().broadcast_message(
+            &TextComponent::text(msg.clone()),
+            &context.source.display_name,
+            SAY_COMMAND,
+            None,
+        );
 
-            Ok(1)
-        })
+        Ok(1)
     }
 }
 

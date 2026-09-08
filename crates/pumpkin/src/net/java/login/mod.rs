@@ -9,7 +9,6 @@ use pumpkin_protocol::{
         },
         login::{CLoginSuccess, CSetCompression},
     },
-    java::server::config::SKnownPacks,
     java::server::login::{
         SEncryptionResponse, SLoginCookieResponse, SLoginPluginResponse, SLoginStart,
     },

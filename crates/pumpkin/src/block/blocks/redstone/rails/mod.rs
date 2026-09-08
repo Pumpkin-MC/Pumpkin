@@ -1,5 +1,4 @@
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::block_properties::PoweredRailLikeProperties;
 use pumpkin_data::block_properties::RailLikeProperties;
@@ -180,9 +179,9 @@ impl RailProperties {
 
     pub fn new(state_id: BlockStateId, block: &Block) -> Self {
         if block == &Block::RAIL {
-            Self::Rail(RailLikeProperties::from_state_id(state_id, block))
+            Self::Rail(RailLikeProperties::from_state_id(state_id))
         } else {
-            Self::StraightRail(PoweredRailLikeProperties::from_state_id(state_id, block))
+            Self::StraightRail(PoweredRailLikeProperties::from_state_id(state_id))
         }
     }
 

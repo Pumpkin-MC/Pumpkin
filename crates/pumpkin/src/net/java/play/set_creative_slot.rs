@@ -2,7 +2,7 @@
 use super::*;
 
 impl JavaClient {
-    pub async fn handle_set_creative_slot(
+    pub fn handle_set_creative_slot(
         &self,
         player: &Arc<Player>,
         packet: SSetCreativeSlot,
@@ -25,8 +25,7 @@ impl JavaClient {
         if let Some(server) = player.world().server.upgrade() {
             server
                 .plugin_manager
-                .fire(&server, &mut creative_event)
-                .await;
+                .fire_blocking(&server, &mut creative_event);
         }
         if creative_event.cancelled {
             return Ok(());
@@ -36,30 +35,30 @@ impl JavaClient {
             item_stack.is_empty() || item_stack.item_count <= item_stack.get_max_stack_size();
 
         if valid_slot && is_legal {
-            let mut player_screen_handler = player.player_screen_handler.lock().await;
+            let mut player_screen_handler = player
+                .player_screen_handler
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             let is_armor_equipped = player_screen_handler
                 .get_slot(packet.slot as usize)
                 .get_stack()
-                .await
                 .are_equal(&item_stack);
             if !is_armor_equipped {
                 if (5..9).contains(&packet.slot) {
-                    player
-                        .enqueue_equipment_change(
-                            &match packet.slot {
-                                5 => EquipmentSlot::HEAD,
-                                6 => EquipmentSlot::CHEST,
-                                7 => EquipmentSlot::LEGS,
-                                8 => EquipmentSlot::FEET,
-                                _ => {
-                                    tracing::error!("Invalid armor slot: {}", packet.slot);
-                                    EquipmentSlot::HEAD
-                                }
-                            },
-                            &item_stack,
-                        )
-                        .await;
+                    player.enqueue_equipment_change(
+                        &match packet.slot {
+                            5 => EquipmentSlot::HEAD,
+                            6 => EquipmentSlot::CHEST,
+                            7 => EquipmentSlot::LEGS,
+                            8 => EquipmentSlot::FEET,
+                            _ => {
+                                tracing::error!("Invalid armor slot: {}", packet.slot);
+                                EquipmentSlot::HEAD
+                            }
+                        },
+                        &item_stack,
+                    );
                 } else if (36..45).contains(&packet.slot) {
                     let slot = packet.slot - 36;
                     if player.inventory().get_selected_slot() == slot as u8 {
@@ -71,14 +70,13 @@ impl JavaClient {
 
             player_screen_handler
                 .get_slot(packet.slot as usize)
-                .set_stack(item_stack.clone())
-                .await;
+                .set_stack(item_stack.clone());
             player_screen_handler.set_received_stack(packet.slot as usize, item_stack);
-            player_screen_handler.send_content_updates().await;
+            player_screen_handler.send_content_updates();
             drop(player_screen_handler);
         } else if is_negative && is_legal {
             // Item drop
-            player.drop_item(item_stack).await;
+            player.drop_item(item_stack);
         }
         Ok(())
     }

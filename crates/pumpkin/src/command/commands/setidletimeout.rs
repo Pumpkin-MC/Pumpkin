@@ -21,40 +21,35 @@ const ARG_MINUTES: &str = "minutes";
 struct SetIdleTimeoutExecutor;
 
 impl CommandExecutor for SetIdleTimeoutExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let minutes: i32 = IntegerArgumentType::get(context, ARG_MINUTES)?;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let minutes: i32 = IntegerArgumentType::get(context, ARG_MINUTES)?;
 
-            context
-                .server()
-                .player_idle_timeout
-                .store(minutes, Ordering::Relaxed);
+        context
+            .server()
+            .player_idle_timeout
+            .store(minutes, Ordering::Relaxed);
 
-            {
-                if minutes == 0 {
-                    context.source.send_feedback(
-                        TextComponent::translate_cross(
-                            "commands.setidletimeout.success.disabled",
-                            "commands.setidletimeout.success.disabled",
-                            [],
-                        ),
-                        true,
-                    )
-                } else {
-                    context.source.send_feedback(
-                        TextComponent::translate_cross(
-                            "commands.setidletimeout.success",
-                            "commands.setidletimeout.success",
-                            [TextComponent::text(minutes.to_string())],
-                        ),
-                        true,
-                    )
-                }
-            }
-            .await;
+        if minutes == 0 {
+            context.source.send_feedback(
+                TextComponent::translate_cross(
+                    "commands.setidletimeout.success.disabled",
+                    "commands.setidletimeout.success.disabled",
+                    [],
+                ),
+                true,
+            );
+        } else {
+            context.source.send_feedback(
+                TextComponent::translate_cross(
+                    "commands.setidletimeout.success",
+                    "commands.setidletimeout.success",
+                    [TextComponent::text(minutes.to_string())],
+                ),
+                true,
+            );
+        }
 
-            Ok(minutes)
-        })
+        Ok(minutes)
     }
 }
 

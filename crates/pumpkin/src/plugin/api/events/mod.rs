@@ -2,6 +2,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 pub mod block;
+pub mod dialog;
 pub mod enchantment;
 pub mod entity;
 pub mod hanging;

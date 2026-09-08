@@ -184,6 +184,88 @@ pub fn send_cancellable(input: TokenStream) -> TokenStream {
     expanded.into()
 }
 
+#[proc_macro]
+pub fn send_cancellable_blocking(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as SynBlock);
+
+    let mut stmts_iter = input.stmts.into_iter();
+
+    let Some(Stmt::Expr(server_stmt, _)) = stmts_iter.next() else {
+        abort_call_site!("expected server expression as first statement")
+    };
+
+    let Some(Stmt::Expr(event_stmt, _)) = stmts_iter.next() else {
+        abort_call_site!("expected event expression as second statement")
+    };
+
+    let event_expr = if let Expr::Reference(syn::ExprReference {
+        expr,
+        mutability: Some(_),
+        ..
+    }) = event_stmt
+    {
+        *expr
+    } else {
+        event_stmt
+    };
+
+    let mut after_block = None;
+    let mut cancelled_block = None;
+
+    for stmt in stmts_iter {
+        if let Stmt::Expr(Expr::Block(b), _) = stmt
+            && let Some(ref label) = b.label
+        {
+            if label.name.ident == "after" {
+                after_block = Some(b.block);
+            } else if label.name.ident == "cancelled" {
+                cancelled_block = Some(b.block);
+            }
+        }
+    }
+
+    let execution = match (after_block, cancelled_block) {
+        (Some(after), Some(cancelled)) => quote! {
+            if !is_cancelled {
+                #after
+            } else {
+                #cancelled
+            }
+        },
+        (Some(after), None) => quote! {
+            if !is_cancelled {
+                #after
+            }
+        },
+        (None, Some(cancelled)) => quote! {
+            if is_cancelled {
+                #cancelled
+            }
+        },
+        (None, None) => quote! {},
+    };
+
+    let expanded = quote! {
+        {
+            let mut event = #event_expr;
+            let server_ref: &std::sync::Arc<crate::server::Server> = {
+                use std::borrow::Borrow;
+                (#server_stmt).borrow()
+            };
+            server_ref.plugin_manager.fire_blocking(server_ref, &mut event);
+
+            let is_cancelled = {
+                use crate::plugin::Cancellable;
+                event.cancelled()
+            };
+
+            #execution
+        }
+    };
+
+    expanded.into()
+}
+
 /// Attaches a fixed packet ID to a struct implementing `Packet`.
 ///
 /// # Arguments

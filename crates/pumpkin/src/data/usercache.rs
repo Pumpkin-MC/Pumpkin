@@ -1,5 +1,5 @@
+use rustc_hash::FxHashMap;
 use std::cmp::Reverse;
-use std::collections::HashMap;
 use std::{env, fs};
 
 use serde::{Deserialize, Serialize};
@@ -29,8 +29,8 @@ struct UserCacheEntryDisk {
 
 #[derive(Default)]
 pub struct UserCache {
-    profiles_by_name: HashMap<String, UserCacheEntry>,
-    profiles_by_uuid: HashMap<Uuid, UserCacheEntry>,
+    profiles_by_name: FxHashMap<String, UserCacheEntry>,
+    profiles_by_uuid: FxHashMap<Uuid, UserCacheEntry>,
     operation_count: u64,
 }
 

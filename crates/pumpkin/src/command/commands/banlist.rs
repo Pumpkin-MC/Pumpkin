@@ -23,86 +23,78 @@ struct BanListCommandExecutor {
 }
 
 impl CommandExecutor for BanListCommandExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let mut entries = Vec::new();
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let mut entries = Vec::new();
 
-            let data = &context.server().data;
+        let data = &context.server().data;
 
-            if self.players {
-                let lock = data.banned_player_list.read().await;
-                for entry in &lock.banned_players {
-                    entries.push(BanListEntry {
-                        name: entry.name.clone(),
-                        source: entry.source.clone(),
-                        reason: entry.reason.clone(),
-                    });
-                }
+        if self.players {
+            let lock = data.banned_player_list.read().unwrap();
+            for entry in &lock.banned_players {
+                entries.push(BanListEntry {
+                    name: entry.name.clone(),
+                    source: entry.source.clone(),
+                    reason: entry.reason.clone(),
+                });
             }
+        }
 
-            if self.ips {
-                let lock = data.banned_ip_list.read().await;
-                for entry in &lock.banned_ips {
-                    entries.push(BanListEntry {
-                        name: entry.ip.to_string(),
-                        source: entry.source.clone(),
-                        reason: entry.reason.clone(),
-                    });
-                }
+        if self.ips {
+            let lock = data.banned_ip_list.read().unwrap();
+            for entry in &lock.banned_ips {
+                entries.push(BanListEntry {
+                    name: entry.ip.to_string(),
+                    source: entry.source.clone(),
+                    reason: entry.reason.clone(),
+                });
             }
+        }
 
-            let entries_len = entries.len() as i32;
-            let source = &context.source;
+        let entries_len = entries.len() as i32;
+        let source = &context.source;
 
-            if entries.is_empty() {
-                source
-                    .send_feedback(
-                        TextComponent::translate_cross(
-                            translation::java::COMMANDS_BANLIST_NONE,
-                            translation::java::COMMANDS_BANLIST_NONE,
-                            [],
-                        ),
-                        false,
-                    )
-                    .await;
+        if entries.is_empty() {
+            source.send_feedback(
+                TextComponent::translate_cross(
+                    translation::java::COMMANDS_BANLIST_NONE,
+                    translation::java::COMMANDS_BANLIST_NONE,
+                    [],
+                ),
+                false,
+            );
+        } else {
+            let bedrock_list_key = if self.ips && !self.players {
+                translation::bedrock::COMMANDS_BANLIST_IPS
             } else {
-                let bedrock_list_key = if self.ips && !self.players {
-                    translation::bedrock::COMMANDS_BANLIST_IPS
-                } else {
-                    translation::bedrock::COMMANDS_BANLIST_PLAYERS
-                };
+                translation::bedrock::COMMANDS_BANLIST_PLAYERS
+            };
 
-                source
-                    .send_feedback(
-                        TextComponent::translate_cross(
-                            translation::java::COMMANDS_BANLIST_LIST,
-                            bedrock_list_key,
-                            [TextComponent::text(entries.len().to_string())],
-                        ),
-                        false,
-                    )
-                    .await;
+            source.send_feedback(
+                TextComponent::translate_cross(
+                    translation::java::COMMANDS_BANLIST_LIST,
+                    bedrock_list_key,
+                    [TextComponent::text(entries.len().to_string())],
+                ),
+                false,
+            );
 
-                for entry in entries {
-                    source
-                        .send_feedback(
-                            TextComponent::translate_cross(
-                                translation::java::COMMANDS_BANLIST_ENTRY,
-                                translation::java::COMMANDS_BANLIST_ENTRY,
-                                [
-                                    TextComponent::text(entry.name),
-                                    TextComponent::text(entry.source),
-                                    TextComponent::text(entry.reason),
-                                ],
-                            ),
-                            false,
-                        )
-                        .await;
-                }
+            for entry in entries {
+                source.send_feedback(
+                    TextComponent::translate_cross(
+                        translation::java::COMMANDS_BANLIST_ENTRY,
+                        translation::java::COMMANDS_BANLIST_ENTRY,
+                        [
+                            TextComponent::text(entry.name),
+                            TextComponent::text(entry.source),
+                            TextComponent::text(entry.reason),
+                        ],
+                    ),
+                    false,
+                );
             }
+        }
 
-            Ok(entries_len)
-        })
+        Ok(entries_len)
     }
 }
 

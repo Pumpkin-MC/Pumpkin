@@ -2,17 +2,16 @@
 use super::*;
 
 impl JavaClient {
-    pub async fn handle_rotation(&self, player: &Player, rotation: SPlayerRotation) {
+    pub fn handle_rotation(&self, player: &Player, rotation: &SPlayerRotation) {
         if !player.has_client_loaded() {
             return;
         }
         if !rotation.yaw.is_finite() || !rotation.pitch.is_finite() {
-            self.kick(TextComponent::translate_cross(
+            self.try_kick(&TextComponent::translate_cross(
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,
                 [],
-            ))
-            .await;
+            ));
             return;
         }
         let entity = &player.get_entity();
@@ -51,11 +50,7 @@ impl JavaClient {
             VarULong(0),
         );
 
-        world.broadcast_packet_except_editioned_sync(
-            &[player.gameprofile.id],
-            &je_packet,
-            &be_packet,
-        );
+        world.broadcast_packet_except_editioned(&[player.gameprofile.id], &je_packet, &be_packet);
 
         let je_packet = CHeadRot::new(entity_id.into(), yaw as u8);
         world.broadcast_packet_except(&[player.gameprofile.id], &je_packet);

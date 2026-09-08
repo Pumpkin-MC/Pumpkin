@@ -1,21 +1,17 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::fmt;
-use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
+use crate::block::entities::BlockEntity;
+use crate::block::entities::command_block::CommandBlockEntity;
+pub use crate::command::context::command_source::CommandSource;
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
-use args::ConsumedArgs;
-
-use crate::block::entities::BlockEntity;
-use crate::block::entities::command_block::CommandBlockEntity;
-use crate::command::context::command_source::CommandSource;
-use crate::entity::EntityBase;
-use dispatcher::CommandError;
 use pumpkin_data::{
     Block,
     block_properties::{BlockProperties, CommandBlockLikeProperties, Facing},
@@ -27,20 +23,69 @@ use pumpkin_util::permission::{PermissionDefault, PermissionLvl};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::translation::Locale;
 
-pub mod args;
+pub use pumpkin_command::*;
+
 pub mod argument_builder;
 pub mod argument_types;
 pub mod client_suggestions;
 pub mod commands;
 pub mod context;
-pub mod dispatcher;
-pub mod errors;
 pub mod node;
-pub mod parser;
-pub mod snbt;
-pub mod string_reader;
-pub mod suggestion;
-pub mod tree;
+
+pub mod dispatcher {
+    pub use pumpkin_command::dispatcher::*;
+    pub type CommandDispatcher =
+        pumpkin_command::dispatcher::CommandDispatcher<crate::command::CommandSource>;
+}
+pub mod errors {
+    pub use pumpkin_command::errors::*;
+}
+pub mod parser {
+    pub use pumpkin_command::parser::*;
+}
+pub mod snbt {
+    pub use pumpkin_command::snbt::*;
+}
+pub mod string_reader {
+    pub use pumpkin_command::string_reader::*;
+}
+pub mod suggestion {
+    pub use pumpkin_command::suggestion::*;
+
+    pub mod provider {
+        use crate::command::context::command_context::CommandContext;
+        use crate::command::context::command_source::CommandSource;
+        use pumpkin_command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
+
+        pub type SuggestionProviderResult = Suggestions;
+
+        pub trait SuggestionProvider: Send + Sync {
+            fn suggest(
+                &self,
+                context: &CommandContext,
+                builder: SuggestionsBuilder,
+            ) -> SuggestionProviderResult;
+        }
+
+        pub struct SuggestionProviderAdapter<T>(pub T);
+
+        impl<T: SuggestionProvider>
+            pumpkin_command::suggestion::provider::SuggestionProvider<CommandSource>
+            for SuggestionProviderAdapter<T>
+        {
+            fn suggest(
+                &self,
+                context: &pumpkin_command::context::command_context::CommandContext<
+                    '_,
+                    CommandSource,
+                >,
+                builder: SuggestionsBuilder,
+            ) -> SuggestionProviderResult {
+                self.0.suggest(context, builder)
+            }
+        }
+    }
+}
 
 /// Whether console and RCON command output is broadcast to online operators.
 ///
@@ -64,9 +109,9 @@ pub fn set_broadcast_console_to_ops(value: bool) {
 pub enum CommandSender {
     /// A remote console connection via the RCON protocol.
     ///
-    /// Stores an asynchronous buffer to capture command output
+    /// Stores an buffer to capture command output
     /// so it can be sent back over the network to the RCON client.
-    Rcon(Arc<tokio::sync::Mutex<Vec<String>>>),
+    Rcon(Arc<std::sync::Mutex<Vec<String>>>),
     /// The local server terminal/console.
     ///
     /// This sender typically has absolute permissions (bypass) and
@@ -104,14 +149,20 @@ impl fmt::Display for CommandSender {
 }
 
 impl CommandSender {
-    pub async fn send_message(&self, text: TextComponent) {
+    pub fn send_message(&self, text: TextComponent) {
         match self {
             #[allow(clippy::print_stdout)]
             Self::Console => println!("{}", text.to_pretty_console()),
-            Self::Player(c) => c.send_system_message(&text).await,
-            Self::Rcon(s) => s.lock().await.push(text.to_pretty_console()),
+            Self::Player(c) => c.send_system_message(&text),
+            Self::Rcon(s) => s
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push(text.to_pretty_console()),
             Self::CommandBlock(block_entity, _) => {
-                let mut last_output = block_entity.last_output.lock().await;
+                let mut last_output = block_entity
+                    .last_output
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
 
                 let now = time::OffsetDateTime::now_utc();
                 let format = time::macros::format_description!("[hour]:[minute]:[second]");
@@ -169,10 +220,10 @@ impl CommandSender {
     }
 
     /// Check if the sender has a specific permission
-    pub async fn has_permission(&self, server: &Server, node: &str) -> bool {
+    pub fn has_permission(&self, server: &Server, node: &str) -> bool {
         match self {
             Self::Console | Self::Rcon(_) => true, // Console and RCON always have all permissions
-            Self::Player(p) => p.has_permission(server, node).await,
+            Self::Player(p) => p.has_permission(server, node),
             Self::CommandBlock(..) | Self::Dummy => {
                 let Some(p) = server.permission_manager.get_permission(node) else {
                     return false;
@@ -215,7 +266,7 @@ impl CommandSender {
                     return None;
                 }
 
-                let props = CommandBlockLikeProperties::from_state_id(state_id, block);
+                let props = CommandBlockLikeProperties::from_state_id(state_id);
                 Some((0.0, command_block_y_rot(props.facing)))
             }
         }
@@ -294,7 +345,7 @@ impl CommandSender {
     }
 
     #[must_use]
-    pub async fn into_source(self, server: &Arc<Server>) -> CommandSource {
+    pub fn into_source(self, server: &Arc<Server>) -> CommandSource {
         match self {
             Self::Rcon(rcon) => {
                 let (world, spawn_point) = Self::get_world_and_spawn_point(server);
@@ -328,16 +379,15 @@ impl CommandSender {
                 Some(player.clone()),
                 player.position(),
                 player.rotation().into(),
-                player.get_display_name().await.get_text(),
-                player.get_display_name().await,
+                player.get_display_name().get_text(),
+                player.get_display_name(),
                 server.clone(),
             ),
             Self::CommandBlock(command_entity, world) => {
                 let pos = command_entity.position;
 
-                let (block, state_id) = world.get_block_and_state_id(&pos);
-                let command_block_props =
-                    CommandBlockLikeProperties::from_state_id(state_id, block);
+                let (_block, state_id) = world.get_block_and_state_id(&pos);
+                let command_block_props = CommandBlockLikeProperties::from_state_id(state_id);
                 let facing = command_block_props.facing;
 
                 let horizontal_direction = match facing {
@@ -398,27 +448,6 @@ const fn command_block_y_rot(facing: Facing) -> f32 {
     }
 }
 
-/// Represents the result of running a command after completion.
-///
-/// If the command **ran successfully**, an [`Ok`] is returned containing an [`i32`].
-/// This represents the 'output value' of the command, which is *homologous* to the
-/// `int` that command executors in vanilla return **upon success**.
-///
-/// **You should choose the successful result as `1` if**:
-/// - you don't know what value to use for a success for your
-///   own commands, or
-/// - you don't understand what this value means, or
-/// - you just simply don't care about this value at all
-///
-/// If the command **fails**, an [`Err`] is returned, containing the [`CommandError`]
-/// that led to this result.
-pub type CommandResult<'a> = Pin<Box<dyn Future<Output = Result<i32, CommandError>> + Send + 'a>>;
-
-pub trait CommandExecutor: Sync + Send {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        server: &'a Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a>;
-}
+pub use context::command_context::CommandContext;
+pub use node::dispatcher::CommandDispatcher;
+pub use node::{Command, CommandExecutor, CommandExecutorResult};

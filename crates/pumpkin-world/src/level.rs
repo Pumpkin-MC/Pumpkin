@@ -18,6 +18,7 @@ use crate::{
     world::WorldPortalExt,
 };
 use arc_swap::ArcSwap;
+use crossbeam::queue::SegQueue;
 use dashmap::{DashMap, Entry};
 use pumpkin_config::{chunk::ChunkConfig, lighting::LightingEngineConfig, world::LevelConfig};
 use pumpkin_data::biome::Biome;
@@ -50,6 +51,12 @@ use tokio_util::task::TaskTracker;
 pub type SyncChunk = Arc<ChunkData>;
 pub type SyncEntityChunk = Arc<ChunkEntityData>;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LoadedChunkChange {
+    Loaded(Vector2<i32>),
+    Unloaded(Vector2<i32>),
+}
+
 pub type ChunkSaver =
     LevelFileIO<LinearV2File<ChunkData>, AnvilChunkFile<ChunkData>, PumpFile<ChunkData>>;
 
@@ -80,6 +87,7 @@ pub struct Level {
     // Chunks that are paired with chunk watchers. When a chunk is no longer watched, it is removed
     // from the loaded chunks map and sent to the underlying ChunkIO
     pub loaded_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
+    pub(crate) loaded_chunk_changes: Arc<SegQueue<LoadedChunkChange>>,
     loaded_entity_chunks: Arc<DashMap<Vector2<i32>, SyncEntityChunk>>,
     pub chunks_with_scheduled_ticks: Arc<dashmap::DashSet<Vector2<i32>>>,
     pub chunk_loading: Mutex<ChunkLoading>,
@@ -114,7 +122,6 @@ pub struct Level {
     pub level_channel: Arc<LevelChannel>,
     pub thread_tracker: Mutex<Vec<thread::JoinHandle<()>>>,
     pub chunk_listener: Arc<ChunkListener>,
-    pub gen_pool: Option<Arc<rayon::ThreadPool>>,
 }
 
 pub struct TickData {
@@ -146,7 +153,6 @@ impl Level {
         root_folder: PathBuf,
         seed: i64,
         dimension: Dimension,
-        gen_pool: Option<Arc<rayon::ThreadPool>>,
     ) -> Arc<Self> {
         let (namespace, name) = match dimension.minecraft_name.split_once(':') {
             Some((ns, n)) => (ns, n),
@@ -265,6 +271,7 @@ impl Level {
             entity_saver,
             schedule_tick_counts: AtomicU64::new(0),
             loaded_chunks: Arc::new(DashMap::new()),
+            loaded_chunk_changes: Arc::new(SegQueue::new()),
             loaded_entity_chunks: Arc::new(DashMap::new()),
             chunks_with_scheduled_ticks: Arc::new(dashmap::DashSet::new()),
             chunk_loading: Mutex::new(ChunkLoading::new(level_channel.clone())),
@@ -281,19 +288,10 @@ impl Level {
             level_channel: level_channel.clone(),
             thread_tracker,
             chunk_listener: listener.clone(),
-            gen_pool: gen_pool.clone(),
         });
-
-        // TODO
-        let total_cores = thread::available_parallelism()
-            .map_or(1, std::num::NonZero::get)
-            .saturating_sub(2)
-            .max(1);
-        let threads_per_dimension = (total_cores / 2).max(1);
 
         GenerationSchedule::create(
             4,
-            threads_per_dimension,
             level_ref.clone(),
             level_channel,
             listener,
@@ -302,7 +300,6 @@ impl Level {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .as_mut(),
-            gen_pool,
         );
 
         level_ref
@@ -319,48 +316,22 @@ impl Level {
 
     pub fn spawn_entity_generation(self: &Arc<Self>, pos: Vector2<i32>) {
         let level = self.clone();
-        if let Some(pool) = &self.gen_pool {
-            pool.spawn(move || {
-                let arc_chunk = Arc::new(ChunkEntityData {
-                    x: pos.x,
-                    z: pos.y,
-                    data: tokio::sync::Mutex::new(Vec::new()),
-                    dirty: AtomicBool::new(false),
-                });
-
-                level.loaded_entity_chunks.insert(pos, arc_chunk.clone());
-
-                if let Some((_, waiters)) = level.pending_entity_generations.remove(&pos) {
-                    for tx in waiters {
-                        let _ = tx.send(arc_chunk.clone());
-                    }
-                }
+        rayon::spawn(move || {
+            let arc_chunk = Arc::new(ChunkEntityData {
+                x: pos.x,
+                z: pos.y,
+                data: std::sync::Mutex::new(Vec::new()),
+                dirty: AtomicBool::new(false),
             });
-        } else {
-            // Fallback to spawning a new thread if no pool is available (should not happen in production)
-            let level_clone = level;
-            let _ = thread::Builder::new()
-                .name(format!("Entity Gen {pos:?}"))
-                .spawn(move || {
-                    let arc_chunk = Arc::new(ChunkEntityData {
-                        x: pos.x,
-                        z: pos.y,
-                        data: tokio::sync::Mutex::new(Vec::new()),
-                        dirty: AtomicBool::new(false),
-                    });
 
-                    level_clone
-                        .loaded_entity_chunks
-                        .insert(pos, arc_chunk.clone());
+            level.loaded_entity_chunks.insert(pos, arc_chunk.clone());
 
-                    if let Some((_, waiters)) = level_clone.pending_entity_generations.remove(&pos)
-                    {
-                        for tx in waiters {
-                            let _ = tx.send(arc_chunk.clone());
-                        }
-                    }
-                });
-        }
+            if let Some((_, waiters)) = level.pending_entity_generations.remove(&pos) {
+                for tx in waiters {
+                    let _ = tx.send(arc_chunk.clone());
+                }
+            }
+        });
     }
 
     /// Spawns a task associated with this world. All tasks spawned with this method are awaited
@@ -393,17 +364,20 @@ impl Level {
 
         let handle_count = handles.len();
         info!("Joining {} threads for {}...", handle_count, world_id);
-        let join_task = tokio::task::spawn_blocking(move || {
-            let mut failed_count = 0;
-            for handle in handles {
-                if handle.join().is_err() {
-                    failed_count += 1;
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let _ = std::thread::Builder::new()
+            .name("Thread-Joiner".into())
+            .spawn(move || {
+                let mut failed_count = 0;
+                for handle in handles {
+                    if handle.join().is_err() {
+                        failed_count += 1;
+                    }
                 }
-            }
-            failed_count
-        });
+                let _ = tx.send(failed_count);
+            });
 
-        match timeout(Duration::from_secs(3), join_task).await {
+        match timeout(Duration::from_secs(3), rx).await {
             Ok(Ok(failed_count)) => {
                 if failed_count > 0 {
                     warn!(
@@ -533,7 +507,13 @@ impl Level {
         });
     }
 
-    pub fn get_tick_data(&self, active_chunks: &FxHashSet<Vector2<i32>>) -> TickData {
+    pub fn get_tick_data(
+        &self,
+        active_chunks: &FxHashSet<Vector2<i32>>,
+        random_tick_speed: i64,
+    ) -> TickData {
+        let samples_per_section = random_tick_speed.max(0);
+
         let mut ticks = TickData {
             block_ticks: Vec::new(),
             fluid_ticks: Vec::new(),
@@ -563,7 +543,7 @@ impl Level {
                             continue;
                         }
                         let y_base = min_y + (i as i32 * 16);
-                        for _ in 0..3 {
+                        for _ in 0..samples_per_section {
                             let r = rand::random::<u32>();
                             let x_offset = (r & 0xF) as usize;
                             let z_offset = (r >> 8 & 0xF) as usize;
@@ -663,7 +643,15 @@ impl Level {
             return res;
         }
         let chunk = self.fetch_chunk(pos).await;
+        if self.loaded_chunks.insert(pos, chunk.clone()).is_none() {
+            self.loaded_chunk_changes
+                .push(LoadedChunkChange::Loaded(pos));
+        }
         f(&chunk)
+    }
+
+    pub fn loaded_chunk_changes(&self) -> impl Iterator<Item = LoadedChunkChange> + '_ {
+        std::iter::from_fn(|| self.loaded_chunk_changes.pop())
     }
 
     async fn fetch_chunk(self: &Arc<Self>, pos: Vector2<i32>) -> SyncChunk {
@@ -674,7 +662,7 @@ impl Level {
                 .chunk_loading
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            lock.add_ticket(pos, 31);
+            lock.add_ticket(pos, ChunkLoading::FULL_CHUNK_LEVEL);
             lock.send_change();
         };
 
@@ -687,7 +675,7 @@ impl Level {
                 .chunk_loading
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            lock.remove_ticket(pos, 31);
+            lock.remove_ticket(pos, ChunkLoading::FULL_CHUNK_LEVEL);
             lock.send_change();
         };
 
@@ -750,20 +738,18 @@ impl Level {
                                 let _ = sender.send((Arc::downgrade(&chunk), true)).await;
                             }
                             LoadedData::Missing(pos) | LoadedData::Error((pos, _)) => {
-                                let sender_clone = sender.clone();
-                                let level_clone = level.clone();
-
-                                tokio::spawn(async move {
-                                    let (tx, rx) = oneshot::channel();
-                                    match level_clone.pending_entity_generations.entry(pos) {
-                                        dashmap::mapref::entry::Entry::Occupied(mut entry) => {
-                                            entry.get_mut().push(tx);
-                                        }
-                                        dashmap::mapref::entry::Entry::Vacant(entry) => {
-                                            entry.insert(vec![tx]);
-                                            level_clone.spawn_entity_generation(pos);
-                                        }
+                                let (tx, rx) = oneshot::channel();
+                                match level.pending_entity_generations.entry(pos) {
+                                    dashmap::mapref::entry::Entry::Occupied(mut entry) => {
+                                        entry.get_mut().push(tx);
                                     }
+                                    dashmap::mapref::entry::Entry::Vacant(entry) => {
+                                        entry.insert(vec![tx]);
+                                        level.spawn_entity_generation(pos);
+                                    }
+                                }
+                                let sender_clone = sender.clone();
+                                tokio::spawn(async move {
                                     if let Ok(chunk) = rx.await {
                                         let _ =
                                             sender_clone.send((Arc::downgrade(&chunk), true)).await;
@@ -807,7 +793,7 @@ impl Level {
                 Arc::new(ChunkEntityData {
                     x: pos.x,
                     z: pos.y,
-                    data: tokio::sync::Mutex::new(Vec::new()),
+                    data: std::sync::Mutex::new(Vec::new()),
                     dirty: AtomicBool::new(false),
                 })
             })
@@ -1025,7 +1011,7 @@ mod tests {
         let config = LevelConfig::default();
 
         let overworld_level =
-            Level::from_root_folder(&config, root.clone(), 0, Dimension::OVERWORLD, None);
+            Level::from_root_folder(&config, root.clone(), 0, Dimension::OVERWORLD);
         assert_eq!(
             overworld_level.level_folder.dim_folder,
             root.join("dimensions").join("minecraft").join("overworld")
@@ -1038,14 +1024,13 @@ mod tests {
                 .join("region")
         );
 
-        let nether_level =
-            Level::from_root_folder(&config, root.clone(), 0, Dimension::THE_NETHER, None);
+        let nether_level = Level::from_root_folder(&config, root.clone(), 0, Dimension::THE_NETHER);
         assert_eq!(
             nether_level.level_folder.dim_folder,
             root.join("dimensions").join("minecraft").join("the_nether")
         );
 
-        let end_level = Level::from_root_folder(&config, root.clone(), 0, Dimension::THE_END, None);
+        let end_level = Level::from_root_folder(&config, root.clone(), 0, Dimension::THE_END);
         assert_eq!(
             end_level.level_folder.dim_folder,
             root.join("dimensions").join("minecraft").join("the_end")
@@ -1064,14 +1049,13 @@ mod tests {
         std::fs::create_dir_all(root.join("DIM1").join("region")).unwrap();
 
         let overworld_level =
-            Level::from_root_folder(&config, root.clone(), 0, Dimension::OVERWORLD, None);
+            Level::from_root_folder(&config, root.clone(), 0, Dimension::OVERWORLD);
         assert_eq!(overworld_level.level_folder.dim_folder, root);
 
-        let nether_level =
-            Level::from_root_folder(&config, root.clone(), 0, Dimension::THE_NETHER, None);
+        let nether_level = Level::from_root_folder(&config, root.clone(), 0, Dimension::THE_NETHER);
         assert_eq!(nether_level.level_folder.dim_folder, root.join("DIM-1"));
 
-        let end_level = Level::from_root_folder(&config, root.clone(), 0, Dimension::THE_END, None);
+        let end_level = Level::from_root_folder(&config, root.clone(), 0, Dimension::THE_END);
         assert_eq!(end_level.level_folder.dim_folder, root.join("DIM1"));
     }
 }

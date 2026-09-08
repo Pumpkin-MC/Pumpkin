@@ -1,4 +1,3 @@
-use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::entity::EntityBase;
@@ -25,73 +24,71 @@ impl ItemMetadata for LeadItem {
 }
 
 impl ItemBehaviour for LeadItem {
-    fn use_on_block<'a>(
-        &'a self,
-        item: &'a mut ItemStack,
-        player: &'a Player,
+    fn use_on_block(
+        &self,
+        item: &mut ItemStack,
+        player: &Player,
         location: BlockPos,
         _face: BlockDirection,
         _cursor_pos: Vector3<f32>,
-        block: &'a Block,
-        _server: &'a Server,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            if !block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_FENCES) {
-                return;
-            }
+        block: &Block,
+        _server: &Server,
+    ) {
+        if !block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_FENCES) {
+            return;
+        }
 
-            let world = player.world();
-            let center = Vector3::new(
-                f64::from(location.0.x) + 0.5,
-                f64::from(location.0.y) + 0.5,
-                f64::from(location.0.z) + 0.5,
-            );
+        let world = player.world();
+        let center = Vector3::new(
+            f64::from(location.0.x) + 0.5,
+            f64::from(location.0.y) + 0.5,
+            f64::from(location.0.z) + 0.5,
+        );
 
-            let search_dim = EntityDimensions {
-                width: 32.0,
-                height: 32.0,
-                eye_height: 16.0,
-            };
+        let search_dim = EntityDimensions {
+            width: 32.0,
+            height: 32.0,
+            eye_height: 16.0,
+        };
 
-            let search_box = BoundingBox::new_from_pos(center.x, center.y, center.z, &search_dim);
+        let search_box = BoundingBox::new_from_pos(center.x, center.y, center.z, &search_dim);
 
-            let player_id = player.entity_id();
-            let entities = world.get_entities_at_box(&search_box);
+        let player_id = player.entity_id();
+        let entities = world.get_entities_at_box(&search_box);
 
-            let mut any_leashed = false;
-            let mut knot: Option<Arc<LeashKnotEntity>> = None;
+        let mut any_leashed = false;
+        let mut knot: Option<Arc<LeashKnotEntity>> = None;
 
-            for entity_base in entities {
-                let ent = entity_base.get_entity();
-                let is_leashed_to_player = ent
-                    .leashed_to
-                    .try_lock()
-                    .ok()
-                    .and_then(|guard| {
-                        guard
-                            .as_ref()
-                            .map(|holder| holder.get_entity().entity_id == player_id)
-                    })
-                    .unwrap_or(false);
+        for entity_base in entities {
+            let ent = entity_base.get_entity();
+            let is_leashed_to_player = ent
+                .leashed_to
+                .try_lock()
+                .ok()
+                .and_then(|guard| {
+                    guard
+                        .as_ref()
+                        .map(|holder| holder.get_entity().entity_id == player_id)
+                })
+                .unwrap_or(false);
 
-                if is_leashed_to_player {
-                    if knot.is_none() {
-                        knot = Some(LeashKnotEntity::get_or_create(&world, location).await);
-                    }
-                    if let Some(k) = &knot {
-                        ent.leash_to(k.clone() as Arc<dyn EntityBase>).await;
-                        any_leashed = true;
-                    }
+            if is_leashed_to_player {
+                if knot.is_none() {
+                    knot = Some(LeashKnotEntity::get_or_create(&world, location));
+                }
+                if let Some(k) = &knot {
+                    ent.leash_to(k.clone() as Arc<dyn EntityBase>);
+                    any_leashed = true;
                 }
             }
+        }
 
-            if any_leashed {
-                if player.gamemode.load() != pumpkin_util::GameMode::Creative {
-                    item.decrement(1);
-                }
-                world.play_sound(Sound::ItemLeadTied, SoundCategory::Neutral, &center);
+        if any_leashed {
+            if player.gamemode.load() != pumpkin_util::GameMode::Creative {
+                item.decrement(1);
             }
-        })
+            world.play_sound(Sound::ItemLeadTied, SoundCategory::Neutral, &center);
+        }
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

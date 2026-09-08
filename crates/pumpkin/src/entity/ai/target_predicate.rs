@@ -2,15 +2,11 @@ use pumpkin_util::Difficulty;
 
 use crate::entity::living::LivingEntity;
 use crate::world::World;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 
 const MIN_DISTANCE: f64 = 2.0;
 
-pub type PredicateFn = dyn Fn(Arc<LivingEntity>, Arc<World>) -> Pin<Box<dyn Future<Output = bool> + Send>>
-    + Send
-    + Sync;
+pub type PredicateFn = dyn Fn(&LivingEntity, &World) -> bool + Send + Sync;
 
 pub struct TargetPredicate {
     pub attackable: bool,
@@ -79,19 +75,14 @@ impl TargetPredicate {
         self
     }
 
-    pub fn set_predicate<F, Fut>(&mut self, predicate: F)
+    pub fn set_predicate<F>(&mut self, predicate: F)
     where
-        F: Fn(Arc<LivingEntity>, Arc<World>) -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = bool> + Send + 'static,
+        F: Fn(&LivingEntity, &World) -> bool + Send + Sync + 'static,
     {
-        self.predicate = Some(Arc::new(
-            move |living_entity: Arc<LivingEntity>, world: Arc<World>| {
-                Box::pin(predicate(living_entity, world))
-            },
-        ));
+        self.predicate = Some(Arc::new(predicate));
     }
 
-    pub async fn test(
+    pub fn test(
         &self,
         world: &World,
         tester: Option<&LivingEntity>,
@@ -137,9 +128,8 @@ impl TargetPredicate {
                 .raycast(
                     tester_ent.entity.get_eye_pos(),
                     target.entity.get_eye_pos(),
-                    async |block_pos, world| world.get_block_state(block_pos).is_solid(),
+                    |block_pos, world| world.get_block_state(block_pos).is_solid(),
                 )
-                .await
                 .is_some()
         {
             return false;

@@ -1,18 +1,21 @@
 use crate::command::CommandSender;
-use crate::command::argument_types::entity_anchor::EntityAnchor;
-use crate::command::errors::command_syntax_error::CommandSyntaxError;
-use crate::command::errors::error_types::CommandErrorType;
+use crate::command::argument_types::entity_anchor::{EntityAnchor, EntityAnchorExt};
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
+use pumpkin_command::errors::command_syntax_error::CommandSyntaxError;
+use pumpkin_command::errors::error_types::CommandErrorType;
+pub use pumpkin_command::source::{
+    ResultValueTaker, ReturnValue, ReturnValueCallable, ReturnValueCallback,
+};
 use pumpkin_data::translation;
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::wrap_degrees;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
-use std::pin::Pin;
 use std::sync::Arc;
 
 pub const REQUIRES_PLAYER: CommandErrorType<0> = CommandErrorType::new(
@@ -23,53 +26,6 @@ pub const REQUIRES_ENTITY: CommandErrorType<0> = CommandErrorType::new(
     translation::java::PERMISSIONS_REQUIRES_ENTITY,
     translation::java::PERMISSIONS_REQUIRES_ENTITY,
 );
-
-pub trait ReturnValueCallable: Send + Sync {
-    fn call(&self, value: ReturnValue) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
-}
-
-pub type ReturnValueCallback = Arc<dyn ReturnValueCallable>;
-
-/// Represents a collection of 'return value callbacks'.
-#[derive(Clone)]
-pub struct ResultValueTaker(pub Vec<ReturnValueCallback>);
-
-impl ResultValueTaker {
-    /// Merges two takers, returning one.
-    #[must_use]
-    pub fn merge(taker_1: &Self, taker_2: &Self) -> Self {
-        let mut takers = Vec::with_capacity(taker_1.0.len() + taker_2.0.len());
-        for taker in &taker_1.0 {
-            takers.push(taker.clone());
-        }
-        for taker in &taker_2.0 {
-            takers.push(taker.clone());
-        }
-        Self(takers)
-    }
-
-    /// Constructs a new, empty result value taker.
-    #[must_use]
-    pub fn new() -> Self {
-        Self(Vec::new())
-    }
-
-    /// Calls all the contained callbacks of this taker with the returned result.
-    #[must_use]
-    pub fn call(&self, return_value: ReturnValue) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
-        Box::pin(async move {
-            for callback in &self.0 {
-                callback.call(return_value).await;
-            }
-        })
-    }
-}
-
-impl Default for ResultValueTaker {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 /// Represents a source of a command, which
 /// contains its own state, which could keep track of its:
@@ -201,9 +157,9 @@ impl CommandSource {
     /// Returns a new [`CommandSource`] with the specified entity and
     /// everything else from the `source` provided.
     #[must_use]
-    pub async fn with_entity(self, entity: Arc<dyn EntityBase>) -> Self {
+    pub fn with_entity(self, entity: Arc<dyn EntityBase>) -> Self {
         let name = entity.get_name().get_text();
-        let display_name = entity.get_display_name().await;
+        let display_name = entity.get_display_name();
         Self {
             output: self.output,
             world: self.world,
@@ -387,6 +343,12 @@ impl CommandSource {
         self.entity.as_ref().and_then(|entity| entity.get_player())
     }
 
+    /// Gets the player as an `Arc<Player>` from the underlying output sender.
+    #[must_use]
+    pub fn as_player(&self) -> Option<Arc<Player>> {
+        self.output.as_player()
+    }
+
     /// Gets the player as a result:
     ///
     /// - If this source actually contains a player, it returns that wrapped in an [`Ok`].
@@ -403,14 +365,14 @@ impl CommandSource {
     }
 
     /// Sends a message to this source.
-    pub async fn send_message(&self, message: TextComponent) {
+    pub fn send_message(&self, message: TextComponent) {
         if !self.silent {
-            self.output.send_message(message).await;
+            self.output.send_message(message);
         }
     }
 
     /// Sends a message to all online operators.
-    async fn send_to_ops(&self, message: TextComponent) {
+    fn send_to_ops(&self, message: TextComponent) {
         let text = TextComponent::translate_cross(
             "chat.type.admin",
             "chat.type.admin",
@@ -430,24 +392,24 @@ impl CommandSource {
                 if output_player != Some(&player)
                     && player.permission_lvl.load() >= server.basic_config.op_permission_level
                 {
-                    player.send_system_message(&text).await;
+                    player.send_system_message(&text);
                 }
             }
         }
     }
 
     /// Sends feedback to this source.
-    pub async fn send_feedback(&self, message: TextComponent, broadcast_to_ops: bool) {
+    pub fn send_feedback(&self, message: TextComponent, broadcast_to_ops: bool) {
         if !self.silent {
             let should_send_to_output = self.output.should_receive_feedback();
             let should_send_to_ops =
                 broadcast_to_ops && self.output.should_broadcast_console_to_ops();
 
             if should_send_to_output {
-                self.output.send_message(message.clone()).await;
+                self.output.send_message(message.clone());
             }
             if should_send_to_ops {
-                self.send_to_ops(message).await;
+                self.send_to_ops(message);
             }
         }
     }
@@ -460,15 +422,13 @@ impl CommandSource {
     ///
     /// However, there are still use cases of this function to send an error
     /// without reporting command failure directly.
-    pub async fn send_error(&self, error: TextComponent) {
+    pub fn send_error(&self, error: TextComponent) {
         if !self.silent && self.output.should_track_output() {
-            self.output
-                .send_message(
-                    TextComponent::empty()
-                        .add_child(error)
-                        .color(Color::Named(NamedColor::Red)),
-                )
-                .await;
+            self.output.send_message(
+                TextComponent::empty()
+                    .add_child(error)
+                    .color(Color::Named(NamedColor::Red)),
+            );
         }
     }
 
@@ -479,8 +439,16 @@ impl CommandSource {
     /// Panics if this source does not have a reference to the
     /// server (i.e. this is a dummy [`CommandSource`].)
     #[must_use]
-    pub async fn has_permission(&self, permission: &str) -> bool {
-        self.output.has_permission(self.server(), permission).await
+    pub fn has_permission(&self, permission: &str) -> bool {
+        self.server.as_ref().map_or(
+            matches!(
+                self.output,
+                crate::command::CommandSender::Console
+                    | crate::command::CommandSender::Rcon(_)
+                    | crate::command::CommandSender::Dummy
+            ),
+            |server| self.output.has_permission(server, permission),
+        )
     }
 
     /// Returns whether this source has the permission provided.
@@ -492,36 +460,65 @@ impl CommandSource {
     /// - permission is not [`None`].
     /// - this source does not have a reference to the server (i.e. this is a dummy [`CommandSource`].)
     #[must_use]
-    pub async fn has_permission_from_option(&self, permission: Option<&str>) -> bool {
-        match permission {
-            None => true,
-            Some(permission) => self.has_permission(permission).await,
-        }
+    pub fn has_permission_from_option(&self, permission: Option<&str>) -> bool {
+        permission.is_none_or(|permission| self.has_permission(permission))
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub enum ReturnValue {
-    Success(i32),
-    Failure,
-}
+impl pumpkin_command::source::CommandSource for CommandSource {
+    fn send_message(&self, message: TextComponent) {
+        self.send_message(message);
+    }
 
-impl ReturnValue {
-    /// Get the success value of this return value.
-    #[must_use]
-    pub const fn success_value(self) -> bool {
-        match self {
-            Self::Success(_) => true,
-            Self::Failure => false,
+    fn send_error(&self, error: TextComponent) {
+        self.send_error(error);
+    }
+
+    fn call_result(&self, result: ReturnValue) {
+        self.command_result_taker.call(result);
+    }
+
+    fn has_permission(&self, permission: &str) -> bool {
+        self.has_permission(permission)
+    }
+
+    fn position(&self) -> Vector3<f64> {
+        self.position
+    }
+
+    fn rotation(&self) -> Vector2<f32> {
+        self.rotation
+    }
+
+    fn check_block_loaded(&self, pos: &BlockPos) -> Result<(), CommandSyntaxError> {
+        let world = self.world();
+        if world
+            .level
+            .read_chunk_sync(&pos.chunk_position(), |_| ())
+            .is_none()
+        {
+            Err(
+                pumpkin_command::argument_types::coordinates::block_pos::NOT_LOADED_ERROR_TYPE
+                    .create_without_context(),
+            )
+        } else if !world.is_in_build_limit(*pos) {
+            Err(
+                pumpkin_command::argument_types::coordinates::block_pos::OUT_OF_WORLD_ERROR_TYPE
+                    .create_without_context(),
+            )
+        } else {
+            Ok(())
         }
     }
 
-    /// Get the result integral value of this return value.
-    #[must_use]
-    pub const fn result_value(self) -> i32 {
-        match self {
-            Self::Success(value) => value,
-            Self::Failure => 0,
-        }
+    fn entity_anchor(&self) -> EntityAnchor {
+        self.entity_anchor
+    }
+
+    fn anchor_position(&self, anchor: EntityAnchor) -> Vector3<f64> {
+        let pos = self.position;
+        self.entity
+            .as_ref()
+            .map_or_else(|| pos, |e| anchor.position_at_entity(e.get_entity()))
     }
 }

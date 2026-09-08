@@ -6,14 +6,16 @@ use crate::{codec::var_int::VarInt, serial::PacketWrite};
 #[packet(162)]
 pub struct CItemRegistry {
     // https://mojang.github.io/bedrock-protocol-docs/docs/ItemRegistryPacket.html
-    pub items: Vec<ItemDefinition>,
+    pub items: Vec<ItemData>,
 }
 
 #[derive(PacketWrite)]
-pub struct ItemDefinition {
-    pub name: String,
-    pub id: i16,
-    pub component_based: bool,
+pub struct ItemData {
+    pub item_name: String,
+    pub item_id: i16,
+    pub is_component_based: bool,
+
+    // TODO: ItemVersion enum
     pub item_version: VarInt,
 
     // Normally would be `Nbt`, but for simplicity elsewhere, this is preserialized (via `Nbt::write_bedrock`)

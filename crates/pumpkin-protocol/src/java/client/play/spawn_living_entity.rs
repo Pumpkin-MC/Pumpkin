@@ -359,16 +359,20 @@ impl ClientPacket for CSpawnLivingEntity {
         self.velocity.write_legacy(&mut write)?;
 
         if !v1_15 {
-            if let Some(metadata) = &self.metadata {
+            if v1_9 {
+                if let Some(metadata) = &self.metadata {
+                    write.write_slice(metadata)?;
+                } else {
+                    write.write_u8(0xFF)?;
+                }
+            } else if let Some(metadata) = &self.metadata
+                && metadata.last().copied() == Some(127)
+            {
                 write.write_slice(metadata)?;
-            } else if v1_9 {
-                write.write_u8(0xFF)?;
             } else {
-                // In <= 1.8 (specifically 1.7.10), DataWatcher requires at least one entry
-                // so that `readWatchedObjectsFromPacketBuffer` returns a non-null List,
-                // avoiding a NullPointerException in `S0FPacketSpawnMob.func_149027_c()`.
-                // (0 << 5) | 0 = 0 (type: byte, index: 0 flags), 0 (value), 127 (terminator)
-                write.write_slice(&[0x00, 0x00, 127])?;
+                // In <= 1.8, write the 127 (0x7F) terminator byte for the DataWatcher list,
+                // matching vanilla and PacketEvents.
+                write.write_u8(127)?;
             }
         }
 

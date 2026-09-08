@@ -67,7 +67,7 @@ pub fn write_chunk_data(
                 pumpkin_nbt::tag::NbtTag::LongArray(mbnl.to_vec()),
             );
         }
-        write_compound_nbt(&mut write, comp, *version)?;
+        write_compound_nbt(&mut write, &comp, *version)?;
     }
     drop(heightmaps);
 
@@ -245,7 +245,7 @@ pub fn write_chunk_data(
         client_nbt.child_tags.remove("LootTableSeed");
         client_nbt.child_tags.remove("PumpkinCustomData");
         client_nbt.child_tags.remove("BukkitValues");
-        write_compound_nbt(&mut write, client_nbt, *version)?;
+        write_compound_nbt(&mut write, &client_nbt, *version)?;
     }
 
     {
