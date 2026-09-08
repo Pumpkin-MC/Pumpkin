@@ -300,6 +300,27 @@ impl BlockPos {
         OutwardIterator::new(center, range_x, range_y, range_z)
     }
 
+    /// Iterates through `BlockPos` objects outward from a specified `center` point.
+    /// This is the borrowed equivalent of [`Self::iterate_outwards`].
+    ///
+    /// # Arguments
+    /// - `center` – The central `&BlockPos` from which to start iterating.
+    /// - `range_x` – The maximum absolute difference allowed in the X-coordinate from the centre.
+    /// - `range_y` – The maximum absolute difference allowed in the Y-coordinate from the centre.
+    /// - `range_z` – The maximum absolute difference allowed in the Z-coordinate from the centre.
+    ///
+    /// # Returns
+    /// An `OutwardIterator` that yields `BlockPos` instances in the described outward order.
+    #[must_use]
+    pub const fn iterate_outwards_ref(
+        center: &Self,
+        range_x: i32,
+        range_y: i32,
+        range_z: i32,
+    ) -> OutwardIterator {
+        Self::iterate_outwards(*center, range_x, range_y, range_z)
+    }
+
     /// Creates a block position iterator over the specified inclusive range.
     ///
     /// # Arguments
@@ -852,5 +873,16 @@ mod test {
             NbtOps,
             is_error
         );
+    }
+
+    #[test]
+    fn iterate_outwards_ref_matches_value_version() {
+        let center = BlockPos::new(1, 1, 1);
+
+        let by_value: Vec<BlockPos> = BlockPos::iterate_outwards(center, 1, 1, 1).collect();
+        let by_reference: Vec<BlockPos> =
+            BlockPos::iterate_outwards_ref(&center, 1, 1, 1).collect();
+
+        assert_eq!(by_reference, by_value);
     }
 }

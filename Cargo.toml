@@ -3,7 +3,9 @@ resolver = "3"
 members = [
     "crates/pumpkin",
     "crates/pumpkin-api-macros",
+    "crates/pumpkin-auth",
     "crates/pumpkin-codecs",
+    "crates/pumpkin-command",
     "crates/pumpkin-config",
     "crates/pumpkin-data",
     "crates/pumpkin-gametest",
@@ -175,7 +177,10 @@ num-traits = { version = "0.2", default-features = false, features = ["std"] }
 p384 = { version = "0.14.0", default-features = false, features = ["std", "arithmetic", "pkcs8"] }
 phf = { version = "0.14.0", default-features = false, features = ["std"] }
 proc-macro2 = { version = "1.0", default-features = false, features = ["proc-macro"] }
+pumpkin-api-macros = { path = "crates/pumpkin-api-macros", default-features = false }
+pumpkin-auth = { path = "crates/pumpkin-auth", default-features = false }
 pumpkin-codecs = { path = "crates/pumpkin-codecs", default-features = false }
+pumpkin-command = { path = "crates/pumpkin-command", default-features = false }
 pumpkin-config = { path = "crates/pumpkin-config", default-features = false }
 pumpkin-data = { path = "crates/pumpkin-data", default-features = false }
 pumpkin-inventory = { path = "crates/pumpkin-inventory", default-features = false }
