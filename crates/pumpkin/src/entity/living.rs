@@ -45,6 +45,7 @@ use pumpkin_data::data_component_impl::{
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::fluid::Fluid;
+use pumpkin_data::game_event::GameEvent;
 use pumpkin_data::item_stack::{DamageResult, ItemStack};
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::{Block, Enchantment};
@@ -1727,6 +1728,12 @@ impl LivingEntity {
 
             self.update_death_stats(&*dyn_self, killer);
 
+            // Vanilla plays the death sound in `hurt` before `die` broadcasts the
+            // death status; emit the `entity_die` game event for sculk listeners.
+            self.entity
+                .world
+                .load_full()
+                .emit_game_event(GameEvent::EntityDie.name(), self.entity.pos.load());
             // Plays the death sound
             world.send_entity_status(&self.entity, EntityStatus::Death, Some(ActorEventID::Death));
             let looting_level;
@@ -2831,6 +2838,13 @@ impl LivingEntity {
                 &self.entity.pos.load(),
             );
 
+            // Vanilla `LivingEntity#hurt` emits an `entity_damage` game event when
+            // the hit connects, letting sculk sensors hear the damage.
+            self.entity
+                .world
+                .load_full()
+                .emit_game_event(GameEvent::EntityDamage.name(), self.entity.pos.load());
+
             if let Some(source) = source {
                 let source_pos = source.get_entity().pos.load();
                 let target_pos = self.entity.pos.load();
@@ -3031,6 +3045,15 @@ impl EntityBase for LivingEntity {
             world
                 .block_registry
                 .on_entity_step(block, &world, caller, &supporting, state, false);
+
+            // Vanilla `LivingEntity#checkFallDamage` emits a step vibration while
+            // walking unless the entity is sneaking (sneaking entities are in the
+            // `minecraft:ignore_vibrations_sneaking` tag and are skipped).
+            if !caller.get_entity().is_sneaking()
+                && caller.get_entity().velocity.load().length_squared() > 0.0001
+            {
+                world.emit_game_event(GameEvent::Step.name(), caller.get_entity().pos.load());
+            }
 
             // Check slightly below supporting_pos for additional supporting blocks (blocks under carpets and the like)
             if !block.is_solid() {

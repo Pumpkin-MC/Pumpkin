@@ -28,6 +28,7 @@ pub mod raid;
 pub mod random_sequences;
 pub mod stopwatches;
 pub mod time;
+mod vibration;
 pub mod villager_poi;
 
 use crate::block::RandomTickArgs;
@@ -298,6 +299,8 @@ pub struct World {
     pub custom_block_entity_data: DashMap<BlockPos, NbtCompound>,
     /// Entity tracker responsible for tracking entity visibility and sending delta/status packets to watchers.
     pub entity_tracker: entity_tracker::EntityTracker,
+    /// Block positions of vibration listeners (sculk sensors and shriekers) for game event dispatch.
+    vibration_listeners: std::sync::Mutex<FxHashSet<BlockPos>>,
 }
 
 #[derive(Clone, Copy)]
@@ -424,6 +427,7 @@ impl World {
             custom_data: std::sync::Mutex::new(custom_data),
             custom_block_entity_data: DashMap::new(),
             entity_tracker: entity_tracker::EntityTracker::new(),
+            vibration_listeners: std::sync::Mutex::new(FxHashSet::default()),
         }
     }
 
@@ -5395,6 +5399,25 @@ impl World {
         let is_new_block = old_block != new_block;
         let block_moved = flags.contains(BlockFlags::MOVED);
 
+        // Keep the vibration listener set in sync with sculk sensor/shrieker placement.
+        let was_vibration_listener = old_block == &Block::SCULK_SENSOR
+            || old_block == &Block::CALIBRATED_SCULK_SENSOR
+            || old_block == &Block::SCULK_SHRIEKER;
+        let is_vibration_listener = new_block == &Block::SCULK_SENSOR
+            || new_block == &Block::CALIBRATED_SCULK_SENSOR
+            || new_block == &Block::SCULK_SHRIEKER;
+        if was_vibration_listener != is_vibration_listener {
+            let mut listeners = self
+                .vibration_listeners
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if is_vibration_listener {
+                listeners.insert(*position);
+            } else {
+                listeners.remove(position);
+            }
+        }
+
         if is_new_block
             && old_block.default_state.block_entity_type != u16::MAX
             && let Some(entity) = self.get_block_entity(position)
@@ -5551,6 +5574,13 @@ impl World {
             };
             crate::block::drop_loot(self, broken_block, position, true, &params);
         }
+
+        // Vanilla `BlockBehaviour#destroy` emits a `block_destroy` game event so
+        // sculk sensors (frequency 12) hear the block being broken.
+        self.emit_game_event(
+            pumpkin_data::game_event::GameEvent::BlockDestroy.name(),
+            position.to_centered_f64(),
+        );
 
         let new_state_id = if broken_block.is_waterlogged(broken_block_state.id) {
             Block::WATER.default_state.id
@@ -7039,13 +7069,17 @@ impl World {
         Self::broadcast_bedrock_grouped(be_packet, bedrock_recipients.into_iter());
     }
 
-    pub fn emit_game_event(&self, event_key: impl Into<String>, position: Vector3<f64>) {
+    pub fn emit_game_event(self: &Arc<Self>, event_key: impl Into<String>, position: Vector3<f64>) {
+        let key = event_key.into();
         let mut event = crate::plugin::api::events::world::generic_game::GenericGameEvent::new(
-            event_key.into(),
+            key.clone(),
             position,
         );
         if let Some(server) = self.server.upgrade() {
             server.plugin_manager.fire_blocking(&server, &mut event);
+        }
+        if let Some(event) = vibration::game_event_from_key(&key) {
+            vibration::dispatch(self, event, position);
         }
     }
 
