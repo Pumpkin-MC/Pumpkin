@@ -361,6 +361,20 @@ impl From<BlockId> for u16 {
     }
 }
 
+impl From<Block> for BlockId {
+    #[inline]
+    fn from(value: Block) -> Self {
+        value.id
+    }
+}
+
+impl From<&Block> for BlockId {
+    #[inline]
+    fn from(value: &Block) -> Self {
+        value.id
+    }
+}
+
 impl Default for BlockId {
     #[inline]
     fn default() -> Self {

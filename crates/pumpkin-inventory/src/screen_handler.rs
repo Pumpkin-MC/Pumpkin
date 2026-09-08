@@ -31,6 +31,10 @@ use crate::{
     slot::{NormalSlot, Slot},
     sync_handler::{SyncHandler, TrackedStack},
 };
+use crate::{
+    inventory::{ComparableInventory, Inventory},
+    window_property::PropertyDelegate,
+};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{
     Enchantment,
@@ -50,10 +54,6 @@ use pumpkin_protocol::{
     },
 };
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::{
-    block::entities::PropertyDelegate,
-    inventory::{ComparableInventory, Inventory},
-};
 use std::cmp::max;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU32, Ordering};

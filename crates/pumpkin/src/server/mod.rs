@@ -83,9 +83,9 @@ pub struct Server {
     /// Handles cryptographic keys for secure communication.
     key_store: OnceCell<Arc<KeyStore>>,
     /// Bedrock OIDC provider keys, fetched on startup for 1.26.10+ token validation.
-    pub bedrock_oidc_keys: Arc<OnceCell<(String, pumpkin_util::jwt::Jwks)>>,
+    pub bedrock_oidc_keys: Arc<OnceCell<(String, pumpkin_auth::jwt::Jwks)>>,
     /// Cached Bedrock server private key (process-lifetime). Generated on first Bedrock login and reused.
-    pub bedrock_private_key: OnceCell<Arc<pumpkin_util::p384::ecdsa::SigningKey>>,
+    pub bedrock_private_key: OnceCell<Arc<pumpkin_auth::p384::ecdsa::SigningKey>>,
     /// Manages server status information.
     listing: std::sync::Mutex<CachedStatus>,
     /// Saves server branding information.
@@ -369,7 +369,7 @@ impl Server {
                     .bedrock
                     .authentication
                     .clone();
-                let keys = match pumpkin_util::jwt::fetch_oidc_jwks(
+                let keys = match pumpkin_auth::jwt::fetch_oidc_jwks(
                     auth.url.as_deref(),
                     auth.connect_timeout,
                     auth.read_timeout,
@@ -379,7 +379,7 @@ impl Server {
                     Ok(keys) => keys,
                     Err(error) => {
                         error!("Failed to fetch Bedrock OIDC keys: {error}");
-                        (String::new(), pumpkin_util::jwt::Jwks { keys: Vec::new() })
+                        (String::new(), pumpkin_auth::jwt::Jwks { keys: Vec::new() })
                     }
                 };
                 let _ = server_clone.bedrock_oidc_keys.set(keys);

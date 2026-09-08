@@ -23,7 +23,6 @@ use pumpkin_protocol::{
         client::{
             client_cache_miss_response::{CClientCacheMissResponse, MissingBlobData},
             disconnect::CDisconnect,
-            level_chunk::CLevelChunk,
         },
         packet_decoder::BedrockBatchDecoder,
         packet_encoder::BedrockBatchEncoder,
@@ -54,7 +53,9 @@ use tokio::{
 
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
+pub mod level_chunk;
 pub mod login;
+use self::level_chunk::CLevelChunk;
 use self::nethernet::NetherNetSession;
 use crate::{
     entity::player::Player,
@@ -292,7 +293,7 @@ impl BedrockClient {
         }
     }
 
-    pub fn nethernet_public_key(&self) -> Option<&pumpkin_util::p384::PublicKey> {
+    pub fn nethernet_public_key(&self) -> Option<&pumpkin_auth::p384::PublicKey> {
         self.session.client_public_key()
     }
 

@@ -548,7 +548,7 @@ impl BlockIsReplacing {
     }
 }
 
-pub fn calculate_comparator_output(inventory: &dyn pumpkin_world::inventory::Inventory) -> u8 {
+pub fn calculate_comparator_output(inventory: &dyn pumpkin_inventory::Inventory) -> u8 {
     let size = inventory.size();
     if size == 0 {
         return 0;
