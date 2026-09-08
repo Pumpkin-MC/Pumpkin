@@ -244,20 +244,22 @@ fn combine_conditions(conditions: &[ConditionStruct]) -> LootCondition {
     merge_conditions(conditions.iter().map(parse_condition).collect())
 }
 
-/// Combines parsed conditions, dropping `None`s and duplicates.
+/// Combines parsed conditions, dropping `None`s.
 /// Returns a single condition when possible, otherwise `AllOf`.
+///
+/// Repeated stochastic conditions (e.g. two identical `random_chance` terms in an
+/// `all_of`) must each roll, so equal conditions are intentionally kept.
 fn merge_conditions(conditions: Vec<LootCondition>) -> LootCondition {
-    let mut unique: Vec<LootCondition> = Vec::with_capacity(conditions.len());
+    let mut kept: Vec<LootCondition> = Vec::with_capacity(conditions.len());
     for cond in conditions {
-        if cond == LootCondition::None || unique.contains(&cond) {
-            continue;
+        if cond != LootCondition::None {
+            kept.push(cond);
         }
-        unique.push(cond);
     }
-    match unique.len() {
+    match kept.len() {
         0 => LootCondition::None,
-        1 => unique[0],
-        _ => LootCondition::AllOf(Box::leak(unique.into_boxed_slice())),
+        1 => kept[0],
+        _ => LootCondition::AllOf(Box::leak(kept.into_boxed_slice())),
     }
 }
 
@@ -384,7 +386,8 @@ fn extract_entries_with_depth(
 
     let entry_cond = match (inherited_condition, combine_conditions(&entry.conditions)) {
         (LootCondition::None, cond) | (cond, LootCondition::None) => cond,
-        (first, second) if first == second => first,
+        // Equal conditions are combined, not collapsed: a repeated stochastic
+        // condition (e.g. two `random_chance` terms) must roll independently.
         (first, second) => LootCondition::AllOf(Box::leak(vec![first, second].into_boxed_slice())),
     };
 

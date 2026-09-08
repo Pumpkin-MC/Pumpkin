@@ -787,7 +787,10 @@ static BLOCKS_ACACIA_LEAVES_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::SilkTouchOrShears,
+            LootCondition::SilkTouchOrShears,
+        ]),
         bonus_formula: None,
     },
     LootEntry {
@@ -1076,7 +1079,7 @@ static BLOCKS_AMETHYST_CLUSTER_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -1274,7 +1277,10 @@ static BLOCKS_AZALEA_LEAVES_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::SilkTouchOrShears,
+            LootCondition::SilkTouchOrShears,
+        ]),
         bonus_formula: None,
     },
     LootEntry {
@@ -1746,7 +1752,7 @@ static BLOCKS_BEEHIVE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -1975,7 +1981,10 @@ static BLOCKS_BIRCH_LEAVES_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::SilkTouchOrShears,
+            LootCondition::SilkTouchOrShears,
+        ]),
         bonus_formula: None,
     },
     LootEntry {
@@ -2828,7 +2837,7 @@ static BLOCKS_BOOKSHELF_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -2874,7 +2883,7 @@ static BLOCKS_BRAIN_CORAL_BLOCK_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -3178,7 +3187,7 @@ static BLOCKS_BROWN_MUSHROOM_BLOCK_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -3314,7 +3323,7 @@ static BLOCKS_BUBBLE_CORAL_BLOCK_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -3461,7 +3470,7 @@ static BLOCKS_CAMPFIRE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -3758,7 +3767,10 @@ static BLOCKS_CHERRY_LEAVES_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::SilkTouchOrShears,
+            LootCondition::SilkTouchOrShears,
+        ]),
         bonus_formula: None,
     },
     LootEntry {
@@ -4461,7 +4473,7 @@ static BLOCKS_CLAY_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -4525,7 +4537,7 @@ static BLOCKS_COAL_ORE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -4715,7 +4727,10 @@ static BLOCKS_COBWEB_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::SilkTouchOrShears,
+            LootCondition::SilkTouchOrShears,
+        ]),
         bonus_formula: None,
     },
     LootEntry {
@@ -5003,7 +5018,7 @@ static BLOCKS_COPPER_ORE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -5211,7 +5226,7 @@ static BLOCKS_CREAKING_HEART_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -5386,7 +5401,7 @@ static BLOCKS_CRIMSON_NYLIUM_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -6089,7 +6104,10 @@ static BLOCKS_DARK_OAK_LEAVES_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::SilkTouchOrShears,
+            LootCondition::SilkTouchOrShears,
+        ]),
         bonus_formula: None,
     },
     LootEntry {
@@ -6530,7 +6548,7 @@ static BLOCKS_DEAD_BUSH_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::Shears,
+        condition: LootCondition::AllOf(&[LootCondition::Shears, LootCondition::Shears]),
         bonus_formula: None,
     },
     LootEntry {
@@ -6738,7 +6756,7 @@ static BLOCKS_DEEPSLATE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -6841,7 +6859,7 @@ static BLOCKS_DEEPSLATE_COAL_ORE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -6869,7 +6887,7 @@ static BLOCKS_DEEPSLATE_COPPER_ORE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -6897,7 +6915,7 @@ static BLOCKS_DEEPSLATE_DIAMOND_ORE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -6925,7 +6943,7 @@ static BLOCKS_DEEPSLATE_EMERALD_ORE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -6953,7 +6971,7 @@ static BLOCKS_DEEPSLATE_GOLD_ORE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -6981,7 +6999,7 @@ static BLOCKS_DEEPSLATE_IRON_ORE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -7009,7 +7027,7 @@ static BLOCKS_DEEPSLATE_LAPIS_ORE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -7037,7 +7055,7 @@ static BLOCKS_DEEPSLATE_REDSTONE_ORE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -7173,7 +7191,7 @@ static BLOCKS_DIAMOND_ORE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -7453,7 +7471,7 @@ static BLOCKS_EMERALD_ORE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -7607,7 +7625,7 @@ static BLOCKS_ENDER_CHEST_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -7926,7 +7944,7 @@ static BLOCKS_FERN_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::Shears,
+        condition: LootCondition::AllOf(&[LootCondition::Shears, LootCondition::Shears]),
         bonus_formula: None,
     },
     LootEntry {
@@ -7979,7 +7997,7 @@ static BLOCKS_FIRE_CORAL_BLOCK_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -8100,7 +8118,10 @@ static BLOCKS_FLOWERING_AZALEA_LEAVES_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::SilkTouchOrShears,
+            LootCondition::SilkTouchOrShears,
+        ]),
         bonus_formula: None,
     },
     LootEntry {
@@ -8181,7 +8202,7 @@ static BLOCKS_GILDED_BLACKSTONE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -8279,7 +8300,7 @@ static BLOCKS_GLOWSTONE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -8325,7 +8346,7 @@ static BLOCKS_GOLD_ORE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -8443,7 +8464,7 @@ static BLOCKS_GRASS_BLOCK_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -8474,7 +8495,7 @@ static BLOCKS_GRAVEL_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -9154,7 +9175,7 @@ static BLOCKS_HORN_CORAL_BLOCK_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -9422,7 +9443,7 @@ static BLOCKS_IRON_ORE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -9597,7 +9618,10 @@ static BLOCKS_JUNGLE_LEAVES_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::SilkTouchOrShears,
+            LootCondition::SilkTouchOrShears,
+        ]),
         bonus_formula: None,
     },
     LootEntry {
@@ -9922,7 +9946,7 @@ static BLOCKS_LAPIS_ORE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -9968,7 +9992,7 @@ static BLOCKS_LARGE_FERN_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 2i32,
         max_count: 2i32,
-        condition: LootCondition::Shears,
+        condition: LootCondition::AllOf(&[LootCondition::Shears, LootCondition::Shears]),
         bonus_formula: None,
     },
     LootEntry {
@@ -9992,7 +10016,7 @@ static BLOCKS_LARGE_FERN_POOL1_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 2i32,
         max_count: 2i32,
-        condition: LootCondition::Shears,
+        condition: LootCondition::AllOf(&[LootCondition::Shears, LootCondition::Shears]),
         bonus_formula: None,
     },
     LootEntry {
@@ -11301,7 +11325,10 @@ static BLOCKS_MANGROVE_LEAVES_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::SilkTouchOrShears,
+            LootCondition::SilkTouchOrShears,
+        ]),
         bonus_formula: None,
     },
     LootEntry {
@@ -11553,7 +11580,7 @@ static BLOCKS_MELON_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -11905,7 +11932,7 @@ static BLOCKS_MYCELIUM_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -12026,7 +12053,7 @@ static BLOCKS_NETHER_GOLD_ORE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -12058,7 +12085,7 @@ static BLOCKS_NETHER_QUARTZ_ORE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -12287,7 +12314,10 @@ static BLOCKS_OAK_LEAVES_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::SilkTouchOrShears,
+            LootCondition::SilkTouchOrShears,
+        ]),
         bonus_formula: None,
     },
     LootEntry {
@@ -13352,7 +13382,10 @@ static BLOCKS_PALE_OAK_LEAVES_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::SilkTouchOrShears,
+            LootCondition::SilkTouchOrShears,
+        ]),
         bonus_formula: None,
     },
     LootEntry {
@@ -14089,7 +14122,7 @@ static BLOCKS_PODZOL_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -17049,7 +17082,7 @@ static BLOCKS_RED_MUSHROOM_BLOCK_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -17383,7 +17416,7 @@ static BLOCKS_REDSTONE_ORE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -17832,7 +17865,7 @@ static BLOCKS_SEA_LANTERN_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -17914,7 +17947,7 @@ static BLOCKS_SHORT_GRASS_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::Shears,
+        condition: LootCondition::AllOf(&[LootCondition::Shears, LootCondition::Shears]),
         bonus_formula: None,
     },
     LootEntry {
@@ -18532,7 +18565,7 @@ static BLOCKS_SNOW_BLOCK_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -18560,7 +18593,7 @@ static BLOCKS_SOUL_CAMPFIRE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -18800,7 +18833,10 @@ static BLOCKS_SPRUCE_LEAVES_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::SilkTouchOrShears,
+            LootCondition::SilkTouchOrShears,
+        ]),
         bonus_formula: None,
     },
     LootEntry {
@@ -19053,7 +19089,7 @@ static BLOCKS_STONE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -19928,7 +19964,7 @@ static BLOCKS_TALL_GRASS_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 2i32,
         max_count: 2i32,
-        condition: LootCondition::Shears,
+        condition: LootCondition::AllOf(&[LootCondition::Shears, LootCondition::Shears]),
         bonus_formula: None,
     },
     LootEntry {
@@ -19952,7 +19988,7 @@ static BLOCKS_TALL_GRASS_POOL1_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 2i32,
         max_count: 2i32,
-        condition: LootCondition::Shears,
+        condition: LootCondition::AllOf(&[LootCondition::Shears, LootCondition::Shears]),
         bonus_formula: None,
     },
     LootEntry {
@@ -20224,7 +20260,7 @@ static BLOCKS_TUBE_CORAL_BLOCK_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -20435,7 +20471,10 @@ static BLOCKS_TWISTING_VINES_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::SilkTouchOrShears,
+            LootCondition::SilkTouchOrShears,
+        ]),
         bonus_formula: None,
     },
     LootEntry {
@@ -20468,7 +20507,10 @@ static BLOCKS_TWISTING_VINES_PLANT_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::SilkTouchOrShears,
+            LootCondition::SilkTouchOrShears,
+        ]),
         bonus_formula: None,
     },
     LootEntry {
@@ -20670,7 +20712,7 @@ static BLOCKS_WARPED_NYLIUM_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouch,
+        condition: LootCondition::AllOf(&[LootCondition::SilkTouch, LootCondition::SilkTouch]),
         bonus_formula: None,
     },
     LootEntry {
@@ -22264,7 +22306,10 @@ static BLOCKS_WEEPING_VINES_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::SilkTouchOrShears,
+            LootCondition::SilkTouchOrShears,
+        ]),
         bonus_formula: None,
     },
     LootEntry {
@@ -22297,7 +22342,10 @@ static BLOCKS_WEEPING_VINES_PLANT_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::SilkTouchOrShears,
+        condition: LootCondition::AllOf(&[
+            LootCondition::SilkTouchOrShears,
+            LootCondition::SilkTouchOrShears,
+        ]),
         bonus_formula: None,
     },
     LootEntry {
