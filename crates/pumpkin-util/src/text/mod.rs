@@ -933,8 +933,48 @@ impl TextComponentBase {
     /// A formatted string ready for console output.
     #[must_use]
     pub fn to_pretty_console(self) -> String {
+        self.to_pretty_console_inner(&Style::default())
+    }
+
+    #[expect(clippy::wrong_self_convention)]
+    fn to_pretty_console_inner(self, current_styles: &Style) -> String {
         fn osc8_link(url: &str, text: &str) -> String {
             format!("\x1b]8;;{url}\x1b\\{text}\x1b]8;;\x1b\\")
+        }
+        /// Prioritizes `a`.
+        fn combine_styles(a: Style, b: &Style) -> Style {
+            let mut style = Style::default();
+            if let Some(color) = a.color {
+                style.color = Some(color);
+            } else {
+                style.color = b.color;
+            }
+            if let Some(bold) = a.bold {
+                style.bold = Some(bold);
+            } else {
+                style.bold = b.bold;
+            }
+            if let Some(italic) = a.italic {
+                style.italic = Some(italic);
+            } else {
+                style.italic = b.italic;
+            }
+            if let Some(underlined) = a.underlined {
+                style.underlined = Some(underlined);
+            } else {
+                style.underlined = b.underlined;
+            }
+            if let Some(strikethrough) = a.strikethrough {
+                style.strikethrough = Some(strikethrough);
+            } else {
+                style.strikethrough = b.strikethrough;
+            }
+            if let Some(click_event) = a.click_event {
+                style.click_event = Some(click_event);
+            } else {
+                style.click_event.clone_from(&b.click_event);
+            }
+            style
         }
 
         let mut text = match *self.content {
@@ -958,7 +998,7 @@ impl TextComponentBase {
                 .get_string("name")
                 .map_or_else(|| "player_sprite".to_string(), ToString::to_string),
         };
-        let style = self.style;
+        let style = combine_styles(*self.style, current_styles);
         let color = style.color;
         if let Some(color) = color {
             text = color.console_color(&text).to_string();
@@ -983,7 +1023,7 @@ impl TextComponentBase {
         }
 
         for child in self.extra {
-            text += &*child.to_pretty_console();
+            text += &*child.to_pretty_console_inner(&style);
         }
         text
     }
