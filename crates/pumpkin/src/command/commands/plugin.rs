@@ -154,7 +154,7 @@ impl CommandExecutor for ListExecutor {
                             " (Permissions: {})",
                             metadata.permissions.join(", ")
                         ))
-                            .color_named(NamedColor::Gray),
+                        .color_named(NamedColor::Gray),
                     );
                 }
 
