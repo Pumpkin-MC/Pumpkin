@@ -22,8 +22,12 @@ impl ItemMetadata for FireworkRocketItem {
 }
 
 impl ItemBehaviour for FireworkRocketItem {
-    // Firework rockets aren't placeable; aiming at a block while gliding must still trigger
-    // the elytra boost, same as `normal_use` does when aiming at open air.
+    // A firework rocket always launches, whether or not the player is gliding - it's a
+    // functional item in its own right (decorative in the open, a boost while gliding), not
+    // an elytra-only action. The boost itself is gated separately, inside the spawned
+    // entity's own tick logic (`FireworkRocketEntity::tick`), based on the owner's
+    // fall-flying state at the time - so spawning unconditionally here is what lets both
+    // cases (plain launch, and launch-while-gliding boost) share one code path.
     fn use_on_block(
         &self,
         item: &mut ItemStack,
@@ -34,50 +38,46 @@ impl ItemBehaviour for FireworkRocketItem {
         _block: &Block,
         _server: &Server,
     ) {
-        if player.get_entity().is_fall_flying() {
-            let world = player.world();
-            let entity = Entity::new(
-                world.clone(),
-                player.get_entity().pos.load(),
-                &EntityType::FIREWORK_ROCKET,
-            );
-            let entity =
-                FireworkRocketEntity::new_shot_with_item(entity, player.get_entity(), item.clone());
-            world.spawn_entity(Arc::new(entity));
-            item.decrement_unless_creative(player.gamemode.load(), 1);
-        }
+        let world = player.world();
+        let entity = Entity::new(
+            world.clone(),
+            player.get_entity().pos.load(),
+            &EntityType::FIREWORK_ROCKET,
+        );
+        let entity =
+            FireworkRocketEntity::new_shot_with_item(entity, player.get_entity(), item.clone());
+        world.spawn_entity(Arc::new(entity));
+        item.decrement_unless_creative(player.gamemode.load(), 1);
     }
 
     fn normal_use(&self, _item: &Item, player: &Player) {
-        if player.get_entity().is_fall_flying() {
-            let mut held = player.inventory().held_item();
-            let mut is_main = true;
+        let mut held = player.inventory().held_item();
+        let mut is_main = true;
+        if held.is_empty() || held.item.id != Item::FIREWORK_ROCKET.id {
+            held = player.inventory().off_hand_item();
+            is_main = false;
             if held.is_empty() || held.item.id != Item::FIREWORK_ROCKET.id {
-                held = player.inventory().off_hand_item();
-                is_main = false;
-                if held.is_empty() || held.item.id != Item::FIREWORK_ROCKET.id {
-                    return;
-                }
+                return;
             }
+        }
 
-            let world = player.world();
-            let entity = Entity::new(
-                world.clone(),
-                player.get_entity().pos.load(),
-                &EntityType::FIREWORK_ROCKET,
-            );
-            let entity =
-                FireworkRocketEntity::new_shot_with_item(entity, player.get_entity(), held.clone());
-            world.spawn_entity(Arc::new(entity));
+        let world = player.world();
+        let entity = Entity::new(
+            world.clone(),
+            player.get_entity().pos.load(),
+            &EntityType::FIREWORK_ROCKET,
+        );
+        let entity =
+            FireworkRocketEntity::new_shot_with_item(entity, player.get_entity(), held.clone());
+        world.spawn_entity(Arc::new(entity));
 
-            held.decrement_unless_creative(player.gamemode.load(), 1);
-            if is_main {
-                player.inventory().set_held_item(held);
-            } else {
-                player
-                    .inventory()
-                    .set_stack_in_hand(pumpkin_util::Hand::Left, held);
-            }
+        held.decrement_unless_creative(player.gamemode.load(), 1);
+        if is_main {
+            player.inventory().set_held_item(held);
+        } else {
+            player
+                .inventory()
+                .set_stack_in_hand(pumpkin_util::Hand::Left, held);
         }
     }
 
