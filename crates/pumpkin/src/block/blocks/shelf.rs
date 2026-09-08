@@ -1,7 +1,7 @@
 use pumpkin_data::block_properties::AcaciaShelfLikeProperties;
 use pumpkin_data::{BlockState, BlockStateId};
+use pumpkin_inventory::Inventory;
 use pumpkin_macros::pumpkin_block_from_tag;
-use pumpkin_world::inventory::Inventory;
 
 use crate::block::entities::shelf::ShelfBlockEntity;
 use crate::block::{

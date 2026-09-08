@@ -8,6 +8,7 @@ use crate::block::{
 use pumpkin_data::block_properties::WallTorchLikeProperties;
 use pumpkin_data::translation;
 use pumpkin_data::{Block, BlockState, BlockStateId};
+use pumpkin_inventory::SimpleInventory;
 use pumpkin_inventory::anvil::AnvilScreenHandler;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
@@ -15,7 +16,6 @@ use pumpkin_inventory::screen_handler::{
 };
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::inventory::SimpleInventory;
 use std::sync::Arc;
 use std::sync::Mutex;
 
