@@ -221,6 +221,9 @@ mod java_codec_tests {
         let bytes = serialize_bedrock_serverbound_packet(&packet).unwrap();
         assert_eq!(bytes.as_ref(), &[47, 7, 1, 0]);
         assert!(matches!(deserialize_bedrock_serverbound_packet(47, &bytes[1..]), Some(BServerboundPacket::SContainerClose(_))));
+        let mut extended_payload = bytes[1..].to_vec();
+        extended_payload.push(255);
+        assert!(deserialize_bedrock_serverbound_packet(47, &extended_payload).is_none());
         assert!(serialize_bedrock_serverbound_packet(&BServerboundPacket::Unknown).is_none());
     }
 }
@@ -1144,10 +1147,14 @@ fn emit_struct_output(
                     rust_path_prefix, struct_name
                 ));
                 output.push_str("            use pumpkin_protocol::BServerPacket;\n");
+                output.push_str("            let mut cursor = Cursor::new(payload);\n");
                 output.push_str(&format!(
-                    "            let p = <{}::{} as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;\n",
+                    "            let p = <{}::{} as pumpkin_protocol::BServerPacket>::read(&mut cursor).ok()?;\n",
                     rust_path_prefix, struct_name
                 ));
+                output.push_str(
+                    "            if cursor.position() != payload.len() as u64 { return None; }\n",
+                );
             }
             output.push_str(prep_code);
             output.push_str(&format!(
@@ -1282,10 +1289,14 @@ fn process_enum(
                     rust_path_prefix, enum_name
                 ));
                 output.push_str("            use pumpkin_protocol::BServerPacket;\n");
+                output.push_str("            let mut cursor = Cursor::new(payload);\n");
                 output.push_str(&format!(
-                    "            let p = <{}::{} as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;\n",
+                    "            let p = <{}::{} as pumpkin_protocol::BServerPacket>::read(&mut cursor).ok()?;\n",
                     rust_path_prefix, enum_name
                 ));
+                output.push_str(
+                    "            if cursor.position() != payload.len() as u64 { return None; }\n",
+                );
             }
             output.push_str(&format!("            Some(match p {{\n"));
             for v in &e.variants {
