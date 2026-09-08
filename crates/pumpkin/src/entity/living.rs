@@ -112,6 +112,9 @@ pub struct LivingEntity {
     /// The [`pumpkin_data::DamageType`] id of the last damage taken, or `-1` if none.
     /// Used by panic goals (`PanicGoal#shouldPanic` in vanilla).
     pub last_damage_type_id: AtomicI32,
+    /// The tick (entity age) at which the last damage was taken, or `i32::MIN` if none.
+    /// Expires the marker above after 40 ticks (vanilla `LivingEntity#getLastDamageSource`).
+    pub last_damage_time: AtomicI32,
 
     /// The entity ID of the entity this living entity last attacked.
     pub last_attacking_id: AtomicI32,
@@ -240,6 +243,7 @@ impl LivingEntity {
             last_attacker_id: AtomicI32::new(0),
             last_attacked_time: AtomicI32::new(0),
             last_damage_type_id: AtomicI32::new(-1),
+            last_damage_time: AtomicI32::new(i32::MIN),
             last_attacking_id: AtomicI32::new(0),
             last_attack_time: AtomicI32::new(0),
             combat_tracker: std::sync::Mutex::new(CombatTracker::new()),
@@ -2274,6 +2278,9 @@ impl LivingEntity {
         // Give a short grace period of invulnerability after respawn
         self.hurt_cooldown.store(20, Relaxed);
         self.last_damage_taken.store(0f32);
+        // Clear the panic-goal damage marker from before the respawn
+        self.last_damage_type_id.store(-1, Relaxed);
+        self.last_damage_time.store(i32::MIN, Relaxed);
 
         self.entity.portal_cooldown.store(0, Relaxed);
         *self
@@ -2889,6 +2896,8 @@ impl LivingEntity {
             // recorded regardless of whether an attacker entity exists (fire, lava, etc.).
             self.last_damage_type_id
                 .store(i32::from(damage_type.id), Relaxed);
+            self.last_damage_time
+                .store(self.entity.age.load(Relaxed), Relaxed);
 
             if let Some(player) = caller.get_player() {
                 if damage_type.exhaustion > 0.0 {

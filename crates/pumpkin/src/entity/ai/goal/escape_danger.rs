@@ -53,10 +53,27 @@ impl EscapeDangerGoal {
         // Vanilla `PanicGoal#shouldPanic`: only the last damage source's type decides
         // whether the mob panics, so being punched does not scare tamed animals.
         let last_damage_type_id = living.last_damage_type_id.load(Relaxed);
-        u8::try_from(last_damage_type_id)
+        let Some(damage_type) = u8::try_from(last_damage_type_id)
             .ok()
             .and_then(DamageType::from_id)
-            .is_some_and(|damage_type| damage_type.has_tag(self.panic_tag))
+        else {
+            return false;
+        };
+
+        // Vanilla `LivingEntity#getLastDamageSource`: the marker expires after 40 ticks,
+        // so stale damage cannot re-trigger panic episodes.
+        let last_damage_time = living.last_damage_time.load(Relaxed);
+        if living
+            .entity
+            .age
+            .load(Relaxed)
+            .saturating_sub(last_damage_time)
+            > 40
+        {
+            return false;
+        }
+
+        damage_type.has_tag(self.panic_tag)
     }
 
     fn find_escape_target(mob: &dyn Mob) -> Option<Vector3<f64>> {
