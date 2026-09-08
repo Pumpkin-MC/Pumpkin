@@ -2447,6 +2447,20 @@ impl DataComponentCodec<Self> for InstrumentImpl {
         let description = seq
             .get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?
             .ok_or_else(|| ReadingError::Message("Missing instrument description".into()))?;
+        // Keep network input within the same bounds as the persistent NBT codec.
+        if !use_duration.is_finite() || use_duration <= 0.0 || !range.is_finite() || range <= 0.0 {
+            return Err(ReadingError::Message(
+                "Instrument duration and range must be finite and positive".into(),
+            ));
+        }
+        if !matches!(
+            description,
+            NbtTag::String(_) | NbtTag::Compound(_) | NbtTag::List(_)
+        ) {
+            return Err(ReadingError::Message(
+                "Invalid instrument description".into(),
+            ));
+        }
         Ok(Self::Inline {
             sound_event,
             use_duration,
@@ -2987,6 +3001,31 @@ mod instrument_tests {
             bytes
                 .write_nbt(NbtTag::String("Ponder".into()))
                 .expect("description");
+            assert!(InstrumentImpl::deserialize(&mut bytes.as_slice()).is_err());
+        }
+    }
+
+    #[test]
+    fn inline_instrument_rejects_fields_that_cannot_be_saved() {
+        let mut invalid_fields = Vec::new();
+        for value in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, 0.0, -1.0] {
+            invalid_fields.push((value, 256.0, NbtTag::String("Horn".into())));
+            invalid_fields.push((7.0, value, NbtTag::String("Horn".into())));
+        }
+        invalid_fields.push((7.0, 256.0, NbtTag::Int(42)));
+        invalid_fields.push((7.0, 256.0, NbtTag::End));
+        for (use_duration, range, description) in invalid_fields {
+            let instrument = InstrumentImpl::Inline {
+                sound_event: IdOr::Value(SoundEvent::new("custom:horn".into(), None)),
+                use_duration,
+                range,
+                description,
+            };
+            assert!(InstrumentImpl::read_data(&instrument.write_data()).is_none());
+            let mut bytes = Vec::new();
+            instrument
+                .serialize(&mut bytes)
+                .expect("encode invalid fields");
             assert!(InstrumentImpl::deserialize(&mut bytes.as_slice()).is_err());
         }
     }
