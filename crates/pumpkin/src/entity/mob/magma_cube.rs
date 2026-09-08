@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use pumpkin_data::attributes::Attributes;
+use pumpkin_data::sound::Sound;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -37,6 +38,26 @@ impl MagmaCubeEntity {
             }
         }
         Arc::new(Self { slime })
+    }
+
+    /// Vanilla `MagmaCube#getHurtSound`/`#getDeathSound`: tiny (size 1) cubes use the small
+    /// sound variants.
+    #[must_use]
+    pub(crate) const fn hurt_sound_for_size(size: i32) -> Sound {
+        if size == 1 {
+            Sound::EntityMagmaCubeHurtSmall
+        } else {
+            Sound::EntityMagmaCubeHurt
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn death_sound_for_size(size: i32) -> Sound {
+        if size == 1 {
+            Sound::EntityMagmaCubeDeathSmall
+        } else {
+            Sound::EntityMagmaCubeDeath
+        }
     }
 }
 

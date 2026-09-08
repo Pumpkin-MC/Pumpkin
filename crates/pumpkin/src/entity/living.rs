@@ -30,6 +30,7 @@ use crate::entity::attributes::Modifier;
 use crate::entity::attributes::ModifierOperation;
 use crate::entity::combat::{CombatRules, CombatTracker, FallLocation, knockback_after_resistance};
 use crate::entity::mob::equipment::DEFAULT_EQUIPMENT_DROP_CHANCE;
+use crate::entity::mob::magma_cube::MagmaCubeEntity;
 use crate::entity::mob::slime::SlimeEntity;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
 use crate::server::Server;
@@ -2329,15 +2330,27 @@ impl LivingEntity {
     }
 
     fn hurt_sound(&self) -> Sound {
+        // Vanilla `Slime#getHurtSound`/`MagmaCube#getHurtSound`: tiny (size 1) cubes use the
+        // small sound variants.
+        let size = self.entity.data.load(Relaxed);
         if self.entity.entity_type == &EntityType::SLIME {
-            SlimeEntity::hurt_sound_for_size(self.entity.data.load(Relaxed))
+            SlimeEntity::hurt_sound_for_size(size)
+        } else if self.entity.entity_type == &EntityType::MAGMA_CUBE {
+            MagmaCubeEntity::hurt_sound_for_size(size)
         } else {
             Self::hurt_sound_for_entity(self.entity.entity_type)
         }
     }
 
     fn death_sound(&self) -> Sound {
-        Self::death_sound_for_entity(self.entity.entity_type)
+        let size = self.entity.data.load(Relaxed);
+        if self.entity.entity_type == &EntityType::SLIME {
+            SlimeEntity::death_sound_for_size(size)
+        } else if self.entity.entity_type == &EntityType::MAGMA_CUBE {
+            MagmaCubeEntity::death_sound_for_size(size)
+        } else {
+            Self::death_sound_for_entity(self.entity.entity_type)
+        }
     }
 }
 
@@ -3641,6 +3654,39 @@ mod tests {
         assert_eq!(
             LivingEntity::death_sound_for_entity(&EntityType::ENDER_DRAGON),
             Sound::EntityGenericDeath
+        );
+    }
+
+    #[test]
+    fn slime_and_magma_cube_size_sounds_use_small_variants_when_tiny() {
+        assert_eq!(
+            SlimeEntity::hurt_sound_for_size(1),
+            Sound::EntitySlimeHurtSmall
+        );
+        assert_eq!(
+            SlimeEntity::death_sound_for_size(1),
+            Sound::EntitySlimeDeathSmall
+        );
+        assert_eq!(SlimeEntity::hurt_sound_for_size(4), Sound::EntitySlimeHurt);
+        assert_eq!(
+            SlimeEntity::death_sound_for_size(4),
+            Sound::EntitySlimeDeath
+        );
+        assert_eq!(
+            MagmaCubeEntity::hurt_sound_for_size(1),
+            Sound::EntityMagmaCubeHurtSmall
+        );
+        assert_eq!(
+            MagmaCubeEntity::death_sound_for_size(1),
+            Sound::EntityMagmaCubeDeathSmall
+        );
+        assert_eq!(
+            MagmaCubeEntity::hurt_sound_for_size(4),
+            Sound::EntityMagmaCubeHurt
+        );
+        assert_eq!(
+            MagmaCubeEntity::death_sound_for_size(4),
+            Sound::EntityMagmaCubeDeath
         );
     }
 

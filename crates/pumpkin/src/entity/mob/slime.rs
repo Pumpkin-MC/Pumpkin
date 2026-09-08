@@ -222,6 +222,14 @@ impl SlimeEntity {
         }
     }
 
+    pub(crate) const fn death_sound_for_size(size: i32) -> Sound {
+        if size == 1 {
+            Sound::EntitySlimeDeathSmall
+        } else {
+            Sound::EntitySlimeDeath
+        }
+    }
+
     fn get_jump_delay() -> i32 {
         rand::random_range(10..30)
     }
