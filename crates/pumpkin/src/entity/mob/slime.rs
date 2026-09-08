@@ -70,10 +70,16 @@ impl SlimeEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-            goal_selector.add_goal(1, Box::new(SlimeFloatGoal::new(mob_arc.clone())));
-            goal_selector.add_goal(2, Box::new(SlimeAttackGoal::new(mob_arc.clone())));
-            goal_selector.add_goal(3, Box::new(SlimeRandomDirectionGoal::new(mob_arc.clone())));
-            goal_selector.add_goal(5, Box::new(SlimeKeepOnJumpingGoal::new(mob_arc.clone())));
+            goal_selector.add_goal(1, Box::new(SlimeFloatGoal::new(Arc::downgrade(&mob_arc))));
+            goal_selector.add_goal(2, Box::new(SlimeAttackGoal::new(Arc::downgrade(&mob_arc))));
+            goal_selector.add_goal(
+                3,
+                Box::new(SlimeRandomDirectionGoal::new(Arc::downgrade(&mob_arc))),
+            );
+            goal_selector.add_goal(
+                5,
+                Box::new(SlimeKeepOnJumpingGoal::new(Arc::downgrade(&mob_arc))),
+            );
 
             target_selector.add_goal(
                 1,
@@ -451,31 +457,38 @@ impl MoveControlTrait for SlimeMoveControl {
 }
 
 pub struct SlimeFloatGoal {
-    slime: Arc<SlimeEntity>,
+    slime: Weak<SlimeEntity>,
 }
 
 impl SlimeFloatGoal {
-    pub const fn new(slime: Arc<SlimeEntity>) -> Self {
+    #[must_use]
+    pub const fn new(slime: Weak<SlimeEntity>) -> Self {
         Self { slime }
     }
 }
 
 impl Goal for SlimeFloatGoal {
     fn can_start(&mut self, _mob: &dyn Mob) -> bool {
-        let entity = &self.slime.entity.living_entity.entity;
+        let Some(slime) = self.slime.upgrade() else {
+            return false;
+        };
+        let entity = &slime.entity.living_entity.entity;
         entity.touching_water.load(Ordering::Relaxed)
             || entity.touching_lava.load(Ordering::Relaxed)
     }
 
     fn tick(&mut self, _mob: &dyn Mob) {
+        let Some(slime) = self.slime.upgrade() else {
+            return;
+        };
         if rand::random_range(0.0..1.0) < 0.8 {
-            self.slime
+            slime
                 .entity
                 .living_entity
                 .jumping
                 .store(true, Ordering::SeqCst);
         }
-        self.slime.speed_modifier.store(1.2);
+        slime.speed_modifier.store(1.2);
     }
 
     fn should_run_every_tick(&self) -> bool {
@@ -488,12 +501,13 @@ impl Goal for SlimeFloatGoal {
 }
 
 pub struct SlimeAttackGoal {
-    slime: Arc<SlimeEntity>,
+    slime: Weak<SlimeEntity>,
     grow_tired_timer: i32,
 }
 
 impl SlimeAttackGoal {
-    pub const fn new(slime: Arc<SlimeEntity>) -> Self {
+    #[must_use]
+    pub const fn new(slime: Weak<SlimeEntity>) -> Self {
         Self {
             slime,
             grow_tired_timer: 0,
@@ -503,7 +517,9 @@ impl SlimeAttackGoal {
 
 impl Goal for SlimeAttackGoal {
     fn can_start(&mut self, _mob: &dyn Mob) -> bool {
-        self.slime.entity.get_target().is_some()
+        self.slime
+            .upgrade()
+            .is_some_and(|slime| slime.entity.get_target().is_some())
     }
 
     fn start(&mut self, _mob: &dyn Mob) {
@@ -511,20 +527,27 @@ impl Goal for SlimeAttackGoal {
     }
 
     fn should_continue(&self, _mob: &dyn Mob) -> bool {
-        self.slime.entity.get_target().is_some() && self.grow_tired_timer > 0
+        self.grow_tired_timer > 0
+            && self
+                .slime
+                .upgrade()
+                .is_some_and(|slime| slime.entity.get_target().is_some())
     }
 
     fn tick(&mut self, _mob: &dyn Mob) {
+        let Some(slime) = self.slime.upgrade() else {
+            return;
+        };
         self.grow_tired_timer -= 1;
-        if let Some(target) = self.slime.entity.get_target() {
+        if let Some(target) = slime.entity.get_target() {
             let pos = target.get_entity().pos.load();
-            let my_pos = self.slime.entity.living_entity.entity.pos.load();
+            let my_pos = slime.entity.living_entity.entity.pos.load();
             let dx = pos.x - my_pos.x;
             let dz = pos.z - my_pos.z;
             let yaw = dx.atan2(dz).to_degrees() as f32;
-            self.slime.target_yaw.store(yaw);
+            slime.target_yaw.store(yaw);
         }
-        self.slime.is_aggressive.store(true, Ordering::Relaxed);
+        slime.is_aggressive.store(true, Ordering::Relaxed);
     }
 
     fn should_run_every_tick(&self) -> bool {
@@ -537,13 +560,14 @@ impl Goal for SlimeAttackGoal {
 }
 
 pub struct SlimeRandomDirectionGoal {
-    slime: Arc<SlimeEntity>,
+    slime: Weak<SlimeEntity>,
     chosen_degrees: f32,
     next_randomize_time: i32,
 }
 
 impl SlimeRandomDirectionGoal {
-    pub const fn new(slime: Arc<SlimeEntity>) -> Self {
+    #[must_use]
+    pub const fn new(slime: Weak<SlimeEntity>) -> Self {
         Self {
             slime,
             chosen_degrees: 0.0,
@@ -554,38 +578,27 @@ impl SlimeRandomDirectionGoal {
 
 impl Goal for SlimeRandomDirectionGoal {
     fn can_start(&mut self, _mob: &dyn Mob) -> bool {
-        self.slime.entity.get_target().is_none()
-            && (self
-                .slime
-                .entity
-                .living_entity
-                .entity
-                .on_ground
-                .load(Ordering::Relaxed)
-                || self
-                    .slime
-                    .entity
-                    .living_entity
-                    .entity
-                    .touching_water
-                    .load(Ordering::Relaxed)
-                || self
-                    .slime
-                    .entity
-                    .living_entity
-                    .entity
-                    .touching_lava
-                    .load(Ordering::Relaxed))
+        let Some(slime) = self.slime.upgrade() else {
+            return false;
+        };
+        let entity = &slime.entity.living_entity.entity;
+        slime.entity.get_target().is_none()
+            && (entity.on_ground.load(Ordering::Relaxed)
+                || entity.touching_water.load(Ordering::Relaxed)
+                || entity.touching_lava.load(Ordering::Relaxed))
     }
 
     fn tick(&mut self, _mob: &dyn Mob) {
+        let Some(slime) = self.slime.upgrade() else {
+            return;
+        };
         self.next_randomize_time -= 1;
         if self.next_randomize_time <= 0 {
             self.next_randomize_time = rand::random_range(40..100);
             self.chosen_degrees = rand::random_range(0.0..360.0);
         }
-        self.slime.target_yaw.store(self.chosen_degrees);
-        self.slime.is_aggressive.store(false, Ordering::Relaxed);
+        slime.target_yaw.store(self.chosen_degrees);
+        slime.is_aggressive.store(false, Ordering::Relaxed);
     }
 
     fn controls(&self) -> crate::entity::ai::goal::Controls {
@@ -594,23 +607,27 @@ impl Goal for SlimeRandomDirectionGoal {
 }
 
 pub struct SlimeKeepOnJumpingGoal {
-    slime: Arc<SlimeEntity>,
+    slime: Weak<SlimeEntity>,
 }
 
 impl SlimeKeepOnJumpingGoal {
     #[must_use]
-    pub const fn new(slime: Arc<SlimeEntity>) -> Self {
+    pub const fn new(slime: Weak<SlimeEntity>) -> Self {
         Self { slime }
     }
 }
 
 impl Goal for SlimeKeepOnJumpingGoal {
     fn can_start(&mut self, _mob: &dyn Mob) -> bool {
-        !self.slime.entity.living_entity.entity.has_vehicle()
+        self.slime
+            .upgrade()
+            .is_some_and(|slime| !slime.entity.living_entity.entity.has_vehicle())
     }
 
     fn tick(&mut self, _mob: &dyn Mob) {
-        self.slime.speed_modifier.store(1.0);
+        if let Some(slime) = self.slime.upgrade() {
+            slime.speed_modifier.store(1.0);
+        }
     }
 
     fn controls(&self) -> crate::entity::ai::goal::Controls {
