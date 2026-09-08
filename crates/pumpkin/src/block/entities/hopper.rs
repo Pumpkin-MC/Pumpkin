@@ -6,11 +6,11 @@ use pumpkin_data::block_properties::{FacingHopper, HopperLikeProperties};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
+use pumpkin_inventory::{Clearable, Inventory, sync_write_items_to_nbt};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::inventory::{Clearable, Inventory, sync_write_items_to_nbt};
 use std::any::Any;
 use std::array::from_fn;
 use std::sync::Arc;
@@ -61,7 +61,7 @@ impl BlockEntity for HopperBlockEntity {
             ticked_game_time: AtomicI64::new(0),
         };
 
-        pumpkin_world::inventory::sync_read_items_from_nbt(
+        pumpkin_inventory::sync_read_items_from_nbt(
             nbt,
             hopper
                 .items

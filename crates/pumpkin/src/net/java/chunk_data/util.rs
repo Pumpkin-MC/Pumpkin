@@ -1,9 +1,8 @@
-use crate::WritingError;
+use pumpkin_protocol::ser::NetworkWriteExt;
+use pumpkin_protocol::ser::WritingError;
 use pumpkin_util::version::JavaMinecraftVersion;
 use pumpkin_world::chunk::format::LightContainer;
 use std::io::Write;
-
-use crate::ser::NetworkWriteExt;
 
 /// Writes an NBT compound tag to the writer, formatted appropriately for the target Minecraft version.
 pub fn write_compound_nbt(

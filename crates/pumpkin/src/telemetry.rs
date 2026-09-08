@@ -460,7 +460,7 @@ pub fn start_telemetry_with_config(server: Arc<Server>, config: &TelemetryConfig
     );
 
     let user_agent = format!("Pumpkin-Server/{}", env!("CARGO_PKG_VERSION"));
-    let http_client = match pumpkin_util::client_builder()
+    let http_client = match pumpkin_auth::client_builder()
         .timeout(Duration::from_secs(10))
         .user_agent(&user_agent)
         .build()
@@ -801,7 +801,7 @@ mod tests {
         });
 
         let endpoint = format!("http://127.0.0.1:{port}/api/v1/rest/telemetry/heartbeat");
-        let http_client = pumpkin_util::client_builder().build().unwrap();
+        let http_client = pumpkin_auth::client_builder().build().unwrap();
         let client = TelemetryClient::new(signing_key, http_client, endpoint);
 
         let payload = HeartbeatPayload {
@@ -840,7 +840,7 @@ mod tests {
             .unwrap()
             .as_secs()
             .to_string();
-        let response = pumpkin_util::client_builder()
+        let response = pumpkin_auth::client_builder()
             .build()
             .unwrap()
             .post(format!(

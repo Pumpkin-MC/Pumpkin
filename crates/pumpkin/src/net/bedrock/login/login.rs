@@ -58,7 +58,7 @@ impl BedrockClient {
                 }
             }
         } else {
-            pumpkin_util::jwt::extract_oidc_token_player_claims(&auth_payload.token)?
+            pumpkin_auth::jwt::extract_oidc_token_player_claims(&auth_payload.token)?
         };
 
         let raw_token_str = std::str::from_utf8(&packet.raw_token).map_err(|_| {
@@ -71,7 +71,7 @@ impl BedrockClient {
         let _header = parts.next().ok_or(AuthError::InvalidTokenFormat)?;
         let payload_b64 = parts.next().ok_or(AuthError::InvalidTokenFormat)?;
 
-        let payload_bytes = pumpkin_util::jwt::decode_b64_url_nopad(payload_b64)
+        let payload_bytes = pumpkin_auth::jwt::decode_b64_url_nopad(payload_b64)
             .map_err(|_| LoginError::DecodeExtraError)?;
         let client_data: ClientData = serde_json::from_slice(&payload_bytes)?;
 
@@ -89,7 +89,7 @@ impl BedrockClient {
             profile_actions: None,
         };
 
-        let login_public_key = pumpkin_util::jwt::extract_cpk_from_token(&auth_payload.token)
+        let login_public_key = pumpkin_auth::jwt::extract_cpk_from_token(&auth_payload.token)
             .map_err(LoginError::ChainValidationFailed)?;
         if self
             .nethernet_public_key()

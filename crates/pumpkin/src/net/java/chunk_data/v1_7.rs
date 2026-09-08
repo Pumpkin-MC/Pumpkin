@@ -1,7 +1,7 @@
 use super::util::get_light_bytes;
-use crate::WritingError;
-use crate::ser::NetworkWriteExt;
 use pumpkin_data::block_state_remap::remap_block_state_for_version;
+use pumpkin_protocol::ser::NetworkWriteExt;
+use pumpkin_protocol::ser::WritingError;
 use pumpkin_util::version::JavaMinecraftVersion;
 use pumpkin_world::chunk::ChunkData;
 use std::io::Write;

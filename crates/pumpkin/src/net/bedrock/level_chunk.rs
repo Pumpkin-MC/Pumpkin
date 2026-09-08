@@ -1,14 +1,13 @@
 use std::io::{Error, Write};
 use xxhash_rust::xxh64::xxh64;
 
-use pumpkin_macros::packet;
 use pumpkin_nbt::{Nbt, compound::NbtCompound};
 use pumpkin_world::chunk::{
     ChunkData,
     palette::{BeNetworkSerialization, NetworkPalette},
 };
 
-use crate::{
+use pumpkin_protocol::{
     codec::{var_int::VarInt, var_uint::VarUInt},
     serial::PacketWrite,
 };
@@ -38,7 +37,6 @@ fn write_block_storage(
     Ok(())
 }
 
-#[packet(58)]
 pub struct CLevelChunk<'a> {
     // https://mojang.github.io/bedrock-protocol-docs/html/LevelChunkPacket.html
     pub dimension: i32,
@@ -48,6 +46,10 @@ pub struct CLevelChunk<'a> {
     // https://github.com/Mojang/bedrock-protocol-docs/blob/main/additional_docs/SubChunk%20Request%20System%20v1.18.10.md
     pub chunk: &'a ChunkData,
     pub block_actors: &'a [NbtCompound],
+}
+
+impl pumpkin_protocol::packet::Packet for CLevelChunk<'_> {
+    const PACKET_ID: i32 = 58;
 }
 
 pub type ChunkBlob = (u64, Vec<u8>);
@@ -202,7 +204,7 @@ mod tests {
     use pumpkin_world::chunk::ChunkData;
 
     use super::{CLevelChunk, VERSION};
-    use crate::serial::PacketWrite;
+    use pumpkin_protocol::serial::PacketWrite;
 
     fn read_var_uint(data: &[u8], offset: &mut usize) -> u32 {
         let mut value = 0;
