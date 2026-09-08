@@ -7,6 +7,7 @@ use pumpkin_data::block_properties::{ChestLikeProperties, ChestType, HorizontalF
 use pumpkin_data::entity::EntityPose;
 use pumpkin_data::loot_table::get_loot_table;
 use pumpkin_data::{Block, BlockDirection, translation};
+use pumpkin_inventory::Inventory;
 use pumpkin_inventory::double::DoubleInventory;
 use pumpkin_inventory::generic_container_screen_handler::{create_generic_9x3, create_generic_9x6};
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
@@ -17,7 +18,6 @@ use pumpkin_macros::{pumpkin_block, pumpkin_block_from_tag};
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::inventory::Inventory;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Mutex;
 

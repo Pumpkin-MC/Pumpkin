@@ -68,6 +68,7 @@ pub struct PendingConnection {
     pub brand: Option<String>,
     pub packet_limiter: PacketRateLimiter,
     pub verify_token: Option<[u8; 4]>,
+    pub vine_challenge: Option<[u8; 16]>,
 }
 
 impl PendingConnection {
@@ -93,6 +94,7 @@ impl PendingConnection {
             brand: None,
             packet_limiter,
             verify_token: None,
+            vine_challenge: None,
         }
     }
 
