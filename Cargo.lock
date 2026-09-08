@@ -3355,7 +3355,7 @@ dependencies = [
  "num-bigint 0.5.1",
  "ordered-float",
  "postcard",
- "pumpkin-codecs",
+ "pumpkin-command",
  "pumpkin-config",
  "pumpkin-data",
  "pumpkin-gametest",
@@ -3433,6 +3433,21 @@ dependencies = [
  "serde_repr",
  "syn 3.0.5",
  "wit-encoder",
+]
+
+[[package]]
+name = "pumpkin-command"
+version = "0.1.0+26.2-26.45"
+dependencies = [
+ "pumpkin-codecs",
+ "pumpkin-data",
+ "pumpkin-nbt",
+ "pumpkin-protocol",
+ "pumpkin-util",
+ "rustc-hash",
+ "serde_json",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]
