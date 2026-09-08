@@ -510,16 +510,22 @@ impl ItemEntity {
 
         entity.update_fluid_state(caller);
 
+        // Vanilla `ItemEntity#tick`: a velocity change larger than 0.01 sets
+        // `needsSync`, which makes the tracker send the update immediately.
         let velocity_dirty = entity.velocity_dirty.swap(false, Ordering::SeqCst)
             || entity.touching_water.load(Ordering::SeqCst)
             || entity.touching_lava.load(Ordering::SeqCst)
-            || entity.velocity.load().sub(&original_velo).length_squared() > 0.1;
+            || entity.velocity.load().sub(&original_velo).length_squared() > 0.01;
         let moved = entity.pos.load() != entity.last_sent_pos.load();
+        // A velocity change (for example being pushed out of blocks) also forces
+        // an immediate position update: vanilla `Entity#needsSync` bypasses the
+        // regular update interval in `ServerEntity#sendChanges`.
         let position_dirty = moved
-            && self
-                .item_age
-                .load(Ordering::Relaxed)
-                .is_multiple_of(ITEM_UPDATE_INTERVAL);
+            && (velocity_dirty
+                || self
+                    .item_age
+                    .load(Ordering::Relaxed)
+                    .is_multiple_of(ITEM_UPDATE_INTERVAL));
 
         if position_dirty || velocity_dirty {
             entity.send_pos_rot();
