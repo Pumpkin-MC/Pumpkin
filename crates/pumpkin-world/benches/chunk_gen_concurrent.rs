@@ -4,9 +4,12 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use pumpkin_data::BlockStateId;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_util::world_seed::Seed;
+use pumpkin_world::ProtoChunk;
 use pumpkin_world::chunk_system::{StagedChunkEnum, generate_single_chunk};
+use pumpkin_world::generation::generator::WorldGenerator;
 use pumpkin_world::generation::get_world_gen;
 use pumpkin_world::world::WorldPortalExt;
+use rayon::prelude::*;
 use std::hint::black_box;
 use std::sync::Arc;
 use std::time::Instant;
@@ -114,5 +117,58 @@ fn bench_concurrent_chunk_generation(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_concurrent_chunk_generation);
+// A fresh generator per iteration prevents the global structure cache from
+// turning a concurrent cold-miss workload into a warm lookup benchmark.
+fn bench_cold_structure_references(c: &mut Criterion) {
+    let mut group = c.benchmark_group("cold_structure_references_16_chunks");
+    group.sample_size(10);
+    for threads in [1, 16] {
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build()
+            .expect("benchmark thread pool");
+        group.bench_function(format!("{threads}_threads"), |b| {
+            b.iter_custom(|iterations| {
+                let mut total = std::time::Duration::ZERO;
+                for _ in 0..iterations {
+                    let world_gen = get_world_gen(
+                        Seed(1),
+                        Dimension::OVERWORLD,
+                        false,
+                        Vec::new(),
+                        String::new(),
+                    );
+                    let WorldGenerator::Noise(generator) = &*world_gen else {
+                        panic!("expected noise generator");
+                    };
+                    // These neighbors share the ancient-city candidate at (58, 5).
+                    let mut chunks: Vec<_> = (50..66)
+                        .map(|x| {
+                            let mut chunk = ProtoChunk::new(x, 0, &world_gen);
+                            chunk.step_to_biomes(generator);
+                            chunk.set_structure_starts(generator);
+                            chunk
+                        })
+                        .collect();
+                    let start = Instant::now();
+                    pool.install(|| {
+                        chunks.par_iter_mut().for_each(|chunk| {
+                            chunk.set_structure_references(generator);
+                        });
+                    });
+                    total += start.elapsed();
+                    black_box(chunks);
+                }
+                total
+            });
+        });
+    }
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    bench_concurrent_chunk_generation,
+    bench_cold_structure_references
+);
 criterion_main!(benches);
