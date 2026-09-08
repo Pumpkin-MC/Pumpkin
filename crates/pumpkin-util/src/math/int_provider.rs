@@ -516,22 +516,12 @@ impl TrapezoidIntProvider {
     /// # Returns
     /// A random integer from the source provider, clamped to [`min_inclusive`, `max_inclusive`].
     ///
-    /// Mirrors vanilla `TrapezoidInt.sample` draw for draw:
+    /// Mirrors vanilla `TrapezoidInt.sample` draw for draw, in three branches:
     ///
-    /// ```java
-    /// if (this.plateau == 0 && this.maxInclusive == -this.minInclusive) {
-    ///     return random.nextInt(this.maxInclusive + 1) - random.nextInt(this.maxInclusive + 1);
-    /// }
-    /// int range = this.maxInclusive - this.minInclusive;
-    /// if (this.plateau == range) {
-    ///     return Mth.randomBetweenInclusive(random, this.minInclusive, this.maxInclusive);
-    /// }
-    /// int half = (range - this.plateau) / 2;
-    /// int rest = range - half;
-    /// return this.minInclusive
-    ///     + Mth.randomBetweenInclusive(random, 0, rest)
-    ///     + Mth.randomBetweenInclusive(random, 0, half);
-    /// ```
+    /// - a symmetric range with no plateau is the *difference* of two `nextInt(max + 1)` draws;
+    /// - a plateau covering the whole range is a single uniform draw over `[min, max]`;
+    /// - otherwise it is `min` plus two uniform draws, over `[0, range - half]` and `[0, half]`,
+    ///   where `half = (range - plateau) / 2`.
     ///
     /// The symmetric branch is the one every `random_offset` placement modifier in the 26.2
     /// data takes, and it is a *difference* of two draws, not a sum offset by `min`.
@@ -1066,10 +1056,8 @@ mod tests {
         }
     }
 
-    /// A `[0, 0]` trapezoid consumes two draws in vanilla, not zero: after one
-    /// `sample(new LegacyRandomSource(13579))` the next `nextInt()` is 392090517, the *third*
-    /// value of that stream (`1265370827, 1234256338, 392090517, ...`). Skipping those draws
-    /// desynchronises every later draw of the feature.
+    /// A `[0, 0]` trapezoid consumes two draws in vanilla, not zero: after one sample on the
+    /// legacy stream seeded with 13579 the next `nextInt()` is its *third* value, 392090517.
     #[test]
     fn trapezoid_int_empty_range_still_consumes_two_draws() {
         let mut random = crate::random::legacy_rand::LegacyRand::from_seed(13579);

@@ -337,8 +337,8 @@ impl ClampedNormalFloatProvider {
     /// A random float from a normal distribution, clamped to [min, max].
     #[allow(clippy::suboptimal_flops)]
     pub fn get(&self, random: &mut impl RandomImpl) -> f32 {
-        // NOTE: Vanilla's `Mth.normal` is `mean + (float) nextGaussian() * deviation`: the
-        // product is rounded to f32 before the add, so no fused multiply-add here either.
+        // NOTE: Vanilla's `Mth.normal` narrows the gaussian to a float, scales it by the
+        // deviation and adds the mean, so no fused multiply-add here either.
         let gaussian = random.next_gaussian() as f32;
         let value = self.mean + gaussian * self.deviation;
 
@@ -469,12 +469,9 @@ mod tests {
         assert_eq!(provider.get(&mut random), 5.5); // Should always return the same value
     }
 
-    /// Vanilla's `UniformFloat.sample` is `Mth.randomBetween`:
-    /// `random.nextFloat() * (maxExclusive - min) + min`, i.e. the product is rounded to f32
-    /// before the add. On the legacy stream seeded with 4 the first float is
-    /// `0.730_609_4`; for the cave carver's `0.7..1.4` horizontal radius multiplier the
-    /// vanilla expression gives `1.211_426_5`, while a fused multiply-add gives
-    /// `1.211_426_6`.
+    /// `Mth.randomBetween` rounds the product to f32 before adding the minimum. On the legacy
+    /// stream seeded with 4, the carver's `0.7..1.4` multiplier gives `1.211_426_5` that way and
+    /// `1.211_426_6` under a fused multiply-add.
     #[test]
     fn uniform_float_provider_matches_vanilla_rounding() {
         let provider = UniformFloatProvider::new(0.7, 1.4);
@@ -499,10 +496,8 @@ mod tests {
         );
     }
 
-    /// Vanilla's `ClampedNormalFloat.sample` is `Mth.normal`:
-    /// `mean + (float) random.nextGaussian() * deviation`, again two roundings. Search the
-    /// legacy stream for the first seed where a fused multiply-add would differ and check
-    /// the provider follows the vanilla expression there.
+    /// `Mth.normal` narrows the gaussian to a float before scaling and adding — two roundings,
+    /// so a fused multiply-add gives a different float on some seeds.
     #[test]
     fn clamped_normal_float_provider_matches_vanilla_rounding() {
         let (mean, deviation) = (0.5f32, 0.3f32);
