@@ -492,6 +492,36 @@ mod packet_tests {
     }
 
     #[test]
+    fn packet_update_tags_preserves_raw_payload() {
+        for (phase, version, id) in [
+            (
+                ConnectionState::Play,
+                JavaMinecraftVersion::V_1_19_4,
+                pumpkin_data::packet::clientbound::play::UPDATE_TAGS,
+            ),
+            (
+                ConnectionState::Config,
+                JavaMinecraftVersion::V_1_21_11,
+                pumpkin_data::packet::clientbound::config::UPDATE_TAGS,
+            ),
+        ] {
+            let user = java_user(phase, phase);
+            user.java_version.store(version);
+            let mut state = PluginHostState::new();
+            let payload = Bytes::from_static(b"\x01\x0eminecraft:item\x01\x08test:tag\x02\x01\x05");
+            let mut event = PacketSentEvent::new(user, id.to_id(version), payload.clone());
+            let Event::PacketSentEvent(data) = event.to_wasm_event(&mut state) else {
+                panic!("sent event expected")
+            };
+            assert!(matches!(data.packet, ClientboundPacket::Unknown));
+            assert_eq!(data.raw_payload, payload);
+            event.apply_wasm_event(Event::PacketSentEvent(data), &mut state);
+            assert_eq!(event.payload, payload);
+            assert!(!event.cancelled);
+        }
+    }
+
+    #[test]
     fn packet_events_apply_typed_replacements_and_reject_invalid_ones() {
         let user = java_user(ConnectionState::Status, ConnectionState::Status);
         let mut state = PluginHostState::new();

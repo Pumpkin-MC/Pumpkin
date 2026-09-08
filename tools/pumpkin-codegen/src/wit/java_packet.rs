@@ -297,14 +297,28 @@ fn process_struct(
     defined_cases: &mut HashSet<String>,
     defined_types: &HashSet<String>,
 ) {
+    // Tag packets remain raw-only until a full payload codec is available.
+    if matches!(
+        s.ident.to_string().as_str(),
+        "CUpdateTags" | "CUpdateTagsPlay"
+    ) {
+        return;
+    }
     let wit_name = wit_name(s.ident.to_string(), state);
     if !defined_cases.insert(wit_name.clone()) {
         return;
     }
-    let fields_list = match s.fields {
+    let mut fields_list = match s.fields {
         Fields::Named(fields) => collect_fields(fields.named, defined_types),
         _ => Vec::new(),
     };
+    if s.ident == "SHandShake"
+        && let Some(port) = fields_list
+            .iter_mut()
+            .find(|field| field.name().raw_name() == "server-port")
+    {
+        port.set_type(WitType::U16);
+    }
 
     register_wit_type(wit_name, fields_list, interface, variant, None);
 }
@@ -482,5 +496,22 @@ fn extract_type_name(ty: &syn::Type) -> String {
             _ => String::new(),
         },
         _ => String::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn handshake_port_uses_unsigned_short() {
+        let wit = super::build();
+        let handshake = wit.split("record handshake-s-hand-shake {").nth(1).unwrap();
+        let handshake = handshake.split('}').next().unwrap();
+        assert!(handshake.contains("server-port: u16,"));
+    }
+
+    #[test]
+    fn update_tags_remains_raw_only() {
+        let wit = super::build();
+        assert!(!wit.contains("c-update-tags"));
     }
 }
