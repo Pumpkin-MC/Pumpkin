@@ -67,9 +67,9 @@ pub struct GeodeFeature {
 }
 
 impl GeodeFeature {
-    /// The geode's shape noise: vanilla creates it from a `LegacyRandomSource(level.getSeed())`,
-    /// i.e. it is a function of the world seed only and consumes nothing from the feature random
-    /// (`NormalNoise.create(new WorldgenRandom(new LegacyRandomSource(level.getSeed())), -4, 1.0)`).
+    /// The geode's shape noise is a normal noise of octave -4 seeded from the world seed through
+    /// a legacy random source, so it is a function of the world seed only and consumes nothing
+    /// from the feature random.
     fn shape_noise(world_seed: u64) -> NormalNoise {
         let mut random = RandomGenerator::Legacy(LegacyRand::from_seed(world_seed));
         NormalNoise::create(&mut random, -4, &[1.0])
@@ -115,8 +115,8 @@ impl GeodeFeature {
         }
     }
 
-    /// Vanilla compares `(double)random.nextFloat() < chance` (the float draw is widened to a
-    /// double, the double chance is never narrowed to a float).
+    /// Vanilla widens the `nextFloat` draw to a double and compares it against the double
+    /// chance; the chance is never narrowed to a float.
     fn chance_hit(draw: f32, chance: f64) -> bool {
         f64::from(draw) < chance
     }
@@ -432,9 +432,8 @@ mod tests {
         assert_eq!(geode.invalid_blocks_threshold, 1);
     }
 
-    /// Values printed by the real 26.2 server classes for seed 13579:
-    /// `NormalNoise.create(new WorldgenRandom(new LegacyRandomSource(13579L)), -4, 1.0)
-    ///     .getValue(x, y, z)` (see `GeodeFeature.place`).
+    /// Values printed by the real 26.2 server classes for seed 13579: the shape noise
+    /// `GeodeFeature.place` builds, sampled at each position.
     #[test]
     fn shape_noise_is_seeded_from_the_world_seed() {
         let cases = [
@@ -468,10 +467,9 @@ mod tests {
         assert!(!cannot_replace.contains(&Block::DEEPSLATE.id));
     }
 
-    /// Vanilla: `(double)random.nextFloat() < config.generateCrackChance` (`f2d; dcmpg`).
-    /// The largest float below 0.95 is 0.94999998807907104, which is below the double 0.95
-    /// but *not* below `0.95 as f32` (they are the same float), so narrowing the chance to a
-    /// float flips that draw.
+    /// The draw is widened to a double, never the chance narrowed to a float: the largest float
+    /// below 0.95 is 0.94999998807907104, which is under the double 0.95 but not under
+    /// `0.95 as f32`, so narrowing flips that draw.
     #[test]
     fn chance_draws_are_compared_as_doubles() {
         let draw = 0.95f32; // == 0.949_999_988_079_071_04
