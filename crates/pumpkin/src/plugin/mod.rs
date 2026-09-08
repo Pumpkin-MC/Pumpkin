@@ -666,12 +666,6 @@ impl PluginManager {
         loader: Arc<dyn PluginLoader>,
         path: PathBuf,
     ) -> Result<tokio::task::JoinHandle<()>, ManagerError> {
-        // Mark plugin as loading
-        self.plugin_states
-            .write()
-            .await
-            .insert(metadata.name.clone(), PluginState::Loading);
-
         let context = Arc::new(Context::new(
             metadata.clone(),
             server.clone(),
@@ -682,25 +676,45 @@ impl PluginManager {
 
         let plugin_path = path.clone();
 
-        // Create the plugin structure first
-        let plugin = LoadedPlugin {
-            metadata: metadata.clone(),
-            instance: None, // Will be set after successful initialization
-            loader: loader.clone(),
-            loader_data: Some(loader_data),
-            is_active: false, // Will be set to true after successful initialization
-            context: context.clone(),
-            path,
-        };
-
-        let plugin_index = {
+        // Claiming the name and inserting the record: two loads of
+        // the same plugin would otherwise both initialize and register handlers
+        let reserved = {
             let mut plugins = self
                 .plugins
                 .write()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            plugins.push(plugin);
-            plugins.len() - 1
+            if plugins.iter().any(|p| p.metadata.name == metadata.name) {
+                Err(loader_data)
+            } else {
+                plugins.push(LoadedPlugin {
+                    metadata: metadata.clone(),
+                    instance: None, // Will be set after successful initialization
+                    loader: loader.clone(),
+                    loader_data: Some(loader_data),
+                    is_active: false, // Will be set to true after successful initialization
+                    context: context.clone(),
+                    path,
+                });
+                Ok(plugins.len() - 1)
+            }
         };
+
+        let plugin_index = match reserved {
+            Ok(index) => index,
+            Err(loader_data) => {
+                // Nothing owns the runtime this loader just built, so release it again
+                loader.unload(loader_data).await.ok();
+                return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
+                    format!("Plugin \"{}\" is already loaded", metadata.name),
+                )));
+            }
+        };
+
+        // Mark plugin as loading, only now that this load owns the name
+        self.plugin_states
+            .write()
+            .await
+            .insert(metadata.name.clone(), PluginState::Loading);
 
         // Spawn async task for plugin initialization
         let self_ref_clone = Arc::clone(self);
