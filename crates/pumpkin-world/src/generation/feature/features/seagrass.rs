@@ -31,30 +31,10 @@ impl SeagrassFeature {
         let grass_pos = BlockPos::new(pos.0.x + x, y, pos.0.z + z);
 
         // Vanilla draws the tall/short coin as soon as the target is water, *before* the
-        // survivability check, and reports success for any surviving spot even when the tall
-        // variant found no water above it:
-        //
-        // ```java
-        // if (level.getBlockState(blockPos).is(Blocks.WATER)) {
-        //     boolean bl2 = random.nextDouble() < config.probability;
-        //     BlockState blockState = bl2
-        //         ? Blocks.TALL_SEAGRASS.defaultBlockState()
-        //         : Blocks.SEAGRASS.defaultBlockState();
-        //     if (blockState.canSurvive(level, blockPos)) {
-        //         if (bl2) {
-        //             BlockState blockState2 = blockState.setValue(TallSeagrassBlock.HALF, DoubleBlockHalf.UPPER);
-        //             BlockPos blockPos2 = blockPos.above();
-        //             if (level.getBlockState(blockPos2).is(Blocks.WATER)) {
-        //                 level.setBlock(blockPos, blockState, 2);
-        //                 level.setBlock(blockPos2, blockState2, 2);
-        //             }
-        //         } else {
-        //             level.setBlock(blockPos, blockState, 2);
-        //         }
-        //         bl = true;
-        //     }
-        // }
-        // ```
+        // survivability check: `nextDouble() < probability` picks tall over short seagrass, and
+        // only then is the chosen state tested for survival. The tall variant additionally needs
+        // water in the block above before either half is written, but the feature reports
+        // success for any surviving spot even when that second water check fails.
         //
         // Skipping the `nextDouble` on the ocean floor blocks that cannot hold seagrass left
         // every later draw of the feature one behind.
@@ -124,15 +104,8 @@ mod tests {
     use super::SeagrassFeature;
 
     /// Vanilla spends the `nextDouble` on every water target, even one the seagrass cannot
-    /// survive on, and spends none when the target is not water:
-    ///
-    /// ```java
-    /// if (level.getBlockState(blockPos).is(Blocks.WATER)) {
-    ///     boolean bl2 = random.nextDouble() < config.probability;
-    ///     ...
-    ///     if (blockState.canSurvive(level, blockPos)) { ... }
-    /// }
-    /// ```
+    /// survive on, and spends none when the target is not water: the coin sits inside the
+    /// "target is water" branch and ahead of the survivability test.
     #[test]
     fn the_tall_coin_is_drawn_before_the_survivability_check() {
         // Not water: no draw at all.
