@@ -4893,6 +4893,9 @@ mod java_codec_tests {
             deserialize_bedrock_serverbound_packet(47, &bytes[1..]),
             Some(BServerboundPacket::SContainerClose(_))
         ));
+        let mut extended_payload = bytes[1..].to_vec();
+        extended_payload.push(255);
+        assert!(deserialize_bedrock_serverbound_packet(47, &extended_payload).is_none());
         assert!(serialize_bedrock_serverbound_packet(&BServerboundPacket::Unknown).is_none());
     }
 }
@@ -5265,7 +5268,9 @@ pub fn deserialize_bedrock_serverbound_packet(
     match id {
         id if id == <pumpkin_protocol::bedrock::server::SBlockPickRequest as pumpkin_protocol::Packet>::PACKET_ID as i32 => {
             use pumpkin_protocol::BServerPacket;
-            let p = <pumpkin_protocol::bedrock::server::SBlockPickRequest as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;
+            let mut cursor = Cursor::new(payload);
+            let p = <pumpkin_protocol::bedrock::server::SBlockPickRequest as pumpkin_protocol::BServerPacket>::read(&mut cursor).ok()?;
+            if cursor.position() != payload.len() as u64 { return None; }
             Some(BServerboundPacket::SBlockPickRequest(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::SBlockPickRequest {
                 position: (p.position.0.x, p.position.0.y, p.position.0.z),
                 with_data: p.with_data,
@@ -5274,14 +5279,18 @@ pub fn deserialize_bedrock_serverbound_packet(
         }
         id if id == <pumpkin_protocol::bedrock::server::SClientCacheStatus as pumpkin_protocol::Packet>::PACKET_ID as i32 => {
             use pumpkin_protocol::BServerPacket;
-            let p = <pumpkin_protocol::bedrock::server::SClientCacheStatus as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;
+            let mut cursor = Cursor::new(payload);
+            let p = <pumpkin_protocol::bedrock::server::SClientCacheStatus as pumpkin_protocol::BServerPacket>::read(&mut cursor).ok()?;
+            if cursor.position() != payload.len() as u64 { return None; }
             Some(BServerboundPacket::SClientCacheStatus(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::SClientCacheStatus {
                 is_cache_supported: p.is_cache_supported,
             }))
         }
         id if id == <pumpkin_protocol::bedrock::server::SContainerClose as pumpkin_protocol::Packet>::PACKET_ID as i32 => {
             use pumpkin_protocol::BServerPacket;
-            let p = <pumpkin_protocol::bedrock::server::SContainerClose as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;
+            let mut cursor = Cursor::new(payload);
+            let p = <pumpkin_protocol::bedrock::server::SContainerClose as pumpkin_protocol::BServerPacket>::read(&mut cursor).ok()?;
+            if cursor.position() != payload.len() as u64 { return None; }
             Some(BServerboundPacket::SContainerClose(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::SContainerClose {
                 container_id: p.container_id as _,
                 container_type: p.container_type as _,
@@ -5290,7 +5299,9 @@ pub fn deserialize_bedrock_serverbound_packet(
         }
         id if id == <pumpkin_protocol::bedrock::server::SLogin as pumpkin_protocol::Packet>::PACKET_ID as i32 => {
             use pumpkin_protocol::BServerPacket;
-            let p = <pumpkin_protocol::bedrock::server::SLogin as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;
+            let mut cursor = Cursor::new(payload);
+            let p = <pumpkin_protocol::bedrock::server::SLogin as pumpkin_protocol::BServerPacket>::read(&mut cursor).ok()?;
+            if cursor.position() != payload.len() as u64 { return None; }
             Some(BServerboundPacket::SLogin(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::SLogin {
                 protocol_version: p.protocol_version as _,
                 jwt: p.jwt.to_vec(),
@@ -5299,7 +5310,9 @@ pub fn deserialize_bedrock_serverbound_packet(
         }
         id if id == <pumpkin_protocol::bedrock::server::SPacketViolationWarning as pumpkin_protocol::Packet>::PACKET_ID as i32 => {
             use pumpkin_protocol::BServerPacket;
-            let p = <pumpkin_protocol::bedrock::server::SPacketViolationWarning as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;
+            let mut cursor = Cursor::new(payload);
+            let p = <pumpkin_protocol::bedrock::server::SPacketViolationWarning as pumpkin_protocol::BServerPacket>::read(&mut cursor).ok()?;
+            if cursor.position() != payload.len() as u64 { return None; }
             Some(BServerboundPacket::SPacketViolationWarning(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::SPacketViolationWarning {
                 violation_type: p.violation_type.0 as _,
                 violation_severity: p.violation_severity.0 as _,
@@ -5309,7 +5322,9 @@ pub fn deserialize_bedrock_serverbound_packet(
         }
         id if id == <pumpkin_protocol::bedrock::server::SPlayerHotbar as pumpkin_protocol::Packet>::PACKET_ID as i32 => {
             use pumpkin_protocol::BServerPacket;
-            let p = <pumpkin_protocol::bedrock::server::SPlayerHotbar as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;
+            let mut cursor = Cursor::new(payload);
+            let p = <pumpkin_protocol::bedrock::server::SPlayerHotbar as pumpkin_protocol::BServerPacket>::read(&mut cursor).ok()?;
+            if cursor.position() != payload.len() as u64 { return None; }
             Some(BServerboundPacket::SPlayerHotbar(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::SPlayerHotbar {
                 selected_slot: p.selected_slot.0 as _,
                 container_id: p.container_id as _,
@@ -5318,7 +5333,9 @@ pub fn deserialize_bedrock_serverbound_packet(
         }
         id if id == <pumpkin_protocol::bedrock::server::SRequestChunkRadius as pumpkin_protocol::Packet>::PACKET_ID as i32 => {
             use pumpkin_protocol::BServerPacket;
-            let p = <pumpkin_protocol::bedrock::server::SRequestChunkRadius as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;
+            let mut cursor = Cursor::new(payload);
+            let p = <pumpkin_protocol::bedrock::server::SRequestChunkRadius as pumpkin_protocol::BServerPacket>::read(&mut cursor).ok()?;
+            if cursor.position() != payload.len() as u64 { return None; }
             Some(BServerboundPacket::SRequestChunkRadius(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::SRequestChunkRadius {
                 chunk_radius: p.chunk_radius.0 as _,
                 max_chunk_radius: p.max_chunk_radius as _,
@@ -5326,21 +5343,27 @@ pub fn deserialize_bedrock_serverbound_packet(
         }
         id if id == <pumpkin_protocol::bedrock::server::SRequestNetworkSettings as pumpkin_protocol::Packet>::PACKET_ID as i32 => {
             use pumpkin_protocol::BServerPacket;
-            let p = <pumpkin_protocol::bedrock::server::SRequestNetworkSettings as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;
+            let mut cursor = Cursor::new(payload);
+            let p = <pumpkin_protocol::bedrock::server::SRequestNetworkSettings as pumpkin_protocol::BServerPacket>::read(&mut cursor).ok()?;
+            if cursor.position() != payload.len() as u64 { return None; }
             Some(BServerboundPacket::SRequestNetworkSettings(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::SRequestNetworkSettings {
                 client_network_version: p.client_network_version as _,
             }))
         }
         id if id == <pumpkin_protocol::bedrock::server::SSetLocalPlayerAsInitialized as pumpkin_protocol::Packet>::PACKET_ID as i32 => {
             use pumpkin_protocol::BServerPacket;
-            let p = <pumpkin_protocol::bedrock::server::SSetLocalPlayerAsInitialized as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;
+            let mut cursor = Cursor::new(payload);
+            let p = <pumpkin_protocol::bedrock::server::SSetLocalPlayerAsInitialized as pumpkin_protocol::BServerPacket>::read(&mut cursor).ok()?;
+            if cursor.position() != payload.len() as u64 { return None; }
             Some(BServerboundPacket::SSetLocalPlayerAsInitialized(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::SSetLocalPlayerAsInitialized {
                 player_id: p.player_id.0 as _,
             }))
         }
         id if id == <pumpkin_protocol::bedrock::server::SSetPlayerInventoryOptions as pumpkin_protocol::Packet>::PACKET_ID as i32 => {
             use pumpkin_protocol::BServerPacket;
-            let p = <pumpkin_protocol::bedrock::server::SSetPlayerInventoryOptions as pumpkin_protocol::BServerPacket>::read(&mut Cursor::new(payload)).ok()?;
+            let mut cursor = Cursor::new(payload);
+            let p = <pumpkin_protocol::bedrock::server::SSetPlayerInventoryOptions as pumpkin_protocol::BServerPacket>::read(&mut cursor).ok()?;
+            if cursor.position() != payload.len() as u64 { return None; }
             Some(BServerboundPacket::SSetPlayerInventoryOptions(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::SSetPlayerInventoryOptions {
                 left_inventory_tab: p.left_inventory_tab.0 as _,
                 right_inventory_tab: p.right_inventory_tab.0 as _,
