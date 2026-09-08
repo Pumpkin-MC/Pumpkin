@@ -9,6 +9,7 @@ use crate::block::{
 use crate::world::World;
 use pumpkin_data::block_properties::LadderLikeProperties;
 use pumpkin_data::{BlockState, BlockStateId, translation};
+use pumpkin_inventory::ViewerCountTracker;
 use pumpkin_inventory::{
     generic_container_screen_handler::create_generic_9x3,
     player::ender_chest_inventory::EnderChestInventory,
@@ -18,7 +19,6 @@ use pumpkin_inventory::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::block::viewer::ViewerCountTracker;
 
 pub struct EnderChestScreenFactory {
     pub inventory: Arc<EnderChestInventory>,

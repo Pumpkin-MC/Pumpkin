@@ -17,6 +17,7 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId, tag, translation};
+use pumpkin_inventory::Inventory;
 use pumpkin_inventory::lectern_screen_handler::{LecternController, LecternScreenHandler};
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
@@ -26,7 +27,6 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::inventory::Inventory;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Mutex;

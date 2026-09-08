@@ -1,10 +1,10 @@
 use super::util::write_compound_nbt;
-use crate::VarInt;
-use crate::WritingError;
-use crate::codec::bit_set::BitSet;
-use crate::ser::NetworkWriteExt;
 use pumpkin_data::block_state_remap::remap_block_state_for_version;
 use pumpkin_data::packet::CURRENT_MC_VERSION;
+use pumpkin_protocol::codec::bit_set::BitSet;
+use pumpkin_protocol::codec::var_int::VarInt;
+use pumpkin_protocol::ser::NetworkWriteExt;
+use pumpkin_protocol::ser::WritingError;
 use pumpkin_util::math::position::get_local_cord;
 use pumpkin_util::version::JavaMinecraftVersion;
 use pumpkin_world::chunk::ChunkData;
