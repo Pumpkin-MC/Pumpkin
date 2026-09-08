@@ -61,14 +61,17 @@ impl SulfurCubeEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-            goal_selector.add_goal(1, Box::new(SulfurCubeFloatGoal::new(mob_arc.clone())));
+            goal_selector.add_goal(
+                1,
+                Box::new(SulfurCubeFloatGoal::new(Arc::downgrade(&mob_arc))),
+            );
             goal_selector.add_goal(
                 4,
-                Box::new(SulfurCubeRandomDirectionGoal::new(mob_arc.clone())),
+                Box::new(SulfurCubeRandomDirectionGoal::new(Arc::downgrade(&mob_arc))),
             );
             goal_selector.add_goal(
                 5,
-                Box::new(SulfurCubeKeepOnJumpingGoal::new(mob_arc.clone())),
+                Box::new(SulfurCubeKeepOnJumpingGoal::new(Arc::downgrade(&mob_arc))),
             );
         };
 
@@ -373,31 +376,37 @@ impl MoveControlTrait for SulfurCubeMoveControl {
 }
 
 pub struct SulfurCubeFloatGoal {
-    cube: Arc<SulfurCubeEntity>,
+    cube: Weak<SulfurCubeEntity>,
 }
 
 impl SulfurCubeFloatGoal {
-    pub const fn new(cube: Arc<SulfurCubeEntity>) -> Self {
+    #[must_use]
+    pub const fn new(cube: Weak<SulfurCubeEntity>) -> Self {
         Self { cube }
     }
 }
 
 impl Goal for SulfurCubeFloatGoal {
     fn can_start(&mut self, _mob: &dyn Mob) -> bool {
-        let entity = &self.cube.entity.living_entity.entity;
+        let Some(cube) = self.cube.upgrade() else {
+            return false;
+        };
+        let entity = &cube.entity.living_entity.entity;
         entity.touching_water.load(Ordering::Relaxed)
             || entity.touching_lava.load(Ordering::Relaxed)
     }
 
     fn tick(&mut self, _mob: &dyn Mob) {
+        let Some(cube) = self.cube.upgrade() else {
+            return;
+        };
         if rand::random_range(0.0..1.0) < 0.8 {
-            self.cube
-                .entity
+            cube.entity
                 .living_entity
                 .jumping
                 .store(true, Ordering::SeqCst);
         }
-        self.cube.speed_modifier.store(1.2);
+        cube.speed_modifier.store(1.2);
     }
 
     fn should_run_every_tick(&self) -> bool {
@@ -410,13 +419,14 @@ impl Goal for SulfurCubeFloatGoal {
 }
 
 pub struct SulfurCubeRandomDirectionGoal {
-    cube: Arc<SulfurCubeEntity>,
+    cube: Weak<SulfurCubeEntity>,
     chosen_degrees: f32,
     next_randomize_time: i32,
 }
 
 impl SulfurCubeRandomDirectionGoal {
-    pub const fn new(cube: Arc<SulfurCubeEntity>) -> Self {
+    #[must_use]
+    pub const fn new(cube: Weak<SulfurCubeEntity>) -> Self {
         Self {
             cube,
             chosen_degrees: 0.0,
@@ -427,19 +437,25 @@ impl SulfurCubeRandomDirectionGoal {
 
 impl Goal for SulfurCubeRandomDirectionGoal {
     fn can_start(&mut self, _mob: &dyn Mob) -> bool {
-        let entity = &self.cube.entity.living_entity.entity;
+        let Some(cube) = self.cube.upgrade() else {
+            return false;
+        };
+        let entity = &cube.entity.living_entity.entity;
         entity.on_ground.load(Ordering::Relaxed)
             || entity.touching_water.load(Ordering::Relaxed)
             || entity.touching_lava.load(Ordering::Relaxed)
     }
 
     fn tick(&mut self, _mob: &dyn Mob) {
+        let Some(cube) = self.cube.upgrade() else {
+            return;
+        };
         self.next_randomize_time -= 1;
         if self.next_randomize_time <= 0 {
             self.next_randomize_time = rand::random_range(40..100);
             self.chosen_degrees = rand::random_range(0.0..360.0);
         }
-        self.cube.target_yaw.store(self.chosen_degrees);
+        cube.target_yaw.store(self.chosen_degrees);
     }
 
     fn controls(&self) -> Controls {
@@ -448,23 +464,28 @@ impl Goal for SulfurCubeRandomDirectionGoal {
 }
 
 pub struct SulfurCubeKeepOnJumpingGoal {
-    cube: Arc<SulfurCubeEntity>,
+    cube: Weak<SulfurCubeEntity>,
 }
 
 impl SulfurCubeKeepOnJumpingGoal {
     #[must_use]
-    pub const fn new(cube: Arc<SulfurCubeEntity>) -> Self {
+    pub const fn new(cube: Weak<SulfurCubeEntity>) -> Self {
         Self { cube }
     }
 }
 
 impl Goal for SulfurCubeKeepOnJumpingGoal {
     fn can_start(&mut self, _mob: &dyn Mob) -> bool {
-        !self.cube.entity.living_entity.entity.has_vehicle()
+        let Some(cube) = self.cube.upgrade() else {
+            return false;
+        };
+        !cube.entity.living_entity.entity.has_vehicle()
     }
 
     fn tick(&mut self, _mob: &dyn Mob) {
-        self.cube.speed_modifier.store(1.0);
+        if let Some(cube) = self.cube.upgrade() {
+            cube.speed_modifier.store(1.0);
+        }
     }
 
     fn controls(&self) -> Controls {
