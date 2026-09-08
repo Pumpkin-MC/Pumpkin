@@ -24,12 +24,12 @@ rayon.workspace = true
 pumpkin-util.workspace = true
 pumpkin-nbt.workspace = true
 pumpkin-config.workspace = true
+pumpkin-command.workspace = true
 pumpkin-inventory.workspace = true
 pumpkin-world.workspace = true
 pumpkin-data = { workspace = true, features = ["default"] }
 pumpkin-protocol = { workspace = true, features = ["default"] }
 pumpkin-macros.workspace = true
-pumpkin-codecs.workspace = true
 pumpkin-plugin-runtime.workspace = true
 pumpkin-gametest = { path = "../pumpkin-gametest" }
 
