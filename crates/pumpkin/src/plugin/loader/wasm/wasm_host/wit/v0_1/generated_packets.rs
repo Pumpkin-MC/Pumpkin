@@ -4797,31 +4797,32 @@ mod java_codec_tests {
             serialize_java_serverbound_packet(&request, ConnectionState::Play, version).is_none()
         );
 
-        let packet = pumpkin_protocol::java::server::handshake::SHandShake {
-            protocol_version: VarInt(version.protocol_version()),
-            server_address: "localhost".into(),
-            server_port: 25565,
-            next_state: ConnectionState::Login,
-        };
-        let encoded = packet.serialize_packet(&version).unwrap();
-        let (id, payload) = split_packet(&encoded);
-        let mut decoded =
-            deserialize_java_serverbound_packet(ConnectionState::HandShake, id, payload, version)
-                .unwrap();
-        assert_eq!(
-            serialize_java_serverbound_packet(&decoded, ConnectionState::HandShake, version)
-                .unwrap(),
-            encoded
-        );
-        if let ServerboundPacket::HandshakeSHandShake(data) = &mut decoded {
-            data.server_port = 65536;
-        } else {
-            panic!("unexpected handshake wrapper");
+        for port in [0u16, 25565, u16::MAX] {
+            let packet = pumpkin_protocol::java::server::handshake::SHandShake {
+                protocol_version: VarInt(version.protocol_version()),
+                server_address: "localhost".into(),
+                server_port: port,
+                next_state: ConnectionState::Login,
+            };
+            let encoded = packet.serialize_packet(&version).unwrap();
+            let (id, payload) = split_packet(&encoded);
+            let decoded = deserialize_java_serverbound_packet(
+                ConnectionState::HandShake,
+                id,
+                payload,
+                version,
+            )
+            .unwrap();
+            let ServerboundPacket::HandshakeSHandShake(data) = &decoded else {
+                panic!("unexpected handshake wrapper");
+            };
+            assert_eq!(data.server_port, port);
+            assert_eq!(
+                serialize_java_serverbound_packet(&decoded, ConnectionState::HandShake, version)
+                    .unwrap(),
+                encoded
+            );
         }
-        assert!(
-            serialize_java_serverbound_packet(&decoded, ConnectionState::HandShake, version)
-                .is_none()
-        );
 
         let uuid = uuid::Uuid::from_u64_pair(0x123456789abcdef0, 0x0fedcba987654321);
         let login = pumpkin_protocol::java::server::login::SLoginStart {
