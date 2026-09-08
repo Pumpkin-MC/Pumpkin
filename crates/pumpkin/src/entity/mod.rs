@@ -1791,35 +1791,57 @@ impl Entity {
             || !(-32768.0..=32767.0).contains(&raw_delta.y)
             || !(-32768.0..=32767.0).contains(&raw_delta.z);
         if delta_too_big {
-            self.send_to_watchers(&CEntityPositionSync::new(
+            let je_packet = CEntityPositionSync::new(
                 self.entity_id.into(),
                 new,
                 self.velocity.load(),
                 self.yaw.load(),
                 self.pitch.load(),
                 self.on_ground.load(Relaxed),
-            ));
-            if self.entity_type != &EntityType::PLAYER {
-                self.send_to_watchers_bedrock(&CMoveActorDelta::new(
-                    VarULong(self.entity_id as u64),
-                    MOVE_ACTOR_DELTA_FLAG_HAS_X
-                        | MOVE_ACTOR_DELTA_FLAG_HAS_Y
-                        | MOVE_ACTOR_DELTA_FLAG_HAS_Z
-                        | MOVE_ACTOR_DELTA_FLAG_HAS_PITCH
-                        | MOVE_ACTOR_DELTA_FLAG_HAS_YAW
-                        | MOVE_ACTOR_DELTA_FLAG_HAS_HEAD_YAW
-                        | if self.on_ground.load(Relaxed) {
-                            MOVE_ACTOR_DELTA_FLAG_ON_GROUND
-                        } else {
-                            0
-                        },
-                    new.x as f32,
-                    new.y as f32,
-                    new.z as f32,
-                    pitch,
-                    yaw,
-                    yaw,
-                ));
+            );
+            if self.entity_type == &EntityType::PLAYER {
+                // Bedrock has no counterpart (as far as I know) to the sync packet, so a player rides a move
+                // in teleport mode, which snaps instead of walking over from the old spot.
+                self.send_to_watchers_editioned(
+                    &je_packet,
+                    &CMovePlayer::new(
+                        VarULong(self.entity_id as u64),
+                        Vector3::new(new.x as f32, new.y as f32, new.z as f32),
+                        self.pitch.load(),
+                        self.yaw.load(),
+                        self.yaw.load(),
+                        CMovePlayer::MODE_TELEPORT,
+                        self.on_ground.load(Relaxed),
+                        VarULong(0),
+                        0,
+                        0,
+                        VarULong(0),
+                    ),
+                );
+            } else {
+                self.send_to_watchers_editioned(
+                    &je_packet,
+                    &CMoveActorDelta::new(
+                        VarULong(self.entity_id as u64),
+                        MOVE_ACTOR_DELTA_FLAG_HAS_X
+                            | MOVE_ACTOR_DELTA_FLAG_HAS_Y
+                            | MOVE_ACTOR_DELTA_FLAG_HAS_Z
+                            | MOVE_ACTOR_DELTA_FLAG_HAS_PITCH
+                            | MOVE_ACTOR_DELTA_FLAG_HAS_YAW
+                            | MOVE_ACTOR_DELTA_FLAG_HAS_HEAD_YAW
+                            | if self.on_ground.load(Relaxed) {
+                                MOVE_ACTOR_DELTA_FLAG_ON_GROUND
+                            } else {
+                                0
+                            },
+                        new.x as f32,
+                        new.y as f32,
+                        new.z as f32,
+                        pitch,
+                        yaw,
+                        yaw,
+                    ),
+                );
             }
             self.send_head_rot(yaw);
             return;
