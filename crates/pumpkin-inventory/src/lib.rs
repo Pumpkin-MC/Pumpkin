@@ -27,7 +27,7 @@
 //! - [`sync_handler`] - Client-server inventory synchronization
 //! - [`window_property`] - Container UI properties (furnace progress, enchantment levels, etc.)
 //!
-//! [`Inventory`]: pumpkin_world::inventory::Inventory
+//! [`Inventory`]: inventory::Inventory
 //! [`ScreenHandler`]: screen_handler::ScreenHandler
 //! [`Slot`]: slot::Slot
 //! [`PlayerInventory`]: PlayerInventory
@@ -48,6 +48,7 @@ pub mod furnace_like;
 pub mod generic_container_screen_handler;
 pub mod grindstone_screen_handler;
 pub mod gui_builder;
+pub mod inventory;
 pub mod lectern_screen_handler;
 pub mod loom_screen_handler;
 pub mod merchant;
@@ -58,12 +59,19 @@ pub mod slot;
 pub mod smithing_table_screen_handler;
 pub mod stonecutter_screen_handler;
 pub mod sync_handler;
+pub mod viewer;
 pub mod window_property;
 
 use rustc_hash::FxHashMap;
 
 pub use error::InventoryError;
+pub use inventory::{
+    Clearable, ComparableInventory, Inventory, SimpleInventory, split_stack_slice,
+    sync_read_items_from_nbt, sync_write_items_to_nbt,
+};
 use pumpkin_data::data_component_impl::EquipmentSlot;
+pub use viewer::ViewerCountTracker;
+pub use window_property::{ExperienceContainer, PropertyDelegate};
 
 use crate::player::player_inventory::PlayerInventory;
 

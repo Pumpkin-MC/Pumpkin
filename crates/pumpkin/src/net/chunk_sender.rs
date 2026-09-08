@@ -3,9 +3,10 @@ use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::{Arc, Weak};
 
+use crate::net::java::chunk_data::{CChunkData, ChunkLightExt};
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::java::client::play::{
-    CChunkBatchEnd, CChunkBatchStart, CChunkData, CLightUpdate, CUnloadChunk,
+    CChunkBatchEnd, CChunkBatchStart, CLightUpdate, CUnloadChunk,
 };
 use pumpkin_protocol::ser::NetworkWriteExt;
 use pumpkin_protocol::{ClientPacket, MultiVersionJavaPacket};

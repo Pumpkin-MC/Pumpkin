@@ -19,6 +19,7 @@ use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::Receiver;
 use crossbeam::queue::SegQueue;
 use pumpkin_data::dimension::Dimension;
+use pumpkin_inventory::Inventory;
 use pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler;
 use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
 use pumpkin_protocol::RawPacket;
@@ -43,7 +44,6 @@ use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_util::translation::Locale;
 use pumpkin_util::version::JavaMinecraftVersion;
 use pumpkin_world::chunk::ChunkData;
-use pumpkin_world::inventory::Inventory;
 use tokio::task::JoinHandle;
 use tracing::{debug, warn};
 use uuid::Uuid;
@@ -575,13 +575,13 @@ impl Player {
         let bytes = if let Ok(handle) = tokio::runtime::Handle::try_current() {
             tokio::task::block_in_place(|| {
                 handle.block_on(async {
-                    let client = pumpkin_util::client();
+                    let client = pumpkin_auth::client();
                     client.get(&url).send().await.ok()?.bytes().await.ok()
                 })
             })?
         } else {
             tokio::runtime::Runtime::new().ok()?.block_on(async {
-                let client = pumpkin_util::client();
+                let client = pumpkin_auth::client();
                 client.get(&url).send().await.ok()?.bytes().await.ok()
             })?
         };
