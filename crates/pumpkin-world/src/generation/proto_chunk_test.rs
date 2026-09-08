@@ -307,19 +307,9 @@ mod test {
         }
     }
 
-    /// Vanilla `FossilFeature.place` reads a neighbouring column through the region:
-    ///
-    /// ```java
-    /// lowestSurfaceY = Math.min(lowestSurfaceY,
-    ///     level.getHeight(Heightmap.Types.OCEAN_FLOOR_WG, lowCorner.getX() + xscan, lowCorner.getZ() + zscan));
-    /// ```
-    ///
-    /// `WorldGenRegion.getHeight` forwards to the chunk holding that column, and
-    /// `OCEAN_FLOOR_WG` / `WORLD_SURFACE_WG` are live on every proto chunk of the region:
-    /// noise and the carvers maintained them. Only the chunk being decorated has the four
-    /// `FINAL_HEIGHTMAPS` primed (`ChunkStatusTasks.generateFeatures`). Pumpkin's multi-chunk
-    /// cache used to answer both `*_WG` maps out of the final maps, so any column outside the
-    /// centre chunk reported `minY - 1`.
+    /// `OCEAN_FLOOR_WG` / `WORLD_SURFACE_WG` are live on every proto chunk of the region, since
+    /// noise and the carvers maintain them; only the chunk being decorated has the four
+    /// `FINAL_HEIGHTMAPS` primed.
     #[test]
     fn the_worldgen_heightmaps_are_live_on_every_chunk_of_the_cache() {
         use crate::chunk_system::{Chunk, generation_cache::Cache};
@@ -364,25 +354,9 @@ mod test {
         }
     }
 
-    /// Vanilla `Heightmap.update` lowers a map when the block it was pointing at is replaced
-    /// by one the map does not match:
-    ///
-    /// ```java
-    /// } else if (i - 1 == y) {
-    ///     for (int j = y - 1; j >= this.chunk.getMinY(); j--) {
-    ///         if (this.isOpaque.test(this.chunk.getBlockState(mutableBlockPos.set(x, j, z)))) {
-    ///             this.setHeight(x, z, j + 1);
-    ///             return true;
-    ///         }
-    ///     }
-    ///     this.setHeight(x, z, this.chunk.getMinY());
-    ///     return true;
-    /// }
-    /// ```
-    ///
-    /// which is how carving pulls `WORLD_SURFACE_WG` / `OCEAN_FLOOR_WG` back down. Pumpkin
-    /// used to keep a running `max`, so a carved-open column still reported its pre-carver
-    /// surface for the whole feature step.
+    /// `Heightmap.update` scans down for the next matching block when the top one is replaced by
+    /// something the map does not match, which is how carving pulls `WORLD_SURFACE_WG` /
+    /// `OCEAN_FLOOR_WG` back down rather than only ever raising them.
     #[test]
     fn a_write_over_the_top_block_lowers_the_worldgen_heightmap() {
         use pumpkin_data::Block;
