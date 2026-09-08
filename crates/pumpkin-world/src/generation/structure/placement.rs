@@ -10,13 +10,14 @@ use pumpkin_util::{
     },
 };
 use std::f64::consts::PI;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 use crate::ProtoChunk;
 use dashmap::DashMap;
 use pumpkin_data::structures::StructureKeys;
 
 use super::structures::StructurePosition;
+type CachedStructureStart = Arc<OnceLock<Option<StructurePosition>>>;
 /// A thread-safe global cache for structures that require world-wide placement calculations
 /// rather than localized chunk-based math (e.g., Strongholds using Concentric Rings).
 ///
@@ -30,7 +31,7 @@ pub struct GlobalStructureCache {
     /// A jigsaw structure's placement is fully determined by its start chunk and the
     /// world seed, so it is computed once here instead of being recomputed for every
     /// surrounding chunk whose structure references overlap it.
-    structure_starts: OnceLock<DashMap<(StructureKeys, i32, i32), Option<StructurePosition>>>,
+    structure_starts: OnceLock<DashMap<(StructureKeys, i32, i32), CachedStructureStart>>,
 }
 impl GlobalStructureCache {
     /// Creates a new, empty global structure cache.
@@ -62,12 +63,21 @@ impl GlobalStructureCache {
         compute: impl FnOnce() -> Option<StructurePosition>,
     ) -> Option<StructurePosition> {
         let cache = self.structure_starts.get_or_init(DashMap::new);
-        if let Some(cached) = cache.get(&(key, chunk_x, chunk_z)) {
-            return cached.value().clone();
-        }
-        let computed = compute();
-        cache.insert((key, chunk_x, chunk_z), computed.clone());
-        computed
+        let cache_key = (key, chunk_x, chunk_z);
+        let entry = cache.get(&cache_key).map_or_else(
+            || {
+                Arc::clone(
+                    cache
+                        .entry(cache_key)
+                        .or_insert_with(|| Arc::new(OnceLock::new()))
+                        .value(),
+                )
+            },
+            |cached| Arc::clone(cached.value()),
+        );
+        // Release the map guard before generating or waiting: unrelated starts may
+        // share its shard. Only callers for this exact start wait for its result.
+        entry.get_or_init(compute).clone()
     }
 
     /// Retrieves the list of chunk coordinates for Concentric Ring structures.
@@ -351,14 +361,23 @@ fn is_start_chunk_random_spread(
 }
 #[cfg(test)]
 mod tests {
+    use super::StructurePosition;
+    use crate::generation::structure::structures::StructurePiecesCollector;
+    use pumpkin_data::structures::StructureKeys;
     use pumpkin_data::{
         dimension::Dimension,
         structures::{RandomSpreadStructurePlacement, StructurePlacementCalculator, StructureSet},
     };
+    use pumpkin_util::math::position::BlockPos;
     use pumpkin_util::random::{
         RandomGenerator, RandomImpl, get_region_seed, legacy_rand::LegacyRand,
     };
     use pumpkin_util::world_seed::Seed;
+    use std::sync::{
+        Arc, Barrier, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    };
+    use std::time::Duration;
 
     use crate::{
         ProtoChunk,
@@ -370,6 +389,59 @@ mod tests {
             },
         },
     };
+
+    #[test]
+    fn concurrent_structure_requests_compute_once() {
+        let cache = GlobalStructureCache::new();
+        let requests = Barrier::new(16);
+        let computations = AtomicUsize::new(0);
+        let collector = Arc::new(Mutex::new(StructurePiecesCollector::new()));
+        std::thread::scope(|scope| {
+            for _ in 0..16 {
+                scope.spawn(|| {
+                    requests.wait();
+                    let result = cache
+                        .get_or_compute_structure_start(StructureKeys::AncientCity, 58, 5, || {
+                            computations.fetch_add(1, Ordering::SeqCst);
+                            // Keep the miss in progress while neighboring requests arrive.
+                            std::thread::sleep(Duration::from_millis(20));
+                            Some(StructurePosition {
+                                start_pos: BlockPos::new(928, -27, 80),
+                                collector: Arc::clone(&collector),
+                            })
+                        })
+                        .expect("structure start");
+                    assert!(Arc::ptr_eq(&result.collector, &collector));
+                    assert_eq!(result.start_pos, BlockPos::new(928, -27, 80));
+                });
+            }
+        });
+        assert_eq!(computations.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn absent_structure_starts_are_cached_separately() {
+        let cache = GlobalStructureCache::new();
+        let computations = AtomicUsize::new(0);
+        for _ in 0..2 {
+            for (key, x, z) in [
+                (StructureKeys::AncientCity, 58, 5),
+                (StructureKeys::EndCity, 58, 5),
+                (StructureKeys::AncientCity, 59, 5),
+                (StructureKeys::AncientCity, 58, 6),
+            ] {
+                assert!(
+                    cache
+                        .get_or_compute_structure_start(key, x, z, || {
+                            computations.fetch_add(1, Ordering::SeqCst);
+                            None
+                        })
+                        .is_none()
+                );
+            }
+        }
+        assert_eq!(computations.load(Ordering::SeqCst), 4);
+    }
 
     #[test]
     fn get_start_chunk_random() {
