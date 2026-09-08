@@ -768,6 +768,12 @@ impl BlockRegistry {
         let _replaced_id =
             world.set_block_state(&final_block_pos, new_state, BlockFlags::NOTIFY_ALL);
 
+        world.play_bedrock_level_sound(
+            "place",
+            &final_block_pos.to_centered_f64(),
+            i32::from(BlockState::to_be_network_id(new_state)),
+        );
+
         self.player_placed(
             &world,
             placed_block,
