@@ -3091,6 +3091,11 @@ impl EntityBase for LivingEntity {
                     player
                         .hunger_manager
                         .eat(player, food.nutrition as u8, food.saturation);
+                    self.entity.world.load().play_bedrock_level_sound(
+                        "burp",
+                        &self.entity.pos.load(),
+                        -1,
+                    );
                 }
 
                 self.apply_consumable_effects(caller, item);
