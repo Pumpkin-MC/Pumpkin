@@ -94,11 +94,8 @@ impl BlockBehaviour for SculkShriekerBlock {
     }
 
     fn on_entity_step(&self, args: OnEntityStepArgs<'_>) {
-        // Vanilla `SculkShriekerBlock#stepOn`: a player standing on the shrieker
-        // resonates it, unless they are stepping carefully (sneaking).
-        if args.entity.get_entity().is_sneaking() {
-            return;
-        }
+        // Vanilla `SculkShriekerBlock#stepOn`: any player standing on the shrieker
+        // resonates it, even when sneaking.
         if args.entity.cast_any().downcast_ref::<Player>().is_some() {
             Self::try_activate(args.world, args.position);
         }
