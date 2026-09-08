@@ -144,7 +144,7 @@ pub type BlockEntityResource = WasmResource<Arc<dyn crate::block::entities::Bloc
 
 #[derive(Clone)]
 pub enum InventoryProvider {
-    Generic(Arc<dyn pumpkin_world::inventory::Inventory>),
+    Generic(Arc<dyn pumpkin_inventory::Inventory>),
     PlayerMain(Arc<Player>),
     PlayerEnderChest(Arc<Player>),
 }
@@ -158,7 +158,7 @@ pub type MobResource = WasmResource<Arc<dyn EntityBase>>;
 #[derive(Clone)]
 pub struct ContainerBlockEntity {
     pub provider: Arc<dyn crate::block::entities::BlockEntity>,
-    pub inventory: Arc<dyn pumpkin_world::inventory::Inventory>,
+    pub inventory: Arc<dyn pumpkin_inventory::Inventory>,
 }
 
 pub type ContainerBlockEntityResource = WasmResource<ContainerBlockEntity>;
@@ -503,7 +503,7 @@ impl PluginHostState {
     pub fn add_container_block_entity<T>(
         &mut self,
         provider: Arc<dyn crate::block::entities::BlockEntity>,
-        inventory: Arc<dyn pumpkin_world::inventory::Inventory>,
+        inventory: Arc<dyn pumpkin_inventory::Inventory>,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
         let resource = self.resource_table.push(ContainerBlockEntityResource {
             provider: ContainerBlockEntity {

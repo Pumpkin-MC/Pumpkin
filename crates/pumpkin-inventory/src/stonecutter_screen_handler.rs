@@ -6,14 +6,14 @@ use crate::player::player_inventory::PlayerInventory;
 use crate::screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour};
 use crate::slot::{NormalSlot, Slot};
 
+use crate::inventory::Inventory;
+use crate::inventory::SimpleInventory;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::recipes::{RECIPES_STONECUTTING, StonecutterRecipe};
 use pumpkin_data::screen::WindowType;
 use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_protocol::java::server::play::SlotActionType;
-use pumpkin_world::inventory::Inventory;
-use pumpkin_world::inventory::SimpleInventory;
 
 pub struct StonecutterScreenHandler {
     behaviour: ScreenHandlerBehaviour,

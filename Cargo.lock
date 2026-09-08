@@ -3355,6 +3355,7 @@ dependencies = [
  "num-bigint 0.5.1",
  "ordered-float",
  "postcard",
+ "pumpkin-auth",
  "pumpkin-command",
  "pumpkin-config",
  "pumpkin-data",
@@ -3395,6 +3396,7 @@ dependencies = [
  "wasmtime-wasi",
  "wasmtime-wasi-http",
  "webrtc",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -3405,6 +3407,27 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.5",
+]
+
+[[package]]
+name = "pumpkin-auth"
+version = "0.1.0+26.2-26.45"
+dependencies = [
+ "base64 0.23.1",
+ "crypto-bigint 0.7.5",
+ "ecdsa 0.17.0",
+ "md5",
+ "p384 0.14.0",
+ "pumpkin-util",
+ "reqwest",
+ "rsa",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "thiserror 2.0.20",
+ "uuid",
+ "webpki-root-certs",
 ]
 
 [[package]]
@@ -3507,7 +3530,6 @@ dependencies = [
  "pumpkin-nbt",
  "pumpkin-protocol",
  "pumpkin-util",
- "pumpkin-world",
  "rand",
  "rustc-hash",
  "thiserror 2.0.20",
@@ -3521,7 +3543,6 @@ dependencies = [
  "heck",
  "proc-macro-error2",
  "proc-macro2",
- "pumpkin-data",
  "quote",
  "syn 3.0.5",
 ]
@@ -3585,6 +3606,7 @@ version = "0.1.0+26.2-26.45"
 dependencies = [
  "aes 0.9.3",
  "async-compression",
+ "base64 0.23.1",
  "bitflags 2.13.1",
  "bytes",
  "cesu8",
@@ -3595,7 +3617,6 @@ dependencies = [
  "pumpkin-macros",
  "pumpkin-nbt",
  "pumpkin-util",
- "pumpkin-world",
  "serde",
  "serde_json",
  "thiserror 2.0.20",
@@ -3608,31 +3629,22 @@ dependencies = [
 name = "pumpkin-util"
 version = "0.1.0+26.2-26.45"
 dependencies = [
- "base64 0.23.1",
  "bytes",
  "colored",
  "criterion",
- "crypto-bigint 0.7.5",
  "dashmap",
- "ecdsa 0.17.0",
  "md5",
  "num-derive",
  "num-traits",
- "p384 0.14.0",
  "proc-macro2",
  "pumpkin-codecs",
  "pumpkin-nbt",
  "quote",
- "reqwest",
- "rsa",
- "rustls",
  "serde",
  "serde_json",
- "sha2 0.11.0",
  "syn 3.0.5",
  "thiserror 2.0.20",
  "uuid",
- "webpki-root-certs",
 ]
 
 [[package]]
