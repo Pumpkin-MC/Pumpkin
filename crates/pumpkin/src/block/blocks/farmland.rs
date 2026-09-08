@@ -52,9 +52,12 @@ impl BlockBehaviour for FarmlandBlock {
             return;
         }
         let entity_pos = args.entity.get_entity().pos.load();
+        // Vanilla `getOnPosLegacy`: the landed-on block is looked up 0.2 blocks
+        // below the feet, otherwise the entity resting on top of the farmland
+        // would resolve to the air block above it.
         let pos = BlockPos(Vector3::new(
             entity_pos.x.floor() as i32,
-            entity_pos.y.floor() as i32,
+            (entity_pos.y - 0.2).floor() as i32,
             entity_pos.z.floor() as i32,
         ));
         let (block, _) = args.world.get_block_and_state(&pos);
