@@ -150,7 +150,10 @@ impl CommandExecutor for ListExecutor {
                     && !metadata.permissions.is_empty()
                 {
                     plugin_component = plugin_component.add_child(
-                        TextComponent::text(format!(" (Permissions: {:?})", metadata.permissions))
+                        TextComponent::text(format!(
+                            " (Permissions: {})",
+                            metadata.permissions.join(", ")
+                        ))
                             .color_named(NamedColor::Gray),
                     );
                 }
@@ -343,7 +346,10 @@ fn info_message(entry: &PluginEntry) -> TextComponent {
         );
     }
     if !metadata.permissions.is_empty() {
-        message = info_line(message, format!("Permissions: {:?}", metadata.permissions));
+        message = info_line(
+            message,
+            format!("Permissions: {}", metadata.permissions.join(", ")),
+        );
     }
 
     message
