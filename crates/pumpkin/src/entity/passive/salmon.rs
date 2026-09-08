@@ -5,8 +5,8 @@ use pumpkin_data::entity::EntityType;
 use crate::entity::{
     Entity,
     ai::goal::{
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        random_swimming::RandomSwimmingGoal, swim::SwimGoal,
     },
     mob::{Mob, MobEntity},
 };
@@ -33,7 +33,7 @@ impl SalmonEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(1, Box::new(RandomSwimmingGoal::new(1.0, 40)));
             goal_selector.add_goal(
                 2,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
