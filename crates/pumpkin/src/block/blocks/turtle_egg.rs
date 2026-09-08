@@ -155,9 +155,11 @@ impl BlockBehaviour for TurtleEggBlock {
 
         if args.entity.get_entity().entity_type.id != EntityType::ZOMBIE.id {
             let entity_pos = args.entity.get_entity().pos.load();
+            // Vanilla uses the landed-on block position (`Entity#getOnPosLegacy`),
+            // which is `Mth.floor(y - 0.2)`, not the feet position.
             let pos = BlockPos(Vector3::new(
                 entity_pos.x.floor() as i32,
-                entity_pos.y.floor() as i32,
+                (entity_pos.y - 0.2).floor() as i32,
                 entity_pos.z.floor() as i32,
             ));
             let (block, state) = args.world.get_block_and_state(&pos);
