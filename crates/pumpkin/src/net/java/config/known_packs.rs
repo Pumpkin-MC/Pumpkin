@@ -104,7 +104,8 @@ impl JavaClient {
             .unwrap_or_default();
 
             for packet_data in packets {
-                self.send_packet_now(packet_data).await;
+                self.send_packet_now_data_in_state(packet_data, ConnectionState::Config)
+                    .await;
             }
         }
 

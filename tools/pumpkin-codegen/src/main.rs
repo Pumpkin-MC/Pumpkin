@@ -99,6 +99,11 @@ pub fn main() {
     let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     std::env::set_current_dir(manifest_dir).expect("Failed to set current dir to manifest dir");
 
+    if std::env::args().any(|arg| arg == "--wit-packets") {
+        wit::generate_packets();
+        return;
+    }
+
     type BuilderFn = fn() -> TokenStream;
 
     fs::create_dir_all(OUT_DIR).expect("Failed to create output directory");

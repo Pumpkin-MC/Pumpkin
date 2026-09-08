@@ -308,6 +308,18 @@ pub fn java_packet(args: TokenStream, item: TokenStream) -> TokenStream {
             fn to_id(version: pumpkin_util::version::JavaMinecraftVersion) -> i32 {
                 #packet_id_expr.to_id(version)
             }
+
+            #[must_use]
+            #[inline]
+            fn state() -> crate::ConnectionState {
+                match (#packet_id_expr).state {
+                    pumpkin_data::packet::PacketState::Handshake => crate::ConnectionState::HandShake,
+                    pumpkin_data::packet::PacketState::Status => crate::ConnectionState::Status,
+                    pumpkin_data::packet::PacketState::Login => crate::ConnectionState::Login,
+                    pumpkin_data::packet::PacketState::Config => crate::ConnectionState::Config,
+                    pumpkin_data::packet::PacketState::Play => crate::ConnectionState::Play,
+                }
+            }
         }
     }
     .into()

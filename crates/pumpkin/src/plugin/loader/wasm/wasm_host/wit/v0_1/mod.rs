@@ -63,6 +63,8 @@ pub mod status_effect;
 #[allow(clippy::unused_async_trait_impl)]
 pub mod text;
 #[allow(clippy::unused_async_trait_impl)]
+pub mod user;
+#[allow(clippy::unused_async_trait_impl)]
 pub mod uuid;
 #[allow(clippy::unused_async_trait_impl)]
 pub mod world;
