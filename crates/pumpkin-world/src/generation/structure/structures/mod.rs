@@ -458,10 +458,10 @@ impl StructurePiece {
         //     world.schedule_fluid_tick(&block_pos, fluid_state.fluid(), 0);
         // }
 
-        // `StructurePiece.placeBlock`: `if (SHAPE_CHECK_BLOCKS.contains(blockState.getBlock()))
-        // level.getChunk(pos).markPosForPostProcessing(pos);`. Pieces only ever write into the
-        // chunk currently being decorated (`generate_in_chunk` clips them to its column), so
-        // `getChunk(pos)` is this chunk.
+        // `StructurePiece.placeBlock` marks the position for post-processing whenever the written
+        // block is one of `SHAPE_CHECK_BLOCKS`, on the chunk that holds it. Pieces only ever write
+        // into the chunk currently being decorated (`generate_in_chunk` clips them to its column),
+        // so that chunk is this one.
         if crate::generation::post_processing::needs_shape_check(block.id) {
             world.mark_pos_for_post_processing(block_pos);
         }

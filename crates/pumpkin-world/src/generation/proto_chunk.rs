@@ -1676,8 +1676,8 @@ impl GenerationCache for ProtoChunk {
     }
     fn set_block_state(&mut self, pos: &Vector3<i32>, block_state: &BlockState) {
         Self::set_block_state(self, pos.x, pos.y, pos.z, block_state);
-        // `WorldGenRegion.setBlock`: `if ((updateFlags & 16) == 0) { BlockPos p =
-        // blockState.getPostProcessPos(this, pos); if (p != null) markPosForPostProcessing(p); }`
+        // `WorldGenRegion.setBlock` asks the written state for a post-process position unless
+        // the caller passed the "no post-processing" update flag, and marks it when there is one.
         if let Some(mark) = super::post_processing::post_process_pos(block_state.id, *pos) {
             self.mark_pos_for_post_processing(mark);
         }

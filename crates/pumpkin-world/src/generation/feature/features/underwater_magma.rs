@@ -17,12 +17,12 @@ pub struct UnderwaterMagmaFeature {
 impl UnderwaterMagmaFeature {
     /// Y of the floor of the water column the origin sits in, or `None`.
     ///
-    /// Vanilla `UnderwaterMagmaFeature.getFloorY` runs `Column.scan(level, origin,
-    /// floorSearchRange, state -> state.is(WATER), state -> !state.is(WATER))` and takes
-    /// `Column::getFloor`. `Column.scan` bails out immediately when the origin itself is not
-    /// water, then `scanDirection(..., Direction.DOWN)` walks down with
-    /// `for (int i = 1; i < searchRange && isStateAtPosition(inside); i++) move(DOWN)` and
-    /// returns the reached Y only when the block there matches the edge predicate.
+    /// Vanilla `UnderwaterMagmaFeature.getFloorY` scans the column around the origin with water
+    /// as the "inside" predicate and non-water as the "edge" one, and takes the floor of the
+    /// result. That scan bails out immediately when the origin itself is not water; the downward
+    /// walk then steps one block at a time while the block stays inside and the search range is
+    /// not exhausted, and returns the reached Y only when the block there matches the edge
+    /// predicate.
     fn get_floor_y<T: GenerationCache>(&self, chunk: &T, origin: BlockPos) -> Option<i32> {
         let x = origin.0.x;
         let z = origin.0.z;
@@ -94,9 +94,9 @@ impl UnderwaterMagmaFeature {
         let floor_pos = BlockPos::new(pos.0.x, floor_y, pos.0.z);
 
         // Sample a cube around the floor, placing magma with probability and validity checks.
-        // `BlockPos.betweenClosedStream` walks X fastest, then Y, then Z (`x = index % width;
-        // y = index / width % height; z = index / width / height`), and the random draw happens
-        // per visited position, so the loop nesting decides which position gets which float.
+        // `BlockPos.betweenClosedStream` unpacks a running index, so X varies fastest, then Y,
+        // then Z, and the draw happens per visited position — the loop nesting decides which
+        // position gets which float.
         let mut placed = 0i32;
         let r = self.placement_radius;
 
@@ -129,12 +129,8 @@ impl UnderwaterMagmaFeature {
 mod tests {
     use pumpkin_data::{Block, BlockState};
 
-    /// `UnderwaterMagmaFeature.place` walks its cube with
-    /// `BlockPos.betweenClosedStream(BoundingBox.fromCorners(floor - r, floor + r))`, and
-    /// `BlockPos.betweenClosed` computes
-    /// `x = index % width; y = index / width % height; z = index / width / height`.
-    /// Every visited position consumes one `random.nextFloat()`, so the loop nesting has to
-    /// reproduce that exact order: X fastest, then Y, then Z.
+    /// `UnderwaterMagmaFeature.place` walks its cube with X varying fastest, then Y, then Z, and
+    /// spends one `nextFloat` per visited position — so the loop nesting has to match.
     #[test]
     fn cube_walk_matches_between_closed() {
         let r = 1i32;
@@ -165,11 +161,8 @@ mod tests {
         assert_eq!(ours[9], (-1, -1, 0));
     }
 
-    /// `isVisibleFromOutside` returns `faceOcclusionShape == Shapes.empty() ||
-    /// !Block.isShapeFullBlock(faceOcclusionShape)`. `BlockStateBase.initCache` stores
-    /// `FULL_BLOCK_OCCLUSION_SHAPES` for solid-render states and slices for everything else, so
-    /// the predicate is exactly `!state.isSolidRender()` — and `cave_air`, not just `air`, is on
-    /// the visible side of it.
+    /// `isVisibleFromOutside` reduces to `!state.isSolidRender()`, so `cave_air` is on the
+    /// visible side of it, not just `air`.
     #[test]
     fn cave_air_is_visible_from_outside() {
         assert!(!BlockState::from_id(Block::CAVE_AIR.default_state.id).is_solid_render());

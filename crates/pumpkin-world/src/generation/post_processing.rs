@@ -29,7 +29,7 @@ use pumpkin_util::math::vector3::Vector3;
 
 use super::proto_chunk::GenerationCache;
 
-/// `StructurePiece.SHAPE_CHECK_BLOCKS` (`StructurePiece.java:43`): the blocks whose shape
+/// `StructurePiece.SHAPE_CHECK_BLOCKS`: the blocks whose shape
 /// `StructurePiece.placeBlock` re-derives once the chunk is complete.
 const SHAPE_CHECK_BLOCKS: [BlockId; 12] = [
     Block::NETHER_BRICK_FENCE.id,
@@ -52,7 +52,7 @@ pub fn needs_shape_check(state: BlockStateId) -> bool {
     SHAPE_CHECK_BLOCKS.contains(&state.to_block_id())
 }
 
-/// `BlockBehaviour.UPDATE_SHAPE_ORDER` (`BlockBehaviour.java:85`).
+/// `BlockBehaviour.UPDATE_SHAPE_ORDER`.
 const UPDATE_SHAPE_ORDER: [BlockDirection; 6] = [
     BlockDirection::West,
     BlockDirection::East,
@@ -62,7 +62,7 @@ const UPDATE_SHAPE_ORDER: [BlockDirection; 6] = [
     BlockDirection::Up,
 ];
 
-/// `Block.updateFromNeighbourShapes` (`Block.java:200`): fold `updateShape` over
+/// `Block.updateFromNeighbourShapes`: fold `updateShape` over
 /// `UPDATE_SHAPE_ORDER`, reading every neighbour from the unmodified world.
 #[must_use]
 fn update_from_neighbour_shapes<C: GenerationCache + ?Sized>(
@@ -82,8 +82,8 @@ fn update_from_neighbour_shapes<C: GenerationCache + ?Sized>(
 
 /// `BlockState.updateShape`, restricted to the overrides worldgen can reach.
 ///
-/// `FenceBlock.updateShape` (`FenceBlock.java:99`) and, for the two mushrooms,
-/// `VegetationBlock.updateShape` (`VegetationBlock.java:28`) are ported; the other
+/// `FenceBlock.updateShape` and, for the two mushrooms,
+/// `VegetationBlock.updateShape` are ported; the other
 /// `SHAPE_CHECK_BLOCKS` (torch, wall torch, ladder, iron bars) keep the placed state, which is
 /// what Pumpkin did before this pass existed.
 #[must_use]
@@ -96,7 +96,8 @@ fn update_shape<C: GenerationCache + ?Sized>(
 ) -> BlockStateId {
     let block = state.to_block_id();
     if block == Block::BROWN_MUSHROOM || block == Block::RED_MUSHROOM {
-        // `!state.canSurvive(level, pos) ? Blocks.AIR.defaultBlockState() : super.updateShape(..)`
+        // The mushrooms' `updateShape` turns the block to air when it can no longer survive, and
+        // otherwise defers to the default shape update.
         return if mushroom_can_survive(cache, pos) {
             state
         } else {
@@ -106,10 +107,10 @@ fn update_shape<C: GenerationCache + ?Sized>(
     fence_update_shape(state, direction, neighbour)
 }
 
-/// `MushroomBlock.canSurvive` (`MushroomBlock.java:83`):
-/// `below.is(OVERRIDES_MUSHROOM_LIGHT_REQUIREMENT) ? true
-///  : level.getRawBrightness(pos, 0) < 13 && this.mayPlaceOn(below, level, belowPos)`,
-/// with `MushroomBlock.mayPlaceOn` = `state.isSolidRender()`.
+/// `MushroomBlock.canSurvive`: a block below carrying the
+/// `overrides_mushroom_light_requirement` tag is enough on its own; otherwise the raw brightness
+/// at the position must be under 13 *and* the block below must be placeable on, which for
+/// mushrooms means a solid-render state.
 #[must_use]
 fn mushroom_can_survive<C: GenerationCache + ?Sized>(cache: &C, pos: Vector3<i32>) -> bool {
     let below_pos = Vector3::new(pos.x, pos.y - 1, pos.z);
@@ -146,7 +147,7 @@ fn raw_brightness<C: GenerationCache + ?Sized>(cache: &C, pos: Vector3<i32>) -> 
     15
 }
 
-/// `FenceBlock.updateShape` (`FenceBlock.java:99`).
+/// `FenceBlock.updateShape`.
 #[must_use]
 fn fence_update_shape(
     state: BlockStateId,
@@ -158,9 +159,9 @@ fn fence_update_shape(
         return state;
     }
 
-    // `state.setValue(PROPERTY_BY_DIRECTION.get(directionToNeighbour), this.connectsTo(
-    //     neighbourState, neighbourState.isFaceSturdy(level, neighbourPos, direction.getOpposite()),
-    //     direction.getOpposite()))`
+    // Vanilla writes the property that belongs to the direction of the neighbour, with the value
+    // `connectsTo` returns for that neighbour, its face sturdiness towards the fence, and the
+    // opposite direction.
     let facing = direction.opposite();
     let face_sturdy = BlockState::from_id(neighbour).is_side_solid(facing);
     let connected = connects_to(block, neighbour, face_sturdy, facing);
@@ -176,7 +177,7 @@ fn fence_update_shape(
     properties.to_state_id(block)
 }
 
-/// `FenceBlock.connectsTo` (`FenceBlock.java:59`):
+/// `FenceBlock.connectsTo`:
 /// `!isExceptionForConnection(state) && faceSolid || sameFence || gate`.
 #[must_use]
 fn connects_to(
@@ -187,14 +188,14 @@ fn connects_to(
 ) -> bool {
     let block = neighbour.to_block();
 
-    // `isSameFence`: `state.is(FENCES) && state.is(WOODEN_FENCES) == this.defaultBlockState()
-    // .is(WOODEN_FENCES)`.
+    // `isSameFence`: the neighbour must carry the `fences` tag, and its `wooden_fences`
+    // membership must match this fence's own.
     let same_fence = block.has_tag(&tag::Block::MINECRAFT_FENCES)
         && block.has_tag(&tag::Block::MINECRAFT_WOODEN_FENCES)
             == fence.has_tag(&tag::Block::MINECRAFT_WOODEN_FENCES);
 
-    // `block instanceof FenceGateBlock && FenceGateBlock.connectsToDirection(state, direction)`,
-    // which is `state.getValue(FACING).getAxis() == direction.getClockWise().getAxis()`.
+    // A fence gate connects when its facing axis matches the clockwise axis of the direction
+    // being tested — `FenceGateBlock.connectsToDirection`.
     let gate = block.has_tag(&tag::Block::MINECRAFT_FENCE_GATES) && {
         let facing = OakFenceGateLikeProperties::from_state_id(neighbour).facing;
         BlockDirection::from_cardinal_direction(facing).to_axis()
@@ -204,7 +205,7 @@ fn connects_to(
     !is_exception_for_connection(neighbour) && face_solid || same_fence || gate
 }
 
-/// `Block.isExceptionForConnection` (`Block.java:251`).
+/// `Block.isExceptionForConnection`.
 #[must_use]
 fn is_exception_for_connection(state: BlockStateId) -> bool {
     let block = state.to_block();
@@ -226,8 +227,8 @@ pub fn post_process_pos(state: BlockStateId, pos: Vector3<i32>) -> Option<Vector
     if block == Block::MAGMA_BLOCK || block == Block::SOUL_SAND {
         return Some(Vector3::new(pos.x, pos.y + 1, pos.z));
     }
-    // `Blocks::postProcessSelf`, registered on `BROWN_MUSHROOM` (`Blocks.java:1015`) and
-    // `RED_MUSHROOM` (`Blocks.java:1027`).
+    // `Blocks::postProcessSelf`, registered on `BROWN_MUSHROOM` and
+    // `RED_MUSHROOM`.
     if block == Block::BROWN_MUSHROOM || block == Block::RED_MUSHROOM {
         return Some(pos);
     }
@@ -268,7 +269,7 @@ fn bubble_column(drag: bool) -> BlockStateId {
     BubbleColumnLikeProperties { drag }.to_state_id(&Block::BUBBLE_COLUMN)
 }
 
-/// `BubbleColumnBlock.updateColumn(bubbleColumn, level, occupyAt, occupyState, belowState)`.
+/// `BubbleColumnBlock.updateColumn`.
 ///
 /// The walk is strictly vertical, so it never leaves the chunk that holds `pos`.
 fn update_column<C: GenerationCache + ?Sized>(cache: &mut C, pos: Vector3<i32>) {
@@ -290,7 +291,7 @@ fn update_column<C: GenerationCache + ?Sized>(cache: &mut C, pos: Vector3<i32>) 
             &Vector3::new(pos.x, y, pos.z),
         ))
     {
-        // `if (!level.setBlock(pos, columnState, 2)) return;` — the only way that fails here is
+        // Vanilla stops the column as soon as a write fails; the only way that happens here is
         // leaving the build height, which the loop bound already covers.
         cache.set_block_state(&Vector3::new(pos.x, y, pos.z), column_state);
         y += 1;
@@ -312,13 +313,10 @@ fn shape_check_readable<C: GenerationCache + ?Sized>(cache: &C, pos: Vector3<i32
         })
 }
 
-/// `LevelChunk.postProcessGeneration` (`LevelChunk.java:565`) for one chunk's marked positions.
+/// `LevelChunk.postProcessGeneration` for one chunk's marked positions.
 ///
-/// ```text
-/// if (blockState.getBlock() instanceof LiquidBlock) blockState.tick(level, pos, random);
-/// else { BlockState s = Block.updateFromNeighbourShapes(blockState, level, pos);
-///        if (s != blockState) level.setBlock(pos, s, 276); }
-/// ```
+/// A liquid block is ticked; anything else is folded through `Block.updateFromNeighbourShapes`
+/// and written back — with flags 276 — only when the shape update actually changed the state.
 ///
 /// Vanilla runs this once, when the chunk reaches `FULL` and therefore after every one of its
 /// eight neighbours finished `FEATURES`. Pumpkin decorates a chunk from a 3x3 window and has no
@@ -387,8 +385,8 @@ mod tests {
         assert_eq!(post_process_pos(Block::WATER.default_state.id, pos), None);
     }
 
-    /// `Blocks.BROWN_MUSHROOM` (`Blocks.java:1015`) and `Blocks.RED_MUSHROOM`
-    /// (`Blocks.java:1027`) are registered with `.postProcess(Blocks::postProcessSelf)`, which
+    /// `Blocks.BROWN_MUSHROOM` and `Blocks.RED_MUSHROOM`
+    /// are registered with `.postProcess(Blocks::postProcessSelf)`, which
     /// returns the position itself.
     #[test]
     fn the_mushrooms_mark_themselves() {
@@ -403,10 +401,8 @@ mod tests {
         );
     }
 
-    /// `MushroomBlock.canSurvive` (`MushroomBlock.java:83`) short-circuits to `true` only for
-    /// `BlockTags.OVERRIDES_MUSHROOM_LIGHT_REQUIREMENT` — mycelium, podzol and the two nyliums.
-    /// On anything else, `mayPlaceOn` (`state.isSolidRender()`) passes for the sand these seven
-    /// worldgen mushrooms stand on, so `getRawBrightness(pos, 0) < 13` is what decides, and
+    /// Sand is not in `overrides_mushroom_light_requirement` but is solid-render, so for the
+    /// seven worldgen mushrooms standing on it the raw-brightness test is what decides — and
     /// under open sky it does not hold.
     #[test]
     fn only_the_light_requirement_can_remove_a_mushroom_from_sand() {
@@ -418,10 +414,8 @@ mod tests {
         assert!(!BlockState::from_id(Block::AIR.default_state.id).is_solid_render());
     }
 
-    /// `BubbleColumnBlock` calls `registerDefaultState(stateDefinition.any().setValue(DRAG_DOWN,
-    /// true))`, and `getColumnState` picks `DRAG_DOWN=true` over magma
-    /// (`ENABLES_BUBBLE_COLUMN_DRAG_DOWN`) and `DRAG_DOWN=false` over soul sand
-    /// (`ENABLES_BUBBLE_COLUMN_PUSH_UP`).
+    /// The bubble column's default state carries `drag_down`, and `getColumnState` keeps it over
+    /// magma and clears it over soul sand.
     #[test]
     fn column_state_follows_the_block_below() {
         let water = Block::WATER.default_state.id;
@@ -442,7 +436,7 @@ mod tests {
         assert_eq!(column_state(Block::STONE.default_state.id, drag), water);
     }
 
-    /// `StructurePiece.SHAPE_CHECK_BLOCKS` (`StructurePiece.java:43`) holds the six wood
+    /// `StructurePiece.SHAPE_CHECK_BLOCKS` holds the six wood
     /// fences, the nether brick fence, both torches, the ladder and iron bars — and nothing else.
     #[test]
     fn shape_check_blocks_are_the_vanilla_set() {
@@ -476,7 +470,7 @@ mod tests {
     }
 
     /// `BlockBehaviour.UPDATE_SHAPE_ORDER = {WEST, EAST, NORTH, SOUTH, DOWN, UP}`
-    /// (`BlockBehaviour.java:85`).
+    ///.
     #[test]
     fn update_shape_order_is_west_east_north_south_down_up() {
         assert_eq!(
@@ -504,10 +498,8 @@ mod tests {
         .to_state_id(&Block::DARK_OAK_FENCE)
     }
 
-    /// `FenceBlock.updateShape` (`FenceBlock.java:99`) writes
-    /// `PROPERTY_BY_DIRECTION.get(directionToNeighbour)` from `connectsTo(neighbourState,
-    /// neighbourState.isFaceSturdy(level, neighbourPos, direction.getOpposite()),
-    /// direction.getOpposite())`, and leaves the state alone for a vertical neighbour.
+    /// `FenceBlock.updateShape` writes the property belonging to the neighbour's direction from
+    /// `connectsTo`, and leaves the state alone for a vertical neighbour.
     #[test]
     fn fence_update_shape_follows_the_neighbour() {
         // A sturdy face connects.

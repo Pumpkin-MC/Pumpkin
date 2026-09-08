@@ -305,8 +305,8 @@ impl GenerationCache for Cache {
             }
         }
 
-        // `WorldGenRegion.setBlock`: `if ((updateFlags & 16) == 0) { BlockPos p =
-        // blockState.getPostProcessPos(this, pos); if (p != null) markPosForPostProcessing(p); }`
+        // `WorldGenRegion.setBlock` asks the written state for a post-process position unless
+        // the caller passed the "no post-processing" update flag, and marks it when there is one.
         // `markPosForPostProcessing` targets the chunk that holds the marked position.
         if let Some(mark) = post_process_pos(block_state.id, *pos)
             && let Some(chunk) = self.get_chunk_mut(mark.x >> 4, mark.z >> 4)
