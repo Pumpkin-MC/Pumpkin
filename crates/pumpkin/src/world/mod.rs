@@ -4450,6 +4450,7 @@ impl World {
 
                         // Detach from the old world before publishing into the new one, so no
                         // observer sees the player in a world whose chunk manager doesn't match.
+                        self.entity_tracker.drop_player_pairings(player);
                         self.remove_player(player, false).await;
                         player.unload_watched_chunks(self).await;
                         player.change_world_chunks(&self.level, &destination);

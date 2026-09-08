@@ -571,15 +571,15 @@ impl EntityTracker {
         }
     }
 
-    /// Drop this player's pairings and send despawn. Dimension leave: the client is still
-    /// connected. Disconnect uses `remove_player` (strips `seen_by`, no packet).
+    /// Sends a despawn for every entity this player is paired with and drops their uuid from each
+    /// `seen_by`. For leaving a dimension, where the client stays connected and would otherwise
+    /// keep entities whose ids the server no longer knows.
     ///
-    /// Without this, a player's UUID sticks in every `TrackedEntity::seen_by` they were
-    /// watching when they left, since `update_all`/`update_player` only ever iterate the
-    /// players currently in `world.players` for *this* world. On return to the same world,
-    /// `update_player`'s `seen_by.insert` sees the stale entry and skips `add_pairing`
-    /// (no spawn packet), even though the client's own state was cleared by the dimension
-    /// change - leaving an entity that's alive and in range permanently invisible to them.
+    /// Must run before `World::remove_player`: that goes through
+    /// [`EntityTracker::remove_entity`], which strips the uuid from every `seen_by` and sends
+    /// nothing, so the `is_some` check below finds nothing left to despawn. A gone entry is also
+    /// what lets the client see the entity again on the way back, since `update_player` only
+    /// calls `add_pairing` when its `seen_by.insert` really added the uuid.
     pub fn drop_player_pairings(&self, player: &Arc<Player>) {
         let uuid = player.gameprofile.id;
         for entry in &self.entity_map {
