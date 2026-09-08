@@ -352,6 +352,57 @@ struct ParsedEntry {
     bonus_formula: Option<LootBonusFormula>,
 }
 
+/// Resolves count and bonus functions across the entry, pool, and table
+/// function layers. The first layer providing a value wins.
+fn resolve_functions(
+    function_layers: &[&[EntryFunctionStruct]],
+) -> (i32, i32, Option<LootBonusFormula>) {
+    let (min_count, max_count) = function_layers
+        .iter()
+        .find_map(|fns| fns.iter().find(|f| f.function == "minecraft:set_count"))
+        .and_then(|f| f.count.as_ref())
+        .map(|c| (c.min(), c.max()))
+        .unwrap_or((1, 1));
+
+    let bonus_formula = function_layers.iter().find_map(|fns| {
+        fns.iter().find_map(|f| {
+            if f.function == "minecraft:apply_bonus" {
+                match f.formula.as_deref() {
+                    Some("minecraft:ore_drops") => Some(LootBonusFormula::OreDrops),
+                    Some("minecraft:uniform_bonus_count") => {
+                        let mult = f
+                            .parameters
+                            .as_ref()
+                            .and_then(|p| p.bonus_multiplier)
+                            .unwrap_or(1);
+                        Some(LootBonusFormula::UniformBonusCount(mult))
+                    }
+                    Some("minecraft:binomial_with_bonus_count") => {
+                        let extra = f.parameters.as_ref().and_then(|p| p.extra).unwrap_or(0);
+                        let prob = f
+                            .parameters
+                            .as_ref()
+                            .and_then(|p| p.probability)
+                            .unwrap_or(0.0);
+                        Some(LootBonusFormula::BinomialWithBonusCount {
+                            extra,
+                            probability: prob,
+                        })
+                    }
+                    _ => None,
+                }
+            } else if f.function == "minecraft:enchanted_count_increase" {
+                let mult = f.count.as_ref().map_or(1, |c| c.max());
+                Some(LootBonusFormula::UniformBonusCount(mult))
+            } else {
+                None
+            }
+        })
+    });
+
+    (min_count, max_count, bonus_formula)
+}
+
 fn extract_entries(
     entry: &PoolEntryStruct,
     inherited_condition: LootCondition,
@@ -397,50 +448,11 @@ fn extract_entries_with_depth(
         }
         "minecraft:item" => {
             if let Some(name) = &entry.name {
-                let function_layers = [entry.functions.as_slice(), pool_functions, table_functions];
-                let (min_count, max_count) = function_layers
-                    .iter()
-                    .find_map(|fns| fns.iter().find(|f| f.function == "minecraft:set_count"))
-                    .and_then(|f| f.count.as_ref())
-                    .map(|c| (c.min(), c.max()))
-                    .unwrap_or((1, 1));
-
-                let bonus_formula = function_layers.iter().find_map(|fns| {
-                    fns.iter().find_map(|f| {
-                        if f.function == "minecraft:apply_bonus" {
-                            match f.formula.as_deref() {
-                                Some("minecraft:ore_drops") => Some(LootBonusFormula::OreDrops),
-                                Some("minecraft:uniform_bonus_count") => {
-                                    let mult = f
-                                        .parameters
-                                        .as_ref()
-                                        .and_then(|p| p.bonus_multiplier)
-                                        .unwrap_or(1);
-                                    Some(LootBonusFormula::UniformBonusCount(mult))
-                                }
-                                Some("minecraft:binomial_with_bonus_count") => {
-                                    let extra =
-                                        f.parameters.as_ref().and_then(|p| p.extra).unwrap_or(0);
-                                    let prob = f
-                                        .parameters
-                                        .as_ref()
-                                        .and_then(|p| p.probability)
-                                        .unwrap_or(0.0);
-                                    Some(LootBonusFormula::BinomialWithBonusCount {
-                                        extra,
-                                        probability: prob,
-                                    })
-                                }
-                                _ => None,
-                            }
-                        } else if f.function == "minecraft:enchanted_count_increase" {
-                            let mult = f.count.as_ref().map_or(1, |c| c.max());
-                            Some(LootBonusFormula::UniformBonusCount(mult))
-                        } else {
-                            None
-                        }
-                    })
-                });
+                let (min_count, max_count, bonus_formula) = resolve_functions(&[
+                    entry.functions.as_slice(),
+                    pool_functions,
+                    table_functions,
+                ]);
 
                 out.push(ParsedEntry {
                     item: name.clone(),
@@ -467,14 +479,19 @@ fn extract_entries_with_depth(
                         values: Vec<String>,
                     }
                     if let Ok(tag_data) = serde_json::from_str::<TagJson>(&content) {
+                        let (min_count, max_count, bonus_formula) = resolve_functions(&[
+                            entry.functions.as_slice(),
+                            pool_functions,
+                            table_functions,
+                        ]);
                         for item_name in tag_data.values {
                             out.push(ParsedEntry {
                                 item: item_name,
                                 weight: entry.weight,
-                                min_count: 1,
-                                max_count: 1,
+                                min_count,
+                                max_count,
                                 condition: entry_cond,
-                                bonus_formula: None,
+                                bonus_formula,
                             });
                         }
                     }
@@ -489,13 +506,13 @@ fn extract_entries_with_depth(
                 if let Ok(content) = fs::read_to_string(&table_path) {
                     if let Ok(nested_table) = serde_json::from_str::<ChestLootTableJson>(&content) {
                         for pool in &nested_table.pools {
-                            let mut pool_cond = entry_cond;
-                            for c in &pool.conditions {
-                                let parsed = parse_condition(c);
-                                if parsed != LootCondition::None {
-                                    pool_cond = parsed;
+                            let pool_cond = {
+                                let mut conds = vec![entry_cond];
+                                for c in &pool.conditions {
+                                    conds.push(parse_condition(c));
                                 }
-                            }
+                                merge_conditions(conds)
+                            };
                             for child_entry in &pool.entries {
                                 extract_entries_with_depth(
                                     child_entry,
@@ -513,13 +530,13 @@ fn extract_entries_with_depth(
             }
             Some(LootTableValue::Inline(nested_table)) => {
                 for pool in &nested_table.pools {
-                    let mut pool_cond = entry_cond;
-                    for c in &pool.conditions {
-                        let parsed = parse_condition(c);
-                        if parsed != LootCondition::None {
-                            pool_cond = parsed;
+                    let pool_cond = {
+                        let mut conds = vec![entry_cond];
+                        for c in &pool.conditions {
+                            conds.push(parse_condition(c));
                         }
-                    }
+                        merge_conditions(conds)
+                    };
                     for child_entry in &pool.entries {
                         extract_entries_with_depth(
                             child_entry,
