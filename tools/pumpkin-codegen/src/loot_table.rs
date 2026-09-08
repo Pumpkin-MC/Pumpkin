@@ -241,17 +241,23 @@ fn parse_condition(cond: &ConditionStruct) -> LootCondition {
 }
 
 fn combine_conditions(conditions: &[ConditionStruct]) -> LootCondition {
-    let mut parsed_list: Vec<LootCondition> = Vec::new();
-    for c in conditions {
-        let parsed = parse_condition(c);
-        if parsed != LootCondition::None {
-            parsed_list.push(parsed);
+    merge_conditions(conditions.iter().map(parse_condition).collect())
+}
+
+/// Combines parsed conditions, dropping `None`s and duplicates.
+/// Returns a single condition when possible, otherwise `AllOf`.
+fn merge_conditions(conditions: Vec<LootCondition>) -> LootCondition {
+    let mut unique: Vec<LootCondition> = Vec::with_capacity(conditions.len());
+    for cond in conditions {
+        if cond == LootCondition::None || unique.contains(&cond) {
+            continue;
         }
+        unique.push(cond);
     }
-    match parsed_list.len() {
+    match unique.len() {
         0 => LootCondition::None,
-        1 => parsed_list[0],
-        _ => LootCondition::AllOf(Box::leak(parsed_list.into_boxed_slice())),
+        1 => unique[0],
+        _ => LootCondition::AllOf(Box::leak(unique.into_boxed_slice())),
     }
 }
 
@@ -535,13 +541,13 @@ fn extract_entries_with_depth(
                             serde_json::from_str::<ChestLootTableJson>(&content)
                         {
                             for pool in &nested_table.pools {
-                                let mut pool_cond = entry_cond;
-                                for c in &pool.conditions {
-                                    let parsed = parse_condition(c);
-                                    if parsed != LootCondition::None {
-                                        pool_cond = parsed;
+                                let pool_cond = {
+                                    let mut conds = vec![entry_cond];
+                                    for c in &pool.conditions {
+                                        conds.push(parse_condition(c));
                                     }
-                                }
+                                    merge_conditions(conds)
+                                };
                                 for child_entry in &pool.entries {
                                     extract_entries_with_depth(
                                         child_entry,
