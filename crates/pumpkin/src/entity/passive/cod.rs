@@ -8,6 +8,7 @@ use crate::entity::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
         random_swimming::RandomSwimmingGoal, swim::SwimGoal,
     },
+    ai::pathfinder::Navigator,
     mob::{Mob, MobEntity},
 };
 
@@ -27,6 +28,13 @@ impl CodEntity {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
             Arc::downgrade(&mob_arc)
         };
+
+        // Vanilla `AbstractFish#createNavigation`: fish navigate through water.
+        *mob_arc
+            .mob_entity
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Navigator::water_bound(false);
 
         {
             let mut goal_selector = mob_arc
