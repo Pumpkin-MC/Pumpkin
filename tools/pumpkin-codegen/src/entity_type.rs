@@ -16,6 +16,7 @@ pub struct EntityType {
     pub experience_reward: Option<u32>,
     /// Static hurt sound event name when it is safely derivable from extracted entity data.
     pub hurt_sound: Option<String>,
+    pub death_sound: Option<String>,
     /// Whether this entity can be attacked by players or other entities.
     pub attackable: Option<bool>,
     /// Whether this entity is classified as a mob (affects spawning mechanics).
@@ -125,6 +126,13 @@ impl ToTokens for NamedEntityType<'_> {
             quote! { None }
         };
 
+        let death_sound = if let Some(sound_name) = entity.death_sound.as_ref() {
+            let sound_ident = format_ident!("{}", sound_name.to_pascal_case());
+            quote! { Some(Sound::#sound_ident) }
+        } else {
+            quote! { None }
+        };
+
         let spawn_restriction_location = match entity.spawn_restriction.location {
             SpawnLocation::InLava => quote! {SpawnLocation::InLava},
             SpawnLocation::InWater => quote! {SpawnLocation::InWater},
@@ -189,6 +197,7 @@ impl ToTokens for NamedEntityType<'_> {
                 attributes: #attributes_field,
                 experience_reward: #experience_reward,
                 hurt_sound: #hurt_sound,
+                death_sound: #death_sound,
                 attackable: #attackable,
                 mob: #mob,
                 saveable: #saveable,
@@ -262,6 +271,7 @@ pub fn build() -> TokenStream {
             pub attributes: &'static [(Attributes, f64)],
             pub experience_reward: u32,
             pub hurt_sound: Option<Sound>,
+            pub death_sound: Option<Sound>,
             pub attackable: Option<bool>,
             pub mob: bool,
             pub saveable: bool,

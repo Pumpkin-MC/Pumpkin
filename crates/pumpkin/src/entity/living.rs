@@ -43,7 +43,7 @@ use pumpkin_data::data_component_impl::{
     EquipmentSlot, EquippableImpl, FoodImpl,
 };
 use pumpkin_data::effect::StatusEffect;
-use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
+use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType, MobCategory};
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::item_stack::{DamageResult, ItemStack};
 use pumpkin_data::sound::SoundCategory;
@@ -189,6 +189,21 @@ impl LivingEntity {
 
     fn hurt_sound_for_entity(entity_type: &'static EntityType) -> Sound {
         entity_type.hurt_sound.unwrap_or(Sound::EntityGenericHurt)
+    }
+
+    fn death_sound_for_entity(entity_type: &'static EntityType) -> Sound {
+        entity_type.death_sound.unwrap_or(Sound::EntityGenericDeath)
+    }
+
+    #[must_use]
+    pub fn sound_category(entity_type: &'static EntityType) -> SoundCategory {
+        if entity_type.category == &MobCategory::MONSTER {
+            SoundCategory::Hostile
+        } else if entity_type.resource_name == "player" {
+            SoundCategory::Players
+        } else {
+            SoundCategory::Neutral
+        }
     }
 
     pub fn new(entity: Entity) -> Self {
@@ -1728,6 +1743,11 @@ impl LivingEntity {
             self.update_death_stats(&*dyn_self, killer);
 
             // Plays the death sound
+            world.play_sound(
+                self.death_sound(),
+                Self::sound_category(self.entity.entity_type),
+                &self.entity.pos.load(),
+            );
             world.send_entity_status(&self.entity, EntityStatus::Death, Some(ActorEventID::Death));
             let looting_level;
             let tool = if let Some(cause_ent) = cause {
@@ -2315,6 +2335,10 @@ impl LivingEntity {
             Self::hurt_sound_for_entity(self.entity.entity_type)
         }
     }
+
+    fn death_sound(&self) -> Sound {
+        Self::death_sound_for_entity(self.entity.entity_type)
+    }
 }
 
 impl LivingEntity {
@@ -2827,7 +2851,7 @@ impl LivingEntity {
         if play_sound {
             world.play_sound(
                 self.hurt_sound(),
-                SoundCategory::Players,
+                Self::sound_category(self.entity.entity_type),
                 &self.entity.pos.load(),
             );
 
@@ -3609,9 +3633,37 @@ mod tests {
     }
 
     #[test]
+    fn death_sound_uses_entity_data_and_generic_fallback() {
+        assert_eq!(
+            LivingEntity::death_sound_for_entity(&EntityType::COW),
+            Sound::EntityCowDeath
+        );
+        assert_eq!(
+            LivingEntity::death_sound_for_entity(&EntityType::ENDER_DRAGON),
+            Sound::EntityGenericDeath
+        );
+    }
+
+    #[test]
+    fn sound_category_matches_vanilla_sound_sources() {
+        assert!(matches!(
+            LivingEntity::sound_category(&EntityType::ZOMBIE),
+            SoundCategory::Hostile
+        ));
+        assert!(matches!(
+            LivingEntity::sound_category(&EntityType::COW),
+            SoundCategory::Neutral
+        ));
+        assert!(matches!(
+            LivingEntity::sound_category(&EntityType::PLAYER),
+            SoundCategory::Players
+        ));
+    }
+
+    #[test]
     fn hurt_sound_for_entity_defaults_to_generic_hurt() {
         assert_eq!(
-            LivingEntity::hurt_sound_for_entity(&EntityType::CREEPER),
+            LivingEntity::hurt_sound_for_entity(&EntityType::ENDER_DRAGON),
             Sound::EntityGenericHurt
         );
     }
