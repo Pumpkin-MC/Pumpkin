@@ -184,25 +184,12 @@ fn set_planks_block(
     }
 }
 
-/// Vanilla `MineshaftPieces$MineShaftCorridor.createChest`
-/// (`MineshaftPieces.java:355-378`) overrides the generic
-/// `StructurePiece.createChest`: it does *not* place a chest block. It places a
-/// rail whose shape comes from `random.nextBoolean()` and spawns a
-/// `chest_minecart` entity whose loot seed is `random.nextLong()`:
-///
-/// ```java
-/// BlockPos pos = this.getWorldPos(x, y, z);
-/// if (chunkBB.isInside(pos) && level.getBlockState(pos).isAir() && !level.getBlockState(pos.below()).isAir()) {
-///    BlockState state = Blocks.RAIL.defaultBlockState()
-///        .setValue(RailBlock.SHAPE, random.nextBoolean() ? RailShape.NORTH_SOUTH : RailShape.EAST_WEST);
-///    this.placeBlock(level, state, x, y, z, chunkBB);
-///    MinecartChest chest = EntityTypes.CHEST_MINECART.create(...);
-///    chest.setLootTable(lootTable, random.nextLong());
-///    ...
-///    return true;
-/// }
-/// return false;
-/// ```
+/// Vanilla `MineshaftPieces$MineShaftCorridor.createChest` overrides the generic
+/// `StructurePiece.createChest`: it does *not* place a chest block. The gate is that the world
+/// position lies inside the chunk bounding box, holds air, and has a non-air block beneath it.
+/// When it passes, the piece places a rail whose shape comes from `random.nextBoolean()` —
+/// north-south or east-west — and spawns a `chest_minecart` entity whose loot seed is
+/// `random.nextLong()`.
 ///
 /// So the gate consumes **no** random at all when it fails, and exactly **two**
 /// draws (a boolean then a long) when it succeeds.
@@ -328,8 +315,8 @@ impl StructureGenerator for MineshaftGenerator {
 
         let mut start_room = MineShaftRoom::new(0, &mut context.random, room_x, room_z, shaft_type);
 
-        // Vanilla `MineshaftStructure.generatePiecesAndAdjust`: `builder.addPiece(room);
-        // room.addChildren(room, builder, random);` — the room is in the collector while its
+        // Vanilla `MineshaftStructure.generatePiecesAndAdjust` adds the room to the collector and
+        // only then generates its children — the room is in the collector while its
         // children (and, depth-first, their children) are generated, and it collects the
         // entrance boxes along the way, so write the finished room back over the placeholder.
         let mut collector = StructurePiecesCollector::default();
@@ -2123,10 +2110,9 @@ mod tests {
 
     #[test]
     fn minecart_chest_places_a_rail_not_a_chest() {
-        // Vanilla 26.2 MineshaftPieces$MineShaftCorridor.createChest:
-        //   BlockState state = Blocks.RAIL.defaultBlockState()
-        //       .setValue(RailBlock.SHAPE, random.nextBoolean() ? RailShape.NORTH_SOUTH
-        //                                                       : RailShape.EAST_WEST);
+        // Vanilla 26.2 `MineshaftPieces$MineShaftCorridor.createChest` places the default rail
+        // state with its shape property set from a `nextBoolean` — north-south on true,
+        // east-west on false.
         // The corridor never writes a chest block; the loot lives in a
         // `chest_minecart` entity spawned on top of the rail.
         let north_south = minecart_chest_rail(true);
@@ -2135,8 +2121,8 @@ mod tests {
         assert_eq!(BlockId::from_state_id(north_south.id), Block::RAIL.id);
         assert_eq!(BlockId::from_state_id(east_west.id), Block::RAIL.id);
         assert_ne!(north_south.id, east_west.id);
-        // `Blocks.RAIL.defaultBlockState()` already carries SHAPE=north_south, so
-        // the `nextBoolean() == true` branch must be exactly the default state.
+        // The rail's default state already carries SHAPE=north_south, so the
+        // `nextBoolean() == true` branch must be exactly the default state.
         assert_eq!(north_south.id, Block::RAIL.default_state.id);
         assert_eq!(
             RailLikeProperties::from_state_id(east_west.id).shape,
@@ -2164,8 +2150,8 @@ mod tests {
 
     #[test]
     fn generate_maybe_box_draws_in_y_x_z_order_before_placement_gates() {
-        // Vanilla 26.2 StructurePiece.generateMaybeBox:
-        // for (y) for (x) for (z) if (random.nextFloat() > chance) continue.
+        // Vanilla 26.2 `StructurePiece.generateMaybeBox` walks Y, then X, then Z, and draws one
+        // `nextFloat` per position, skipping the position when the draw exceeds the chance.
         let mut random = RandomGenerator::Legacy(LegacyRand::from_seed(0));
         let mut accepted = Vec::new();
         for_each_maybe_box_position(&mut random, 0.8, 0, 2, 0, 2, 2, 2, |x, y, z| {
@@ -2190,16 +2176,17 @@ mod tests {
 
     #[test]
     fn corridor_support_requires_a_complete_non_air_ceiling() {
-        // Vanilla 26.2 MineShaftPiece.isSupportingBox:
-        // for (x = minX; x <= maxX; x++) if (getBlock(x, y + 1, z).isAir()) return false.
+        // Vanilla 26.2 `MineShaftPiece.isSupportingBox` walks the span and fails as soon as one
+        // block above the row is air.
         assert!(is_supporting_box(0, 2, |_| false));
         assert!(!is_supporting_box(0, 2, |x| x == 1));
     }
 
     #[test]
     fn cobweb_interior_gate_precedes_the_random_draw() {
-        // Vanilla 26.2 MineShaftCorridor.maybePlaceCobWeb:
-        // isInterior(...) && random.nextFloat() < chance && hasSturdyNeighbours(..., 2).
+        // Vanilla 26.2 `MineShaftCorridor.maybePlaceCobWeb` gates on the interior test first, then
+        // the `nextFloat` against the chance, and only then on having two sturdy neighbours — so a
+        // non-interior position spends no draw at all.
         let mut random = RandomGenerator::Legacy(LegacyRand::from_seed(0));
         assert!(!passes_cobweb_random_gate(&mut random, 0.8, false));
         assert!(passes_cobweb_random_gate(&mut random, 0.8, true));
@@ -2208,16 +2195,16 @@ mod tests {
 
     #[test]
     fn corridor_rail_chance_depends_on_interior_status() {
-        // Vanilla 26.2 MineShaftCorridor.postProcess:
-        // float chance = isInterior(world, 1, 0, z, box) ? 0.7F : 0.9F.
+        // Vanilla 26.2 `MineShaftCorridor.postProcess` uses 0.7 for an interior column and 0.9
+        // otherwise.
         assert_eq!(rail_chance(true), 0.7);
         assert_eq!(rail_chance(false), 0.9);
     }
 
     #[test]
     fn corridor_support_fences_connect_toward_the_beam() {
-        // Vanilla 26.2 MineShaftCorridor.placeSupport uses
-        // fence.setValue(WEST, true) at x0 and fence.setValue(EAST, true) at x1.
+        // Vanilla 26.2 `MineShaftCorridor.placeSupport` sets the west connection on the low-x
+        // fence and the east connection on the high-x one.
         let west = MineshaftType::Mesa.connected_fence(true, false);
         let east = MineshaftType::Mesa.connected_fence(false, true);
         let west_props =
@@ -2230,7 +2217,7 @@ mod tests {
 
     #[test]
     fn pillar_fill_column_excludes_its_anchor_endpoint() {
-        // Vanilla 26.2 fillColumnBetween: for (int y = start; y < end; ++y).
+        // Vanilla 26.2 `fillColumnBetween` runs from the start Y up to, but not including, the end.
         assert_eq!((6..10).collect::<Vec<_>>(), [6, 7, 8, 9]);
         assert_eq!((12..12).count(), 0);
     }
@@ -2251,12 +2238,9 @@ mod tests {
 
     #[test]
     fn floor_planks_need_interior_and_a_non_sturdy_top_face() {
-        // Vanilla 26.2 MineShaftPiece.setPlanksBlock:
-        //   if (this.isInterior(level, x, y, z, chunkBB)) {
-        //       BlockState existingState = level.getBlockState(pos);
-        //       if (!existingState.isFaceSturdy(level, pos, Direction.UP)) { setBlock(planks) }
-        //   }
-        // so both a non-interior position and a sturdy upward face suppress the plank.
+        // Vanilla 26.2 `MineShaftPiece.setPlanksBlock` places the plank only for an interior
+        // position whose existing state has a non-sturdy upward face, so both a non-interior
+        // position and a sturdy upward face suppress the plank.
         assert!(places_floor_planks(true, false));
         assert!(!places_floor_planks(true, true));
         assert!(!places_floor_planks(false, false));
