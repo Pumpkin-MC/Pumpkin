@@ -36,14 +36,25 @@ impl TNTBlock {
             return false;
         }
 
-        // Vanilla's `TntBlock` removes the block synchronously as the first step of priming.
-        // `use_with_item`, `placed` and `on_neighbor_update` can all reach `prime()` for the
-        // same position from independent tasks (a player's flint-and-steel click racing a
-        // redstone neighbor update). Swap first and inspect what was actually replaced:
-        // `set_block_state` serializes on the chunk section lock, so only the caller that
-        // swapped away a TNT state owns the ignition.
+        // Swap in air to claim the block: `set_block_state` locks the chunk section, so a task
+        // racing for the same spot gets a non-TNT old state back and drops out here. The swap is
+        // undone below if nothing ends up primed.
         let old_state = world.set_block_state(location, BlockStateId::AIR, BlockFlags::NOTIFY_ALL);
         if old_state.to_block() != &Block::TNT {
+            return false;
+        }
+
+        if Self::spawn_primed(world, location) {
+            return true;
+        }
+
+        world.set_block_state(location, old_state, BlockFlags::NOTIFY_ALL);
+        false
+    }
+
+    /// Spawns the primed entity for a TNT block the caller already took out of the world.
+    pub fn spawn_primed(world: &Arc<World>, location: &BlockPos) -> bool {
+        if !world.level_info.load().game_rules.tnt_explodes {
             return false;
         }
 
@@ -55,7 +66,6 @@ impl TNTBlock {
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
         if event.cancelled {
-            world.set_block_state(location, old_state, BlockFlags::NOTIFY_ALL);
             return false;
         }
 
@@ -77,7 +87,6 @@ impl TNTBlock {
                 .fire_blocking(&server, &mut prime_event);
         }
         if prime_event.cancelled {
-            world.set_block_state(location, old_state, BlockFlags::NOTIFY_ALL);
             return false;
         }
 
@@ -138,7 +147,8 @@ impl BlockBehaviour for TNTBlock {
         if args.player.gamemode.load() != GameMode::Creative {
             let props = TntLikeProperties::from_state_id(args.state.id);
             if props.r#unstable {
-                Self::prime(args.world, args.position);
+                // `break_block` already swapped the TNT away, so `prime` would find no TNT here.
+                Self::spawn_primed(args.world, args.position);
             }
         }
     }
