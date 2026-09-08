@@ -61,15 +61,8 @@ impl MultifaceGrowthFeature {
     /// The position vanilla probes on iteration `i` of the search loop.
     ///
     /// `MultifaceGrowthFeature.place` keeps the cursor as a `MutableBlockPos` but re-seeds it
-    /// from the *origin* on every iteration:
-    ///
-    /// ```java
-    /// for (int i = 0; i < config.searchRange; i++) {
-    ///     mutableBlockPos.setWithOffset(blockPos, direction);   // blockPos, not mutableBlockPos
-    ///     ...
-    /// }
-    /// ```
-    ///
+    /// from the *origin* on every iteration — the offset is taken from the origin position, not
+    /// from the cursor it just wrote —
     /// so the search never walks away from `origin + direction`, whatever `search_range` says,
     /// and the loop just re-tests the same block. Advancing the cursor instead (what Pumpkin
     /// used to do) let glow lichen attach up to 20 blocks from where vanilla put it.
@@ -77,25 +70,11 @@ impl MultifaceGrowthFeature {
         origin.offset(direction.to_offset())
     }
 
-    /// Vanilla `MultifaceGrowthFeature.placeGrowthIfPossible`:
-    ///
-    /// ```java
-    /// for (Direction direction : list) {
-    ///     BlockState blockState = level.getBlockState(mutable.setWithOffset(pos, direction));
-    ///     if (config.canBePlacedOn.contains(blockState)) {
-    ///         BlockState blockState2 = block.getStateForPlacement(state, level, pos, direction);
-    ///         if (blockState2 == null) return false;
-    ///         level.setBlock(pos, blockState2, 3);
-    ///         level.getChunk(pos).markPosForPostProcessing(pos);
-    ///         if (random.nextFloat() < config.chanceOfSpreading) {
-    ///             block.getSpreader()
-    ///                 .spreadFromFaceTowardRandomDirection(blockState2, level, pos, direction, random, true);
-    ///         }
-    ///         return true;
-    ///     }
-    /// }
-    /// return false;
-    /// ```
+    /// Vanilla `MultifaceGrowthFeature.placeGrowthIfPossible` walks the direction list and stops
+    /// at the first neighbour whose state is in `can_be_placed_on`. It asks the block for a
+    /// placement state against that face, bails out if there is none, writes the growth, marks
+    /// the position for post-processing, and then draws a `nextFloat` against
+    /// `chance_of_spreading` — on success spreading from that face towards a random direction.
     ///
     /// The `nextFloat` is drawn on *every* successful placement (`chance_of_spreading` is 0.5
     /// for `glow_lichen`, 1.0 for `sculk_vein`), so leaving it out desynchronises the rest of
@@ -210,9 +189,9 @@ impl MultifaceGrowthFeature {
     }
 
     /// Vanilla `Direction.allShuffled` = `Util.shuffledCopy(Direction.values(), random)`, i.e.
-    /// `[DOWN, UP, NORTH, SOUTH, WEST, EAST]` run through
-    /// `for (int j = size; j > 1; j--) { int k = random.nextInt(j); swap(j - 1, k); }`,
-    /// which always spends exactly five `nextInt` draws.
+    /// `[DOWN, UP, NORTH, SOUTH, WEST, EAST]` run through a downward Fisher-Yates pass that
+    /// swaps each tail element with `nextInt(remaining)`, which always spends exactly five
+    /// `nextInt` draws.
     fn shuffled_all_directions(random: &mut RandomGenerator) -> [BlockDirection; 6] {
         let mut directions = BlockDirection::all();
         for i in (1..directions.len()).rev() {
@@ -244,14 +223,9 @@ impl MultifaceGrowthFeature {
             .find(|&(spread_pos, spread_face)| self.can_spread_into(chunk, spread_pos, spread_face))
     }
 
-    /// `MultifaceSpreader.DEFAULT_SPREAD_ORDER`, in order:
-    ///
-    /// ```java
-    /// SAME_POSITION -> new SpreadPos(pos, spreadDirection)
-    /// SAME_PLANE    -> new SpreadPos(pos.relative(spreadDirection), face)
-    /// WRAP_AROUND   -> new SpreadPos(pos.relative(spreadDirection).relative(face),
-    ///                                spreadDirection.getOpposite())
-    /// ```
+    /// `MultifaceSpreader.DEFAULT_SPREAD_ORDER`, in order: the same position facing the spread
+    /// direction; the neighbour along the spread direction keeping the original face; then that
+    /// neighbour offset again along the face, facing back against the spread direction.
     fn spread_candidates(
         pos: BlockPos,
         face: BlockDirection,
@@ -413,11 +387,9 @@ mod tests {
         }
     }
 
-    /// Reference values from the real 26.2 server jar:
-    /// `Direction.allShuffled(new XoroshiroRandomSource(13579))`, four calls in a row, and the
-    /// raw `nextInt()` after a single call (`-1266923548`, the *sixth* value of that stream
-    /// `1544854625, -1649625109, 454558489, -1024776688, -2036914607, -1266923548, ...`, so a
-    /// shuffle costs exactly five draws).
+    /// Reference values from the real 26.2 server jar: four `Direction.allShuffled` calls in a
+    /// row on a Xoroshiro stream seeded with 13579, plus the raw `nextInt()` after a single call
+    /// — the sixth value of that stream, so a shuffle costs exactly five draws.
     #[test]
     fn shuffled_all_directions_matches_vanilla() {
         use pumpkin_util::random::{RandomGenerator, RandomImpl, xoroshiro128::Xoroshiro};
