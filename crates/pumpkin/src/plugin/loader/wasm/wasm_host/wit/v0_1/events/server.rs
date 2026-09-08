@@ -1,4 +1,6 @@
-use crate::net::ClientPlatform;
+use super::super::user::to_wasm_state;
+use crate::net::user::Edition;
+use crate::plugin::server::packet::decode_packet;
 use crate::plugin::{
     loader::wasm::wasm_host::{
         state::PluginHostState,
@@ -28,32 +30,34 @@ use crate::plugin::{
 
 impl ToFromWasmEvent for PacketReceivedEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player_res = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let user = state
+            .add_user(self.user.clone())
+            .expect("failed to add user resource");
 
-        let packet = match self.player.client.as_ref() {
-            ClientPlatform::Java(client) => {
-                let version = client.version.load();
+        let packet = match self.user.edition {
+            Edition::Java => {
+                let version = self.version;
                 generated_packets::deserialize_java_serverbound_packet(
+                    self.state,
                     self.packet_id,
                     &self.payload,
                     version,
                 )
                 .map_or(ServerboundPacket::Unknown, ServerboundPacket::Java)
             }
-            ClientPlatform::Bedrock(_) => {
-                generated_packets::deserialize_bedrock_serverbound_packet(
-                    self.packet_id,
-                    &self.payload,
-                )
-                .map_or(ServerboundPacket::Unknown, ServerboundPacket::Bedrock)
-            }
+            Edition::Bedrock => generated_packets::deserialize_bedrock_serverbound_packet(
+                self.packet_id,
+                &self.payload,
+            )
+            .map_or(ServerboundPacket::Unknown, ServerboundPacket::Bedrock),
         };
 
         Event::PacketReceivedEvent(PacketReceivedEventData {
-            player: player_res,
+            user,
+            state: to_wasm_state(self.state),
+            protocol_version: self.protocol_version,
             packet,
+            replacement: None,
             packet_id: self.packet_id,
             raw_payload: self.payload.to_vec(),
             cancelled: self.cancelled,
@@ -66,42 +70,68 @@ impl ToFromWasmEvent for PacketReceivedEvent {
             self.packet_id = data.packet_id;
             self.payload = data.raw_payload.into();
             self.cancelled = data.cancelled;
+            if !self.cancelled
+                && let Some(replacement) = data.replacement
+            {
+                let bytes = match replacement {
+                    ServerboundPacket::Java(packet) if self.user.edition == Edition::Java => {
+                        generated_packets::serialize_java_serverbound_packet(
+                            &packet,
+                            self.state,
+                            self.version,
+                        )
+                    }
+                    ServerboundPacket::Bedrock(packet) if self.user.edition == Edition::Bedrock => {
+                        generated_packets::serialize_bedrock_serverbound_packet(&packet)
+                    }
+                    _ => None,
+                };
+                if let Some(packet) = bytes.and_then(|bytes| decode_packet(bytes).ok()) {
+                    self.packet_id = packet.id;
+                    self.payload = packet.payload;
+                } else {
+                    self.cancelled = true;
+                    tracing::warn!("Invalid received packet replacement");
+                }
+            }
         }
     }
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::PacketReceivedEvent(_) => {
-                // TODO: Implement converting from WIT variant back to raw if needed.
-                // For now, we only support cancellation.
-                panic!(
-                    "Modifying packets from WASM is not yet supported in this simple implementation."
-                );
-            }
-            _ => panic!("unexpected event type"),
-        }
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        let Event::PacketReceivedEvent(data) = &event else {
+            panic!("unexpected event type")
+        };
+        let user = state
+            .packet_user(&data.user)
+            .expect("invalid user resource");
+        let mut result = Self::new(user, data.packet_id, bytes::Bytes::new());
+        result.apply_wasm_event(event, state);
+        result
     }
 }
 
 impl ToFromWasmEvent for PacketSentEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player_res = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let user = state
+            .add_user(self.user.clone())
+            .expect("failed to add user resource");
 
-        let packet = match self.player.client.as_ref() {
-            ClientPlatform::Java(_) => {
-                generated_packets::clientbound_java_any_to_wit(self.packet.as_ref())
-                    .map_or(ClientboundPacket::Unknown, ClientboundPacket::Java)
-            }
-            ClientPlatform::Bedrock(_) => {
-                generated_packets::clientbound_bedrock_any_to_wit(self.packet.as_ref())
-                    .map_or(ClientboundPacket::Unknown, ClientboundPacket::Bedrock)
-            }
+        let packet = match self.user.edition {
+            Edition::Java => generated_packets::deserialize_java_clientbound_packet(
+                self.state,
+                self.packet_id,
+                &self.payload,
+                self.version,
+            )
+            .map_or(ClientboundPacket::Unknown, ClientboundPacket::Java),
+            Edition::Bedrock => ClientboundPacket::Unknown,
         };
 
         Event::PacketSentEvent(PacketSentEventData {
-            player: player_res,
+            user,
+            state: to_wasm_state(self.state),
+            protocol_version: self.protocol_version,
             packet,
+            replacement: None,
             packet_id: self.packet_id,
             raw_payload: self.payload.iter().copied().collect(),
             cancelled: self.cancelled,
@@ -111,17 +141,45 @@ impl ToFromWasmEvent for PacketSentEvent {
     fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
         cleanup_event(&event, state);
         if let Event::PacketSentEvent(data) = event {
+            self.packet_id = data.packet_id;
             self.payload = data.raw_payload.into();
             self.cancelled = data.cancelled;
+            if !self.cancelled
+                && let Some(replacement) = data.replacement
+            {
+                let bytes = match replacement {
+                    ClientboundPacket::Java(packet) if self.user.edition == Edition::Java => {
+                        generated_packets::serialize_java_clientbound_packet(
+                            &packet,
+                            self.state,
+                            self.version,
+                        )
+                    }
+                    ClientboundPacket::Bedrock(packet) if self.user.edition == Edition::Bedrock => {
+                        generated_packets::serialize_bedrock_packet(&packet)
+                    }
+                    _ => None,
+                };
+                if let Some(packet) = bytes.and_then(|bytes| decode_packet(bytes).ok()) {
+                    self.packet_id = packet.id;
+                    self.payload = packet.payload;
+                } else {
+                    self.cancelled = true;
+                    tracing::warn!("Invalid sent packet replacement");
+                }
+            }
         }
     }
-    fn from_wasm_event(event: Event, _state: &mut PluginHostState) -> Self {
-        match event {
-            Event::PacketSentEvent(_) => {
-                panic!("Modifying packets from WASM is not yet supported.");
-            }
-            _ => panic!("unexpected event type"),
-        }
+    fn from_wasm_event(event: Event, state: &mut PluginHostState) -> Self {
+        let Event::PacketSentEvent(data) = &event else {
+            panic!("unexpected event type")
+        };
+        let user = state
+            .packet_user(&data.user)
+            .expect("invalid user resource");
+        let mut result = Self::new(user, data.packet_id, bytes::Bytes::new());
+        result.apply_wasm_event(event, state);
+        result
     }
 }
 
@@ -347,5 +405,192 @@ mod tests {
                 .get::<TextComponentResource>(&Resource::new_own(motd_rep))
                 .is_err()
         );
+    }
+}
+
+#[cfg(test)]
+mod packet_tests {
+    use super::*;
+    use crate::{
+        net::user::User,
+        plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::{
+            java_packets as packets, user::ConnectionState as WasmConnectionState,
+        },
+    };
+    use bytes::Bytes;
+    use pumpkin_protocol::ConnectionState;
+    use pumpkin_util::version::JavaMinecraftVersion;
+    use std::sync::{Arc, Weak};
+    use wasmtime::component::Resource;
+
+    fn java_user(receive: ConnectionState, send: ConnectionState) -> Arc<User> {
+        let user = User::new(
+            "127.0.0.1:25565".parse().unwrap(),
+            Edition::Java,
+            Weak::new(),
+        );
+        user.decoder_state.store(receive);
+        user.encoder_state.store(send);
+        user.java_version.store(JavaMinecraftVersion::V_1_21_11);
+        user.protocol_version
+            .store(Some(JavaMinecraftVersion::V_1_21_11.protocol_version()));
+        user
+    }
+
+    #[test]
+    fn packet_events_apply_raw_changes_and_consume_users() {
+        for cancelled in [false, true] {
+            let user = java_user(ConnectionState::Login, ConnectionState::Config);
+            let mut state = PluginHostState::new();
+            let mut received =
+                PacketReceivedEvent::new(user.clone(), 32767, Bytes::from_static(&[255, 0]));
+            let mut sent = PacketSentEvent::new(user.clone(), 32767, Bytes::from_static(&[128, 0]));
+            user.decoder_state.store(ConnectionState::Play);
+            user.encoder_state.store(ConnectionState::Play);
+            user.protocol_version.store(Some(47));
+
+            let Event::PacketReceivedEvent(mut data) = received.to_wasm_event(&mut state) else {
+                panic!("received event expected")
+            };
+            assert!(matches!(data.state, WasmConnectionState::Login));
+            assert_eq!(
+                data.protocol_version,
+                Some(JavaMinecraftVersion::V_1_21_11.protocol_version())
+            );
+            assert!(matches!(data.packet, ServerboundPacket::Unknown));
+            assert!(Arc::ptr_eq(&user, &state.packet_user(&data.user).unwrap()));
+            let user_rep = data.user.rep();
+            data.packet_id = 17;
+            data.raw_payload = vec![9, 8, 7];
+            data.cancelled = cancelled;
+            received.apply_wasm_event(Event::PacketReceivedEvent(data), &mut state);
+            assert_eq!(received.packet_id, 17);
+            assert_eq!(received.payload.as_ref(), &[9, 8, 7]);
+            assert_eq!(received.cancelled, cancelled);
+            assert!(state.packet_user(&Resource::new_own(user_rep)).is_err());
+
+            let Event::PacketSentEvent(mut data) = sent.to_wasm_event(&mut state) else {
+                panic!("sent event expected")
+            };
+            assert!(matches!(data.state, WasmConnectionState::Config));
+            assert_eq!(
+                data.protocol_version,
+                Some(JavaMinecraftVersion::V_1_21_11.protocol_version())
+            );
+            assert!(matches!(data.packet, ClientboundPacket::Unknown));
+            assert!(Arc::ptr_eq(&user, &state.packet_user(&data.user).unwrap()));
+            let user_rep = data.user.rep();
+            data.packet_id = 19;
+            data.raw_payload = vec![6, 5, 4];
+            data.cancelled = cancelled;
+            sent.apply_wasm_event(Event::PacketSentEvent(data), &mut state);
+            assert_eq!(sent.packet_id, 19);
+            assert_eq!(sent.payload.as_ref(), &[6, 5, 4]);
+            assert_eq!(sent.cancelled, cancelled);
+            assert!(state.packet_user(&Resource::new_own(user_rep)).is_err());
+        }
+    }
+
+    #[test]
+    fn packet_events_apply_typed_replacements_and_reject_invalid_ones() {
+        let user = java_user(ConnectionState::Status, ConnectionState::Status);
+        let mut state = PluginHostState::new();
+        let mut received = PacketReceivedEvent::new(user.clone(), 0, Bytes::new());
+        let Event::PacketReceivedEvent(mut data) = received.to_wasm_event(&mut state) else {
+            panic!("received event expected")
+        };
+        let user_rep = data.user.rep();
+        data.replacement = Some(ServerboundPacket::Java(
+            packets::ServerboundPacket::StatusSStatusPingRequest(
+                packets::StatusSStatusPingRequest {
+                    payload: 0x0102030405060708,
+                },
+            ),
+        ));
+        received.apply_wasm_event(Event::PacketReceivedEvent(data), &mut state);
+        assert!(!received.cancelled);
+        assert_eq!(received.packet_id, 1);
+        assert_eq!(received.payload.as_ref(), &[1, 2, 3, 4, 5, 6, 7, 8]);
+        assert!(state.packet_user(&Resource::new_own(user_rep)).is_err());
+
+        let mut sent = PacketSentEvent::new(user, 0, Bytes::from_static(b"\x02{}"));
+        let Event::PacketSentEvent(mut data) = sent.to_wasm_event(&mut state) else {
+            panic!("sent event expected")
+        };
+        let user_rep = data.user.rep();
+        data.replacement = Some(ClientboundPacket::Java(
+            packets::ClientboundPacket::StatusCPingResponse(packets::StatusCPingResponse {
+                payload: -1,
+            }),
+        ));
+        sent.apply_wasm_event(Event::PacketSentEvent(data), &mut state);
+        assert!(!sent.cancelled);
+        assert_eq!(sent.packet_id, 1);
+        assert_eq!(sent.payload.as_ref(), &[255; 8]);
+        assert!(state.packet_user(&Resource::new_own(user_rep)).is_err());
+
+        let Event::PacketReceivedEvent(mut data) = received.to_wasm_event(&mut state) else {
+            panic!("received event expected")
+        };
+        data.replacement = Some(ServerboundPacket::Java(
+            packets::ServerboundPacket::LoginSLoginAcknowledged,
+        ));
+        received.apply_wasm_event(Event::PacketReceivedEvent(data), &mut state);
+        assert!(received.cancelled);
+        let Event::PacketSentEvent(mut data) = sent.to_wasm_event(&mut state) else {
+            panic!("sent event expected")
+        };
+        data.replacement = Some(ClientboundPacket::Java(
+            packets::ClientboundPacket::ConfigCFinishConfig,
+        ));
+        sent.apply_wasm_event(Event::PacketSentEvent(data), &mut state);
+        assert!(sent.cancelled);
+    }
+
+    #[test]
+    fn packet_read_views_preserve_original_and_unknown_payloads() {
+        let user = java_user(ConnectionState::Login, ConnectionState::Status);
+        let mut state = PluginHostState::new();
+        let mut login = vec![0x86, 0];
+        login.extend_from_slice(b"tester");
+        login.extend_from_slice(&[1; 16]);
+        let login = Bytes::from(login);
+        let mut received = PacketReceivedEvent::new(user.clone(), 0, login.clone());
+        let mut sent = PacketSentEvent::new(user.clone(), 0, Bytes::from_static(b"\x82\x00{}"));
+        user.java_version.store(JavaMinecraftVersion::V_1_8);
+        let returned = received.to_wasm_event(&mut state);
+        assert!(
+            matches!(&returned, Event::PacketReceivedEvent(data) if matches!(&data.packet, ServerboundPacket::Java(packets::ServerboundPacket::LoginSLoginStart(_))))
+        );
+        received.apply_wasm_event(returned, &mut state);
+        assert_eq!(received.payload, login);
+        assert!(!received.cancelled);
+        let returned = sent.to_wasm_event(&mut state);
+        assert!(
+            matches!(&returned, Event::PacketSentEvent(data) if matches!(&data.packet, ClientboundPacket::Java(packets::ClientboundPacket::StatusCStatusResponse(_))))
+        );
+        sent.apply_wasm_event(returned, &mut state);
+        assert_eq!(sent.payload.as_ref(), b"\x82\x00{}");
+        assert!(!sent.cancelled);
+
+        let payload = Bytes::from_static(&[0, 255, 128, 0]);
+        let mut received = PacketReceivedEvent::new(user.clone(), 32767, payload.clone());
+        let returned = received.to_wasm_event(&mut state);
+        assert!(
+            matches!(&returned, Event::PacketReceivedEvent(data) if matches!(data.packet, ServerboundPacket::Unknown))
+        );
+        received.apply_wasm_event(returned, &mut state);
+        assert_eq!(received.packet_id, 32767);
+        assert_eq!(received.payload, payload);
+        assert!(!received.cancelled);
+        let mut sent = PacketSentEvent::new(user, 32767, payload.clone());
+        let returned = sent.to_wasm_event(&mut state);
+        assert!(
+            matches!(&returned, Event::PacketSentEvent(data) if matches!(data.packet, ClientboundPacket::Unknown))
+        );
+        sent.apply_wasm_event(returned, &mut state);
+        assert_eq!(sent.packet_id, 32767);
+        assert_eq!(sent.payload, payload);
+        assert!(!sent.cancelled);
     }
 }

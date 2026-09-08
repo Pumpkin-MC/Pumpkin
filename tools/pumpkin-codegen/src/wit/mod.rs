@@ -56,6 +56,15 @@ pub fn main() {
         write_generated_wit(&wit_code, file);
     }
 
+    generate_packet_mapping();
+}
+
+pub fn generate_packets() {
+    write_generated_wit(&java_packet::build(), "java-packets.wit");
+    generate_packet_mapping();
+}
+
+fn generate_packet_mapping() {
     println!("Generating Java and Bedrock packet mapping");
     let mut mapping = packet_mapping::build_java_mapping();
     mapping.push_str(&packet_mapping::build_bedrock_mapping());

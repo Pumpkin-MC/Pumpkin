@@ -301,10 +301,8 @@ use crate::plugin::player::player_change_world::PlayerChangeWorldEvent;
 use crate::plugin::player::player_gamemode_change::PlayerGamemodeChangeEvent;
 use crate::plugin::player::player_permission_check::PlayerPermissionCheckEvent;
 use crate::plugin::player::player_teleport::PlayerTeleportEvent;
-use crate::plugin::server::packet::PacketSentEvent;
 use crate::server::Server;
 use crate::world::{BlockBreakingProgress, World};
-use bytes::Bytes;
 
 use super::breath::BreathManager;
 use super::combat::{self, AttackType, player_attack_sound};
@@ -2462,18 +2460,7 @@ impl Player {
                     }
                 }
                 ClientPlatform::Bedrock(client) => {
-                    let mut event = crate::plugin::server::packet::PacketReceivedEvent::new(
-                        player_arc.clone(),
-                        packet.id,
-                        packet.payload.clone(),
-                    );
-                    server_arc
-                        .plugin_manager
-                        .fire_blocking(&server_arc, &mut event);
-                    if !event.cancelled
-                        && let Err(err) =
-                            client.handle_play_packet(&player_arc, &server_arc, &packet)
-                    {
+                    if let Err(err) = client.handle_play_packet(&player_arc, &server_arc, &packet) {
                         tracing::error!("Failed to handle Bedrock play packet: {err}");
                     }
                 }
@@ -2867,44 +2854,6 @@ impl Player {
         let progress_per_tick = tps / attack_speed;
         let progress = x / progress_per_tick;
         progress.clamp(0.0, 1.0)
-    }
-
-    pub async fn fire_packet_sent<P: Send + Sync + std::any::Any>(
-        self: &Arc<Self>,
-        packet: P,
-        packet_id: i32,
-        payload: Bytes,
-    ) -> bool {
-        let server = self.world().server.upgrade();
-        if let Some(server) = server {
-            let mut event =
-                PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(packet));
-            server.plugin_manager.fire(&server, &mut event).await;
-            return event.cancelled;
-        }
-        false
-    }
-
-    pub(crate) async fn fire_packet_sent_event_no_obj(
-        self: &Arc<Self>,
-        packet_id: i32,
-        payload: Bytes,
-    ) -> PacketSentEvent {
-        // This is a dummy object to satisfy the non-optional requirement in WIT
-        // In the future we should make all packets 'static or have a way to represent raw packets in WIT
-        struct RawPacket;
-
-        let mut event = PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(RawPacket));
-        if let Some(server) = self.world().server.upgrade() {
-            server.plugin_manager.fire(&server, &mut event).await;
-        }
-        event
-    }
-
-    pub async fn fire_packet_sent_no_obj(self: &Arc<Self>, packet_id: i32, payload: Bytes) -> bool {
-        self.fire_packet_sent_event_no_obj(packet_id, payload)
-            .await
-            .cancelled
     }
 
     pub const fn entity_id(&self) -> i32 {

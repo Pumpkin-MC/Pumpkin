@@ -1,3 +1,4 @@
+use crate::wit::packet_mapping::implemented_types;
 use crate::wit::utils::map_type_with_defined;
 use heck::ToKebabCase;
 use semver::Version;
@@ -92,17 +93,26 @@ fn collect_defined_types(dirs: &[(String, &str)]) -> HashSet<String> {
         for entry in paths.flatten() {
             let path = entry.path();
             if path.extension().is_some_and(|ext| ext == "rs")
-                && path.file_name().is_some_and(|name| name != "mod.rs")
+                && path
+                    .file_name()
+                    .is_some_and(|name| name != "mod.rs" || *state == "handshake")
             {
                 if let Ok(content) = fs::read_to_string(&path)
                     && let Ok(file) = syn::parse_file(&content)
                 {
+                    let packet_types = implemented_types(&file, "MultiVersionJavaPacket");
                     for item in file.items {
                         match item {
-                            Item::Struct(s) if has_java_packet_attr(&s.attrs) => {
+                            Item::Struct(s)
+                                if has_java_packet_attr(&s.attrs)
+                                    || packet_types.contains(&s.ident.to_string()) =>
+                            {
                                 defined.insert(wit_name(s.ident.to_string(), state));
                             }
-                            Item::Enum(e) if has_java_packet_attr(&e.attrs) => {
+                            Item::Enum(e)
+                                if has_java_packet_attr(&e.attrs)
+                                    || packet_types.contains(&e.ident.to_string()) =>
+                            {
                                 defined.insert(wit_name(e.ident.to_string(), state));
                             }
                             Item::Struct(s) if is_valid_helper_struct(&s) => {
@@ -161,7 +171,9 @@ fn process_packets(
             continue;
         }
         if path.extension().is_some_and(|ext| ext == "rs")
-            && path.file_name().is_some_and(|name| name != "mod.rs")
+            && path
+                .file_name()
+                .is_some_and(|name| name != "mod.rs" || state == "handshake")
         {
             parse_packet_file(
                 &path,
@@ -185,13 +197,20 @@ fn parse_packet_file(
 ) {
     let content = fs::read_to_string(path).expect("Failed to read file");
     let file = syn::parse_file(&content).expect("Failed to parse file");
+    let packet_types = implemented_types(&file, "MultiVersionJavaPacket");
 
     for item in file.items {
         match item {
-            Item::Struct(s) if has_java_packet_attr(&s.attrs) => {
+            Item::Struct(s)
+                if has_java_packet_attr(&s.attrs)
+                    || packet_types.contains(&s.ident.to_string()) =>
+            {
                 process_struct(s, state, interface, variant, defined_cases, defined_types);
             }
-            Item::Enum(e) if has_java_packet_attr(&e.attrs) => {
+            Item::Enum(e)
+                if has_java_packet_attr(&e.attrs)
+                    || packet_types.contains(&e.ident.to_string()) =>
+            {
                 process_enum(e, state, interface, variant, defined_cases, defined_types);
             }
             Item::Struct(s) if is_valid_helper_struct(&s) => {

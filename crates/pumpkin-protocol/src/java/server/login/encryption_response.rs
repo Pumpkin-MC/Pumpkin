@@ -10,6 +10,10 @@ pub struct SEncryptionResponse {
 }
 
 impl MultiVersionJavaPacket for SEncryptionResponse {
+    fn state() -> crate::ConnectionState {
+        crate::ConnectionState::Login
+    }
+
     fn to_id(_version: JavaMinecraftVersion) -> i32 {
         1
     }

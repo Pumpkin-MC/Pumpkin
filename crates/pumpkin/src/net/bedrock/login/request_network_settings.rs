@@ -15,6 +15,9 @@ impl BedrockClient {
         packet: SRequestNetworkSettings,
         server: &Server,
     ) -> bool {
+        self.user
+            .protocol_version
+            .store(Some(packet.client_network_version));
         let status = incompatible_protocol_status(packet.client_network_version);
         if let Some(status) = status {
             self.send_packet(&status).await;
@@ -42,7 +45,6 @@ impl BedrockClient {
             client_throttle_scalar: 0.0,
         })
         .await;
-        self.set_compression(compression).await;
         true
     }
 }

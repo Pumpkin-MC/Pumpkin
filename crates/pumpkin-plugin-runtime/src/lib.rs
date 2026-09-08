@@ -11,6 +11,12 @@ pub use lifecycle::{DriverError, DriverJoin, DriverState};
 pub use policy::{LegacySyncReentry, StorePolicy};
 pub use spawn::{RuntimeSpawner, SpawnError, SpawnFuture};
 
+/// Whether this task is executing within a synchronous guest call chain.
+#[must_use]
+pub fn is_guest_call_active() -> bool {
+    chain::ReentryContext::current().is_some()
+}
+
 #[cfg(test)]
 pub(crate) use chain::MAX_SYNC_REENTRY_DEPTH;
 
@@ -42,7 +48,7 @@ mod tests {
 
     use super::{
         DriverError, DriverState, LegacyStore, LegacySyncReentry, MAX_SYNC_REENTRY_DEPTH,
-        RuntimeSpawner, SpawnError, SpawnFuture,
+        RuntimeSpawner, SpawnError, SpawnFuture, is_guest_call_active,
     };
 
     struct TestHostState;
@@ -748,6 +754,7 @@ mod tests {
     /// Mirrors synchronous game methods that call `fire_blocking` from a
     /// blocking worker while the host import keeps the active store pumpable.
     async fn blocking_host_operation_propagates_the_reentry_chain() {
+        assert!(!is_guest_call_active());
         let mut config = Config::new();
         config.wasm_component_model(true);
         config.wasm_component_model_async(true);
@@ -778,6 +785,7 @@ mod tests {
                         let nested_driver = driver.clone();
                         driver
                             .pump_blocking(&mut store, move || {
+                                assert!(is_guest_call_active());
                                 tokio::task::block_in_place(|| {
                                     runtime.block_on(nested_driver.call_guest(
                                         move |mut context| {
@@ -813,13 +821,22 @@ mod tests {
         timeout(
             Duration::from_secs(2),
             driver.call_guest(move |mut context| {
-                Box::pin(async move { context.call(run, ()).await })
+                Box::pin(async move {
+                    assert!(is_guest_call_active());
+                    assert!(
+                        !tokio::spawn(async { is_guest_call_active() })
+                            .await
+                            .expect("independent task")
+                    );
+                    context.call(run, ()).await
+                })
             }),
         )
         .await
         .expect("blocking sync-lifted guest reentry timed out")
         .expect("blocking sync-lifted guest reentry failed");
 
+        assert!(!is_guest_call_active());
         assert_eq!(host_calls.load(Ordering::SeqCst), 2);
         driver
             .shutdown(|_| Box::pin(async move { Ok(()) }))

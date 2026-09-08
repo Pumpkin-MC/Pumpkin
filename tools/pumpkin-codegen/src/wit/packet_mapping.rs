@@ -1,5 +1,5 @@
 use heck::{ToPascalCase, ToSnakeCase};
-use std::{fs, path::Path};
+use std::{collections::HashSet, fs, path::Path};
 use syn::{Attribute, Fields, Item};
 
 pub fn build_java_mapping() -> String {
@@ -17,9 +17,20 @@ pub fn build_java_mapping() -> String {
     output.push_str("use std::any::Any;\n");
     output.push_str("use pumpkin_protocol::packet::MultiVersionJavaPacket;\n");
     output.push_str("use pumpkin_protocol::packet::Packet;\n\n");
+    output.push_str("use pumpkin_protocol::ConnectionState;\n\n");
 
     output.push_str("#[must_use]\n");
     output.push_str("pub fn serialize_java_packet(packet: &ClientboundPacket, version: JavaMinecraftVersion) -> Option<Bytes> {\n");
+    output.push_str(
+        "    serialize_java_packet_with_state(packet, version).map(|(_, bytes)| bytes)\n}\n\n",
+    );
+    output.push_str("pub fn serialize_java_packet_with_state(packet: &ClientboundPacket, version: JavaMinecraftVersion) -> Option<(ConnectionState, Bytes)> {\n");
+    output.push_str("    serialize_java_clientbound_packet_inner(packet, None, version)\n}\n\n");
+    output.push_str("pub fn serialize_java_clientbound_packet(packet: &ClientboundPacket, state: ConnectionState, version: JavaMinecraftVersion) -> Option<Bytes> {\n");
+    output.push_str(
+        "    serialize_java_clientbound_packet_inner(packet, Some(state), version).map(|(_, bytes)| bytes)\n}\n\n",
+    );
+    output.push_str("fn serialize_java_clientbound_packet_inner(packet: &ClientboundPacket, state: Option<ConnectionState>, version: JavaMinecraftVersion) -> Option<(ConnectionState, Bytes)> {\n");
     output.push_str("    match packet {\n");
 
     let client_states = &["config", "login", "play", "status"];
@@ -42,10 +53,8 @@ pub fn build_java_mapping() -> String {
     output.push_str("    }\n");
     output.push_str("}\n\n");
 
-    output.push_str("#[must_use]\n");
-    output.push_str("pub fn deserialize_java_serverbound_packet(id: i32, mut payload: &[u8], version: JavaMinecraftVersion) -> Option<ServerboundPacket> {\n");
-    output.push_str("    match id {\n");
-
+    output.push_str("pub fn serialize_java_serverbound_packet(packet: &ServerboundPacket, state: ConnectionState, version: JavaMinecraftVersion) -> Option<Bytes> {\n");
+    output.push_str("    let state = Some(state);\n    match packet {\n");
     for state in server_states {
         process_packets(
             &format!("../../crates/pumpkin-protocol/src/java/server/{}", state),
@@ -55,13 +64,42 @@ pub fn build_java_mapping() -> String {
             "ServerboundPacket",
             &format!("pumpkin_protocol::java::server::{}", state),
             false,
-            MappingMode::Deserialize,
+            MappingMode::Serialize,
         );
     }
 
     output.push_str("        _ => None,\n");
     output.push_str("    }\n");
     output.push_str("}\n\n");
+
+    for (direction, states, packet_type) in [
+        ("server", server_states.as_slice(), "ServerboundPacket"),
+        ("client", client_states.as_slice(), "ClientboundPacket"),
+    ] {
+        output.push_str(&format!("pub fn deserialize_java_{}bound_packet(state: ConnectionState, id: i32, mut payload: &[u8], version: JavaMinecraftVersion) -> Option<{}> {{\n", direction, packet_type));
+        output.push_str("    if id < 0 { return None; }\n    match state {\n");
+        for state in states {
+            output.push_str(&format!(
+                "        {} => match id {{\n",
+                java_state_pattern(state)
+            ));
+            process_packets(
+                &format!("../../crates/pumpkin-protocol/src/java/{direction}/{state}"),
+                state,
+                &mut output,
+                "java_packet",
+                packet_type,
+                &format!("pumpkin_protocol::java::{direction}::{state}"),
+                false,
+                MappingMode::Deserialize,
+            );
+            output.push_str("            _ => None,\n        },\n");
+        }
+        if direction == "client" {
+            output.push_str("        ConnectionState::HandShake => None,\n");
+        }
+        output.push_str("    }\n}\n\n");
+    }
 
     output.push_str("pub trait ToWitClientboundJava {\n");
     output.push_str("    fn to_wit(&self) -> ClientboundPacket;\n");
@@ -99,8 +137,94 @@ pub fn build_java_mapping() -> String {
     output.push_str("    None\n");
     output.push_str("}\n\n");
 
+    output.push_str(JAVA_CODEC_TESTS);
     output
 }
+
+const JAVA_CODEC_TESTS: &str = r#"
+#[cfg(test)]
+mod java_codec_tests {
+    use super::*;
+    use pumpkin_protocol::{ClientPacket, ser::NetworkReadExt};
+    use pumpkin_util::text::TextComponent;
+
+    fn split_packet(bytes: &[u8]) -> (i32, &[u8]) {
+        let mut payload = bytes;
+        let id = payload.get_var_int().unwrap().0;
+        (id, payload)
+    }
+
+    #[test]
+    fn packet_codecs_preserve_phase_and_roundtrip_values() {
+        let version = JavaMinecraftVersion::V_1_21_11;
+        let request = ServerboundPacket::StatusSStatusRequest;
+        let encoded = serialize_java_serverbound_packet(&request, ConnectionState::Status, version).unwrap();
+        let (id, payload) = split_packet(&encoded);
+        assert!(matches!(deserialize_java_serverbound_packet(ConnectionState::Status, id, payload, version), Some(ServerboundPacket::StatusSStatusRequest)));
+        assert!(deserialize_java_serverbound_packet(ConnectionState::Login, id, payload, version).is_none());
+        assert!(serialize_java_serverbound_packet(&request, ConnectionState::Play, version).is_none());
+
+        let packet = pumpkin_protocol::java::server::handshake::SHandShake {
+            protocol_version: VarInt(version.protocol_version()),
+            server_address: "localhost".into(),
+            server_port: 25565,
+            next_state: ConnectionState::Login,
+        };
+        let encoded = packet.serialize_packet(&version).unwrap();
+        let (id, payload) = split_packet(&encoded);
+        let mut decoded = deserialize_java_serverbound_packet(ConnectionState::HandShake, id, payload, version).unwrap();
+        assert_eq!(serialize_java_serverbound_packet(&decoded, ConnectionState::HandShake, version).unwrap(), encoded);
+        if let ServerboundPacket::HandshakeSHandShake(data) = &mut decoded {
+            data.server_port = 65536;
+        } else {
+            panic!("unexpected handshake wrapper");
+        }
+        assert!(serialize_java_serverbound_packet(&decoded, ConnectionState::HandShake, version).is_none());
+
+        let uuid = uuid::Uuid::from_u64_pair(0x123456789abcdef0, 0x0fedcba987654321);
+        let login = pumpkin_protocol::java::server::login::SLoginStart { name: "tester".into(), uuid };
+        let encoded = login.serialize_packet(&version).unwrap();
+        let (id, payload) = split_packet(&encoded);
+        let decoded = deserialize_java_serverbound_packet(ConnectionState::Login, id, payload, version).unwrap();
+        assert_eq!(serialize_java_serverbound_packet(&decoded, ConnectionState::Login, version).unwrap(), encoded);
+
+        let response = pumpkin_protocol::java::client::status::CStatusResponse { json_response: "{}".into() };
+        let encoded = response.serialize_packet(&version).unwrap();
+        let (id, payload) = split_packet(&encoded);
+        assert!(matches!(deserialize_java_clientbound_packet(ConnectionState::Status, id, payload, version), Some(ClientboundPacket::StatusCStatusResponse(_))));
+        assert!(matches!(deserialize_java_clientbound_packet(ConnectionState::Login, id, payload, version), Some(ClientboundPacket::LoginCLoginDisconnect(_))));
+        assert!(deserialize_java_clientbound_packet(ConnectionState::Status, -1, payload, version).is_none());
+
+        let content = TextComponent::text("packet text");
+        let chat = pumpkin_protocol::java::client::play::CSystemChatMessage::new(&content, false);
+        let mut wrapper = chat.to_wit();
+        assert_eq!(serialize_java_packet(&wrapper, version).unwrap(), chat.serialize_packet(&version).unwrap());
+        if let ClientboundPacket::CSystemChatMessage(data) = &mut wrapper {
+            data.content = "{".into();
+        }
+        assert!(serialize_java_packet(&wrapper, version).is_none());
+
+        let (state, _) = serialize_java_packet_with_state(&ClientboundPacket::CStartConfiguration, version).unwrap();
+        assert_eq!(state, ConnectionState::Play);
+        let (state, _) = serialize_java_packet_with_state(&ClientboundPacket::ConfigCFinishConfig, version).unwrap();
+        assert_eq!(state, ConnectionState::Config);
+    }
+
+    #[test]
+    fn bedrock_packet_replacement_roundtrip() {
+        use crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets;
+        let packet = BServerboundPacket::SContainerClose(bedrock_packets::SContainerClose {
+            container_id: 7,
+            container_type: 1,
+            server_initiated_close: false,
+        });
+        let bytes = serialize_bedrock_serverbound_packet(&packet).unwrap();
+        assert_eq!(bytes.as_ref(), &[47, 7, 1, 0]);
+        assert!(matches!(deserialize_bedrock_serverbound_packet(47, &bytes[1..]), Some(BServerboundPacket::SContainerClose(_))));
+        assert!(serialize_bedrock_serverbound_packet(&BServerboundPacket::Unknown).is_none());
+    }
+}
+"#;
 
 pub fn build_bedrock_mapping() -> String {
     let mut output = String::new();
@@ -125,6 +249,19 @@ pub fn build_bedrock_mapping() -> String {
     output.push_str("        _ => None,\n");
     output.push_str("    }\n");
     output.push_str("}\n\n");
+
+    output.push_str("pub fn serialize_bedrock_serverbound_packet(packet: &BServerboundPacket) -> Option<Bytes> {\n    match packet {\n");
+    process_packets(
+        "../../crates/pumpkin-protocol/src/bedrock/server",
+        "",
+        &mut output,
+        "packet",
+        "BServerboundPacket",
+        "pumpkin_protocol::bedrock::server",
+        true,
+        MappingMode::Serialize,
+    );
+    output.push_str("        _ => None,\n    }\n}\n\n");
 
     output.push_str("#[must_use]\n");
     output.push_str("pub fn deserialize_bedrock_serverbound_packet(id: i32, payload: &[u8]) -> Option<BServerboundPacket> {\n");
@@ -192,6 +329,56 @@ fn has_attr(attrs: &[Attribute], attr_name: &str) -> bool {
     attrs.iter().any(|attr| attr.path().is_ident(attr_name))
 }
 
+fn derives_trait(attrs: &[Attribute], trait_name: &str) -> bool {
+    attrs.iter().any(|attr| {
+        attr.path().is_ident("derive")
+            && attr
+                .parse_args_with(
+                    syn::punctuated::Punctuated::<syn::Path, syn::Token![,]>::parse_terminated,
+                )
+                .is_ok_and(|paths| paths.iter().any(|path| path.is_ident(trait_name)))
+    })
+}
+
+pub(super) fn implemented_types(file: &syn::File, trait_name: &str) -> HashSet<String> {
+    file.items
+        .iter()
+        .filter_map(|item| {
+            let Item::Impl(item) = item else { return None };
+            let (path, _) = item.trait_.as_ref()?;
+            if path.segments.last()?.ident != trait_name {
+                return None;
+            }
+            let syn::Type::Path(ty) = item.self_ty.as_ref() else {
+                return None;
+            };
+            Some(ty.path.segments.last()?.ident.to_string())
+        })
+        .collect()
+}
+
+fn java_state_pattern(state: &str) -> &'static str {
+    match state {
+        "handshake" => "ConnectionState::HandShake",
+        "status" => "ConnectionState::Status",
+        "login" => "ConnectionState::Login | ConnectionState::Transfer",
+        "config" => "ConnectionState::Config",
+        "play" => "ConnectionState::Play",
+        _ => unreachable!(),
+    }
+}
+
+fn serialization_guard(state: &str, attr_name: &str) -> String {
+    if attr_name == "java_packet" {
+        format!(
+            " if state.is_none_or(|state| matches!(state, {}))",
+            java_state_pattern(state)
+        )
+    } else {
+        String::new()
+    }
+}
+
 fn get_type_info(ty: &syn::Type) -> (String, bool, bool) {
     match ty {
         syn::Type::Path(tp) => {
@@ -207,6 +394,32 @@ fn get_type_info(ty: &syn::Type) -> (String, bool, bool) {
                     .is_some_and(|segment| segment.ident == "u8")
             {
                 return ("BoxedU8Slice".to_string(), false, false);
+            }
+            if segment.ident == "Box"
+                && let syn::PathArguments::AngleBracketed(args) = &segment.arguments
+                && let Some(syn::GenericArgument::Type(syn::Type::Path(inner))) = args.args.first()
+                && inner.path.is_ident("str")
+            {
+                return ("BoxedStr".to_string(), false, false);
+            }
+            if segment.ident == "Vec"
+                && let syn::PathArguments::AngleBracketed(args) = &segment.arguments
+                && let Some(syn::GenericArgument::Type(syn::Type::Path(inner))) = args.args.first()
+                && inner.path.is_ident("u8")
+            {
+                return ("ByteVec".to_string(), false, false);
+            }
+            if segment.ident == "Option"
+                && let syn::PathArguments::AngleBracketed(args) = &segment.arguments
+                && let Some(syn::GenericArgument::Type(inner)) = args.args.first()
+            {
+                let (name, is_ref, is_slice) = get_type_info(inner);
+                if name == "u8" && is_ref && is_slice {
+                    return ("OptionalByteSlice".to_string(), false, false);
+                }
+                if !is_ref && !is_slice {
+                    return (format!("Optional{name}"), false, false);
+                }
             }
             (segment.ident.to_string(), false, false)
         }
@@ -239,6 +452,58 @@ fn convert_value(
     let mut possible = true;
 
     let expr = match type_ident {
+        "OptionalBoxedU8Slice" | "OptionalByteSlice" | "OptionalBytes" | "OptionalByteVec" => {
+            match mode {
+                MappingMode::Serialize => match type_ident {
+                    "OptionalBoxedU8Slice" => format!(
+                        "{}.as_ref().map(|bytes| bytes.clone().into_boxed_slice())",
+                        src
+                    ),
+                    "OptionalByteSlice" => format!("{}.as_deref()", src),
+                    _ => format!("{}.as_ref().map(|bytes| bytes.clone().into())", src),
+                },
+                MappingMode::Deserialize | MappingMode::ToWit => {
+                    format!("{}.as_ref().map(|bytes| bytes.to_vec())", src)
+                }
+                MappingMode::Downcast => String::new(),
+            }
+        }
+        "OptionalUuid" => match mode {
+            MappingMode::Serialize => format!(
+                "{}.as_ref().map(|value| uuid::Uuid::from_u64_pair(value.high, value.low))",
+                src
+            ),
+            MappingMode::Deserialize | MappingMode::ToWit => format!(
+                "{}.as_ref().map(|value| crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::uuid::Uuid {{ high: value.as_u64_pair().0, low: value.as_u64_pair().1 }})",
+                src
+            ),
+            MappingMode::Downcast => String::new(),
+        },
+        "OptionalVarInt" => match mode {
+            MappingMode::Serialize => format!("{}.map(VarInt)", src),
+            MappingMode::Deserialize | MappingMode::ToWit => {
+                format!("{}.map(|value| value.0)", src)
+            }
+            MappingMode::Downcast => String::new(),
+        },
+        "BoxedStr" => match mode {
+            MappingMode::Serialize => format!("{}.clone().into_boxed_str()", src),
+            MappingMode::Deserialize | MappingMode::ToWit => format!("{}.to_string()", src),
+            MappingMode::Downcast => String::new(),
+        },
+        "Bytes" | "ByteVec" => match mode {
+            MappingMode::Serialize => format!("{}.clone().into()", src),
+            MappingMode::Deserialize | MappingMode::ToWit => format!("{}.to_vec()", src),
+            MappingMode::Downcast => String::new(),
+        },
+        "ConnectionState" => match mode {
+            MappingMode::Serialize => format!(
+                "pumpkin_protocol::ConnectionState::try_from(VarInt({})).ok()?",
+                src
+            ),
+            MappingMode::Deserialize | MappingMode::ToWit => format!("{} as i32", src),
+            MappingMode::Downcast => String::new(),
+        },
         "String" | "str" => match mode {
             MappingMode::Serialize => {
                 if is_slice {
@@ -276,10 +541,20 @@ fn convert_value(
         },
         "Identifier" => match mode {
             MappingMode::Serialize => {
-                format!(
-                    "pumpkin_util::identifier::Identifier::try_from({}).unwrap()",
+                let value = format!(
+                    "pumpkin_util::identifier::Identifier::try_from({}.as_str()).ok()?",
                     src
-                )
+                );
+                if is_ref {
+                    let tmp = dst.unwrap_or("identifier");
+                    prep.push_str(&format!(
+                        "{}let identifier_{} = {};\n",
+                        prep_prefix, tmp, value
+                    ));
+                    format!("&identifier_{}", tmp)
+                } else {
+                    value
+                }
             }
             MappingMode::Deserialize | MappingMode::ToWit => {
                 format!("{}.to_string()", src)
@@ -288,13 +563,10 @@ fn convert_value(
         },
         "VarUInt" => match mode {
             MappingMode::Serialize => {
-                format!(
-                    "pumpkin_protocol::codec::var_uint::VarUInt({}.try_into().unwrap())",
-                    src
-                )
+                format!("pumpkin_protocol::codec::var_uint::VarUInt({} as u32)", src)
             }
             MappingMode::Deserialize | MappingMode::ToWit => {
-                format!("{}.0.try_into().unwrap()", src)
+                format!("{}.0 as _", src)
             }
             MappingMode::Downcast => String::new(),
         },
@@ -321,26 +593,26 @@ fn convert_value(
                 } else {
                     if is_ref {
                         prep.push_str(&format!(
-                            "{}let var_long_{} = {}({}.try_into().unwrap());\n",
+                            "{}let var_long_{} = {}({} as _);\n",
                             prep_prefix, tmp, path, src
                         ));
                         format!("&var_long_{}", tmp)
                     } else {
-                        format!("{}({}.try_into().unwrap())", path, src)
+                        format!("{}({} as _)", path, src)
                     }
                 }
             } else if mode == MappingMode::Deserialize {
                 if is_slice {
                     format!("{}.iter().map(|v| v.0 as _).collect()", src)
                 } else {
-                    format!("{}.0.try_into().unwrap()", src)
+                    format!("{}.0 as _", src)
                 }
             } else {
                 // ToWit
                 if is_slice {
                     format!("{}.iter().map(|v| v.0 as _).collect()", src)
                 } else {
-                    format!("{}.0.try_into().unwrap()", src)
+                    format!("{}.0 as _", src)
                 }
             }
         }
@@ -348,7 +620,7 @@ fn convert_value(
             MappingMode::Serialize => {
                 let tmp = dst.unwrap_or("tmp").replace('.', "_");
                 prep.push_str(&format!(
-                    "{}let component_{} = pumpkin_util::text::TextComponent::text({}.clone());\n",
+                    "{}let component_{}: pumpkin_util::text::TextComponent = serde_json::from_str(&{}).ok()?;\n",
                     prep_prefix, tmp, src
                 ));
                 if is_ref {
@@ -443,7 +715,7 @@ fn convert_value(
             }
             MappingMode::Deserialize | MappingMode::ToWit => {
                 let map_fn = format!(
-                    "crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::uuid::Uuid {{ high: {{}}.as_u64_pair().1, low: {{}}.as_u64_pair().0 }}",
+                    "crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::uuid::Uuid {{ high: {{}}.as_u64_pair().0, low: {{}}.as_u64_pair().1 }}",
                 );
                 if is_slice {
                     format!(
@@ -453,7 +725,7 @@ fn convert_value(
                     )
                 } else {
                     format!(
-                        "crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::uuid::Uuid {{ high: {}.as_u64_pair().1, low: {}.as_u64_pair().0 }}",
+                        "crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::uuid::Uuid {{ high: {}.as_u64_pair().0, low: {}.as_u64_pair().1 }}",
                         src, src
                     )
                 }
@@ -504,12 +776,16 @@ fn convert_value(
                 } else {
                     if is_ref {
                         prep.push_str(&format!(
-                            "{}let val_{} = {}.try_into().unwrap();\n",
+                            "{}let val_{} = {}.try_into().ok()?;\n",
                             prep_prefix, tmp, src
                         ));
                         format!("&val_{}", tmp)
                     } else {
-                        format!("{}.try_into().unwrap()", src)
+                        if matches!(type_ident, "u32" | "u64" | "i8") {
+                            format!("{} as {}", src, type_ident)
+                        } else {
+                            format!("{}.try_into().ok()?", src)
+                        }
                     }
                 }
             }
@@ -521,9 +797,11 @@ fn convert_value(
                         format!("{}.iter().map(|v| *v as _).collect()", src)
                     }
                 } else if type_ident == "VarInt" {
-                    format!("{}.0.try_into().unwrap()", src)
+                    format!("{}.0 as _", src)
+                } else if type_ident == "bool" {
+                    src.to_string()
                 } else {
-                    format!("{}.try_into().unwrap()", src)
+                    format!("{} as _", src)
                 }
             }
             MappingMode::Downcast => String::new(),
@@ -572,7 +850,9 @@ fn process_packets(
             continue;
         }
         if path.extension().is_some_and(|ext| ext == "rs")
-            && path.file_name().is_some_and(|name| name != "mod.rs")
+            && path
+                .file_name()
+                .is_some_and(|name| name != "mod.rs" || state == "handshake")
         {
             parse_packet_file(
                 &path,
@@ -598,11 +878,32 @@ fn parse_packet_file(
 ) {
     let content = fs::read_to_string(path).expect("Failed to read file");
     let file = syn::parse_file(&content).expect("Failed to parse file");
+    let packet_types = implemented_types(&file, "MultiVersionJavaPacket");
+    let readers = implemented_types(&file, "ServerPacket");
+    let mut writers = implemented_types(&file, "PacketWrite");
+    writers.extend(implemented_types(&file, "BClientPacket"));
 
     for item in file.items {
         match item {
-            Item::Struct(s) if has_attr(&s.attrs, attr_name) => {
+            Item::Struct(s)
+                if has_attr(&s.attrs, attr_name)
+                    || attr_name == "java_packet"
+                        && packet_types.contains(&s.ident.to_string()) =>
+            {
                 if s.ident == "CHandshake" {
+                    continue;
+                }
+                if mode == MappingMode::Serialize
+                    && variant_prefix == "BServerboundPacket"
+                    && !writers.contains(&s.ident.to_string())
+                    && !derives_trait(&s.attrs, "PacketWrite")
+                {
+                    continue;
+                }
+                if mode == MappingMode::Deserialize
+                    && attr_name == "java_packet"
+                    && !readers.contains(&s.ident.to_string())
+                {
                     continue;
                 }
                 process_struct(
@@ -615,7 +916,24 @@ fn parse_packet_file(
                     mode,
                 );
             }
-            Item::Enum(e) if has_attr(&e.attrs, attr_name) => {
+            Item::Enum(e)
+                if has_attr(&e.attrs, attr_name)
+                    || attr_name == "java_packet"
+                        && packet_types.contains(&e.ident.to_string()) =>
+            {
+                if mode == MappingMode::Serialize
+                    && variant_prefix == "BServerboundPacket"
+                    && !writers.contains(&e.ident.to_string())
+                    && !derives_trait(&e.attrs, "PacketWrite")
+                {
+                    continue;
+                }
+                if mode == MappingMode::Deserialize
+                    && attr_name == "java_packet"
+                    && !readers.contains(&e.ident.to_string())
+                {
+                    continue;
+                }
                 process_enum(
                     e,
                     state,
@@ -652,6 +970,32 @@ fn process_struct(
         struct_name.clone()
     };
 
+    if attr_name == "java_packet" && matches!(&s.fields, Fields::Unit) {
+        let rust_type = format!("{rust_path_prefix}::{struct_name}");
+        let variant = format!("{variant_prefix}::{wit_case}");
+        match mode {
+            MappingMode::Serialize => {
+                let with_state = if variant_prefix == "ClientboundPacket" {
+                    format!(".map(|bytes| (<{rust_type} as MultiVersionJavaPacket>::state(), bytes))")
+                } else { String::new() };
+                output.push_str(&format!(
+                    "        {variant}{} => pumpkin_protocol::ClientPacket::serialize_packet(&{rust_type}, &version).ok(){with_state},\n",
+                    serialization_guard(state, attr_name)
+                ));
+            }
+            MappingMode::Deserialize => output.push_str(&format!(
+                "        id if id == {rust_type}::to_id(version) => {{\n            <{rust_type} as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;\n            if !payload.is_empty() {{ return None; }}\n            Some({variant})\n        }}\n"
+            )),
+            MappingMode::ToWit => output.push_str(&format!(
+                "impl ToWitClientboundJava for {rust_type} {{\n    fn to_wit(&self) -> ClientboundPacket {{ {variant} }}\n}}\n"
+            )),
+            MappingMode::Downcast => output.push_str(&format!(
+                "    if let Some(p) = any.downcast_ref::<{rust_type}>() {{ return Some(p.to_wit()); }}\n"
+            )),
+        }
+        return;
+    }
+
     let mut prep_code = String::new();
     let mut field_inits = String::new();
     let mut possible = true;
@@ -668,7 +1012,7 @@ fn process_struct(
 
             if type_ident == "DynamicRecipe" {
                 if mode == MappingMode::Serialize {
-                    field_inits.push_str(&format!("                {}: &[],\n", field_name));
+                    possible = false;
                 } else {
                     possible = false; // Cannot handle DynamicRecipe yet
                 }
@@ -719,6 +1063,7 @@ fn process_struct(
         emit_struct_output(
             output,
             mode,
+            state,
             attr_name,
             variant_prefix,
             rust_path_prefix,
@@ -734,6 +1079,7 @@ fn process_struct(
 fn emit_struct_output(
     output: &mut String,
     mode: MappingMode,
+    state: &str,
     attr_name: &str,
     variant_prefix: &str,
     rust_path_prefix: &str,
@@ -752,8 +1098,10 @@ fn emit_struct_output(
     match mode {
         MappingMode::Serialize => {
             output.push_str(&format!(
-                "        {}::{}(data) => {{\n",
-                variant_prefix, wit_case
+                "        {}::{}(data){} => {{\n",
+                variant_prefix,
+                wit_case,
+                serialization_guard(state, attr_name)
             ));
             output.push_str(prep_code);
             output.push_str(&format!(
@@ -764,17 +1112,21 @@ fn emit_struct_output(
             output.push_str("            };\n");
             output.push_str("            let mut buf = Vec::new();\n");
             if attr_name == "java_packet" {
-                output.push_str("            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();\n");
+                output.push_str("            pumpkin_protocol::java::packet_encoder::write_packet(&p, &version, &mut buf).ok()?;\n");
             } else {
-                output.push_str("            crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();\n");
+                output.push_str("            crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).ok()?;\n");
             }
-            output.push_str("            Some(buf.into())\n");
+            if variant_prefix == "ClientboundPacket" {
+                output.push_str(&format!(
+                    "            Some((<{}::{} as MultiVersionJavaPacket>::state(), buf.into()))\n",
+                    rust_path_prefix, struct_name_with_lt
+                ));
+            } else {
+                output.push_str("            Some(buf.into())\n");
+            }
             output.push_str("        }\n");
         }
         MappingMode::Deserialize => {
-            if rust_path_prefix.contains("client") {
-                return;
-            }
             if rust_path_prefix.contains("java") {
                 output.push_str(&format!(
                     "        id if id == {}::{}::to_id(version) => {{\n",
@@ -785,6 +1137,7 @@ fn emit_struct_output(
                     "            let p = <{}::{} as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;\n",
                     rust_path_prefix, struct_name
                 ));
+                output.push_str("            if !payload.is_empty() { return None; }\n");
             } else {
                 output.push_str(&format!(
                     "        id if id == <{}::{} as pumpkin_protocol::Packet>::PACKET_ID as i32 => {{\n",
@@ -872,14 +1225,16 @@ fn process_enum(
     };
     let wit_ns = format!(
         "crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::{}::{}",
-        packet_ns, enum_name
+        packet_ns, wit_case
     );
 
     match mode {
         MappingMode::Serialize => {
             output.push_str(&format!(
-                "        {}::{}(data) => {{\n",
-                variant_prefix, wit_case
+                "        {}::{}(data){} => {{\n",
+                variant_prefix,
+                wit_case,
+                serialization_guard(state, attr_name)
             ));
             output.push_str("            let p = match data {\n");
             for v in &e.variants {
@@ -894,18 +1249,22 @@ fn process_enum(
             output.push_str("            };\n");
             output.push_str("            let mut buf = Vec::new();\n");
             if attr_name == "java_packet" {
-                output.push_str("            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();\n");
+                output.push_str("            pumpkin_protocol::java::packet_encoder::write_packet(&p, &version, &mut buf).ok()?;\n");
             } else {
-                output.push_str("            crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();\n");
+                output.push_str("            crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).ok()?;\n");
             }
-            output.push_str("            Some(buf.into())\n");
+            if variant_prefix == "ClientboundPacket" {
+                output.push_str(&format!(
+                    "            Some((<{}::{} as MultiVersionJavaPacket>::state(), buf.into()))\n",
+                    rust_path_prefix, enum_name_with_lt
+                ));
+            } else {
+                output.push_str("            Some(buf.into())\n");
+            }
             output.push_str("        }\n");
         }
 
         MappingMode::Deserialize => {
-            if rust_path_prefix.contains("client") {
-                return;
-            }
             if rust_path_prefix.contains("java") {
                 output.push_str(&format!(
                     "        id if id == {}::{}::to_id(version) => {{\n",
@@ -916,6 +1275,7 @@ fn process_enum(
                     "            let p = <{}::{} as pumpkin_protocol::ServerPacket>::read(&mut payload, &version).ok()?;\n",
                     rust_path_prefix, enum_name
                 ));
+                output.push_str("            if !payload.is_empty() { return None; }\n");
             } else {
                 output.push_str(&format!(
                     "        id if id == <{}::{} as pumpkin_protocol::Packet>::PACKET_ID as i32 => {{\n",
