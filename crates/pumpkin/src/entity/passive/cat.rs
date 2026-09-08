@@ -108,8 +108,8 @@ impl CatEntity {
 
             // Goal 1: SwimGoal (FloatGoal)
             goal_selector.add_goal(1, Box::new(SwimGoal::default()));
-            // Goal 1: TamableAnimalPanicGoal (EscapeDangerGoal)
-            goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
+            // Goal 1: TamableAnimalPanicGoal (EscapeDangerGoal) — only environmental damage causes panic
+            goal_selector.add_goal(1, EscapeDangerGoal::with_environmental_panic(1.5));
             // Goal 4: CatTemptGoal
             goal_selector.add_goal(4, Box::new(TemptGoal::new(0.6, TEMPT_ITEMS)));
             // Goal 4: CatAvoidEntityGoal (when untamed)

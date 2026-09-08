@@ -109,6 +109,9 @@ pub struct LivingEntity {
     pub last_attacker_id: AtomicI32,
     /// The tick at which this entity was last attacked (entity age).
     pub last_attacked_time: AtomicI32,
+    /// The [`pumpkin_data::DamageType`] id of the last damage taken, or `-1` if none.
+    /// Used by panic goals (`PanicGoal#shouldPanic` in vanilla).
+    pub last_damage_type_id: AtomicI32,
 
     /// The entity ID of the entity this living entity last attacked.
     pub last_attacking_id: AtomicI32,
@@ -236,6 +239,7 @@ impl LivingEntity {
             climbing_pos: AtomicCell::new(None),
             last_attacker_id: AtomicI32::new(0),
             last_attacked_time: AtomicI32::new(0),
+            last_damage_type_id: AtomicI32::new(-1),
             last_attacking_id: AtomicI32::new(0),
             last_attack_time: AtomicI32::new(0),
             combat_tracker: std::sync::Mutex::new(CombatTracker::new()),
@@ -2881,6 +2885,11 @@ impl LivingEntity {
         let new_health = (self.health.load() - dmg_to_health).clamp(0.0, max_h);
 
         if dmg_to_health > 0.0 {
+            // Vanilla `Entity#setLastHurtByMob`/`LivingEntity#hurt`: the last damage source is
+            // recorded regardless of whether an attacker entity exists (fire, lava, etc.).
+            self.last_damage_type_id
+                .store(i32::from(damage_type.id), Relaxed);
+
             if let Some(player) = caller.get_player() {
                 if damage_type.exhaustion > 0.0 {
                     player.add_exhaustion(damage_type.exhaustion);
