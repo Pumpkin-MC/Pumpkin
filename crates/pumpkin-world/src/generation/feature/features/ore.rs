@@ -205,12 +205,9 @@ impl OreFeature {
         placed_blocks_count > 0
     }
 
-    /// The two ends of the vein axis, as vanilla `OreFeature.place` offsets them:
-    ///
-    /// ```text
-    /// double x0 = origin.getX() + Math.sin(dir) * spreadXY;
-    /// double z0 = origin.getZ() + Math.cos(dir) * spreadXY;
-    /// ```
+    /// The two ends of the vein axis, as vanilla `OreFeature.place` offsets them: the origin's X
+    /// moves by `sin(dir) * spread_xy` and its Z by `cos(dir) * spread_xy`, both through
+    /// `java.lang.Math`.
     ///
     /// `Math.sin`/`Math.cos` take a `double`, so the `float` angle is widened *before* the sine.
     /// That is a different function from the `Mth.sin` lookup table `doPlace` uses a few lines
@@ -222,11 +219,9 @@ impl OreFeature {
         (dir.sin() * spread_xy, dir.cos() * spread_xy)
     }
 
-    /// Radius of one node of the vein, exactly as vanilla `OreFeature.doPlace` computes it:
-    ///
-    /// ```text
-    /// double r = ((Mth.sin((float) Math.PI * step) + 1.0F) * ss + 1.0) / 2.0;
-    /// ```
+    /// Radius of one node of the vein, exactly as vanilla `OreFeature.doPlace` computes it: the
+    /// table sine of `PI * step` plus one, times the node size, plus one, and the whole thing
+    /// halved.
     ///
     /// Two details matter for bit-for-bit parity:
     /// * `Mth.sin` is the 65536-entry lookup table (`pumpkin_util::math::sin`), not an accurate
@@ -287,9 +282,8 @@ impl OreFeature {
 mod tests {
     use super::OreFeature;
 
-    /// Reference values produced by running vanilla's own expression
-    /// `((Mth.sin((float) Math.PI * step) + 1.0F) * ss + 1.0) / 2.0` on a JVM
-    /// (`step = (float) i / size`), printed as raw `double` bits.
+    /// Reference values produced by running vanilla's own node-radius expression on a JVM,
+    /// printed as raw `double` bits.
     #[test]
     fn node_radius_matches_vanilla_do_place() {
         // (size, i, ss, expected raw f64 bits)
@@ -317,8 +311,8 @@ mod tests {
         }
     }
 
-    /// Reference values produced by running vanilla's `Math.sin(dir) * spreadXY` /
-    /// `Math.cos(dir) * spreadXY` on a JVM (`spreadXY = size / 8.0F`), as raw `double` bits.
+    /// Reference values produced by running vanilla's vein-spread expression on a JVM, as raw
+    /// `double` bits.
     #[test]
     fn vein_spread_matches_vanilla_place() {
         // (dir, size, sin*spread bits, cos*spread bits)
