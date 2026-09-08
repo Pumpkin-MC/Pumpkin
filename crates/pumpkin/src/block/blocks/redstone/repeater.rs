@@ -50,9 +50,8 @@ impl BlockBehaviour for RepeaterBlock {
         let now_powered = props.powered;
         let should_be_powered = self.has_power(args.world, *args.position, state, block);
 
-        // Vanilla `DiodeBlock.tick` is `setBlock(..., 2)` only. That still runs `onPlace`,
-        // which calls `updateNeighborsInFront`. Pumpkin `placed` is block-type-only, so
-        // the front poke is explicit here.
+        // Vanilla's `DiodeBlock.tick` just does `setBlock(..., 2)`, which still calls the neighbor
+        // in front. Pumpkin's `placed` only sets the block-type, so `update_target` below does it.
         if now_powered && !should_be_powered {
             props.powered = false;
             args.world.set_block_state(
@@ -101,7 +100,6 @@ impl BlockBehaviour for RepeaterBlock {
         let props = RepeaterProperties::from_state_id(state.id);
         Self::on_use(props, args.world, *args.position, args.block);
 
-        // Vanilla `RepeaterBlock.useWithoutItem`: `InteractionResult.SUCCESS`.
         BlockActionResult::Success
     }
 
@@ -114,8 +112,8 @@ impl BlockBehaviour for RepeaterBlock {
     }
 
     fn emits_redstone_power(&self, args: EmitsRedstonePowerArgs<'_>) -> bool {
-        // Vanilla `DiodeBlock.isSignalSource` is always true; wire `shouldConnectTo` uses
-        // facing and its opposite (input and output). Power amount is still facing-only.
+        // Vanilla's `isSignalSource` is always true; `shouldConnectTo` checks facing
+        // and its opposite (in and out). Power stays facing-only.
         let repeater_props = RepeaterProperties::from_state_id(args.state.id);
         repeater_props.facing.to_block_direction() == args.direction
             || repeater_props.facing.to_block_direction() == args.direction.opposite()
