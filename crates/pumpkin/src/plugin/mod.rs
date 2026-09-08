@@ -4,6 +4,7 @@ use loader::{LoaderError, PluginLoader, native::NativePluginLoader};
 use notify::{EventKind, RecursiveMode, Watcher, event::ModifyKind};
 use std::{
     any::Any,
+    borrow::Cow,
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     pin::Pin,
@@ -180,12 +181,94 @@ pub enum PluginState {
     Failed(String),
 }
 
+/// State of a plugin file the manager knows about, running or not.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PluginStatus {
+    Active,
+    Loading,
+    /// Unloaded on request
+    Unloaded,
+    /// Turned off in the configuration, or a `.deactivated` file
+    Disabled,
+    /// Unsigned while `allow_unsigned` is off
+    Unsigned,
+    PermissionDenied,
+    /// Loader or initialization error
+    Failed(String),
+    /// No loader accepts the file
+    NoLoader,
+}
+
+impl PluginStatus {
+    #[must_use]
+    pub const fn is_active(&self) -> bool {
+        matches!(self, Self::Active)
+    }
+}
+
+impl std::fmt::Display for PluginStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Active => f.write_str("Running"),
+            Self::Loading => f.write_str("Loading"),
+            Self::Unloaded => f.write_str("Unloaded"),
+            Self::Disabled => f.write_str("Disabled in the server configuration"),
+            Self::Unsigned => {
+                f.write_str("Unsigned or invalid signature, and allow_unsigned is off")
+            }
+            Self::PermissionDenied => f.write_str("Permission request denied"),
+            Self::Failed(error) => write!(f, "Failed: {error}"),
+            Self::NoLoader => f.write_str("No plugin loader accepts this file"),
+        }
+    }
+}
+
+/// A plugin file, running or not.
+#[derive(Debug, Clone)]
+pub struct PluginEntry {
+    /// `None` when the file never got far enough to name itself
+    pub metadata: Option<PluginMetadata>,
+    pub path: PathBuf,
+    pub status: PluginStatus,
+    /// False while the loader holds it and cannot release it at runtime
+    pub can_unload: bool,
+}
+
+impl PluginEntry {
+    /// The plugin name, or the file name when it never named itself.
+    #[must_use]
+    pub fn name(&self) -> Cow<'_, str> {
+        self.metadata.as_ref().map_or_else(
+            || self.path.file_name().unwrap_or_default().to_string_lossy(),
+            |metadata| Cow::Borrowed(metadata.name.as_str()),
+        )
+    }
+}
+
+/// Keeps the first, richer record when a later source names the same plugin again.
+fn push_unless_known(entries: &mut Vec<PluginEntry>, entry: PluginEntry) {
+    if !entries.iter().any(|known| known.name() == entry.name()) {
+        entries.push(entry);
+    }
+}
+
+/// Whether a file claims to be a plugin, by extension.
+fn is_plugin_file(path: &Path) -> bool {
+    path.extension().is_some_and(|ext| {
+        ["wasm", "so", "dll", "dylib", "deactivated"]
+            .iter()
+            .any(|known| ext.eq_ignore_ascii_case(known))
+    })
+}
+
 /// Core plugin management system
 pub struct PluginManager {
     plugins: SyncRwLock<Vec<LoadedPlugin>>,
     loaders: RwLock<Vec<Arc<dyn PluginLoader>>>,
     handlers: Arc<ArcSwap<HandlerMap>>,
     unloaded_files: RwLock<HashSet<PathBuf>>,
+    /// Plugin files that are known but not running, by path
+    inactive: RwLock<HashMap<PathBuf, PluginEntry>>,
     services: Arc<RwLock<HashMap<String, Arc<dyn Payload>>>>,
     // Plugin state tracking
     plugin_states: RwLock<HashMap<String, PluginState>>,
@@ -244,6 +327,7 @@ impl PluginManager {
             ]),
             handlers: Arc::new(ArcSwap::from_pointee(HashMap::new())),
             unloaded_files: RwLock::new(HashSet::new()),
+            inactive: RwLock::new(HashMap::new()),
             services: Arc::new(RwLock::new(HashMap::new())),
             plugin_states: RwLock::new(HashMap::new()),
             state_notify: Arc::new(Notify::new()),
@@ -566,6 +650,8 @@ impl PluginManager {
             Arc::clone(&LOGGER_IMPL),
         ));
 
+        let plugin_path = path.clone();
+
         // Create the plugin structure first
         let plugin = LoadedPlugin {
             metadata: metadata.clone(),
@@ -612,6 +698,7 @@ impl PluginManager {
                         .write()
                         .await
                         .insert(plugin_name.clone(), PluginState::Loaded);
+                    self_ref_clone.inactive.write().await.remove(&plugin_path);
                     state_notify.notify_waiters();
 
                     info!("Loaded {} ({})", metadata.name, metadata.version);
@@ -660,6 +747,14 @@ impl PluginManager {
                         .write()
                         .await
                         .insert(plugin_name.clone(), PluginState::Failed(error_msg.clone()));
+                    // Keep it listed with its error, so it can be tried again
+                    self_ref_clone
+                        .mark_inactive(
+                            &plugin_path,
+                            Some(&metadata),
+                            PluginStatus::Failed(error_msg.clone()),
+                        )
+                        .await;
                     state_notify.notify_waiters();
 
                     error!("Failed to initialize plugin {plugin_name}: {error_msg}",);
@@ -701,6 +796,8 @@ impl PluginManager {
                 .extension()
                 .is_some_and(|ext| ext.eq_ignore_ascii_case("deactivated"))
             {
+                self.mark_inactive(&path, None, PluginStatus::Disabled)
+                    .await;
                 continue;
             }
 
@@ -718,6 +815,8 @@ impl PluginManager {
                                     "Plugin \"{}\" is disabled in configuration, skipping.",
                                     metadata.name
                                 );
+                                self.mark_inactive(&path, Some(&metadata), PluginStatus::Disabled)
+                                    .await;
                                 loader_found = true;
                                 break;
                             }
@@ -737,6 +836,12 @@ impl PluginManager {
                                         "Plugin \"{}\" ({:?}) is unsigned or invalid and allow_unsigned is disabled in configuration, skipping.",
                                         metadata.name, path
                                     );
+                                    self.mark_inactive(
+                                        &path,
+                                        Some(&metadata),
+                                        PluginStatus::Unsigned,
+                                    )
+                                    .await;
                                     loader_found = true;
                                     break;
                                 }
@@ -751,7 +856,13 @@ impl PluginManager {
                             ));
                             loader_found = true;
                         }
-                        Err(err) => error!("Failed to load plugin from {:?}: {}", path, err),
+                        Err(err) => {
+                            error!("Failed to load plugin from {:?}: {}", path, err);
+                            // No metadata -> the file never named itself
+                            self.mark_inactive(&path, None, PluginStatus::Failed(err.to_string()))
+                                .await;
+                            loader_found = true;
+                        }
                     }
                     break;
                 }
@@ -804,6 +915,8 @@ impl PluginManager {
                         "Permission denied for plugin \"{}\", skipping loading.",
                         metadata.name
                     );
+                    self.mark_inactive(&path, Some(&metadata), PluginStatus::PermissionDenied)
+                        .await;
                     continue;
                 }
 
@@ -922,7 +1035,16 @@ impl PluginManager {
         let loaders = self.loaders.read().await.clone();
         for loader in &loaders {
             if loader.can_load(path) {
-                let (instance, metadata, loader_data) = loader.load(path).await?;
+                let (instance, metadata, loader_data) = match loader.load(path).await {
+                    Ok(loaded) => loaded,
+                    Err(err) => {
+                        error!("Failed to load plugin from {:?}: {}", path, err);
+                        // No metadata -> the file never named itself
+                        self.mark_inactive(path, None, PluginStatus::Failed(err.to_string()))
+                            .await;
+                        return Err(err.into());
+                    }
+                };
 
                 let plugin_override = server.advanced_config.plugins.overrides.get(&metadata.name);
 
@@ -966,10 +1088,15 @@ impl PluginManager {
                         "Permission denied for plugin \"{}\", skipping loading.",
                         metadata.name
                     );
+                    self.mark_inactive(path, Some(&metadata), PluginStatus::PermissionDenied)
+                        .await;
                     return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
                         "Permission denied".to_string(),
                     )));
                 }
+
+                // A loader took it, so it is no longer waiting for one
+                self.unloaded_files.write().await.remove(path);
 
                 return self
                     .spawn_plugin_initialization(
@@ -1082,6 +1209,90 @@ impl PluginManager {
         plugins.iter().map(|p| p.metadata.clone()).collect()
     }
 
+    /// Every plugin file the manager knows about: running, unloaded, failed or without a loader.
+    ///
+    /// Sorted by name; the first, richer record wins when a plugin is named more than once.
+    pub async fn plugin_entries(&self) -> Vec<PluginEntry> {
+        let states = self.plugin_states.read().await;
+
+        let mut entries: Vec<PluginEntry> = {
+            let plugins = self
+                .plugins
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            plugins
+                .iter()
+                .map(|p| PluginEntry {
+                    status: if p.is_active && p.instance.is_some() {
+                        PluginStatus::Active
+                    } else {
+                        match states.get(&p.metadata.name) {
+                            Some(PluginState::Loading) => PluginStatus::Loading,
+                            Some(PluginState::Failed(error)) => PluginStatus::Failed(error.clone()),
+                            _ => PluginStatus::Unloaded,
+                        }
+                    },
+                    metadata: Some(p.metadata.clone()),
+                    path: p.path.clone(),
+                    can_unload: p.loader.can_unload(),
+                })
+                .collect()
+        };
+        drop(states);
+
+        for entry in self.inactive.read().await.values() {
+            push_unless_known(&mut entries, entry.clone());
+        }
+
+        for path in self.unloaded_files.read().await.iter() {
+            // Only files that claim to be a plugin, not a readme or a config next to them
+            if !is_plugin_file(path) {
+                continue;
+            }
+            push_unless_known(
+                &mut entries,
+                PluginEntry {
+                    metadata: None,
+                    path: path.clone(),
+                    status: PluginStatus::NoLoader,
+                    can_unload: true,
+                },
+            );
+        }
+
+        entries.sort_by(|a, b| a.name().cmp(&b.name()));
+        entries
+    }
+
+    /// The plugin with this name, running or not.
+    ///
+    /// Reloading needs it: `unload_plugin` takes a name but `try_load_plugin` takes a file.
+    pub async fn plugin_entry(&self, name: &str) -> Option<PluginEntry> {
+        self.plugin_entries()
+            .await
+            .into_iter()
+            .find(|entry| entry.name() == name)
+    }
+
+    /// Records why a plugin file is not running, so it can be reported and not only logged.
+    async fn mark_inactive(
+        &self,
+        path: &Path,
+        metadata: Option<&PluginMetadata>,
+        status: PluginStatus,
+    ) {
+        self.inactive.write().await.insert(
+            path.to_path_buf(),
+            PluginEntry {
+                metadata: metadata.cloned(),
+                path: path.to_path_buf(),
+                status,
+                // Nothing is resident, so there is nothing that could block a load
+                can_unload: true,
+            },
+        );
+    }
+
     /// Unload a plugin by name
     pub async fn unload_plugin(&self, name: &str) -> Result<(), ManagerError> {
         let mut plugin = {
@@ -1104,9 +1315,12 @@ impl PluginManager {
         }
 
         if plugin.loader.can_unload() {
-            if let Some(data) = plugin.loader_data {
+            if let Some(data) = plugin.loader_data.take() {
                 plugin.loader.unload(data).await?;
             }
+            // Dropped from `plugins`, so remember it here or it vanishes from every view
+            self.mark_inactive(&plugin.path, Some(&plugin.metadata), PluginStatus::Unloaded)
+                .await;
         } else {
             plugin.is_active = false;
             self.plugins
