@@ -5,8 +5,8 @@ use std::sync::RwLock;
 use pumpkin_data::{item_stack::ItemStack, screen::WindowType};
 use pumpkin_inventory::screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour};
 use pumpkin_inventory::slot::NormalSlot;
+use pumpkin_inventory::{Clearable, Inventory};
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::inventory::{Clearable, Inventory};
 
 pub struct PluginGui {
     pub window_type: WindowType,
