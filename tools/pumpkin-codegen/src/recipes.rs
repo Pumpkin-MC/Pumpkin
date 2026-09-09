@@ -29,22 +29,97 @@ pub enum RecipeTypes {
     /// Furnace smelting recipe.
     #[serde(rename = "minecraft:smelting")]
     Smelting(CookingRecipeStruct),
-    /// Smithing table transform recipe (not yet codegen'd).
+    /// Smithing table transform recipe.
     #[serde(rename = "minecraft:smithing_transform")]
-    SmithingTransform,
-    /// Smithing table armor-trim recipe (not yet codegen'd).
+    SmithingTransform(SmithingTransformRecipeStruct),
+    /// Smithing table armor-trim recipe.
     #[serde(rename = "minecraft:smithing_trim")]
-    SmithingTrim,
+    SmithingTrim(SmithingTrimRecipeStruct),
     /// Smoker cooking recipe.
     #[serde(rename = "minecraft:smoking")]
     Smoking(CookingRecipeStruct),
     /// Stonecutter recipe.
     #[serde(rename = "minecraft:stonecutting")]
     Stonecutting(StonecuttingRecipeStruct),
-    /// Any special crafting recipe type (not yet codegen'd).
+    /// Special crafting recipe types.
+    #[serde(rename = "minecraft:crafting_special_bannerduplicate")]
+    CraftingSpecialBannerDuplicate,
+    #[serde(rename = "minecraft:crafting_special_bookcloning")]
+    CraftingSpecialBookCloning,
+    #[serde(rename = "minecraft:crafting_special_firework_rocket")]
+    CraftingSpecialFireworkRocket,
+    #[serde(rename = "minecraft:crafting_special_firework_star")]
+    CraftingSpecialFireworkStar,
+    #[serde(rename = "minecraft:crafting_special_firework_star_fade")]
+    CraftingSpecialFireworkStarFade,
+    #[serde(rename = "minecraft:crafting_special_mapextending")]
+    CraftingSpecialMapExtending,
+    #[serde(rename = "minecraft:crafting_special_repairitem")]
+    CraftingSpecialRepairItem,
+    #[serde(rename = "minecraft:crafting_special_shielddecoration")]
+    CraftingSpecialShieldDecoration,
+    #[serde(rename = "minecraft:crafting_dye")]
+    CraftingDye,
+    #[serde(rename = "minecraft:crafting_imbue")]
+    CraftingImbue,
+    /// Any other special crafting recipe type.
     #[serde(other)]
     #[serde(rename = "minecraft:crafting_special_*")]
     CraftingSpecial,
+}
+
+/// Deserialized smithing table transform recipe.
+#[derive(Deserialize)]
+pub struct SmithingTransformRecipeStruct {
+    template: RecipeIngredientTypes,
+    base: RecipeIngredientTypes,
+    addition: RecipeIngredientTypes,
+    result: RecipeResultStruct,
+}
+
+impl ToTokens for SmithingTransformRecipeStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let template = self.template.to_token_stream();
+        let base = self.base.to_token_stream();
+        let addition = self.addition.to_token_stream();
+        let result = self.result.to_token_stream();
+
+        tokens.extend(quote! {
+            SmithingTransformRecipe {
+                template: #template,
+                base: #base,
+                addition: #addition,
+                result: #result,
+            }
+        });
+    }
+}
+
+/// Deserialized smithing table armor-trim recipe.
+#[derive(Deserialize)]
+pub struct SmithingTrimRecipeStruct {
+    template: RecipeIngredientTypes,
+    base: RecipeIngredientTypes,
+    addition: RecipeIngredientTypes,
+    pattern: String,
+}
+
+impl ToTokens for SmithingTrimRecipeStruct {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let template = self.template.to_token_stream();
+        let base = self.base.to_token_stream();
+        let addition = self.addition.to_token_stream();
+        let pattern = &self.pattern;
+
+        tokens.extend(quote! {
+            SmithingTrimRecipe {
+                template: #template,
+                base: #base,
+                addition: #addition,
+                pattern: #pattern,
+            }
+        });
+    }
 }
 
 /// Deserialized stonecutter recipe.
@@ -479,14 +554,16 @@ pub fn build() -> TokenStream {
         let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
         let key = format!("minecraft:{stem}");
         let content = fs::read_to_string(&path).expect("Failed to read recipe file");
-        if let Ok(recipe) = serde_json::from_str::<RecipeTypes>(&content) {
-            recipes_assets.insert(key, recipe);
-        }
+        let recipe = serde_json::from_str::<RecipeTypes>(&content)
+            .unwrap_or_else(|e| panic!("Failed to parse recipe {}: {e}", path.display()));
+        recipes_assets.insert(key, recipe);
     }
 
     let mut crafting_recipes = Vec::new();
     let mut cooking_recipes = Vec::new();
     let mut stonecutting_recipes = Vec::new();
+    let mut smithing_trim_recipes = Vec::new();
+    let mut smithing_transform_recipes = Vec::new();
 
     for (recipe_id, recipe) in recipes_assets {
         match recipe {
@@ -532,8 +609,12 @@ pub fn build() -> TokenStream {
                 };
                 cooking_recipes.push(smelting_token);
             }
-            RecipeTypes::SmithingTransform => {}
-            RecipeTypes::SmithingTrim => {}
+            RecipeTypes::SmithingTransform(recipe) => {
+                smithing_transform_recipes.push(recipe.to_token_stream());
+            }
+            RecipeTypes::SmithingTrim(recipe) => {
+                smithing_trim_recipes.push(recipe.to_token_stream());
+            }
             RecipeTypes::Smoking(recipe) => {
                 let mut common_cooking_token = TokenStream::new();
                 recipe.to_tokens_with_id(&mut common_cooking_token, &recipe_id, 100);
@@ -547,7 +628,17 @@ pub fn build() -> TokenStream {
             RecipeTypes::Stonecutting(recipe) => {
                 stonecutting_recipes.push(recipe.to_token_stream());
             }
-            RecipeTypes::CraftingSpecial => {}
+            RecipeTypes::CraftingSpecial
+            | RecipeTypes::CraftingSpecialBannerDuplicate
+            | RecipeTypes::CraftingSpecialBookCloning
+            | RecipeTypes::CraftingSpecialFireworkRocket
+            | RecipeTypes::CraftingSpecialFireworkStar
+            | RecipeTypes::CraftingSpecialFireworkStarFade
+            | RecipeTypes::CraftingSpecialMapExtending
+            | RecipeTypes::CraftingSpecialRepairItem
+            | RecipeTypes::CraftingSpecialShieldDecoration
+            | RecipeTypes::CraftingDye
+            | RecipeTypes::CraftingImbue => {}
         }
     }
 
@@ -705,6 +796,87 @@ pub fn build() -> TokenStream {
         pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
             #(#stonecutting_recipes),*
         ];
+        pub static RECIPES_SMITHING_TRIM: &[SmithingTrimRecipe] = &[
+            #(#smithing_trim_recipes),*
+        ];
+        pub static RECIPES_SMITHING_TRANSFORM: &[SmithingTransformRecipe] = &[
+            #(#smithing_transform_recipes),*
+        ];
+
+        #[derive(Clone, Debug, Serialize)]
+        pub struct SmithingTrimRecipe {
+            pub template: RecipeIngredientTypes,
+            pub base: RecipeIngredientTypes,
+            pub addition: RecipeIngredientTypes,
+            pub pattern: &'static str,
+        }
+
+        impl SmithingTrimRecipe {
+            #[must_use]
+            pub fn matches(&self, template: &Item, base: &Item, addition: &Item) -> bool {
+                self.template.match_item(template)
+                    && self.base.match_item(base)
+                    && self.addition.match_item(addition)
+            }
+        }
+
+        #[must_use]
+        pub fn get_smithing_trim_recipe(
+            template: &Item,
+            base: &Item,
+            addition: &Item,
+        ) -> Option<&'static SmithingTrimRecipe> {
+            RECIPES_SMITHING_TRIM
+                .iter()
+                .find(|recipe| recipe.matches(template, base, addition))
+        }
+
+        #[derive(Clone, Debug, Serialize)]
+        pub struct SmithingTransformRecipe {
+            pub template: RecipeIngredientTypes,
+            pub base: RecipeIngredientTypes,
+            pub addition: RecipeIngredientTypes,
+            pub result: RecipeResultStruct,
+        }
+
+        impl SmithingTransformRecipe {
+            #[must_use]
+            pub fn matches(&self, template: &Item, base: &Item, addition: &Item) -> bool {
+                self.template.match_item(template)
+                    && self.base.match_item(base)
+                    && self.addition.match_item(addition)
+            }
+        }
+
+        #[must_use]
+        pub fn get_smithing_transform_recipe(
+            template: &Item,
+            base: &Item,
+            addition: &Item,
+        ) -> Option<&'static SmithingTransformRecipe> {
+            RECIPES_SMITHING_TRANSFORM
+                .iter()
+                .find(|recipe| recipe.matches(template, base, addition))
+        }
+
+        /// Returns the trim material registry key for a given item, if it is a valid trim material.
+        #[must_use]
+        pub fn get_trim_material_for_item(item: &Item) -> Option<&'static str> {
+            match item.registry_key {
+                "amethyst_shard" => Some("minecraft:amethyst"),
+                "copper_ingot" => Some("minecraft:copper"),
+                "diamond" => Some("minecraft:diamond"),
+                "emerald" => Some("minecraft:emerald"),
+                "gold_ingot" => Some("minecraft:gold"),
+                "iron_ingot" => Some("minecraft:iron"),
+                "lapis_lazuli" => Some("minecraft:lapis"),
+                "netherite_ingot" => Some("minecraft:netherite"),
+                "quartz" => Some("minecraft:quartz"),
+                "redstone" => Some("minecraft:redstone"),
+                "resin_brick" | "resin_clump" => Some("minecraft:resin"),
+                _ => None,
+            }
+        }
 
         #[must_use]
         pub fn get_cooking_recipe_with_ingredient(ingredient: &Item, recipe_type: CookingRecipeKind) -> Option<&'static CookingRecipe> {

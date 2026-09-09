@@ -1,10 +1,10 @@
 use std::any::Any;
-use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
+use crate::entity::EntityBase;
 use crate::entity::player::Player;
-use crate::entity::projectile::arrow::{ArrowEntity, ArrowPickup};
-use crate::entity::{Entity, EntityBase};
+use crate::entity::projectile::arrow::ArrowEntity;
+use crate::item::items::projectile_weapon::ProjectileWeaponItem;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -41,8 +41,8 @@ impl ItemBehaviour for BowItem {
             .set_active_hand(pumpkin_util::Hand::Right, stack, Self::USE_DURATION);
     }
 
-    fn on_stopped_using(&self, _stack: &ItemStack, player: &Player) {
-        Self::release_bow(player);
+    fn on_stopped_using(&self, stack: &ItemStack, player: &Player) {
+        Self::release_bow(player, stack);
     }
 
     fn get_use_duration(&self) -> i32 {
@@ -58,10 +58,10 @@ impl BowItem {
     /// The maximum number of ticks a bow can be drawn for
     pub const USE_DURATION: i32 = 72000;
     const MAX_DRAW_DURATION: f32 = 20.0;
-    const ARROW_SPEED_MULTIPLIER: f32 = 3.0;
+    pub const ARROW_SPEED_MULTIPLIER: f32 = 3.0;
 
     /// Called when the player releases the bow
-    pub fn release_bow(player: &Player) {
+    pub fn release_bow(player: &Player, weapon: &ItemStack) {
         // Get the used ticks
         let use_ticks = player.living_entity.item_use_time.load(Ordering::Relaxed);
         let use_ticks = Self::USE_DURATION - use_ticks;
@@ -92,18 +92,24 @@ impl BowItem {
         let power = Self::get_power_for_time(use_ticks);
 
         // Check for Infinity enchantment
-        let mut has_infinity = false;
-        let held = player.inventory().held_item();
-        if let Some(enchantments) =
-            held.get_data_component::<pumpkin_data::data_component_impl::EnchantmentsImpl>()
-        {
-            has_infinity = enchantments
-                .enchantment
-                .iter()
-                .any(|(e, _)| **e == pumpkin_data::Enchantment::INFINITY);
-        }
+        let has_infinity = weapon
+            .get_data_component::<pumpkin_data::data_component_impl::EnchantmentsImpl>()
+            .is_some_and(|enchantments| {
+                enchantments
+                    .enchantment
+                    .iter()
+                    .any(|(e, _)| **e == pumpkin_data::Enchantment::INFINITY)
+            });
 
-        Self::fire_arrow(player, power, &projectile);
+        let is_crit = (power - 1.0).abs() < f32::EPSILON;
+        Self::shoot(
+            player,
+            weapon,
+            std::slice::from_ref(&projectile),
+            power,
+            1.0,
+            is_crit,
+        );
 
         // Consume arrow (if not creative and no Infinity)
         if let Some(slot) = arrow_slot
@@ -133,75 +139,86 @@ impl BowItem {
         power
     }
 
-    /// Fire an arrow from the bow
-    pub fn fire_arrow(player: &Player, power: f32, projectile: &ItemStack) {
-        if power < 0.1 {
-            return; // Not enough charge
+    /// Creates projectile matching vanilla `ProjectileWeaponItem::createProjectile`.
+    pub fn create_projectile(
+        player: &Player,
+        weapon: &ItemStack,
+        projectile: &ItemStack,
+        is_crit: bool,
+    ) -> ArrowEntity {
+        let world = player.world();
+        let is_creative = player.gamemode.load() == GameMode::Creative;
+        ProjectileWeaponItem::create_projectile(
+            world,
+            player.get_entity(),
+            weapon,
+            projectile,
+            is_crit,
+            is_creative,
+        )
+    }
+
+    /// Shoot projectile matching vanilla `ProjectileWeaponItem::shoot`.
+    pub fn shoot(
+        player: &Player,
+        weapon: &ItemStack,
+        projectiles: &[ItemStack],
+        power: f32,
+        uncertainty: f32,
+        is_crit: bool,
+    ) {
+        if power < 0.1 || projectiles.is_empty() {
+            return;
         }
 
         let world = player.world();
-        let position = player.position();
+        let is_creative = player.gamemode.load() == GameMode::Creative;
+        let speed = power * ProjectileWeaponItem::ARROW_SPEED_MULTIPLIER;
 
-        // Create arrow entity
-        let arrow_entity = Entity::new(
-            world.clone(),
-            position,
-            ArrowEntity::entity_type_for_item(projectile.item),
+        ProjectileWeaponItem::shoot_projectiles(
+            &world,
+            player.get_entity(),
+            weapon,
+            projectiles,
+            speed,
+            uncertainty,
+            is_crit,
+            is_creative,
         );
 
-        // Determine pickup mode based on gamemode
-        let gamemode = player.gamemode.load();
-        let pickup = if gamemode == GameMode::Creative {
-            ArrowPickup::CreativeOnly
-        } else {
-            ArrowPickup::Allowed
-        };
-
-        let mut arrow =
-            ArrowEntity::new_shot(arrow_entity, player.get_entity(), projectile, pickup);
-
-        // Read enchantments of the held item (bow)
-        let stack = player.inventory().held_item();
-        if let Some(enchantments) =
-            stack.get_data_component::<pumpkin_data::data_component_impl::EnchantmentsImpl>()
-        {
-            for (enchantment, level) in enchantments.enchantment.iter() {
-                if **enchantment == pumpkin_data::Enchantment::POWER {
-                    arrow.base_damage *= 1.0 + 0.25 * (f64::from(*level) + 1.0);
-                } else if **enchantment == pumpkin_data::Enchantment::PUNCH {
-                    arrow.punch_level.store(*level as u8, Ordering::Relaxed);
-                } else if **enchantment == pumpkin_data::Enchantment::FLAME {
-                    arrow.is_flame.store(true, Ordering::Relaxed);
-                }
-            }
-        }
-        drop(stack);
-
-        // Set velocity based on player's look direction and power
-        let (yaw, pitch) = player.rotation();
-        let speed = power * Self::ARROW_SPEED_MULTIPLIER;
-        arrow.set_velocity_from_rotation(pitch, yaw, 0.0, speed, 1.0);
-
-        // Set critical if fully charged
-        if power >= 1.0 {
-            arrow.set_critical(true);
-        }
-
-        // Spawn the arrow entity in the world
-        let arrow_arc: Arc<dyn EntityBase> = Arc::new(arrow);
-        world.spawn_entity(arrow_arc);
-
-        // Play bow shoot sound
         let sound_pitch = 1.0 / (rand::random::<f32>() * 0.4 + 1.2) + power * 0.5;
         let sound_packet = CSoundEffect::new(
             IdOr::Id(Sound::EntityArrowShoot as u16),
             SoundCategory::Neutral,
-            &position,
+            &player.position(),
             1.0,
             sound_pitch,
             0.0,
         );
         let chunk_pos = player.get_entity().chunk_pos.load();
         world.broadcast_to_chunk(chunk_pos, &sound_packet);
+    }
+
+    /// Fire an arrow from the bow with explicit critical flag
+    pub fn fire_arrow_with_crit(
+        player: &Player,
+        power: f32,
+        projectile: &ItemStack,
+        is_crit: bool,
+    ) {
+        let held = player.inventory().held_item();
+        Self::shoot(
+            player,
+            &held,
+            std::slice::from_ref(projectile),
+            power,
+            1.0,
+            is_crit,
+        );
+    }
+
+    /// Fire an arrow from the bow
+    pub fn fire_arrow(player: &Player, power: f32, projectile: &ItemStack) {
+        Self::fire_arrow_with_crit(player, power, projectile, power >= 1.0);
     }
 }

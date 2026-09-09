@@ -106,11 +106,28 @@ impl JavaClient {
                                 player.trigger_advancement(crate::entity::player::advancement::trigger::AdvancementTrigger::CuredZombieVillager);
                             }
 
+                            let item_id = stack.item.id;
+                            let before = stack.clone();
                             let interacted = event.target.interact(player, &mut stack);
                             if !interacted {
                                 server
                                     .item_registry
                                     .use_on_entity(&mut stack, player, event.target);
+                            }
+                            if !stack.are_equal(&before) {
+                                player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
+                                if before.is_damageable() && stack.is_empty() {
+                                    player.increment_stat(
+                                        StatisticCategory::Broken,
+                                        item_id as i32,
+                                        1,
+                                    );
+                                    player.world().send_entity_status(
+                                        player.get_entity(),
+                                        equipment_break_status(&EquipmentSlot::MAIN_HAND),
+                                        None,
+                                    );
+                                }
                             }
                             player.inventory().set_held_item(stack);
                         }

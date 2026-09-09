@@ -1,39 +1,34 @@
-use crate::{
-    command::{
-        CommandError, CommandExecutor, CommandResult, CommandSender,
-        args::{
-            Arg, ConsumedArgs,
-            gameprofile::{GameProfileSuggestionMode, GameProfilesArgumentConsumer},
-        },
-        tree::{CommandTree, builder::argument},
-    },
-    data::SaveJSONConfiguration,
-};
-use CommandError::InvalidConsumption;
+use pumpkin_data::translation;
+use pumpkin_util::PermissionLvl;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 
-const NAMES: [&str; 1] = ["pardon"];
+use crate::command::argument_builder::{ArgumentBuilder, argument, command};
+use crate::command::argument_types::game_profile::GameProfileArgumentType;
+use crate::command::context::command_context::CommandContext;
+use crate::command::errors::error_types::CommandErrorType;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
+use crate::data::SaveJSONConfiguration;
+
 const DESCRIPTION: &str = "unbans a player";
+const PERMISSION: &str = "minecraft:command.pardon";
 
-const ARG_TARGET: &str = "targets";
+const ERROR_PARDON_FAILED: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::COMMANDS_PARDON_FAILED,
+    translation::bedrock::COMMANDS_UNBAN_FAILED,
+);
 
-struct Executor;
+struct PardonExecutor;
 
-impl CommandExecutor for Executor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        let Some(Arg::GameProfiles(targets)) = args.get(&ARG_TARGET) else {
-            return Err(InvalidConsumption(Some(ARG_TARGET.into())));
-        };
-
+impl CommandExecutor for PardonExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let targets = GameProfileArgumentType::get(context, "targets")?;
+        let server = context.source.server();
         let mut lock = server.data.banned_player_list.write().unwrap();
         let mut successes = 0;
 
-        for target in targets {
+        for target in &targets {
             let idx = lock
                 .banned_players
                 .iter()
@@ -41,11 +36,14 @@ impl CommandExecutor for Executor {
 
             if let Some(idx) = idx {
                 lock.banned_players.remove(idx);
-                sender.send_message(TextComponent::translate_cross(
-                    pumpkin_data::translation::java::COMMANDS_PARDON_SUCCESS,
-                    pumpkin_data::translation::bedrock::COMMANDS_UNBAN_SUCCESS,
-                    [TextComponent::text(target.name.clone())],
-                ));
+                context.source.send_feedback(
+                    TextComponent::translate_cross(
+                        translation::java::COMMANDS_PARDON_SUCCESS,
+                        translation::bedrock::COMMANDS_UNBAN_SUCCESS,
+                        [TextComponent::text(target.name.clone())],
+                    ),
+                    true,
+                );
                 successes += 1;
             }
         }
@@ -57,22 +55,21 @@ impl CommandExecutor for Executor {
             let err_target = targets
                 .first()
                 .map_or_else(String::new, |first_target| first_target.name.clone());
-            Err(CommandError::CommandFailed(TextComponent::translate_cross(
-                pumpkin_data::translation::java::COMMANDS_PARDON_FAILED,
-                pumpkin_data::translation::bedrock::COMMANDS_UNBAN_FAILED,
-                [TextComponent::text(err_target)],
-            )))
+            Err(ERROR_PARDON_FAILED.create_without_context(TextComponent::text(err_target)))
         }
     }
 }
 
-#[allow(clippy::too_many_lines)]
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).then(
-        argument(
-            ARG_TARGET,
-            GameProfilesArgumentConsumer::new(GameProfileSuggestionMode::BannedNames, false),
-        )
-        .execute(Executor),
-    )
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Three),
+    ));
+
+    dispatcher.register(
+        command("pardon", DESCRIPTION)
+            .requires(PERMISSION)
+            .then(argument("targets", GameProfileArgumentType).executes(PardonExecutor)),
+    );
 }

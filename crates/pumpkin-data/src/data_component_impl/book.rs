@@ -90,6 +90,11 @@ impl DataComponentImpl for WrittenBookContentImpl {
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct DebugStickStateImpl;
+impl DebugStickStateImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
 impl DataComponentImpl for DebugStickStateImpl {
     default_impl!(DebugStickState);
 }

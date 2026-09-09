@@ -2,7 +2,7 @@ use crate::block::registry::BlockActionResult;
 use crate::block::{BlockBehaviour, NormalUseArgs, OnPlaceArgs};
 
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{BlockProperties, StructureBlockLikeProperties};
+use pumpkin_data::block_properties::StructureBlockLikeProperties;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::PermissionLvl;
 

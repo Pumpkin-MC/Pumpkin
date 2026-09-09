@@ -1,14 +1,21 @@
 use std::sync::Arc;
 
 use bytes::BufMut;
+use crossbeam::atomic::AtomicCell;
 use dashmap::DashMap;
 use dashmap::DashSet;
 use pumpkin_protocol::bedrock::client::remove_actor::CRemoveActor;
+use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
+use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::codec::var_long::VarLong;
 use pumpkin_protocol::java::client::play::{
-    CEntityVelocity, CHeadRot, CRemoveEntities, CSetEntityMetadata, Metadata,
+    CEntityVelocity, CHeadRot, CRemoveEntities, CSetEntityMetadata, CSetEquipment, CSetPassengers,
+    Metadata,
 };
 use pumpkin_protocol::{BClientPacket, ClientPacket};
+use pumpkin_util::GameMode;
+use pumpkin_util::math::get_section_cord;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::version::JavaMinecraftVersion;
 use uuid::Uuid;
 
@@ -19,8 +26,6 @@ use crate::net::java::JavaClient;
 use crate::world::World;
 use crate::world::chunker::{get_view_distance, is_within_view_distance};
 
-/// Represents an entity tracked in the world and its current watchers,
-/// corresponding to Vanilla's `ChunkMap.TrackedEntity`.
 pub struct TrackedEntity {
     pub entity: Arc<dyn EntityBase>,
     pub entity_id: i32,
@@ -28,6 +33,7 @@ pub struct TrackedEntity {
     pub update_interval: u32,
     pub track_deltas: bool,
     pub seen_by: DashSet<Uuid>,
+    pub last_section_pos: AtomicCell<Vector3<i32>>,
 }
 
 impl TrackedEntity {
@@ -39,6 +45,12 @@ impl TrackedEntity {
         track_deltas: bool,
     ) -> Self {
         let entity_id = entity.get_entity().entity_id;
+        let pos = entity.get_entity().pos.load();
+        let last_section_pos = Vector3::new(
+            get_section_cord(pos.x.floor() as i32),
+            get_section_cord(pos.y.floor() as i32),
+            get_section_cord(pos.z.floor() as i32),
+        );
         Self {
             entity,
             entity_id,
@@ -46,25 +58,43 @@ impl TrackedEntity {
             update_interval,
             track_deltas,
             seen_by: DashSet::new(),
+            last_section_pos: AtomicCell::new(last_section_pos),
         }
     }
 
-    /// Gets the effective tracking range in chunks, taking passengers into account.
+    fn collect_indirect_passengers(
+        entity: &Arc<dyn EntityBase>,
+        result: &mut Vec<Arc<dyn EntityBase>>,
+    ) {
+        if let Ok(passengers) = entity.get_entity().passengers.try_lock() {
+            for passenger in passengers.iter() {
+                result.push(passenger.clone());
+                Self::collect_indirect_passengers(passenger, result);
+            }
+        }
+    }
+
     #[must_use]
     pub fn get_effective_range(&self) -> u32 {
         let mut effective_range = self.tracking_range;
-        if let Ok(passengers) = self.entity.get_entity().passengers.try_lock() {
-            for passenger in passengers.iter() {
-                let passenger_range = passenger.get_entity().entity_type.client_tracking_range;
-                if passenger_range > effective_range {
-                    effective_range = passenger_range;
-                }
+        let mut passengers = Vec::new();
+        Self::collect_indirect_passengers(&self.entity, &mut passengers);
+        for passenger in passengers {
+            let passenger_range = passenger.get_entity().entity_type.client_tracking_range;
+            if passenger_range > effective_range {
+                effective_range = passenger_range;
             }
         }
         effective_range
     }
 
-    /// Updates visibility for a single player.
+    fn broadcast_to_player(&self, player: &Player) -> bool {
+        self.entity.get_player().is_none_or(|target_player| {
+            player.gamemode.load() == GameMode::Spectator
+                || target_player.gamemode.load() != GameMode::Spectator
+        })
+    }
+
     pub fn update_player(&self, player: &Arc<Player>, _world: &World) {
         if player.get_entity().entity_id == self.entity_id {
             return;
@@ -86,7 +116,7 @@ impl TrackedEntity {
         let player_chunk = player_entity.chunk_pos.load();
         let in_view = is_within_view_distance(entity_chunk, player_chunk, player_vd);
 
-        let is_visible = dist_sq <= range_sq && in_view;
+        let is_visible = dist_sq <= range_sq && self.broadcast_to_player(player) && in_view;
 
         if is_visible {
             if self.seen_by.insert(player.gameprofile.id) {
@@ -97,14 +127,13 @@ impl TrackedEntity {
         }
     }
 
-    /// Updates visibility for a list of players.
     pub fn update_players(&self, players: &[Arc<Player>], world: &World) {
         for player in players {
             self.update_player(player, world);
         }
     }
 
-    /// Sends spawn and initial state packets to the new watcher.
+    #[allow(clippy::too_many_lines)]
     pub fn add_pairing(&self, player: &Arc<Player>) {
         player.client.try_enqueue_spawn_packet(&self.entity);
 
@@ -169,9 +198,81 @@ impl TrackedEntity {
                 client.try_enqueue_packet(data);
             }
         }
+
+        if let ClientPlatform::Java(client) = player.client.as_ref() {
+            let version = client.version.load();
+            // TODO: Support older versions
+            if version >= JavaMinecraftVersion::V_26_2
+                && let Some(non_default) = self
+                    .entity
+                    .get_entity()
+                    .synched_data
+                    .get_non_default_values_for_version(&version)
+            {
+                let packet = CSetEntityMetadata::new(self.entity_id.into(), non_default);
+                if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version)
+                {
+                    client.try_enqueue_packet(packet_data);
+                }
+            }
+        }
+
+        if let Some(living) = self.entity.get_living_entity()
+            && let Ok(equipment_guard) = living.entity_equipment.try_lock()
+        {
+            let mut equipment_list = Vec::new();
+            for (slot, item_stack) in &equipment_guard.equipment {
+                if !item_stack.is_empty() {
+                    equipment_list.push((slot.discriminant(), item_stack.clone()));
+                }
+            }
+            if !equipment_list.is_empty() {
+                let equipment: Vec<(i8, ItemStackSerializer)> = equipment_list
+                    .iter()
+                    .map(|(slot, stack)| (*slot, ItemStackSerializer::from(stack.clone())))
+                    .collect();
+                let packet = CSetEquipment::new(self.entity_id.into(), equipment);
+                if let ClientPlatform::Java(client) = player.client.as_ref()
+                    && let Ok(data) = client.serialize_packet(&packet)
+                {
+                    client.try_enqueue_packet(data);
+                }
+            }
+        }
+
+        if let Ok(passengers) = self.entity.get_entity().passengers.try_lock()
+            && !passengers.is_empty()
+        {
+            let passenger_ids: Vec<VarInt> = passengers
+                .iter()
+                .map(|p| VarInt(p.get_entity().entity_id))
+                .collect();
+            let packet = CSetPassengers::new(VarInt(self.entity_id), &passenger_ids);
+            if let ClientPlatform::Java(client) = player.client.as_ref()
+                && let Ok(data) = client.serialize_packet(&packet)
+            {
+                client.try_enqueue_packet(data);
+            }
+        }
+
+        if let Ok(vehicle_guard) = self.entity.get_entity().vehicle.try_lock()
+            && let Some(vehicle) = vehicle_guard.as_ref()
+            && let Ok(vehicle_passengers) = vehicle.get_entity().passengers.try_lock()
+        {
+            let passenger_ids: Vec<VarInt> = vehicle_passengers
+                .iter()
+                .map(|p| VarInt(p.get_entity().entity_id))
+                .collect();
+            let packet =
+                CSetPassengers::new(VarInt(vehicle.get_entity().entity_id), &passenger_ids);
+            if let ClientPlatform::Java(client) = player.client.as_ref()
+                && let Ok(data) = client.serialize_packet(&packet)
+            {
+                client.try_enqueue_packet(data);
+            }
+        }
     }
 
-    /// Sends despawn packet to a player leaving visibility range.
     pub fn remove_pairing(&self, player: &Arc<Player>) {
         let entity_ids = [self.entity_id.into()];
         match player.client.as_ref() {
@@ -190,7 +291,6 @@ impl TrackedEntity {
         }
     }
 
-    /// Broadcasts removal of this entity to all current watchers.
     pub fn broadcast_removed(&self, world: &World) {
         let entity_ids = [self.entity_id.into()];
         let je_packet = CRemoveEntities::new(&entity_ids);
@@ -217,12 +317,10 @@ impl TrackedEntity {
         self.seen_by.clear();
     }
 
-    /// Removes a player by UUID without sending despawn packet (used on disconnect).
     pub fn remove_player(&self, player_uuid: &Uuid) {
         self.seen_by.remove(player_uuid);
     }
 
-    /// Sends a Java client packet to all tracking players.
     pub fn send_to_tracking_players<P: ClientPacket + Sync>(&self, packet: &P, world: &World) {
         let players = world.players.load();
         let recipients = players
@@ -232,7 +330,6 @@ impl TrackedEntity {
         World::broadcast_java_grouped(packet, recipients_by_version);
     }
 
-    /// Sends a Bedrock client packet to all tracking players.
     pub fn send_to_tracking_players_bedrock<P: BClientPacket + Sync>(
         &self,
         packet: &P,
@@ -250,7 +347,6 @@ impl TrackedEntity {
         World::broadcast_bedrock_grouped(packet, recipients);
     }
 
-    /// Sends an editioned packet (Java + Bedrock) to all tracking players.
     pub fn send_to_tracking_players_editioned<J: ClientPacket + Sync, B: BClientPacket + Sync>(
         &self,
         je_packet: &J,
@@ -276,7 +372,6 @@ impl TrackedEntity {
         World::broadcast_bedrock_grouped(be_packet, bedrock_recipients.into_iter());
     }
 
-    /// Sends a packet to all tracking players and the entity itself if it is a player.
     pub fn send_to_tracking_players_and_self<P: ClientPacket + Sync>(
         &self,
         packet: &P,
@@ -288,7 +383,6 @@ impl TrackedEntity {
         }
     }
 
-    /// Sends an editioned packet to all tracking players and the entity itself if it is a player.
     pub fn send_to_tracking_players_and_self_editioned<
         J: ClientPacket + Sync,
         B: BClientPacket + Sync,
@@ -304,7 +398,6 @@ impl TrackedEntity {
         }
     }
 
-    /// Sends a packet to tracking players filtered by predicate.
     pub fn send_to_tracking_players_filtered<P: ClientPacket + Sync, F: Fn(&Player) -> bool>(
         &self,
         packet: &P,
@@ -319,7 +412,6 @@ impl TrackedEntity {
         World::broadcast_java_grouped(packet, recipients_by_version);
     }
 
-    /// Sends an editioned packet to tracking players filtered by predicate.
     pub fn send_to_tracking_players_filtered_editioned<
         J: ClientPacket + Sync,
         B: BClientPacket + Sync,
@@ -351,7 +443,6 @@ impl TrackedEntity {
     }
 }
 
-/// The entity tracking system for a world, corresponding to Vanilla's `ChunkMap.entityMap`.
 pub struct EntityTracker {
     pub entity_map: DashMap<i32, Arc<TrackedEntity>>,
 }
@@ -387,6 +478,18 @@ impl EntityTracker {
             .is_some_and(|t| !t.seen_by.is_empty())
     }
 
+    pub fn for_each_entity_tracked_by<F: FnMut(&Arc<dyn EntityBase>)>(
+        &self,
+        player: &Player,
+        mut f: F,
+    ) {
+        for entry in &self.entity_map {
+            if entry.value().seen_by.contains(&player.gameprofile.id) {
+                f(&entry.value().entity);
+            }
+        }
+    }
+
     pub fn add_entity(&self, entity: &Arc<dyn EntityBase>, world: &World) {
         let entity_type = entity.get_entity().entity_type;
         let range = entity_type.client_tracking_range;
@@ -407,15 +510,14 @@ impl EntityTracker {
 
         let players = world.players.load();
         tracked.update_players(players.as_ref(), world);
+    }
 
-        // If the newly added entity is a player, update all other tracked entities for this player
-        if let Some(player) = entity.get_player()
-            && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
-        {
-            for entry in &self.entity_map {
-                if *entry.key() != entity_id {
-                    entry.value().update_player(&player_arc, world);
-                }
+    /// Must only be called after the player's own `CLogin` packet has been sent.
+    pub fn pair_new_player_with_tracked_entities(&self, player_arc: &Arc<Player>, world: &World) {
+        let entity_id = player_arc.get_entity().entity_id;
+        for entry in &self.entity_map {
+            if *entry.key() != entity_id {
+                entry.value().update_player(player_arc, world);
             }
         }
     }
@@ -435,6 +537,15 @@ impl EntityTracker {
     }
 
     pub fn update_player_position(&self, player: &Arc<Player>, world: &World) {
+        let pos = player.get_entity().pos.load();
+        let new_pos = Vector3::new(
+            get_section_cord(pos.x.floor() as i32),
+            get_section_cord(pos.y.floor() as i32),
+            get_section_cord(pos.z.floor() as i32),
+        );
+        if let Some(tracked) = self.entity_map.get(&player.get_entity().entity_id) {
+            tracked.last_section_pos.store(new_pos);
+        }
         for entry in &self.entity_map {
             if *entry.key() == player.get_entity().entity_id {
                 let players = world.players.load();
@@ -447,6 +558,13 @@ impl EntityTracker {
 
     pub fn update_entity_position(&self, entity: &dyn EntityBase, world: &World) {
         if let Some(tracked) = self.entity_map.get(&entity.get_entity().entity_id) {
+            let pos = entity.get_entity().pos.load();
+            let new_pos = Vector3::new(
+                get_section_cord(pos.x.floor() as i32),
+                get_section_cord(pos.y.floor() as i32),
+                get_section_cord(pos.z.floor() as i32),
+            );
+            tracked.last_section_pos.store(new_pos);
             let players = world.players.load();
             tracked.update_players(players.as_ref(), world);
         }
@@ -454,8 +572,39 @@ impl EntityTracker {
 
     pub fn update_all(&self, world: &World) {
         let players = world.players.load();
+        let mut moved_players = Vec::new();
+
         for entry in &self.entity_map {
-            entry.value().update_players(players.as_ref(), world);
+            let tracked = entry.value();
+            let pos = tracked.entity.get_entity().pos.load();
+            let new_pos = Vector3::new(
+                get_section_cord(pos.x.floor() as i32),
+                get_section_cord(pos.y.floor() as i32),
+                get_section_cord(pos.z.floor() as i32),
+            );
+            let old_pos = tracked.last_section_pos.load();
+            if old_pos != new_pos {
+                tracked.update_players(players.as_ref(), world);
+                if let Some(player) = tracked.entity.get_player()
+                    && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
+                {
+                    moved_players.push(player_arc);
+                }
+                tracked.last_section_pos.store(new_pos);
+            }
+        }
+
+        if !moved_players.is_empty() {
+            for entry in &self.entity_map {
+                entry.value().update_players(&moved_players, world);
+            }
+        }
+
+        for entry in &self.entity_map {
+            let tracked = entry.value();
+            if tracked.entity.get_entity().synched_data.is_dirty() {
+                tracked.entity.get_entity().send_dirty_entity_data();
+            }
         }
     }
 }

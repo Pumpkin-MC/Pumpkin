@@ -7,7 +7,6 @@ use crate::{
 };
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::vector3::Vector3;
 
@@ -204,12 +203,9 @@ impl FishingBobberEntity {
             if ebb.intersects(&search_box) {
                 self.hooked_entity_id
                     .store(cand.get_entity().entity_id, Ordering::Relaxed);
-                entity.send_meta_data(
-                    &[Metadata::new(
-                        pumpkin_data::tracked_data::fishing_bobber::HOOKED_ENTITY,
-                        cand.get_entity().entity_id + 1,
-                    )],
-                    None,
+                entity.set_synced_data(
+                    pumpkin_data::tracked_data::fishing_bobber::HOOKED_ENTITY,
+                    cand.get_entity().entity_id + 1,
                 );
                 return;
             }
@@ -218,6 +214,10 @@ impl FishingBobberEntity {
 }
 
 impl EntityBase for FishingBobberEntity {
+    fn get_owner_id(&self) -> Option<i32> {
+        Some(self.owner_id)
+    }
+
     fn get_entity(&self) -> &Entity {
         &self.entity
     }
