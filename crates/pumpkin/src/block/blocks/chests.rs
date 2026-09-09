@@ -24,7 +24,7 @@ use std::sync::Mutex;
 use crate::block::{
     BlockBehaviour, BrokenArgs, EmitsRedstonePowerArgs, GetComparatorOutputArgs,
     GetRedstonePowerArgs, GetScreenHandlerFactoryArgs, NormalUseArgs, OnPlaceArgs,
-    OnSyncedBlockEventArgs, PathComputationType, PlacedArgs, PlayerPlacedArgs, RandomTickArgs,
+    OnSyncedBlockEventArgs, PathComputationType, PlacedArgs, RandomTickArgs,
     registry::BlockActionResult,
 };
 use crate::entity::EntityBase;
@@ -118,19 +118,6 @@ fn placed_chest_impl<E: BlockEntity + 'static>(
             BlockFlags::NOTIFY_LISTENERS,
         );
     }
-}
-
-fn player_placed_chest_impl(args: &PlayerPlacedArgs<'_>) {
-    let position = pumpkin_util::math::vector3::Vector3::new(
-        args.position.0.x as f64 + 0.5,
-        args.position.0.y as f64 + 0.5,
-        args.position.0.z as f64 + 0.5,
-    );
-    args.world.play_bedrock_level_sound(
-        "place",
-        &position,
-        i32::from(pumpkin_data::BlockState::to_be_network_id(args.state_id)),
-    );
 }
 
 /// Computes the comparator output for a chest, combining both halves for double chests.
@@ -311,10 +298,6 @@ impl BlockBehaviour for ChestBlock {
         placed_chest_impl(&args, ChestBlockEntity::new);
     }
 
-    fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
-        player_placed_chest_impl(&args);
-    }
-
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         normal_use_chest_impl(&args)
     }
@@ -390,10 +373,6 @@ impl BlockBehaviour for CopperChestBlock {
         placed_chest_impl(&args, ChestBlockEntity::new);
     }
 
-    fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
-        player_placed_chest_impl(&args);
-    }
-
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         normal_use_chest_impl(&args)
     }
@@ -458,10 +437,6 @@ impl BlockBehaviour for TrappedChestBlock {
     fn placed(&self, args: PlacedArgs<'_>) {
         use crate::block::entities::trapped_chest::TrappedChestBlockEntity;
         placed_chest_impl(&args, TrappedChestBlockEntity::new);
-    }
-
-    fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
-        player_placed_chest_impl(&args);
     }
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
