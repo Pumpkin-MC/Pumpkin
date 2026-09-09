@@ -1,0 +1,40 @@
+{
+  "type": "minecraft:cache",
+  "input": {
+    "type": "minecraft:max",
+    "left": {
+      "type": "minecraft:slice",
+      "axis": "y",
+      "coordinate": 0,
+      "input": {
+        "type": "minecraft:mul",
+        "left": {
+          "type": "minecraft:sub",
+          "left": {
+            "type": "minecraft:clamp",
+            "input": {
+              "type": "minecraft:sub",
+              "left": 100.0,
+              "right": {
+                "type": "minecraft:distance_to_point",
+                "metric": "euclidean",
+                "point": [
+                  0,
+                  0,
+                  0
+                ]
+              }
+            },
+            "max": 80.0,
+            "min": -100.0
+          },
+          "right": 8.0
+        },
+        "right": 0.0078125
+      }
+    },
+    "right": {
+      "type": "minecraft:end_outer_islands"
+    }
+  }
+}

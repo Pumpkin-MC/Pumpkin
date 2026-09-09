@@ -138,7 +138,7 @@ impl TreeFeature {
                 if smallest_distance != 0 {
                     let (block, state) = chunk.get_block_and_state(&pos);
                     if OakLeavesLikeProperties::handles_block_id(block.id) {
-                        let mut props = OakLeavesLikeProperties::from_state_id(state.id, block);
+                        let mut props = OakLeavesLikeProperties::from_state_id(state.id);
                         props.distance = smallest_distance as u8;
                         let new_state = &block.states[props.to_index() as usize];
                         chunk.set_block_state(&pos.0, new_state);
@@ -160,8 +160,8 @@ impl TreeFeature {
                                 Some(0)
                             } else if OakLeavesLikeProperties::handles_block_id(n_block.id) {
                                 Some(
-                                    OakLeavesLikeProperties::from_state_id(n_state.id, n_block)
-                                        .distance as usize,
+                                    OakLeavesLikeProperties::from_state_id(n_state.id).distance
+                                        as usize,
                                 )
                             } else {
                                 None

@@ -9,7 +9,7 @@ use pumpkin_util::math::position::BlockPos;
 
 use crate::block::entities::BlockEntity;
 use crate::world::World;
-use pumpkin_world::inventory::{Clearable, Inventory};
+use pumpkin_inventory::{Clearable, Inventory};
 
 /// Matches vanilla's `JukeboxBlockEntity`
 pub struct JukeboxBlockEntity {

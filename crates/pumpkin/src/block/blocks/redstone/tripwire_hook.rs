@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use pumpkin_data::{
     Block, BlockDirection, BlockStateId, HorizontalFacingExt,
-    block_properties::BlockProperties,
     sound::{Sound, SoundCategory},
 };
 use pumpkin_macros::pumpkin_block;
@@ -41,7 +40,7 @@ impl BlockBehaviour for TripwireHookBlock {
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        let props = TripwireHookProperties::from_state_id(args.state.id, args.block);
+        let props = TripwireHookProperties::from_state_id(args.state.id);
 
         Self::can_place_at(
             args.block_accessor,
@@ -67,7 +66,7 @@ impl BlockBehaviour for TripwireHookBlock {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         if args.direction.to_horizontal_facing().is_some_and(|facing| {
-            let props = TripwireHookProperties::from_state_id(args.state_id, args.block);
+            let props = TripwireHookProperties::from_state_id(args.state_id);
             facing.opposite() == props.facing
         }) && !Self::can_place_at(args.world, args.position, args.direction)
         {
@@ -86,7 +85,7 @@ impl BlockBehaviour for TripwireHookBlock {
         if args.moved || Block::from_state_id(args.old_state_id) == args.block {
             return;
         }
-        let props = TripwireHookProperties::from_state_id(args.old_state_id, args.block);
+        let props = TripwireHookProperties::from_state_id(args.old_state_id);
         if props.powered || props.attached {
             Self::update(
                 args.world,
@@ -113,12 +112,12 @@ impl BlockBehaviour for TripwireHookBlock {
     }
 
     fn get_weak_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
-        let props = TripwireHookProperties::from_state_id(args.state.id, args.block);
+        let props = TripwireHookProperties::from_state_id(args.state.id);
         if props.powered { 15 } else { 0 }
     }
 
     fn get_strong_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
-        let props = TripwireHookProperties::from_state_id(args.state.id, args.block);
+        let props = TripwireHookProperties::from_state_id(args.state.id);
         if props.powered
             && args
                 .direction
@@ -156,8 +155,7 @@ impl TripwireHookBlock {
         raw_wire_index: i32,
         raw_wire_state: Option<BlockStateId>,
     ) {
-        let start_hook_props =
-            TripwireHookProperties::from_state_id(start_hook_state_id, &Block::TRIPWIRE_HOOK);
+        let start_hook_props = TripwireHookProperties::from_state_id(start_hook_state_id);
         let mut can_attach = !skip_state_update;
         let mut wire_attached = false;
         let mut j = 0;
@@ -169,7 +167,7 @@ impl TripwireHookBlock {
             if current_block == &Block::TRIPWIRE_HOOK {
                 let current_hook_props = {
                     let state_id = world.get_block_state_id(&current_pos);
-                    TripwireHookProperties::from_state_id(state_id, &Block::TRIPWIRE_HOOK)
+                    TripwireHookProperties::from_state_id(state_id)
                 };
                 if current_hook_props.facing == start_hook_props.facing.opposite() {
                     j = k;
@@ -184,7 +182,7 @@ impl TripwireHookBlock {
                     } else {
                         ro_state_id
                     };
-                    TripwireProperties::from_state_id(state_id, &Block::TRIPWIRE)
+                    TripwireProperties::from_state_id(state_id)
                 };
                 wire_attached |= (!current_wire_props.disarmed) && current_wire_props.powered;
                 wires_props[k as usize] = Some(current_wire_props);

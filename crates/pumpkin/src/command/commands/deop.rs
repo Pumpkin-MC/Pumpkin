@@ -8,6 +8,8 @@ use crate::command::context::command_context::CommandContext;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
+use crate::command::suggestion::provider::{SuggestionProvider, SuggestionProviderResult};
+use crate::command::suggestion::suggestions::SuggestionsBuilder;
 use crate::data::SaveJSONConfiguration;
 
 const DESCRIPTION: &str = "Revokes operator status from a player.";
@@ -52,15 +54,32 @@ impl CommandExecutor for DeopExecutor {
             }
         }
 
-        if succeeded_deops > 0 {
-            config.save();
-        }
-
         if succeeded_deops == 0 {
             Err(ERROR_DEOP_FAILED.create_without_context())
         } else {
+            config.save();
+            drop(config);
+
+            crate::command::commands::whitelist::kick_non_whitelisted_players(server);
+
             Ok(succeeded_deops)
         }
+    }
+}
+
+struct DeopSuggestionProvider;
+
+impl SuggestionProvider for DeopSuggestionProvider {
+    fn suggest(
+        &self,
+        context: &CommandContext,
+        mut builder: SuggestionsBuilder,
+    ) -> SuggestionProviderResult {
+        let ops = context.server().data.operator_config.read().unwrap();
+        for op in &ops.ops {
+            builder = builder.suggest(op.name.clone());
+        }
+        builder.build()
     }
 }
 
@@ -72,8 +91,10 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
     ));
 
     dispatcher.register(
-        command("deop", DESCRIPTION)
-            .requires(PERMISSION)
-            .then(argument("targets", GameProfileArgumentType).executes(DeopExecutor)),
+        command("deop", DESCRIPTION).requires(PERMISSION).then(
+            argument("targets", GameProfileArgumentType)
+                .suggests(DeopSuggestionProvider)
+                .executes(DeopExecutor),
+        ),
     );
 }

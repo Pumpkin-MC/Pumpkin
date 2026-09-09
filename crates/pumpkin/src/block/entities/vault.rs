@@ -9,6 +9,7 @@ pub struct VaultBlockEntity {
     pub position: BlockPos,
     pub config: Mutex<Option<NbtCompound>>,
     pub server_data: Mutex<Option<NbtCompound>>,
+    pub shared_data: Mutex<Option<NbtCompound>>,
     pub rewarded_players: Mutex<FxHashSet<Uuid>>,
 }
 
@@ -29,6 +30,7 @@ impl BlockEntity for VaultBlockEntity {
             position,
             config: Mutex::new(nbt.get_compound("config").cloned()),
             server_data: Mutex::new(nbt.get_compound("server_data").cloned()),
+            shared_data: Mutex::new(nbt.get_compound("shared_data").cloned()),
             rewarded_players: Mutex::new(FxHashSet::default()),
         }
     }
@@ -44,19 +46,19 @@ impl BlockEntity for VaultBlockEntity {
         {
             nbt.put_compound("server_data", data.clone());
         }
+        if let Ok(shared) = self.shared_data.lock()
+            && let Some(shared) = shared.as_ref()
+        {
+            nbt.put_compound("shared_data", shared.clone());
+        }
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
-        if let Ok(cfg) = self.config.try_lock()
-            && let Some(ref cfg) = *cfg
+        if let Ok(shared) = self.shared_data.try_lock()
+            && let Some(ref shared) = *shared
         {
-            nbt.put_compound("config", cfg.clone());
-        }
-        if let Ok(data) = self.server_data.try_lock()
-            && let Some(ref data) = *data
-        {
-            nbt.put_compound("server_data", data.clone());
+            nbt.put_compound("shared_data", shared.clone());
         }
         Some(nbt)
     }
@@ -75,6 +77,7 @@ impl VaultBlockEntity {
             position,
             config: Mutex::new(None),
             server_data: Mutex::new(None),
+            shared_data: Mutex::new(None),
             rewarded_players: Mutex::new(FxHashSet::default()),
         }
     }

@@ -7,7 +7,6 @@ use pumpkin_util::math::vector3::Vector3;
 use crate::world::ExplosionInteraction;
 
 /// Enchantment entity effect that produces an explosion at an offset position.
-/// Matches vanilla `net.minecraft.world.item.enchantment.effects.ExplodeEffect`.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExplodeEffect {
     pub attribute_to_user: bool,
@@ -64,5 +63,28 @@ impl ExplodeEffect {
         self.knockback_multiplier
             .as_ref()
             .map(|kb| kb.calculate(level))
+    }
+}
+
+impl super::EnchantmentEntityEffectExt for ExplodeEffect {
+    fn apply(
+        &self,
+        world: &std::sync::Arc<crate::world::World>,
+        enchantment_level: i32,
+        _owner: Option<&std::sync::Arc<crate::entity::player::Player>>,
+        _entity: Option<&crate::entity::Entity>,
+        position: Vector3<f64>,
+    ) {
+        let r = self.calculate_radius(enchantment_level);
+        let center = position + self.offset;
+        world.explode(
+            center,
+            r,
+            if self.create_fire {
+                self.block_interaction
+            } else {
+                ExplosionInteraction::None
+            },
+        );
     }
 }
