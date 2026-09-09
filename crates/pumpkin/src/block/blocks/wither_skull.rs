@@ -1,6 +1,4 @@
-use pumpkin_data::{
-    Block, BlockDirection, BlockState, BlockStateId, entity::EntityType, world::WorldEvent,
-};
+use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId, entity::EntityType};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::world::BlockFlags;
 
@@ -76,10 +74,10 @@ impl BlockBehaviour for WitherSkeletonSkullBlock {
                                 Block::AIR.default_state.id,
                                 BlockFlags::NOTIFY_ALL,
                             );
-                            world.sync_world_event(
-                                WorldEvent::ParticlesDestroyBlock,
+                            world.sync_destroy_block_particles(
+                                None,
                                 p,
-                                Block::SOUL_SAND.default_state.id.as_u16().into(),
+                                Block::SOUL_SAND.default_state.id,
                             );
                         }
 

@@ -5540,11 +5540,10 @@ impl World {
         // Player mine is `spawnDestroyParticles` -> `levelEvent(player, 2001)`: the breaker
         // already plays the particles locally, so omit them here.
         if broken_block != &Block::FIRE && broken_block != &Block::SOUL_FIRE {
-            self.sync_world_event_except(
+            self.sync_destroy_block_particles(
                 cause.map(Arc::as_ref),
-                WorldEvent::ParticlesDestroyBlock,
                 *position,
-                i32::from(broken_block_state.id.as_u16()),
+                broken_block_state.id,
             );
         }
 
@@ -5988,6 +5987,45 @@ impl World {
             self.broadcast_to_chunk_except(chunk_pos, &[player.get_entity().entity_uuid], &packet);
         } else {
             self.broadcast_to_chunk(chunk_pos, &packet);
+        }
+    }
+
+    /// Vanilla `Level.levelEvent(player, 2001, pos, stateId)`, the block-break particles.
+    ///
+    /// Own helper because [`Self::sync_world_event_except`] is Java only: both editions know the
+    /// event as 2001, but the data is the block id of the respective edition, so Bedrock needs
+    /// the network id, not the Java state id.
+    pub fn sync_destroy_block_particles(
+        &self,
+        except: Option<&Player>,
+        position: BlockPos,
+        state_id: BlockStateId,
+    ) {
+        let chunk_pos = position.chunk_position();
+        let je_packet = CWorldEvent::new(
+            WorldEvent::ParticlesDestroyBlock as i32,
+            position,
+            i32::from(state_id.as_u16()),
+            false,
+        );
+        let be_packet = CLevelEvent {
+            event_id: VarInt(LevelEvent::ParticlesDestroyBlock as i32),
+            position: Vector3::new(
+                position.0.x as f32,
+                position.0.y as f32,
+                position.0.z as f32,
+            ),
+            data: VarInt(i32::from(BlockState::to_be_network_id(state_id))),
+        };
+        if let Some(player) = except {
+            self.broadcast_to_chunk_except_editioned(
+                chunk_pos,
+                &[player.get_entity().entity_uuid],
+                &je_packet,
+                &be_packet,
+            );
+        } else {
+            self.broadcast_to_chunk_editioned(chunk_pos, &je_packet, &be_packet);
         }
     }
 

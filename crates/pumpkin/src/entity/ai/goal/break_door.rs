@@ -165,10 +165,10 @@ impl Goal for BreakDoorGoal {
                 self.door_interact_goal.door_pos,
                 0,
             );
-            world.sync_world_event(
-                WorldEvent::ParticlesDestroyBlock,
+            world.sync_destroy_block_particles(
+                None,
                 self.door_interact_goal.door_pos,
-                i32::from(block_state_id.as_u16()),
+                block_state_id,
             );
         }
     }
