@@ -7,6 +7,22 @@ use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
 use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::*;
+use pumpkin_data::data_component_impl::{
+    AxolotlVariantImpl, BlockStateImpl, BundleContentsImpl, CatCollarImpl, CatSoundVariantImpl,
+    CatVariantImpl, ChickenSoundVariantImpl, ChickenVariantImpl, ConsumableImpl, ConsumeAnimation,
+    ConsumeEffect, CowSoundVariantImpl, CowVariantImpl, CustomDataImpl, CustomNameImpl, DamageImpl,
+    DataComponentImpl, DyedColorImpl, EnchantmentsImpl, EquipmentSlot, EquippableImpl,
+    FireworkExplosionImpl, FireworkExplosionShape, FireworksImpl, FoxVariantImpl, FrogVariantImpl,
+    HorseVariantImpl, IDSet, IDSetContent, IdOr, ItemModelImpl, ItemNameImpl, LlamaVariantImpl,
+    LoreImpl, MapIdImpl, MaxStackSizeImpl, MooshroomVariantImpl, PaintingVariantImpl,
+    ParrotVariantImpl, PigSoundVariantImpl, PigVariantImpl, PotionContentsImpl, RabbitVariantImpl,
+    Rarity, RarityImpl, RepairCostImpl, RepairableImpl, SalmonSizeImpl, SheepColorImpl,
+    ShulkerColorImpl, SoundEvent, StatusEffectInstance, StoredEnchantmentsImpl,
+    SuspiciousStewEffect, SuspiciousStewEffectsImpl, SwingAnimationImpl, SwingAnimationType,
+    TropicalFishBaseColorImpl, TropicalFishPatternColorImpl, TropicalFishPatternImpl,
+    UnbreakableImpl, UseCooldownImpl, VillagerVariantImpl, WolfCollarImpl, WolfSoundVariantImpl,
+    WolfVariantImpl, ZombieNautilusVariantImpl, get,
+};
 
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
@@ -990,6 +1006,11 @@ pub fn deserialize(
         DataComponent::MapPostProcessing => Ok(MapPostProcessingImpl::deserialize(seq)?.to_dyn()),
         DataComponent::ChargedProjectiles => Ok(ChargedProjectilesImpl::deserialize(seq)?.to_dyn()),
         DataComponent::BundleContents => Ok(BundleContentsImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::BlockState => Ok(BlockStateImpl::deserialize(seq)?.to_dyn()),
+        _ => Err(ReadingError::Message(format!(
+            "component_id_{} (TODO)",
+            id.to_id()
+        ))),
         DataComponent::PotionContents => Ok(PotionContentsImpl::deserialize(seq)?.to_dyn()),
         DataComponent::PotionDurationScale => {
             Ok(PotionDurationScaleImpl::deserialize(seq)?.to_dyn())
@@ -1137,6 +1158,11 @@ pub fn serialize(
         DataComponent::MapPostProcessing => get::<MapPostProcessingImpl>(value).serialize(seq),
         DataComponent::ChargedProjectiles => get::<ChargedProjectilesImpl>(value).serialize(seq),
         DataComponent::BundleContents => get::<BundleContentsImpl>(value).serialize(seq),
+        DataComponent::BlockState => get::<BlockStateImpl>(value).serialize(seq),
+        _ => Err(WritingError::Message(format!(
+            "{} not yet implemented",
+            id.to_name()
+        ))),
         DataComponent::PotionContents => get::<PotionContentsImpl>(value).serialize(seq),
         DataComponent::PotionDurationScale => get::<PotionDurationScaleImpl>(value).serialize(seq),
         DataComponent::SuspiciousStewEffects => {
@@ -1245,6 +1271,47 @@ impl DataComponentCodec<Self> for UseCooldownImpl {
         Ok(Self {
             seconds,
             cooldown_group,
+        })
+    }
+}
+
+impl DataComponentCodec<Self> for BlockStateImpl {
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        const MAX_PROPERTIES: usize = 256;
+
+        if self.properties.len() > MAX_PROPERTIES {
+            return Err(WritingError::Message(
+                "Too many block state properties".into(),
+            ));
+        }
+
+        seq.write_var_int(&VarInt::from(self.properties.len() as i32))?;
+        for (name, value) in self.properties.iter() {
+            seq.write_string(name)?;
+            seq.write_string(value)?;
+        }
+        Ok(())
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        const MAX_PROPERTIES: i32 = 256;
+
+        let property_count = seq.get_var_int()?.0;
+        if !(0..=MAX_PROPERTIES).contains(&property_count) {
+            return Err(ReadingError::Message(
+                "Invalid block state property count".into(),
+            ));
+        }
+
+        let mut properties = Vec::with_capacity(property_count as usize);
+        for _ in 0..property_count {
+            let name = Cow::Owned(seq.get_str()?.into());
+            let value = Cow::Owned(seq.get_str()?.into());
+            properties.push((name, value));
+        }
+
+        Ok(Self {
+            properties: Cow::Owned(properties),
         })
     }
 }
@@ -1411,6 +1478,37 @@ codec_string_variant!(CatSoundVariantImpl);
 codec_string_variant!(CatCollarImpl);
 codec_string_variant!(SheepColorImpl);
 codec_string_variant!(ShulkerColorImpl);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn block_state_component_round_trip() {
+        let component = BlockStateImpl {
+            properties: Cow::Owned(vec![(Cow::Borrowed("level"), Cow::Borrowed("7"))]),
+        };
+        let mut encoded = Vec::new();
+
+        serialize(DataComponent::BlockState, &component, &mut encoded).unwrap();
+
+        let mut encoded = encoded.as_slice();
+        let decoded = deserialize(DataComponent::BlockState, &mut encoded).unwrap();
+        let decoded = get::<BlockStateImpl>(decoded.as_ref());
+
+        assert_eq!(decoded, &component);
+        assert!(encoded.is_empty());
+    }
+
+    #[test]
+    fn block_state_component_rejects_excessive_property_count() {
+        let mut encoded = Vec::new();
+        encoded.write_var_int(&VarInt(257)).unwrap();
+
+        let error = BlockStateImpl::deserialize(&mut encoded.as_slice());
+        assert!(error.is_err());
+    }
+}
 
 impl DataComponentCodec<Self> for MaxDamageImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {

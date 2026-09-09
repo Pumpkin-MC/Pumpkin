@@ -154,7 +154,7 @@ impl JavaClient {
         let item_id = item.item.id;
         if let Some(block) = Block::from_item_id(item_id) {
             should_try_decrement =
-                Self::run_is_block_place(player, block, server, use_item_on, position, face)?;
+                Self::run_is_block_place(player, block, &item, server, use_item_on, face)?;
         }
 
         if should_try_decrement {
@@ -249,15 +249,19 @@ impl JavaClient {
     fn run_is_block_place(
         player: &Arc<Player>,
         block: &'static Block,
+        item_stack: &ItemStack,
         server: &Arc<Server>,
         use_item_on: &SUseItemOn,
-        location: BlockPos,
         face: BlockDirection,
     ) -> Result<bool, BlockPlacingError> {
-        match server
-            .block_registry
-            .place_block(player, block, server, use_item_on, location, face)
-        {
+        match server.block_registry.place_block(
+            player,
+            block,
+            item_stack,
+            server,
+            use_item_on,
+            face,
+        ) {
             Ok(Some((final_block_pos, new_state))) => {
                 player.try_send_client_packet(&CBlockUpdate::new(
                     final_block_pos,
