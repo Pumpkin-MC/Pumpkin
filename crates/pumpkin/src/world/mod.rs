@@ -5661,10 +5661,14 @@ impl World {
         self.environment_attributes().get_value_activity(baby, pos)
     }
 
-    pub fn get_max_local_raw_brightness(&self, pos: &BlockPos) -> u8 {
-        let sky_light = (self.get_sky_light_level(pos) as i32 - self.get_sky_darken()).max(0) as u8;
+    pub fn get_raw_brightness(&self, pos: &BlockPos, sky_darken: u8) -> u8 {
+        let sky_light = self.get_sky_light_level(pos).saturating_sub(sky_darken);
         let block_light = self.get_block_light_level(pos).unwrap_or(0);
         sky_light.max(block_light)
+    }
+
+    pub fn get_max_local_raw_brightness(&self, pos: &BlockPos) -> u8 {
+        self.get_raw_brightness(pos, self.get_sky_darken() as u8)
     }
 
     pub fn get_block_light_level(&self, position: &BlockPos) -> Option<u8> {
@@ -7402,7 +7406,7 @@ impl WorldPortalExt for WorldPortal {
     ) -> bool {
         self.0.block_registry.can_place_at(
             None,
-            None,
+            Some(&self.0),
             block_accessor,
             None,
             block,
