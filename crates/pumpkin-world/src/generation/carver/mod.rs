@@ -3,28 +3,28 @@ pub mod cave;
 pub mod mask;
 
 use crate::ProtoChunk;
+use crate::biome::BiomeSupplier;
 use crate::generation::GlobalRandomConfig;
 use crate::generation::generator::VanillaGenerator;
 use crate::generation::noise::aquifer_sampler::CarverAquiferSampler;
 use crate::generation::noise::perlin::DoublePerlinNoiseSampler;
+use crate::generation::noise::router::multi_noise_sampler::MultiNoiseSampler;
 use crate::generation::noise::router::surface_height_sampler::{
     SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
 };
 use crate::generation::surface::rule::try_apply_material_rule;
 use crate::generation::surface::terrain::SurfaceTerrainBuilder;
 use crate::generation::surface::{MaterialRuleContext, steep_material_condition};
+use crate::generation::{biome_coords, section_coords};
 use pumpkin_data::block_state::BlockState;
-use pumpkin_data::carver::{CANYON, CAVE, CAVE_EXTRA_UNDERGROUND, NETHER_CAVE};
 use pumpkin_data::carver::{CarverAdditionalConfig, CarverConfig};
-use pumpkin_data::chunk_gen_settings::MaterialRule;
+#[cfg(test)]
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::Fluid;
+use pumpkin_data::material_rule::MaterialRule;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::{RandomGenerator, RandomImpl};
-
-const OVERWORLD_CARVERS: [&CarverConfig; 3] = [&CAVE, &CAVE_EXTRA_UNDERGROUND, &CANYON];
-const NETHER_CARVERS: [&CarverConfig; 1] = [&NETHER_CAVE];
 
 pub struct CarverBlockIds {
     pub air: &'static BlockState,
@@ -63,6 +63,8 @@ pub struct CarvingContext<'a> {
     pub secondary_noise: &'a DoublePerlinNoiseSampler,
     pub terrain_builder: &'a SurfaceTerrainBuilder,
     pub sea_level: i32,
+    pub default_block: &'static BlockState,
+    pub default_fluid: &'static BlockState,
     pub surface_rule: &'a MaterialRule,
     pub surface_height_sampler: SurfaceHeightEstimateSampler<'a>,
     pub carver_aquifer: Option<CarverAquiferSampler<'a>>,
@@ -119,6 +121,7 @@ pub trait Carver {
     );
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
     // Vanilla applyCarvers uses a range of 8 chunks (17x17 area)
     let radius = 8;
@@ -126,20 +129,11 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
     let chunk_z = chunk.z;
     let chunk_pos = Vector2::new(chunk_x, chunk_z);
 
-    let carvers_to_use = carvers_for_dimension(&generator.dimension);
+    let supplier: &dyn BiomeSupplier = &generator.biome_supplier;
+    let mut multi_noise_sampler = MultiNoiseSampler::generate(&generator.base_router.multi_noise);
 
-    let start_x = crate::generation::positions::chunk_pos::start_block_x(chunk_x);
-    let start_z = crate::generation::positions::chunk_pos::start_block_z(chunk_z);
     let generation_shape = &generator.settings.shape;
-    let horizontal_cell_count = 16 / generation_shape.horizontal_cell_block_count();
-
-    let horizontal_biome_end = crate::generation::biome_coords::from_block(
-        horizontal_cell_count as i32 * generation_shape.horizontal_cell_block_count() as i32,
-    );
     let surface_config = SurfaceHeightSamplerBuilderOptions::new(
-        crate::generation::biome_coords::from_block(start_x),
-        crate::generation::biome_coords::from_block(start_z),
-        horizontal_biome_end as usize,
         generation_shape.min_y as i32,
         generation_shape.max_y() as i32,
         generation_shape.vertical_cell_block_count() as usize,
@@ -166,10 +160,14 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
         secondary_noise: &generator.terrain_cache.secondary_noise,
         terrain_builder: &generator.terrain_cache.terrain_builder,
         sea_level: generator.settings.sea_level,
-        surface_rule: &generator.settings.surface_rule,
+        default_block: generator.settings.default_block,
+        default_fluid: generator.settings.default_fluid,
+        surface_rule: generator.surface_rule,
         surface_height_sampler,
         carver_aquifer,
     };
+
+    let center_biome = chunk.get_biome(0, 0, 0);
 
     let mut run = CarveRun {
         ctx: &mut context,
@@ -186,9 +184,18 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
             let carver_z = chunk_z + dz;
             let carver_chunk_pos = Vector2::new(carver_x, carver_z);
 
-            // In vanilla, carvers are per-biome. Here we use the hardcoded list but
-            // maintain the random seed logic.
-            for (index, &config) in carvers_to_use.iter().enumerate() {
+            let carver_biome = if dx == 0 && dz == 0 {
+                center_biome
+            } else {
+                supplier.biome(
+                    biome_coords::from_block(section_coords::section_to_block(carver_x)),
+                    0,
+                    biome_coords::from_block(section_coords::section_to_block(carver_z)),
+                    &mut multi_noise_sampler,
+                )
+            };
+
+            for (index, &config) in carver_biome.carvers.iter().enumerate() {
                 let seed = get_large_feature_seed(
                     generator.random_config.seed + index as u64,
                     carver_x,
@@ -199,7 +206,7 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
 
                 if should_carve(config, &mut carver_random) {
                     match config.additional {
-                        CarverAdditionalConfig::Cave(_) | CarverAdditionalConfig::NetherCave(_) => {
+                        CarverAdditionalConfig::Cave(_) => {
                             cave_carver.carve(
                                 config,
                                 &mut run,
@@ -252,16 +259,6 @@ const fn new_carver_random(seed: u64, non_vanilla_random: bool) -> RandomGenerat
     }
 }
 
-fn carvers_for_dimension(dimension: &Dimension) -> &'static [&'static CarverConfig] {
-    if dimension == &Dimension::OVERWORLD {
-        &OVERWORLD_CARVERS
-    } else if dimension == &Dimension::THE_NETHER {
-        &NETHER_CARVERS
-    } else {
-        &[]
-    }
-}
-
 fn carve_top_material(
     run: &mut CarveRun,
     x: i32,
@@ -294,28 +291,20 @@ fn carve_top_material(
 
 fn overworld_carve_state(
     run: &mut CarveRun,
-    config: &CarverConfig,
     x: i32,
     y: i32,
     z: i32,
 ) -> Option<(&'static BlockState, bool)> {
-    let lava_y = config.lava_level.get_y(
-        run.chunk.generation_bottom_y() as i16,
-        run.chunk.generation_height(),
-    );
-
-    if y <= lava_y {
-        return Some((run.ids.lava, false));
+    if let Some(aquifer) = run.ctx.carver_aquifer.as_mut() {
+        let result = aquifer.compute(&Vector3::new(x, y, z), 0.0);
+        result
+            .state
+            .map(|state| (state, result.should_schedule_fluid_update))
+    } else if y < run.ctx.sea_level {
+        Some((run.ctx.default_fluid, false))
+    } else {
+        Some((run.ids.air, false))
     }
-
-    let Some(aquifer) = run.ctx.carver_aquifer.as_mut() else {
-        return Some((run.ids.air, false));
-    };
-
-    let result = aquifer.compute(&Vector3::new(x, y, z), 0.0);
-    result
-        .state
-        .map(|state| (state, result.should_schedule_fluid_update))
 }
 
 fn place_carved_block(
@@ -375,17 +364,8 @@ fn with_carve_run_options<F>(
     };
     let mut chunk = ProtoChunk::new(0, 0, &world_gen);
 
-    let start_x = crate::generation::positions::chunk_pos::start_block_x(chunk.x);
-    let start_z = crate::generation::positions::chunk_pos::start_block_z(chunk.z);
     let generation_shape = &generator.settings.shape;
-    let horizontal_cell_count = 16 / generation_shape.horizontal_cell_block_count();
-    let horizontal_biome_end = crate::generation::biome_coords::from_block(
-        horizontal_cell_count as i32 * generation_shape.horizontal_cell_block_count() as i32,
-    );
     let surface_config = SurfaceHeightSamplerBuilderOptions::new(
-        crate::generation::biome_coords::from_block(start_x),
-        crate::generation::biome_coords::from_block(start_z),
-        horizontal_biome_end as usize,
         generation_shape.min_y as i32,
         generation_shape.max_y() as i32,
         generation_shape.vertical_cell_block_count() as usize,
@@ -411,7 +391,9 @@ fn with_carve_run_options<F>(
         secondary_noise: &generator.terrain_cache.secondary_noise,
         terrain_builder: &generator.terrain_cache.terrain_builder,
         sea_level: generator.settings.sea_level,
-        surface_rule: surface_rule.unwrap_or(&generator.settings.surface_rule),
+        default_block: generator.settings.default_block,
+        default_fluid: generator.settings.default_fluid,
+        surface_rule: surface_rule.unwrap_or(generator.surface_rule),
         surface_height_sampler,
         carver_aquifer,
     };
@@ -428,7 +410,7 @@ fn with_carve_run_options<F>(
 mod tests {
     use super::*;
     use pumpkin_data::Block;
-    use pumpkin_data::chunk_gen_settings::{
+    use pumpkin_data::material_rule::{
         BlockMaterialRule, ConditionMaterialRule, MaterialCondition, SequenceMaterialRule,
         WaterMaterialCondition,
     };
@@ -571,5 +553,24 @@ mod tests {
     fn set_surface_height(chunk: &mut ProtoChunk, x: i32, z: i32, height: i16) {
         let index = (x & 15) as usize * 16 + (z & 15) as usize;
         chunk.flat_surface_height_map[index] = height;
+    }
+
+    #[test]
+    fn biome_carvers_driven_by_data() {
+        use pumpkin_data::biome::Biome;
+        use pumpkin_data::carver::{CANYON, CAVE, CAVE_EXTRA_UNDERGROUND, NETHER_CAVE};
+
+        assert_eq!(Biome::PLAINS.carvers.len(), 3);
+        assert!(std::ptr::eq(Biome::PLAINS.carvers[0], &CAVE));
+        assert!(std::ptr::eq(
+            Biome::PLAINS.carvers[1],
+            &CAVE_EXTRA_UNDERGROUND
+        ));
+        assert!(std::ptr::eq(Biome::PLAINS.carvers[2], &CANYON));
+
+        assert_eq!(Biome::NETHER_WASTES.carvers.len(), 1);
+        assert!(std::ptr::eq(Biome::NETHER_WASTES.carvers[0], &NETHER_CAVE));
+
+        assert!(Biome::THE_END.carvers.is_empty());
     }
 }

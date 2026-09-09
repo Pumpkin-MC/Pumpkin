@@ -1,17 +1,15 @@
-use crate::command::CommandResult;
-use crate::command::args::gamemode::GamemodeArgumentConsumer;
-use crate::command::args::{Arg, GetCloned};
-use crate::command::dispatcher::CommandError::InvalidConsumption;
-use crate::command::tree::builder::argument;
-use crate::command::{CommandExecutor, CommandSender, args::ConsumedArgs, tree::CommandTree};
-use pumpkin_util::GameMode;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
+use pumpkin_util::{GameMode, PermissionLvl};
 
-const NAMES: [&str; 1] = ["defaultgamemode"];
+use crate::command::argument_builder::{ArgumentBuilder, argument, command};
+use crate::command::argument_types::gamemode::GameModeArgumentType;
+use crate::command::context::command_context::CommandContext;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
 
-const DESCRIPTION: &str = "Change the default gamemode";
-
-pub const ARG_GAMEMODE: &str = "gamemode";
+const DESCRIPTION: &str = "Change the default gamemode.";
+const PERMISSION: &str = "minecraft:command.defaultgamemode";
 
 pub struct DefaultGamemode {
     pub gamemode: GameMode,
@@ -20,15 +18,9 @@ pub struct DefaultGamemode {
 struct DefaultGamemodeExecutor;
 
 impl CommandExecutor for DefaultGamemodeExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        let Some(Arg::GameMode(gamemode)) = args.get_cloned(&ARG_GAMEMODE) else {
-            return Err(InvalidConsumption(Some(ARG_GAMEMODE.into())));
-        };
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let gamemode = GameModeArgumentType::get(context, "gamemode")?;
+        let server = context.source.server();
 
         let mut successful_changes: i32 = 0;
         if server.basic_config.force_gamemode {
@@ -43,25 +35,35 @@ impl CommandExecutor for DefaultGamemodeExecutor {
         let gamemode_string = format!("{gamemode:?}").to_lowercase();
         let gamemode_string = format!("gameMode.{gamemode_string}");
 
-        sender.send_message(TextComponent::translate_cross(
-            pumpkin_data::translation::java::COMMANDS_DEFAULTGAMEMODE_SUCCESS,
-            pumpkin_data::translation::bedrock::COMMANDS_DEFAULTGAMEMODE_SUCCESS,
-            [TextComponent::translate_cross(
-                gamemode_string.clone(),
-                gamemode_string,
-                [],
-            )],
-        ));
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                pumpkin_data::translation::java::COMMANDS_DEFAULTGAMEMODE_SUCCESS,
+                pumpkin_data::translation::bedrock::COMMANDS_DEFAULTGAMEMODE_SUCCESS,
+                [TextComponent::translate_cross(
+                    gamemode_string.clone(),
+                    gamemode_string,
+                    [],
+                )],
+            ),
+            true,
+        );
 
-        //Change the default gamemode (not in configuration.toml)
         server.defaultgamemode.lock().unwrap().gamemode = gamemode;
 
         Ok(successful_changes)
     }
 }
 
-#[must_use]
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION)
-        .then(argument(ARG_GAMEMODE, GamemodeArgumentConsumer).execute(DefaultGamemodeExecutor))
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Two),
+    ));
+
+    dispatcher.register(
+        command("defaultgamemode", DESCRIPTION)
+            .requires(PERMISSION)
+            .then(argument("gamemode", GameModeArgumentType).executes(DefaultGamemodeExecutor)),
+    );
 }

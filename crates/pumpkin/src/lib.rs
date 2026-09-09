@@ -1,5 +1,6 @@
 #![deny(clippy::unwrap_used)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
+#![allow(clippy::significant_drop_in_scrutinee)]
 // Not warn event sending macros
 #![allow(unused_labels, deprecated)]
 
@@ -23,7 +24,7 @@ use crate::net::{lan_broadcast::LANBroadcast, query, rcon::RCONServer};
 use crate::plugin::server::server_command::ServerCommandEvent;
 use crate::server::{Server, ticker::Ticker};
 use plugin::server::server_load::{LoadType, ServerLoadEvent};
-use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
+use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
 use rustyline::Editor;
@@ -52,6 +53,7 @@ pub mod block;
 pub mod command;
 pub mod crash;
 pub mod data;
+pub mod enchantment;
 pub mod entity;
 pub mod error;
 pub mod item;
@@ -59,11 +61,14 @@ pub mod logging;
 pub mod net;
 pub mod plugin;
 pub mod server;
+pub mod telemetry;
 pub mod world;
 
 pub struct LoggingConfig {
     pub color: bool,
     pub threads: bool,
+    pub thread_ids: bool,
+    pub target: bool,
     pub timestamp: bool,
 }
 
@@ -80,6 +85,7 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
         let level = std::env::var("RUST_LOG")
             .ok()
             .as_deref()
+            .or(Some(advanced_config.logging.level.as_str()))
             .map(LevelFilter::from_str)
             .and_then(Result::ok)
             .unwrap_or(LevelFilter::INFO);
@@ -143,17 +149,25 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
             .with_writer(std::sync::Mutex::new(logger))
             .with_ansi(advanced_config.logging.color)
             .with_ansi_sanitization(false)
-            .with_target(true)
+            .with_target(advanced_config.logging.target)
             .with_thread_names(advanced_config.logging.threads)
-            .with_thread_ids(advanced_config.logging.threads);
+            .with_thread_ids(advanced_config.logging.thread_ids);
 
         if advanced_config.logging.timestamp {
             let local_offset =
                 time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC);
-            let fmt_layer = fmt_layer.with_timer(fmt::time::OffsetTime::new(
-                local_offset,
-                time::macros::format_description!("[year]-[month]-[day] [hour]:[minute]:[second]"),
-            ));
+            let format_str: &'static str = Box::leak(
+                advanced_config
+                    .logging
+                    .timestamp_format
+                    .clone()
+                    .into_boxed_str(),
+            );
+            let timer_format = time::format_description::parse(format_str).unwrap_or_else(|_| {
+                time::macros::format_description!("[hour]:[minute]:[second]").to_vec()
+            });
+            let fmt_layer =
+                fmt_layer.with_timer(fmt::time::OffsetTime::new(local_offset, timer_format));
             let registry = tracing_subscriber::registry()
                 .with(env_filter)
                 .with(fmt_layer);
@@ -177,6 +191,8 @@ pub fn init_logger(advanced_config: &AdvancedConfiguration) {
         let logging_config = LoggingConfig {
             color: advanced_config.logging.color,
             threads: advanced_config.logging.threads,
+            thread_ids: advanced_config.logging.thread_ids,
+            target: advanced_config.logging.target,
             timestamp: advanced_config.logging.timestamp,
         };
 
@@ -233,9 +249,19 @@ impl PumpkinServer {
     pub async fn new(
         basic_config: BasicConfiguration,
         advanced_config: AdvancedConfiguration,
+        telemetry_config: TelemetryConfig,
         vanilla_data: VanillaData,
     ) -> Self {
-        let server = Server::new(basic_config, advanced_config, vanilla_data).await;
+        let server = Server::new(
+            basic_config,
+            advanced_config,
+            telemetry_config,
+            vanilla_data,
+        )
+        .await;
+
+        #[cfg(target_family = "unix")]
+        adjust_file_descriptor_limit();
 
         let rcon = server.advanced_config.networking.rcon.clone();
 
@@ -448,6 +474,8 @@ impl PumpkinServer {
             .fire(&self.server, &mut ServerLoadEvent::new(LoadType::Startup))
             .await;
 
+        self.server.start_telemetry();
+
         while !SHOULD_STOP.load(Ordering::Relaxed) {
             if !self
                 .unified_listener_task(&mut master_client_id, &tasks, &bedrock_clients)
@@ -601,6 +629,15 @@ impl PumpkinServer {
                         });
                     }
                     Err(e) => {
+                        #[cfg(target_family = "unix")]
+                        if e.raw_os_error() == Some(libc::EMFILE) {
+                            error!(
+                                "Too many open files! Server reached file descriptor limit. \
+                                New connections cannot be accepted until existing connections close or `ulimit -n` is increased."
+                            );
+                            sleep(Duration::from_millis(500)).await;
+                            return true;
+                        }
                         error!("Failed to accept Java client connection: {e}");
                         sleep(Duration::from_millis(50)).await;
                     }
@@ -811,4 +848,59 @@ fn scrub_address(ip: &str) -> String {
     ip.chars()
         .map(|ch| if ch == '.' || ch == ':' { ch } else { 'x' })
         .collect()
+}
+
+#[cfg(target_family = "unix")]
+fn adjust_file_descriptor_limit() {
+    let mut rlim = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+
+    // SAFETY: Passing a valid mutable pointer to a stack-allocated `rlimit` struct.
+    if unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &raw mut rlim) } != 0 {
+        return;
+    }
+
+    let max_target = if rlim.rlim_max == libc::RLIM_INFINITY {
+        1_048_576
+    } else {
+        rlim.rlim_max
+    };
+
+    if rlim.rlim_cur < max_target {
+        let old_limit = rlim.rlim_cur;
+        rlim.rlim_cur = max_target;
+
+        // SAFETY: Calling `setrlimit` with a valid resource and valid pointer to initialized `rlimit`.
+        let res = unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &raw const rlim) };
+        if res == 0 {
+            debug!("Increased open file descriptor limit from {old_limit} to {max_target}");
+        } else {
+            // Fallback: try setting to a reasonable high value (65,536) if max_target was rejected by the OS.
+            let fallback = 65_536.min(max_target);
+            if fallback > old_limit {
+                rlim.rlim_cur = fallback;
+                // SAFETY: Calling `setrlimit` with a valid resource and valid pointer to initialized `rlimit`.
+                if unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &raw const rlim) } == 0 {
+                    debug!("Increased open file descriptor limit from {old_limit} to {fallback}");
+                }
+            }
+        }
+    }
+
+    let mut current_rlim = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+    // SAFETY: Passing a valid mutable pointer to a stack-allocated `rlimit` struct.
+    if unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &raw mut current_rlim) } == 0
+        && current_rlim.rlim_cur < 4096
+    {
+        warn!(
+            "Open file descriptor limit is low ({}). Supporting >1000 concurrent players may fail with 'Too many open files'. \
+            Consider increasing the limit with `ulimit -n 65535` or setting `LimitNOFILE=65535` in systemd.",
+            current_rlim.rlim_cur
+        );
+    }
 }

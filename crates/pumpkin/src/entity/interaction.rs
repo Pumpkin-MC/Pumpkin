@@ -6,7 +6,6 @@ use uuid::Uuid;
 
 use pumpkin_data::{damage::DamageType, item_stack::ItemStack};
 use pumpkin_nbt::{compound::NbtCompound, tag::NbtTag};
-use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::{
     boundingbox::{BoundingBox, EntityDimensions},
     vector3::Vector3,
@@ -82,13 +81,8 @@ impl InteractionEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = width;
         self.update_dimensions();
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::interaction::WIDTH,
-                width,
-            )],
-            None,
-        );
+        self.entity
+            .set_synced_data(pumpkin_data::tracked_data::interaction::WIDTH, width);
     }
 
     pub fn get_height(&self) -> f32 {
@@ -104,13 +98,8 @@ impl InteractionEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = height;
         self.update_dimensions();
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::interaction::HEIGHT,
-                height,
-            )],
-            None,
-        );
+        self.entity
+            .set_synced_data(pumpkin_data::tracked_data::interaction::HEIGHT, height);
     }
 
     pub fn get_response(&self) -> bool {
@@ -119,13 +108,8 @@ impl InteractionEntity {
 
     pub fn set_response(&self, response: bool) {
         self.response.store(response, Ordering::Relaxed);
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::interaction::RESPONSE,
-                response,
-            )],
-            None,
-        );
+        self.entity
+            .set_synced_data(pumpkin_data::tracked_data::interaction::RESPONSE, response);
     }
 
     pub fn update_dimensions(&self) {
@@ -249,27 +233,12 @@ impl EntityBase for InteractionEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let response = self.response.load(Ordering::Relaxed);
 
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::interaction::WIDTH,
-                width,
-            )],
-            None,
-        );
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::interaction::HEIGHT,
-                height,
-            )],
-            None,
-        );
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::interaction::RESPONSE,
-                response,
-            )],
-            None,
-        );
+        self.entity
+            .set_synced_data(pumpkin_data::tracked_data::interaction::WIDTH, width);
+        self.entity
+            .set_synced_data(pumpkin_data::tracked_data::interaction::HEIGHT, height);
+        self.entity
+            .set_synced_data(pumpkin_data::tracked_data::interaction::RESPONSE, response);
     }
 
     fn get_entity(&self) -> &Entity {
