@@ -25,7 +25,7 @@ use crate::{
         can_not_join, is_valid_player_name,
         java::pending::PendingConnection,
         offline_uuid,
-        proxy::{bungeecord, velocity},
+        proxy::{bungeecord, velocity, vine},
     },
     server::Server,
 };
