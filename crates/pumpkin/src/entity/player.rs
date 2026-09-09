@@ -3361,8 +3361,8 @@ impl Player {
             .try_enqueue_packet_editioned(&clock_packet, &time_packet);
     }
 
-    /// Day time this client should see, given its own world's `time_of_day`.
-    /// Bedrock has no game-time clock packet, so `CSetTime` carries this instead.
+    /// Day time for this client, from its own world's `time_of_day`. Bedrock has
+    /// no game-time clock packet, so `CSetTime` carries this instead.
     #[must_use]
     pub fn client_time_of_day(&self, world_time_of_day: i64) -> i64 {
         match self.per_player_time.load() {

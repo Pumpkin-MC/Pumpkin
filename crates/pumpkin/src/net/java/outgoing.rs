@@ -16,7 +16,10 @@ use pumpkin_protocol::{
 use tokio::io::AsyncWrite;
 use tokio::sync::{
     Notify,
-    mpsc::{Receiver, error::TryRecvError},
+    mpsc::{
+        Permit, Receiver, Sender,
+        error::{TryRecvError, TrySendError},
+    },
     oneshot,
 };
 use tokio::time::MissedTickBehavior;
@@ -25,13 +28,31 @@ use tracing::warn;
 
 use crate::net::decrement_pending_bytes;
 
-/// No barrier pending. Also the identity for `fetch_min`, which keeps the earliest.
+/// No barrier pending. Also the `fetch_min` identity: keeps the earliest.
 const NO_BARRIER: u64 = u64::MAX;
 
+/// Where `resumeFlushing` got the tick barrier.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum BarrierPlacement {
+    /// `OutgoingPacket::Flush` took a FIFO slot. Ordered by the FIFO itself.
+    InBand,
+    /// FIFO full. Barrier pending behind the packets admitted so far.
+    Deferred,
+    Closed,
+}
+
 /// `resumeFlushing` when the FIFO is full: cannot drop the tick barrier.
+///
+/// Deferred barrier has no FIFO slot to order it, so it carries the packet count
+/// it sits behind. Writer flushes after draining that many. Admission and count
+/// move together: a packet in the FIFO but not yet counted lets a barrier snapshot
+/// land in front of it, flushing it into the next tick. `admission` makes it one step.
 #[derive(Clone)]
 pub struct TickFlush {
-    /// Packets handed to the FIFO so far.
+    /// Serializes FIFO admission and count against a barrier snapshot.
+    /// Held across non-blocking work only, never across an await.
+    admission: Arc<std::sync::Mutex<()>>,
+    /// Packets admitted to the FIFO so far.
     enqueued: Arc<AtomicU64>,
     /// `enqueued` count the pending barrier sits behind, or `NO_BARRIER`.
     barrier_at: Arc<AtomicU64>,
@@ -42,22 +63,41 @@ impl TickFlush {
     #[must_use]
     pub fn new() -> Self {
         Self {
+            admission: Arc::new(std::sync::Mutex::new(())),
             enqueued: Arc::new(AtomicU64::new(0)),
             barrier_at: Arc::new(AtomicU64::new(NO_BARRIER)),
             notify: Arc::new(Notify::new()),
         }
     }
 
-    /// Counts a packet on the FIFO. Must be called after the send
-    /// succeeds. An overcount would strand the barrier behind a packet that never arrives.
-    pub fn packet_enqueued(&self) {
+    /// Count and FIFO hand-off in one step. Caller reserves the slot first: the
+    /// capacity wait stays outside the lock, and `Permit::send` cannot fail once counted.
+    pub fn admit(&self, permit: Permit<'_, OutgoingPacket>, packet: OutgoingPacket) {
+        let _admission = self
+            .admission
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let _ = self.enqueued.fetch_add(1, Ordering::AcqRel);
+        permit.send(packet);
     }
 
-    pub fn request(&self) {
-        let barrier_at = self.enqueued.load(Ordering::Acquire);
-        let _ = self.barrier_at.fetch_min(barrier_at, Ordering::AcqRel);
-        self.notify.notify_one();
+    /// Vanilla `Connection.flushChannel`. In band while the FIFO has room. Same lock
+    /// as [`Self::admit`]: the fallback snapshot cannot miss an already queued packet.
+    pub fn place_barrier(&self, sender: &Sender<OutgoingPacket>) -> BarrierPlacement {
+        let _admission = self
+            .admission
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        match sender.try_send(OutgoingPacket::Flush) {
+            Ok(()) => BarrierPlacement::InBand,
+            Err(TrySendError::Full(_)) => {
+                let barrier_at = self.enqueued.load(Ordering::Acquire);
+                let _ = self.barrier_at.fetch_min(barrier_at, Ordering::AcqRel);
+                self.notify.notify_one();
+                BarrierPlacement::Deferred
+            }
+            Err(TrySendError::Closed(_)) => BarrierPlacement::Closed,
+        }
     }
 
     /// `true` once `received` covers the packets the barrier sits behind.
@@ -262,7 +302,7 @@ impl FlushState {
                     }
                     return None;
                 }
-                // close() while a flush is stalled. stop observing it rather than hang UP.
+                // close() during a stalled flush. Drop it instead of hanging here.
                 None => return None,
             }
             self.unflushed = false;
@@ -433,7 +473,7 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
         id,
     };
     let mut state = FlushState::new();
-    // Packets taken off the FIFO, matched against an out-of-band barrier's position.
+    // Packets taken off the FIFO. Matched against a deferred barrier's position.
     let mut received = 0u64;
 
     let mut flush_interval = tokio::time::interval(TICK_FLUSH_INTERVAL);
@@ -446,8 +486,8 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
             break;
         }
 
-        // `resumeFlushing` when the barrier could not be enqueued. Only once this
-        // tick's packets are drained, otherwise they land behind the flush.
+        // Deferred barrier. Only after this tick's packets are drained, else they
+        // land behind the flush.
         if ctx.tick_flush.take(received) {
             if !state.flush_and_stamp(&mut writer, &ctx).await {
                 ctx.close_token.cancel();
@@ -495,7 +535,7 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
         }
     }
 
-    // A stalled flush already raced close_token above.
+    // Stalled flush already raced close_token above. No second hang here.
     if !ctx.close_token.is_cancelled() {
         let _ = writer.flush().await;
     }
@@ -558,7 +598,7 @@ mod tests {
         }
     }
 
-    /// Records how many bytes had been written when each flush ran.
+    /// Records the byte count written at each flush.
     struct FlushOrderWriter {
         written: Arc<AtomicUsize>,
         flush_marks: Arc<std::sync::Mutex<Vec<usize>>>,
@@ -874,43 +914,77 @@ mod tests {
         writer.await.unwrap();
     }
 
-    #[tokio::test]
-    async fn pending_tick_flush_flushes_when_fifo_has_no_room_for_barrier() {
-        let (tx, rx) = tokio::sync::mpsc::channel(4096);
+    /// Tick thread calls `resume_flushing` while other tasks still admit packets, so
+    /// admission and the barrier snapshot share a lock. Never held across the wait for
+    /// FIFO capacity: a backed-up connection would deadlock the tick thread.
+    /// Small FIFO, so `reserve()` really waits.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrent_admits_and_barriers_lose_no_packets() {
+        const MARKER: u8 = 0xEF;
+        const TASKS: u8 = 4;
+        const PER_TASK: u8 = 100;
+
+        let (tx, rx) = tokio::sync::mpsc::channel(16);
         let writes = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let flushes = Arc::new(AtomicUsize::new(0));
-        let suspend = Arc::new(AtomicBool::new(true));
         let tick_flush = TickFlush::new();
         let close = CancellationToken::new();
 
         let writer = tokio::spawn(run_writer_with_tick_flush(
             rx,
-            writes,
-            flushes.clone(),
-            suspend,
+            writes.clone(),
+            Arc::new(AtomicUsize::new(0)),
+            Arc::new(AtomicBool::new(false)),
             tick_flush.clone(),
             close.clone(),
         ));
 
-        tx.try_send(packet(1)).unwrap();
-        tokio::time::sleep(Duration::from_millis(20)).await;
-        assert_eq!(flushes.load(Ordering::SeqCst), 0);
+        let producers: Vec<_> = (0..TASKS)
+            .map(|_| {
+                let tx = tx.clone();
+                let tick_flush = tick_flush.clone();
+                tokio::spawn(async move {
+                    for seq in 0..PER_TASK {
+                        let permit = tx.reserve().await.unwrap();
+                        tick_flush.admit(
+                            permit,
+                            OutgoingPacket::normal(Bytes::from(vec![MARKER, seq])),
+                        );
+                        tokio::task::yield_now().await;
+                    }
+                })
+            })
+            .collect();
 
-        tick_flush.request();
-        tokio::time::sleep(Duration::from_millis(20)).await;
-        assert_eq!(
-            flushes.load(Ordering::SeqCst),
-            1,
-            "resumeFlushing must flush even when try_send(Flush) cannot enqueue"
-        );
+        // Race `resumeFlushing` against them. In band or deferred, as capacity allows.
+        for _ in 0..PER_TASK {
+            let _ = tick_flush.place_barrier(&tx);
+            tokio::task::yield_now().await;
+        }
 
+        for producer in producers {
+            producer.await.unwrap();
+        }
         drop(tx);
-        close.cancel();
         writer.await.unwrap();
+
+        let written = writes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        // Frames are `[len, MARKER, seq]`. Neither `len` nor `seq` reaches MARKER.
+        let delivered = written
+            .windows(2)
+            .filter(|payload| payload[0] == MARKER && payload[1] < PER_TASK)
+            .count();
+        assert_eq!(
+            delivered,
+            usize::from(TASKS) * usize::from(PER_TASK),
+            "every admitted packet must reach the socket"
+        );
     }
 
-    /// A full FIFO has no room for the barrier, but the tick boundary still belongs
-    /// behind that tick's packets, not in front of them.
+    /// Full FIFO has no room for the barrier. Tick boundary still belongs behind
+    /// that tick's packets, not in front of them.
     #[tokio::test]
     async fn full_fifo_barrier_flushes_after_that_ticks_packets() {
         const PACKETS: usize = 8;
@@ -922,12 +996,15 @@ mod tests {
         let flush_marks = Arc::new(std::sync::Mutex::new(Vec::new()));
 
         for i in 0..PACKETS {
-            tx.try_send(packet(i as u8)).unwrap();
-            tick_flush.packet_enqueued();
+            let permit = tx.try_reserve().unwrap();
+            tick_flush.admit(permit, packet(i as u8));
         }
         // `resumeFlushing` with the tick's packets still queued.
-        assert!(tx.try_send(OutgoingPacket::Flush).is_err());
-        tick_flush.request();
+        assert_eq!(
+            tick_flush.place_barrier(&tx),
+            BarrierPlacement::Deferred,
+            "a full FIFO has no slot for the in-band barrier"
+        );
 
         let writer = tokio::spawn(run_outgoing_packet_writer(
             rx,

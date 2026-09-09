@@ -106,7 +106,7 @@ pub struct BedrockClient {
     tasks: TaskTracker,
     rt_handle: tokio::runtime::Handle,
     outgoing_packet_queue_send: UnboundedSender<OutgoingPacket>,
-    /// A FIFO queue of serialized packets to send to the network
+    /// FIFO queue of serialized packets for the network
     outgoing_packet_queue_recv: Mutex<Option<UnboundedReceiver<OutgoingPacket>>>,
 
     /// Tracks total buffered payload bytes in the outgoing queues.

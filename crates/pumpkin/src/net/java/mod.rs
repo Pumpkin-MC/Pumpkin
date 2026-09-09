@@ -63,7 +63,7 @@ pub mod recipe_helper;
 pub mod status;
 
 pub use chunk_data::{CChunkData, ChunkLightExt};
-use outgoing::{OutgoingPacket, TickFlush, run_outgoing_packet_writer};
+use outgoing::{BarrierPlacement, OutgoingPacket, TickFlush, run_outgoing_packet_writer};
 
 use arc_swap::ArcSwap;
 use pending::PendingConnection;
@@ -176,25 +176,19 @@ impl JavaClient {
 
     /// Vanilla `resumeFlushing`: queue `flushChannel` then lift the hold.
     pub fn resume_flushing(&self) {
-        match self
-            .outgoing_packet_queue_send
-            .try_send(OutgoingPacket::Flush)
-        {
-            Ok(()) => {}
-            Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                self.tick_flush.request();
-            }
-            Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
-                if !self.close_token.is_cancelled() {
-                    warn!(
-                        "Failed to queue tick flush for client {}: channel closed",
-                        self.id
-                    );
-                    self.close();
-                }
-            }
-        }
+        let placement = self
+            .tick_flush
+            .place_barrier(&self.outgoing_packet_queue_send);
         self.suspend_flushing.store(false, Ordering::Release);
+
+        // Outside the admission lock: `close` must not run under it.
+        if placement == BarrierPlacement::Closed && !self.close_token.is_cancelled() {
+            warn!(
+                "Failed to queue tick flush for client {}: channel closed",
+                self.id
+            );
+            self.close();
+        }
     }
 
     pub fn set_player(&self, player: Arc<Player>) {
@@ -430,12 +424,11 @@ impl JavaClient {
             return;
         };
 
-        match self
-            .outgoing_packet_queue_send
-            .send(OutgoingPacket::normal(packet_data))
-            .await
-        {
-            Ok(()) => self.tick_flush.packet_enqueued(),
+        // Reserve first: capacity wait must not hold the admission lock.
+        match self.outgoing_packet_queue_send.reserve().await {
+            Ok(permit) => self
+                .tick_flush
+                .admit(permit, OutgoingPacket::normal(packet_data)),
             Err(err) => {
                 decrement_pending_bytes(&self.pending_bytes, packet_len);
                 // This is expected to fail if we are closed
@@ -486,17 +479,16 @@ impl JavaClient {
             return;
         };
 
-        match self
-            .outgoing_packet_queue_send
-            .try_send(OutgoingPacket::normal(packet_data))
-        {
-            Ok(()) => self.tick_flush.packet_enqueued(),
+        match self.outgoing_packet_queue_send.try_reserve() {
+            Ok(permit) => self
+                .tick_flush
+                .admit(permit, OutgoingPacket::normal(packet_data)),
             Err(err) => {
                 decrement_pending_bytes(&self.pending_bytes, packet_len);
                 let reason = match err {
                     // Vanilla queues without a limit, so a backlog disconnects instead of desyncing.
-                    tokio::sync::mpsc::error::TrySendError::Full(_) => "channel full",
-                    tokio::sync::mpsc::error::TrySendError::Closed(_) => "channel closed",
+                    tokio::sync::mpsc::error::TrySendError::Full(()) => "channel full",
+                    tokio::sync::mpsc::error::TrySendError::Closed(()) => "channel closed",
                 };
                 // Both are expected to fail if we are closed
                 if !self.close_token.is_cancelled() {
@@ -563,22 +555,19 @@ impl JavaClient {
         if let Some(data) = serialized {
             let packet_len = data.len();
             let _ = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
-            match self
-                .outgoing_packet_queue_send
-                .try_send(OutgoingPacket::normal(data))
-            {
-                Ok(()) => self.tick_flush.packet_enqueued(),
+            match self.outgoing_packet_queue_send.try_reserve() {
+                Ok(permit) => self.tick_flush.admit(permit, OutgoingPacket::normal(data)),
                 Err(err) => {
                     decrement_pending_bytes(&self.pending_bytes, packet_len);
                     match err {
-                        tokio::sync::mpsc::error::TrySendError::Full(_) => {
+                        tokio::sync::mpsc::error::TrySendError::Full(()) => {
                             warn!(
                                 "Disconnect packet for client {} dropped: outgoing packet queue full",
                                 self.id
                             );
                         }
                         // Expected: the writer task is already gone.
-                        tokio::sync::mpsc::error::TrySendError::Closed(_) => {
+                        tokio::sync::mpsc::error::TrySendError::Closed(()) => {
                             debug!(
                                 "Disconnect packet for client {} dropped: outgoing packet queue closed",
                                 self.id
@@ -633,12 +622,11 @@ impl JavaClient {
 
         let (completion_tx, completion_rx) = oneshot::channel();
 
-        match self
-            .outgoing_packet_queue_send
-            .send(OutgoingPacket::high_priority(packet, completion_tx))
-            .await
-        {
-            Ok(()) => self.tick_flush.packet_enqueued(),
+        // Reserve first: capacity wait must not hold the admission lock.
+        match self.outgoing_packet_queue_send.reserve().await {
+            Ok(permit) => self
+                .tick_flush
+                .admit(permit, OutgoingPacket::high_priority(packet, completion_tx)),
             Err(err) => {
                 decrement_pending_bytes(&self.pending_bytes, packet_len);
                 // It is expected that the packet will fail if closed
