@@ -618,8 +618,7 @@ impl JavaClient {
     }
 
     /// Enqueue on the per-connection FIFO and wait until the writer has
-    /// `write_frame`d into the `BufWriter`. Does not wait for a TCP flush
-    /// while `suspendFlushing` is set.
+    /// `write_frame`d into the `BufWriter`. Never waits for a TCP flush.
     pub async fn send_packet_now_data(&self, packet: Bytes) {
         let Some(packet_len) = self.reserve_pending_bytes(&packet) else {
             return;

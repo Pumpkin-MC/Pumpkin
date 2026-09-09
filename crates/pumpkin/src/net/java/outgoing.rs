@@ -209,8 +209,6 @@ struct WriterCtx {
 struct FlushState {
     /// Written to the `BufWriter`, not flushed yet.
     unflushed: bool,
-    /// `send_packet_now` waiters, released on flush.
-    pending_completions: Vec<oneshot::Sender<()>>,
     last_tcp_flush: Instant,
 }
 
@@ -218,14 +216,7 @@ impl FlushState {
     fn new() -> Self {
         Self {
             unflushed: false,
-            pending_completions: Vec::new(),
             last_tcp_flush: Instant::now(),
-        }
-    }
-
-    fn complete_pending(&mut self) {
-        for completion in self.pending_completions.drain(..) {
-            let _ = completion.send(());
         }
     }
 
@@ -245,7 +236,6 @@ impl FlushState {
             }
             self.unflushed = false;
         }
-        self.complete_pending();
         Some(did_flush)
     }
 
@@ -348,7 +338,6 @@ fn drain_until_barrier(
 async fn write_queued_frames<W: AsyncWrite + Unpin + Send + 'static>(
     mut writer: TCPNetworkEncoder<W>,
     mut packets_to_frame: VecDeque<FramePacket>,
-    state: &mut FlushState,
     ctx: &WriterCtx,
 ) -> Option<TCPNetworkEncoder<W>> {
     let (close_token, id) = (&ctx.close_token, ctx.id);
@@ -383,9 +372,10 @@ async fn write_queued_frames<W: AsyncWrite + Unpin + Send + 'static>(
         let written_bytes: usize = returned_batch.iter().map(|packet| packet.data.len()).sum();
         decrement_pending_bytes(&ctx.pending_bytes, written_bytes);
 
+        // The frame is in the `BufWriter`, so release before the independent TCP flush.
         for packet in returned_batch {
             if let Some(completion) = packet.completion {
-                state.pending_completions.push(completion);
+                let _ = completion.send(());
             }
         }
     }
@@ -447,9 +437,7 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
             drain_until_barrier(first, &mut packet_receiver, &ctx.tick_flush);
 
         if !packets_to_frame.is_empty() {
-            let Some(returned) =
-                write_queued_frames(writer, packets_to_frame, &mut state, &ctx).await
-            else {
+            let Some(returned) = write_queued_frames(writer, packets_to_frame, &ctx).await else {
                 ctx.close_token.cancel();
                 return;
             };
@@ -457,13 +445,11 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
             state.unflushed = true;
         }
 
-        if state.should_flush_now(flush_request, disconnected, &ctx) {
-            if !state.flush_and_stamp(&mut writer, &ctx).await {
-                ctx.close_token.cancel();
-                break;
-            }
-        } else {
-            state.complete_pending();
+        if state.should_flush_now(flush_request, disconnected, &ctx)
+            && !state.flush_and_stamp(&mut writer, &ctx).await
+        {
+            ctx.close_token.cancel();
+            break;
         }
 
         // Flushed above already, so skip the final flush.
@@ -501,6 +487,30 @@ mod tests {
         fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
             self.flushes.fetch_add(1, Ordering::SeqCst);
             Poll::Ready(Ok(()))
+        }
+
+        fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    /// Writes land in the `BufWriter`, the TCP flush never finishes.
+    struct StalledFlushWriter {
+        flush_polls: Arc<AtomicUsize>,
+    }
+
+    impl AsyncWrite for StalledFlushWriter {
+        fn poll_write(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            buf: &[u8],
+        ) -> Poll<std::io::Result<usize>> {
+            Poll::Ready(Ok(buf.len()))
+        }
+
+        fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+            self.flush_polls.fetch_add(1, Ordering::SeqCst);
+            Poll::Pending
         }
 
         fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
@@ -676,6 +686,49 @@ mod tests {
         drop(tx);
         close.cancel();
         writer.await.unwrap();
+    }
+
+    /// Unsuspended, `high_priority` requests a flush -> the completion is tied to
+    /// `write_frame`, so a stalled TCP flush must not hold it back.
+    #[tokio::test]
+    async fn send_packet_now_completes_before_the_tcp_flush() {
+        let (tx, rx) = tokio::sync::mpsc::channel(4096);
+        let flush_polls = Arc::new(AtomicUsize::new(0));
+        let close = CancellationToken::new();
+
+        let writer = tokio::spawn(run_outgoing_packet_writer(
+            rx,
+            TCPNetworkEncoder::new(StalledFlushWriter {
+                flush_polls: flush_polls.clone(),
+            }),
+            close.clone(),
+            Arc::new(AtomicBool::new(false)),
+            TickFlush::new(),
+            Arc::new(AtomicUsize::new(0)),
+            0,
+        ));
+
+        let (done_tx, done_rx) = oneshot::channel();
+        tx.try_send(OutgoingPacket::high_priority(
+            Bytes::from_static(&[1]),
+            done_tx,
+        ))
+        .unwrap();
+
+        tokio::time::timeout(Duration::from_millis(50), done_rx)
+            .await
+            .expect("send_packet_now must not wait for the TCP flush")
+            .expect("writer dropped");
+
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        assert_eq!(
+            flush_polls.load(Ordering::SeqCst),
+            1,
+            "the flush was attempted and is still pending"
+        );
+
+        close.cancel();
+        writer.abort();
     }
 
     #[tokio::test]
