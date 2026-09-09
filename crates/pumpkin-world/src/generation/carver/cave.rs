@@ -272,7 +272,8 @@ impl CaveCarver {
             return;
         }
 
-        let min_y = 1.max((y - vertical_radius).floor() as i32 - 1);
+        let min_y = ((y - vertical_radius).floor() as i32 - 1)
+            .max(run.chunk.generation_bottom_y() as i32 + 1);
         let max_y = (run.chunk.generation_height() as i32 - 1)
             .min((y + vertical_radius).floor() as i32 + 1);
 
@@ -462,6 +463,35 @@ mod tests {
             assert_eq!(run.chunk.fluid_ticks.len(), old_tick_count + 1);
             let pos = run.chunk.fluid_ticks.last().unwrap().position.0;
             assert_eq!((pos.x, pos.y, pos.z), (x, y, z));
+        });
+    }
+
+    /// Vanilla clamps the ellipsoid's lower bound to `getMinGenY() + 1` (-63 in the
+    /// overworld), not to 1, so deepslate-level caves are carved at all.
+    #[test]
+    fn carves_below_y_one() {
+        super::super::with_carve_run(Dimension::OVERWORLD, |run| {
+            let (x, y, z) = (8, -30, 8);
+            let expected = super::super::overworld_carve_state(run, x, y, z)
+                .expect("test position should carve")
+                .0
+                .id;
+            assert_ne!(expected, Block::STONE.default_state.id);
+
+            run.chunk
+                .set_block_state(x, y, z, Block::STONE.default_state);
+            CaveCarver::carve_ellipsoid(
+                run,
+                &CAVE,
+                f64::from(x) + 0.5,
+                f64::from(y) + 0.5,
+                f64::from(z) + 0.5,
+                4.0,
+                4.0,
+                -1.0,
+            );
+
+            assert_eq!(block_id(run, x, y, z), expected);
         });
     }
 
