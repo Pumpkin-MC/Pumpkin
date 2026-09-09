@@ -514,7 +514,7 @@ impl ItemEntity {
             || entity.touching_water.load(Ordering::SeqCst)
             || entity.touching_lava.load(Ordering::SeqCst)
             || entity.velocity.load().sub(&original_velo).length_squared() > 0.1;
-        let moved = entity.pos.load() != entity.last_sent_pos.load();
+        let moved = entity.pos_delta_pending();
         let position_dirty = moved
             && self
                 .item_age

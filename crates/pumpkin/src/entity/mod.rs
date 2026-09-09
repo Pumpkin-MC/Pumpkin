@@ -904,7 +904,10 @@ pub struct Entity {
     pub last_sent_yaw: AtomicU8,
     /// The last sent pitch value (encoded as u8) for change detection
     pub last_sent_pitch: AtomicU8,
-    /// Cache for the last sent position to optimize Entity Pos update packets
+    /// Base the relative-move packets encode against. Vanilla: `ServerEntity.positionCodec`
+    /// (`VecDeltaCodec`). Not the raw position: it sits on the 1/4096 lattice the client
+    /// tracks, advanced by what actually went on the wire. See
+    /// [`Entity::advance_last_sent_pos`].
     pub last_sent_pos: AtomicCell<Vector3<f64>>,
     /// Cache for the last sent head yaw byte
     pub last_sent_head_yaw: AtomicU8,
@@ -1751,16 +1754,44 @@ impl Entity {
         }
     }
 
-    #[expect(clippy::too_many_lines)]
-    pub fn send_pos_rot(&self) {
+    /// Move since the last position send, in `VecDeltaCodec` units (1/4096 block). Truncated to
+    /// an i16 it is what the relative-move packets carry.
+    fn pos_delta_units(&self) -> Vector3<f64> {
         let old = self.last_sent_pos.load();
         let new = self.pos.load();
 
-        let raw_delta = Vector3::new(
+        Vector3::new(
             new.x.mul_add(4096.0, -(old.x * 4096.0)),
             new.y.mul_add(4096.0, -(old.y * 4096.0)),
             new.z.mul_add(4096.0, -(old.z * 4096.0)),
-        );
+        )
+    }
+
+    /// Moves the delta base by the units actually encoded, vanilla's `VecDeltaCodec.setBase`.
+    ///
+    /// Not by the raw position: `as i16` truncates towards zero, so the sub-unit remainder
+    /// never goes on the wire. Storing the raw position drops it per send and the client falls
+    /// behind for good. Kept in the base it lands in the next delta instead.
+    fn advance_last_sent_pos(&self, encoded: Vector3<i16>) {
+        let old = self.last_sent_pos.load();
+        self.last_sent_pos.store(Vector3::new(
+            f64::from(encoded.x).mul_add(1.0 / 4096.0, old.x),
+            f64::from(encoded.y).mul_add(1.0 / 4096.0, old.y),
+            f64::from(encoded.z).mul_add(1.0 / 4096.0, old.z),
+        ));
+    }
+
+    /// Whether a relative-move packet would carry anything. Sub-unit movement encodes to a zero
+    /// delta -> nothing to send.
+    pub fn pos_delta_pending(&self) -> bool {
+        let delta = self.pos_delta_units();
+        delta.x as i16 != 0 || delta.y as i16 != 0 || delta.z as i16 != 0
+    }
+
+    #[expect(clippy::too_many_lines)]
+    pub fn send_pos_rot(&self) {
+        let new = self.pos.load();
+        let raw_delta = self.pos_delta_units();
 
         let yaw = self.yaw.load();
 
@@ -1768,18 +1799,8 @@ impl Entity {
         let yaw = (yaw * 256.0 / 360.0).rem_euclid(256.0) as u8;
         let pitch = (pitch * 256.0 / 360.0).rem_euclid(256.0) as u8;
 
-        // Only broadcast when position or rotation has actually changed.
-        let pos_changed = raw_delta.x != 0.0 || raw_delta.y != 0.0 || raw_delta.z != 0.0;
         let rot_changed =
             yaw != self.last_sent_yaw.load(Relaxed) || pitch != self.last_sent_pitch.load(Relaxed);
-
-        if !pos_changed && !rot_changed {
-            return;
-        }
-
-        self.last_sent_pos.store(new);
-        self.last_sent_yaw.store(yaw, Relaxed);
-        self.last_sent_pitch.store(pitch, Relaxed);
 
         // The relative-move packets below encode the delta as an i16 (vanilla's
         // `ClientboundMoveEntityPacket`, `VecDeltaCodec` at 4096 units/block, about 8 blocks of
@@ -1791,6 +1812,10 @@ impl Entity {
             || !(-32768.0..=32767.0).contains(&raw_delta.y)
             || !(-32768.0..=32767.0).contains(&raw_delta.z);
         if delta_too_big {
+            // Absolute position: base is the raw position, no remainder left over.
+            self.last_sent_pos.store(new);
+            self.last_sent_yaw.store(yaw, Relaxed);
+            self.last_sent_pitch.store(pitch, Relaxed);
             let je_packet = CEntityPositionSync::new(
                 self.entity_id.into(),
                 new,
@@ -1848,6 +1873,19 @@ impl Entity {
         }
 
         let converted = Vector3::new(raw_delta.x as i16, raw_delta.y as i16, raw_delta.z as i16);
+
+        // Only broadcast when position or rotation has actually changed. Position by the encoded
+        // delta, not the raw one.
+        let pos_changed = converted.x != 0 || converted.y != 0 || converted.z != 0;
+        if !pos_changed && !rot_changed {
+            return;
+        }
+
+        self.last_sent_yaw.store(yaw, Relaxed);
+        self.last_sent_pitch.store(pitch, Relaxed);
+        if pos_changed {
+            self.advance_last_sent_pos(converted);
+        }
 
         // Dynamically pick the most efficient packet
         if pos_changed && rot_changed {
@@ -2021,21 +2059,17 @@ impl Entity {
     }
 
     pub fn send_pos(&self) {
-        let old = self.last_sent_pos.load();
         let new = self.pos.load();
+        let raw_delta = self.pos_delta_units();
 
-        let converted = Vector3::new(
-            new.x.mul_add(4096.0, -(old.x * 4096.0)) as i16,
-            new.y.mul_add(4096.0, -(old.y * 4096.0)) as i16,
-            new.z.mul_add(4096.0, -(old.z * 4096.0)) as i16,
-        );
+        let converted = Vector3::new(raw_delta.x as i16, raw_delta.y as i16, raw_delta.z as i16);
 
         // Only broadcast when position has actually changed.
         if converted.x == 0 && converted.y == 0 && converted.z == 0 {
             return;
         }
 
-        self.last_sent_pos.store(new);
+        self.advance_last_sent_pos(converted);
 
         let je_packet = CUpdateEntityPos::new(
             self.entity_id.into(),
