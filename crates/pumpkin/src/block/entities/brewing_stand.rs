@@ -6,16 +6,17 @@ use std::sync::{
 };
 
 use crate::block::entities::PropertyDelegate;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::potion_brewing::{ITEM_RECIPES, POTION_RECIPES};
+use pumpkin_data::potion::Potion;
+use pumpkin_data::potion_brewing::BREWING_RECIPES;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
+use pumpkin_inventory::{Inventory, sync_read_items_from_nbt, sync_write_items_to_nbt};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_protocol::codec::recipe::DynamicRecipe;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::inventory::{Inventory, sync_read_items_from_nbt, sync_write_items_to_nbt};
 
 pub struct BrewingStandBlockEntity {
     pub position: BlockPos,
@@ -54,7 +55,7 @@ impl BrewingStandBlockEntity {
     }
 
     /// Check if any potion slot has a valid recipe with the ingredient
-    fn is_brewable(&self, ingredient: &ItemStack) -> bool {
+    fn is_brewable(&self, ingredient: &ItemStack, world: &Arc<crate::world::World>) -> bool {
         if ingredient.is_empty() {
             return false;
         }
@@ -71,24 +72,39 @@ impl BrewingStandBlockEntity {
                 continue;
             }
 
-            // Check item recipes first (potion -> splash potion, splash -> lingering)
-            for recipe in &ITEM_RECIPES {
-                if slot.get_item().id == recipe.from().id
-                    && recipe.ingredient().iter().any(|i| i.id == ingredient_id)
+            let slot_item_id = slot.get_item().id;
+            let potion_id = slot
+                .get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
+                .and_then(|pc| pc.potion_id);
+
+            // 1. Check data-driven BREWING_RECIPES from datapack
+            for recipe in &BREWING_RECIPES {
+                if slot_item_id == recipe.from_item().id
+                    && ingredient_id == recipe.ingredient().id
+                    && potion_id == Some(recipe.from_potion().id as i32)
                 {
                     return true;
                 }
             }
 
-            // Check potion recipes (modify potion type)
-            if let Some(pc) =
-                slot.get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
-                && let Some(potion_id) = pc.potion_id
-            {
-                for recipe in &POTION_RECIPES {
-                    if recipe.from().id as i32 == potion_id
-                        && recipe.ingredient().iter().any(|i| i.id == ingredient_id)
+            // 2. Check dynamic brewing recipes from loaded datapacks
+            if let Some(server) = world.server.upgrade() {
+                let dynamic_recipes = server.recipe_manager.get_dynamic_recipes_internal();
+                let slot_key = format!("minecraft:{}", slot.get_item().registry_key);
+                let ing_key = format!("minecraft:{}", ingredient.get_item().registry_key);
+                for dyn_recipe in &dynamic_recipes {
+                    if let DynamicRecipe::Brewing(r) = dyn_recipe
+                        && r.input_item == slot_key
+                        && r.reagent == ing_key
                     {
+                        if let Some(req_pot) = &r.input_potion {
+                            let current_pot = potion_id
+                                .and_then(|id| Potion::from_id(id as u8))
+                                .map(|p| format!("minecraft:{}", p.name));
+                            if current_pot.as_deref() != Some(req_pot.as_str()) {
+                                continue;
+                            }
+                        }
                         return true;
                     }
                 }
@@ -107,6 +123,20 @@ impl BrewingStandBlockEntity {
 
         let ingredient_id = ingredient.get_item().id;
 
+        // Fire BrewEvent before mutating items
+        if let Some(server) = world.server.upgrade() {
+            let mut brew_event = crate::plugin::api::events::inventory::brew::BrewEvent::new(
+                self.position,
+                self.fuel.load(Ordering::Relaxed) as u8,
+            );
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut brew_event);
+            if brew_event.cancelled {
+                return;
+            }
+        }
+
         // Brew potion slots
         let mut ingredient_used = false;
         {
@@ -120,18 +150,31 @@ impl BrewingStandBlockEntity {
                     continue;
                 }
 
-                // 1. Try item recipes (e.g. gunpowder -> splash potion, dragon breath -> lingering)
+                let slot_item_id = slot.get_item().id;
+                let potion_id = slot
+                    .get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
+                    .and_then(|pc| pc.potion_id);
+
+                // 1. Try data-driven BREWING_RECIPES
                 let mut item_brewed = false;
-                for recipe in &ITEM_RECIPES {
-                    if slot.get_item().id == recipe.from().id
-                        && recipe.ingredient().iter().any(|i| i.id == ingredient_id)
+                for recipe in &BREWING_RECIPES {
+                    if slot_item_id == recipe.from_item().id
+                        && recipe.ingredient().id == ingredient_id
+                        && potion_id == Some(recipe.from_potion().id as i32)
                     {
-                        // Preserve potion contents component when converting potion type
-                        let pc = slot.get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>().cloned();
-                        *slot = ItemStack::new(1, recipe.to());
-                        if let Some(pc) = pc {
-                            slot.set_data_component(pc);
-                        }
+                        let mut new_slot = ItemStack::new(1, recipe.to_item());
+                        let mut pc = slot
+                            .get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
+                            .cloned()
+                            .unwrap_or_else(|| pumpkin_data::data_component_impl::PotionContentsImpl {
+                                potion_id: None,
+                                custom_color: None,
+                                custom_effects: Vec::new(),
+                                custom_name: None,
+                            });
+                        pc.potion_id = Some(recipe.to_potion().id as i32);
+                        new_slot.set_data_component(pc);
+                        *slot = new_slot;
                         item_brewed = true;
                         ingredient_used = true;
                         break;
@@ -142,21 +185,53 @@ impl BrewingStandBlockEntity {
                     continue;
                 }
 
-                // 2. Try potion recipes (e.g. water bottle -> awkward potion, awkward -> strength)
-                if let Some(pc) = slot
-                    .get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
-                    && let Some(potion_id) = pc.potion_id
-                {
-                    for recipe in &POTION_RECIPES {
-                        if recipe.from().id as i32 == potion_id
-                            && recipe.ingredient().iter().any(|i| i.id == ingredient_id)
+                // 2. Try dynamic brewing recipes from loaded datapacks
+                if let Some(server) = world.server.upgrade() {
+                    let dynamic_recipes = server.recipe_manager.get_dynamic_recipes_internal();
+                    let slot_key = format!("minecraft:{}", slot.get_item().registry_key);
+                    let ing_key = format!("minecraft:{}", ingredient.get_item().registry_key);
+                    for dyn_recipe in &dynamic_recipes {
+                        if let DynamicRecipe::Brewing(r) = dyn_recipe
+                            && r.input_item == slot_key
+                            && r.reagent == ing_key
                         {
-                            let new_potion_id = recipe.to().id as i32;
-                            let mut new_pc = pc.clone();
-                            new_pc.potion_id = Some(new_potion_id);
-                            slot.set_data_component(new_pc);
-                            ingredient_used = true;
-                            break;
+                            if let Some(req_pot) = &r.input_potion {
+                                let current_pot = potion_id
+                                    .and_then(|id| Potion::from_id(id as u8))
+                                    .map(|p| format!("minecraft:{}", p.name));
+                                if current_pot.as_deref() != Some(req_pot.as_str()) {
+                                    continue;
+                                }
+                            }
+                            if let Some(target_item) = Item::from_registry_key(
+                                r.output_item
+                                    .strip_prefix("minecraft:")
+                                    .unwrap_or(&r.output_item),
+                            ) {
+                                let mut new_slot = ItemStack::new(1, target_item);
+                                let mut pc = slot
+                                    .get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
+                                    .cloned()
+                                    .unwrap_or_else(|| pumpkin_data::data_component_impl::PotionContentsImpl {
+                                        potion_id: None,
+                                        custom_color: None,
+                                        custom_effects: Vec::new(),
+                                        custom_name: None,
+                                    });
+                                if let Some(out_pot_name) = &r.output_potion
+                                    && let Some(out_pot) = Potion::from_name(
+                                        out_pot_name
+                                            .strip_prefix("minecraft:")
+                                            .unwrap_or(out_pot_name),
+                                    )
+                                {
+                                    pc.potion_id = Some(out_pot.id as i32);
+                                }
+                                new_slot.set_data_component(pc);
+                                *slot = new_slot;
+                                ingredient_used = true;
+                                break;
+                            }
                         }
                     }
                 }
@@ -170,17 +245,6 @@ impl BrewingStandBlockEntity {
 
         if !ingredient_used {
             return;
-        }
-
-        // Fire BrewEvent
-        if let Some(server) = world.server.upgrade() {
-            let mut brew_event = crate::plugin::api::events::inventory::brew::BrewEvent::new(
-                self.position,
-                self.fuel.load(Ordering::Relaxed) as u8,
-            );
-            server
-                .plugin_manager
-                .fire_blocking(&server, &mut brew_event);
         }
 
         // Check if remaining ingredient matches or clear it
@@ -204,7 +268,7 @@ impl BrewingStandBlockEntity {
         if let Ok(items) = self.items.read() {
             let ingredient = items[3].clone();
             drop(items);
-            if self.fuel.load(Ordering::Relaxed) > 0 && self.is_brewable(&ingredient) {
+            if self.fuel.load(Ordering::Relaxed) > 0 && self.is_brewable(&ingredient, world) {
                 self.fuel.fetch_sub(1, Ordering::Relaxed);
                 self.brew_time.store(400, Ordering::Relaxed);
                 *self
@@ -228,9 +292,53 @@ impl BrewingStandBlockEntity {
         // Mark dirty to trigger update
         self.mark_dirty();
     }
+
+    fn try_refill_fuel(&self, world: &Arc<crate::world::World>) -> bool {
+        let expected_fuel = if self.fuel.load(Ordering::Relaxed) <= 0
+            && let Ok(items) = self.items.try_read()
+            && !items[4].is_empty()
+            && items[4]
+                .get_item()
+                .has_tag(&tag::Item::MINECRAFT_BREWING_FUEL)
+        {
+            items[4].clone()
+        } else {
+            return false;
+        };
+
+        let fuel_power = if let Some(server) = world.server.upgrade() {
+            let mut fuel_event = crate::plugin::api::events::inventory::brewing_stand_fuel::BrewingStandFuelEvent::new(
+                self.position,
+                20,
+            );
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut fuel_event);
+
+            if fuel_event.cancelled {
+                return false;
+            }
+
+            fuel_event.fuel_power
+        } else {
+            20
+        };
+
+        if self.fuel.load(Ordering::Relaxed) <= 0
+            && let Ok(mut items) = self.items.try_write()
+            && !items[4].is_empty()
+            && items[4].are_equal(&expected_fuel)
+        {
+            self.fuel.store(i32::from(fuel_power), Ordering::Relaxed);
+            items[4].decrement(1);
+            true
+        } else {
+            false
+        }
+    }
 }
 
-impl pumpkin_world::inventory::Inventory for BrewingStandBlockEntity {
+impl pumpkin_inventory::Inventory for BrewingStandBlockEntity {
     fn size(&self) -> usize {
         Self::INVENTORY_SIZE
     }
@@ -330,7 +438,7 @@ impl pumpkin_world::inventory::Inventory for BrewingStandBlockEntity {
     }
 }
 
-impl pumpkin_world::inventory::Clearable for BrewingStandBlockEntity {
+impl pumpkin_inventory::Clearable for BrewingStandBlockEntity {
     fn clear(&self) {
         let mut items = self
             .items
@@ -357,10 +465,18 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
         let mut entity = Self::new(position);
 
         // Load brew time / fuel if present in NBT
-        if let Some(bt) = nbt.get_int("BrewTime") {
+        if let Some(bt) = nbt
+            .get_short("BrewTime")
+            .map(i32::from)
+            .or_else(|| nbt.get_int("BrewTime"))
+        {
             entity.brew_time.store(bt, Ordering::Relaxed);
         }
-        if let Some(f) = nbt.get_int("Fuel") {
+        if let Some(f) = nbt
+            .get_byte("Fuel")
+            .map(i32::from)
+            .or_else(|| nbt.get_int("Fuel"))
+        {
             entity.fuel.store(f, Ordering::Relaxed);
         }
 
@@ -401,8 +517,8 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
 
     fn write_nbt(&self, nbt: &mut NbtCompound) {
         // Persist brew state
-        nbt.put_int("BrewTime", self.brew_time.load(Ordering::Relaxed));
-        nbt.put_int("Fuel", self.fuel.load(Ordering::Relaxed));
+        nbt.put_short("BrewTime", self.brew_time.load(Ordering::Relaxed) as i16);
+        nbt.put_byte("Fuel", self.fuel.load(Ordering::Relaxed) as i8);
 
         // Save inventory contents to NBT
         self.write_inventory_nbt(nbt, true);
@@ -414,8 +530,8 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
-        nbt.put_int("BrewTime", self.brew_time.load(Ordering::Relaxed));
-        nbt.put_int("Fuel", self.fuel.load(Ordering::Relaxed));
+        nbt.put_short("BrewTime", self.brew_time.load(Ordering::Relaxed) as i16);
+        nbt.put_byte("Fuel", self.fuel.load(Ordering::Relaxed) as i8);
         if let Ok(items) = self.items.try_read() {
             sync_write_items_to_nbt(&*items, &mut nbt);
         }
@@ -434,30 +550,10 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
         self
     }
 
+    #[allow(clippy::too_many_lines)]
     fn tick(&self, world: &Arc<crate::world::World>) {
         // Refill fuel counter from fuel item if needed
-        let fuel_refilled = self.fuel.load(Ordering::Relaxed) <= 0
-            && if let Ok(mut items) = self.items.try_write()
-                && !items[4].is_empty()
-                && items[4]
-                    .get_item()
-                    .has_tag(&tag::Item::MINECRAFT_BREWING_FUEL)
-            {
-                if let Some(server) = world.server.upgrade() {
-                    let mut fuel_event = crate::plugin::api::events::inventory::brewing_stand_fuel::BrewingStandFuelEvent::new(
-                            self.position,
-                            20,
-                        );
-                    server
-                        .plugin_manager
-                        .fire_blocking(&server, &mut fuel_event);
-                }
-                self.fuel.store(20, Ordering::Relaxed);
-                items[4].decrement(1);
-                true
-            } else {
-                false
-            };
+        let fuel_refilled = self.try_refill_fuel(world);
 
         // Get current ingredient and check brewing state
         let Ok(items) = self.items.try_read() else {
@@ -465,7 +561,7 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
         };
         let ingredient = items[3].clone();
         drop(items);
-        let brewable = self.is_brewable(&ingredient);
+        let brewable = self.is_brewable(&ingredient, world);
         let is_brewing = self.brew_time.load(Ordering::Relaxed) > 0;
 
         // Handle brewing state machine
@@ -486,9 +582,27 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
                 self.mark_dirty();
             }
         } else if brewable && self.fuel.load(Ordering::Relaxed) > 0 {
+            let brew_time = if let Some(server) = world.server.upgrade() {
+                let mut start_event =
+                    crate::plugin::api::events::block::brewing_start::BrewingStartEvent::new(
+                        self.position,
+                        world.clone(),
+                        400,
+                    );
+                server
+                    .plugin_manager
+                    .fire_blocking(&server, &mut start_event);
+                if start_event.cancelled {
+                    return;
+                }
+                start_event.brewing_time
+            } else {
+                400
+            };
+
             // Start new brewing cycle
             self.fuel.fetch_sub(1, Ordering::Relaxed);
-            self.brew_time.store(400, Ordering::Relaxed);
+            self.brew_time.store(brew_time, Ordering::Relaxed);
             *self
                 .ingredient_item
                 .lock()
@@ -527,9 +641,7 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
             let (block, state) = world.get_block_and_state(&self.position);
             // Use generated block properties helper to produce a new state id with the bits set
             let mut props =
-                pumpkin_data::block_properties::BrewingStandLikeProperties::from_state_id(
-                    state.id, block,
-                );
+                pumpkin_data::block_properties::BrewingStandLikeProperties::from_state_id(state.id);
             // Generated field names use raw identifiers for clarity
             props.r#has_bottle_0 = current[0];
             props.r#has_bottle_1 = current[1];

@@ -532,6 +532,7 @@ impl Raid {
         health
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn tick(&mut self, world: &Arc<World>) {
         if self.is_stopped() {
             return;
@@ -616,6 +617,11 @@ impl Raid {
                     for player in players.iter() {
                         if self.heroes_of_the_village.contains(&player.gameprofile.id) {
                             player.add_effect(effect.clone());
+                            player.increment_stat(
+                                pumpkin_data::statistic::StatisticCategory::Custom,
+                                pumpkin_data::statistic::CustomStatistic::RaidWin as i32,
+                                1,
+                            );
                         }
                     }
                 }

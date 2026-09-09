@@ -12,6 +12,24 @@ struct GeyserBiomeMapping {
     bedrock_id: u8,
 }
 
+fn deserialize_carvers<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StringOrVec {
+        String(String),
+        Vec(Vec<String>),
+    }
+
+    match Option::<StringOrVec>::deserialize(deserializer)? {
+        Some(StringOrVec::String(s)) => Ok(vec![s]),
+        Some(StringOrVec::Vec(v)) => Ok(v),
+        None => Ok(Vec::new()),
+    }
+}
+
 /// Raw deserialization shape for a single biome entry from `biome.json`.
 #[derive(Deserialize)]
 pub struct Biome {
@@ -23,7 +41,8 @@ pub struct Biome {
     downfall: f32,
     /// Optional modifier that changes how temperature is applied.
     temperature_modifier: Option<TemperatureModifier>,
-    //carvers: Vec<String>,
+    #[serde(default, deserialize_with = "deserialize_carvers")]
+    pub carvers: Vec<String>,
     /// Nested lists of feature resource-location strings applied during world generation.
     features: Vec<Vec<String>>,
     /// Probability per chunk tick that a creature spawns, if not overridden per-biome.
@@ -261,7 +280,15 @@ pub fn build() -> TokenStream {
         let has_precipitation = biome.has_precipitation;
         let temperature = biome.temperature;
         let downfall = biome.downfall;
-        //  let carvers = &biome.carvers;
+        let carvers: Vec<TokenStream> = biome
+            .carvers
+            .iter()
+            .map(|c| {
+                let name = c.strip_prefix("minecraft:").unwrap_or(c);
+                let variant_name = format_ident!("{}", name.to_uppercase());
+                quote! { &crate::carver::#variant_name }
+            })
+            .collect();
         let features: Vec<TokenStream> = biome
             .features
             .iter()
@@ -371,6 +398,7 @@ pub fn build() -> TokenStream {
                      #downfall
                 ),
                 features: &[#(#features),*],
+                carvers: &[#(#carvers),*],
                 creature_spawn_probability: #creature_spawn_probability,
                 spawners: #spawners,
                 spawn_costs: phf::phf_map! {
@@ -401,7 +429,7 @@ pub fn build() -> TokenStream {
             pub registry_id: &'static str,
             pub be_network_id: u8,
             pub weather: Weather,
-            // carvers: &'static [&str],
+            pub carvers: &'static [&'static crate::carver::CarverConfig],
             pub features: &'static [&'static [crate::placed_feature::PlacedFeature]],
             pub creature_spawn_probability: f32,
             pub spawners: SpawnGroups,

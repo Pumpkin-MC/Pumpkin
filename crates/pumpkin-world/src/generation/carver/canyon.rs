@@ -32,7 +32,7 @@ impl Carver for CanyonCarver {
 
         let horizontal_rotation = random.next_f32() * PI * 2.0;
         let vertical_rotation = canyon_config.vertical_rotation.get(random);
-        let y_scale = config.y_scale.get(random) as f64;
+        let y_scale = canyon_config.shape.y_scale as f64;
         let thickness = canyon_config.shape.thickness.get(random);
         let distance =
             (max_distance as f32 * canyon_config.shape.distance_factor.get(random)) as i32;
@@ -288,7 +288,7 @@ impl CanyonCarver {
 
     fn carve_block(
         run: &mut CarveRun,
-        config: &CarverConfig,
+        _config: &CarverConfig,
         x: i32,
         y: i32,
         z: i32,
@@ -304,24 +304,20 @@ impl CanyonCarver {
             *has_grass = true;
         }
 
-        if block.id.has_tag(config.replaceable) {
-            let Some((state, should_schedule_fluid_update)) =
-                overworld_carve_state(run, config, x, y, z)
-            else {
-                return false;
-            };
+        let Some((state, should_schedule_fluid_update)) = overworld_carve_state(run, x, y, z)
+        else {
+            return false;
+        };
 
-            place_carved_block(
-                run,
-                pumpkin_util::math::vector3::Vector3::new(x, y, z),
-                state,
-                should_schedule_fluid_update,
-                *has_grass,
-                true,
-            );
+        place_carved_block(
+            run,
+            pumpkin_util::math::vector3::Vector3::new(x, y, z),
+            state,
+            should_schedule_fluid_update,
+            *has_grass,
+            true,
+        );
 
-            return true;
-        }
-        false
+        true
     }
 }

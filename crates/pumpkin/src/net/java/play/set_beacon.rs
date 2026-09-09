@@ -1,9 +1,9 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
 use crate::block::entities::beacon::BeaconBlockEntity;
+use pumpkin_inventory::Inventory;
 use pumpkin_inventory::beacon_screen_handler::BeaconScreenHandler;
 use pumpkin_protocol::java::server::play::SSetBeacon;
-use pumpkin_world::inventory::Inventory;
 
 impl JavaClient {
     pub fn handle_set_beacon(&self, player: &Arc<Player>, packet: &SSetBeacon) {

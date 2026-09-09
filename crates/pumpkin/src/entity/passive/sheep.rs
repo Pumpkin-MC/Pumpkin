@@ -5,10 +5,10 @@ use std::sync::{
 
 use pumpkin_data::{entity::EntityType, item::Item};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::Metadata;
+use rand::RngExt;
 
 use crate::entity::{
-    Entity,
+    Entity, EntityBase,
     ageable::AgeableMob,
     ai::goal::{
         breed::BreedGoal, eat_grass::EatGrassGoal, escape_danger::EscapeDangerGoal,
@@ -84,13 +84,10 @@ impl SheepEntity {
 
     fn set_packed_and_sync(&self, byte: u8) {
         self.color_and_sheared.store(byte, Ordering::Relaxed);
-        self.mob_entity.living_entity.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::sheep::WOOL_ID,
-                byte as i8,
-            )],
-            None,
-        );
+        self.mob_entity
+            .living_entity
+            .entity
+            .set_synced_data(pumpkin_data::tracked_data::sheep::WOOL_ID, byte as i8);
     }
 
     pub fn set_color(&self, color: u8) {
@@ -157,7 +154,41 @@ impl Mob for SheepEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        use super::animal::Animal;
+        use super::animal::{Animal, get_dye_color_from_item, get_wool_item_for_color};
+        let item = item_stack.get_item();
+
+        if item == &Item::SHEARS && !self.is_sheared() && !self.is_baby() {
+            self.set_sheared(true);
+            let entity = self.get_entity();
+            let world = entity.world.load();
+            let pos = entity.pos.load();
+            world.play_sound(
+                Sound::EntitySheepShear,
+                pumpkin_data::sound::SoundCategory::Players,
+                &pos,
+            );
+
+            let wool_item = get_wool_item_for_color(self.get_color());
+            let mut rng = rand::rng();
+            let count = rng.random_range(1..=3);
+            let item_entity = Arc::new(crate::entity::item::ItemEntity::new(
+                Entity::new(world.clone(), pos, &EntityType::ITEM),
+                ItemStack::new(count, wool_item),
+            ));
+            world.spawn_entity(item_entity);
+            player.damage_held_item(1);
+            return true;
+        }
+
+        if let Some(color) = get_dye_color_from_item(item)
+            && !self.is_sheared()
+            && color != self.get_color()
+        {
+            self.set_color(color);
+            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+            return true;
+        }
+
         self.animal_interact(player, item_stack, Sound::EntitySheepAmbient)
     }
 }
