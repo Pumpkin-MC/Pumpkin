@@ -36,7 +36,6 @@ flate2.workspace = true
 
 bitflags.workspace = true
 base64.workspace = true
-xxhash-rust.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
