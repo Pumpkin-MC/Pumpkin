@@ -1,12 +1,16 @@
+pub mod light;
 pub mod util;
 pub mod v1_18;
 pub mod v1_7;
 pub mod v1_8;
 pub mod v1_9;
 
-use crate::packet::MultiVersionJavaPacket;
-use crate::{ClientPacket, WritingError};
+pub use light::ChunkLightExt;
+
 use pumpkin_data::packet::clientbound::play::LEVEL_CHUNK_WITH_LIGHT;
+use pumpkin_protocol::ClientPacket;
+use pumpkin_protocol::packet::MultiVersionJavaPacket;
+use pumpkin_protocol::ser::WritingError;
 use pumpkin_util::version::JavaMinecraftVersion;
 use pumpkin_world::chunk::ChunkData;
 use std::io::Write;
