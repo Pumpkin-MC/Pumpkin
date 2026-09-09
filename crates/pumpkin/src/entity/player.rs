@@ -3361,6 +3361,17 @@ impl Player {
             .try_enqueue_packet_editioned(&clock_packet, &time_packet);
     }
 
+    /// Day time this client should see, given its own world's `time_of_day`.
+    /// Bedrock has no game-time clock packet, so `CSetTime` carries this instead.
+    #[must_use]
+    pub fn client_time_of_day(&self, world_time_of_day: i64) -> i64 {
+        match self.per_player_time.load() {
+            Some((custom_time, true)) => (world_time_of_day as u64 + custom_time) as i64,
+            Some((custom_time, false)) => custom_time as i64,
+            None => world_time_of_day % 24000,
+        }
+    }
+
     pub fn set_player_time(&self, time: u64, relative: bool) {
         let world = self.world();
         self.per_player_time.store(Some((time, relative)));

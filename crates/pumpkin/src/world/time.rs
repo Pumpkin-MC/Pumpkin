@@ -139,15 +139,21 @@ impl LevelTime {
     /// Vanilla `PlayerList.broadcastAll`: every player, not only this world's.
     /// Per-player serialize is intentional; version grouping is world-scoped
     /// `broadcast_editioned`.
+    /// `CUpdateTime.game_time` is global, but Bedrock's `CSetTime` is a day time:
+    /// sending the overworld's would snap a Nether or End client back to it. Runs
+    /// before any world ticks, so every `time_of_day` read here is this tick's.
     pub fn send_game_time_sync(&self, server: &crate::server::Server) {
         let java = CUpdateTime {
             game_time: self.world_age,
             clock_updates: Vec::new(),
         };
-        let bedrock = CSetTime::new(self.time_of_day as _);
-        server.for_each_player(|player| {
-            player.client.try_enqueue_packet_editioned(&java, &bedrock);
-        });
+        for world in server.worlds.load().iter() {
+            let time_of_day = world.get_time_of_day();
+            for player in world.players.load().iter() {
+                let bedrock = CSetTime::new(player.client_time_of_day(time_of_day) as _);
+                player.client.try_enqueue_packet_editioned(&java, &bedrock);
+            }
+        }
     }
 
     pub fn add_time(&mut self, time: i64) {
