@@ -3418,7 +3418,6 @@ dependencies = [
  "ecdsa 0.17.0",
  "md5",
  "p384 0.14.0",
- "pumpkin-util",
  "reqwest",
  "rsa",
  "rustls",
@@ -3622,7 +3621,6 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "uuid",
- "xxhash-rust",
 ]
 
 [[package]]

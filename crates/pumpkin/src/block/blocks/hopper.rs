@@ -107,6 +107,11 @@ impl BlockBehaviour for HopperBlock {
     }
 
     fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+        // Same guard as `RedstoneGateBlock::on_neighbor_update` (abstract_redstone_gate.rs):
+        // the block at this position may have already changed since dispatch.
+        if args.world.get_block(args.position) != args.block {
+            return;
+        }
         check_powered_state(
             args.world,
             args.position,
