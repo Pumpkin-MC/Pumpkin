@@ -228,11 +228,21 @@ impl FlushState {
     ) -> Option<bool> {
         let did_flush = self.unflushed;
         if did_flush {
-            if let Err(err) = writer.flush().await {
-                if !ctx.close_token.is_cancelled() {
-                    warn!("Failed to flush packets for client {}: {err}", ctx.id);
+            let flushed = tokio::select! {
+                biased;
+                () = ctx.close_token.cancelled() => None,
+                res = writer.flush() => Some(res),
+            };
+            match flushed {
+                Some(Ok(())) => {}
+                Some(Err(err)) => {
+                    if !ctx.close_token.is_cancelled() {
+                        warn!("Failed to flush packets for client {}: {err}", ctx.id);
+                    }
+                    return None;
                 }
-                return None;
+                // close() while a flush is stalled. stop observing it rather than hang UP.
+                None => return None,
             }
             self.unflushed = false;
         }
@@ -458,7 +468,10 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
         }
     }
 
-    let _ = writer.flush().await;
+    // A stalled flush already raced close_token above.
+    if !ctx.close_token.is_cancelled() {
+        let _ = writer.flush().await;
+    }
 }
 
 #[cfg(test)]
@@ -728,7 +741,10 @@ mod tests {
         );
 
         close.cancel();
-        writer.abort();
+        tokio::time::timeout(Duration::from_millis(50), writer)
+            .await
+            .expect("writer task must observe close_token while the TCP flush is stalled")
+            .unwrap();
     }
 
     #[tokio::test]
