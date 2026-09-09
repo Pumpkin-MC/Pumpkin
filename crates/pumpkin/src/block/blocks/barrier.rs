@@ -1,8 +1,6 @@
 use crate::block::{BlockBehaviour, GetStateForNeighborUpdateArgs, OnPlaceArgs};
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{
-    BlockProperties, MangroveRootsLikeProperties as BarrierLikeProperties,
-};
+use pumpkin_data::block_properties::MangroveRootsLikeProperties as BarrierLikeProperties;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::tick::TickPriority;
@@ -21,7 +19,7 @@ impl BlockBehaviour for BarrierBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        let props = BarrierLikeProperties::from_state_id(args.state_id, args.block);
+        let props = BarrierLikeProperties::from_state_id(args.state_id);
         if props.waterlogged {
             args.world.schedule_fluid_tick(
                 &Fluid::WATER,

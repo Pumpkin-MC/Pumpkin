@@ -10,7 +10,7 @@ use crate::generation::structure::template::{
 use pumpkin_util::math::block_box::BlockBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::random::RandomImpl;
+use pumpkin_util::random::{RandomDeriverImpl, RandomImpl};
 use serde::Deserialize;
 use std::sync::Arc;
 
@@ -823,10 +823,9 @@ impl StructureGenerator for JigsawGenerator {
             .structure_key
             .map(|key| pumpkin_data::structures::Structure::get(&key));
 
-        let height = if context.min_y < 0 { 384 } else { 256 };
         let start_y = if let Some(s) = structure {
             s.start_height.map_or(context.sea_level, |hp| {
-                hp.get(&mut context.random, context.min_y as i8, height)
+                hp.get(&mut context.random, context.min_y as i8, context.height)
             })
         } else {
             context.sea_level
@@ -880,7 +879,11 @@ impl StructureGenerator for JigsawGenerator {
             &[]
         };
 
-        let pool_alias_lookup = PoolAliasLookup::from_bindings(pool_aliases, &mut context.random);
+        let mut alias_random =
+            pumpkin_util::random::legacy_rand::LegacyRand::from_seed(context.seed as u64)
+                .next_splitter()
+                .split_pos(start_pos.0.x, start_pos.0.y, start_pos.0.z);
+        let pool_alias_lookup = PoolAliasLookup::from_bindings(pool_aliases, &mut alias_random);
 
         let start_pool = if self.start_pool.is_empty() {
             structure
@@ -1008,6 +1011,7 @@ mod tests {
             random: super::super::create_chunk_random(0, 0, 0),
             sea_level: 63,
             min_y: -64,
+            height: 384,
             height_sampler: None,
             structure_key: Some(pumpkin_data::structures::StructureKeys::AncientCity),
         };
@@ -1108,9 +1112,7 @@ mod tests {
             unreachable!()
         };
         let mut height_sampler =
-            crate::generation::structure::height_sampler::NoiseHeightSampler::new(
-                world_gen, 1200, -1312,
-            );
+            crate::generation::structure::height_sampler::NoiseHeightSampler::new(world_gen);
         let generator = JigsawGenerator::new("minecraft:pillager_outpost/base_plates", 7)
             .with_expansion_hack(true);
 
@@ -1121,6 +1123,7 @@ mod tests {
             random: super::super::create_chunk_random(SEED, 75, -82),
             sea_level: 63,
             min_y: -64,
+            height: 384,
             height_sampler: Some(&mut height_sampler),
             structure_key: Some(pumpkin_data::structures::StructureKeys::PillagerOutpost),
         };

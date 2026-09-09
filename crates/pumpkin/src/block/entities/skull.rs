@@ -7,6 +7,7 @@ pub struct SkullBlockEntity {
     pub position: BlockPos,
     pub note_block_sound: Mutex<Option<String>>,
     pub profile: Mutex<Option<NbtCompound>>,
+    pub custom_name: Mutex<Option<String>>,
 }
 
 impl BlockEntity for SkullBlockEntity {
@@ -24,10 +25,15 @@ impl BlockEntity for SkullBlockEntity {
     {
         let note_block_sound = nbt.get_string("note_block_sound").map(ToString::to_string);
         let profile = nbt.get_compound("profile").cloned();
+        let custom_name = nbt
+            .get_string("custom_name")
+            .or_else(|| nbt.get_string("CustomName"))
+            .map(ToString::to_string);
         Self {
             position,
             note_block_sound: Mutex::new(note_block_sound),
             profile: Mutex::new(profile),
+            custom_name: Mutex::new(custom_name),
         }
     }
 
@@ -42,6 +48,11 @@ impl BlockEntity for SkullBlockEntity {
         {
             nbt.put_compound("profile", prof.clone());
         }
+        if let Ok(name) = self.custom_name.lock()
+            && let Some(name) = name.as_ref()
+        {
+            nbt.put_string("custom_name", name.clone());
+        }
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
@@ -55,6 +66,11 @@ impl BlockEntity for SkullBlockEntity {
             && let Some(ref prof) = *profile
         {
             nbt.put_compound("profile", prof.clone());
+        }
+        if let Ok(name) = self.custom_name.try_lock()
+            && let Some(ref name) = *name
+        {
+            nbt.put_string("custom_name", name.clone());
         }
         Some(nbt)
     }
@@ -72,6 +88,7 @@ impl SkullBlockEntity {
             position,
             note_block_sound: Mutex::new(None),
             profile: Mutex::new(None),
+            custom_name: Mutex::new(None),
         }
     }
 }

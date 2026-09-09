@@ -16,8 +16,9 @@
 pub mod chunk_view_lut;
 
 #[rustfmt::skip]
-#[path = "generated/chest_loot.rs"]
-pub mod chest_loot_table;
+#[path = "generated/loot_table.rs"]
+pub mod loot_table;
+pub use loot_table as chest_loot_table;
 
 #[cfg(feature = "item")]
 #[rustfmt::skip]
@@ -177,6 +178,14 @@ mod spawn_egg;
 #[rustfmt::skip]
 #[path = "generated/dimension.rs"]
 pub mod dimension;
+
+#[cfg(feature = "environment_attribute")]
+#[rustfmt::skip]
+#[path = "generated/environment_attribute.rs"]
+pub mod environment_attribute;
+
+#[cfg(feature = "environment_attribute")]
+pub use environment_attribute::*;
 
 #[cfg(feature = "enchantment")]
 #[rustfmt::skip]
@@ -402,16 +411,24 @@ mod blocks;
 #[cfg(feature = "block")]
 pub use block_direction::{BlockDirection, FacingExt, HorizontalFacingExt};
 #[cfg(feature = "block")]
-pub use block_rotation::{Mirror, Rotation};
+pub use block_rotation::{Mirror, Rotation, transform_block_properties, transform_rail_shape};
 #[cfg(feature = "block")]
 pub use block_state::{BlockState, BlockStateId};
 #[cfg(feature = "block")]
 pub use blocks::{Block, BlockId};
 
-#[cfg(feature = "chunk_gen_settings")]
+#[cfg(feature = "material_rule")]
 #[rustfmt::skip]
-#[path = "generated/chunk_gen_settings.rs"]
-pub mod chunk_gen_settings;
+#[path = "generated/material_rule.rs"]
+pub mod material_rule;
+
+#[cfg(feature = "noise_settings")]
+#[rustfmt::skip]
+#[path = "generated/noise_settings.rs"]
+pub mod noise_settings;
+
+#[cfg(feature = "chunk_gen_settings")]
+pub use noise_settings as chunk_gen_settings;
 
 #[cfg(feature = "carver")]
 #[rustfmt::skip]
@@ -442,3 +459,13 @@ pub mod map_decoration;
 #[rustfmt::skip]
 #[path = "generated/dye_color.rs"]
 pub mod dye_color;
+
+#[cfg(feature = "block_transformer")]
+#[rustfmt::skip]
+#[path = "generated/block_transformer.rs"]
+pub mod block_transformer;
+
+#[cfg(feature = "trial_spawner")]
+#[rustfmt::skip]
+#[path = "generated/trial_spawner.rs"]
+pub mod trial_spawner;

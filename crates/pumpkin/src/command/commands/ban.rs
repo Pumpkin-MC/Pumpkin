@@ -80,7 +80,7 @@ struct BanExecutor {
 
 impl CommandExecutor for BanExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
-        let targets = GameProfileArgumentType::get(context, "player")?;
+        let targets = GameProfileArgumentType::get(context, "targets")?;
         let reason = if self.has_reason {
             Some(StringArgumentType::get(context, "reason")?.to_string())
         } else {
@@ -111,7 +111,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
 
     dispatcher.register(
         command("ban", DESCRIPTION).requires(PERMISSION).then(
-            argument("player", GameProfileArgumentType)
+            argument("targets", GameProfileArgumentType)
                 .executes(BanExecutor { has_reason: false })
                 .then(
                     argument("reason", StringArgumentType::GreedyPhrase)
