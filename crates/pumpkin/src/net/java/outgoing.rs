@@ -5,7 +5,7 @@
 use std::collections::VecDeque;
 use std::sync::{
     Arc,
-    atomic::{AtomicBool, AtomicUsize, Ordering},
+    atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
 };
 use std::time::{Duration, Instant};
 
@@ -25,10 +25,16 @@ use tracing::warn;
 
 use crate::net::decrement_pending_bytes;
 
+/// No barrier pending. Also the identity for `fetch_min`, which keeps the earliest.
+const NO_BARRIER: u64 = u64::MAX;
+
 /// `resumeFlushing` when the FIFO is full: cannot drop the tick barrier.
 #[derive(Clone)]
 pub struct TickFlush {
-    pending: Arc<AtomicBool>,
+    /// Packets handed to the FIFO so far.
+    enqueued: Arc<AtomicU64>,
+    /// `enqueued` count the pending barrier sits behind, or `NO_BARRIER`.
+    barrier_at: Arc<AtomicU64>,
     notify: Arc<Notify>,
 }
 
@@ -36,18 +42,33 @@ impl TickFlush {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            pending: Arc::new(AtomicBool::new(false)),
+            enqueued: Arc::new(AtomicU64::new(0)),
+            barrier_at: Arc::new(AtomicU64::new(NO_BARRIER)),
             notify: Arc::new(Notify::new()),
         }
     }
 
+    /// Counts a packet on the FIFO. Must be called after the send
+    /// succeeds. An overcount would strand the barrier behind a packet that never arrives.
+    pub fn packet_enqueued(&self) {
+        let _ = self.enqueued.fetch_add(1, Ordering::AcqRel);
+    }
+
     pub fn request(&self) {
-        self.pending.store(true, Ordering::Release);
+        let barrier_at = self.enqueued.load(Ordering::Acquire);
+        let _ = self.barrier_at.fetch_min(barrier_at, Ordering::AcqRel);
         self.notify.notify_one();
     }
 
-    fn take(&self) -> bool {
-        self.pending.swap(false, Ordering::AcqRel)
+    /// `true` once `received` covers the packets the barrier sits behind.
+    fn take(&self, received: u64) -> bool {
+        let barrier_at = self.barrier_at.load(Ordering::Acquire);
+        barrier_at != NO_BARRIER
+            && received >= barrier_at
+            && self
+                .barrier_at
+                .compare_exchange(barrier_at, NO_BARRIER, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
     }
 }
 
@@ -309,6 +330,7 @@ fn drain_until_barrier(
     first: OutgoingPacket,
     packet_receiver: &mut Receiver<OutgoingPacket>,
     tick_flush: &TickFlush,
+    received: u64,
 ) -> (FlushRequest, VecDeque<FramePacket>, bool) {
     let mut flush_request = FlushRequest::None;
     let mut packets = VecDeque::new();
@@ -318,7 +340,8 @@ fn drain_until_barrier(
         data @ OutgoingPacket::Data { .. } => {
             data.ingest(&mut flush_request, &mut packets);
             loop {
-                if tick_flush.take() {
+                let drained = received + packets.len() as u64;
+                if tick_flush.take(drained) {
                     flush_request = flush_request.merge(FlushRequest::Always);
                     break;
                 }
@@ -329,7 +352,7 @@ fn drain_until_barrier(
                     }
                     Ok(packet) => packet.ingest(&mut flush_request, &mut packets),
                     Err(TryRecvError::Empty) => {
-                        if tick_flush.take() {
+                        if tick_flush.take(received + packets.len() as u64) {
                             flush_request = flush_request.merge(FlushRequest::Always);
                         }
                         break;
@@ -410,6 +433,8 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
         id,
     };
     let mut state = FlushState::new();
+    // Packets taken off the FIFO, matched against an out-of-band barrier's position.
+    let mut received = 0u64;
 
     let mut flush_interval = tokio::time::interval(TICK_FLUSH_INTERVAL);
     flush_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
@@ -421,8 +446,9 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
             break;
         }
 
-        // `resumeFlushing` when the barrier could not be enqueued.
-        if ctx.tick_flush.take() {
+        // `resumeFlushing` when the barrier could not be enqueued. Only once this
+        // tick's packets are drained, otherwise they land behind the flush.
+        if ctx.tick_flush.take(received) {
             if !state.flush_and_stamp(&mut writer, &ctx).await {
                 ctx.close_token.cancel();
                 break;
@@ -444,7 +470,8 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
         };
 
         let (flush_request, packets_to_frame, disconnected) =
-            drain_until_barrier(first, &mut packet_receiver, &ctx.tick_flush);
+            drain_until_barrier(first, &mut packet_receiver, &ctx.tick_flush, received);
+        received += packets_to_frame.len() as u64;
 
         if !packets_to_frame.is_empty() {
             let Some(returned) = write_queued_frames(writer, packets_to_frame, &ctx).await else {
@@ -524,6 +551,36 @@ mod tests {
         fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
             self.flush_polls.fetch_add(1, Ordering::SeqCst);
             Poll::Pending
+        }
+
+        fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    /// Records how many bytes had been written when each flush ran.
+    struct FlushOrderWriter {
+        written: Arc<AtomicUsize>,
+        flush_marks: Arc<std::sync::Mutex<Vec<usize>>>,
+    }
+
+    impl AsyncWrite for FlushOrderWriter {
+        fn poll_write(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            buf: &[u8],
+        ) -> Poll<std::io::Result<usize>> {
+            self.written.fetch_add(buf.len(), Ordering::SeqCst);
+            Poll::Ready(Ok(buf.len()))
+        }
+
+        fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+            let written = self.written.load(Ordering::SeqCst);
+            self.flush_marks
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push(written);
+            Poll::Ready(Ok(()))
         }
 
         fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
@@ -845,6 +902,59 @@ mod tests {
             flushes.load(Ordering::SeqCst),
             1,
             "resumeFlushing must flush even when try_send(Flush) cannot enqueue"
+        );
+
+        drop(tx);
+        close.cancel();
+        writer.await.unwrap();
+    }
+
+    /// A full FIFO has no room for the barrier, but the tick boundary still belongs
+    /// behind that tick's packets, not in front of them.
+    #[tokio::test]
+    async fn full_fifo_barrier_flushes_after_that_ticks_packets() {
+        const PACKETS: usize = 8;
+
+        let (tx, rx) = tokio::sync::mpsc::channel(PACKETS);
+        let tick_flush = TickFlush::new();
+        let close = CancellationToken::new();
+        let written = Arc::new(AtomicUsize::new(0));
+        let flush_marks = Arc::new(std::sync::Mutex::new(Vec::new()));
+
+        for i in 0..PACKETS {
+            tx.try_send(packet(i as u8)).unwrap();
+            tick_flush.packet_enqueued();
+        }
+        // `resumeFlushing` with the tick's packets still queued.
+        assert!(tx.try_send(OutgoingPacket::Flush).is_err());
+        tick_flush.request();
+
+        let writer = tokio::spawn(run_outgoing_packet_writer(
+            rx,
+            TCPNetworkEncoder::new(FlushOrderWriter {
+                written: written.clone(),
+                flush_marks: flush_marks.clone(),
+            }),
+            close.clone(),
+            // Suspended, so only the barrier can flush.
+            Arc::new(AtomicBool::new(true)),
+            tick_flush,
+            Arc::new(AtomicUsize::new(0)),
+            0,
+        ));
+
+        tokio::time::sleep(Duration::from_millis(20)).await;
+
+        let marks = flush_marks
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let total = written.load(Ordering::SeqCst);
+        assert!(total > 0, "the queued tick packets must be written");
+        assert_eq!(
+            marks,
+            vec![total],
+            "the barrier must flush once, after all {PACKETS} of this tick's packets"
         );
 
         drop(tx);

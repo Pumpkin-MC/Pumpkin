@@ -430,21 +430,23 @@ impl JavaClient {
             return;
         };
 
-        if let Err(err) = self
+        match self
             .outgoing_packet_queue_send
             .send(OutgoingPacket::normal(packet_data))
             .await
         {
-            decrement_pending_bytes(&self.pending_bytes, packet_len);
-            // This is expected to fail if we are closed
-            if !self.close_token.is_cancelled() {
-                warn!(
-                    "Failed to add packet to the outgoing packet queue for client {}: {}",
-                    self.id, err
-                );
-                // We now need to close the connection to the client since the stream is in an
-                // unknown state
-                self.close();
+            Ok(()) => self.tick_flush.packet_enqueued(),
+            Err(err) => {
+                decrement_pending_bytes(&self.pending_bytes, packet_len);
+                // This is expected to fail if we are closed
+                if !self.close_token.is_cancelled() {
+                    warn!(
+                        "Failed to add packet to the outgoing packet queue for client {}: {}",
+                        self.id, err
+                    );
+                    // Connection to the client closed since the stream is in an unknown state
+                    self.close();
+                }
             }
         }
     }
@@ -484,25 +486,27 @@ impl JavaClient {
             return;
         };
 
-        if let Err(err) = self
+        match self
             .outgoing_packet_queue_send
             .try_send(OutgoingPacket::normal(packet_data))
         {
-            decrement_pending_bytes(&self.pending_bytes, packet_len);
-            let reason = match err {
-                // Vanilla queues without a limit, so a backlog disconnects instead of desyncing.
-                tokio::sync::mpsc::error::TrySendError::Full(_) => "channel full",
-                tokio::sync::mpsc::error::TrySendError::Closed(_) => "channel closed",
-            };
-            // Both are expected to fail if we are closed
-            if !self.close_token.is_cancelled() {
-                warn!(
-                    "Failed to add packet to the outgoing packet queue for client {}: {}",
-                    self.id, reason
-                );
-                // We now need to close the connection to the client since the stream is in
-                // an unknown state
-                self.close();
+            Ok(()) => self.tick_flush.packet_enqueued(),
+            Err(err) => {
+                decrement_pending_bytes(&self.pending_bytes, packet_len);
+                let reason = match err {
+                    // Vanilla queues without a limit, so a backlog disconnects instead of desyncing.
+                    tokio::sync::mpsc::error::TrySendError::Full(_) => "channel full",
+                    tokio::sync::mpsc::error::TrySendError::Closed(_) => "channel closed",
+                };
+                // Both are expected to fail if we are closed
+                if !self.close_token.is_cancelled() {
+                    warn!(
+                        "Failed to add packet to the outgoing packet queue for client {}: {}",
+                        self.id, reason
+                    );
+                    // Connection to the client closed since the stream is in an unknown state
+                    self.close();
+                }
             }
         }
     }
@@ -559,24 +563,27 @@ impl JavaClient {
         if let Some(data) = serialized {
             let packet_len = data.len();
             let _ = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
-            if let Err(err) = self
+            match self
                 .outgoing_packet_queue_send
                 .try_send(OutgoingPacket::normal(data))
             {
-                decrement_pending_bytes(&self.pending_bytes, packet_len);
-                match err {
-                    tokio::sync::mpsc::error::TrySendError::Full(_) => {
-                        warn!(
-                            "Disconnect packet for client {} dropped: outgoing packet queue full",
-                            self.id
-                        );
-                    }
-                    // Expected: the writer task is already gone.
-                    tokio::sync::mpsc::error::TrySendError::Closed(_) => {
-                        debug!(
-                            "Disconnect packet for client {} dropped: outgoing packet queue closed",
-                            self.id
-                        );
+                Ok(()) => self.tick_flush.packet_enqueued(),
+                Err(err) => {
+                    decrement_pending_bytes(&self.pending_bytes, packet_len);
+                    match err {
+                        tokio::sync::mpsc::error::TrySendError::Full(_) => {
+                            warn!(
+                                "Disconnect packet for client {} dropped: outgoing packet queue full",
+                                self.id
+                            );
+                        }
+                        // Expected: the writer task is already gone.
+                        tokio::sync::mpsc::error::TrySendError::Closed(_) => {
+                            debug!(
+                                "Disconnect packet for client {} dropped: outgoing packet queue closed",
+                                self.id
+                            );
+                        }
                     }
                 }
             }
@@ -626,23 +633,25 @@ impl JavaClient {
 
         let (completion_tx, completion_rx) = oneshot::channel();
 
-        if let Err(err) = self
+        match self
             .outgoing_packet_queue_send
             .send(OutgoingPacket::high_priority(packet, completion_tx))
             .await
         {
-            decrement_pending_bytes(&self.pending_bytes, packet_len);
-            // It is expected that the packet will fail if we are closed
-            if !self.close_token.is_cancelled() {
-                warn!(
-                    "Failed to add packet to the outgoing packet queue for client {}: {}",
-                    self.id, err
-                );
-                // We now need to close the connection to the client since the stream is in an
-                // unknown state
-                self.close();
+            Ok(()) => self.tick_flush.packet_enqueued(),
+            Err(err) => {
+                decrement_pending_bytes(&self.pending_bytes, packet_len);
+                // It is expected that the packet will fail if closed
+                if !self.close_token.is_cancelled() {
+                    warn!(
+                        "Failed to add packet to the outgoing packet queue for client {}: {}",
+                        self.id, err
+                    );
+                    // Connection to the client closed since the stream is in an unknown state
+                    self.close();
+                }
+                return;
             }
-            return;
         }
 
         if completion_rx.await.is_err() && !self.close_token.is_cancelled() {
