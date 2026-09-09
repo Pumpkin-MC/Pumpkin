@@ -1,0 +1,20 @@
+{
+  "type": "minecraft:condition",
+  "if_true": {
+    "type": "minecraft:not",
+    "invert": {
+      "type": "minecraft:vertical_gradient",
+      "false_at_and_above": {
+        "below_top": 0
+      },
+      "random_name": "minecraft:bedrock_roof",
+      "true_at_and_below": {
+        "below_top": 5
+      }
+    }
+  },
+  "then_run": {
+    "type": "minecraft:block",
+    "result_state": "minecraft:bedrock"
+  }
+}

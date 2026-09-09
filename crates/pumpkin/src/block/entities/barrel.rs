@@ -1,4 +1,4 @@
-use pumpkin_data::block_properties::{BarrelLikeProperties, BlockProperties};
+use pumpkin_data::block_properties::BarrelLikeProperties;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, FacingExt, item_stack::ItemStack};
 use pumpkin_nbt::compound::NbtCompound;
@@ -18,7 +18,7 @@ use std::{
 
 use crate::block::viewer::{ViewerCountListener, ViewerCountTracker, ViewerCountTrackerExt};
 use crate::world::{BlockFlags, World};
-use pumpkin_world::inventory::{Clearable, Inventory, sync_write_items_to_nbt};
+use pumpkin_inventory::{Clearable, Inventory, sync_write_items_to_nbt};
 
 use super::BlockEntity;
 
@@ -51,7 +51,7 @@ impl BlockEntity for BarrelBlockEntity {
             viewers: ViewerCountTracker::new(),
         };
 
-        pumpkin_world::inventory::sync_read_items_from_nbt(
+        pumpkin_inventory::sync_read_items_from_nbt(
             nbt,
             barrel
                 .items
@@ -124,7 +124,7 @@ impl BarrelBlockEntity {
 
     fn set_open(&self, world: &Arc<World>, open: bool) {
         let state = world.get_block_state(&self.position);
-        let mut properties = BarrelLikeProperties::from_state_id(state.id, &Block::BARREL);
+        let mut properties = BarrelLikeProperties::from_state_id(state.id);
 
         properties.open = open;
 
@@ -139,7 +139,7 @@ impl BarrelBlockEntity {
         let mut rng = Xoroshiro::from_seed(get_seed());
 
         let state = world.get_block_state(&self.position);
-        let properties = BarrelLikeProperties::from_state_id(state.id, &Block::BARREL);
+        let properties = BarrelLikeProperties::from_state_id(state.id);
         let direction = properties.facing.to_block_direction().to_offset();
         let position = Vector3::new(
             self.position.0.x as f64 + 0.5 + direction.x as f64 / 2.0,

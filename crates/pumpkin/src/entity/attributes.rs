@@ -5,7 +5,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy, PartialEq, Eq)]
 #[repr(i8)]
 pub enum ModifierOperation {
     Add = 0,           // add value
@@ -13,7 +13,7 @@ pub enum ModifierOperation {
     MultiplyTotal = 2, // multiply total (applied last)
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Modifier {
     pub id: String,
     pub amount: f64,
@@ -138,6 +138,7 @@ pub fn send_attribute_updates_for_living(
             id if id == Attributes::MAX_HEALTH.id => "minecraft:health".to_string(),
             id if id == Attributes::MAX_ABSORPTION.id => "minecraft:absorption".to_string(),
             id if id == Attributes::ATTACK_DAMAGE.id => "minecraft:attack_damage".to_string(),
+            id if id == Attributes::ATTACK_SPEED.id => "minecraft:attack_speed".to_string(),
             id if id == Attributes::ARMOR.id => "minecraft:armor".to_string(),
             id if id == Attributes::KNOCKBACK_RESISTANCE.id => {
                 "minecraft:knockback_resistance".to_string()
