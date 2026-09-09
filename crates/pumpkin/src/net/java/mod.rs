@@ -62,8 +62,8 @@ pub mod play;
 pub mod recipe_helper;
 pub mod status;
 
-use outgoing::{OutgoingPacket, TickFlush, run_outgoing_packet_writer};
 pub use chunk_data::{CChunkData, ChunkLightExt};
+use outgoing::{OutgoingPacket, TickFlush, run_outgoing_packet_writer};
 
 use arc_swap::ArcSwap;
 use pending::PendingConnection;
@@ -489,26 +489,20 @@ impl JavaClient {
             .try_send(OutgoingPacket::normal(packet_data))
         {
             decrement_pending_bytes(&self.pending_bytes, packet_len);
-            match err {
-                tokio::sync::mpsc::error::TrySendError::Full(_) => {
-                    // TODO Full drops the newest packet; drop oldest or coalesce to avoid desync.
-                    debug!(
-                        "Failed to add packet to the outgoing packet queue for client {}: channel full",
-                        self.id
-                    );
-                }
-                tokio::sync::mpsc::error::TrySendError::Closed(_) => {
-                    // This is expected to fail if we are closed
-                    if !self.close_token.is_cancelled() {
-                        warn!(
-                            "Failed to add packet to the outgoing packet queue for client {}: channel closed",
-                            self.id
-                        );
-                        // We now need to close the connection to the client since the stream is in
-                        // an unknown state
-                        self.close();
-                    }
-                }
+            let reason = match err {
+                // Vanilla queues without a limit, so a backlog disconnects instead of desyncing.
+                tokio::sync::mpsc::error::TrySendError::Full(_) => "channel full",
+                tokio::sync::mpsc::error::TrySendError::Closed(_) => "channel closed",
+            };
+            // Both are expected to fail if we are closed
+            if !self.close_token.is_cancelled() {
+                warn!(
+                    "Failed to add packet to the outgoing packet queue for client {}: {}",
+                    self.id, reason
+                );
+                // We now need to close the connection to the client since the stream is in
+                // an unknown state
+                self.close();
             }
         }
     }
