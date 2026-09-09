@@ -1,20 +1,21 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
 
+fn incompatible_protocol_status(client_network_version: i32) -> Option<CPlayStatus> {
+    match client_network_version.cmp(&(CURRENT_BEDROCK_MC_PROTOCOL as i32)) {
+        std::cmp::Ordering::Less => Some(CPlayStatus::OutdatedClient),
+        std::cmp::Ordering::Greater => Some(CPlayStatus::OutdatedServer),
+        std::cmp::Ordering::Equal => None,
+    }
+}
+
 impl BedrockClient {
     pub async fn handle_request_network_settings(
         &self,
         packet: SRequestNetworkSettings,
         server: &Server,
     ) -> bool {
-        let status = match packet
-            .client_network_version
-            .cmp(&(CURRENT_BEDROCK_MC_PROTOCOL as i32))
-        {
-            std::cmp::Ordering::Less => Some(CPlayStatus::OutdatedClient),
-            std::cmp::Ordering::Greater => Some(CPlayStatus::OutdatedServer),
-            std::cmp::Ordering::Equal => None,
-        };
+        let status = incompatible_protocol_status(packet.client_network_version);
         if let Some(status) = status {
             self.send_packet(&status).await;
             self.close().await;
@@ -43,5 +44,23 @@ impl BedrockClient {
         .await;
         self.set_compression(compression).await;
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accepts_only_the_current_bedrock_protocol() {
+        assert!(matches!(
+            incompatible_protocol_status(2168),
+            Some(CPlayStatus::OutdatedClient)
+        ));
+        assert!(incompatible_protocol_status(2169).is_none());
+        assert!(matches!(
+            incompatible_protocol_status(2170),
+            Some(CPlayStatus::OutdatedServer)
+        ));
     }
 }

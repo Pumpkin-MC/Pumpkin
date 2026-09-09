@@ -1,8 +1,10 @@
 use crate::VarInt;
-use crate::codec::data_component::{deserialize, serialize};
+use crate::codec::data_component::{DataComponentCodec, deserialize, serialize};
 use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
 use pumpkin_data::data_component::DataComponent;
-use pumpkin_data::data_component_impl::{CustomNameImpl, DataComponentImpl, ItemNameImpl};
+use pumpkin_data::data_component_impl::{
+    CustomDataImpl, CustomNameImpl, DataComponentImpl, ItemNameImpl,
+};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_id_remap::{remap_item_id_for_version, remap_item_id_from_version};
 use pumpkin_data::item_stack::ItemStack;
@@ -188,15 +190,7 @@ fn decode_custom_name(component_data: &[u8]) -> Result<Box<dyn DataComponentImpl
     let mut nbt_reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
     let tag = NbtTag::deserialize(&mut nbt_reader)
         .map_err(|err| ReadingError::Message(format!("Failed to decode CustomName NBT: {err}")))?;
-    let name = match tag {
-        NbtTag::String(name) => TextComponent::text(name.to_string()),
-        NbtTag::Compound(compound) => compound
-            .get_string("text")
-            .map_or_else(TextComponent::empty, |name| {
-                TextComponent::text(name.to_string())
-            }),
-        _ => TextComponent::empty(),
-    };
+    let name = TextComponent::from_nbt(&tag);
     Ok(CustomNameImpl { name }.to_dyn())
 }
 
@@ -220,6 +214,18 @@ fn decode_item_name(component_data: &[u8]) -> Result<Box<dyn DataComponentImpl>,
     .to_dyn())
 }
 
+fn decode_custom_data(component_data: &[u8]) -> Result<Box<dyn DataComponentImpl>, ReadingError> {
+    let mut cursor = Cursor::new(component_data);
+    let mut nbt_reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
+    let tag = NbtTag::deserialize(&mut nbt_reader)
+        .map_err(|err| ReadingError::Message(format!("Failed to decode CustomData NBT: {err}")))?;
+    let data = match tag {
+        NbtTag::Compound(compound) => compound,
+        _ => pumpkin_nbt::compound::NbtCompound::new(),
+    };
+    Ok(CustomDataImpl::new(data).to_dyn())
+}
+
 fn decode_component(
     id: DataComponent,
     component_data: &[u8],
@@ -227,6 +233,7 @@ fn decode_component(
     match id {
         DataComponent::CustomName => decode_custom_name(component_data),
         DataComponent::ItemName => decode_item_name(component_data),
+        DataComponent::CustomData => decode_custom_data(component_data),
         _ => {
             let mut cursor = Cursor::new(component_data);
             deserialize(id, &mut cursor)
@@ -296,7 +303,11 @@ impl ItemStackSerializer<'_> {
             let id = DataComponent::try_from_id(id_val as u8)
                 .ok_or_else(|| ReadingError::Message(format!("Unknown component ID: {id_val}")))?;
 
-            let component_impl = deserialize(id, read)?;
+            let component_impl = if id == DataComponent::CustomData {
+                CustomDataImpl::deserialize(read)?.to_dyn()
+            } else {
+                deserialize(id, read)?
+            };
             patch.push((id, Some(component_impl)));
         }
 
@@ -462,7 +473,11 @@ impl ItemStackSerializer<'_> {
             let id = DataComponent::try_from_id(remapped_comp_id as u8)
                 .ok_or_else(|| ReadingError::Message(format!("Unknown component ID: {id_val}")))?;
 
-            let component_impl = deserialize(id, read)?;
+            let component_impl = if id == DataComponent::CustomData {
+                CustomDataImpl::deserialize(read)?.to_dyn()
+            } else {
+                deserialize(id, read)?
+            };
             patch.push((id, Some(component_impl)));
         }
 

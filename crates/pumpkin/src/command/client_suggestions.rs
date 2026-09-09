@@ -7,7 +7,6 @@ use pumpkin_protocol::{
 };
 use std::sync::Arc;
 
-use super::tree::{Node, NodeType};
 use crate::command::node::{
     attached::{AttachedNode, NodeId},
     dispatcher::CommandDispatcher,
@@ -20,99 +19,21 @@ use pumpkin_protocol::bedrock::client::available_commands::{
 };
 use pumpkin_protocol::java::client::play::SuggestionProviders;
 
-#[expect(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines)]
 pub fn send_c_commands_packet(
     player: &Arc<Player>,
-    server: &Server,
+    _server: &Server,
     dispatcher: &CommandDispatcher,
 ) {
-    let cmd_src = super::CommandSender::Player(player.clone());
-
-    let mut first_level = Vec::new();
-
-    let fallback_dispatcher = &dispatcher.fallback_dispatcher;
-    for key in fallback_dispatcher.commands.keys() {
-        if dispatcher.is_disabled(key) {
-            continue;
-        }
-
-        // For double-slash commands, if the single-slash alias (/set) exists, only
-        // register the single-slash literal for the Java client.
-        if key.starts_with("//") && fallback_dispatcher.commands.contains_key(&key[1..]) {
-            continue;
-        }
-
-        let Ok(tree) = fallback_dispatcher.get_tree(key) else {
-            continue;
-        };
-
-        let Some(permission) = fallback_dispatcher.permissions.get(key) else {
-            continue;
-        };
-
-        if !cmd_src.has_permission(server, permission.as_str()) {
-            continue;
-        }
-
-        let (is_executable, child_nodes) =
-            nodes_to_proto_node_builders(&cmd_src, &tree.nodes, &tree.children);
-
-        let name = if key.starts_with("//") {
-            &key[1..]
-        } else {
-            key.as_str()
-        };
-
-        let proto_node = ProtoNodeBuilder {
-            child_nodes,
-            node_type: ProtoNodeType::Literal {
-                name,
-                is_executable,
-                redirect_target: None,
-                restricted: false,
-            },
-        };
-
-        first_level.push(proto_node);
-    }
-
-    let root = ProtoNodeBuilder {
-        child_nodes: first_level,
-        node_type: ProtoNodeType::Root,
-    };
-
-    let mut proto_nodes = Vec::new();
-    let root_node_index = root.build(&mut proto_nodes);
-
-    let node_id_offset = proto_nodes.len();
-
-    let mut root_node_children_second: Box<[VarInt]> = Box::new([]);
+    let mut proto_nodes: Vec<ProtoNode> = Vec::with_capacity(dispatcher.tree.len());
 
     for node in &dispatcher.tree {
-        let children: Box<[VarInt]> = node
-            .children_ref()
-            .values()
-            .copied()
-            .map(|id| resolve_node_id(id, node_id_offset, root_node_index))
-            .map(|i| VarInt(i as i32))
-            .collect();
-
-        let redirect_target = node
-            .redirect()
-            .and_then(|redirection| dispatcher.tree.resolve(redirection))
-            .map(|id| resolve_node_id(id, node_id_offset, root_node_index) as i32);
-
-        let satisfies_requirements = true;
-
-        match node {
+        let children: Box<[VarInt]> = match node {
             AttachedNode::Root(_) => {
                 // Drop disabled commands from the root's child list so they
                 // disappear from the client's command graph (and tab-completion)
-                // entirely. The nodes themselves stay in `proto_nodes` to keep
-                // every other node's indices valid; they simply become
-                // unreachable.
-                root_node_children_second = node
-                    .children_ref()
+                // entirely.
+                node.children_ref()
                     .values()
                     .copied()
                     .filter(|id| {
@@ -135,9 +56,30 @@ pub fn send_c_commands_packet(
                         }
                         true
                     })
-                    .map(|id| resolve_node_id(id, node_id_offset, root_node_index))
-                    .map(|i| VarInt(i as i32))
-                    .collect();
+                    .map(|id| VarInt((id.0.get() - 1) as i32))
+                    .collect()
+            }
+            _ => node
+                .children_ref()
+                .values()
+                .copied()
+                .map(|id| VarInt((id.0.get() - 1) as i32))
+                .collect(),
+        };
+
+        let redirect_target = node
+            .redirect()
+            .and_then(|redirection| dispatcher.tree.resolve(redirection))
+            .map(|id| (id.0.get() - 1) as i32);
+
+        let satisfies_requirements = true;
+
+        match node {
+            AttachedNode::Root(_) => {
+                proto_nodes.push(ProtoNode {
+                    children,
+                    node_type: ProtoNodeType::Root,
+                });
             }
             AttachedNode::Literal(literal_attached_node) => {
                 let name = if literal_attached_node.meta.literal.starts_with("//") {
@@ -200,117 +142,9 @@ pub fn send_c_commands_packet(
         }
     }
 
-    if !root_node_children_second.is_empty() {
-        let root_node = &mut proto_nodes[root_node_index];
-        let mut first = std::mem::take(&mut root_node.children).into_vec();
-        first.append(&mut root_node_children_second.into_vec());
-        root_node.children = first.into_boxed_slice();
-    }
-
+    let root_node_index = ROOT_NODE_ID.0.get() - 1;
     let packet = CCommands::new(proto_nodes.into(), VarInt(root_node_index as i32));
     player.try_send_client_packet(&packet);
-}
-
-fn resolve_node_id(node_id: NodeId, node_id_offset: usize, root_node_index: usize) -> usize {
-    if node_id == ROOT_NODE_ID {
-        root_node_index
-    } else {
-        const FIRST_NONROOT_ID: usize = 2;
-        debug_assert!(
-            node_id.0.get() >= FIRST_NONROOT_ID,
-            "Root node should have been handled in the if body"
-        );
-        node_id_offset + node_id.0.get() - FIRST_NONROOT_ID
-    }
-}
-
-struct ProtoNodeBuilder<'a> {
-    child_nodes: Vec<Self>,
-    node_type: ProtoNodeType<'a>,
-}
-
-impl<'a> ProtoNodeBuilder<'a> {
-    fn build(self, buffer: &mut Vec<ProtoNode<'a>>) -> usize {
-        let children: Box<[VarInt]> = self
-            .child_nodes
-            .into_iter()
-            .map(|node| VarInt(node.build(buffer) as i32))
-            .collect();
-
-        let i = buffer.len();
-        buffer.push(ProtoNode {
-            children,
-            node_type: self.node_type,
-        });
-        i
-    }
-}
-
-fn nodes_to_proto_node_builders<'a>(
-    cmd_src: &super::CommandSender,
-    nodes: &'a [Node],
-    children: &[usize],
-) -> (bool, Vec<ProtoNodeBuilder<'a>>) {
-    let mut child_nodes = Vec::new();
-    let mut is_executable = false;
-
-    for i in children {
-        let node = &nodes[*i];
-        match &node.node_type {
-            NodeType::Argument {
-                name,
-                consumer,
-                suggestion_provider,
-            } => {
-                let (node_is_executable, node_children) =
-                    nodes_to_proto_node_builders(cmd_src, nodes, &node.children);
-                child_nodes.push(ProtoNodeBuilder {
-                    child_nodes: node_children,
-                    node_type: ProtoNodeType::Argument {
-                        name,
-                        is_executable: node_is_executable,
-                        redirect_target: None,
-                        parser: consumer.get_client_side_parser(),
-                        override_suggestion_type: if suggestion_provider.is_some() {
-                            Some(SuggestionProviders::AskServer)
-                        } else {
-                            consumer.get_client_side_suggestion_type_override()
-                        },
-                        restricted: false,
-                    },
-                });
-            }
-
-            NodeType::Literal { string, .. } => {
-                let (node_is_executable, node_children) =
-                    nodes_to_proto_node_builders(cmd_src, nodes, &node.children);
-                child_nodes.push(ProtoNodeBuilder {
-                    child_nodes: node_children,
-                    node_type: ProtoNodeType::Literal {
-                        name: string,
-                        is_executable: node_is_executable,
-                        redirect_target: None,
-                        restricted: false,
-                    },
-                });
-            }
-
-            NodeType::ExecuteLeaf { .. } => is_executable = true,
-
-            NodeType::Require { predicate } => {
-                if predicate(cmd_src) {
-                    let (node_is_executable, node_children) =
-                        nodes_to_proto_node_builders(cmd_src, nodes, &node.children);
-                    if node_is_executable {
-                        is_executable = true;
-                    }
-                    child_nodes.extend(node_children);
-                }
-            }
-        }
-    }
-
-    (is_executable, child_nodes)
 }
 
 struct BuilderContext<'a> {
@@ -318,57 +152,14 @@ struct BuilderContext<'a> {
     enums: &'a mut Vec<EnumData>,
 }
 
-#[expect(clippy::too_many_lines)]
 pub fn send_bedrock_commands_packet(
     player: &Arc<Player>,
-    server: &Server,
+    _server: &Server,
     dispatcher: &CommandDispatcher,
 ) {
-    let cmd_src = super::CommandSender::Player(player.clone());
-
     let mut enum_values: Vec<String> = Vec::new();
     let mut enums: Vec<EnumData> = Vec::new();
     let mut commands: Vec<CommandData> = Vec::new();
-
-    let fallback_dispatcher = &dispatcher.fallback_dispatcher;
-    for key in fallback_dispatcher.commands.keys() {
-        if dispatcher.is_disabled(key) {
-            continue;
-        }
-
-        if key.starts_with("//") && fallback_dispatcher.commands.contains_key(&key[1..]) {
-            continue;
-        }
-
-        let Ok(tree) = fallback_dispatcher.get_tree(key) else {
-            continue;
-        };
-
-        let Some(permission) = fallback_dispatcher.permissions.get(key) else {
-            continue;
-        };
-
-        if !cmd_src.has_permission(server, permission.as_str()) {
-            continue;
-        }
-
-        let mut ctx = BuilderContext {
-            enum_values: &mut enum_values,
-            enums: &mut enums,
-        };
-
-        let overloads = build_overloads_from_nodes(&tree.nodes, &tree.children, &mut ctx);
-
-        commands.push(CommandData {
-            name: key.clone(),
-            description: String::new(),
-            flags: 0,
-            permission_level: CommandPermissionLevel::Any.into(),
-            alias_enum: -1,
-            command_data_chained_subcommand_indexes: Vec::new(),
-            overloads,
-        });
-    }
 
     let tree_nodes: Vec<&AttachedNode> = dispatcher.tree.iter().collect();
 
@@ -445,79 +236,6 @@ pub fn send_bedrock_commands_packet(
         && let Ok(data) = bedrock_client.serialize_packet(&packet)
     {
         bedrock_client.try_enqueue_packet(data);
-    }
-}
-
-fn build_overloads_from_nodes(
-    nodes: &[Node],
-    children: &[usize],
-    ctx: &mut BuilderContext,
-) -> Vec<OverloadData> {
-    let mut overloads = Vec::new();
-    collect_overloads_from_nodes(nodes, children, &mut Vec::new(), &mut overloads, ctx);
-    if overloads.is_empty() {
-        overloads.push(OverloadData {
-            is_chaining: false,
-            parameter_data: Vec::new(),
-        });
-    }
-    overloads
-}
-
-fn collect_overloads_from_nodes(
-    nodes: &[Node],
-    children: &[usize],
-    current_params: &mut Vec<ParamData>,
-    overloads: &mut Vec<OverloadData>,
-    ctx: &mut BuilderContext,
-) {
-    let mut has_executable = false;
-
-    for &i in children {
-        let node = &nodes[i];
-        match &node.node_type {
-            NodeType::ExecuteLeaf { .. } => {
-                has_executable = true;
-            }
-            NodeType::Literal { string, .. } => {
-                let enum_idx = ensure_command_enum(
-                    ctx.enums,
-                    ctx.enum_values,
-                    &format!("SubCommand_{string}"),
-                    std::slice::from_ref(string),
-                );
-                let mut params = current_params.clone();
-                params.push(ParamData {
-                    name: string.clone(),
-                    parse_symbol: arg_flags::ARG_FLAG_VALID
-                        | arg_flags::ARG_FLAG_ENUM
-                        | enum_idx as u32,
-                    is_optional: false,
-                    options: 0,
-                });
-                collect_overloads_from_nodes(nodes, &node.children, &mut params, overloads, ctx);
-            }
-            NodeType::Argument { name, consumer, .. } => {
-                let mut params = current_params.clone();
-                params.push(ParamData {
-                    name: name.clone(),
-                    parse_symbol: bedrock_param_type(&consumer.get_client_side_parser()),
-                    is_optional: false,
-                    options: 0,
-                });
-                collect_overloads_from_nodes(nodes, &node.children, &mut params, overloads, ctx);
-            }
-            NodeType::Require { .. } => {
-                collect_overloads_from_nodes(nodes, &node.children, current_params, overloads, ctx);
-            }
-        }
-    }
-
-    if has_executable {
-        overloads.push(OverloadData {
-            is_chaining: false,
-            parameter_data: current_params.clone(),
-        });
     }
 }
 

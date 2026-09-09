@@ -5,10 +5,12 @@ use pumpkin_data::{
     block_properties::{BlockProperties, OakSaplingLikeProperties},
 };
 use pumpkin_macros::pumpkin_block_from_tag;
-use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
+use pumpkin_util::random::{RandomGenerator, xoroshiro128::Xoroshiro};
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::blocks::plant::PlantBlockBase;
+use crate::block::blocks::plant::tree_grower::TreeGrower;
 use crate::block::{
     BlockBehaviour, BonemealArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, RandomTickArgs,
 };
@@ -43,7 +45,7 @@ impl SaplingBlock {
         bone_meal: bool,
     ) {
         if OakSaplingLikeProperties::handles_block_id(block.id) {
-            let mut props = OakSaplingLikeProperties::from_state_id(state_id, block);
+            let mut props = OakSaplingLikeProperties::from_state_id(state_id);
             if props.stage == 0 {
                 props.stage = 1;
                 world.set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_ALL);
@@ -55,7 +57,15 @@ impl SaplingBlock {
         let mut event = StructureGrowEvent::new(*pos, tree_type, bone_meal);
         if let Some(server) = world.server.upgrade() {
             server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return;
+            }
         }
+        let Some(grower) = TreeGrower::for_block(block) else {
+            return;
+        };
+        let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(rand::random::<u64>()));
+        grower.grow_tree(world, pos, block, state_id, &mut random);
     }
 }
 
@@ -77,14 +87,26 @@ impl BlockBehaviour for SaplingBlock {
     }
 
     fn random_tick(&self, args: RandomTickArgs<'_>) {
-        if rand::random::<u8>().is_multiple_of(7) {
+        if args.world.get_max_local_raw_brightness(&args.position.up()) >= 9
+            && rand::random_range(0..7) == 0
+        {
             let state_id = args.world.get_block_state_id(args.position);
             Self::advance_tree(args.world, args.position, args.block, state_id, false);
         }
     }
 
-    fn is_valid_bonemeal_target(&self, _args: BonemealArgs<'_>) -> bool {
-        true
+    fn is_valid_bonemeal_target(&self, args: BonemealArgs<'_>) -> bool {
+        let Some(grower) = TreeGrower::for_block(args.block) else {
+            return false;
+        };
+        let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(rand::random::<u64>()));
+        grower.can_grow(args.world, args.position, args.block, &mut random)
+            && args
+                .world
+                .is_in_build_limit(
+                    args.position
+                        .offset(Vector3::new(0, grower.min_height(), 0)),
+                )
     }
 
     fn is_bonemeal_success(&self, _args: BonemealArgs<'_>) -> bool {

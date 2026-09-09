@@ -77,14 +77,14 @@ impl HangingSignBlockEntity {
             position,
             is_waxed: AtomicBool::new(false),
             front_text: if is_front {
-                Text::new(messages.clone())
+                Text::from_messages(messages.clone())
             } else {
                 Text::default()
             },
             back_text: if is_front {
                 Text::default()
             } else {
-                Text::new(messages)
+                Text::from_messages(messages)
             },
             currently_editing_player: Arc::new(Mutex::new(None)),
         }

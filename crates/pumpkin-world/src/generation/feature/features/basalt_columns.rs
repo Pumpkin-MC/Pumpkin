@@ -6,7 +6,6 @@ use pumpkin_util::{
 
 use crate::{generation::proto_chunk::GenerationCache, world::WorldPortalExt};
 
-const LAVA_SEA_LEVEL: i32 = 32; // TODO: use getSeaLevel() instead of hardcoding this
 const CLUSTERED_REACH: i32 = 5;
 const UNCLUSTERED_REACH: i32 = 8;
 const CLUSTERED_SIZE: i32 = 50;
@@ -143,7 +142,7 @@ fn find_air<T: GenerationCache>(chunk: &T, pos: BlockPos, mut limit: i32) -> Opt
 
 fn is_air_or_lava_ocean<T: GenerationCache>(chunk: &T, pos: BlockPos) -> bool {
     let state = GenerationCache::get_block_state(chunk, &pos.0);
-    is_air(state) || (state.to_block_id() == Block::LAVA.id && pos.0.y <= LAVA_SEA_LEVEL)
+    is_air(state) || (state.to_block_id() == Block::LAVA.id && pos.0.y <= chunk.get_sea_level())
 }
 
 const fn is_cannot_place_on(id: BlockId) -> bool {

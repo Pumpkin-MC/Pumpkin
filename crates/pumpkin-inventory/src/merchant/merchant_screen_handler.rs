@@ -6,12 +6,12 @@ use std::{
     },
 };
 
+use crate::inventory::Inventory;
 use pumpkin_data::{
     item_stack::ItemStack,
     screen::WindowType,
     statistic::{CustomStatistic, StatisticCategory},
 };
-use pumpkin_world::inventory::Inventory;
 
 use crate::{
     player::player_inventory::PlayerInventory,
@@ -495,6 +495,7 @@ mod tests {
         sync::atomic::{AtomicI32, AtomicUsize, Ordering},
     };
 
+    use crate::inventory::SimpleInventory;
     use pumpkin_data::{data_component_impl::EquipmentSlot, item::Item};
     use pumpkin_protocol::{
         codec::item_stack_seralizer::ItemStackSerializer,
@@ -506,7 +507,6 @@ mod tests {
             server::play::SlotActionType,
         },
     };
-    use pumpkin_world::inventory::SimpleInventory;
     use std::sync::Mutex;
 
     use crate::{entity_equipment::EntityEquipment, screen_handler::InventoryPlayer};
@@ -620,6 +620,8 @@ mod tests {
                 self.traded.fetch_add(amount, Ordering::Relaxed);
             }
         }
+
+        fn play_block_sound(&self, _sound: pumpkin_data::sound::Sound, _pitch: f32) {}
     }
 
     fn inventories() -> (Arc<PlayerInventory>, Arc<SimpleInventory>) {

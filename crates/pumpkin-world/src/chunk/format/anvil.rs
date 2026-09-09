@@ -8,6 +8,7 @@ use std::{
     io::{Read, SeekFrom, Write},
     marker::PhantomData,
     path::{Path, PathBuf},
+    sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
 use tokio::{
@@ -19,7 +20,7 @@ use tracing::{debug, trace};
 use crate::chunk::{
     ChunkParsingError, ChunkReadingError, ChunkSerializingError, ChunkWritingError,
     CompressionError,
-    io::{ChunkSerializer, Dirtiable, LoadedData},
+    io::{ChunkSerializer, Dirtiable, LoadedData, run_blocking},
 };
 
 /// The side size of a region in chunks (one region is 32x32 chunks)
@@ -603,7 +604,7 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for AnvilChunkFile<
     #[expect(clippy::too_many_lines)]
     async fn update_chunk(
         &mut self,
-        chunk: &Self::Data,
+        chunk: Arc<Self::Data>,
         chunk_config: &Self::ChunkConfig,
     ) -> Result<(), ChunkWritingError> {
         let epoch = SystemTime::now()
@@ -616,7 +617,14 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for AnvilChunkFile<
         let compression_type = self.chunks_data[index]
             .as_ref()
             .and_then(|chunk_data| chunk_data.serialized_data.compression);
-        let new_chunk_data = AnvilChunkData::from_chunk(chunk, compression_type, chunk_config)?;
+        let chunk_config_snapshot = chunk_config.clone();
+        let new_chunk_data = run_blocking(move || {
+            AnvilChunkData::from_chunk(&*chunk, compression_type, &chunk_config_snapshot)
+        })
+        .await
+        .map_err(|_| {
+            ChunkWritingError::IoError(std::io::Error::other("chunk serialization task failed"))
+        })??;
 
         let mut write_action = self.write_action.lock().await;
         if !chunk_config.write_in_place {

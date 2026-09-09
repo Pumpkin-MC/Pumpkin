@@ -2,15 +2,15 @@ use crate::block::entities::BlockEntity;
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::world::World;
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::{BlockProperties, FacingHopper, HopperLikeProperties};
+use pumpkin_data::block_properties::{FacingHopper, HopperLikeProperties};
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, tag};
+use pumpkin_inventory::{Clearable, Inventory, sync_write_items_to_nbt};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::inventory::{Clearable, Inventory, sync_write_items_to_nbt};
 use std::any::Any;
 use std::array::from_fn;
 use std::sync::Arc;
@@ -61,7 +61,7 @@ impl BlockEntity for HopperBlockEntity {
             ticked_game_time: AtomicI64::new(0),
         };
 
-        pumpkin_world::inventory::sync_read_items_from_nbt(
+        pumpkin_inventory::sync_read_items_from_nbt(
             nbt,
             hopper
                 .items
@@ -77,10 +77,8 @@ impl BlockEntity for HopperBlockEntity {
             .store(world.get_world_age(), Ordering::Relaxed);
         if self.cooldown_time.fetch_sub(1, Ordering::Relaxed) <= 0 {
             self.cooldown_time.store(0, Ordering::Relaxed);
-            let state = HopperLikeProperties::from_state_id(
-                world.get_block_state(&self.position).id,
-                &Block::HOPPER,
-            );
+            let state =
+                HopperLikeProperties::from_state_id(world.get_block_state(&self.position).id);
             if state.enabled
                 && let Some(entity) = world.get_block_entity(&self.position)
                 && let Some(hopper) = entity.as_any().downcast_ref::<Self>()
@@ -104,7 +102,7 @@ impl BlockEntity for HopperBlockEntity {
 
     fn set_block_state(&mut self, block_state: BlockStateId) {
         // TODO !!!IMPORTANT!!! set block state when loading the chunk
-        self.facing = HopperLikeProperties::from_state_id(block_state, &Block::HOPPER).facing;
+        self.facing = HopperLikeProperties::from_state_id(block_state).facing;
     }
 
     fn is_dirty(&self) -> bool {
