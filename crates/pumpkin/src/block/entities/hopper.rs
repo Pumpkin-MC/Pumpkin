@@ -79,7 +79,7 @@ impl BlockEntity for HopperBlockEntity {
         // before `from_state_id`): the block entity can outlive the block itself for one tick
         // when destroyed concurrently on another Rayon worker.
         let block = world.get_block(&self.position);
-        if block.id != Block::HOPPER.id {
+        if block.id != pumpkin_data::BlockId::HOPPER {
             return;
         }
         if self.cooldown_time.fetch_sub(1, Ordering::Relaxed) <= 0 {
@@ -335,16 +335,19 @@ impl HopperBlockEntity {
                 // clone and never writing back left the source stack untouched, duplicating
                 // the item into the target while the hopper kept its full stack.
                 let one_item = self.remove_stack_specific(slot, 1);
+                if one_item.is_empty() {
+                    // Slot emptied between the read and the removal. `add_one_item` would take
+                    // the `dst.is_empty()` branch and report a transfer that never happened.
+                    continue;
+                }
                 if Self::add_one_item(self, container.as_ref(), &one_item) {
                     return true;
                 }
-                let mut restored = self.get_stack(slot);
-                if restored.is_empty() {
-                    self.set_stack(slot, one_item);
-                } else {
-                    restored.item_count += one_item.item_count;
-                    self.set_stack(slot, restored);
-                }
+                // Vanilla `HopperBlockEntity.ejectItems` writes back the copy taken before the
+                // removal. Re-reading the slot and adding onto it would fold the item into
+                // whatever a concurrent writer put there, changing its type or overflowing
+                // `get_max_stack_size`.
+                self.set_stack(slot, item);
             }
         }
         false
