@@ -431,8 +431,11 @@ impl DynamicLightEngine {
         pos: &BlockPos,
         removed_light_level: u8,
     ) {
-        // Check what the current light level actually is at this position
-        let current_level = cursor.block_light(pos).unwrap_or(0);
+        // `None` is unloaded or out of range, not dark. A fabricated 0 passes the guard below,
+        // darkening the loaded cross-border neighbours from a source that was never read.
+        let Some(current_level) = cursor.block_light(pos) else {
+            return;
+        };
 
         // Only propagate decrease if this position hasn't already been reset to 0
         // This prevents positions that were intentionally set to 0 from propagating light
