@@ -5963,6 +5963,8 @@ impl World {
     }
     /* End ItemScatterer.java */
 
+    /// Vanilla `levelEvent`. Java-only: Bedrock clients get nothing.
+    /// See [`Self::sync_global_world_event`]
     pub fn sync_world_event(&self, world_event: WorldEvent, position: BlockPos, data: i32) {
         let chunk_pos = position.chunk_position();
         self.broadcast_to_chunk(
@@ -5971,6 +5973,12 @@ impl World {
         );
     }
 
+    /// Vanilla `globalLevelEvent`. Java-only: Bedrock clients get nothing.
+    ///
+    /// No editioned broadcast here. [`WorldEvent`] ids are Java ids; Bedrock's
+    /// `CLevelEvent` is a separate id space, undocumented. The global events
+    /// are sounds anyway: Bedrock takes those as `CLevelSoundEvent` with `is_global`,
+    /// e.g. `SoundEndPortalSpawn` -> `block.end_portal.spawn`. Per event, no mapping.
     pub fn sync_global_world_event(&self, world_event: WorldEvent, position: BlockPos, data: i32) {
         self.broadcast_packet_all(&CWorldEvent::new(world_event as i32, position, data, true));
     }
