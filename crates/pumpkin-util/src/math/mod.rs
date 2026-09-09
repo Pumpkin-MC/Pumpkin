@@ -16,6 +16,12 @@ pub mod vector2;
 pub mod vector3;
 pub mod vertical_surface_type;
 
+// TODO: replace the table with a polynomial. 65536 f32 are 256 KiB, so every lookup that is not
+// in a hot loop is a cache miss, and the table is only about 1e-4 exact anyway -> pi does not
+// have to be exact either. Plan: 5th order odd minimax polynomial in f32
+// (`sin x ~ x + c3*x^3 + c5*x^5`), range-reduced to the first quadrant, the other three quadrants
+// from the copied value with the axis mirrored (sign flip on argument and result). Branch-free,
+// so it vectorizes over a batch of angles.
 const SIN_SCALE: f64 = 10430.378350470453;
 const SIN_MASK: i64 = 65535;
 

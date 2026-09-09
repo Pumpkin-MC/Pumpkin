@@ -1788,6 +1788,16 @@ impl Entity {
         delta.x as i16 != 0 || delta.y as i16 != 0 || delta.z as i16 != 0
     }
 
+    /// Out of the i16 range the relative-move packets encode, vanilla's `deltaTooBig`
+    /// (`VecDeltaCodec` at 4096 units/block, about 8 blocks). A bigger jump between two resyncs
+    /// saturates and would claim the entity moved less far than it did, so
+    /// [`Entity::send_pos_rot`] substitutes the absolute `CEntityPositionSync`.
+    fn delta_too_big(raw_delta: Vector3<f64>) -> bool {
+        !(-32768.0..=32767.0).contains(&raw_delta.x)
+            || !(-32768.0..=32767.0).contains(&raw_delta.y)
+            || !(-32768.0..=32767.0).contains(&raw_delta.z)
+    }
+
     #[expect(clippy::too_many_lines)]
     pub fn send_pos_rot(&self) {
         let new = self.pos.load();
@@ -1802,16 +1812,8 @@ impl Entity {
         let rot_changed =
             yaw != self.last_sent_yaw.load(Relaxed) || pitch != self.last_sent_pitch.load(Relaxed);
 
-        // The relative-move packets below encode the delta as an i16 (vanilla's
-        // `ClientboundMoveEntityPacket`, `VecDeltaCodec` at 4096 units/block, about 8 blocks of
-        // range). A bigger jump between two resyncs (explosion, a long fall) does not fit, and
-        // truncating it would tell the client the entity moved less far than it did. Vanilla's
-        // `ServerEntity.sendChanges` checks this (`deltaTooBig`) and substitutes an absolute
-        // `ClientboundEntityPositionSyncPacket`.
-        let delta_too_big = !(-32768.0..=32767.0).contains(&raw_delta.x)
-            || !(-32768.0..=32767.0).contains(&raw_delta.y)
-            || !(-32768.0..=32767.0).contains(&raw_delta.z);
-        if delta_too_big {
+        // Out of range for the relative-move packets below: absolute sync instead.
+        if Self::delta_too_big(raw_delta) {
             // Absolute position: base is the raw position, no remainder left over.
             self.last_sent_pos.store(new);
             self.last_sent_yaw.store(yaw, Relaxed);
@@ -2061,6 +2063,14 @@ impl Entity {
     pub fn send_pos(&self) {
         let new = self.pos.load();
         let raw_delta = self.pos_delta_units();
+
+        // Too far for a relative packet: `send_pos_rot` owns the absolute sync. Converting here
+        // would saturate to a partial move and advance the base by it, leaving the client behind
+        // for good.
+        if Self::delta_too_big(raw_delta) {
+            self.send_pos_rot();
+            return;
+        }
 
         let converted = Vector3::new(raw_delta.x as i16, raw_delta.y as i16, raw_delta.z as i16);
 
