@@ -201,6 +201,24 @@ fn is_allowed_by_team_rules(
         || same_team
 }
 
+/// Resolves an entity's scoreboard team. Players are
+/// tracked by name; all other entities are tracked by their UUID string.
+fn get_entity_team(entity: &dyn EntityBase) -> Option<crate::world::scoreboard::Team> {
+    if let Some(player) = entity.get_player() {
+        return player.get_team();
+    }
+
+    let entity_ref = entity.get_entity();
+    entity_ref
+        .world
+        .load()
+        .scoreboard
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get_entity_team(&entity_ref.entity_uuid.to_string())
+        .cloned()
+}
+
 impl LivingEntity {
     const USING_ITEM_FLAG: u8 = 1;
     const OFF_HAND_ACTIVE_FLAG: u8 = 2;
@@ -1271,9 +1289,7 @@ impl LivingEntity {
     fn push_entities(&self, dyn_self: &dyn EntityBase) {
         let world = self.entity.world.load();
         let entity_bb = self.entity.bounding_box.load();
-        let own_team = dyn_self
-            .get_player()
-            .and_then(super::player::Player::get_team);
+        let own_team = get_entity_team(dyn_self);
 
         let pushable: Vec<Arc<dyn EntityBase>> = world
             .get_all_at_box(&entity_bb)
@@ -1285,10 +1301,7 @@ impl LivingEntity {
                     && entity.is_pushable()
                     && is_allowed_by_team_rules(
                         own_team.as_ref(),
-                        entity
-                            .get_player()
-                            .and_then(super::player::Player::get_team)
-                            .as_ref(),
+                        get_entity_team(&**entity).as_ref(),
                     )
             })
             .collect();
