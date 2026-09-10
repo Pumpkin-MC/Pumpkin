@@ -4,21 +4,20 @@ use pumpkin_util::{
     random::{RandomImpl, xoroshiro128::XoroshiroSplitter},
 };
 
-use crate::generation::noise::router::{
-    chunk_density_function::ChunkNoiseFunctionSampleOptions, chunk_noise_router::ChunkNoiseRouter,
-};
+use crate::generation::noise::{VeinSample, router::chunk_noise_router::ChunkNoiseRouter};
 
 pub struct OreVeinSampler;
 
 impl OreVeinSampler {
+    #[must_use]
     pub fn sample(
         &self,
         router: &mut ChunkNoiseRouter,
         ore_random_deriver: &XoroshiroSplitter,
         pos: &Vector3<i32>,
-        sample_options: &ChunkNoiseFunctionSampleOptions,
+        veins: &VeinSample,
     ) -> Option<&'static BlockState> {
-        let vein_toggle = router.vein_toggle(pos, sample_options);
+        let vein_toggle = veins.toggle;
         let vein_type: &VeinType = if vein_toggle > 0.0 {
             &vein_type::COPPER
         } else {
@@ -35,11 +34,11 @@ impl OreVeinSampler {
             if abs_sample + mapped_diff >= 0.4 {
                 let mut random = ore_random_deriver.split_pos(pos.x, block_y, pos.z);
 
-                let vein_ridged_sample = router.vein_ridged(pos, sample_options);
+                let vein_ridged_sample = veins.ridged;
                 if random.next_f32() <= 0.7 && vein_ridged_sample < 0.0 {
                     let clamped_sample = clamped_map(abs_sample, 0.4, 0.6, 0.1, 0.3);
 
-                    let vein_gap = router.vein_gap(pos, sample_options);
+                    let vein_gap = router.vein_gap(pos);
                     return if random.next_f32() < clamped_sample && vein_gap > -0.3 {
                         Some(if random.next_f32() < 0.02 {
                             vein_type.raw_ore.default_state

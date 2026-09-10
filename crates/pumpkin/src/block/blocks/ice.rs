@@ -14,9 +14,9 @@ use crate::block::{
 };
 use crate::world::World;
 
-/// Melts ice at the given position into water (or removes it in ultrawarm dimensions like the Nether).
+/// Melts ice at the given position into water (or removes it where water evaporates).
 pub fn melt(world: &Arc<World>, position: &BlockPos) {
-    if world.dimension == Dimension::THE_NETHER {
+    if world.dimension.water_evaporates {
         world.set_block_state(position, BlockStateId::AIR, BlockFlags::NOTIFY_ALL);
     } else {
         world.set_block_state(
@@ -68,7 +68,7 @@ impl BlockBehaviour for IceBlock {
             let held_item = args.player.inventory().held_item();
             let has_silk_touch = held_item.get_enchantment_level(&Enchantment::SILK_TOUCH) > 0;
             if !has_silk_touch {
-                if args.world.dimension == Dimension::THE_NETHER {
+                if args.world.dimension.water_evaporates {
                     args.world.set_block_state(
                         args.position,
                         BlockStateId::AIR,

@@ -9,7 +9,7 @@ use super::{
     LevelChannel,
 };
 use crate::chunk::io::Dirtiable;
-use crate::level::{Level, SyncChunk};
+use crate::level::{Level, LoadedChunkChange, SyncChunk};
 use dashmap::DashMap;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_util::math::vector2::Vector2;
@@ -56,6 +56,7 @@ pub struct GenerationSchedule {
     send_level: Arc<LevelChannel>,
 
     public_chunk_map: Arc<DashMap<Vector2<i32>, SyncChunk>>,
+    loaded_chunk_changes: Arc<crossbeam::queue::SegQueue<LoadedChunkChange>>,
     chunk_map: HashMap<ChunkPos, ChunkHolder>,
     unload_chunks: HashSetType<ChunkPos>,
 
@@ -79,6 +80,24 @@ pub struct GenerationSchedule {
 }
 
 impl GenerationSchedule {
+    fn publish_chunk(&self, pos: ChunkPos, chunk: SyncChunk) -> Option<SyncChunk> {
+        let previous = self.public_chunk_map.insert(pos, chunk);
+        if previous.is_none() {
+            self.loaded_chunk_changes
+                .push(LoadedChunkChange::Loaded(pos));
+        }
+        previous
+    }
+
+    fn unpublish_chunk(&self, pos: ChunkPos) -> Option<SyncChunk> {
+        let removed = self.public_chunk_map.remove(&pos).map(|(_, chunk)| chunk);
+        if removed.is_some() {
+            self.loaded_chunk_changes
+                .push(LoadedChunkChange::Unloaded(pos));
+        }
+        removed
+    }
+
     pub fn create(
         io_read_thread_count: usize,
         level: Arc<Level>,
@@ -136,6 +155,7 @@ impl GenerationSchedule {
                     last_high_priority: Vec::new(),
                     send_level: level_channel,
                     public_chunk_map: level_sched.loaded_chunks.clone(),
+                    loaded_chunk_changes: level_sched.loaded_chunk_changes.clone(),
                     unload_chunks: HashSetType::default(),
                     waiting_for_chunks: HashSetType::default(),
                     io_lock,
@@ -577,7 +597,7 @@ impl GenerationSchedule {
                         match holder.chunk.as_ref().expect("chunk exists") {
                             Chunk::Level(chunk) => {
                                 self.apply_lighting_override(chunk);
-                                self.public_chunk_map.insert(pos, chunk.clone());
+                                self.publish_chunk(pos, chunk.clone());
                                 self.listener.process_new_chunk(pos, chunk);
                             }
                             Chunk::Proto(_) => panic!(),
@@ -602,6 +622,7 @@ impl GenerationSchedule {
                             for dz in -radius..=radius {
                                 let new_pos = pos.add_raw(dx, dz);
                                 let req_stage = dependency[dx.abs().max(dz.abs()) as usize];
+                                self.unload_chunks.remove(&new_pos);
                                 if new_pos == pos {
                                     let newly_created = Self::ensure_dependency_chain(
                                         &mut self.graph,
@@ -654,6 +675,7 @@ impl GenerationSchedule {
         }
 
         while let Some((pos, req_stage, dep_task)) = worklist.pop_front() {
+            self.unload_chunks.remove(&pos);
             let mut holder = self.chunk_map.remove(&pos).unwrap_or_default();
             let newly_created = Self::ensure_dependency_chain(
                 &mut self.graph,
@@ -841,7 +863,12 @@ impl GenerationSchedule {
             let Some(mut holder) = self.chunk_map.remove(&pos) else {
                 continue;
             };
-            debug_assert_eq!(holder.target_stage, StagedChunkEnum::None);
+            if holder.target_stage != StagedChunkEnum::None
+                || holder.dependency_stage != StagedChunkEnum::None
+            {
+                self.chunk_map.insert(pos, holder);
+                continue;
+            }
             if !holder.occupied.is_null() {
                 self.chunk_map.insert(pos, holder);
                 self.unload_chunks.insert(pos);
@@ -862,7 +889,7 @@ impl GenerationSchedule {
             holder.occupied_by = EdgeKey::null();
 
             if holder.public {
-                self.public_chunk_map.remove(&pos);
+                self.unpublish_chunk(pos);
                 holder.public = false;
             }
 
@@ -874,10 +901,10 @@ impl GenerationSchedule {
                             chunks.push((pos, Chunk::Level(chunk)));
                         }
                     }
-                    Chunk::Proto(_) => {
-                        // ProtoChunks are in-memory intermediate generation stages
-                        // (e.g. temporary border dependencies). Do not convert and save
-                        // incomplete chunks to disk during runtime unloads.
+                    Chunk::Proto(proto) => {
+                        if !matches!(proto.stage, StagedChunkEnum::Empty | StagedChunkEnum::None) {
+                            chunks.push((pos, Chunk::Proto(proto)));
+                        }
                     }
                 }
             }
@@ -1017,7 +1044,7 @@ impl GenerationSchedule {
                 match &chunk {
                     Chunk::Level(data) => {
                         self.apply_lighting_override(data);
-                        let result = self.public_chunk_map.insert(pos, data.clone());
+                        let result = self.publish_chunk(pos, data.clone());
                         if result.is_some() {
                             warn!(
                                 "receive_chunk(IO): replacing existing public chunk at {:?}",
@@ -1037,7 +1064,7 @@ impl GenerationSchedule {
                                 "Chunk {:?} downgraded to Proto for relighting, marking as non-public",
                                 pos
                             );
-                            self.public_chunk_map.remove(&pos);
+                            self.unpublish_chunk(pos);
                             holder.public = false;
                         }
                     }
@@ -1078,7 +1105,7 @@ impl GenerationSchedule {
                                 self.apply_lighting_override(&chunk);
                                 let public_chunk = chunk.clone();
                                 if was_public {
-                                    self.public_chunk_map.insert(new_pos, public_chunk);
+                                    self.publish_chunk(new_pos, public_chunk);
                                     info!(
                                         "Notifying players: regenerated chunk at {:?} (was already public)",
                                         new_pos
@@ -1087,8 +1114,7 @@ impl GenerationSchedule {
                                     holder.chunk = Some(Chunk::Level(chunk));
                                 } else {
                                     holder.chunk = Some(Chunk::Level(chunk));
-                                    let result =
-                                        self.public_chunk_map.insert(new_pos, public_chunk);
+                                    let result = self.publish_chunk(new_pos, public_chunk);
                                     holder.public = true;
                                     if result.is_some() {
                                         warn!(

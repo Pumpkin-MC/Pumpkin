@@ -13,11 +13,12 @@ use crate::{
         },
         palette::has_random_ticking_fluid,
     },
-    generation::get_world_gen,
+    generation::get_world_gen_with_all_settings,
     tick::{OrderedTick, ScheduledTick, TickPriority},
     world::WorldPortalExt,
 };
 use arc_swap::ArcSwap;
+use crossbeam::queue::SegQueue;
 use dashmap::{DashMap, Entry};
 use pumpkin_config::{chunk::ChunkConfig, lighting::LightingEngineConfig, world::LevelConfig};
 use pumpkin_data::biome::Biome;
@@ -50,6 +51,12 @@ use tokio_util::task::TaskTracker;
 pub type SyncChunk = Arc<ChunkData>;
 pub type SyncEntityChunk = Arc<ChunkEntityData>;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LoadedChunkChange {
+    Loaded(Vector2<i32>),
+    Unloaded(Vector2<i32>),
+}
+
 pub type ChunkSaver =
     LevelFileIO<LinearV2File<ChunkData>, AnvilChunkFile<ChunkData>, PumpFile<ChunkData>>;
 
@@ -80,6 +87,7 @@ pub struct Level {
     // Chunks that are paired with chunk watchers. When a chunk is no longer watched, it is removed
     // from the loaded chunks map and sent to the underlying ChunkIO
     pub loaded_chunks: Arc<DashMap<Vector2<i32>, SyncChunk>>,
+    pub(crate) loaded_chunk_changes: Arc<SegQueue<LoadedChunkChange>>,
     loaded_entity_chunks: Arc<DashMap<Vector2<i32>, SyncEntityChunk>>,
     pub chunks_with_scheduled_ticks: Arc<dashmap::DashSet<Vector2<i32>>>,
     pub chunk_loading: Mutex<ChunkLoading>,
@@ -194,42 +202,48 @@ impl Level {
         let mut is_flat = false;
         let mut flat_layers = Vec::new();
         let mut flat_biome = "minecraft:plains".to_string();
+        let mut generator_settings_name: Option<String> = None;
+        let mut biome_source: Option<crate::world_info::BiomeSource> = None;
+        let mut structure_overrides: Option<Vec<String>> = None;
 
         if let Some(wgs) = crate::world_info::data_files::read_world_gen_settings(main_folder)
             && let Some(dim_settings) = wgs.dimensions.get(dimension.minecraft_name)
-            && dim_settings.generator.generator_type == "minecraft:flat"
         {
-            is_flat = true;
-            if let Some(crate::world_info::GeneratorSettings::Compound(val)) =
+            biome_source.clone_from(&dim_settings.generator.biome_source);
+
+            if dim_settings.generator.generator_type == "minecraft:flat" {
+                is_flat = true;
+                let flat_settings = dim_settings
+                    .generator
+                    .settings
+                    .as_ref()
+                    .and_then(crate::world_info::GeneratorSettings::as_flat_settings)
+                    .or_else(|| {
+                        crate::world_info::FlatLevelGeneratorPreset::from_name("classic_flat")
+                            .map(|p| p.settings)
+                    });
+                if let Some(flat_settings) = flat_settings {
+                    flat_layers = flat_settings.to_flat_layers();
+                    structure_overrides = flat_settings.structure_overrides_vec();
+                    flat_biome = flat_settings.biome;
+                }
+            } else if let Some(crate::world_info::GeneratorSettings::Reference(s)) =
                 &dim_settings.generator.settings
             {
-                if let Some(b) = val.get("biome").and_then(|v| v.as_str()) {
-                    flat_biome = b.to_string();
-                }
-                if let Some(list) = val.get("layers").and_then(|v| v.as_array()) {
-                    for layer in list {
-                        let block = layer
-                            .get("block")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("minecraft:air")
-                            .to_string();
-                        let height = layer
-                            .get("height")
-                            .and_then(serde_json::Value::as_i64)
-                            .unwrap_or(1) as i32;
-                        flat_layers.push(crate::generation::generator::FlatLayer { block, height });
-                    }
-                }
+                generator_settings_name = Some(s.clone());
             }
         }
 
         let seed = Seed(seed as u64);
-        let world_gen: Arc<WorldGenerator> = Arc::from(get_world_gen(
+        let world_gen: Arc<WorldGenerator> = Arc::from(get_world_gen_with_all_settings(
             seed,
             dimension,
             is_flat,
             flat_layers,
             flat_biome,
+            generator_settings_name.as_deref(),
+            biome_source.as_ref(),
+            structure_overrides.as_deref(),
         ));
 
         let chunk_saver = match &level_config.chunk {
@@ -263,6 +277,7 @@ impl Level {
             entity_saver,
             schedule_tick_counts: AtomicU64::new(0),
             loaded_chunks: Arc::new(DashMap::new()),
+            loaded_chunk_changes: Arc::new(SegQueue::new()),
             loaded_entity_chunks: Arc::new(DashMap::new()),
             chunks_with_scheduled_ticks: Arc::new(dashmap::DashSet::new()),
             chunk_loading: Mutex::new(ChunkLoading::new(level_channel.clone())),
@@ -634,8 +649,15 @@ impl Level {
             return res;
         }
         let chunk = self.fetch_chunk(pos).await;
-        self.loaded_chunks.insert(pos, chunk.clone());
+        if self.loaded_chunks.insert(pos, chunk.clone()).is_none() {
+            self.loaded_chunk_changes
+                .push(LoadedChunkChange::Loaded(pos));
+        }
         f(&chunk)
+    }
+
+    pub fn loaded_chunk_changes(&self) -> impl Iterator<Item = LoadedChunkChange> + '_ {
+        std::iter::from_fn(|| self.loaded_chunk_changes.pop())
     }
 
     async fn fetch_chunk(self: &Arc<Self>, pos: Vector2<i32>) -> SyncChunk {
@@ -646,7 +668,7 @@ impl Level {
                 .chunk_loading
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            lock.add_ticket(pos, 31);
+            lock.add_ticket(pos, ChunkLoading::FULL_CHUNK_LEVEL);
             lock.send_change();
         };
 
@@ -659,7 +681,7 @@ impl Level {
                 .chunk_loading
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            lock.remove_ticket(pos, 31);
+            lock.remove_ticket(pos, ChunkLoading::FULL_CHUNK_LEVEL);
             lock.send_change();
         };
 

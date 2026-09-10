@@ -18,6 +18,9 @@ pub enum LootCondition {
         enchanted_chance_base: f32,
         enchanted_chance_per_level_above_first: f32,
     },
+    TableBonus {
+        chances: &'static [f32],
+    },
     AllOf(&'static [Self]),
 }
 

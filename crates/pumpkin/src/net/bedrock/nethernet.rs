@@ -24,8 +24,8 @@ use axum::{
 };
 use base64::{Engine, engine::general_purpose};
 use bytes::{BufMut, BytesMut};
-use pumpkin_util::jwt::Jwks;
-use pumpkin_util::p384::{
+use pumpkin_auth::jwt::Jwks;
+use pumpkin_auth::p384::{
     PublicKey,
     ecdsa::{
         Signature, SigningKey,
@@ -834,12 +834,12 @@ fn verify_and_strip_identity(
         {
             return Err("invalid identity provider".to_string());
         }
-        pumpkin_util::jwt::verify_oidc_token(token, issuer, keys)
+        pumpkin_auth::jwt::verify_oidc_token(token, issuer, keys)
             .map_err(|error| format!("invalid GameServerToken: {error}"))?;
     } else {
         validate_token_expiration(token)?;
     }
-    let public_key = pumpkin_util::jwt::extract_cpk_from_token(token)
+    let public_key = pumpkin_auth::jwt::extract_cpk_from_token(token)
         .map_err(|error| format!("invalid identity public key: {error}"))?;
     let fingerprints = assertion["fingerprints"]
         .as_str()
@@ -916,7 +916,7 @@ fn verify_fingerprint_assertion(
         .map_err(|error| format!("invalid fingerprint signature: {error}"))?;
     let signature = Signature::from_slice(&signature)
         .map_err(|error| format!("invalid ES384 signature: {error}"))?;
-    let verifying_key = pumpkin_util::p384::ecdsa::VerifyingKey::from(public_key);
+    let verifying_key = pumpkin_auth::p384::ecdsa::VerifyingKey::from(public_key);
     verifying_key
         .verify(format!("{header}.{payload_b64}").as_bytes(), &signature)
         .map_err(|_| "fingerprint signature verification failed".to_string())
