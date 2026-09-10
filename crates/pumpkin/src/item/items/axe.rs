@@ -1,3 +1,4 @@
+use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
@@ -30,7 +31,7 @@ impl ItemBehaviour for AxeItem {
         _cursor_pos: Vector3<f32>,
         block: &Block,
         _server: &Server,
-    ) {
+    ) -> BlockActionResult {
         let world = player.world();
         let get_block = |dx: i8, dy: i8, dz: i8| {
             let check_pos = BlockPos(location.0 + Vector3::new(dx as i32, dy as i32, dz as i32));
@@ -79,7 +80,9 @@ impl ItemBehaviour for AxeItem {
             if player.gamemode.load() != GameMode::Creative {
                 let _ = item.damage_item(i32::from(result.entry.item_damage_per_use));
             }
+            return BlockActionResult::Success;
         }
+        BlockActionResult::Pass
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
