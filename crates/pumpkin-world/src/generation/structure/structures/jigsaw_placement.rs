@@ -392,7 +392,7 @@ impl Placer {
                                 pool_alias_lookup.lookup(&target_jigsaw_x.pool, random);
                             let child_pool = TemplatePool::discover(child_pool_name);
                             let child_pool_size =
-                                child_pool.as_ref().map_or(0, |pool| pool.get_max_size());
+                                child_pool.as_ref().map_or(0, |p| p.get_max_size());
                             let child_fallback_size = child_pool
                                 .as_ref()
                                 .and_then(|p| {
