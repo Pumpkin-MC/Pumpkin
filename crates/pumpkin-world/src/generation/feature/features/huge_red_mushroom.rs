@@ -53,7 +53,6 @@ impl HugeRedMushroomFeature {
         let radius = Self::FOLIAGE_RADIUS;
         for i in (tree_height - 3)..=tree_height {
             let j = if i < tree_height { radius } else { radius - 1 };
-            let k = radius - 2;
 
             for l in -j..=j {
                 for m in -j..=j {
@@ -67,10 +66,10 @@ impl HugeRedMushroomFeature {
                     let props = BrownMushroomBlockLikeProperties {
                         up: i >= tree_height - 1,
                         down: false,
-                        west: l < -k,
-                        east: l > k,
-                        north: m < -k,
-                        south: m > k,
+                        west: l < 0,
+                        east: l > 0,
+                        north: m < 0,
+                        south: m > 0,
                     };
                     let state_id = props.to_state_id(&Block::RED_MUSHROOM_BLOCK);
                     let cap_pos = BlockPos::new(pos.0.x + l, pos.0.y + i, pos.0.z + m);
