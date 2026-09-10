@@ -24,7 +24,7 @@ pub enum JigsawProjection {
 pub struct TemplatePool {
     pub id: String,
     pub fallback: String,
-    pub elements: Vec<PoolElement>,
+    pub elements: Vec<Arc<PoolElement>>,
 }
 
 #[derive(Clone)]
@@ -386,36 +386,36 @@ impl TemplatePool {
     pub fn get_max_size(&self) -> i32 {
         self.elements
             .iter()
-            .filter_map(PoolElement::get_y_size)
+            .filter_map(|element| element.get_y_size())
             .max()
             .unwrap_or(0)
     }
     pub fn get_random_element(
         &self,
         random: &mut pumpkin_util::random::RandomGenerator,
-    ) -> &PoolElement {
+    ) -> Arc<PoolElement> {
         let total_weight: u32 = self.elements.iter().map(|e| e.weight).sum();
         if total_weight == 0 {
-            return &self.elements[0];
+            return Arc::clone(&self.elements[0]);
         }
         let mut r = random.next_bounded_i32(total_weight as i32) as u32;
         for element in &self.elements {
             if r < element.weight {
-                return element;
+                return Arc::clone(element);
             }
             r -= element.weight;
         }
-        &self.elements[0]
+        Arc::clone(&self.elements[0])
     }
 
     /// Discovers a pool from the filesystem/embedded assets.
     #[must_use]
-    pub fn discover(id: &str) -> Option<Self> {
-        static CACHE: std::sync::LazyLock<dashmap::DashMap<String, TemplatePool>> =
+    pub fn discover(id: &str) -> Option<Arc<Self>> {
+        static CACHE: std::sync::LazyLock<dashmap::DashMap<String, Arc<TemplatePool>>> =
             std::sync::LazyLock::new(dashmap::DashMap::new);
 
         if let Some(pool) = CACHE.get(id) {
-            return Some(pool.clone());
+            return Some(Arc::clone(&pool));
         }
 
         let pool = if id == "minecraft:empty" || id == "empty" {
@@ -438,14 +438,13 @@ impl TemplatePool {
                 .elements
                 .into_iter()
                 .filter_map(|weighted| {
-                    weighted
-                        .element
-                        .into_element()
-                        .map(|(kind, projection)| PoolElement {
+                    weighted.element.into_element().map(|(kind, projection)| {
+                        Arc::new(PoolElement {
                             weight: weighted.weight,
                             projection,
                             kind,
                         })
+                    })
                 })
                 .collect();
             Self {
@@ -466,20 +465,23 @@ impl TemplatePool {
                 fallback: "minecraft:empty".to_string(),
                 elements: elements
                     .iter()
-                    .map(|e| PoolElement {
-                        weight: 1,
-                        projection,
-                        kind: PoolElementKind::Single {
-                            template: (*e).to_string(),
-                            resolved: crate::generation::structure::template::get_template(e),
-                            processors: ProcessorListRef::Empty,
-                            legacy: false,
-                        },
+                    .map(|e| {
+                        Arc::new(PoolElement {
+                            weight: 1,
+                            projection,
+                            kind: PoolElementKind::Single {
+                                template: (*e).to_string(),
+                                resolved: crate::generation::structure::template::get_template(e),
+                                processors: ProcessorListRef::Empty,
+                                legacy: false,
+                            },
+                        })
                     })
                     .collect(),
             }
         };
-        CACHE.insert(id.to_owned(), pool.clone());
+        let pool = Arc::new(pool);
+        CACHE.insert(id.to_owned(), Arc::clone(&pool));
         Some(pool)
     }
 
@@ -487,11 +489,11 @@ impl TemplatePool {
     pub fn get_shuffled_elements(
         &self,
         random: &mut pumpkin_util::random::RandomGenerator,
-    ) -> Vec<PoolElement> {
+    ) -> Vec<Arc<PoolElement>> {
         let mut elements = self
             .elements
             .iter()
-            .flat_map(|element| std::iter::repeat_n(element.clone(), element.weight as usize))
+            .flat_map(|element| std::iter::repeat_n(Arc::clone(element), element.weight as usize))
             .collect::<Vec<_>>();
         for index in (1..elements.len()).rev() {
             let other = random.next_bounded_i32(index as i32 + 1) as usize;
@@ -619,7 +621,7 @@ pub struct JigsawJunction {
 
 pub struct PoolElementStructurePiece {
     pub piece: crate::generation::structure::structures::StructurePiece,
-    pub element: PoolElement,
+    pub element: Arc<PoolElement>,
     pub pos: BlockPos,
     pub rotation: BlockRotation,
     pub mirror: BlockMirror,
@@ -943,7 +945,7 @@ mod tests {
     #[test]
     fn ancient_city_start_templates_and_anchor_exist() {
         let pool = TemplatePool::discover("minecraft:ancient_city/city_center").unwrap();
-        for element in pool.elements {
+        for element in &pool.elements {
             let template = element.first_template().expect("missing start template");
             assert!(
                 template.blocks.iter().any(|block| {
@@ -988,7 +990,8 @@ mod tests {
             "minecraft:ancient_city/city_center/walls",
             "minecraft:ancient_city/walls/no_corners",
         ] {
-            for element in TemplatePool::discover(id).unwrap().elements {
+            let pool = TemplatePool::discover(id).unwrap();
+            for element in &pool.elements {
                 check(&element.kind);
             }
         }
