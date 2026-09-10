@@ -132,7 +132,8 @@ impl DecoratedPotBlockEntity {
                 if item.item_count == 0 {
                     0
                 } else {
-                    let max_count = 64f32;
+                    // Vanilla scales by the item's own stack size, not a fixed 64.
+                    let max_count = f32::from(item.get_max_stack_size());
                     1 + ((item.item_count as f32 / max_count) * 14.0).floor() as u8
                 }
             })

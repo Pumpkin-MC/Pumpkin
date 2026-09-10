@@ -21,6 +21,16 @@ use pumpkin_world::{
     tick::TickPriority,
     world::{BlockAccessor, BlockFlags},
 };
+
+/// Vanilla `CakeBlock.getOutputSignal`. Saturates -> an out-of-range bite count reads 0.
+#[must_use]
+pub const fn cake_output_signal(bites: u8) -> u8 {
+    7u8.saturating_sub(bites) * 2
+}
+
+/// Vanilla `CakeBlock.FULL_CAKE_SIGNAL`.
+pub const FULL_CAKE_SIGNAL: u8 = cake_output_signal(0);
+
 #[pumpkin_block("minecraft:cake")]
 pub struct CakeBlock;
 
@@ -159,15 +169,9 @@ impl BlockBehaviour for CakeBlock {
     }
 
     fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
-        {
-            let state_id = args.world.get_block_state_id(args.position);
-            let properties = CakeLikeProperties::from_state_id(state_id);
-            if properties.bites <= 6 {
-                Some((7 - properties.bites) * 2)
-            } else {
-                Some(0)
-            }
-        }
+        let state_id = args.world.get_block_state_id(args.position);
+        let properties = CakeLikeProperties::from_state_id(state_id);
+        Some(cake_output_signal(properties.bites))
     }
 
     fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {

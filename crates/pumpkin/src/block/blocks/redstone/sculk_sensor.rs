@@ -33,6 +33,15 @@ const fn horizontal_facing_to_dir(facing: HorizontalFacing) -> BlockDirection {
     }
 }
 
+/// Both sensor variants carry the same phase property under different types.
+fn sculk_sensor_phase(block: &Block, state_id: BlockStateId) -> SculkSensorPhase {
+    if block.id == BlockId::CALIBRATED_SCULK_SENSOR {
+        CalibratedSculkSensorLikeProperties::from_state_id(state_id).sculk_sensor_phase
+    } else {
+        SculkSensorLikeProperties::from_state_id(state_id).sculk_sensor_phase
+    }
+}
+
 impl SculkSensorBlock {
     pub fn trigger(world: &Arc<World>, pos: &BlockPos, block: &Block, power: u8) {
         if block.id == BlockId::SCULK_SENSOR {
@@ -139,6 +148,11 @@ impl BlockBehaviour for SculkSensorBlock {
     }
 
     fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
+        // Vanilla reads the frequency only while the sensor is active.
+        if sculk_sensor_phase(args.block, args.state.id) != SculkSensorPhase::Active {
+            return Some(0);
+        }
+
         let be = args.world.get_block_entity(args.position)?;
         if let Some(sensor_be) = be.as_any().downcast_ref::<SculkSensorBlockEntity>() {
             return Some(

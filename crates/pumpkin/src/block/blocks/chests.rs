@@ -133,6 +133,17 @@ fn get_chest_comparator_output(args: &GetComparatorOutputArgs<'_>) -> Option<u8>
         ChestType::Right => Some(chest_props.facing.rotate_counter_clockwise()),
     };
 
+    // Vanilla passes `ignoreBeingBlocked = false`, so a blocked half reads zero.
+    if is_chest_blocked(args.world, args.position) {
+        return Some(0);
+    }
+
+    if let Some(direction) = connected_towards
+        && is_chest_blocked(args.world, &args.position.offset(direction.to_offset()))
+    {
+        return Some(0);
+    }
+
     if let Some(direction) = connected_towards
         && let Some(second_inventory) = args
             .world
