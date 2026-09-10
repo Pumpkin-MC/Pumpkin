@@ -105,7 +105,12 @@ impl DecoratedPotBlockEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some(existing) = item_guard.as_mut() {
             if existing.item.id == stack.item.id {
-                let add = count.min(64 - existing.item_count);
+                // Vanilla gates on the item's own max stack size, not a fixed 64.
+                // Saturate so a count loaded from NBT above that limit cannot underflow.
+                let space = existing
+                    .get_max_stack_size()
+                    .saturating_sub(existing.item_count);
+                let add = count.min(space).min(stack.item_count);
                 if add > 0 {
                     existing.item_count += add;
                     stack.item_count -= add;
@@ -114,7 +119,7 @@ impl DecoratedPotBlockEntity {
             }
             false
         } else {
-            let insert_count = count.min(stack.item_count);
+            let insert_count = count.min(stack.item_count).min(stack.get_max_stack_size());
             let mut inserted = stack.clone();
             inserted.item_count = insert_count;
             *item_guard = Some(inserted);
