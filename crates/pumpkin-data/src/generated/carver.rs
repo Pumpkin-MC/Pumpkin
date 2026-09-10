@@ -65,7 +65,7 @@ pub struct CanyonShapeConfig {
     pub horizontal_radius_factor: FloatProvider,
     pub vertical_radius_default_factor: f32,
     pub vertical_radius_center_factor: f32,
-    pub y_scale: f32,
+    pub y_scale: FloatProvider,
 }
 #[derive(Clone, Debug)]
 pub struct CanyonCarverConfig {
@@ -107,7 +107,7 @@ pub const CANYON: CarverConfig = CarverConfig {
             )),
             vertical_radius_default_factor: 1f32,
             vertical_radius_center_factor: 0f32,
-            y_scale: 3f32,
+            y_scale: FloatProvider::Constant(3f32),
         },
     }),
 };
