@@ -211,6 +211,9 @@ pub struct StructureTemplate {
     pub author: String,
 
     // Backward-compatible fields
+    // TODO: make these fields private with accessors. They are public now, so a
+    // caller can change them after the jigsaw cache is filled. The cache then
+    // goes stale. `load()` resets the cache, but a direct mutation does not.
     pub palette: Vec<PaletteEntry>,
     pub blocks: Vec<TemplateBlock>,
     pub entities: Vec<TemplateEntity>,
