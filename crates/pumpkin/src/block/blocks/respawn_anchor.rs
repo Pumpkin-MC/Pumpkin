@@ -6,8 +6,13 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::registry::BlockActionResult;
-use crate::block::{BlockBehaviour, NormalUseArgs, PathComputationType, UseWithItemArgs};
+use crate::block::{
+    BlockBehaviour, GetComparatorOutputArgs, NormalUseArgs, PathComputationType, UseWithItemArgs,
+};
 use crate::entity::EntityBase;
+
+/// Vanilla `RespawnAnchorBlock.MAX_CHARGES`.
+const MAX_CHARGES: u8 = 4;
 
 #[pumpkin_block("minecraft:respawn_anchor")]
 pub struct RespawnAnchorBlock;
@@ -89,6 +94,12 @@ impl BlockBehaviour for RespawnAnchorBlock {
         }
 
         BlockActionResult::SuccessServer
+    }
+
+    /// Charges scale over the full signal range, so each charge is worth 15 / 4.
+    fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
+        let props = RespawnAnchorLikeProperties::from_state_id(args.state.id);
+        Some(props.charges * 15 / MAX_CHARGES)
     }
 
     fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {

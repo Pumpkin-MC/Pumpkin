@@ -22,6 +22,7 @@ pub struct BrewingStandBlockEntity {
     pub position: BlockPos,
     pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
     pub dirty: AtomicBool,
+    pub comparator_dirty: AtomicBool,
     pub brew_time: AtomicI32,
     pub fuel: AtomicI32,
     pub last_potion_count: StdMutex<Option<[bool; 3]>>,
@@ -39,6 +40,7 @@ impl BrewingStandBlockEntity {
             position,
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
             brew_time: AtomicI32::new(0),
             fuel: AtomicI32::new(0),
             last_potion_count: StdMutex::new(None),
@@ -406,6 +408,7 @@ impl pumpkin_inventory::Inventory for BrewingStandBlockEntity {
 
     fn mark_dirty(&self) {
         self.dirty.store(true, Ordering::Relaxed);
+        self.comparator_dirty.store(true, Ordering::Relaxed);
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -536,6 +539,14 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
             sync_write_items_to_nbt(&*items, &mut nbt);
         }
         Some(nbt)
+    }
+
+    fn is_comparator_dirty(&self) -> bool {
+        self.comparator_dirty.load(Ordering::Relaxed)
+    }
+
+    fn clear_comparator_dirty(&self) {
+        self.comparator_dirty.store(false, Ordering::Relaxed);
     }
 
     fn is_dirty(&self) -> bool {

@@ -1592,6 +1592,15 @@ impl World {
             let _guard = be_handle.enter();
             for be in batch {
                 be.tick(self);
+                // Vanilla `BlockEntity.setChanged` -> `Level.updateNeighbourForOutputSignal`.
+                if be.is_comparator_dirty() {
+                    be.clear_comparator_dirty();
+                    let pos = be.get_position();
+                    // The batch is a snapshot, so the chunk may be gone by now.
+                    if let Some(state_id) = self.get_block_state_id_if_loaded(&pos) {
+                        self.update_neighbour_for_output_signal(&pos, state_id.to_block());
+                    }
+                }
             }
         });
         let block_entity_elapsed = t_be.elapsed();
