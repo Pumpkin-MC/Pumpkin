@@ -3,12 +3,10 @@ use crate::world::World;
 use pumpkin_data::block_properties::CrafterLikeProperties;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_inventory::crafting::recipes::RecipeInputInventory;
+use pumpkin_inventory::{Clearable, Inventory, sync_read_items_from_nbt, sync_write_items_to_nbt};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::inventory::{
-    Clearable, Inventory, sync_read_items_from_nbt, sync_write_items_to_nbt,
-};
 use pumpkin_world::world::BlockFlags;
 use std::any::Any;
 use std::array::from_fn;

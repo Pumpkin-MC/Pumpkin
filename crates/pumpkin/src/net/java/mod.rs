@@ -1,5 +1,5 @@
 use pumpkin_protocol::java::client::play::{
-    CChunkBatchEnd, CChunkBatchStart, CChunkData, CLightUpdate, CPlayDisconnect,
+    CChunkBatchEnd, CChunkBatchStart, CLightUpdate, CPlayDisconnect,
 };
 use pumpkin_world::level::SyncChunk;
 use std::net::SocketAddr;
@@ -53,6 +53,7 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use tracing::{debug, error, warn};
 
+pub mod chunk_data;
 pub mod config;
 pub mod handshake;
 pub mod login;
@@ -60,6 +61,8 @@ pub mod pending;
 pub mod play;
 pub mod recipe_helper;
 pub mod status;
+
+pub use chunk_data::{CChunkData, ChunkLightExt};
 
 use arc_swap::ArcSwap;
 use pending::PendingConnection;

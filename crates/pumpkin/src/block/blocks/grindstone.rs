@@ -6,6 +6,7 @@ use pumpkin_data::{
     Block, BlockDirection, BlockStateId, HorizontalFacingExt,
     block_properties::{AttachFace, GrindstoneLikeProperties},
 };
+use pumpkin_inventory::SimpleInventory;
 use pumpkin_inventory::grindstone_screen_handler::GrindstoneScreenHandler;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
@@ -14,7 +15,6 @@ use pumpkin_inventory::screen_handler::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::inventory::SimpleInventory;
 use pumpkin_world::world::BlockAccessor;
 
 use crate::block::registry::BlockActionResult;

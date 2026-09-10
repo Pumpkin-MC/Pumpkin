@@ -11,10 +11,10 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::potion_brewing::{ITEM_RECIPES, POTION_RECIPES};
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
+use pumpkin_inventory::{Inventory, sync_read_items_from_nbt, sync_write_items_to_nbt};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::inventory::{Inventory, sync_read_items_from_nbt, sync_write_items_to_nbt};
 
 pub struct BrewingStandBlockEntity {
     pub position: BlockPos,
@@ -276,7 +276,7 @@ impl BrewingStandBlockEntity {
     }
 }
 
-impl pumpkin_world::inventory::Inventory for BrewingStandBlockEntity {
+impl pumpkin_inventory::Inventory for BrewingStandBlockEntity {
     fn size(&self) -> usize {
         Self::INVENTORY_SIZE
     }
@@ -376,7 +376,7 @@ impl pumpkin_world::inventory::Inventory for BrewingStandBlockEntity {
     }
 }
 
-impl pumpkin_world::inventory::Clearable for BrewingStandBlockEntity {
+impl pumpkin_inventory::Clearable for BrewingStandBlockEntity {
     fn clear(&self) {
         let mut items = self
             .items

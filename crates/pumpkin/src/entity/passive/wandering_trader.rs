@@ -15,6 +15,7 @@ use pumpkin_data::villager::{
     TRADES_WANDERING_TRADER_BUYING, TRADES_WANDERING_TRADER_COMMON,
     TRADES_WANDERING_TRADER_UNCOMMON, VillagerTrade, VillagerTradeModifier,
 };
+use pumpkin_inventory::SimpleInventory;
 use pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler;
 use pumpkin_inventory::screen_handler::{
     InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
@@ -26,7 +27,6 @@ use pumpkin_protocol::java::client::play::CMerchantOffers;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::inventory::SimpleInventory;
 use rand::RngExt;
 use rand::seq::IndexedRandom;
 

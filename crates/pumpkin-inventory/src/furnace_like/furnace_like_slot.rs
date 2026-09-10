@@ -8,8 +8,8 @@
 
 use std::sync::{Arc, atomic::AtomicU8};
 
+use crate::{inventory::Inventory, window_property::ExperienceContainer};
 use pumpkin_data::{fuels::is_fuel, item::Item, statistic::StatisticCategory};
-use pumpkin_world::{block::entities::ExperienceContainer, inventory::Inventory};
 
 use tracing::debug;
 
