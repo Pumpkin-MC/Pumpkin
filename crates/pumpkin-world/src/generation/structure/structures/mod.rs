@@ -1,7 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use pumpkin_data::Block;
-use pumpkin_data::BlockState;
+use pumpkin_data::{Block, BlockId, BlockState};
 use pumpkin_data::{Mirror, Rotation};
 use pumpkin_util::HeightMap;
 use pumpkin_util::{
@@ -464,6 +463,89 @@ impl StructurePiece {
         // }
     }
 
+    /// Reorients a chest block state based on solid render neighbors, matching vanilla `StructurePiece.reorient`.
+    #[must_use]
+    pub fn reorient(
+        pos: &Vector3<i32>,
+        block_state: &'static BlockState,
+        mut get_block_state: impl FnMut(&Vector3<i32>) -> pumpkin_data::BlockStateId,
+    ) -> &'static BlockState {
+        use pumpkin_data::block_properties::{ChestProperties, HorizontalFacing};
+
+        let mut solid_neighbor: Option<HorizontalFacing> = None;
+
+        let horizontal = [
+            HorizontalFacing::North,
+            HorizontalFacing::South,
+            HorizontalFacing::West,
+            HorizontalFacing::East,
+        ];
+
+        let offset = |facing: HorizontalFacing| match facing {
+            HorizontalFacing::North => Vector3::new(0, 0, -1),
+            HorizontalFacing::South => Vector3::new(0, 0, 1),
+            HorizontalFacing::West => Vector3::new(-1, 0, 0),
+            HorizontalFacing::East => Vector3::new(1, 0, 0),
+        };
+
+        let opposite = |facing: HorizontalFacing| match facing {
+            HorizontalFacing::North => HorizontalFacing::South,
+            HorizontalFacing::South => HorizontalFacing::North,
+            HorizontalFacing::West => HorizontalFacing::East,
+            HorizontalFacing::East => HorizontalFacing::West,
+        };
+
+        let clockwise = |facing: HorizontalFacing| match facing {
+            HorizontalFacing::North => HorizontalFacing::East,
+            HorizontalFacing::East => HorizontalFacing::South,
+            HorizontalFacing::South => HorizontalFacing::West,
+            HorizontalFacing::West => HorizontalFacing::North,
+        };
+
+        for direction in horizontal {
+            let relative_pos = *pos + offset(direction);
+            let state = get_block_state(&relative_pos).to_state();
+            if state.id.to_block_id() == BlockId::CHEST {
+                return block_state;
+            }
+
+            if state.is_solid_render() {
+                if solid_neighbor.is_some() {
+                    solid_neighbor = None;
+                    break;
+                }
+                solid_neighbor = Some(direction);
+            }
+        }
+
+        let mut props = ChestProperties::from_state_id(block_state.id);
+
+        if let Some(solid_dir) = solid_neighbor {
+            props.facing = opposite(solid_dir);
+            return BlockState::from_id(props.to_state_id(&Block::CHEST));
+        }
+
+        let mut lock_dir = props.facing;
+
+        let mut relative_pos = *pos + offset(lock_dir);
+        if get_block_state(&relative_pos).to_state().is_solid_render() {
+            lock_dir = opposite(lock_dir);
+            relative_pos = *pos + offset(lock_dir);
+        }
+
+        if get_block_state(&relative_pos).to_state().is_solid_render() {
+            lock_dir = clockwise(lock_dir);
+            relative_pos = *pos + offset(lock_dir);
+        }
+
+        if get_block_state(&relative_pos).to_state().is_solid_render() {
+            lock_dir = opposite(lock_dir);
+        }
+
+        props.facing = lock_dir;
+        BlockState::from_id(props.to_state_id(&Block::CHEST))
+    }
+
     /// Places a chest with a deferred loot table at the given local coordinates.
     ///
     /// Returns `true` if the chest was placed (i.e., the position is within the bounding box),
@@ -479,6 +561,22 @@ impl StructurePiece {
         z: i32,
         loot_table: &str,
     ) -> bool {
+        self.create_chest(chunk, bb, random, x, y, z, loot_table, None)
+    }
+
+    /// Creates and places a chest at the given local coordinates, matching vanilla `StructurePiece.createChest`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_chest(
+        &self,
+        chunk: &mut ProtoChunk,
+        bb: &BlockBox,
+        random: &mut RandomGenerator,
+        x: i32,
+        y: i32,
+        z: i32,
+        loot_table: &str,
+        block_state: Option<&'static BlockState>,
+    ) -> bool {
         use pumpkin_nbt::compound::NbtCompound;
 
         let world_pos = self.offset_pos(x, y, z);
@@ -486,12 +584,17 @@ impl StructurePiece {
             return false;
         }
 
-        chunk.set_block_state(
-            world_pos.x,
-            world_pos.y,
-            world_pos.z,
-            Block::CHEST.default_state,
-        );
+        if chunk.get_block_state(&world_pos).to_block_id() == BlockId::CHEST {
+            return false;
+        }
+
+        let state = block_state.unwrap_or_else(|| {
+            Self::reorient(&world_pos, Block::CHEST.default_state, |p| {
+                chunk.get_block_state(p)
+            })
+        });
+
+        chunk.set_block_state(world_pos.x, world_pos.y, world_pos.z, state);
 
         let mut nbt = NbtCompound::new();
         nbt.put_string("id", "minecraft:chest".to_string());
@@ -732,6 +835,15 @@ pub trait HeightSampler {
     fn estimate_ocean_floor_height(&mut self, block_x: i32, block_z: i32) -> i32 {
         self.estimate_height(block_x, block_z)
     }
+
+    fn sample_column_block(
+        &mut self,
+        _block_x: i32,
+        _block_z: i32,
+        _y: i32,
+    ) -> Option<&'static pumpkin_data::BlockState> {
+        None
+    }
 }
 
 impl HeightSampler
@@ -749,6 +861,7 @@ pub struct StructureGeneratorContext<'a> {
     pub random: RandomGenerator,
     pub sea_level: i32,
     pub min_y: i32,
+    pub height: u16,
     pub height_sampler: Option<&'a mut dyn HeightSampler>,
     pub structure_key: Option<pumpkin_data::structures::StructureKeys>,
 }

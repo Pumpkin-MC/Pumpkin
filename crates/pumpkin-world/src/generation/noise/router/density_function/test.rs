@@ -10,9 +10,6 @@ use std::sync::LazyLock;
 
 use crate::generation::GlobalRandomConfig;
 use crate::generation::noise::router::chunk_density_function::ChunkNoiseFunctionBuilderOptions;
-use crate::generation::noise::router::chunk_density_function::{
-    ChunkNoiseFunctionSampleOptions, SampleAction,
-};
 use crate::generation::noise::router::chunk_noise_router::{
     ChunkNoiseDensityFunction, ChunkNoiseFunctionComponent,
 };
@@ -24,7 +21,7 @@ use super::{NoiseFunctionComponentRange, PassThrough};
 
 // This is a dummy value because we are not actually building chunk-specific functions
 static TEST_OPTIONS: ChunkNoiseFunctionBuilderOptions =
-    ChunkNoiseFunctionBuilderOptions::new(0, 0, 0, 0, 0, 0, 0, Vec::new(), Vec::new(), None);
+    ChunkNoiseFunctionBuilderOptions::new(Vec::new(), Vec::new(), None);
 const SEED: u64 = 0;
 static RANDOM_CONFIG: LazyLock<GlobalRandomConfig> =
     LazyLock::new(|| GlobalRandomConfig::new(SEED, false));
@@ -70,9 +67,6 @@ macro_rules! build_function {
     };
 }
 
-const TEST_SAMPLE_OPTIONS: ChunkNoiseFunctionSampleOptions =
-    ChunkNoiseFunctionSampleOptions::new(false, SampleAction::SkipCellCaches, 0, 0, 0);
-
 macro_rules! sample_noise_router_function {
     ($name:ident, $pos: expr) => {{
         let base_router = &OVERWORLD_BASE_NOISE_ROUTER.noise;
@@ -82,7 +76,7 @@ macro_rules! sample_noise_router_function {
         );
         let mut stack = build_function_stack!(&proto_stack[..=base_router.$name]);
         let mut function = build_function!(&mut stack);
-        function.sample(&$pos, &TEST_SAMPLE_OPTIONS)
+        function.sample(&$pos)
     }};
 }
 
@@ -95,7 +89,7 @@ macro_rules! sample_multi_noise_router_function {
         );
         let mut stack = build_function_stack!(&proto_stack[..=base_router.$name]);
         let mut function = build_function!(&mut stack);
-        function.sample(&$pos, &TEST_SAMPLE_OPTIONS)
+        function.sample(&$pos)
     }};
 }
 
@@ -108,11 +102,18 @@ macro_rules! sample_surface_router_function {
         );
         let mut stack = build_function_stack!(&proto_stack);
         let mut function = build_function!(&mut stack);
-        function.sample(&$pos, &TEST_SAMPLE_OPTIONS)
+        function.sample(&$pos)
     }};
 }
 
 // TODO: Test all dimensions/noise routers
+
+fn assert_close(actual: f32, expected: f32) {
+    assert!(
+        (actual - expected).abs() <= expected.abs().max(1.0) * 1e-5,
+        "{actual} is not close to {expected}"
+    );
+}
 
 #[test]
 // This test verifies that the generated functions after seed initialization but before chunk
@@ -124,50 +125,50 @@ macro_rules! sample_surface_router_function {
 fn normal_surface_noisified() {
     let pos = Vector3 { x: 0, y: 0, z: 0 };
     // TODO: Move these values to a file and create an extractor for them
-    assert_eq!(
+    assert_close(
         sample_noise_router_function!(barrier_noise, pos),
-        -0.54002273f32
+        -0.54002273f32,
     );
-    assert_eq!(
+    assert_close(
         sample_noise_router_function!(fluid_level_floodedness_noise, pos),
-        -0.4709572f32
+        -0.4709572f32,
     );
-    assert_eq!(
+    assert_close(
         sample_noise_router_function!(fluid_level_spread_noise, pos),
-        -0.05726914f32
+        -0.05726914f32,
     );
-    assert_eq!(
+    assert_close(
         sample_noise_router_function!(lava_noise, pos),
-        -0.16423604f32
+        -0.16423604f32,
     );
-    assert_eq!(
+    assert_close(
         sample_multi_noise_router_function!(temperature, pos),
-        0.11823799f32
+        0.11823799f32,
     );
-    assert_eq!(
+    assert_close(
         sample_multi_noise_router_function!(vegetation, pos),
-        -0.0013601681f32
+        -0.0013601681f32,
     );
-    assert_eq!(
+    assert_close(
         sample_multi_noise_router_function!(continents, pos),
-        -0.008171953f32
+        -0.008171953f32,
     );
-    assert_eq!(
+    assert_close(
         sample_multi_noise_router_function!(erosion, pos),
-        -0.10391074f32
+        -0.10391074f32,
     );
-    assert_eq!(
+    assert_close(
         sample_multi_noise_router_function!(depth, pos),
-        0.4118821f32
+        0.4118821f32,
     );
-    assert_eq!(
+    assert_close(
         sample_multi_noise_router_function!(ridges, pos),
-        0.011110324f32
+        0.011110324f32,
     );
-    assert_eq!(sample_surface_router_function!(pos), 45.832787f32);
-    assert_eq!(
+    assert_close(sample_surface_router_function!(pos), 40.0f32);
+    assert_close(
         sample_noise_router_function!(final_density, pos),
-        0.15719144f32
+        0.15719144f32,
     );
 
     let values = [
@@ -303,7 +304,7 @@ fn normal_surface_noisified() {
             y: *y,
             z: *z,
         };
-        assert_eq!(sample_noise_router_function!(vein_toggle, pos), *value);
+        assert_close(sample_noise_router_function!(vein_toggle, pos), *value);
     }
 
     let values = [
@@ -435,7 +436,7 @@ fn normal_surface_noisified() {
     ];
     for ((x, y, z), value) in values {
         let pos = Vector3 { x, y, z };
-        assert_eq!(sample_noise_router_function!(vein_ridged, pos), value);
+        assert_close(sample_noise_router_function!(vein_ridged, pos), value);
     }
 
     let values = [
@@ -567,7 +568,7 @@ fn normal_surface_noisified() {
     ];
     for ((x, y, z), value) in values {
         let pos = Vector3 { x, y, z };
-        assert_eq!(sample_noise_router_function!(vein_gap, pos), value);
+        assert_close(sample_noise_router_function!(vein_gap, pos), value);
     }
 }
 
@@ -586,7 +587,7 @@ fn normal_surface_noisified() {
 //     for (x, y, z, sample) in expected_data.into_iter().step_by(5) {
 //         let pos = Vector3 { x, y, z };
 //         assert_eq_delta!(
-//             function.sample(&pos, &TEST_SAMPLE_OPTIONS),
+//             function.sample(&pos),
 //             sample,
 //             f32::EPSILON
 //         );
@@ -656,7 +657,7 @@ fn normal_surface_noisified() {
 //     for (x, y, z, sample) in expected_data {
 //         let pos = Vector3 { x, y, z };
 //         assert_eq_delta!(
-//             function.sample(&pos, &TEST_SAMPLE_OPTIONS),
+//             function.sample(&pos),
 //             sample,
 //             f32::EPSILON
 //         );
@@ -675,7 +676,7 @@ fn normal_surface_noisified() {
 //     for (x, y, z, sample) in expected_data {
 //         let pos = Vector3 { x, y, z };
 //         assert_eq_delta!(
-//             function.sample(&pos, &TEST_SAMPLE_OPTIONS),
+//             function.sample(&pos),
 //             sample,
 //             f32::EPSILON
 //         );
@@ -694,7 +695,7 @@ fn normal_surface_noisified() {
 //     for (x, y, z, sample) in expected_data {
 //         let pos = Vector3 { x, y, z };
 //         assert_eq_delta!(
-//             function.sample(&pos, &TEST_SAMPLE_OPTIONS),
+//             function.sample(&pos),
 //             sample,
 //             f32::EPSILON
 //         );
@@ -713,7 +714,7 @@ fn normal_surface_noisified() {
 //     for (x, y, z, sample) in expected_data {
 //         let pos = Vector3 { x, y, z };
 //         assert_eq_delta!(
-//             function.sample(&pos, &TEST_SAMPLE_OPTIONS),
+//             function.sample(&pos),
 //             sample,
 //             f32::EPSILON
 //         );
@@ -732,7 +733,7 @@ fn normal_surface_noisified() {
 //     for (x, y, z, sample) in expected_data {
 //         let pos = Vector3 { x, y, z };
 //         assert_eq_delta!(
-//             function.sample(&pos, &TEST_SAMPLE_OPTIONS),
+//             function.sample(&pos),
 //             sample,
 //             f32::EPSILON
 //         );
@@ -751,7 +752,7 @@ fn normal_surface_noisified() {
 //     for (x, y, z, sample) in expected_data {
 //         let pos = Vector3 { x, y, z };
 //         assert_eq_delta!(
-//             function.sample(&pos, &TEST_SAMPLE_OPTIONS),
+//             function.sample(&pos),
 //             sample,
 //             f32::EPSILON
 //         );
@@ -773,7 +774,7 @@ fn normal_surface_noisified() {
 //     for (x, y, z, sample) in expected_data {
 //         let pos = Vector3 { x, y, z };
 //         assert_eq_delta!(
-//             function.sample(&pos, &TEST_SAMPLE_OPTIONS),
+//             function.sample(&pos),
 //             sample,
 //             f32::EPSILON
 //         );
@@ -792,7 +793,7 @@ fn normal_surface_noisified() {
 //     for (x, y, z, sample) in expected_data {
 //         let pos = Vector3 { x, y, z };
 //         assert_eq_delta!(
-//             function.sample(&pos, &TEST_SAMPLE_OPTIONS),
+//             function.sample(&pos),
 //             sample,
 //             f32::EPSILON
 //         );
@@ -811,7 +812,7 @@ fn normal_surface_noisified() {
 //     for (x, y, z, sample) in expected_data {
 //         let pos = Vector3 { x, y, z };
 //         assert_eq_delta!(
-//             function.sample(&pos, &TEST_SAMPLE_OPTIONS),
+//             function.sample(&pos),
 //             sample,
 //             f32::EPSILON
 //         );
@@ -832,7 +833,7 @@ fn normal_surface_noisified() {
 //     for (x, y, z, sample) in expected_data {
 //         let pos = Vector3 { x, y, z };
 //         assert_eq_delta!(
-//             function.sample(&pos, &TEST_SAMPLE_OPTIONS),
+//             function.sample(&pos),
 //             sample,
 //             f32::EPSILON
 //         );

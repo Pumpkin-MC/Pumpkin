@@ -1,5 +1,4 @@
 use pumpkin_data::block_properties::RespawnAnchorLikeProperties;
-use pumpkin_data::dimension::Dimension;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{BlockState, translation};
@@ -49,7 +48,7 @@ impl BlockBehaviour for RespawnAnchorBlock {
         let state_id = args.world.get_block_state_id(args.position);
         let props = RespawnAnchorLikeProperties::from_state_id(state_id);
 
-        if args.world.dimension != Dimension::THE_NETHER {
+        if !args.world.dimension.respawn_anchor_works {
             args.world
                 .break_block(args.position, None, BlockFlags::SKIP_DROPS);
             let center_pos = args.position.to_centered_f64();

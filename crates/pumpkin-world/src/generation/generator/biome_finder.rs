@@ -5,9 +5,7 @@ use rustc_hash::FxHashSet;
 
 use crate::biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier};
 use crate::generation::biome_coords;
-use crate::generation::noise::router::multi_noise_sampler::{
-    MultiNoiseSampler, MultiNoiseSamplerBuilderOptions,
-};
+use crate::generation::noise::router::multi_noise_sampler::MultiNoiseSampler;
 
 use super::{VanillaGenerator, WorldGenerator};
 
@@ -77,8 +75,7 @@ fn find_in_noise_world(
         &MultiNoiseBiomeSupplier::OVERWORLD
     };
 
-    let options = MultiNoiseSamplerBuilderOptions::new(1, 1, 1);
-    let mut sampler = MultiNoiseSampler::generate(&generator.base_router.multi_noise, &options);
+    let mut sampler = MultiNoiseSampler::generate(&generator.base_router.multi_noise);
 
     // `level.getMinY() + 1` to `level.getMaxY() + 1` in vanilla.
     let min_y = i32::from(generator.settings.shape.min_y) + 1;
@@ -262,12 +259,12 @@ mod test {
 
     #[test]
     fn flat_world_has_a_single_fixed_biome() {
-        let world_gen = WorldGenerator::Flat(FlatGenerator::new(
+        let world_gen = WorldGenerator::Flat(Box::new(FlatGenerator::new(
             Seed(0),
             Dimension::OVERWORLD,
             Vec::new(),
             "minecraft:plains".to_string(),
-        ));
+        )));
 
         let origin = BlockPos::new(17, 64, -3);
         let (pos, biome) = find_closest_biome_3d(
