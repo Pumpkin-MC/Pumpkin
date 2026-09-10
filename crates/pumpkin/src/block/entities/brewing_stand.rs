@@ -48,6 +48,11 @@ impl BrewingStandBlockEntity {
         }
     }
 
+    /// Vanilla `setChanged` only persists the entity, comparators react to slot changes instead.
+    fn mark_timer_dirty(&self) {
+        self.dirty.store(true, Ordering::Relaxed);
+    }
+
     /// Check if the current ingredient matches the stored ingredient
     fn ingredient_matches(&self, ingredient: &ItemStack) -> bool {
         self.ingredient_item
@@ -333,6 +338,8 @@ impl BrewingStandBlockEntity {
         {
             self.fuel.store(i32::from(fuel_power), Ordering::Relaxed);
             items[4].decrement(1);
+            // The fuel slot shrank, comparators needs an update.
+            self.comparator_dirty.store(true, Ordering::Relaxed);
             true
         } else {
             false
@@ -587,10 +594,10 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
             } else if !brewable || !self.ingredient_matches(&ingredient) {
                 // Cancel brewing
                 self.brew_time.store(0, Ordering::Relaxed);
-                self.mark_dirty();
+                self.mark_timer_dirty();
             } else {
                 // Continue brewing
-                self.mark_dirty();
+                self.mark_timer_dirty();
             }
         } else if brewable && self.fuel.load(Ordering::Relaxed) > 0 {
             let brew_time = if let Some(server) = world.server.upgrade() {
@@ -618,10 +625,10 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
                 .ingredient_item
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(ingredient.get_item());
-            self.mark_dirty();
+            self.mark_timer_dirty();
         } else if fuel_refilled {
             // Mark dirty if fuel was refilled to update fuel indicator
-            self.mark_dirty();
+            self.mark_timer_dirty();
         }
 
         // Ensure clients are notified when potion slot contents (and their data) change.
@@ -664,8 +671,9 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
                 crate::world::BlockFlags::NOTIFY_ALL,
             );
 
-            // Also mark dirty so inventory/container updates are sent to open screens
-            self.mark_dirty();
+            // Also mark dirty so inventory/container updates are sent to open screens.
+            // The slot change that flipped these bits already flagged the comparator.
+            self.mark_timer_dirty();
         }
     }
 
