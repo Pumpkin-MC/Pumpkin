@@ -1,7 +1,7 @@
 use crate::block::entities::BlockEntity;
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::world::World;
-use pumpkin_data::BlockStateId;
+use pumpkin_data::{BlockId, BlockStateId};
 use pumpkin_data::block_properties::{FacingHopper, HopperLikeProperties};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag;
@@ -37,6 +37,12 @@ pub fn to_offset(facing: &FacingHopper) -> Vector3<i32> {
         FacingHopper::East => (1, 0, 0),
     }
     .into()
+}
+
+/// Properties of one state snapshot, `None` for any other block. `from_state_id` parses whatever
+/// it is handed, so only the block id can reject a replacement state.
+fn hopper_properties(block: BlockId, state_id: BlockStateId) -> Option<HopperLikeProperties> {
+    (block == BlockId::HOPPER).then(|| HopperLikeProperties::from_state_id(state_id))
 }
 
 impl BlockEntity for HopperBlockEntity {
@@ -75,22 +81,20 @@ impl BlockEntity for HopperBlockEntity {
     fn tick(&self, world: &Arc<World>) {
         self.ticked_game_time
             .store(world.get_world_age(), Ordering::Relaxed);
-        // Same guard as `trial_spawner.rs::tick` (checks `block.id == BlockId::TRIAL_SPAWNER`
-        // before `from_state_id`): the block entity can outlive the block itself for one tick
-        // when destroyed concurrently on another Rayon worker.
-        let block = world.get_block(&self.position);
-        if block.id != pumpkin_data::BlockId::HOPPER {
+        // The block entity outlives its block by a tick when another Rayon worker replaces it,
+        // so guard like `trial_spawner.rs::tick` does. One snapshot for id and state: a second
+        // read could already be the replacement, and the pair would not belong together.
+        let (block, state) = world.get_block_and_state(&self.position);
+        let Some(properties) = hopper_properties(block.id, state.id) else {
             return;
-        }
+        };
         if self.cooldown_time.fetch_sub(1, Ordering::Relaxed) <= 0 {
             self.cooldown_time.store(0, Ordering::Relaxed);
-            let state =
-                HopperLikeProperties::from_state_id(world.get_block_state(&self.position).id);
-            if state.enabled
+            if properties.enabled
                 && let Some(entity) = world.get_block_entity(&self.position)
                 && let Some(hopper) = entity.as_any().downcast_ref::<Self>()
             {
-                hopper.try_move_items(state, world);
+                hopper.try_move_items(properties, world);
             }
         }
     }
@@ -465,5 +469,54 @@ impl Clearable for HopperBlockEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         items.fill_with(|| ItemStack::EMPTY.clone());
         self.mark_dirty();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::Block;
+
+    #[test]
+    fn hopper_state_yields_its_properties() {
+        let properties =
+            hopper_properties(Block::HOPPER.id, Block::HOPPER.default_state.id).unwrap();
+
+        assert!(properties.enabled);
+        assert_eq!(properties.facing, FacingHopper::Down);
+    }
+
+    #[test]
+    fn disabled_hopper_state_is_read_as_disabled() {
+        let disabled = HopperLikeProperties {
+            facing: FacingHopper::North,
+            enabled: false,
+        }
+        .to_state_id(&Block::HOPPER);
+
+        let properties = hopper_properties(Block::HOPPER.id, disabled).unwrap();
+
+        assert!(!properties.enabled);
+        assert_eq!(properties.facing, FacingHopper::North);
+    }
+
+    /// Every one of these decodes cleanly through `from_state_id` into some `facing`/`enabled`.
+    /// Nothing about the state marks it as foreign, so rejection has to come from the id.
+    #[test]
+    fn replacement_state_yields_no_properties() {
+        for replacement in [Block::AIR, Block::CHEST, Block::DROPPER, Block::PISTON] {
+            assert!(
+                hopper_properties(replacement.id, replacement.default_state.id).is_none(),
+                "{} was accepted as a hopper",
+                replacement.name
+            );
+        }
+    }
+
+    /// The other direction: a hopper state under a foreign id is still foreign. Pins that the id
+    /// decides, not a range check on the state.
+    #[test]
+    fn hopper_state_id_under_another_block_yields_no_properties() {
+        assert!(hopper_properties(Block::CHEST.id, Block::HOPPER.default_state.id).is_none());
     }
 }
