@@ -12,7 +12,6 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::vector3::Vector3;
 use uuid::Uuid;
 
@@ -126,12 +125,9 @@ impl MooshroomEntity {
     pub fn set_variant(&self, variant: MooshroomVariant) {
         self.variant.store(variant.id(), Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::mooshroom::DATA_TYPE,
-                VarInt(variant.id()),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::mooshroom::DATA_TYPE,
+            VarInt(variant.id()),
         );
     }
 }
@@ -180,20 +176,11 @@ impl Mob for MooshroomEntity {
         let entity = self.get_entity();
         let is_baby = entity.age.load(Ordering::Relaxed) < 0;
         if is_baby {
-            entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::mooshroom::DATA_BABY_ID,
-                    true,
-                )],
-                None,
-            );
+            entity.set_synced_data(pumpkin_data::tracked_data::mooshroom::DATA_BABY_ID, true);
         }
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::mooshroom::DATA_TYPE,
-                VarInt(self.get_variant().id()),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::mooshroom::DATA_TYPE,
+            VarInt(self.get_variant().id()),
         );
     }
 

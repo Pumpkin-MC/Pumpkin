@@ -2,13 +2,13 @@ use std::any::Any;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
 
+use crate::inventory::Inventory;
+use crate::window_property::PropertyDelegate;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::potion_brewing::{ITEM_RECIPES, POTION_RECIPES};
+use pumpkin_data::potion_brewing::BREWING_RECIPES;
 use pumpkin_data::screen::WindowType;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_world::block::entities::PropertyDelegate;
-use pumpkin_world::inventory::Inventory;
 
 use crate::player::player_inventory::PlayerInventory;
 use crate::screen_handler::{
@@ -23,12 +23,7 @@ pub fn is_fuel(item: &Item) -> bool {
 
 #[must_use]
 pub fn is_ingredient(item: &Item) -> bool {
-    ITEM_RECIPES
-        .iter()
-        .any(|r| r.ingredient().iter().any(|i| i.id == item.id))
-        || POTION_RECIPES
-            .iter()
-            .any(|r| r.ingredient().iter().any(|i| i.id == item.id))
+    BREWING_RECIPES.iter().any(|r| r.ingredient().id == item.id)
 }
 
 #[must_use]

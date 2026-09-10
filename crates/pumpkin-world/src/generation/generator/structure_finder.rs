@@ -109,17 +109,14 @@ pub fn find_nearest_structure_start(
     generator: &WorldGenerator,
 ) -> Option<BlockPos> {
     use crate::{
-        ProtoChunk,
         biome::{BiomeSupplier, MultiNoiseBiomeSupplier},
         generation::{
-            biome_coords,
             noise::router::{
-                multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
+                multi_noise_sampler::MultiNoiseSampler,
                 surface_height_sampler::{
                     SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
                 },
             },
-            positions::chunk_pos::{start_block_x, start_block_z},
             structure::{
                 lazily_generate_structure,
                 placement::should_generate_structure,
@@ -158,15 +155,12 @@ pub fn find_nearest_structure_start(
                     region_origin_z + region_z_offset,
                     structure_set.placement.salt,
                 );
-                let placement_chunk = ProtoChunk::new(chunk_x, chunk_z, generator);
                 if !should_generate_structure(
                     &structure_set.placement,
                     &noise_generator.structure_calculator,
                     chunk_x,
                     chunk_z,
                     global_cache,
-                    &placement_chunk,
-                    &[],
                 ) {
                     continue;
                 }
@@ -174,15 +168,10 @@ pub fn find_nearest_structure_start(
                 for &key in target_structures {
                     let start =
                         global_cache.get_or_compute_structure_start(key, chunk_x, chunk_z, || {
-                            let start_x = start_block_x(chunk_x);
-                            let start_z = start_block_z(chunk_z);
                             let settings = noise_generator.settings;
                             let mut height_sampler = SurfaceHeightEstimateSampler::generate(
                                 &noise_generator.base_router.surface_estimator,
                                 &SurfaceHeightSamplerBuilderOptions::new(
-                                    biome_coords::from_block(start_x),
-                                    biome_coords::from_block(start_z),
-                                    4,
                                     settings.shape.min_y as i32,
                                     settings.shape.height as i32,
                                     (settings.shape.height
@@ -192,7 +181,6 @@ pub fn find_nearest_structure_start(
                             );
                             let mut biome_sampler = MultiNoiseSampler::generate(
                                 &noise_generator.base_router.multi_noise,
-                                &MultiNoiseSamplerBuilderOptions::new(0, 0, 0),
                             );
                             let biome_supplier: &dyn BiomeSupplier =
                                 &MultiNoiseBiomeSupplier::OVERWORLD;
@@ -202,7 +190,12 @@ pub fn find_nearest_structure_start(
                                 chunk_z,
                                 random: create_chunk_random(world_seed, chunk_x, chunk_z),
                                 sea_level: settings.sea_level,
-                                min_y: noise_generator.dimension.min_y,
+                                min_y: (settings.shape.min_y as i32)
+                                    .max(noise_generator.dimension.min_y),
+                                height: settings
+                                    .shape
+                                    .height
+                                    .min(noise_generator.dimension.height as u16),
                                 height_sampler: Some(&mut height_sampler),
                                 structure_key: Some(key),
                             };

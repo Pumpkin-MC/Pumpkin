@@ -10,7 +10,6 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::Metadata;
 use uuid::Uuid;
 
 use crate::entity::{
@@ -97,12 +96,9 @@ impl MuleEntity {
         let new_flags = if val { current | flag } else { current & !flag };
         self.flags.store(new_flags, Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::mule::DATA_ID_FLAGS,
-                new_flags as i8,
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::mule::DATA_ID_FLAGS,
+            new_flags as i8,
         );
     }
 
@@ -132,13 +128,7 @@ impl MuleEntity {
     pub fn set_has_chest(&self, val: bool) {
         self.has_chest.store(val, Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::mule::DATA_ID_CHEST,
-                val,
-            )],
-            None,
-        );
+        entity.set_synced_data(pumpkin_data::tracked_data::mule::DATA_ID_CHEST, val);
     }
 }
 
@@ -208,27 +198,15 @@ impl Mob for MuleEntity {
         let entity = self.get_entity();
         let is_baby = entity.age.load(Ordering::Relaxed) < 0;
         if is_baby {
-            entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::mule::DATA_BABY_ID,
-                    true,
-                )],
-                None,
-            );
+            entity.set_synced_data(pumpkin_data::tracked_data::mule::DATA_BABY_ID, true);
         }
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::mule::DATA_ID_CHEST,
-                self.has_chest(),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::mule::DATA_ID_CHEST,
+            self.has_chest(),
         );
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::mule::DATA_ID_FLAGS,
-                self.flags.load(Ordering::Relaxed) as i8,
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::mule::DATA_ID_FLAGS,
+            self.flags.load(Ordering::Relaxed) as i8,
         );
     }
 

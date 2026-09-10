@@ -10,7 +10,6 @@ use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::Metadata;
 use rand::RngExt;
 
 use crate::entity::{
@@ -142,12 +141,9 @@ impl RabbitEntity {
     pub fn set_variant(&self, variant: RabbitVariant) {
         self.variant.store(variant.id(), Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::rabbit::DATA_TYPE_ID,
-                VarInt(variant.id()),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::rabbit::DATA_TYPE_ID,
+            VarInt(variant.id()),
         );
 
         if variant == RabbitVariant::Evil {
@@ -232,20 +228,11 @@ impl Mob for RabbitEntity {
         let entity = self.get_entity();
         let is_baby = entity.age.load(Ordering::Relaxed) < 0;
         if is_baby {
-            entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::rabbit::DATA_BABY_ID,
-                    true,
-                )],
-                None,
-            );
+            entity.set_synced_data(pumpkin_data::tracked_data::rabbit::DATA_BABY_ID, true);
         }
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::rabbit::DATA_TYPE_ID,
-                VarInt(self.get_variant().id()),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::rabbit::DATA_TYPE_ID,
+            VarInt(self.get_variant().id()),
         );
     }
 

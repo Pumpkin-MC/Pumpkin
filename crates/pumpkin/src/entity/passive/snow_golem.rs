@@ -6,7 +6,6 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -84,12 +83,9 @@ impl SnowGolemEntity {
         self.has_pumpkin.store(has_pumpkin, Ordering::Relaxed);
         let entity = self.get_entity();
         let flags = if has_pumpkin { 16u8 } else { 0u8 };
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::snow_golem::DATA_PUMPKIN_ID,
-                flags as i8,
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::snow_golem::DATA_PUMPKIN_ID,
+            flags as i8,
         );
     }
 
@@ -140,12 +136,9 @@ impl Mob for SnowGolemEntity {
     fn mob_init_data_tracker(&self) {
         let entity = self.get_entity();
         let flags = if self.has_pumpkin() { 16u8 } else { 0u8 };
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::snow_golem::DATA_PUMPKIN_ID,
-                flags as i8,
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::snow_golem::DATA_PUMPKIN_ID,
+            flags as i8,
         );
     }
 

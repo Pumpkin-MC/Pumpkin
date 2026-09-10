@@ -4,12 +4,10 @@ use std::sync::{
 };
 
 use pumpkin_data::Block;
-use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tracked_data;
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::{
@@ -98,12 +96,9 @@ impl PiglinBruteEntity {
     pub fn set_immune_to_zombification(&self, immune: bool) {
         self.immune_to_zombification
             .store(immune, Ordering::Relaxed);
-        self.mob_entity.living_entity.entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::piglin_brute::DATA_IMMUNE_TO_ZOMBIFICATION,
-                immune,
-            )],
-            None,
+        self.mob_entity.living_entity.entity.set_synced_data(
+            tracked_data::piglin_brute::DATA_IMMUNE_TO_ZOMBIFICATION,
+            immune,
         );
     }
 
@@ -111,7 +106,7 @@ impl PiglinBruteEntity {
     pub fn is_converting(&self, world: &World) -> bool {
         !self.is_immune_to_zombification()
             && !self.mob_entity.is_no_ai()
-            && world.dimension.minecraft_name != Dimension::THE_NETHER.minecraft_name
+            && world.dimension.piglins_zombify
     }
 
     #[must_use]
@@ -185,12 +180,9 @@ impl Mob for PiglinBruteEntity {
     fn mob_init_data_tracker(&self) {
         let entity = self.get_entity();
         if self.is_immune_to_zombification() {
-            entity.send_meta_data(
-                &[Metadata::new(
-                    tracked_data::piglin_brute::DATA_IMMUNE_TO_ZOMBIFICATION,
-                    true,
-                )],
-                None,
+            entity.set_synced_data(
+                tracked_data::piglin_brute::DATA_IMMUNE_TO_ZOMBIFICATION,
+                true,
             );
         }
     }

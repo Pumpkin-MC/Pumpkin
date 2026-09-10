@@ -111,14 +111,9 @@ impl EntityBase for SplashPotionEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         // Sync the item stack
-        entity.send_meta_data(
-            &[pumpkin_protocol::java::client::play::Metadata::new(
-                pumpkin_data::tracked_data::splash_potion::ITEM_STACK,
-                &pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer::from(
-                    stack.clone(),
-                ),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::splash_potion::ITEM_STACK,
+            pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer::from(stack.clone()),
         );
     }
 
@@ -137,6 +132,7 @@ impl EntityBase for SplashPotionEntity {
         self
     }
 
+    #[allow(clippy::too_many_lines)]
     fn on_hit(&self, hit: crate::entity::projectile::ProjectileHit) {
         let world = self.get_entity().world.load();
         let hit_pos = hit.hit_pos();
@@ -233,20 +229,42 @@ impl EntityBase for SplashPotionEntity {
             candidates.push(p.clone() as Arc<dyn EntityBase>);
         }
 
+        let mut affected: Vec<(Arc<dyn EntityBase>, f32)> = Vec::new();
         for cand in candidates {
-            if let Some(living) = cand.get_living_entity() {
+            if cand.get_living_entity().is_some() {
                 let pos = cand.get_entity().pos.load();
                 let dx = pos.x - hit_pos.x;
                 let dy = pos.y - hit_pos.y;
                 let dz = pos.z - hit_pos.z;
                 let dist = (dx * dx + dy * dy + dz * dz).sqrt();
-                if dist > radius {
-                    continue;
+                if dist <= radius {
+                    let scale = (1.0f32 - (dist as f32 / radius as f32)).max(0.0);
+                    affected.push((cand, scale));
                 }
+            }
+        }
 
-                // Distance scaling
-                let scale = (1.0f32 - (dist as f32 / radius as f32)).max(0.0);
+        let affected_ids: Vec<i32> = affected
+            .iter()
+            .map(|(c, _)| c.get_entity().entity_id)
+            .collect();
+        if let Some(server) = world.server.upgrade() {
+            let mut event =
+                crate::plugin::api::events::entity::potion_splash::PotionSplashEvent::new(
+                    self.get_entity().entity_id,
+                    block_pos,
+                    stack.item.registry_key.to_string(),
+                    affected_ids,
+                );
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return;
+            }
+            affected.retain(|(c, _)| event.affected_entities.contains(&c.get_entity().entity_id));
+        }
 
+        for (cand, scale) in affected {
+            if let Some(living) = cand.get_living_entity() {
                 crate::item::potion::PotionContents::apply_effects_to(
                     living,
                     effects.clone(),

@@ -48,7 +48,7 @@ use pumpkin_protocol::{
 };
 use pumpkin_util::{GameMode, Hand, math::position::BlockPos, text::TextComponent};
 
-use pumpkin_world::inventory::Inventory;
+use pumpkin_inventory::Inventory;
 use pumpkin_world::world::BlockFlags;
 
 use crate::{

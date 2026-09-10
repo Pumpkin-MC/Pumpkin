@@ -9,7 +9,6 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -87,12 +86,9 @@ impl CamelEntity {
         let new_flags = if val { current | flag } else { current & !flag };
         self.flags.store(new_flags, Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::camel::DATA_ID_FLAGS,
-                new_flags as i8,
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::camel::DATA_ID_FLAGS,
+            new_flags as i8,
         );
     }
 
@@ -113,13 +109,7 @@ impl CamelEntity {
     pub fn set_dashing(&self, dashing: bool) {
         self.dashing.store(dashing, Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::camel::DASH,
-                dashing,
-            )],
-            None,
-        );
+        entity.set_synced_data(pumpkin_data::tracked_data::camel::DASH, dashing);
     }
 }
 
@@ -169,28 +159,13 @@ impl Mob for CamelEntity {
         let entity = self.get_entity();
         let is_baby = entity.age.load(Ordering::Relaxed) < 0;
         if is_baby {
-            entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::camel::DATA_BABY_ID,
-                    true,
-                )],
-                None,
-            );
+            entity.set_synced_data(pumpkin_data::tracked_data::camel::DATA_BABY_ID, true);
         }
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::camel::DATA_ID_FLAGS,
-                self.flags.load(Ordering::Relaxed) as i8,
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::camel::DATA_ID_FLAGS,
+            self.flags.load(Ordering::Relaxed) as i8,
         );
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::camel::DASH,
-                self.is_dashing(),
-            )],
-            None,
-        );
+        entity.set_synced_data(pumpkin_data::tracked_data::camel::DASH, self.is_dashing());
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {

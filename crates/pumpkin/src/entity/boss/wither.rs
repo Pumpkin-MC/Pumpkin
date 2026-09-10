@@ -15,7 +15,7 @@ use pumpkin_data::{
     world::WorldEvent,
 };
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::Metadata};
+use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::{
     Difficulty,
     math::{position::BlockPos, vector3::Vector3},
@@ -106,13 +106,10 @@ impl WitherEntity {
 
     pub fn set_invulnerable_ticks(&self, ticks: i32) {
         self.invulnerable_ticks.store(ticks, Ordering::Relaxed);
-        self.mob_entity.living_entity.entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::wither::DATA_ID_INV,
-                VarInt(ticks),
-            )],
-            None,
-        );
+        self.mob_entity
+            .living_entity
+            .entity
+            .set_synced_data(tracked_data::wither::DATA_ID_INV, VarInt(ticks));
     }
 
     #[must_use]
@@ -136,7 +133,7 @@ impl WitherEntity {
                 self.mob_entity
                     .living_entity
                     .entity
-                    .send_meta_data(&[Metadata::new(tracker_id, VarInt(entity_id))], None);
+                    .set_synced_data(tracker_id, VarInt(entity_id));
             }
         }
     }
@@ -583,26 +580,21 @@ impl Mob for WitherEntity {
 
     fn mob_init_data_tracker(&self) {
         let entity = &self.mob_entity.living_entity.entity;
-        entity.send_meta_data(
-            &[
-                Metadata::new(
-                    tracked_data::wither::DATA_TARGET_A,
-                    VarInt(self.get_alternative_target(0)),
-                ),
-                Metadata::new(
-                    tracked_data::wither::DATA_TARGET_B,
-                    VarInt(self.get_alternative_target(1)),
-                ),
-                Metadata::new(
-                    tracked_data::wither::DATA_TARGET_C,
-                    VarInt(self.get_alternative_target(2)),
-                ),
-                Metadata::new(
-                    tracked_data::wither::DATA_ID_INV,
-                    VarInt(self.get_invulnerable_ticks()),
-                ),
-            ],
-            None,
+        entity.set_synced_data(
+            tracked_data::wither::DATA_TARGET_A,
+            VarInt(self.get_alternative_target(0)),
+        );
+        entity.set_synced_data(
+            tracked_data::wither::DATA_TARGET_B,
+            VarInt(self.get_alternative_target(1)),
+        );
+        entity.set_synced_data(
+            tracked_data::wither::DATA_TARGET_C,
+            VarInt(self.get_alternative_target(2)),
+        );
+        entity.set_synced_data(
+            tracked_data::wither::DATA_ID_INV,
+            VarInt(self.get_invulnerable_ticks()),
         );
     }
 

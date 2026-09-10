@@ -5,7 +5,6 @@ use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
-use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::atomic_f32::AtomicF32;
 use pumpkin_util::math::vector3::Vector3;
 
@@ -118,12 +117,9 @@ impl FireballEntity {
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = new_item.clone();
 
-        self.get_entity().send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::fireball::ITEM_STACK,
-                &ItemStackSerializer::from(new_item),
-            )],
-            None,
+        self.get_entity().set_synced_data(
+            pumpkin_data::tracked_data::fireball::ITEM_STACK,
+            ItemStackSerializer::from(new_item),
         );
     }
 
@@ -200,12 +196,9 @@ impl EntityBase for FireballEntity {
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::fireball::ITEM_STACK,
-                &ItemStackSerializer::from(stack.clone()),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::fireball::ITEM_STACK,
+            ItemStackSerializer::from(stack.clone()),
         );
     }
 

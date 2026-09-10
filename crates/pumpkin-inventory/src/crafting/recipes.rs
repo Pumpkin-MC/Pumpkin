@@ -12,7 +12,7 @@
 //! - [`RecipeMatcher`] - Helper for matching items to recipes
 //! - [`RecipeFinder`] - Helper for finding recipes
 
-use pumpkin_world::inventory::Inventory;
+use crate::inventory::Inventory;
 
 /// Helper struct for matching recipe ingredients.
 // RecipeMatcher.java

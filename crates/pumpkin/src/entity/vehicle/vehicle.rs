@@ -2,7 +2,6 @@ use crossbeam::atomic::AtomicCell;
 use std::sync::atomic::{AtomicI32, Ordering};
 
 use crate::entity::Entity;
-use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::EntityBase;
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -44,6 +43,11 @@ impl VehicleEntity {
             server
                 .plugin_manager
                 .fire_blocking(&server, &mut update_event);
+        }
+
+        // Coalesce pushed velocity to once per tick (boats use the default push()).
+        if self.entity.velocity_dirty.swap(false, Ordering::SeqCst) {
+            self.entity.send_velocity();
         }
     }
 
@@ -134,25 +138,17 @@ impl VehicleEntity {
     }
 
     pub fn send_wobble_metadata(&self) {
-        self.entity.send_meta_data(
-            &[
-                Metadata::new(
-                    pumpkin_data::tracked_data::boat::ID_HURT,
-                    VarInt(self.get_hurt_time()),
-                ),
-                Metadata::new(
-                    pumpkin_data::tracked_data::boat::ID_HURTDIR,
-                    VarInt(self.get_hurt_dir()),
-                ),
-            ],
-            None,
+        self.entity.set_synced_data(
+            pumpkin_data::tracked_data::boat::ID_HURT,
+            VarInt(self.get_hurt_time()),
         );
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::boat::ID_DAMAGE,
-                self.get_damage(),
-            )],
-            None,
+        self.entity.set_synced_data(
+            pumpkin_data::tracked_data::boat::ID_HURTDIR,
+            VarInt(self.get_hurt_dir()),
+        );
+        self.entity.set_synced_data(
+            pumpkin_data::tracked_data::boat::ID_DAMAGE,
+            self.get_damage(),
         );
     }
 

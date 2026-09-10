@@ -126,6 +126,24 @@ impl BlockState {
         self.state_flags & HAS_RANDOM_TICKS != 0
     }
 
+    /// Returns whether this block state is a full opaque cube (`isSolidRender()` in Java).
+    #[must_use]
+    pub const fn is_solid_render(&self) -> bool {
+        self.state_flags & IS_SOLID_RENDER != 0
+    }
+
+    /// Returns whether this block state can occlude other blocks (`canOcclude` in Java).
+    #[must_use]
+    pub const fn can_occlude(&self) -> bool {
+        self.state_flags & CAN_OCCLUDE != 0
+    }
+
+    /// Returns whether this block produces an analog output signal for comparators (`hasAnalogOutputSignal()` in Java).
+    #[must_use]
+    pub const fn has_analog_output_signal(&self) -> bool {
+        self.state_flags & HAS_ANALOG_OUTPUT_SIGNAL != 0
+    }
+
     ///`isFaceSturdy()` in Java!
     #[must_use]
     pub const fn is_side_solid(&self, side: BlockDirection) -> bool {
@@ -214,12 +232,12 @@ impl BlockState {
     }
 
     #[must_use]
-    pub const fn rotate(&self, rotation: crate::block_rotation::Rotation) -> &'static Self {
+    pub fn rotate(&self, rotation: crate::block_rotation::Rotation) -> &'static Self {
         Block::from_state_id(self.id).rotate(self.id, rotation)
     }
 
     #[must_use]
-    pub const fn mirror(&self, mirror: crate::block_rotation::Mirror) -> &'static Self {
+    pub fn mirror(&self, mirror: crate::block_rotation::Mirror) -> &'static Self {
         Block::from_state_id(self.id).mirror(self.id, mirror)
     }
 }
@@ -277,19 +295,37 @@ impl BlockStateId {
 
     #[inline]
     #[must_use]
+    pub const fn is_solid_render(self) -> bool {
+        self.to_state().is_solid_render()
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn can_occlude(self) -> bool {
+        self.to_state().can_occlude()
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn has_analog_output_signal(self) -> bool {
+        self.to_state().has_analog_output_signal()
+    }
+
+    #[inline]
+    #[must_use]
     pub fn is_waterlogged(self) -> bool {
         self.to_block().is_waterlogged(self)
     }
 
     #[inline]
     #[must_use]
-    pub const fn rotate(self, rotation: crate::block_rotation::Rotation) -> &'static BlockState {
+    pub fn rotate(self, rotation: crate::block_rotation::Rotation) -> &'static BlockState {
         Block::from_state_id(self).rotate(self, rotation)
     }
 
     #[inline]
     #[must_use]
-    pub const fn mirror(self, mirror: crate::block_rotation::Mirror) -> &'static BlockState {
+    pub fn mirror(self, mirror: crate::block_rotation::Mirror) -> &'static BlockState {
         Block::from_state_id(self).mirror(self, mirror)
     }
 }
@@ -324,6 +360,9 @@ const IS_SOLID: u16 = 1 << 6;
 const IS_FULL_CUBE: u16 = 1 << 7;
 const IS_SOLID_BLOCK: u16 = 1 << 8;
 const HAS_RANDOM_TICKS: u16 = 1 << 9;
+const IS_SOLID_RENDER: u16 = 1 << 10;
+const CAN_OCCLUDE: u16 = 1 << 11;
+const HAS_ANALOG_OUTPUT_SIGNAL: u16 = 1 << 12;
 
 // side_flags
 const DOWN_SIDE_SOLID: u8 = 1 << 0;

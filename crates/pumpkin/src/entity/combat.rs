@@ -407,6 +407,7 @@ impl CombatTracker {
     pub fn get_death_message(
         &self,
         victim_name: pumpkin_util::text::TextComponent,
+        kill_credit_name: Option<pumpkin_util::text::TextComponent>,
     ) -> pumpkin_util::text::TextComponent {
         if self.entries.is_empty() {
             return pumpkin_util::text::TextComponent::translate_cross(
@@ -456,7 +457,7 @@ impl CombatTracker {
                 )
             }
             pumpkin_data::damage::DeathMessageType::Default => {
-                self.get_default_death_message(victim_name, killing_blow)
+                self.get_default_death_message(victim_name, killing_blow, kill_credit_name)
             }
         }
     }
@@ -585,6 +586,7 @@ impl CombatTracker {
         &self,
         victim_name: pumpkin_util::text::TextComponent,
         killing_blow: &CombatEntry,
+        kill_credit_name: Option<pumpkin_util::text::TextComponent>,
     ) -> pumpkin_util::text::TextComponent {
         let damage_type = killing_blow.damage_type;
         let msg_id = damage_type.message_id;
@@ -598,18 +600,19 @@ impl CombatTracker {
                 )
             } else {
                 pumpkin_util::text::TextComponent::translate_cross(
-                    format!("death.attack.{msg_id}.player"),
-                    format!("death.attack.{msg_id}.player"),
+                    format!("death.attack.{msg_id}"),
+                    format!("death.attack.{msg_id}"),
                     [victim_name, attacker_name.clone()],
                 )
             }
-        } else if let Some(killer) = self.get_killer_entry()
-            && let Some(killer_name) = &killer.attacker_name
-        {
+        } else if let Some(killer_name) = kill_credit_name.or_else(|| {
+            self.get_killer_entry()
+                .and_then(|k| k.attacker_name.clone())
+        }) {
             pumpkin_util::text::TextComponent::translate_cross(
                 format!("death.attack.{msg_id}.player"),
                 format!("death.attack.{msg_id}.player"),
-                [victim_name, killer_name.clone()],
+                [victim_name, killer_name],
             )
         } else {
             pumpkin_util::text::TextComponent::translate_cross(
