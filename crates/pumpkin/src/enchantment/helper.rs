@@ -1,4 +1,4 @@
-use crate::enchantment::effects::Ignite;
+use crate::enchantment::effects::EnchantmentEntityEffectExt;
 use crate::entity::Entity;
 use crate::entity::projectile::arrow::ArrowEntity;
 use pumpkin_data::data_component_impl::EnchantmentsImpl;
@@ -28,29 +28,39 @@ impl EnchantmentHelper {
         projectile_entity: &Entity,
         arrow: Option<&ArrowEntity>,
     ) {
+        let world = projectile_entity.world.load_full();
         Self::run_iteration_on_item(weapon, |enchantment, level| {
             for conditional_effect in enchantment.effects.projectile_spawned {
-                if let EnchantmentEntityEffect::Ignite { duration } = &conditional_effect.effect {
-                    let ignite = Ignite::new(duration.clone());
-                    ignite.apply(level, projectile_entity);
-                    if let Some(arrow) = arrow {
-                        arrow.set_flame(true);
-                    }
+                conditional_effect.effect.apply(
+                    &world,
+                    level,
+                    None,
+                    Some(projectile_entity),
+                    projectile_entity.pos.load(),
+                );
+                if let EnchantmentEntityEffect::Ignite { .. } = &conditional_effect.effect
+                    && let Some(arrow) = arrow
+                {
+                    arrow.set_flame(true);
                 }
             }
         });
     }
 
     /// Applies post-attack enchantment effects (e.g. Fire Aspect ignites victim).
-    pub fn on_post_attack(_attacker: &Entity, victim: &Entity, weapon: &ItemStack) {
+    pub fn on_post_attack(attacker: &Entity, victim: &Entity, weapon: &ItemStack) {
         Self::run_iteration_on_item(weapon, |enchantment, level| {
             for targeted_effect in enchantment.effects.post_attack {
-                if targeted_effect.affected == Some(EnchantmentTarget::Victim)
-                    && let EnchantmentEntityEffect::Ignite { duration } = &targeted_effect.effect
-                {
-                    let ignite = Ignite::new(duration.clone());
-                    ignite.apply(level, victim);
-                }
+                let target = match targeted_effect.affected {
+                    Some(EnchantmentTarget::Attacker | EnchantmentTarget::DamagingEntity) => {
+                        attacker
+                    }
+                    Some(EnchantmentTarget::Victim) | None => victim,
+                };
+                let world = target.world.load_full();
+                targeted_effect
+                    .effect
+                    .apply(&world, level, None, Some(target), target.pos.load());
             }
         });
     }
@@ -165,5 +175,158 @@ impl EnchantmentHelper {
             }
         }
         (charge_time as i32).max(0)
+    }
+
+    /// Modifies durability change using data-driven item damage effects (e.g. Unbreaking).
+    #[must_use]
+    pub fn modify_durability_change(item: &ItemStack, base_change: f32) -> f32 {
+        let mut change = base_change;
+        if let Some(enchantments) = item.get_data_component::<EnchantmentsImpl>() {
+            for (enchantment, level) in enchantments.enchantment.iter() {
+                for effect in enchantment.effects.item_damage {
+                    change = effect.effect.process(*level, change);
+                }
+            }
+        }
+        change
+    }
+
+    /// Modifies block experience using data-driven block experience effects (e.g. Fortune).
+    #[must_use]
+    pub fn modify_block_experience(tool: &ItemStack, base_xp: i32) -> i32 {
+        let mut xp = base_xp as f32;
+        if let Some(enchantments) = tool.get_data_component::<EnchantmentsImpl>() {
+            for (enchantment, level) in enchantments.enchantment.iter() {
+                enchantment.modify_block_experience(*level, &mut xp);
+            }
+        }
+        (xp as i32).max(0)
+    }
+
+    /// Modifies mob experience using data-driven mob experience effects (e.g. Looting).
+    #[must_use]
+    pub fn modify_mob_experience(weapon: &ItemStack, base_xp: i32) -> i32 {
+        let mut xp = base_xp as f32;
+        if let Some(enchantments) = weapon.get_data_component::<EnchantmentsImpl>() {
+            for (enchantment, level) in enchantments.enchantment.iter() {
+                enchantment.modify_mob_experience(*level, &mut xp);
+            }
+        }
+        (xp as i32).max(0)
+    }
+
+    /// Modifies durability to repair from experience using data-driven effects (e.g. Mending).
+    #[must_use]
+    pub fn modify_durability_to_repair_from_xp(item: &ItemStack, base_repair: f32) -> f32 {
+        let mut repair = base_repair;
+        if let Some(enchantments) = item.get_data_component::<EnchantmentsImpl>() {
+            for (enchantment, level) in enchantments.enchantment.iter() {
+                enchantment.modify_durability_to_repair_from_xp(*level, &mut repair);
+            }
+        }
+        repair
+    }
+
+    /// Modifies trident return acceleration using data-driven effects (e.g. Loyalty).
+    #[must_use]
+    pub fn modify_trident_return_acceleration(trident: &ItemStack, base_accel: f32) -> f32 {
+        let mut accel = base_accel;
+        if let Some(enchantments) = trident.get_data_component::<EnchantmentsImpl>() {
+            for (enchantment, level) in enchantments.enchantment.iter() {
+                enchantment.modify_trident_return_to_owner_acceleration(*level, &mut accel);
+            }
+        }
+        accel
+    }
+
+    /// Modifies trident spin attack strength using data-driven effects (e.g. Riptide).
+    #[must_use]
+    pub fn modify_trident_spin_attack_strength(trident: &ItemStack, base_strength: f32) -> f32 {
+        let mut strength = base_strength;
+        if let Some(enchantments) = trident.get_data_component::<EnchantmentsImpl>() {
+            for (enchantment, level) in enchantments.enchantment.iter() {
+                enchantment.modify_trident_spin_attack_strength(*level, &mut strength);
+            }
+        }
+        strength
+    }
+
+    /// Modifies fishing time reduction using data-driven effects (e.g. Lure).
+    #[must_use]
+    pub fn modify_fishing_time_reduction(rod: &ItemStack, base_reduction: f32) -> f32 {
+        let mut reduction = base_reduction;
+        if let Some(enchantments) = rod.get_data_component::<EnchantmentsImpl>() {
+            for (enchantment, level) in enchantments.enchantment.iter() {
+                enchantment.modify_fishing_time_reduction(*level, &mut reduction);
+            }
+        }
+        reduction
+    }
+
+    /// Modifies fishing luck bonus using data-driven effects (e.g. Luck of the Sea).
+    #[must_use]
+    pub fn modify_fishing_luck_bonus(rod: &ItemStack, base_luck: f32) -> f32 {
+        let mut luck = base_luck;
+        if let Some(enchantments) = rod.get_data_component::<EnchantmentsImpl>() {
+            for (enchantment, level) in enchantments.enchantment.iter() {
+                enchantment.modify_fishing_luck_bonus(*level, &mut luck);
+            }
+        }
+        luck
+    }
+
+    /// Modifies damage protection across equipped armor items.
+    #[must_use]
+    pub fn modify_damage_protection<'a>(
+        armor_items: impl IntoIterator<Item = &'a ItemStack>,
+        base_protection: f32,
+    ) -> f32 {
+        let mut protection = base_protection;
+        for item in armor_items {
+            if let Some(enchantments) = item.get_data_component::<EnchantmentsImpl>() {
+                for (enchantment, level) in enchantments.enchantment.iter() {
+                    for effect in enchantment.effects.damage_protection {
+                        protection = effect.effect.process(*level, protection);
+                    }
+                }
+            }
+        }
+        protection
+    }
+
+    /// Applies location-changed enchantment effects (e.g. Frost Walker replacing water with frosted ice).
+    pub fn on_location_changed(
+        entity: &Entity,
+        item: &ItemStack,
+        position: pumpkin_util::math::vector3::Vector3<f64>,
+    ) {
+        let world = entity.world.load_full();
+        Self::run_iteration_on_item(item, |enchantment, level| {
+            for conditional_effect in enchantment.effects.location_changed {
+                conditional_effect
+                    .effect
+                    .apply(&world, level, None, Some(entity), position);
+            }
+        });
+    }
+
+    /// Applies hit-block enchantment effects.
+    pub fn on_hit_block(
+        weapon: &ItemStack,
+        projectile_entity: &Entity,
+        position: pumpkin_util::math::vector3::Vector3<f64>,
+    ) {
+        let world = projectile_entity.world.load_full();
+        Self::run_iteration_on_item(weapon, |enchantment, level| {
+            for conditional_effect in enchantment.effects.hit_block {
+                conditional_effect.effect.apply(
+                    &world,
+                    level,
+                    None,
+                    Some(projectile_entity),
+                    position,
+                );
+            }
+        });
     }
 }

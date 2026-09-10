@@ -16,7 +16,7 @@ mod center_chunk;
 mod change_difficulty;
 mod chunk_batch_end;
 mod chunk_batch_start;
-mod chunk_data;
+pub mod chunk_data;
 mod clear_dialog;
 mod clear_title;
 mod close_container;

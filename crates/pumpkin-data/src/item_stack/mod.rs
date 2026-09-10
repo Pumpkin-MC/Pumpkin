@@ -245,6 +245,14 @@ impl ItemStack {
         }
     }
 
+    pub fn remove_data_component(&mut self, to_remove_id: DataComponent) {
+        if let Some((_, c)) = self.patch.iter_mut().find(|(id, _)| *id == to_remove_id) {
+            *c = None;
+        } else {
+            self.patch.push((to_remove_id, None));
+        }
+    }
+
     pub fn add_lore(&mut self, line: pumpkin_util::text::TextComponent) {
         let mut lines = self
             .get_data_component::<crate::data_component_impl::LoreImpl>()

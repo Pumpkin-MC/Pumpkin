@@ -1,3 +1,4 @@
+use crate::command::CommandSource;
 use crate::command::argument_types::FromStringReader;
 use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
 use crate::command::context::command_context::CommandContext;
@@ -42,7 +43,7 @@ pub static ERROR_INVALID: CommandErrorType<0> = CommandErrorType::new(
     translation::java::ARGUMENT_ID_INVALID,
 );
 
-impl ArgumentType for ResourceKeyArgument {
+impl ArgumentType<CommandSource> for ResourceKeyArgument {
     type Item = ResourceKey;
 
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {

@@ -10,6 +10,9 @@ impl MobEffect for RaidOmenMobEffect {
 
     fn apply_effect_tick(&self, living: &LivingEntity, _amplifier: u8) {
         let world = living.entity.world.load();
+        if !world.dimension.can_start_raid {
+            return;
+        }
         if let Some(entity) = world.get_entity_by_id(living.entity.entity_id)
             && let Some(player) = entity.get_player()
             && !player.is_spectator()
@@ -22,6 +25,11 @@ impl MobEffect for RaidOmenMobEffect {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             raids.create_or_extend_raid(raid_pos, &world);
+            player.increment_stat(
+                pumpkin_data::statistic::StatisticCategory::Custom,
+                pumpkin_data::statistic::CustomStatistic::RaidTrigger as i32,
+                1,
+            );
             player.clear_raid_omen_position();
         }
     }

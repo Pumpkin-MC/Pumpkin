@@ -357,7 +357,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
     registry.register_permission_or_panic(Permission::new(
         PERMISSION,
         DESCRIPTION,
-        PermissionDefault::Op(PermissionLvl::Two),
+        PermissionDefault::Op(PermissionLvl::Three),
     ));
 
     dispatcher.register(

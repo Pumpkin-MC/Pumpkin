@@ -160,6 +160,133 @@ fn parse_level_based_value(val: &serde_json::Value) -> TokenStream {
     }
 }
 
+fn parse_particle(v: &serde_json::Value) -> TokenStream {
+    let type_str = if let Some(s) = v.as_str() {
+        s
+    } else {
+        v.get("type").and_then(|s| s.as_str()).unwrap_or("")
+    };
+    let raw = type_str.strip_prefix("minecraft:").unwrap_or(type_str);
+    let ident = format_ident!("{}", raw.to_pascal_case());
+    quote! { crate::particle::Particle::#ident }
+}
+
+fn parse_position_source(v: Option<&serde_json::Value>) -> (TokenStream, f32, f32) {
+    let obj = v.and_then(|val| val.as_object());
+    let type_str = obj
+        .and_then(|o| o.get("type"))
+        .and_then(|s| s.as_str())
+        .unwrap_or("entity_position");
+    let offset = obj
+        .and_then(|o| o.get("offset"))
+        .and_then(|n| n.as_f64())
+        .unwrap_or(0.0) as f32;
+    let scale = obj
+        .and_then(|o| o.get("scale"))
+        .and_then(|n| n.as_f64())
+        .unwrap_or(1.0) as f32;
+    let type_token = match type_str {
+        "in_bounding_box" => quote! { PositionSourceType::InBoundingBox },
+        _ => quote! { PositionSourceType::EntityPosition },
+    };
+    (type_token, offset, scale)
+}
+
+fn parse_float_provider(v: &serde_json::Value) -> TokenStream {
+    if let Some(f) = v.as_f64() {
+        let f = f as f32;
+        quote! { pumpkin_util::math::float_provider::FloatProvider::Constant(#f) }
+    } else if let Some(type_str) = v.get("type").and_then(|s| s.as_str()) {
+        match type_str {
+            "minecraft:constant" => {
+                let val = v.get("value").and_then(|n| n.as_f64()).unwrap_or(0.0) as f32;
+                quote! { pumpkin_util::math::float_provider::FloatProvider::Constant(#val) }
+            }
+            "minecraft:uniform" => {
+                let min = v
+                    .get("min_inclusive")
+                    .and_then(|n| n.as_f64())
+                    .unwrap_or(0.0) as f32;
+                let max = v
+                    .get("max_exclusive")
+                    .and_then(|n| n.as_f64())
+                    .unwrap_or(0.0) as f32;
+                quote! {
+                    pumpkin_util::math::float_provider::FloatProvider::Object(
+                        pumpkin_util::math::float_provider::NormalFloatProvider::Uniform(
+                            pumpkin_util::math::float_provider::UniformFloatProvider::new(#min, #max)
+                        )
+                    )
+                }
+            }
+            "minecraft:trapezoid" => {
+                let min = v.get("min").and_then(|n| n.as_f64()).unwrap_or(0.0) as f32;
+                let max = v.get("max").and_then(|n| n.as_f64()).unwrap_or(0.0) as f32;
+                let plateau = v.get("plateau").and_then(|n| n.as_f64()).unwrap_or(0.0) as f32;
+                quote! {
+                    pumpkin_util::math::float_provider::FloatProvider::Object(
+                        pumpkin_util::math::float_provider::NormalFloatProvider::Trapezoid(
+                            pumpkin_util::math::float_provider::TrapezoidFloatProvider::new(#min, #max, #plateau)
+                        )
+                    )
+                }
+            }
+            _ => quote! { pumpkin_util::math::float_provider::FloatProvider::Constant(0.0) },
+        }
+    } else {
+        quote! { pumpkin_util::math::float_provider::FloatProvider::Constant(0.0) }
+    }
+}
+
+fn parse_velocity_source(v: Option<&serde_json::Value>) -> (f32, TokenStream) {
+    let obj = v.and_then(|val| val.as_object());
+    let movement_scale = obj
+        .and_then(|o| o.get("movement_scale"))
+        .and_then(|n| n.as_f64())
+        .unwrap_or(0.0) as f32;
+    let base = obj.and_then(|o| o.get("base"));
+    let base_token = match base {
+        Some(b) => parse_float_provider(b),
+        None => quote! { pumpkin_util::math::float_provider::FloatProvider::Constant(0.0) },
+    };
+    (movement_scale, base_token)
+}
+
+fn parse_vec3(v: Option<&serde_json::Value>) -> (f64, f64, f64) {
+    let arr = v.and_then(|val| val.as_array());
+    if let Some(a) = arr {
+        let x = a.first().and_then(|n| n.as_f64()).unwrap_or(0.0);
+        let y = a.get(1).and_then(|n| n.as_f64()).unwrap_or(0.0);
+        let z = a.get(2).and_then(|n| n.as_f64()).unwrap_or(0.0);
+        (x, y, z)
+    } else {
+        (0.0, 0.0, 0.0)
+    }
+}
+
+fn parse_status_effect_list(v: Option<&serde_json::Value>) -> TokenStream {
+    match v {
+        Some(serde_json::Value::String(s)) => {
+            let raw = s.strip_prefix("minecraft:").unwrap_or(s);
+            let ident = format_ident!("{}", raw.to_shouty_snake_case());
+            quote! { &[&crate::effect::StatusEffect::#ident] }
+        }
+        Some(serde_json::Value::Array(arr)) => {
+            let idents: Vec<_> = arr
+                .iter()
+                .filter_map(|x| x.as_str())
+                .map(|s| {
+                    let raw = s.strip_prefix("minecraft:").unwrap_or(s);
+                    let ident = format_ident!("{}", raw.to_shouty_snake_case());
+                    quote! { &crate::effect::StatusEffect::#ident }
+                })
+                .collect();
+            quote! { &[#(#idents),*] }
+        }
+        _ => quote! { &[] },
+    }
+}
+
 fn parse_entity_effect(val: &serde_json::Value) -> TokenStream {
     if let Some(obj) = val.as_object() {
         let eff_type = obj.get("type").and_then(|t| t.as_str()).unwrap_or("");
@@ -171,12 +298,41 @@ fn parse_entity_effect(val: &serde_json::Value) -> TokenStream {
                 quote! { EnchantmentEntityEffect::Ignite { duration: #dur } }
             }
             "minecraft:damage_entity" => {
-                let dmg = parse_level_based_value(
-                    obj.get("damage")
-                        .or_else(|| obj.get("min_damage"))
+                let min_damage = parse_level_based_value(
+                    obj.get("min_damage")
+                        .or_else(|| obj.get("damage"))
                         .unwrap_or(&serde_json::Value::Null),
                 );
-                quote! { EnchantmentEntityEffect::DamageEntity { damage: #dmg } }
+                let max_damage = parse_level_based_value(
+                    obj.get("max_damage")
+                        .or_else(|| obj.get("damage"))
+                        .unwrap_or(&serde_json::Value::Null),
+                );
+                let damage_type = obj.get("damage_type").and_then(|s| s.as_str());
+                let damage_type_token = match damage_type {
+                    Some(dt) => {
+                        let dt_raw = dt.strip_prefix("minecraft:").unwrap_or(dt);
+                        let dt_ident = format_ident!("{}", dt_raw.to_shouty_snake_case());
+                        quote! { Some(&crate::damage::DamageType::#dt_ident) }
+                    }
+                    None => quote! { None },
+                };
+                quote! {
+                    EnchantmentEntityEffect::DamageEntity {
+                        min_damage: #min_damage,
+                        max_damage: #max_damage,
+                        damage_type: #damage_type_token,
+                    }
+                }
+            }
+            "minecraft:change_item_damage" => {
+                let amount =
+                    parse_level_based_value(obj.get("amount").unwrap_or(&serde_json::Value::Null));
+                quote! {
+                    EnchantmentEntityEffect::ChangeItemDamage {
+                        amount: #amount,
+                    }
+                }
             }
             "minecraft:play_sound" => {
                 let sound = obj.get("sound").and_then(|s| s.as_str()).unwrap_or("");
@@ -213,6 +369,227 @@ fn parse_entity_effect(val: &serde_json::Value) -> TokenStream {
                         offset_y: #offset_y,
                         offset_z: #offset_z,
                         trigger_game_event: #event_token,
+                    }
+                }
+            }
+            "minecraft:set_block_properties" => {
+                let offset_x = obj
+                    .get("offset")
+                    .and_then(|v| v.get(0))
+                    .and_then(|n| n.as_i64())
+                    .unwrap_or(0) as i32;
+                let offset_y = obj
+                    .get("offset")
+                    .and_then(|v| v.get(1))
+                    .and_then(|n| n.as_i64())
+                    .unwrap_or(0) as i32;
+                let offset_z = obj
+                    .get("offset")
+                    .and_then(|v| v.get(2))
+                    .and_then(|n| n.as_i64())
+                    .unwrap_or(0) as i32;
+                let event = obj.get("trigger_game_event").and_then(|s| s.as_str());
+                let event_token = match event {
+                    Some(ev) => {
+                        let ev_raw = ev.strip_prefix("minecraft:").unwrap_or(ev);
+                        let ev_ident = format_ident!("{}", ev_raw.to_pascal_case());
+                        quote! { Some(crate::game_event::GameEvent::#ev_ident) }
+                    }
+                    None => quote! { None },
+                };
+                let properties_obj = obj.get("properties").and_then(|p| p.as_object());
+                let properties_tokens: Vec<_> = properties_obj
+                    .map(|o| {
+                        o.iter()
+                            .map(|(k, v)| {
+                                let val_str = v.as_str().unwrap_or("");
+                                quote! { (#k, #val_str) }
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                quote! {
+                    EnchantmentEntityEffect::SetBlockProperties {
+                        properties: &[#(#properties_tokens),*],
+                        offset_x: #offset_x,
+                        offset_y: #offset_y,
+                        offset_z: #offset_z,
+                        trigger_game_event: #event_token,
+                    }
+                }
+            }
+            "minecraft:replace_disk" => {
+                let radius =
+                    parse_level_based_value(obj.get("radius").unwrap_or(&serde_json::Value::Null));
+                let height =
+                    parse_level_based_value(obj.get("height").unwrap_or(&serde_json::Value::Null));
+                let offset_x = obj
+                    .get("offset")
+                    .and_then(|v| v.get(0))
+                    .and_then(|n| n.as_i64())
+                    .unwrap_or(0) as i32;
+                let offset_y = obj
+                    .get("offset")
+                    .and_then(|v| v.get(1))
+                    .and_then(|n| n.as_i64())
+                    .unwrap_or(0) as i32;
+                let offset_z = obj
+                    .get("offset")
+                    .and_then(|v| v.get(2))
+                    .and_then(|n| n.as_i64())
+                    .unwrap_or(0) as i32;
+                let event = obj.get("trigger_game_event").and_then(|s| s.as_str());
+                let event_token = match event {
+                    Some(ev) => {
+                        let ev_raw = ev.strip_prefix("minecraft:").unwrap_or(ev);
+                        let ev_ident = format_ident!("{}", ev_raw.to_pascal_case());
+                        quote! { Some(crate::game_event::GameEvent::#ev_ident) }
+                    }
+                    None => quote! { None },
+                };
+                let block_state_token = obj.get("block_state").map_or_else(
+                    || quote! { crate::block::Block::FROSTED_ICE.default_state },
+                    parse_block_state,
+                );
+                let predicate_token = obj
+                    .get("predicate")
+                    .map_or_else(|| quote! { None }, parse_replace_disk_predicate);
+                quote! {
+                    EnchantmentEntityEffect::ReplaceDisk {
+                        radius: #radius,
+                        height: #height,
+                        offset_x: #offset_x,
+                        offset_y: #offset_y,
+                        offset_z: #offset_z,
+                        predicate: #predicate_token,
+                        block_state: #block_state_token,
+                        trigger_game_event: #event_token,
+                    }
+                }
+            }
+            "minecraft:summon_entity" => {
+                let entity_val = obj.get("entity");
+                let entity_token = match entity_val {
+                    Some(serde_json::Value::String(s)) => {
+                        let raw = s.strip_prefix("minecraft:").unwrap_or(s);
+                        let ident = format_ident!("{}", raw.to_shouty_snake_case());
+                        quote! { &[&crate::entity::EntityType::#ident] }
+                    }
+                    Some(serde_json::Value::Array(arr)) => {
+                        let idents: Vec<TokenStream> = arr
+                            .iter()
+                            .filter_map(|v| v.as_str())
+                            .map(|s| {
+                                let raw = s.strip_prefix("minecraft:").unwrap_or(s);
+                                let ident = format_ident!("{}", raw.to_shouty_snake_case());
+                                quote! { &crate::entity::EntityType::#ident }
+                            })
+                            .collect();
+                        quote! { &[#(#idents),*] }
+                    }
+                    _ => quote! { &[] },
+                };
+                let join_team = obj
+                    .get("join_team")
+                    .and_then(|b| b.as_bool())
+                    .unwrap_or(false);
+                quote! {
+                    EnchantmentEntityEffect::SummonEntity {
+                        entity_types: #entity_token,
+                        join_team: #join_team,
+                    }
+                }
+            }
+            "minecraft:spawn_particles" => {
+                let particle_val = obj.get("particle").unwrap_or(&serde_json::Value::Null);
+                let particle_token = parse_particle(particle_val);
+                let (h_pos_type, h_pos_off, h_pos_scale) =
+                    parse_position_source(obj.get("horizontal_position"));
+                let (v_pos_type, v_pos_off, v_pos_scale) =
+                    parse_position_source(obj.get("vertical_position"));
+                let (h_vel_scale, h_vel_base) =
+                    parse_velocity_source(obj.get("horizontal_velocity"));
+                let (v_vel_scale, v_vel_base) = parse_velocity_source(obj.get("vertical_velocity"));
+                let speed_token =
+                    parse_float_provider(obj.get("speed").unwrap_or(&serde_json::Value::Null));
+
+                quote! {
+                    EnchantmentEntityEffect::SpawnParticles {
+                        particle: #particle_token,
+                        horizontal_position: PositionSource {
+                            source_type: #h_pos_type,
+                            offset: #h_pos_off,
+                            scale: #h_pos_scale,
+                        },
+                        vertical_position: PositionSource {
+                            source_type: #v_pos_type,
+                            offset: #v_pos_off,
+                            scale: #v_pos_scale,
+                        },
+                        horizontal_velocity: VelocitySource {
+                            movement_scale: #h_vel_scale,
+                            base: #h_vel_base,
+                        },
+                        vertical_velocity: VelocitySource {
+                            movement_scale: #v_vel_scale,
+                            base: #v_vel_base,
+                        },
+                        speed: #speed_token,
+                    }
+                }
+            }
+            "minecraft:run_function" => {
+                let function = obj.get("function").and_then(|s| s.as_str()).unwrap_or("");
+                quote! {
+                    EnchantmentEntityEffect::RunFunction {
+                        function: #function,
+                    }
+                }
+            }
+            "minecraft:apply_exhaustion" => {
+                let amount =
+                    parse_level_based_value(obj.get("amount").unwrap_or(&serde_json::Value::Null));
+                quote! {
+                    EnchantmentEntityEffect::ApplyExhaustion {
+                        amount: #amount,
+                    }
+                }
+            }
+            "minecraft:apply_impulse" => {
+                let (dir_x, dir_y, dir_z) = parse_vec3(obj.get("direction"));
+                let (scale_x, scale_y, scale_z) = parse_vec3(obj.get("coordinate_scale"));
+                let mag = parse_level_based_value(
+                    obj.get("magnitude").unwrap_or(&serde_json::Value::Null),
+                );
+                quote! {
+                    EnchantmentEntityEffect::ApplyImpulse {
+                        direction: pumpkin_util::math::vector3::Vector3::new(#dir_x, #dir_y, #dir_z),
+                        coordinate_scale: pumpkin_util::math::vector3::Vector3::new(#scale_x, #scale_y, #scale_z),
+                        magnitude: #mag,
+                    }
+                }
+            }
+            "minecraft:apply_mob_effect" => {
+                let to_apply = parse_status_effect_list(obj.get("to_apply"));
+                let min_duration = parse_level_based_value(
+                    obj.get("min_duration").unwrap_or(&serde_json::Value::Null),
+                );
+                let max_duration = parse_level_based_value(
+                    obj.get("max_duration").unwrap_or(&serde_json::Value::Null),
+                );
+                let min_amplifier = parse_level_based_value(
+                    obj.get("min_amplifier").unwrap_or(&serde_json::Value::Null),
+                );
+                let max_amplifier = parse_level_based_value(
+                    obj.get("max_amplifier").unwrap_or(&serde_json::Value::Null),
+                );
+                quote! {
+                    EnchantmentEntityEffect::ApplyMobEffect {
+                        to_apply: #to_apply,
+                        min_duration: #min_duration,
+                        max_duration: #max_duration,
+                        min_amplifier: #min_amplifier,
+                        max_amplifier: #max_amplifier,
                     }
                 }
             }
@@ -477,6 +854,146 @@ fn parse_targeted_conditional_value_effects(val: Option<&serde_json::Value>) -> 
     quote! { &[#(#effects),*] }
 }
 
+fn parse_block_state(v: &serde_json::Value) -> TokenStream {
+    let state_val = if let Some(state) = v.get("state") {
+        state
+    } else {
+        v
+    };
+    let name = state_val
+        .get("Name")
+        .and_then(|n| n.as_str())
+        .unwrap_or("minecraft:air");
+    let name_stripped = name.strip_prefix("minecraft:").unwrap_or(name);
+    let block_ident = format_ident!("{}", name_stripped.to_shouty_snake_case());
+    quote! {
+        crate::Block::#block_ident.default_state
+    }
+}
+
+fn parse_replace_disk_predicate(v: &serde_json::Value) -> TokenStream {
+    if v.is_null() {
+        return quote! { None };
+    }
+    let pred_token = parse_single_replace_disk_predicate(v);
+    quote! { Some(#pred_token) }
+}
+
+fn parse_single_replace_disk_predicate(v: &serde_json::Value) -> TokenStream {
+    let type_str = v.get("type").and_then(|s| s.as_str()).unwrap_or("");
+    match type_str {
+        "minecraft:matching_block_tag" => {
+            let offset_x = v
+                .get("offset")
+                .and_then(|a| a.get(0))
+                .and_then(|n| n.as_i64())
+                .unwrap_or(0) as i32;
+            let offset_y = v
+                .get("offset")
+                .and_then(|a| a.get(1))
+                .and_then(|n| n.as_i64())
+                .unwrap_or(0) as i32;
+            let offset_z = v
+                .get("offset")
+                .and_then(|a| a.get(2))
+                .and_then(|n| n.as_i64())
+                .unwrap_or(0) as i32;
+            let tag = v.get("tag").and_then(|s| s.as_str()).unwrap_or("");
+            let tag_ident = format_ident!("{}", tag.to_uppercase().replace([':', '-'], "_"));
+            quote! {
+                ReplaceDiskPredicate::MatchingBlockTag {
+                    offset: pumpkin_util::math::vector3::Vector3::new(#offset_x, #offset_y, #offset_z),
+                    tag: &crate::tag::Block::#tag_ident,
+                }
+            }
+        }
+        "minecraft:matching_blocks" => {
+            let offset_x = v
+                .get("offset")
+                .and_then(|a| a.get(0))
+                .and_then(|n| n.as_i64())
+                .unwrap_or(0) as i32;
+            let offset_y = v
+                .get("offset")
+                .and_then(|a| a.get(1))
+                .and_then(|n| n.as_i64())
+                .unwrap_or(0) as i32;
+            let offset_z = v
+                .get("offset")
+                .and_then(|a| a.get(2))
+                .and_then(|n| n.as_i64())
+                .unwrap_or(0) as i32;
+            let blocks_token = match v.get("blocks") {
+                Some(serde_json::Value::String(s)) => quote! { &[#s] },
+                Some(serde_json::Value::Array(arr)) => {
+                    let items: Vec<&str> = arr.iter().filter_map(|x| x.as_str()).collect();
+                    quote! { &[#(#items),*] }
+                }
+                _ => quote! { &[] },
+            };
+            quote! {
+                ReplaceDiskPredicate::MatchingBlocks {
+                    offset: pumpkin_util::math::vector3::Vector3::new(#offset_x, #offset_y, #offset_z),
+                    blocks: #blocks_token,
+                }
+            }
+        }
+        "minecraft:matching_fluids" => {
+            let offset_x = v
+                .get("offset")
+                .and_then(|a| a.get(0))
+                .and_then(|n| n.as_i64())
+                .unwrap_or(0) as i32;
+            let offset_y = v
+                .get("offset")
+                .and_then(|a| a.get(1))
+                .and_then(|n| n.as_i64())
+                .unwrap_or(0) as i32;
+            let offset_z = v
+                .get("offset")
+                .and_then(|a| a.get(2))
+                .and_then(|n| n.as_i64())
+                .unwrap_or(0) as i32;
+            let fluids_token = match v.get("fluids") {
+                Some(serde_json::Value::String(s)) => quote! { &[#s] },
+                Some(serde_json::Value::Array(arr)) => {
+                    let items: Vec<&str> = arr.iter().filter_map(|x| x.as_str()).collect();
+                    quote! { &[#(#items),*] }
+                }
+                _ => quote! { &[] },
+            };
+            quote! {
+                ReplaceDiskPredicate::MatchingFluids {
+                    offset: pumpkin_util::math::vector3::Vector3::new(#offset_x, #offset_y, #offset_z),
+                    fluids: #fluids_token,
+                }
+            }
+        }
+        "minecraft:unobstructed" => {
+            quote! {
+                ReplaceDiskPredicate::Unobstructed
+            }
+        }
+        "minecraft:all_of" => {
+            let preds: Vec<TokenStream> = v
+                .get("predicates")
+                .and_then(|arr| arr.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .map(parse_single_replace_disk_predicate)
+                        .collect()
+                })
+                .unwrap_or_default();
+            quote! {
+                ReplaceDiskPredicate::AllOf(&[#(#preds),*])
+            }
+        }
+        _ => quote! {
+            ReplaceDiskPredicate::AllOf(&[])
+        },
+    }
+}
+
 fn parse_optional_value_effect(val: Option<&serde_json::Value>) -> TokenStream {
     if let Some(v) = val {
         let eff = v.get("effect").unwrap_or(v);
@@ -595,6 +1112,8 @@ pub fn build() -> TokenStream {
             parse_optional_value_effect(effects_map.get("minecraft:trident_spin_attack_strength"));
         let crossbow_charge_time =
             parse_optional_value_effect(effects_map.get("minecraft:crossbow_charge_time"));
+        let location_changed =
+            parse_conditional_entity_effects(effects_map.get("minecraft:location_changed"));
         let prevent_armor_change = effects_map.contains_key("minecraft:prevent_armor_change");
         let prevent_equipment_drop = effects_map.contains_key("minecraft:prevent_equipment_drop");
 
@@ -622,6 +1141,7 @@ pub fn build() -> TokenStream {
                 trident_return_acceleration: #trident_return_acceleration,
                 trident_spin_attack_strength: #trident_spin_attack_strength,
                 crossbow_charge_time: #crossbow_charge_time,
+                location_changed: #location_changed,
                 prevent_armor_change: #prevent_armor_change,
                 prevent_equipment_drop: #prevent_equipment_drop,
             }
@@ -778,12 +1298,35 @@ pub fn build() -> TokenStream {
         }
 
         #[derive(Clone, Debug, PartialEq)]
+        pub enum ReplaceDiskPredicate {
+            MatchingBlockTag {
+                offset: pumpkin_util::math::vector3::Vector3<i32>,
+                tag: &'static crate::tag::Tag,
+            },
+            MatchingBlocks {
+                offset: pumpkin_util::math::vector3::Vector3<i32>,
+                blocks: &'static [&'static str],
+            },
+            MatchingFluids {
+                offset: pumpkin_util::math::vector3::Vector3<i32>,
+                fluids: &'static [&'static str],
+            },
+            Unobstructed,
+            AllOf(&'static [ReplaceDiskPredicate]),
+        }
+
+        #[derive(Clone, Debug, PartialEq)]
         pub enum EnchantmentEntityEffect {
             Ignite {
                 duration: LevelBasedValue,
             },
             DamageEntity {
-                damage: LevelBasedValue,
+                min_damage: LevelBasedValue,
+                max_damage: LevelBasedValue,
+                damage_type: Option<&'static crate::damage::DamageType>,
+            },
+            ChangeItemDamage {
+                amount: LevelBasedValue,
             },
             PlaySound {
                 sound: &'static str,
@@ -793,6 +1336,53 @@ pub fn build() -> TokenStream {
                 offset_y: i32,
                 offset_z: i32,
                 trigger_game_event: Option<crate::game_event::GameEvent>,
+            },
+            SetBlockProperties {
+                properties: &'static [(&'static str, &'static str)],
+                offset_x: i32,
+                offset_y: i32,
+                offset_z: i32,
+                trigger_game_event: Option<crate::game_event::GameEvent>,
+            },
+            ReplaceDisk {
+                radius: LevelBasedValue,
+                height: LevelBasedValue,
+                offset_x: i32,
+                offset_y: i32,
+                offset_z: i32,
+                predicate: Option<ReplaceDiskPredicate>,
+                block_state: &'static crate::block_state::BlockState,
+                trigger_game_event: Option<crate::game_event::GameEvent>,
+            },
+            SummonEntity {
+                entity_types: &'static [&'static crate::entity::EntityType],
+                join_team: bool,
+            },
+            SpawnParticles {
+                particle: crate::particle::Particle,
+                horizontal_position: PositionSource,
+                vertical_position: PositionSource,
+                horizontal_velocity: VelocitySource,
+                vertical_velocity: VelocitySource,
+                speed: pumpkin_util::math::float_provider::FloatProvider,
+            },
+            RunFunction {
+                function: &'static str,
+            },
+            ApplyExhaustion {
+                amount: LevelBasedValue,
+            },
+            ApplyImpulse {
+                direction: pumpkin_util::math::vector3::Vector3<f64>,
+                coordinate_scale: pumpkin_util::math::vector3::Vector3<f64>,
+                magnitude: LevelBasedValue,
+            },
+            ApplyMobEffect {
+                to_apply: &'static [&'static crate::effect::StatusEffect],
+                min_duration: LevelBasedValue,
+                max_duration: LevelBasedValue,
+                min_amplifier: LevelBasedValue,
+                max_amplifier: LevelBasedValue,
             },
             Explode {
                 attribute_to_user: bool,
@@ -811,6 +1401,129 @@ pub fn build() -> TokenStream {
             },
             AllOf(&'static [EnchantmentEntityEffect]),
             Other,
+        }
+
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
+        pub enum PositionSourceType {
+            #[default]
+            EntityPosition,
+            InBoundingBox,
+        }
+
+        impl PositionSourceType {
+            #[must_use]
+            pub fn get_coordinate(
+                self,
+                position: f64,
+                center: f64,
+                bounding_box_span: f32,
+                random: &mut impl pumpkin_util::random::RandomImpl,
+            ) -> f64 {
+                match self {
+                    Self::EntityPosition => position,
+                    Self::InBoundingBox => {
+                        let random_offset = f64::from(random.next_f32()) - 0.5;
+                        center + random_offset * f64::from(bounding_box_span)
+                    }
+                }
+            }
+        }
+
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        pub struct PositionSource {
+            pub source_type: PositionSourceType,
+            pub offset: f32,
+            pub scale: f32,
+        }
+
+        impl PositionSource {
+            #[must_use]
+            pub const fn new(source_type: PositionSourceType, offset: f32, scale: f32) -> Self {
+                Self {
+                    source_type,
+                    offset,
+                    scale,
+                }
+            }
+
+            #[must_use]
+            pub const fn offset_from_entity_position(offset: f32) -> Self {
+                Self {
+                    source_type: PositionSourceType::EntityPosition,
+                    offset,
+                    scale: 1.0,
+                }
+            }
+
+            #[must_use]
+            pub const fn in_bounding_box() -> Self {
+                Self {
+                    source_type: PositionSourceType::InBoundingBox,
+                    offset: 0.0,
+                    scale: 1.0,
+                }
+            }
+
+            #[must_use]
+            pub fn get_coordinate(
+                &self,
+                position: f64,
+                center: f64,
+                bounding_box_span: f32,
+                random: &mut impl pumpkin_util::random::RandomImpl,
+            ) -> f64 {
+                self.source_type.get_coordinate(
+                    position,
+                    center,
+                    bounding_box_span * self.scale,
+                    random,
+                ) + f64::from(self.offset)
+            }
+        }
+
+        #[derive(Clone, Debug, PartialEq)]
+        pub struct VelocitySource {
+            pub movement_scale: f32,
+            pub base: pumpkin_util::math::float_provider::FloatProvider,
+        }
+
+        impl VelocitySource {
+            #[must_use]
+            pub const fn new(
+                movement_scale: f32,
+                base: pumpkin_util::math::float_provider::FloatProvider,
+            ) -> Self {
+                Self {
+                    movement_scale,
+                    base,
+                }
+            }
+
+            #[must_use]
+            pub const fn movement_scaled(scale: f32) -> Self {
+                Self {
+                    movement_scale: scale,
+                    base: pumpkin_util::math::float_provider::FloatProvider::Constant(0.0),
+                }
+            }
+
+            #[must_use]
+            pub const fn fixed_velocity(
+                provider: pumpkin_util::math::float_provider::FloatProvider,
+            ) -> Self {
+                Self {
+                    movement_scale: 0.0,
+                    base: provider,
+                }
+            }
+
+            pub fn get_velocity(
+                &self,
+                movement: f64,
+                random: &mut impl pumpkin_util::random::RandomImpl,
+            ) -> f64 {
+                f64::from(self.movement_scale).mul_add(movement, f64::from(self.base.get(random)))
+            }
         }
 
         #[derive(Clone, Debug, PartialEq)]
@@ -866,6 +1579,7 @@ pub fn build() -> TokenStream {
             pub trident_return_acceleration: &'static [ConditionalEffect<EnchantmentValueEffect>],
             pub trident_spin_attack_strength: Option<EnchantmentValueEffect>,
             pub crossbow_charge_time: Option<EnchantmentValueEffect>,
+            pub location_changed: &'static [ConditionalEffect<EnchantmentEntityEffect>],
             pub prevent_armor_change: bool,
             pub prevent_equipment_drop: bool,
         }
@@ -1108,6 +1822,10 @@ pub fn build() -> TokenStream {
 
             pub fn get_projectile_spawned_effects(&self) -> &'static [ConditionalEffect<EnchantmentEntityEffect>] {
                 self.effects.projectile_spawned
+            }
+
+            pub fn get_location_changed_effects(&self) -> &'static [ConditionalEffect<EnchantmentEntityEffect>] {
+                self.effects.location_changed
             }
         }
     }

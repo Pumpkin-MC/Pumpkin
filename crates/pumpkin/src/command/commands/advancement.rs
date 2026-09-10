@@ -12,7 +12,7 @@ use crate::command::suggestion::provider::{SuggestionProvider, SuggestionProvide
 use crate::command::suggestion::suggestions::SuggestionsBuilder;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
-use crate::entity::player::advancement::PlayerAdvancement;
+use crate::entity::player::advancement::{AdvancementAward, PlayerAdvancement};
 use pumpkin_data::advancement_data::AdvancementNode;
 use pumpkin_data::{ADVANCEMENT_TREE, Advancement, translation};
 use pumpkin_util::PermissionLvl;
@@ -28,7 +28,6 @@ const ARG_TARGETS: &str = "targets";
 const ARG_ADVANCEMENT: &str = "advancement";
 const ARG_CRITERION: &str = "criterion";
 
-#[allow(unused)]
 const ERROR_CRITERION_NOT_FOUND: CommandErrorType<2> = CommandErrorType::new(
     translation::java::COMMANDS_ADVANCEMENT_CRITERIONNOTFOUND,
     translation::java::COMMANDS_ADVANCEMENT_CRITERIONNOTFOUND,
@@ -98,30 +97,46 @@ impl Action {
         self,
         guard: &mut PlayerAdvancement,
         advancement: &'static Advancement,
-    ) -> bool {
+    ) -> (bool, AdvancementAward) {
         let progress = guard.progress.get_mut_or_start_progress(advancement);
         match self {
             Self::Grant => {
                 if progress.is_done() {
-                    return false;
+                    return (false, AdvancementAward::default());
                 }
                 let criteria: Vec<Arc<str>> = progress.get_remaining_criteria().collect();
+                let mut result = AdvancementAward::default();
                 for criterion in criteria {
-                    guard.award(advancement, &criterion);
+                    result = result.combine(guard.award(advancement, &criterion));
                 }
-                true
+                (true, result)
             }
             Self::Revoke => {
-                if !progress.is_done() {
-                    return false;
+                if !progress.has_progress() {
+                    return (false, AdvancementAward::default());
                 }
                 let criteria: Vec<Arc<str>> = progress.get_completed_criteria().collect();
                 for criterion in criteria {
                     guard.revoke(advancement, &criterion);
                 }
-                true
+                (true, AdvancementAward::default())
             }
         }
+    }
+
+    fn perform_single(self, player: &Arc<Player>, advancement: &'static Advancement) -> bool {
+        let (performed, result) = {
+            let mut guard = player
+                .advancements
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            self.perform_single_inner(&mut guard, advancement)
+        };
+
+        if matches!(self, Self::Grant) {
+            PlayerAdvancement::finish_award(player, advancement, result);
+        }
+        performed
     }
 
     /// Performs the action (grant or revoke) on multiple advancements for a single player.
@@ -146,18 +161,22 @@ impl Action {
         advancements: &[&'static Advancement],
         show_advancement: bool,
     ) -> i32 {
-        let mut guard = player
-            .advancements
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if !show_advancement {
+            let mut guard = player
+                .advancements
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             guard.flush_dirty(player, true);
         }
         let count = advancements
             .iter()
-            .filter(|advancement| self.perform_single_inner(&mut guard, advancement))
+            .filter(|advancement| self.perform_single(player, advancement))
             .count() as i32;
         if !show_advancement {
+            let mut guard = player
+                .advancements
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             guard.flush_dirty(player, false);
         }
         count
@@ -169,14 +188,27 @@ impl Action {
         advancement: &'static Advancement,
         criterion: &str,
     ) -> bool {
-        let mut guard = player
-            .advancements
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        match self {
-            Self::Grant => guard.award(advancement, criterion),
-            Self::Revoke => guard.revoke(advancement, criterion),
+        let (performed, result) = {
+            let mut guard = player
+                .advancements
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            match self {
+                Self::Grant => {
+                    let result = guard.award(advancement, criterion);
+                    (result.awarded(), result)
+                }
+                Self::Revoke => (
+                    guard.revoke(advancement, criterion),
+                    AdvancementAward::default(),
+                ),
+            }
+        };
+
+        if matches!(self, Self::Grant) {
+            PlayerAdvancement::finish_award(player, advancement, result);
         }
+        performed
     }
 
     /// return the corresponding key of the action
@@ -306,11 +338,16 @@ fn perform(
     advancements: &[&'static Advancement],
     show_advancement: bool,
 ) -> Result<i32, CommandSyntaxError> {
-    let mut i = 0;
+    let mut advancement_count = 0;
+    let mut player_count = 0;
     for player in targets {
-        i += action.perform(player, advancements, show_advancement);
+        let changed = action.perform(player, advancements, show_advancement);
+        if changed > 0 {
+            player_count += 1;
+        }
+        advancement_count += changed;
     }
-    if i == 0 {
+    if advancement_count == 0 {
         return if let [first_advancement] = advancements[..] {
             if let [first_player] = targets {
                 Err(match action {
@@ -362,7 +399,7 @@ fn perform(
                 format!("{}.one.to.many.success", action.get_key()),
                 [
                     first_advancement.name(),
-                    TextComponent::text(targets.len().to_string()),
+                    TextComponent::text(player_count.to_string()),
                 ],
             )
         }
@@ -370,7 +407,7 @@ fn perform(
         TextComponent::translate(
             format!("{}.many.to.one.success", action.get_key()),
             [
-                TextComponent::text(advancements.len().to_string()),
+                TextComponent::text(advancement_count.to_string()),
                 first.get_display_name(),
             ],
         )
@@ -378,13 +415,13 @@ fn perform(
         TextComponent::translate(
             format!("{}.many.to.many.success", action.get_key()),
             [
-                TextComponent::text(advancements.len().to_string()),
-                TextComponent::text(targets.len().to_string()),
+                TextComponent::text(advancement_count.to_string()),
+                TextComponent::text(player_count.to_string()),
             ],
         )
     };
     context.send_feedback(translate, true);
-    Ok(i)
+    Ok(advancement_count)
 }
 
 /// Performs an action (grant or revoke) on a specific advancement criterion for multiple players.
@@ -414,64 +451,65 @@ pub fn perform_criterion(
     advancement: &'static Advancement,
     criterion: &str,
 ) -> Result<i32, CommandSyntaxError> {
-    if advancement.criteria.contains(&criterion) {
-        let count = targets
-            .iter()
-            .map(|player| action.perform_criterion(player, advancement, criterion))
-            .filter(|&success| success)
-            .count() as i32;
-        if count == 0 {
-            if let [first_player] = targets {
-                Err(match action {
-                    Action::Grant => &ERROR_GRANT_CRITERION_TO_ONE_FAILURE,
-                    Action::Revoke => &ERROR_REVOKE_CRITERION_TO_ONE_FAILURE,
-                }
-                .create_without_context_args_slice(&[
-                    TextComponent::text(criterion.to_owned()),
-                    advancement.name(),
-                    first_player.get_display_name(),
-                ]))
-            } else {
-                Err(match action {
-                    Action::Grant => &ERROR_GRANT_CRITERION_TO_MANY_FAILURE,
-                    Action::Revoke => &ERROR_REVOKE_CRITERION_TO_MANY_FAILURE,
-                }
-                .create_without_context_args_slice(&[
-                    TextComponent::text(criterion.to_owned()),
-                    advancement.name(),
-                    TextComponent::text(targets.len().to_string()),
-                ]))
-            }
-        } else {
-            let translate = if let [first_player] = targets {
-                TextComponent::translate(
-                    format!("{}.criterion.to.one.success", action.get_key()),
-                    [
-                        TextComponent::text(criterion.to_owned()),
-                        advancement.name(),
-                        first_player.get_display_name(),
-                    ],
-                )
-            } else {
-                TextComponent::translate(
-                    format!("{}.criterion.to.many.success", action.get_key()),
-                    [
-                        TextComponent::text(criterion.to_owned()),
-                        advancement.name(),
-                        TextComponent::text(targets.len().to_string()),
-                    ],
-                )
-            };
-            context.send_feedback(translate, true);
-            Ok(count)
-        }
-    } else {
-        Err(
+    if !advancement.criteria.contains(&criterion) {
+        return Err(
             ERROR_CRITERION_NOT_FOUND.create_without_context_args_slice(&[
                 advancement.name(),
                 TextComponent::text(criterion.to_owned()),
             ]),
-        )
+        );
+    }
+
+    let count = targets
+        .iter()
+        .map(|player| action.perform_criterion(player, advancement, criterion))
+        .filter(|&success| success)
+        .count() as i32;
+
+    if count == 0 {
+        if let [first_player] = targets {
+            Err(match action {
+                Action::Grant => &ERROR_GRANT_CRITERION_TO_ONE_FAILURE,
+                Action::Revoke => &ERROR_REVOKE_CRITERION_TO_ONE_FAILURE,
+            }
+            .create_without_context_args_slice(&[
+                TextComponent::text(criterion.to_owned()),
+                advancement.name(),
+                first_player.get_display_name(),
+            ]))
+        } else {
+            Err(match action {
+                Action::Grant => &ERROR_GRANT_CRITERION_TO_MANY_FAILURE,
+                Action::Revoke => &ERROR_REVOKE_CRITERION_TO_MANY_FAILURE,
+            }
+            .create_without_context_args_slice(&[
+                TextComponent::text(criterion.to_owned()),
+                advancement.name(),
+                TextComponent::text(targets.len().to_string()),
+            ]))
+        }
+    } else {
+        let translate = if let [first_player] = targets {
+            TextComponent::translate(
+                format!("{}.criterion.to.one.success", action.get_key()),
+                [
+                    TextComponent::text(criterion.to_owned()),
+                    advancement.name(),
+                    first_player.get_display_name(),
+                ],
+            )
+        } else {
+            TextComponent::translate(
+                format!("{}.criterion.to.many.success", action.get_key()),
+                [
+                    TextComponent::text(criterion.to_owned()),
+                    advancement.name(),
+                    TextComponent::text(count.to_string()),
+                ],
+            )
+        };
+        context.send_feedback(translate, true);
+        Ok(count)
     }
 }
 
@@ -537,17 +575,19 @@ impl SuggestionProvider for CriterionSuggestionProvider {
 /// executor to grant/revoke every advancement to specified players
 struct EveryAdvancementExecutor {
     action: Action,
+    show_advancement: bool,
 }
 
 impl CommandExecutor for EveryAdvancementExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let action = self.action;
+        let show_advancement = self.show_advancement;
         perform(
             &context.source,
             &EntityArgumentType::get_players(context, ARG_TARGETS)?,
             action,
             &Advancement::get_advancements_list(),
-            false,
+            show_advancement,
         )
     }
 }
@@ -607,10 +647,10 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 }),
                         ),
                     )
-                    .then(
-                        literal("everything")
-                            .executes(EveryAdvancementExecutor { action: $action }),
-                    ),
+                    .then(literal("everything").executes(EveryAdvancementExecutor {
+                        action: $action,
+                        show_advancement: matches!($action, Action::Revoke),
+                    })),
             )
         };
     }

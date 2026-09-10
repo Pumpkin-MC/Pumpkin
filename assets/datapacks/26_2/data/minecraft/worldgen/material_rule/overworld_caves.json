@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:sequence",
+  "sequence": [
+    "minecraft:bedrock_roof",
+    "minecraft:bedrock_floor",
+    "minecraft:overworld/copper_ore_vein",
+    "minecraft:overworld/iron_ore_vein",
+    "minecraft:overworld/surface",
+    "minecraft:overworld/underground"
+  ]
+}

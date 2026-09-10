@@ -22,9 +22,9 @@ impl JavaClient {
                 return;
             };
 
-            let block = player.world().get_block(&pos);
+            let _block = player.world().get_block(&pos);
             let old_state_id = player.world().get_block_state_id(&pos);
-            let mut props = CommandBlockLikeProperties::from_state_id(old_state_id, block);
+            let mut props = CommandBlockLikeProperties::from_state_id(old_state_id);
 
             let block_type = match command_block_mode {
                 CommandBlockMode::Chain => Block::CHAIN_COMMAND_BLOCK,
