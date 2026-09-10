@@ -598,6 +598,12 @@ impl ChunkSections {
 }
 
 impl ChunkData {
+    /// Vanilla `LevelChunkTicks` rides on the chunk, so restored NBT ticks count too.
+    #[must_use]
+    pub fn has_scheduled_ticks(&self) -> bool {
+        self.block_ticks.has_ticks() || self.fluid_ticks.has_ticks()
+    }
+
     #[must_use]
     pub fn empty(x: i32, z: i32) -> Self {
         Self {

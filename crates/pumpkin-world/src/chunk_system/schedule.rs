@@ -10,7 +10,7 @@ use super::{
 };
 use crate::chunk::io::Dirtiable;
 use crate::level::{Level, LoadedChunkChange, SyncChunk};
-use dashmap::DashMap;
+use dashmap::{DashMap, DashSet};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_util::math::vector2::Vector2;
 use slotmap::Key;
@@ -56,6 +56,9 @@ pub struct GenerationSchedule {
     send_level: Arc<LevelChannel>,
 
     public_chunk_map: Arc<DashMap<Vector2<i32>, SyncChunk>>,
+    /// Ticks restored from NBT are only in the chunk, so publishing has to
+    /// index them or they never run again.
+    chunks_with_scheduled_ticks: Arc<DashSet<Vector2<i32>>>,
     loaded_chunk_changes: Arc<crossbeam::queue::SegQueue<LoadedChunkChange>>,
     chunk_map: HashMap<ChunkPos, ChunkHolder>,
     unload_chunks: HashSetType<ChunkPos>,
@@ -81,6 +84,11 @@ pub struct GenerationSchedule {
 
 impl GenerationSchedule {
     fn publish_chunk(&self, pos: ChunkPos, chunk: SyncChunk) -> Option<SyncChunk> {
+        // Index before publishing: once the chunk is readable, a concurrent
+        // `schedule_block_tick` may index too.
+        if chunk.has_scheduled_ticks() {
+            self.chunks_with_scheduled_ticks.insert(pos);
+        }
         let previous = self.public_chunk_map.insert(pos, chunk);
         if previous.is_none() {
             self.loaded_chunk_changes
@@ -92,6 +100,7 @@ impl GenerationSchedule {
     fn unpublish_chunk(&self, pos: ChunkPos) -> Option<SyncChunk> {
         let removed = self.public_chunk_map.remove(&pos).map(|(_, chunk)| chunk);
         if removed.is_some() {
+            self.chunks_with_scheduled_ticks.remove(&pos);
             self.loaded_chunk_changes
                 .push(LoadedChunkChange::Unloaded(pos));
         }
@@ -155,6 +164,7 @@ impl GenerationSchedule {
                     last_high_priority: Vec::new(),
                     send_level: level_channel,
                     public_chunk_map: level_sched.loaded_chunks.clone(),
+                    chunks_with_scheduled_ticks: level_sched.chunks_with_scheduled_ticks.clone(),
                     loaded_chunk_changes: level_sched.loaded_chunk_changes.clone(),
                     unload_chunks: HashSetType::default(),
                     waiting_for_chunks: HashSetType::default(),

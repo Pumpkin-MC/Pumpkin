@@ -183,3 +183,49 @@ impl<T> Default for ChunkTickScheduler<T> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tick::TickPriority;
+
+    static A: u32 = 1;
+    static B: u32 = 2;
+
+    fn tick<T>(x: i32, value: &'static T, delay: u8) -> ScheduledTick<&'static T> {
+        ScheduledTick {
+            delay,
+            priority: TickPriority::Normal,
+            position: BlockPos::new(x, 0, 0),
+            value,
+        }
+    }
+
+    /// A clock only survives a chunk reload if the saved ticks keep their remaining delay.
+    #[test]
+    fn save_reload_keeps_remaining_delays() {
+        let scheduler = ChunkTickScheduler::default();
+        scheduler.schedule_tick(&tick(0, &A, 3), 0);
+        scheduler.schedule_tick(&tick(1, &B, 0), 1);
+
+        // One tick runs before the chunk is saved, leaving 2 of the original 3.
+        assert_eq!(scheduler.step_tick().len(), 1);
+
+        let restored = ChunkTickScheduler::from_iter(scheduler.to_vec());
+        assert!(restored.has_ticks());
+
+        assert!(restored.step_tick().is_empty());
+        assert!(restored.step_tick().is_empty());
+        assert_eq!(restored.step_tick().len(), 1);
+        assert!(!restored.has_ticks());
+    }
+
+    #[test]
+    fn reloaded_scheduler_reports_ticks_for_indexing() {
+        let scheduler: ChunkTickScheduler<&u32> = ChunkTickScheduler::default();
+        assert!(!scheduler.has_ticks());
+
+        let restored = ChunkTickScheduler::from_iter(vec![tick(0, &A, 5)]);
+        assert!(restored.has_ticks());
+    }
+}
