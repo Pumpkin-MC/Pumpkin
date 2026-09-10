@@ -1,7 +1,6 @@
 use pumpkin_data::noise_router::WrapperType;
 use pumpkin_util::math::vector3::Vector3;
 
-use super::chunk_density_function::ChunkNoiseFunctionSampleOptions;
 use super::density_volume::DensityVolume;
 
 pub(crate) mod beardifier;
@@ -16,14 +15,6 @@ mod test;
 #[cfg(test)]
 mod test_deserializer;
 
-pub trait IndexToNoisePos {
-    fn at(
-        &self,
-        index: usize,
-        sample_options: Option<&mut ChunkNoiseFunctionSampleOptions>,
-    ) -> Vector3<i32>;
-}
-
 pub trait NoiseFunctionComponentRange {
     fn min(&self) -> f32;
     fn max(&self) -> f32;
@@ -34,12 +25,6 @@ pub trait StaticIndependentChunkNoiseFunctionComponentImpl: NoiseFunctionCompone
 
     fn sample_volume(&self, buffer: &mut [f32], volume: &DensityVolume) {
         volume.fill_with(buffer, |pos| self.sample(pos));
-    }
-    fn fill(&self, array: &mut [f32], mapper: &impl IndexToNoisePos) {
-        array.iter_mut().enumerate().for_each(|(index, value)| {
-            let pos = mapper.at(index, None);
-            *value = self.sample(&pos);
-        });
     }
 }
 

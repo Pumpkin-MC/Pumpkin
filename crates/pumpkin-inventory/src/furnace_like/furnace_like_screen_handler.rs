@@ -1,14 +1,14 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use crate::{
+    inventory::Inventory,
+    window_property::{ExperienceContainer, PropertyDelegate},
+};
 use pumpkin_data::fuels::is_fuel;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::recipes::{CookingRecipeKind, CookingRecipeType};
 use pumpkin_data::screen::WindowType;
-use pumpkin_world::{
-    block::entities::{ExperienceContainer, PropertyDelegate},
-    inventory::Inventory,
-};
 
 use crate::{
     player::player_inventory::PlayerInventory,

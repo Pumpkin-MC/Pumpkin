@@ -355,10 +355,7 @@ fn can_support_dripstone(support_block: &Block) -> bool {
     if support_block == &Block::POINTED_DRIPSTONE {
         return true;
     }
-    if support_block.default_state.is_full_cube() && support_block.default_state.is_solid_block() {
-        return true;
-    }
-    false
+    support_block.default_state.is_solid_render()
 }
 fn modify_dripstone_thickness_to(
     world: &Arc<World>,

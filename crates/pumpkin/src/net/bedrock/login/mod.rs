@@ -5,6 +5,7 @@ use crate::{
     server::Server,
 };
 use arc_swap::ArcSwap;
+use pumpkin_auth::jwt::AuthError;
 use pumpkin_protocol::bedrock::{
     client::{
         network_settings::CNetworkSettings, play_status::CPlayStatus,
@@ -17,7 +18,6 @@ use pumpkin_protocol::bedrock::{
     client::{resource_pack_stack::PackInstanceId, resource_packs_info::PackInfoData},
     server::{login::ClientData, resource_pack_client_response::SResourcePackClientResponse},
 };
-use pumpkin_util::jwt::AuthError;
 use pumpkin_util::version::BedrockMinecraftVersion;
 use pumpkin_world::{CURRENT_BEDROCK_MC_PROTOCOL, CURRENT_BEDROCK_MC_VERSION};
 use serde::{Deserialize, de::Error};
@@ -65,12 +65,12 @@ async fn verify_oidc_token_path(
     server: &Server,
     token: &str,
     self_signed: bool,
-) -> Result<pumpkin_util::jwt::PlayerClaims, LoginError> {
+) -> Result<pumpkin_auth::jwt::PlayerClaims, LoginError> {
     let token = token.to_string();
     let (tx, rx) = tokio::sync::oneshot::channel();
     if self_signed {
         rayon::spawn(move || {
-            let res = pumpkin_util::jwt::verify_oidc_token_self_signed(&token)
+            let res = pumpkin_auth::jwt::verify_oidc_token_self_signed(&token)
                 .map_err(LoginError::ChainValidationFailed);
             let _ = tx.send(res);
         });
@@ -85,7 +85,7 @@ async fn verify_oidc_token_path(
                 ))?;
 
         rayon::spawn(move || {
-            let res = pumpkin_util::jwt::verify_oidc_token(&token, &issuer, &jwks)
+            let res = pumpkin_auth::jwt::verify_oidc_token(&token, &issuer, &jwks)
                 .map_err(LoginError::ChainValidationFailed);
             let _ = tx.send(res);
         });
