@@ -277,16 +277,18 @@ pub fn read_world_gen_settings(level_folder: &Path) -> Option<WorldGenSettings> 
                                         .get_string("type")
                                         .unwrap_or("minecraft:multi_noise")
                                         .to_string();
-                                    match bs_c.get_string("preset") {
-                                        Some(preset) => {
-                                            crate::world_info::BiomeSource::WithPreset {
-                                                preset: preset.to_string(),
-                                                biome_type,
-                                            }
+                                    if let Some(preset) = bs_c.get_string("preset") {
+                                        crate::world_info::BiomeSource::WithPreset {
+                                            preset: preset.to_string(),
+                                            biome_type,
                                         }
-                                        None => {
-                                            crate::world_info::BiomeSource::Simple { biome_type }
+                                    } else if let Some(biome) = bs_c.get_string("biome") {
+                                        crate::world_info::BiomeSource::Fixed {
+                                            biome: biome.to_string(),
+                                            biome_type,
                                         }
+                                    } else {
+                                        crate::world_info::BiomeSource::Simple { biome_type }
                                     }
                                 });
                                 dimensions.insert(
@@ -354,6 +356,10 @@ pub fn write_world_gen_settings(
             match bs {
                 crate::world_info::BiomeSource::WithPreset { preset, biome_type } => {
                     bs_comp.put_string("preset", preset.clone());
+                    bs_comp.put_string("type", biome_type.clone());
+                }
+                crate::world_info::BiomeSource::Fixed { biome, biome_type } => {
+                    bs_comp.put_string("biome", biome.clone());
                     bs_comp.put_string("type", biome_type.clone());
                 }
                 crate::world_info::BiomeSource::Simple { biome_type } => {

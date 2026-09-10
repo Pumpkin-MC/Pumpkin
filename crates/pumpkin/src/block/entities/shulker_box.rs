@@ -10,7 +10,7 @@ use std::{array::from_fn, sync::Arc};
 use crate::block::entities::BlockEntity;
 use crate::block::viewer::{ViewerCountListener, ViewerCountTracker, ViewerCountTrackerExt};
 use crate::world::World;
-use pumpkin_world::inventory::{Clearable, Inventory, sync_write_items_to_nbt};
+use pumpkin_inventory::{Clearable, Inventory, sync_write_items_to_nbt};
 
 pub struct ShulkerBoxBlockEntity {
     pub position: BlockPos,
@@ -41,7 +41,7 @@ impl BlockEntity for ShulkerBoxBlockEntity {
             viewers: ViewerCountTracker::new(),
         };
 
-        pumpkin_world::inventory::sync_read_items_from_nbt(
+        pumpkin_inventory::sync_read_items_from_nbt(
             nbt,
             shulker_box
                 .items
