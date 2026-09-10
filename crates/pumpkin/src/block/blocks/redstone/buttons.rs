@@ -40,26 +40,33 @@ fn get_sound(block: &Block, on: bool) -> Sound {
     }
 }
 
-fn click_button(world: &Arc<World>, block_pos: &BlockPos) {
+/// Presses the button, unless it is already pressed. Returns whether it was
+/// pressed, so callers can tell the two cases apart the way vanilla's
+/// `ButtonBlock::useWithoutItem` does.
+fn click_button(world: &Arc<World>, block_pos: &BlockPos) -> bool {
     let (block, state) = world.get_block_and_state_id(block_pos);
 
     let mut button_props = ButtonLikeProperties::from_state_id(state);
-    if !button_props.powered {
-        button_props.powered = true;
-        world.set_block_state(
-            block_pos,
-            button_props.to_state_id(block),
-            BlockFlags::NOTIFY_ALL,
-        );
-        let delay = if block == &Block::STONE_BUTTON {
-            20
-        } else {
-            30
-        };
-        world.schedule_block_tick(block, *block_pos, delay, TickPriority::Normal);
-        ButtonBlock::update_neighbors(world, block_pos, button_props);
-        world.play_block_sound(get_sound(block, true), SoundCategory::Blocks, *block_pos);
+    if button_props.powered {
+        return false;
     }
+
+    button_props.powered = true;
+    world.set_block_state(
+        block_pos,
+        button_props.to_state_id(block),
+        BlockFlags::NOTIFY_ALL,
+    );
+    let delay = if block == &Block::STONE_BUTTON {
+        20
+    } else {
+        30
+    };
+    world.schedule_block_tick(block, *block_pos, delay, TickPriority::Normal);
+    ButtonBlock::update_neighbors(world, block_pos, button_props);
+    world.play_block_sound(get_sound(block, true), SoundCategory::Blocks, *block_pos);
+
+    true
 }
 
 #[pumpkin_block_from_tag("minecraft:buttons")]
@@ -67,9 +74,11 @@ pub struct ButtonBlock;
 
 impl BlockBehaviour for ButtonBlock {
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        click_button(args.world, args.position);
-
-        BlockActionResult::Success
+        if click_button(args.world, args.position) {
+            BlockActionResult::Success
+        } else {
+            BlockActionResult::Consume
+        }
     }
 
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
