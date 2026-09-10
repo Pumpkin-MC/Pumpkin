@@ -20,27 +20,24 @@ pub enum JigsawProjection {
     TerrainMatching,
 }
 
-#[derive(Clone)]
 pub struct TemplatePool {
     pub id: String,
     pub fallback: String,
     pub elements: Vec<Arc<PoolElement>>,
 }
 
-#[derive(Clone)]
 pub struct PoolElement {
     pub weight: u32,
     pub projection: JigsawProjection,
     pub kind: PoolElementKind,
 }
 
-#[derive(Clone)]
 pub enum PoolElementKind {
     Empty,
     Single {
         template: String,
         /// Resolved template, loaded once when the pool element is created.
-        resolved: Option<Arc<StructureTemplate>>,
+        resolved_template: Option<Arc<StructureTemplate>>,
         processors: ProcessorListRef,
         legacy: bool,
     },
@@ -133,11 +130,11 @@ impl RawPoolElement {
                 ProcessorListRef::Empty
             }
         };
-        let resolved = crate::generation::structure::template::get_template(&location);
+        let resolved_template = crate::generation::structure::template::get_template(&location);
         (
             PoolElementKind::Single {
                 template: location,
-                resolved,
+                resolved_template,
                 processors,
                 legacy,
             },
@@ -191,7 +188,9 @@ impl PoolElement {
     pub fn first_template(&self) -> Option<Arc<StructureTemplate>> {
         fn find(kind: &PoolElementKind) -> Option<Arc<StructureTemplate>> {
             match kind {
-                PoolElementKind::Single { resolved, .. } => resolved.clone(),
+                PoolElementKind::Single {
+                    resolved_template, ..
+                } => resolved_template.clone(),
                 PoolElementKind::List(elements) => elements.iter().find_map(find),
                 PoolElementKind::Empty | PoolElementKind::Feature(_) => None,
             }
@@ -211,11 +210,11 @@ impl PoolElement {
             match kind {
                 PoolElementKind::Single {
                     template,
-                    resolved,
+                    resolved_template,
                     processors,
                     legacy,
                 } => {
-                    if let Some(structure_template) = resolved {
+                    if let Some(structure_template) = resolved_template {
                         consumer(
                             template,
                             processors,
@@ -255,7 +254,9 @@ impl PoolElementKind {
     #[must_use]
     pub fn get_y_size(&self) -> Option<i32> {
         match self {
-            Self::Single { resolved, .. } => resolved.as_ref().map(|t| t.size.y),
+            Self::Single {
+                resolved_template, ..
+            } => resolved_template.as_ref().map(|t| t.size.y),
             Self::List(elements) => elements.iter().filter_map(Self::get_y_size).max(),
             Self::Feature(_) => Some(1),
             Self::Empty => None,
@@ -265,7 +266,9 @@ impl PoolElementKind {
     #[must_use]
     pub fn get_bounding_box(&self, offset: BlockPos, rotation: pumpkin_data::Rotation) -> BlockBox {
         match self {
-            Self::Single { resolved, .. } => resolved.as_ref().map_or_else(
+            Self::Single {
+                resolved_template, ..
+            } => resolved_template.as_ref().map_or_else(
                 || {
                     BlockBox::new(
                         offset.0.x, offset.0.y, offset.0.z, offset.0.x, offset.0.y, offset.0.z,
@@ -306,8 +309,10 @@ impl PoolElementKind {
         random: &mut pumpkin_util::random::RandomGenerator,
     ) -> Vec<JigsawBlock> {
         match self {
-            Self::Single { resolved, .. } => {
-                let Some(template) = resolved else {
+            Self::Single {
+                resolved_template, ..
+            } => {
+                let Some(template) = resolved_template else {
                     return Vec::new();
                 };
                 let mut jigsaws = template.jigsaw_blocks().to_vec();
@@ -471,7 +476,8 @@ impl TemplatePool {
                             projection,
                             kind: PoolElementKind::Single {
                                 template: (*e).to_string(),
-                                resolved: crate::generation::structure::template::get_template(e),
+                                resolved_template:
+                                    crate::generation::structure::template::get_template(e),
                                 processors: ProcessorListRef::Empty,
                                 legacy: false,
                             },

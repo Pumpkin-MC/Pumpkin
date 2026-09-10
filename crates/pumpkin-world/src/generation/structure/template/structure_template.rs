@@ -192,11 +192,11 @@ impl StructurePlaceSettings {
 ///
 /// Wrapped so the template's `Debug` derive does not require `JigsawBlock: Debug`.
 #[derive(Clone, Default)]
-struct TemplateJigsaws(Vec<JigsawBlock>);
+struct JigsawBlockCache(Vec<JigsawBlock>);
 
-impl std::fmt::Debug for TemplateJigsaws {
+impl std::fmt::Debug for JigsawBlockCache {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("TemplateJigsaws")
+        f.debug_tuple("JigsawBlockCache")
             .field(&self.0.len())
             .finish()
     }
@@ -220,7 +220,7 @@ pub struct StructureTemplate {
 
     /// Jigsaw blocks parsed from the flat `blocks`/`palette` view, computed lazily
     /// on first use so placement never rescans the template's block list.
-    jigsaw_blocks: OnceLock<TemplateJigsaws>,
+    jigsaw_blocks_cache: OnceLock<JigsawBlockCache>,
 }
 
 /// A single entry in the template's block palette.
@@ -587,9 +587,9 @@ impl StructureTemplate {
     #[must_use]
     pub fn jigsaw_blocks(&self) -> &[JigsawBlock] {
         &self
-            .jigsaw_blocks
+            .jigsaw_blocks_cache
             .get_or_init(|| {
-                TemplateJigsaws(
+                JigsawBlockCache(
                     self.blocks
                         .iter()
                         .filter_map(|block| {
@@ -938,7 +938,7 @@ impl StructureTemplate {
     pub fn load(&mut self, compound: &NbtCompound) -> Result<(), TemplateError> {
         self.palettes.clear();
         self.entity_info_list.clear();
-        self.jigsaw_blocks = OnceLock::new();
+        self.jigsaw_blocks_cache = OnceLock::new();
 
         // 1. size
         self.size = Self::parse_size(compound)?;
