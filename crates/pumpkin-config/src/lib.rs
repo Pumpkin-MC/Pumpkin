@@ -91,6 +91,25 @@ impl LoadConfiguration for PumpkinConfig {
         Path::new("pumpkin.toml")
     }
 
+    #[expect(clippy::print_stdout, clippy::print_stderr)]
+    fn prepare(raw: &mut toml::Value) -> bool {
+        let report = networking::address::check(raw);
+        for warning in &report.warnings {
+            println!("Warning: {warning}");
+        }
+        if !report.errors.is_empty() {
+            for error in &report.errors {
+                eprintln!("Error: {error}");
+            }
+            eprintln!(
+                "Invalid network settings in {}, not starting",
+                Self::get_path().display()
+            );
+            std::process::exit(1);
+        }
+        report.patched
+    }
+
     fn validate(&self) {
         self.basic.validate();
         self.advanced.validate();
@@ -216,6 +235,8 @@ pub struct BasicConfiguration {
     pub white_list: bool,
     /// Whether to enforce the whitelist.
     pub enforce_whitelist: bool,
+    /// Whether to skip port and loopback address warnings.
+    pub ignore_port_warning: bool,
 }
 
 impl Default for BasicConfiguration {
@@ -237,6 +258,7 @@ impl Default for BasicConfiguration {
             allow_chat_reports: false,
             white_list: false,
             enforce_whitelist: false,
+            ignore_port_warning: false,
         }
     }
 }
@@ -293,7 +315,7 @@ pub trait LoadConfiguration {
                 }
             };
 
-            let parsed_toml_value: toml::Value = match toml::from_str(&file_content) {
+            let mut parsed_toml_value: toml::Value = match toml::from_str(&file_content) {
                 Ok(val) => val,
                 Err(err) => {
                     error!(
@@ -304,9 +326,10 @@ pub trait LoadConfiguration {
                 }
             };
 
+            let patched = Self::prepare(&mut parsed_toml_value);
             let (merged_config, changed) = Self::merge_with_default_toml(parsed_toml_value);
 
-            if changed {
+            if changed && !patched {
                 let file_name = path.file_name().map_or_else(
                     || path.display().to_string(),
                     |f| f.to_string_lossy().into_owned(),
@@ -420,6 +443,11 @@ pub trait LoadConfiguration {
 
     /// Returns the path to the configuration file relative to the config directory.
     fn get_path() -> &'static Path;
+
+    /// Checks the raw TOML before it is deserialized. Returns true if it was changed in memory.
+    fn prepare(_raw: &mut toml::Value) -> bool {
+        false
+    }
 
     /// Validates the configuration after loading or merging.
     fn validate(&self);

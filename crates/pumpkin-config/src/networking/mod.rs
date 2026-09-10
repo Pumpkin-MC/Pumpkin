@@ -7,6 +7,7 @@ use crate::LANBroadcastConfig;
 use bedrock::BedrockConfig;
 use java::JavaConfig;
 
+pub(crate) mod address;
 /// Authentication configuration.
 pub mod auth;
 /// Bedrock protocol networking configuration.
