@@ -237,6 +237,10 @@ impl PumpkinError for GetBlockError {
     }
 }
 
+/// One ring of loaded neighbours around a forced chunk, so cross-border block updates
+/// resolve. Vanilla's `FORCED_TICKET_LEVEL` keeps two.
+const FORCED_TICKET_LEVEL: i8 = pumpkin_world::chunk_system::ChunkLoading::FULL_CHUNK_LEVEL - 1;
+
 /// Represents a Minecraft world, containing entities, players, and the underlying level data.
 ///
 /// Each dimension (Overworld, Nether, End) typically has its own `World`.
@@ -424,6 +428,47 @@ impl World {
             custom_block_entity_data: DashMap::new(),
             entity_tracker: entity_tracker::EntityTracker::new(),
         }
+    }
+
+    /// Vanilla `ServerLevel.setChunkForced`. The set drives simulation, keeps
+    /// the chunk and a ring of neighbours loaded so block updates can cross the border.
+    pub fn set_chunks_forced(&self, positions: &[Vector2<i32>], forced: bool) -> usize {
+        let changed: Vec<Vector2<i32>> = {
+            let mut set = self
+                .forced_chunks
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            positions
+                .iter()
+                .copied()
+                .filter(|pos| {
+                    if forced {
+                        set.insert(*pos)
+                    } else {
+                        set.remove(pos)
+                    }
+                })
+                .collect()
+        };
+
+        if !changed.is_empty() {
+            let mut lock = self
+                .level
+                .chunk_loading
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for pos in &changed {
+                if forced {
+                    lock.add_ticket(*pos, FORCED_TICKET_LEVEL);
+                } else {
+                    lock.remove_ticket(*pos, FORCED_TICKET_LEVEL);
+                }
+            }
+            lock.send_change();
+            self.update_active_chunks();
+        }
+
+        changed.len()
     }
 
     pub fn update_active_chunks(&self) {

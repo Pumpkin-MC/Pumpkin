@@ -299,15 +299,8 @@ fn acquire_forced_game_test_chunk(world: &World, chunk: Vector2<i32>) {
         return;
     }
 
-    let was_forced = {
-        let mut forced_chunks = world
-            .forced_chunks
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let was_forced = forced_chunks.contains(&chunk);
-        forced_chunks.insert(chunk);
-        was_forced
-    };
+    // Go through `set_chunks_forced` so the chunk gets its loading ticket too.
+    let was_forced = world.set_chunks_forced(&[chunk], true) == 0;
     leases.insert(
         key,
         ForcedGameTestChunk {
@@ -334,11 +327,7 @@ fn release_forced_game_test_chunk(world: &World, chunk: Vector2<i32>) {
     drop(leases);
 
     if release_world_chunk {
-        world
-            .forced_chunks
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .remove(&chunk);
+        world.set_chunks_forced(&[chunk], false);
     }
 }
 

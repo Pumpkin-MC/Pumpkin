@@ -583,6 +583,11 @@ impl Level {
             .map(|p| *p)
             .collect();
         for pos in scheduled_chunk_pos {
+            // Vanilla `LevelTicks.tickCheck`: a loaded but unsimulated chunk keeps its
+            // ticks queued instead of running them, so its neighbours stay loaded.
+            if !active_chunks.contains(&pos) {
+                continue;
+            }
             if let Some(chunk) = self.loaded_chunks.get(&pos) {
                 let chunk = chunk.value();
                 ticks.block_ticks.append(&mut chunk.block_ticks.step_tick());
@@ -959,6 +964,9 @@ impl Level {
             .is_some()
         {
             self.chunks_with_scheduled_ticks.insert(chunk_pos);
+        } else {
+            // Vanilla `LevelTicks.schedule` drops this too, but says so.
+            debug!("Trying to schedule block tick in not loaded position {block_pos:?}");
         }
     }
 
@@ -986,6 +994,9 @@ impl Level {
             .is_some()
         {
             self.chunks_with_scheduled_ticks.insert(chunk_pos);
+        } else {
+            // Vanilla `LevelTicks.schedule` drops this too, but says so.
+            debug!("Trying to schedule fluid tick in not loaded position {block_pos:?}");
         }
     }
 

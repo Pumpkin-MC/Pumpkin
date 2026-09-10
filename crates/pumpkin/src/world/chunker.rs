@@ -103,7 +103,11 @@ pub fn update_position(player: &Arc<Player>) {
         let sim_dist = world.server.upgrade().map_or(10, |s| {
             s.advanced_config.networking.java.simulation_distance.get()
         });
-        pumpkin_world::chunk_system::ChunkLoading::get_level_from_simulation_distance(sim_dist)
+        // `+ 1` so every simulated chunk keeps loaded neighbours, which block updates
+        // across a chunk border need. Same reason the view ticket adds a ring.
+        pumpkin_world::chunk_system::ChunkLoading::get_level_from_simulation_distance(
+            sim_dist.saturating_add(1),
+        )
     });
 
     {
