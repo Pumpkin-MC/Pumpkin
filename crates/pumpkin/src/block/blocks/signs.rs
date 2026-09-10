@@ -10,6 +10,7 @@ use pumpkin_data::BlockId;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::EnumVariants;
+use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Taggable;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::pumpkin_block_from_tag;
@@ -18,6 +19,7 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
+use pumpkin_world::tick::TickPriority;
 use uuid::Uuid;
 
 use crate::block::BlockBehaviour;
@@ -54,6 +56,7 @@ struct SignPlacement {
     facing: Option<String>,
     rotation: Option<u8>,
     attached: bool,
+    waterlogged: bool,
 }
 
 impl SignBlock {
@@ -186,6 +189,7 @@ impl SignBlock {
             facing,
             rotation,
             attached,
+            waterlogged: args.replacing.water_source(),
         })
     }
 
@@ -306,6 +310,14 @@ impl SignBlock {
 
         if let Some(prop) = props.iter_mut().find(|(k, _)| *k == "attached") {
             prop.1 = if placement.attached { "true" } else { "false" };
+        }
+
+        if let Some(prop) = props.iter_mut().find(|(k, _)| *k == "waterlogged") {
+            prop.1 = if placement.waterlogged {
+                "true"
+            } else {
+                "false"
+            };
         }
 
         block.from_properties(&props).to_state_id(block)
@@ -461,6 +473,18 @@ impl BlockBehaviour for SignBlock {
                 return BlockStateId::AIR;
             }
         }
+
+        // A surviving waterlogged sign keeps the water around it flowing,
+        // mirroring the `scheduleTick` in `SignBlock::updateShape`.
+        if args.state_id.is_waterlogged() {
+            args.world.schedule_fluid_tick(
+                &Fluid::WATER,
+                *args.position,
+                Fluid::WATER.flow_speed as u8,
+                TickPriority::Normal,
+            );
+        }
+
         args.state_id
     }
 
@@ -771,4 +795,42 @@ fn is_facing_front_text(
 
 fn get_yaw_from_rotation_16(rotation: u8) -> f32 {
     f32::from(rotation) * 22.5
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn placement(block: &Block, waterlogged: bool) -> SignPlacement {
+        SignPlacement {
+            block_id: block.id,
+            facing: None,
+            rotation: None,
+            attached: false,
+            waterlogged,
+        }
+    }
+
+    /// `apply_placement_properties` matches property names as strings, so a
+    /// renamed or missing `waterlogged` would silently stop waterlogging signs.
+    #[test]
+    fn placement_carries_waterlogging_into_the_state() {
+        for block in [
+            &Block::OAK_SIGN,
+            &Block::OAK_WALL_SIGN,
+            &Block::OAK_HANGING_SIGN,
+            &Block::OAK_WALL_HANGING_SIGN,
+        ] {
+            for waterlogged in [false, true] {
+                let state_id =
+                    SignBlock::apply_placement_properties(block, &placement(block, waterlogged));
+                assert_eq!(
+                    state_id.is_waterlogged(),
+                    waterlogged,
+                    "{} placed with waterlogged={waterlogged}",
+                    block.name
+                );
+            }
+        }
+    }
 }

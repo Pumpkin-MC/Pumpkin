@@ -142,7 +142,6 @@ pub struct ProtoChunk {
     generation_bottom_y: i8,
     pub stage: StagedChunkEnum,
     pub light: ChunkLight,
-    pub carving_mask: crate::generation::carver::mask::CarvingMask,
     pub blending_data: Option<crate::generation::blender::blending_data::BlendingData>,
     pub pending_block_entities: Vec<NbtCompound>,
     pending_structure_entities: Vec<NbtCompound>,
@@ -252,10 +251,6 @@ impl ProtoChunk {
                     .map(|_| LightContainer::new_empty(0))
                     .collect(),
             },
-            carving_mask: crate::generation::carver::mask::CarvingMask::new(
-                height as i32,
-                bottom_y as i32,
-            ),
             blending_data: None,
             pending_block_entities: Vec::new(),
             pending_structure_entities: Vec::new(),

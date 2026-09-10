@@ -1,7 +1,7 @@
 use arc_swap::ArcSwap;
 use pumpkin_data::translation;
 use pumpkin_protocol::{
-    ConnectionState, KnownPack, Label, Link, LinkType,
+    ConnectionState, Label, Link, LinkType,
     java::client::{
         config::{
             CConfigAddResourcePack, CConfigServerLinks, CFeatureFlags, CFinishConfig, CKnownPacks,
