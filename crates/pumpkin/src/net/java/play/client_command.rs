@@ -67,9 +67,25 @@ impl JavaClient {
             return;
         }
 
-        let level_info = player.world().level_info.load();
+        let world = player.world();
+        let level_info = world.level_info.load();
+        let minecart_improvements_enabled = world.server.upgrade().map_or_else(
+            || {
+                level_info
+                    .data_packs
+                    .enabled
+                    .iter()
+                    .any(|p| p == "minecart_improvements" || p == "file/minecart_improvements")
+            },
+            |s| s.is_feature_enabled("minecraft:minecart_improvements"),
+        );
+
         let rules: Vec<(String, String)> = GameRule::all()
             .iter()
+            .filter(|rule| match rule {
+                GameRule::MaxMinecartSpeed => minecart_improvements_enabled,
+                _ => true,
+            })
             .map(|rule| {
                 (
                     rule.to_string(),
