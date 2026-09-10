@@ -7,7 +7,6 @@ use pumpkin_protocol::{
 };
 use std::sync::Arc;
 
-use super::tree::{Node, NodeType};
 use crate::command::node::{
     attached::{AttachedNode, NodeId},
     dispatcher::CommandDispatcher,
@@ -15,18 +14,10 @@ use crate::command::node::{
 };
 use crate::entity::player::Player;
 use crate::server::Server;
-use pumpkin_protocol::bedrock::client::CommandPermissionLevel;
 use pumpkin_protocol::bedrock::client::available_commands::{
     CAvailableCommands, CommandData, EnumData, OverloadData, ParamData, arg_flags, arg_types,
 };
 use pumpkin_protocol::java::client::play::SuggestionProviders;
-use pumpkin_protocol::{
-    codec::var_int::VarInt,
-    java::client::play::{
-        ArgumentType, CCommands, ProtoNode, ProtoNodeType, StringProtoArgBehavior,
-    },
-};
-use std::sync::Arc;
 
 #[allow(clippy::too_many_lines)]
 pub fn send_c_commands_packet(
@@ -35,9 +26,7 @@ pub fn send_c_commands_packet(
     dispatcher: &CommandDispatcher,
 ) {
     let mut proto_nodes: Vec<ProtoNode> = Vec::with_capacity(dispatcher.tree.len());
-    let source = &super::CommandSender::Player(player.clone())
-        .clone()
-        .into_source(server);
+    let source = &super::CommandSender::Player(player.clone()).into_source(server);
     for node in &dispatcher.tree {
         let children: Box<[VarInt]> = match node {
             AttachedNode::Root(_) => {
@@ -61,9 +50,10 @@ pub fn send_c_commands_packet(
                             ),
                             _ => (false, true, ""),
                         };
-                        (!disabled && requirement)
-                            || !name.starts_with("//")
-                            || dispatcher.tree.get(&name[1..]).is_none()
+                        !disabled
+                            && requirement
+                            && (!name.starts_with("//")
+                                || dispatcher.tree.get(&name[1..]).is_none())
                     })
                     .map(|id| VarInt((id.0.get() - 1) as i32))
                     .collect()
