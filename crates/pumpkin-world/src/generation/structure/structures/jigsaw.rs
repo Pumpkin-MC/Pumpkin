@@ -39,6 +39,8 @@ pub enum PoolElementKind {
     Empty,
     Single {
         template: String,
+        /// Resolved template, loaded once when the pool element is created.
+        resolved: Option<Arc<StructureTemplate>>,
         processors: ProcessorListRef,
         legacy: bool,
     },
@@ -131,9 +133,11 @@ impl RawPoolElement {
                 ProcessorListRef::Empty
             }
         };
+        let resolved = crate::generation::structure::template::get_template(&location);
         (
             PoolElementKind::Single {
                 template: location,
+                resolved,
                 processors,
                 legacy,
             },
@@ -187,9 +191,7 @@ impl PoolElement {
     pub fn first_template(&self) -> Option<Arc<StructureTemplate>> {
         fn find(kind: &PoolElementKind) -> Option<Arc<StructureTemplate>> {
             match kind {
-                PoolElementKind::Single { template, .. } => {
-                    crate::generation::structure::template::get_template(template)
-                }
+                PoolElementKind::Single { resolved, .. } => resolved.clone(),
                 PoolElementKind::List(elements) => elements.iter().find_map(find),
                 PoolElementKind::Empty | PoolElementKind::Feature(_) => None,
             }
@@ -209,13 +211,17 @@ impl PoolElement {
             match kind {
                 PoolElementKind::Single {
                     template,
+                    resolved,
                     processors,
                     legacy,
                 } => {
-                    if let Some(structure_template) =
-                        crate::generation::structure::template::get_template(template)
-                    {
-                        consumer(template, processors, *legacy, structure_template);
+                    if let Some(structure_template) = resolved {
+                        consumer(
+                            template,
+                            processors,
+                            *legacy,
+                            Arc::clone(structure_template),
+                        );
                     }
                 }
                 PoolElementKind::List(elements) => {
@@ -249,9 +255,7 @@ impl PoolElementKind {
     #[must_use]
     pub fn get_y_size(&self) -> Option<i32> {
         match self {
-            Self::Single { template, .. } => {
-                crate::generation::structure::template::get_template(template).map(|t| t.size.y)
-            }
+            Self::Single { resolved, .. } => resolved.as_ref().map(|t| t.size.y),
             Self::List(elements) => elements.iter().filter_map(Self::get_y_size).max(),
             Self::Feature(_) => Some(1),
             Self::Empty => None,
@@ -261,16 +265,14 @@ impl PoolElementKind {
     #[must_use]
     pub fn get_bounding_box(&self, offset: BlockPos, rotation: pumpkin_data::Rotation) -> BlockBox {
         match self {
-            Self::Single { template, .. } => {
-                crate::generation::structure::template::get_template(template).map_or_else(
-                    || {
-                        BlockBox::new(
-                            offset.0.x, offset.0.y, offset.0.z, offset.0.x, offset.0.y, offset.0.z,
-                        )
-                    },
-                    |t| super::jigsaw_placement::rotated_box(offset, t.size, rotation),
-                )
-            }
+            Self::Single { resolved, .. } => resolved.as_ref().map_or_else(
+                || {
+                    BlockBox::new(
+                        offset.0.x, offset.0.y, offset.0.z, offset.0.x, offset.0.y, offset.0.z,
+                    )
+                },
+                |t| super::jigsaw_placement::rotated_box(offset, t.size, rotation),
+            ),
             Self::List(elements) => {
                 let mut bbox: Option<BlockBox> = None;
                 for element in elements {
@@ -304,20 +306,11 @@ impl PoolElementKind {
         random: &mut pumpkin_util::random::RandomGenerator,
     ) -> Vec<JigsawBlock> {
         match self {
-            Self::Single { template, .. } => {
-                let Some(template) = crate::generation::structure::template::get_template(template)
-                else {
+            Self::Single { resolved, .. } => {
+                let Some(template) = resolved else {
                     return Vec::new();
                 };
-                let mut jigsaws = Vec::new();
-                for block in &template.blocks {
-                    if let Some(jigsaw) = JigsawBlock::from_template_block(
-                        block,
-                        &template.palette[block.state as usize],
-                    ) {
-                        jigsaws.push(jigsaw);
-                    }
-                }
+                let mut jigsaws = template.jigsaw_blocks().to_vec();
                 for i in (1..jigsaws.len()).rev() {
                     let j = random.next_bounded_i32(i as i32 + 1) as usize;
                     jigsaws.swap(i, j);
@@ -478,6 +471,7 @@ impl TemplatePool {
                         projection,
                         kind: PoolElementKind::Single {
                             template: (*e).to_string(),
+                            resolved: crate::generation::structure::template::get_template(e),
                             processors: ProcessorListRef::Empty,
                             legacy: false,
                         },
