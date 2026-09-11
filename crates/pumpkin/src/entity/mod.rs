@@ -2736,6 +2736,9 @@ impl Entity {
         let mut bedrock_recipients = Vec::new();
 
         if let Some(tracked) = world.entity_tracker.get_tracked_entity(self.entity_id) {
+            if !tracked.has_bedrock_watchers() && self.entity_type != &EntityType::PLAYER {
+                return;
+            }
             for player in players.iter() {
                 if (tracked.seen_by.contains(&player.gameprofile.id)
                     || player.entity_id() == self.entity_id)
@@ -2785,6 +2788,10 @@ impl Entity {
         let mut java_recipients = Vec::new();
 
         if let Some(tracked) = world.entity_tracker.get_tracked_entity(self.entity_id) {
+            if tracked.seen_by.is_empty() && self.entity_type != &EntityType::PLAYER {
+                self.synched_data.clear_dirty();
+                return;
+            }
             for player in players.iter() {
                 if (tracked.seen_by.contains(&player.gameprofile.id)
                     || player.entity_id() == self.entity_id)

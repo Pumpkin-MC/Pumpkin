@@ -134,6 +134,11 @@ impl TrackedEntity {
         }
     }
 
+    #[must_use]
+    pub fn has_bedrock_watchers(&self) -> bool {
+        self.bedrock_watchers.load(Relaxed) > 0
+    }
+
     /// Vanilla `ServerEntity.sendChanges`. Non-player entities only.
     pub fn send_changes(&self, world: &World) {
         let entity = self.entity.get_entity();
@@ -338,7 +343,7 @@ impl TrackedEntity {
             self.bedrock_pos.store(pos);
         }
         self.bedrock_rot.store(rot);
-        if self.bedrock_watchers.load(Relaxed) == 0 {
+        if !self.has_bedrock_watchers() {
             return;
         }
         if entity.on_ground.load(Relaxed) {
@@ -653,7 +658,7 @@ impl TrackedEntity {
         packet: &P,
         world: &World,
     ) {
-        if self.bedrock_watchers.load(Relaxed) == 0 {
+        if !self.has_bedrock_watchers() {
             return;
         }
         let players = world.players.load();
