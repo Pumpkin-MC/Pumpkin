@@ -611,16 +611,11 @@ macro_rules! impl_block_entity_for_cooking {
             }
 
             fn is_comparator_dirty(&self) -> bool {
-
                 self.comparator_dirty.load(Ordering::Relaxed)
-
             }
 
-
             fn clear_comparator_dirty(&self) {
-
                 self.comparator_dirty.store(false, Ordering::Relaxed);
-
             }
 
 
