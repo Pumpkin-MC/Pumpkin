@@ -126,6 +126,12 @@ pub struct WasmPlugin {
     pub store: concurrent_store::LegacyStore,
 }
 
+impl Drop for WasmPlugin {
+    fn drop(&mut self) {
+        self.store.discard();
+    }
+}
+
 impl PluginRuntime {
     pub fn new<P: AsRef<Path>>(
         path: P,
