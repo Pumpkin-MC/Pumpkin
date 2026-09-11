@@ -5,8 +5,10 @@ use pumpkin_data::{
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::random::{RandomGenerator, xoroshiro128::Xoroshiro};
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
+use crate::block::blocks::plant::tree_grower::TreeGrower;
 use crate::block::{
     BlockBehaviour, BonemealArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
     RandomTickArgs,
@@ -68,7 +70,19 @@ impl MangrovePropaguleBlock {
             let mut event = StructureGrowEvent::new(*pos, TreeType::Mangrove, false);
             if let Some(server) = world.server.upgrade() {
                 server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return;
+                }
             }
+            let mut random =
+                RandomGenerator::Xoroshiro(Xoroshiro::from_seed(rand::random::<u64>()));
+            TreeGrower::MANGROVE.grow_tree(
+                world,
+                pos,
+                block,
+                props.to_state_id(block),
+                &mut random,
+            );
         }
     }
 }

@@ -19,6 +19,7 @@ use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::Receiver;
 use crossbeam::queue::SegQueue;
 use pumpkin_data::dimension::Dimension;
+use pumpkin_inventory::Inventory;
 use pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler;
 use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
 use pumpkin_protocol::RawPacket;
@@ -43,7 +44,6 @@ use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_util::translation::Locale;
 use pumpkin_util::version::JavaMinecraftVersion;
 use pumpkin_world::chunk::ChunkData;
-use pumpkin_world::inventory::Inventory;
 use tokio::task::JoinHandle;
 use tracing::{debug, warn};
 use uuid::Uuid;
@@ -575,13 +575,13 @@ impl Player {
         let bytes = if let Ok(handle) = tokio::runtime::Handle::try_current() {
             tokio::task::block_in_place(|| {
                 handle.block_on(async {
-                    let client = pumpkin_util::client();
+                    let client = pumpkin_auth::client();
                     client.get(&url).send().await.ok()?.bytes().await.ok()
                 })
             })?
         } else {
             tokio::runtime::Runtime::new().ok()?.block_on(async {
-                let client = pumpkin_util::client();
+                let client = pumpkin_auth::client();
                 client.get(&url).send().await.ok()?.bytes().await.ok()
             })?
         };
@@ -2416,6 +2416,17 @@ impl Player {
     pub fn process_inbound_packets(&self) {
         const MAX_PACKETS_PER_TICK: usize = 64;
 
+        // Player::tick runs after the world's block-update flush. Acknowledge the previous tick's
+        // predictions here so Java clients receive the authoritative block states before resolving
+        // those predictions. Sending the ACK from the packet loop would make doors and other
+        // predicted blocks briefly revert because their updates are not flushed until the next tick.
+        if let ClientPlatform::Java(client) = self.client.as_ref() {
+            let seq = client.packet_sequence.swap(-1, Ordering::Relaxed);
+            if seq != -1 {
+                client.try_send_packet(&CAcknowledgeBlockChange::new(seq.into()));
+            }
+        }
+
         let Some(player_arc) = self.world().get_player_by_uuid(self.gameprofile.id) else {
             return;
         };
@@ -2448,11 +2459,6 @@ impl Player {
                             packet.payload.len(),
                             e
                         );
-                    }
-
-                    let seq = client.packet_sequence.swap(-1, Ordering::Relaxed);
-                    if seq != -1 {
-                        client.try_send_packet(&CAcknowledgeBlockChange::new(seq.into()));
                     }
                 }
                 ClientPlatform::Bedrock(client) => {
@@ -2667,7 +2673,7 @@ impl Player {
                     state,
                     p.start_mining_time.load(Ordering::Relaxed),
                 );
-                if finished {
+                if finished && matches!(p.client.as_ref(), ClientPlatform::Bedrock(_)) {
                     p.stop_mining();
 
                     let block = Block::from_state_id(state.id);
@@ -2691,12 +2697,6 @@ impl Player {
                         let item_id = p.inventory().held_item().item.id;
                         p.increment_stat(StatisticCategory::Used, item_id as i32, 1);
                         p.increment_stat(StatisticCategory::Mined, state.id.as_u16() as i32, 1);
-                    }
-
-                    // Java clients decide completion on their own local timer, if the block is
-                    // broken earlier the server must reset the state
-                    if matches!(p.client.as_ref(), ClientPlatform::Java(_)) {
-                        p.reset_block_change(pos);
                     }
                 }
             }
@@ -3299,7 +3299,7 @@ impl Player {
     /// Sets the player's permission level and notifies the client.
     pub fn set_permission_lvl(
         self: &Arc<Self>,
-        server: &Server,
+        server: &Arc<Server>,
         lvl: PermissionLvl,
         command_dispatcher: &CommandDispatcher,
     ) {
@@ -4122,7 +4122,9 @@ impl Player {
                         5.0,
                     ),
                 ],
-                tick: VarULong(self.tick_counter.load(Ordering::Relaxed).max(0) as u64),
+                // This is a client input tick, not our independent server tick counter.
+                // Zero applies the authoritative values without prediction-history matching.
+                tick: VarULong(0),
             },
         );
     }
@@ -4176,6 +4178,9 @@ impl Player {
             && !self.has_effect(&StatusEffect::RAID_OMEN)
         {
             let world = self.world();
+            if !world.dimension.can_start_raid {
+                return;
+            }
             let player_pos = self.living_entity.entity.block_pos.load();
             let pos_f64 = self.living_entity.entity.pos.load();
 
@@ -6241,9 +6246,20 @@ impl Player {
         advancement: &'static pumpkin_data::advancement::Advancement,
         criterion: &str,
     ) {
-        if let Ok(mut advancements) = self.advancements.try_lock() {
-            advancements.award(advancement, criterion);
-        }
+        let Some((player, result)) =
+            self.advancements
+                .try_lock()
+                .ok()
+                .and_then(|mut advancements| {
+                    let player = advancements.player.upgrade()?;
+                    let result = advancements.award(advancement, criterion);
+                    Some((player, result))
+                })
+        else {
+            return;
+        };
+
+        PlayerAdvancement::finish_award(&player, advancement, result);
     }
 
     pub fn check_inventory_advancements(&self) {
@@ -7556,6 +7572,18 @@ impl InventoryPlayer for Player {
 
     fn increment_stat(&self, category: StatisticCategory, stat_id: i32, amount: i32) {
         self.increment_stat(category, stat_id, amount);
+    }
+
+    fn play_block_sound(&self, sound: Sound, pitch: f32) {
+        if let Some(pos) = self.open_container_pos.load() {
+            self.world().play_sound_fine(
+                sound,
+                SoundCategory::Blocks,
+                &pos.to_centered_f64(),
+                1.0,
+                pitch,
+            );
+        }
     }
 
     fn fire_prepare_item_enchant_event(
