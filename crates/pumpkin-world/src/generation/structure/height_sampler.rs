@@ -1,4 +1,4 @@
-use pumpkin_data::{Block, BlockId, block_properties::blocks_movement};
+use pumpkin_data::{Block, BlockId, BlockState, block_properties::blocks_movement};
 use pumpkin_util::math::vector3::Vector3;
 use rustc_hash::FxHashMap;
 
@@ -24,6 +24,7 @@ pub struct NoiseHeightSampler<'a> {
     preliminary: SurfaceHeightEstimateSampler<'a>,
     heights: FxHashMap<(i32, i32), i32>,
     ocean_floor_heights: FxHashMap<(i32, i32), i32>,
+    columns: FxHashMap<(i32, i32), (i32, Vec<&'static BlockState>)>,
 }
 
 impl<'a> NoiseHeightSampler<'a> {
@@ -42,10 +43,15 @@ impl<'a> NoiseHeightSampler<'a> {
             preliminary,
             heights: FxHashMap::default(),
             ocean_floor_heights: FxHashMap::default(),
+            columns: FxHashMap::default(),
         }
     }
 
-    fn sample_column(&mut self, x: i32, z: i32, ocean_floor: bool) -> i32 {
+    fn ensure_column_sampled(&mut self, x: i32, z: i32) {
+        if self.columns.contains_key(&(x, z)) {
+            return;
+        }
+
         let settings = self.generator.settings;
         let shape = &settings.shape;
         let fluid_sampler = StandardChunkFluidLevelSampler::new(
@@ -77,7 +83,8 @@ impl<'a> NoiseHeightSampler<'a> {
         );
 
         let densities = noise.sample_density();
-        for y in (0..volume.size_y).rev() {
+        let mut blocks = Vec::with_capacity(volume.size_y);
+        for y in 0..volume.size_y {
             let block_y = volume.block_y(y);
             let index = volume.index_unchecked(0, y, 0);
             let state = noise
@@ -89,6 +96,20 @@ impl<'a> NoiseHeightSampler<'a> {
                     &mut self.preliminary,
                 )
                 .unwrap_or(self.generator.default_block);
+            blocks.push(state);
+        }
+        self.columns
+            .insert((x, z), (i32::from(shape.min_y), blocks));
+    }
+
+    fn sample_column(&mut self, x: i32, z: i32, ocean_floor: bool) -> i32 {
+        self.ensure_column_sampled(x, z);
+        let Some((min_y, blocks)) = self.columns.get(&(x, z)) else {
+            return 0;
+        };
+        let min_y = *min_y;
+        for (idx, &state) in blocks.iter().enumerate().rev() {
+            let block_y = min_y + idx as i32;
             if if ocean_floor {
                 blocks_movement(state, BlockId::from_state_id(state.id))
             } else {
@@ -98,7 +119,7 @@ impl<'a> NoiseHeightSampler<'a> {
             }
         }
 
-        i32::from(shape.min_y)
+        min_y
     }
 }
 
@@ -123,5 +144,21 @@ impl HeightSampler for NoiseHeightSampler<'_> {
         let height = self.sample_column(block_x, block_z, true) - 1;
         self.ocean_floor_heights.insert(key, height);
         height
+    }
+
+    fn sample_column_block(
+        &mut self,
+        block_x: i32,
+        block_z: i32,
+        y: i32,
+    ) -> Option<&'static BlockState> {
+        self.ensure_column_sampled(block_x, block_z);
+        let (min_y, blocks) = self.columns.get(&(block_x, block_z))?;
+        let idx = y - *min_y;
+        if idx >= 0 && (idx as usize) < blocks.len() {
+            Some(blocks[idx as usize])
+        } else {
+            Some(Block::AIR.default_state)
+        }
     }
 }
