@@ -174,6 +174,8 @@ impl Server {
             advanced_config.commands.broadcast_console_to_ops,
         );
 
+        crate::net::bedrock::register_translations();
+
         let world_path = basic_config.get_world_path();
 
         let block_registry = super::block::registry::default_registry();
