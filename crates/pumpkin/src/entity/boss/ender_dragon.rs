@@ -144,7 +144,7 @@ pub fn find_path(
 }
 
 /// Vanilla `EnderDragon` sub entities, in `subEntities`: name, width, height.
-const PART_DIMENSIONS: [(&str, f32, f32); 8] = [
+pub const PART_DIMENSIONS: [(&str, f32, f32); 8] = [
     ("head", 1.0, 1.0),
     ("neck", 3.0, 3.0),
     ("body", 5.0, 3.0),
@@ -269,8 +269,7 @@ impl EnderDragonEntity {
         let dragon_uuid = entity.entity_uuid;
         let world = entity.world.load();
 
-        Entity::reserve_ids_after(base_id, PART_DIMENSIONS.len() as i32);
-
+        // The part ids follow the dragon's, `from_type` reserved them with it.
         let mut parts = Vec::new();
         for (i, (name, width, height)) in PART_DIMENSIONS.iter().enumerate() {
             let part_entity = Entity::from_uuid_with_id(

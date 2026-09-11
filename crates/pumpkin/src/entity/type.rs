@@ -6,7 +6,7 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use uuid::Uuid;
 
-use crate::entity::boss::ender_dragon::EnderDragonEntity;
+use crate::entity::boss::ender_dragon::{EnderDragonEntity, PART_DIMENSIONS};
 use crate::entity::boss::wither::WitherEntity;
 use crate::entity::decoration::{
     armor_stand::ArmorStandEntity,
@@ -135,7 +135,13 @@ pub fn from_type(
     world: &Arc<World>,
     uuid: Uuid,
 ) -> Arc<dyn EntityBase> {
-    let entity = Entity::from_uuid(uuid, world.clone(), position, entity_type);
+    let entity = if entity_type.id == EntityType::ENDER_DRAGON.id {
+        // The client derives the 8 part ids from the dragon's, so reserve them together.
+        let base_id = Entity::reserve_ids(1 + PART_DIMENSIONS.len() as i32);
+        Entity::from_uuid_with_id(base_id, uuid, world.clone(), position, entity_type)
+    } else {
+        Entity::from_uuid(uuid, world.clone(), position, entity_type)
+    };
 
     let mob: Arc<dyn EntityBase> = match entity_type.id {
         // Zombie

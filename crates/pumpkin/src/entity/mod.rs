@@ -922,10 +922,9 @@ impl Entity {
         Self::from_uuid(Uuid::new_v4(), world, position, entity_type)
     }
 
-    /// Claims the `count` ids right after `after`, if they are still free.
-    /// Dragon parts must keep these ids, the client derives them from the dragon's.
-    pub fn reserve_ids_after(after: i32, count: i32) {
-        let _ = CURRENT_ID.compare_exchange(after + 1, after + 1 + count, Relaxed, Relaxed);
+    /// Reserves `count` consecutive ids and returns the first.
+    pub fn reserve_ids(count: i32) -> i32 {
+        CURRENT_ID.fetch_add(count, Relaxed)
     }
 
     pub fn from_uuid(
