@@ -4508,7 +4508,15 @@ impl Player {
                 .main_inventory
                 .write()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            for item in main_inv.iter_mut() {
+            let mut equipment = std::mem::take(
+                &mut self
+                    .inventory()
+                    .entity_equipment
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .equipment,
+            );
+            for item in main_inv.iter_mut().chain(equipment.values_mut()) {
                 if !item.is_empty() {
                     let stack = std::mem::replace(item, ItemStack::EMPTY.clone());
                     self.increment_stat(

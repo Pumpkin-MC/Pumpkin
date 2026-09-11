@@ -1917,7 +1917,9 @@ impl LivingEntity {
             }
             self.entity.pose.store(EntityPose::Dying);
 
-            self.drop_equipment(looting_level);
+            if dyn_self.get_player().is_none() {
+                self.drop_equipment(looting_level);
+            }
 
             // Broadcast death message if it's a player and the gamerule is enabled
             self.broadcast_death_message(&*dyn_self, damage_type, source, cause);
