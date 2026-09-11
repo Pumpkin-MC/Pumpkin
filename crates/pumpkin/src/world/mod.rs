@@ -4691,8 +4691,6 @@ impl World {
                             .lock()
                             .unwrap_or_else(std::sync::PoisonError::into_inner),
                     );
-                    let mut entities_to_add: Vec<Arc<dyn EntityBase>> =
-                        Vec::with_capacity(entity_nbts.len());
                     for entity_nbt in &entity_nbts {
                         let Some(id) = entity_nbt.get_string("id") else {
                             debug!("Entity has no ID");
@@ -4721,30 +4719,11 @@ impl World {
                         // stale data.
                         base_entity.velocity.store(Vector3::default());
 
-                        player.client.enqueue_spawn_packet(&entity);
-                        player.try_restore_vehicle(&entity);
-                        entities_to_add.push(entity);
-                    }
-
-                    if !entities_to_add.is_empty() {
-                        world.entities.rcu(|current_entities| {
-                            let mut new_entities = (**current_entities).clone();
-                            new_entities.extend(entities_to_add.iter().cloned());
-                            new_entities
-                        });
-                    }
-                } else {
-                    // The chunk's entities are already live (another watcher loaded
-                    // them). Just send this player the spawn packets for the live
-                    // entities currently in this chunk.
-                    for entity in world.entities.load().iter() {
-                        let base_entity = entity.get_entity();
-                        if base_entity.chunk_pos.load() == position {
-                            player.client.enqueue_spawn_packet(entity);
-                            player.try_restore_vehicle(entity);
-                        }
+                        // Tracker owns pairing: spawn packets for every watcher.
+                        world.add_entity_silent(entity);
                     }
                 }
+                // Already-live chunk: tracker pairs on its next pass.
             }
 
             #[cfg(debug_assertions)]
@@ -5196,21 +5175,6 @@ impl World {
 
         entity.init_data_tracker();
         self.add_entity_silent(entity);
-    }
-
-    pub fn broadcast_entity_spawn(&self, entity: &Arc<dyn EntityBase>) {
-        let base_entity = entity.get_entity();
-        let chunk_pos = base_entity.chunk_pos.load();
-
-        let players = self.players.load();
-        for player in players.iter() {
-            let center = player.get_entity().chunk_pos.load();
-            let view_distance = get_view_distance(player).get() as i32;
-
-            if is_within_view_distance(chunk_pos, center, view_distance) {
-                player.client.try_enqueue_spawn_packet(entity);
-            }
-        }
     }
 
     #[expect(clippy::needless_pass_by_value)]

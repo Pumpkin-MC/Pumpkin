@@ -122,8 +122,8 @@ impl TrackedEntity {
             if self.seen_by.insert(player.gameprofile.id) {
                 self.add_pairing(player);
             }
-        } else if self.seen_by.remove(&player.gameprofile.id).is_some() {
-            self.remove_pairing(player);
+        } else {
+            self.remove_player(player);
         }
     }
 
@@ -136,6 +136,7 @@ impl TrackedEntity {
     #[allow(clippy::too_many_lines)]
     pub fn add_pairing(&self, player: &Arc<Player>) {
         player.client.try_enqueue_spawn_packet(&self.entity);
+        player.try_restore_vehicle(&self.entity);
 
         if let Some(target_player) = self.entity.get_player() {
             let skin_parts = target_player.config.load().skin_parts;
@@ -273,7 +274,7 @@ impl TrackedEntity {
         }
     }
 
-    pub fn remove_pairing(&self, player: &Arc<Player>) {
+    pub fn remove_pairing(&self, player: &Player) {
         let entity_ids = [self.entity_id.into()];
         match player.client.as_ref() {
             ClientPlatform::Java(client) => {
@@ -317,8 +318,11 @@ impl TrackedEntity {
         self.seen_by.clear();
     }
 
-    pub fn remove_player(&self, player_uuid: &Uuid) {
-        self.seen_by.remove(player_uuid);
+    /// Vanilla `TrackedEntity.removePlayer`: despawn on the client, only if it was paired.
+    pub fn remove_player(&self, player: &Player) {
+        if self.seen_by.remove(&player.gameprofile.id).is_some() {
+            self.remove_pairing(player);
+        }
     }
 
     pub fn send_to_tracking_players<P: ClientPacket + Sync>(&self, packet: &P, world: &World) {
@@ -525,9 +529,8 @@ impl EntityTracker {
     pub fn remove_entity(&self, entity: &dyn EntityBase, world: &World) {
         let entity_id = entity.get_entity().entity_id;
         if let Some(player) = entity.get_player() {
-            let player_id = player.gameprofile.id;
             for entry in &self.entity_map {
-                entry.value().remove_player(&player_id);
+                entry.value().remove_player(player);
             }
         }
 
