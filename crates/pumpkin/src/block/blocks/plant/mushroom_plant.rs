@@ -47,7 +47,7 @@ impl MushroomPlantBlock {
             return true;
         }
 
-        let is_dark_enough = world.is_none_or(|world| world.get_max_local_raw_brightness(pos) < 13);
+        let is_dark_enough = world.is_none_or(|world| world.get_raw_brightness(pos, 0) < 13);
 
         is_dark_enough && Self::may_place_on(block_accessor.get_block_state(&below_pos))
     }
@@ -71,33 +71,40 @@ impl MushroomPlantBlock {
 
         let tree_height = mushroom_tree_height(&mut rand::rng());
 
-        if !world.is_in_height_limit(pos.0.y + tree_height + 1) {
+        let min_y = world.get_bottom_y();
+        let max_y = world.get_top_y();
+        if pos.0.y < min_y + 1 || pos.0.y + tree_height + 1 > max_y {
             return false;
         }
 
-        let foliage_radius = if block == &Block::BROWN_MUSHROOM {
-            3
+        let below_block = world.get_block(&pos.down());
+        let can_place_on = if block == &Block::BROWN_MUSHROOM {
+            below_block.has_tag(&tag::Block::MINECRAFT_HUGE_BROWN_MUSHROOM_CAN_PLACE_ON)
         } else {
-            2
+            below_block.has_tag(&tag::Block::MINECRAFT_HUGE_RED_MUSHROOM_CAN_PLACE_ON)
         };
-        for dy in 0..=tree_height + 1 {
-            let radius = if dy <= 3 { 0 } else { foliage_radius };
+        if !can_place_on {
+            return false;
+        }
+
+        for dy in 0..=tree_height {
+            let radius = if block == &Block::BROWN_MUSHROOM {
+                if dy <= 3 { 0 } else { 3 }
+            } else if (dy < tree_height && dy >= tree_height - 3) || dy == tree_height {
+                2
+            } else {
+                0
+            };
             for dx in -radius..=radius {
                 for dz in -radius..=radius {
                     let check_pos = pos.add(dx, dy, dz);
-                    if check_pos == *pos {
-                        continue;
-                    }
                     if !world.is_loaded(&check_pos) {
                         return false;
                     }
                     let check_state = world.get_block_state(&check_pos);
                     let check_block = world.get_block(&check_pos);
-                    let can_replace = check_state.is_air()
-                        || check_block.has_tag(&tag::Block::MINECRAFT_LEAVES)
-                        || check_block.has_tag(&tag::Block::MINECRAFT_REPLACEABLE_BY_MUSHROOMS)
-                        || check_state.replaceable();
-                    if !can_replace {
+                    if !check_state.is_air() && !check_block.has_tag(&tag::Block::MINECRAFT_LEAVES)
+                    {
                         return false;
                     }
                 }
@@ -113,6 +120,14 @@ impl MushroomPlantBlock {
         }
 
         true
+    }
+}
+
+fn place_mushroom_block(world: &Arc<World>, pos: &BlockPos, state_id: BlockStateId) {
+    let block = world.get_block(pos);
+    let state = world.get_block_state(pos);
+    if state.is_air() || block.has_tag(&tag::Block::MINECRAFT_REPLACEABLE_BY_MUSHROOMS) {
+        world.set_block_state(pos, state_id, BlockFlags::NOTIFY_ALL);
     }
 }
 
@@ -138,7 +153,7 @@ fn place_huge_brown_mushroom(world: &Arc<World>, pos: &BlockPos, tree_height: i3
             };
             let state_id = props.to_state_id(&Block::BROWN_MUSHROOM_BLOCK);
             let cap_pos = BlockPos::new(pos.0.x + j, cap_y, pos.0.z + k);
-            world.set_block_state(&cap_pos, state_id, BlockFlags::NOTIFY_ALL);
+            place_mushroom_block(world, &cap_pos, state_id);
         }
     }
 
@@ -153,7 +168,7 @@ fn place_huge_brown_mushroom(world: &Arc<World>, pos: &BlockPos, tree_height: i3
     let stem_state = stem_props.to_state_id(&Block::MUSHROOM_STEM);
     for i in 0..tree_height {
         let stem_pos = BlockPos::new(pos.0.x, pos.0.y + i, pos.0.z);
-        world.set_block_state(&stem_pos, stem_state, BlockFlags::NOTIFY_ALL);
+        place_mushroom_block(world, &stem_pos, stem_state);
     }
 }
 
@@ -182,7 +197,7 @@ fn place_huge_red_mushroom(world: &Arc<World>, pos: &BlockPos, tree_height: i32)
                 };
                 let state_id = props.to_state_id(&Block::RED_MUSHROOM_BLOCK);
                 let cap_pos = BlockPos::new(pos.0.x + l, pos.0.y + i, pos.0.z + m);
-                world.set_block_state(&cap_pos, state_id, BlockFlags::NOTIFY_ALL);
+                place_mushroom_block(world, &cap_pos, state_id);
             }
         }
     }
@@ -198,7 +213,7 @@ fn place_huge_red_mushroom(world: &Arc<World>, pos: &BlockPos, tree_height: i32)
     let stem_state = stem_props.to_state_id(&Block::MUSHROOM_STEM);
     for i in 0..tree_height {
         let stem_pos = BlockPos::new(pos.0.x, pos.0.y + i, pos.0.z);
-        world.set_block_state(&stem_pos, stem_state, BlockFlags::NOTIFY_ALL);
+        place_mushroom_block(world, &stem_pos, stem_state);
     }
 }
 

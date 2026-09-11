@@ -2975,12 +2975,16 @@ fn load_vanilla_noise_routers() -> NoiseRouterReprs {
 pub fn build() -> TokenStream {
     let mut reprs: NoiseRouterReprs = load_vanilla_noise_routers();
 
-    let _ = reprs.overworld_amplified;
-    let _ = reprs.overworld_large_biomes;
     let _ = reprs.end_islands;
 
     let (overworld_router, overworld_compiled) =
         reprs.overworld.into_token_stream_compiled("overworld");
+    let (amplified_router, amplified_compiled) = reprs
+        .overworld_amplified
+        .into_token_stream_compiled("amplified");
+    let (large_biomes_router, large_biomes_compiled) = reprs
+        .overworld_large_biomes
+        .into_token_stream_compiled("large_biomes");
     let (nether_router, nether_compiled) = reprs.nether.into_token_stream_compiled("nether");
     let (end_router, end_compiled) = reprs.end.into_token_stream_compiled("end");
 
@@ -3004,6 +3008,8 @@ pub fn build() -> TokenStream {
         }
 
         #overworld_compiled
+        #amplified_compiled
+        #large_biomes_compiled
         #nether_compiled
         #end_compiled
 
@@ -3366,7 +3372,35 @@ pub fn build() -> TokenStream {
         }
 
         pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = #overworld_router;
+        pub const AMPLIFIED_BASE_NOISE_ROUTER: BaseNoiseRouters = #amplified_router;
+        pub const LARGE_BIOMES_BASE_NOISE_ROUTER: BaseNoiseRouters = #large_biomes_router;
         pub const NETHER_BASE_NOISE_ROUTER: BaseNoiseRouters = #nether_router;
         pub const END_BASE_NOISE_ROUTER: BaseNoiseRouters = #end_router;
+
+        impl BaseNoiseRouters {
+            #[must_use]
+            pub fn from_name(name: &str) -> Option<&'static Self> {
+                let name = name.strip_prefix("minecraft:").unwrap_or(name);
+                match name {
+                    "overworld" => Some(&OVERWORLD_BASE_NOISE_ROUTER),
+                    "amplified" => Some(&AMPLIFIED_BASE_NOISE_ROUTER),
+                    "large_biomes" => Some(&LARGE_BIOMES_BASE_NOISE_ROUTER),
+                    "nether" => Some(&NETHER_BASE_NOISE_ROUTER),
+                    "end" => Some(&END_BASE_NOISE_ROUTER),
+                    _ => None,
+                }
+            }
+
+            #[must_use]
+            pub fn from_dimension(dimension: &crate::dimension::Dimension) -> &'static Self {
+                if dimension == &crate::dimension::Dimension::OVERWORLD {
+                    &OVERWORLD_BASE_NOISE_ROUTER
+                } else if dimension == &crate::dimension::Dimension::THE_NETHER {
+                    &NETHER_BASE_NOISE_ROUTER
+                } else {
+                    &END_BASE_NOISE_ROUTER
+                }
+            }
+        }
     }
 }
