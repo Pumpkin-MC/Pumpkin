@@ -37,6 +37,7 @@ impl FreezeTopLayerFeature {
                 // Freeze check
                 if biome.weather.base_temperature() <= 0.15 && below_block == BlockId::WATER {
                     chunk.set_block_state(&below_vec, Block::ICE.default_state);
+                    continue;
                 }
 
                 // Snow check
@@ -47,8 +48,6 @@ impl FreezeTopLayerFeature {
 
                 if top_temp < 0.15 {
                     let top_raw = GenerationCache::get_block_state(chunk, &top_vec);
-                    // Re-read below (may have been replaced by ice in the freeze step above)
-
                     // topPos must be air; belowPos must not be air (something to stand on)
                     if top_raw.to_state().is_air()
                         && !below.to_state().is_air()
