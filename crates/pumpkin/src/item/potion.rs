@@ -162,17 +162,8 @@ impl PotionContents {
                     );
                 }
 
-                // For instant effects, still add a short visual effect entry as before
-                let eff = pumpkin_data::potion::Effect {
-                    effect_type,
-                    duration: 1,
-                    amplifier,
-                    ambient,
-                    show_particles,
-                    show_icon,
-                    blend: false,
-                };
-                target.add_effect(eff);
+                // Like vanilla, instant effects are applied once and never added to the active
+                // effects, where they would linger.
             } else {
                 // Duration scaling
                 let duration_scale = source.duration_scale(scale);
