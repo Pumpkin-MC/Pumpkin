@@ -137,7 +137,7 @@ impl GenerationCache for WorldGenerationCache {
 
     fn get_fluid_and_fluid_state(&self, position: &Vector3<i32>) -> (Fluid, FluidState) {
         let (fluid, state) = self.world.get_fluid_and_fluid_state(&BlockPos(*position));
-        (fluid.clone(), state.clone())
+        (fluid.clone(), state)
     }
 
     fn set_block_state(&mut self, pos: &Vector3<i32>, block_state: &BlockState) {

@@ -22,11 +22,11 @@ use pumpkin_protocol::java::client::play::SuggestionProviders;
 #[allow(clippy::too_many_lines)]
 pub fn send_c_commands_packet(
     player: &Arc<Player>,
-    _server: &Server,
+    server: &Arc<Server>,
     dispatcher: &CommandDispatcher,
 ) {
     let mut proto_nodes: Vec<ProtoNode> = Vec::with_capacity(dispatcher.tree.len());
-
+    let source = &super::CommandSender::Player(player.clone()).into_source(server);
     for node in &dispatcher.tree {
         let children: Box<[VarInt]> = match node {
             AttachedNode::Root(_) => {
@@ -37,24 +37,23 @@ pub fn send_c_commands_packet(
                     .values()
                     .copied()
                     .filter(|id| {
-                        let (disabled, name) = match &dispatcher.tree[*id] {
+                        let (disabled, requirement, name) = match &dispatcher.tree[*id] {
                             AttachedNode::Literal(child) => (
                                 dispatcher.is_disabled(&child.meta.literal_lowercase),
+                                child.owned.requirements.evaluate(source),
                                 child.meta.literal.as_ref(),
                             ),
                             AttachedNode::Command(child) => (
                                 dispatcher.is_disabled(&child.meta.literal_lowercase),
+                                child.owned.requirements.evaluate(source),
                                 child.meta.literal.as_ref(),
                             ),
-                            _ => (false, ""),
+                            _ => (false, true, ""),
                         };
-                        if disabled {
-                            return false;
-                        }
-                        if name.starts_with("//") && dispatcher.tree.get(&name[1..]).is_some() {
-                            return false;
-                        }
-                        true
+                        !disabled
+                            && requirement
+                            && (!name.starts_with("//")
+                                || dispatcher.tree.get(&name[1..]).is_none())
                     })
                     .map(|id| VarInt((id.0.get() - 1) as i32))
                     .collect()
@@ -72,7 +71,7 @@ pub fn send_c_commands_packet(
             .and_then(|redirection| dispatcher.tree.resolve(redirection))
             .map(|id| (id.0.get() - 1) as i32);
 
-        let satisfies_requirements = true;
+        let satisfies_requirements = node.requirements().evaluate(source);
 
         match node {
             AttachedNode::Root(_) => {
