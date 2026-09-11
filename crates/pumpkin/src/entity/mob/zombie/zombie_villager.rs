@@ -48,7 +48,7 @@ impl ZombieVillagerEntity {
     const VILLAGER_CONVERSION_WAIT_MAX: i32 = 6000;
     const MAX_SPECIAL_BLOCKS_COUNT: i32 = 14;
     const SPECIAL_BLOCK_RADIUS_X: i32 = 4;
-    const SPECIAL_BLOCK_RADIUS_Y: i32 = 3;
+    const SPECIAL_BLOCK_RADIUS_Y: i32 = 4;
     const SPECIAL_BLOCK_RADIUS_Z: i32 = 4;
     /// Nausea the cured villager wakes up with.
     const NAUSEA_DURATION: i32 = 200;
@@ -64,7 +64,10 @@ impl ZombieVillagerEntity {
             mob_entity,
             villager_data: std::sync::Mutex::new(VillagerData::new(
                 pumpkin_data::villager::VillagerType::Plains,
-                pumpkin_data::villager::VillagerProfession::None,
+                // Vanilla's `initializeZombieVillagerData` rolls a random profession
+                // so a cured villager has trades. NBT-loaded data overwrites this later.
+                pumpkin_data::villager::VillagerProfession::from_i32(rand::random_range(0..15))
+                    .unwrap_or(pumpkin_data::villager::VillagerProfession::None),
                 1,
             )),
             villager_nbt: std::sync::Mutex::new(NbtCompound::new()),
