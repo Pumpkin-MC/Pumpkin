@@ -2808,6 +2808,8 @@ impl Entity {
         }
 
         if java_recipients.is_empty() {
+            // Vanilla `packDirty` clears even without recipients.
+            self.synched_data.clear_dirty();
             return;
         }
 

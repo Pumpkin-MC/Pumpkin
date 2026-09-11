@@ -75,6 +75,8 @@ pub struct TrackedEntity {
     pub update_interval: u32,
     pub track_deltas: bool,
     pub seen_by: DashSet<Uuid>,
+    /// Bedrock players in `seen_by`.
+    bedrock_watchers: AtomicU32,
     pub last_section_pos: AtomicCell<Vector3<i32>>,
     tick_count: AtomicU32,
     teleport_delay: AtomicU32,
@@ -121,6 +123,7 @@ impl TrackedEntity {
             update_interval,
             track_deltas,
             seen_by: DashSet::new(),
+            bedrock_watchers: AtomicU32::new(0),
             last_section_pos: AtomicCell::new(last_section_pos),
             tick_count: AtomicU32::new(0),
             teleport_delay: AtomicU32::new(0),
@@ -335,6 +338,9 @@ impl TrackedEntity {
             self.bedrock_pos.store(pos);
         }
         self.bedrock_rot.store(rot);
+        if self.bedrock_watchers.load(Relaxed) == 0 {
+            return;
+        }
         if entity.on_ground.load(Relaxed) {
             flags |= MOVE_ACTOR_DELTA_FLAG_ON_GROUND;
         }
@@ -411,6 +417,9 @@ impl TrackedEntity {
 
         if is_visible {
             if self.seen_by.insert(player.gameprofile.id) {
+                if matches!(player.client.as_ref(), ClientPlatform::Bedrock(_)) {
+                    self.bedrock_watchers.fetch_add(1, Relaxed);
+                }
                 self.add_pairing(player);
             }
         } else {
@@ -584,6 +593,9 @@ impl TrackedEntity {
     }
 
     pub fn broadcast_removed(&self, world: &World) {
+        if self.seen_by.is_empty() {
+            return;
+        }
         let entity_ids = [self.entity_id.into()];
         let je_packet = CRemoveEntities::new(&entity_ids);
         let be_packet = CRemoveActor::new(VarLong(i64::from(self.entity_id)));
@@ -607,16 +619,23 @@ impl TrackedEntity {
         World::broadcast_bedrock_grouped(&be_packet, bedrock_recipients.into_iter());
 
         self.seen_by.clear();
+        self.bedrock_watchers.store(0, Relaxed);
     }
 
     /// Vanilla `TrackedEntity.removePlayer`: despawn on the client, only if it was paired.
     pub fn remove_player(&self, player: &Player) {
         if self.seen_by.remove(&player.gameprofile.id).is_some() {
+            if matches!(player.client.as_ref(), ClientPlatform::Bedrock(_)) {
+                self.bedrock_watchers.fetch_sub(1, Relaxed);
+            }
             self.remove_pairing(player);
         }
     }
 
     pub fn send_to_tracking_players<P: ClientPacket + Sync>(&self, packet: &P, world: &World) {
+        if self.seen_by.is_empty() {
+            return;
+        }
         let players = world.players.load();
         let recipients = players
             .iter()
@@ -630,6 +649,9 @@ impl TrackedEntity {
         packet: &P,
         world: &World,
     ) {
+        if self.bedrock_watchers.load(Relaxed) == 0 {
+            return;
+        }
         let players = world.players.load();
         let recipients = players.iter().filter_map(|p| {
             if self.seen_by.contains(&p.gameprofile.id)
@@ -648,6 +670,9 @@ impl TrackedEntity {
         be_packet: &B,
         world: &World,
     ) {
+        if self.seen_by.is_empty() {
+            return;
+        }
         let players = world.players.load();
         let recipients = players
             .iter()
