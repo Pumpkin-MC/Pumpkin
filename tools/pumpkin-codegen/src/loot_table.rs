@@ -112,6 +112,8 @@ struct ConditionStruct {
     term: Option<Box<ConditionStruct>>,
     #[serde(default)]
     terms: Option<Vec<ConditionStruct>>,
+    #[serde(default)]
+    properties: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 fn parse_condition(cond: &ConditionStruct) -> LootCondition {
@@ -150,6 +152,26 @@ fn parse_condition(cond: &ConditionStruct) -> LootCondition {
             } else {
                 LootCondition::TableBonus {
                     chances: Box::leak(chances.into_boxed_slice()),
+                }
+            }
+        }
+        "minecraft:block_state_property" => {
+            // Only exact values are supported; ranges stay unconditional like before.
+            let Some(properties) = &cond.properties else {
+                return LootCondition::None;
+            };
+            let mut pairs = Vec::new();
+            for (name, value) in properties {
+                let Some(value) = value.as_str() else {
+                    return LootCondition::None;
+                };
+                pairs.push((leak_str(name), leak_str(value)));
+            }
+            if pairs.is_empty() {
+                LootCondition::None
+            } else {
+                LootCondition::BlockStateProperty {
+                    properties: Box::leak(pairs.into_boxed_slice()),
                 }
             }
         }
@@ -198,6 +220,11 @@ fn parse_condition(cond: &ConditionStruct) -> LootCondition {
                 } else if has_shears {
                     return LootCondition::Shears;
                 }
+                let parsed: Vec<LootCondition> = terms.iter().map(parse_condition).collect();
+                // An unsupported term counts as always true, and so would the whole `any_of`.
+                if !parsed.is_empty() && !parsed.contains(&LootCondition::None) {
+                    return LootCondition::AnyOf(Box::leak(parsed.into_boxed_slice()));
+                }
             }
             LootCondition::None
         }
@@ -207,7 +234,8 @@ fn parse_condition(cond: &ConditionStruct) -> LootCondition {
                     LootCondition::SilkTouch => LootCondition::NoSilkTouch,
                     LootCondition::Shears => LootCondition::NoSilkTouchOrShears,
                     LootCondition::SilkTouchOrShears => LootCondition::NoSilkTouchOrShears,
-                    _ => LootCondition::None,
+                    LootCondition::None => LootCondition::None,
+                    other => LootCondition::Inverted(Box::leak(Box::new(other))),
                 }
             } else {
                 LootCondition::None
@@ -215,6 +243,126 @@ fn parse_condition(cond: &ConditionStruct) -> LootCondition {
         }
         _ => LootCondition::None,
     }
+}
+
+fn leak_str(s: &str) -> &'static str {
+    Box::leak(s.to_owned().into_boxed_str())
+}
+
+/// Combines conditions that must all hold, dropping unconditional parts.
+fn all_of(parts: Vec<LootCondition>) -> LootCondition {
+    let mut parts: Vec<LootCondition> = parts
+        .into_iter()
+        .filter(|c| *c != LootCondition::None)
+        .collect();
+    parts.dedup();
+    match parts.len() {
+        0 => LootCondition::None,
+        1 => parts[0],
+        _ => LootCondition::AllOf(Box::leak(parts.into_boxed_slice())),
+    }
+}
+
+fn invert(cond: LootCondition) -> LootCondition {
+    match cond {
+        LootCondition::SilkTouch => LootCondition::NoSilkTouch,
+        LootCondition::NoSilkTouch => LootCondition::SilkTouch,
+        LootCondition::SilkTouchOrShears => LootCondition::NoSilkTouchOrShears,
+        LootCondition::NoSilkTouchOrShears => LootCondition::SilkTouchOrShears,
+        LootCondition::Inverted(inner) => *inner,
+        other => LootCondition::Inverted(Box::leak(Box::new(other))),
+    }
+}
+
+/// Whether a condition gives the same answer every time it is checked, so it can be
+/// negated without re-rolling a random chance.
+fn is_deterministic(cond: LootCondition) -> bool {
+    match cond {
+        LootCondition::None
+        | LootCondition::SilkTouch
+        | LootCondition::NoSilkTouch
+        | LootCondition::Shears
+        | LootCondition::SilkTouchOrShears
+        | LootCondition::NoSilkTouchOrShears
+        | LootCondition::KilledByPlayer
+        | LootCondition::BlockStateProperty { .. } => true,
+        LootCondition::Inverted(inner) => is_deterministic(*inner),
+        LootCondition::AllOf(list) | LootCondition::AnyOf(list) => {
+            list.iter().copied().all(is_deterministic)
+        }
+        LootCondition::SurvivesExplosion
+        | LootCondition::RandomChance { .. }
+        | LootCondition::RandomChanceWithEnchantedBonus { .. }
+        | LootCondition::TableBonus { .. } => false,
+    }
+}
+
+/// Emits one entry per possible `set_count` outcome. A `set_count` with a condition (e.g.
+/// `type=double` on slabs) only applies when it holds, and later ones override earlier ones.
+fn push_count_variants(
+    item: &str,
+    weight: i32,
+    condition: LootCondition,
+    bonus_formula: Option<LootBonusFormula>,
+    functions: &[&EntryFunctionStruct],
+    out: &mut Vec<ParsedEntry>,
+) {
+    let set_counts: Vec<(LootCondition, (i32, i32))> = functions
+        .iter()
+        .filter(|f| f.function == "minecraft:set_count")
+        .filter_map(|f| {
+            f.count
+                .as_ref()
+                .map(|c| (combine_conditions(&f.conditions), (c.min(), c.max())))
+        })
+        .collect();
+
+    let mut push = |condition: LootCondition, (min_count, max_count): (i32, i32)| {
+        out.push(ParsedEntry {
+            item: item.to_owned(),
+            weight,
+            min_count,
+            max_count,
+            condition,
+            bonus_formula,
+        });
+    };
+
+    // An unparsed condition would make its `set_count` look unconditional.
+
+    let all_parsed = functions
+        .iter()
+        .filter(|f| f.function == "minecraft:set_count")
+        .all(|f| {
+            f.conditions
+                .iter()
+                .all(|c| parse_condition(c) != LootCondition::None)
+        });
+
+    if !all_parsed || !set_counts.iter().all(|(c, _)| is_deterministic(*c)) {
+        // Random conditions can't be split without re-rolling: keep the first `set_count`.
+        push(
+            condition,
+            set_counts.first().map_or((1, 1), |(_, count)| *count),
+        );
+        return;
+    }
+
+    // Walk from the last `set_count` backwards: each applies when its condition holds and
+    // none of the later ones do.
+    let mut later: Vec<LootCondition> = Vec::new();
+    for (set_condition, count) in set_counts.iter().rev() {
+        let mut parts = vec![condition, *set_condition];
+        parts.extend(later.iter().copied().map(invert));
+        push(all_of(parts), *count);
+        if *set_condition == LootCondition::None {
+            return;
+        }
+        later.push(*set_condition);
+    }
+    let mut parts = vec![condition];
+    parts.extend(later.iter().copied().map(invert));
+    push(all_of(parts), (1, 1));
 }
 
 fn combine_conditions(conditions: &[ConditionStruct]) -> LootCondition {
@@ -250,6 +398,8 @@ struct EntryFunctionStruct {
     #[serde(default)]
     parameters: Option<BonusParameterStruct>,
     count: Option<CountStruct>,
+    #[serde(default)]
+    conditions: Vec<ConditionStruct>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -288,6 +438,8 @@ struct PoolStruct {
     rolls: RollsStruct,
     #[serde(default)]
     conditions: Vec<ConditionStruct>,
+    #[serde(default)]
+    functions: Vec<EntryFunctionStruct>,
 }
 
 fn default_rolls() -> RollsStruct {
@@ -320,15 +472,24 @@ struct ParsedEntry {
 fn extract_entries(
     entry: &PoolEntryStruct,
     inherited_condition: LootCondition,
+    pool_functions: &[EntryFunctionStruct],
     out: &mut Vec<ParsedEntry>,
     empty_weight: &mut i32,
 ) {
-    extract_entries_with_depth(entry, inherited_condition, out, empty_weight, 0);
+    extract_entries_with_depth(
+        entry,
+        inherited_condition,
+        pool_functions,
+        out,
+        empty_weight,
+        0,
+    );
 }
 
 fn extract_entries_with_depth(
     entry: &PoolEntryStruct,
     inherited_condition: LootCondition,
+    pool_functions: &[EntryFunctionStruct],
     out: &mut Vec<ParsedEntry>,
     empty_weight: &mut i32,
     depth: usize,
@@ -349,15 +510,11 @@ fn extract_entries_with_depth(
         }
         "minecraft:item" => {
             if let Some(name) = &entry.name {
-                let (min_count, max_count) = entry
-                    .functions
-                    .iter()
-                    .find(|f| f.function == "minecraft:set_count")
-                    .and_then(|f| f.count.as_ref())
-                    .map(|c| (c.min(), c.max()))
-                    .unwrap_or((1, 1));
+                // Pool-level functions apply to every entry in the pool, after the entry's own.
+                let functions: Vec<&EntryFunctionStruct> =
+                    entry.functions.iter().chain(pool_functions).collect();
 
-                let bonus_formula = entry.functions.iter().find_map(|f| {
+                let bonus_formula = functions.iter().find_map(|f| {
                     if f.function == "minecraft:apply_bonus" {
                         match f.formula.as_deref() {
                             Some("minecraft:ore_drops") => Some(LootBonusFormula::OreDrops),
@@ -392,14 +549,14 @@ fn extract_entries_with_depth(
                     }
                 });
 
-                out.push(ParsedEntry {
-                    item: name.clone(),
-                    weight: entry.weight,
-                    min_count,
-                    max_count,
-                    condition: entry_cond,
+                push_count_variants(
+                    name,
+                    entry.weight,
+                    entry_cond,
                     bonus_formula,
-                });
+                    &functions,
+                    out,
+                );
             }
         }
         "minecraft:tag" => {
@@ -450,6 +607,7 @@ fn extract_entries_with_depth(
                                 extract_entries_with_depth(
                                     child_entry,
                                     pool_cond,
+                                    &pool.functions,
                                     out,
                                     empty_weight,
                                     depth + 1,
@@ -472,6 +630,7 @@ fn extract_entries_with_depth(
                         extract_entries_with_depth(
                             child_entry,
                             pool_cond,
+                            &pool.functions,
                             out,
                             empty_weight,
                             depth + 1,
@@ -501,6 +660,7 @@ fn extract_entries_with_depth(
                                     extract_entries_with_depth(
                                         child_entry,
                                         pool_cond,
+                                        &pool.functions,
                                         out,
                                         empty_weight,
                                         depth + 1,
@@ -513,38 +673,53 @@ fn extract_entries_with_depth(
             }
         },
         "minecraft:alternatives" => {
-            let mut saw_silk = false;
-            let mut saw_shears = false;
-
+            // Vanilla uses the first child whose conditions hold, so a later child only applies
+            // when every earlier one fails. Random conditions can't be negated without
+            // re-rolling, so only deterministic ones are excluded.
+            let mut earlier: Vec<LootCondition> = Vec::new();
             for child in &entry.children {
                 let child_cond = combine_conditions(&child.conditions);
-
-                let effective_cond = if child_cond == LootCondition::SilkTouch {
-                    saw_silk = true;
-                    LootCondition::SilkTouch
-                } else if child_cond == LootCondition::Shears {
-                    saw_shears = true;
-                    LootCondition::Shears
-                } else if child_cond == LootCondition::SilkTouchOrShears {
-                    saw_silk = true;
-                    saw_shears = true;
-                    LootCondition::SilkTouchOrShears
-                } else if saw_silk && saw_shears {
-                    LootCondition::NoSilkTouchOrShears
-                } else if saw_silk {
-                    LootCondition::NoSilkTouch
-                } else if saw_shears {
-                    LootCondition::NoSilkTouchOrShears
-                } else {
-                    entry_cond
-                };
-
-                extract_entries_with_depth(child, effective_cond, out, empty_weight, depth + 1);
+                let mut parts = vec![entry_cond];
+                parts.extend(earlier.iter().copied().map(invert));
+                extract_entries_with_depth(
+                    child,
+                    all_of(parts),
+                    pool_functions,
+                    out,
+                    empty_weight,
+                    depth + 1,
+                );
+                if child.conditions.is_empty()
+                    && matches!(
+                        child.entry_type.as_str(),
+                        "minecraft:item" | "minecraft:tag" | "minecraft:empty"
+                    )
+                {
+                    // An unconditional leaf always matches, so later children never run.
+                    break;
+                }
+                // Only exclude conditions that are fully understood: an unparsed one would
+                // become "never" and hide every later child.
+                let fully_parsed = child
+                    .conditions
+                    .iter()
+                    .all(|c| parse_condition(c) != LootCondition::None);
+                if child_cond != LootCondition::None && fully_parsed && is_deterministic(child_cond)
+                {
+                    earlier.push(child_cond);
+                }
             }
         }
         "minecraft:sequence" | "minecraft:group" => {
             for child in &entry.children {
-                extract_entries_with_depth(child, entry_cond, out, empty_weight, depth + 1);
+                extract_entries_with_depth(
+                    child,
+                    entry_cond,
+                    pool_functions,
+                    out,
+                    empty_weight,
+                    depth + 1,
+                );
             }
         }
         _ => {}
@@ -580,6 +755,20 @@ fn condition_to_tokens(cond: LootCondition) -> TokenStream {
         LootCondition::TableBonus { chances } => {
             let values = chances.iter();
             quote! { LootCondition::TableBonus { chances: &[#(#values),*] } }
+        }
+        LootCondition::BlockStateProperty { properties } => {
+            let pairs = properties
+                .iter()
+                .map(|(name, value)| quote! { (#name, #value) });
+            quote! { LootCondition::BlockStateProperty { properties: &[#(#pairs),*] } }
+        }
+        LootCondition::Inverted(inner) => {
+            let inner = condition_to_tokens(*inner);
+            quote! { LootCondition::Inverted(&#inner) }
+        }
+        LootCondition::AnyOf(list) => {
+            let tokens: Vec<TokenStream> = list.iter().copied().map(condition_to_tokens).collect();
+            quote! { LootCondition::AnyOf(&[#(#tokens),*]) }
         }
         LootCondition::AllOf(list) => {
             let tokens: Vec<TokenStream> = list.iter().copied().map(condition_to_tokens).collect();
@@ -625,6 +814,7 @@ fn emit_table(
             extract_entries(
                 entry,
                 LootCondition::None,
+                &pool.functions,
                 &mut parsed_entries,
                 &mut empty_weight,
             );
@@ -689,12 +879,13 @@ fn collect_json_files(base: &Path, dir: &Path) -> Vec<(String, ChestLootTableJso
         if path.is_dir() {
             result.extend(collect_json_files(base, &path));
         } else if path.extension().is_some_and(|ext| ext == "json") {
+            // Use '/' on every OS so the keys match the vanilla resource ids.
             let relative = path
                 .strip_prefix(base)
                 .unwrap()
                 .with_extension("")
                 .to_string_lossy()
-                .to_string();
+                .replace('\\', "/");
 
             let content = match fs::read_to_string(&path) {
                 Ok(c) => c,
