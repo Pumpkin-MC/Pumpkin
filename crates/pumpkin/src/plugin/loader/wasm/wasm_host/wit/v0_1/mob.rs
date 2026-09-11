@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use wasmtime::component::Resource;
+use wasmtime::component::{Access, HasSelf, Resource};
 
 use pumpkin_util::math::vector3::Vector3;
 
@@ -211,6 +211,83 @@ fn current_mob_entity(mob: &dyn InternalMob) -> Option<Arc<dyn crate::entity::En
     entity.world.load().get_entity_by_id(entity.entity_id)
 }
 
+#[derive(Clone, Copy)]
+enum GoalCall {
+    Start,
+    Tick,
+    Stop,
+}
+
+impl CustomWasmGoal {
+    fn invoke(&self, mob: &dyn InternalMob, call: GoalCall) {
+        let Some(entity) = current_mob_entity(mob) else {
+            return;
+        };
+        let world = entity.get_entity().world.load();
+        let Some(server) = world.server.upgrade() else {
+            return;
+        };
+        let plugin = self.plugin.clone();
+        let goal_id = self.goal_id;
+        let run = async move {
+            let function = match plugin.plugin_instance.as_ref() {
+                PluginInstance::V0_1(instance) => match call {
+                    GoalCall::Start => instance.func_handle_ai_goal_start(),
+                    GoalCall::Tick => instance.func_handle_ai_goal_tick(),
+                    GoalCall::Stop => instance.func_handle_ai_goal_stop(),
+                },
+            };
+            if let Err(error) = plugin
+                .store
+                .call_guest(move |mut guest| {
+                    Box::pin(async move {
+                        let (server_resource, entity_resource, reps) =
+                            guest.with(|mut store| {
+                                let server = store.data_mut().server.clone().ok_or_else(|| {
+                                    wasmtime::Error::msg("Wasm plugin server is not available")
+                                })?;
+                                let server_resource = store.data_mut().add_server(server)?;
+                                let server_rep = server_resource.rep();
+                                let entity_resource = match store.data_mut().add_entity(entity) {
+                                    Ok(resource) => resource,
+                                    Err(error) => {
+                                        let _ = store.data_mut().resource_table.delete::<
+                                            crate::plugin::loader::wasm::wasm_host::state::ServerResource,
+                                        >(wasmtime::component::Resource::new_own(server_rep));
+                                        return Err(error);
+                                    }
+                                };
+                                let reps = (server_rep, entity_resource.rep());
+                                Ok::<_, wasmtime::Error>((server_resource, entity_resource, reps))
+                            })?;
+                        let result = guest
+                            .call(function, (goal_id, server_resource, entity_resource))
+                            .await;
+                        guest.with(|mut store| {
+                            let _ = store.data_mut().resource_table.delete::<
+                                crate::plugin::loader::wasm::wasm_host::state::ServerResource,
+                            >(wasmtime::component::Resource::new_own(reps.0));
+                            let _ = store.data_mut().resource_table.delete::<
+                                crate::plugin::loader::wasm::wasm_host::state::EntityResource,
+                            >(wasmtime::component::Resource::new_own(reps.1));
+                        });
+                        result
+                    })
+                })
+                .await
+            {
+                tracing::error!(goal_id, %error, "Wasm AI goal callback failed");
+            }
+        };
+
+        if tokio::runtime::Handle::try_current().is_ok() {
+            tokio::task::block_in_place(|| server.runtime.block_on(run));
+        } else {
+            server.runtime.block_on(run);
+        }
+    }
+}
+
 impl Goal for CustomWasmGoal {
     fn can_start(&mut self, _mob: &dyn InternalMob) -> bool {
         false
@@ -221,189 +298,15 @@ impl Goal for CustomWasmGoal {
     }
 
     fn start(&mut self, mob: &dyn InternalMob) {
-        if let Some(entity_arc) = current_mob_entity(mob) {
-            let plugin = self.plugin.clone();
-            let goal_id = self.goal_id;
-            let world = entity_arc.get_entity().world.load();
-            if let Some(server) = world.server.upgrade() {
-                let run = async move {
-                    let mut store = plugin.store.lock().await;
-                    match plugin.plugin_instance {
-                        PluginInstance::V0_1(ref plugin_inst) => {
-                            let Some(server) = store.data_mut().server.clone() else {
-                                return;
-                            };
-                            let Ok(server_res) = store.data_mut().add_server(server) else {
-                                return;
-                            };
-                            let Ok(entity_res) = store.data_mut().add_entity(entity_arc) else {
-                                let _ = store
-                                    .data_mut()
-                                    .resource_table
-                                    .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
-                                        wasmtime::component::Resource::new_own(server_res.rep()),
-                                    );
-                                return;
-                            };
-                            let server_rep = server_res.rep();
-                            let entity_rep = entity_res.rep();
-                            let _ = plugin_inst
-                                .call_handle_ai_goal_start(
-                                    &mut *store,
-                                    goal_id,
-                                    server_res,
-                                    entity_res,
-                                )
-                                .await;
-                            let _ = store
-                                .data_mut()
-                                .resource_table
-                                .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
-                                    wasmtime::component::Resource::new_own(server_rep),
-                                );
-                            let _ = store
-                                .data_mut()
-                                .resource_table
-                                .delete::<crate::plugin::loader::wasm::wasm_host::state::EntityResource>(
-                                    wasmtime::component::Resource::new_own(entity_rep),
-                                );
-                        }
-                    }
-                };
-
-                if tokio::runtime::Handle::try_current().is_ok() {
-                    tokio::task::block_in_place(|| {
-                        server.runtime.block_on(run);
-                    });
-                } else {
-                    server.runtime.block_on(run);
-                }
-            }
-        }
+        self.invoke(mob, GoalCall::Start);
     }
 
     fn tick(&mut self, mob: &dyn InternalMob) {
-        if let Some(entity_arc) = current_mob_entity(mob) {
-            let plugin = self.plugin.clone();
-            let goal_id = self.goal_id;
-            let world = entity_arc.get_entity().world.load();
-            if let Some(server) = world.server.upgrade() {
-                let run = async move {
-                    let mut store = plugin.store.lock().await;
-                    match plugin.plugin_instance {
-                        PluginInstance::V0_1(ref plugin_inst) => {
-                            let Some(server) = store.data_mut().server.clone() else {
-                                return;
-                            };
-                            let Ok(server_res) = store.data_mut().add_server(server) else {
-                                return;
-                            };
-                            let Ok(entity_res) = store.data_mut().add_entity(entity_arc) else {
-                                let _ = store
-                                    .data_mut()
-                                    .resource_table
-                                    .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
-                                        wasmtime::component::Resource::new_own(server_res.rep()),
-                                    );
-                                return;
-                            };
-                            let server_rep = server_res.rep();
-                            let entity_rep = entity_res.rep();
-                            let _ = plugin_inst
-                                .call_handle_ai_goal_tick(
-                                    &mut *store,
-                                    goal_id,
-                                    server_res,
-                                    entity_res,
-                                )
-                                .await;
-                            let _ = store
-                                .data_mut()
-                                .resource_table
-                                .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
-                                    wasmtime::component::Resource::new_own(server_rep),
-                                );
-                            let _ = store
-                                .data_mut()
-                                .resource_table
-                                .delete::<crate::plugin::loader::wasm::wasm_host::state::EntityResource>(
-                                    wasmtime::component::Resource::new_own(entity_rep),
-                                );
-                        }
-                    }
-                };
-
-                if tokio::runtime::Handle::try_current().is_ok() {
-                    tokio::task::block_in_place(|| {
-                        server.runtime.block_on(run);
-                    });
-                } else {
-                    server.runtime.block_on(run);
-                }
-            }
-        }
+        self.invoke(mob, GoalCall::Tick);
     }
 
     fn stop(&mut self, mob: &dyn InternalMob) {
-        if let Some(entity_arc) = current_mob_entity(mob) {
-            let plugin = self.plugin.clone();
-            let goal_id = self.goal_id;
-            let world = entity_arc.get_entity().world.load();
-            if let Some(server) = world.server.upgrade() {
-                let run = async move {
-                    let mut store = plugin.store.lock().await;
-                    match plugin.plugin_instance {
-                        PluginInstance::V0_1(ref plugin_inst) => {
-                            let Some(server) = store.data_mut().server.clone() else {
-                                return;
-                            };
-                            let Ok(server_res) = store.data_mut().add_server(server) else {
-                                return;
-                            };
-                            let Ok(entity_res) = store.data_mut().add_entity(entity_arc) else {
-                                let _ = store
-                                    .data_mut()
-                                    .resource_table
-                                    .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
-                                        wasmtime::component::Resource::new_own(server_res.rep()),
-                                    );
-                                return;
-                            };
-                            let server_rep = server_res.rep();
-                            let entity_rep = entity_res.rep();
-                            let _ = plugin_inst
-                                .call_handle_ai_goal_stop(
-                                    &mut *store,
-                                    goal_id,
-                                    server_res,
-                                    entity_res,
-                                )
-                                .await;
-                            let _ = store
-                                .data_mut()
-                                .resource_table
-                                .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
-                                    wasmtime::component::Resource::new_own(server_rep),
-                                );
-                            let _ = store
-                                .data_mut()
-                                .resource_table
-                                .delete::<crate::plugin::loader::wasm::wasm_host::state::EntityResource>(
-                                    wasmtime::component::Resource::new_own(entity_rep),
-                                );
-                        }
-                    }
-                };
-
-                if tokio::runtime::Handle::try_current().is_ok() {
-                    tokio::task::block_in_place(|| {
-                        server.runtime.block_on(run);
-                    });
-                } else {
-                    server.runtime.block_on(run);
-                }
-            }
-        }
+        self.invoke(mob, GoalCall::Stop);
     }
 }
 
@@ -474,14 +377,6 @@ impl HostMob for PluginHostState {
         if let Some(mob) = entity.get_mob() {
             let mob_entity = mob.get_mob_entity();
             mob_entity.add_goal(priority, CustomWasmGoal { plugin, goal_id });
-        }
-        Ok(())
-    }
-
-    async fn clear_ai_goals(&mut self, this: Resource<WitMob>) -> wasmtime::Result<()> {
-        let entity = mob_from_resource(self, &this)?;
-        if let Some(mob) = entity.get_mob() {
-            mob.get_mob_entity().clear_ai_goals(mob);
         }
         Ok(())
     }
@@ -998,5 +893,35 @@ impl HostMob for PluginHostState {
             .resource_table
             .delete::<MobResource>(Resource::new_own(rep.rep()));
         Ok(())
+    }
+}
+
+impl
+    crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::HostMobWithStore<
+        PluginHostState,
+    > for HasSelf<PluginHostState>
+{
+    async fn clear_ai_goals(
+        mut host: Access<'_, PluginHostState, Self>,
+        this: Resource<WitMob>,
+    ) -> wasmtime::Result<()> {
+        let (entity, plugin) = {
+            let state = host.get();
+            let entity = mob_from_resource(state, &this)?;
+            let plugin = state
+                .plugin
+                .as_ref()
+                .and_then(std::sync::Weak::upgrade)
+                .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))?;
+            (entity, plugin)
+        };
+        plugin
+            .store
+            .pump_blocking(&mut host, move || {
+                if let Some(mob) = entity.get_mob() {
+                    mob.get_mob_entity().clear_ai_goals(mob);
+                }
+            })
+            .await
     }
 }

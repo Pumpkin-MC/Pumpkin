@@ -198,22 +198,32 @@ impl TaskScheduler {
             let server_clone = server.clone();
 
             server.spawn_task(async move {
-                let mut store = plugin.store.lock().await;
-                match plugin.plugin_instance {
-                    crate::plugin::loader::wasm::wasm_host::PluginInstance::V0_1(ref instance) => {
-                        if let Ok(server_res) = store.data_mut().add_server(server_clone) {
-                            let server_rep = server_res.rep();
-                            let _ = instance
-                                .call_handle_task(&mut *store, handler_id, server_res)
-                                .await;
-                            let _ = store
-                                .data_mut()
-                                .resource_table
-                                .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
-                                    wasmtime::component::Resource::new_own(server_rep),
-                                );
-                        }
+                let function = match plugin.plugin_instance.as_ref() {
+                    crate::plugin::loader::wasm::wasm_host::PluginInstance::V0_1(instance) => {
+                        instance.func_handle_task()
                     }
+                };
+                if let Err(error) = plugin
+                    .store
+                    .call_guest(move |mut guest| {
+                        Box::pin(async move {
+                            let (server_resource, server_rep) = guest.with(|mut store| {
+                                let resource = store.data_mut().add_server(server_clone)?;
+                                let rep = resource.rep();
+                                Ok::<_, wasmtime::Error>((resource, rep))
+                            })?;
+                            let result = guest.call(function, (handler_id, server_resource)).await;
+                            guest.with(|mut store| {
+                                let _ = store.data_mut().resource_table.delete::<
+                                    crate::plugin::loader::wasm::wasm_host::state::ServerResource,
+                                >(wasmtime::component::Resource::new_own(server_rep));
+                            });
+                            result
+                        })
+                    })
+                    .await
+                {
+                    tracing::error!(handler_id, %error, "Wasm scheduled task failed");
                 }
             });
 

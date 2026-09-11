@@ -7,7 +7,7 @@ use std::sync::atomic::AtomicBool;
 
 use crate::block::entities::BlockEntity;
 use crate::block::entities::command_block::CommandBlockEntity;
-use crate::command::context::command_source::CommandSource;
+pub use crate::command::context::command_source::CommandSource;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -23,18 +23,69 @@ use pumpkin_util::permission::{PermissionDefault, PermissionLvl};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::translation::Locale;
 
+pub use pumpkin_command::*;
+
 pub mod argument_builder;
 pub mod argument_types;
 pub mod client_suggestions;
 pub mod commands;
 pub mod context;
-pub mod dispatcher;
-pub mod errors;
 pub mod node;
-pub mod parser;
-pub mod snbt;
-pub mod string_reader;
-pub mod suggestion;
+
+pub mod dispatcher {
+    pub use pumpkin_command::dispatcher::*;
+    pub type CommandDispatcher =
+        pumpkin_command::dispatcher::CommandDispatcher<crate::command::CommandSource>;
+}
+pub mod errors {
+    pub use pumpkin_command::errors::*;
+}
+pub mod parser {
+    pub use pumpkin_command::parser::*;
+}
+pub mod snbt {
+    pub use pumpkin_command::snbt::*;
+}
+pub mod string_reader {
+    pub use pumpkin_command::string_reader::*;
+}
+pub mod suggestion {
+    pub use pumpkin_command::suggestion::*;
+
+    pub mod provider {
+        use crate::command::context::command_context::CommandContext;
+        use crate::command::context::command_source::CommandSource;
+        use pumpkin_command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
+
+        pub type SuggestionProviderResult = Suggestions;
+
+        pub trait SuggestionProvider: Send + Sync {
+            fn suggest(
+                &self,
+                context: &CommandContext,
+                builder: SuggestionsBuilder,
+            ) -> SuggestionProviderResult;
+        }
+
+        pub struct SuggestionProviderAdapter<T>(pub T);
+
+        impl<T: SuggestionProvider>
+            pumpkin_command::suggestion::provider::SuggestionProvider<CommandSource>
+            for SuggestionProviderAdapter<T>
+        {
+            fn suggest(
+                &self,
+                context: &pumpkin_command::context::command_context::CommandContext<
+                    '_,
+                    CommandSource,
+                >,
+                builder: SuggestionsBuilder,
+            ) -> SuggestionProviderResult {
+                self.0.suggest(context, builder)
+            }
+        }
+    }
+}
 
 /// Whether console and RCON command output is broadcast to online operators.
 ///
@@ -397,5 +448,6 @@ const fn command_block_y_rot(facing: Facing) -> f32 {
     }
 }
 
+pub use context::command_context::CommandContext;
 pub use node::dispatcher::CommandDispatcher;
 pub use node::{Command, CommandExecutor, CommandExecutorResult};

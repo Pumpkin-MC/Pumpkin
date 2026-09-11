@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    future::Future,
     sync::{Arc, Weak},
 };
 
@@ -143,7 +144,7 @@ pub type BlockEntityResource = WasmResource<Arc<dyn crate::block::entities::Bloc
 
 #[derive(Clone)]
 pub enum InventoryProvider {
-    Generic(Arc<dyn pumpkin_world::inventory::Inventory>),
+    Generic(Arc<dyn pumpkin_inventory::Inventory>),
     PlayerMain(Arc<Player>),
     PlayerEnderChest(Arc<Player>),
 }
@@ -157,7 +158,7 @@ pub type MobResource = WasmResource<Arc<dyn EntityBase>>;
 #[derive(Clone)]
 pub struct ContainerBlockEntity {
     pub provider: Arc<dyn crate::block::entities::BlockEntity>,
-    pub inventory: Arc<dyn pumpkin_world::inventory::Inventory>,
+    pub inventory: Arc<dyn pumpkin_inventory::Inventory>,
 }
 
 pub type ContainerBlockEntityResource = WasmResource<ContainerBlockEntity>;
@@ -168,19 +169,14 @@ pub type ItemDisplayEntityResource = WasmResource<Arc<dyn EntityBase>>;
 pub type TextDisplayEntityResource = WasmResource<Arc<dyn EntityBase>>;
 pub type InteractionEntityResource = WasmResource<Arc<dyn EntityBase>>;
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct ChunkBuffer {
     pub x: i32,
     pub z: i32,
     pub min_y: i32,
     pub height: u32,
-    pub proto_chunk: *mut pumpkin_world::ProtoChunk,
+    pub proto_chunk: Arc<std::sync::Mutex<pumpkin_world::ProtoChunk>>,
 }
-
-// SAFETY: `ChunkBuffer` encapsulates a raw pointer to a proto chunk that is uniquely accessed during custom world generation phases.
-unsafe impl Send for ChunkBuffer {}
-// SAFETY: `ChunkBuffer` encapsulates a raw pointer to a proto chunk that is uniquely accessed during custom world generation phases.
-unsafe impl Sync for ChunkBuffer {}
 
 pub type ChunkBufferResource = WasmResource<ChunkBuffer>;
 
@@ -396,6 +392,16 @@ impl PluginHostState {
         Ok(wasmtime::component::Resource::new_own(resource.rep()))
     }
 
+    pub fn add_owned_consumed_args<T>(
+        &mut self,
+        provider: OwnedConsumedArgs,
+    ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
+        let resource = self
+            .resource_table
+            .push(ConsumedArgsResource { provider })?;
+        Ok(wasmtime::component::Resource::new_own(resource.rep()))
+    }
+
     pub fn add_command_node<T>(
         &mut self,
         provider: WasmCommandNode,
@@ -497,7 +503,7 @@ impl PluginHostState {
     pub fn add_container_block_entity<T>(
         &mut self,
         provider: Arc<dyn crate::block::entities::BlockEntity>,
-        inventory: Arc<dyn pumpkin_world::inventory::Inventory>,
+        inventory: Arc<dyn pumpkin_inventory::Inventory>,
     ) -> wasmtime::Result<wasmtime::component::Resource<T>> {
         let resource = self.resource_table.push(ContainerBlockEntityResource {
             provider: ContainerBlockEntity {

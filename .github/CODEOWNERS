@@ -25,3 +25,15 @@ crates/pumpkin/src/plugin/ @vyPal @yunuservices @QuantumSegfault
 # Documentation related changes
 *.md @Q2297045667
 docs/ @Q2297045667
+
+# Mob & projectile related changes
+crates/pumpkin/src/entity/mob/ @Snowiiii @RoosterBooster007
+crates/pumpkin/src/entity/projectile/ @Snowiiii @RoosterBooster007
+
+# Block & item related changes
+crates/pumpkin/src/block/ @Snowiiii @RoosterBooster007
+crates/pumpkin/src/item/ @Snowiiii @RoosterBooster007
+
+# World generation feature & noise related changes
+crates/pumpkin-world/src/generation/feature/ @Snowiiii @RoosterBooster007
+crates/pumpkin-world/src/generation/noise/ @Snowiiii @RoosterBooster007
