@@ -1,15 +1,28 @@
 use std::sync::Arc;
+use std::sync::atomic::{
+    AtomicBool, AtomicU32,
+    Ordering::{self, Relaxed},
+};
 
 use bytes::BufMut;
 use crossbeam::atomic::AtomicCell;
 use dashmap::DashMap;
 use dashmap::DashSet;
+use pumpkin_data::entity::EntityType;
+use pumpkin_protocol::bedrock::client::CSetActorMotion;
+use pumpkin_protocol::bedrock::client::move_actor_delta::{
+    CMoveActorDelta, MOVE_ACTOR_DELTA_FLAG_HAS_HEAD_YAW, MOVE_ACTOR_DELTA_FLAG_HAS_PITCH,
+    MOVE_ACTOR_DELTA_FLAG_HAS_X, MOVE_ACTOR_DELTA_FLAG_HAS_Y, MOVE_ACTOR_DELTA_FLAG_HAS_YAW,
+    MOVE_ACTOR_DELTA_FLAG_HAS_Z, MOVE_ACTOR_DELTA_FLAG_ON_GROUND,
+};
 use pumpkin_protocol::bedrock::client::remove_actor::CRemoveActor;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::codec::var_long::VarLong;
+use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_protocol::java::client::play::{
-    CEntityVelocity, CHeadRot, CRemoveEntities, CSetEntityMetadata, CSetEquipment, CSetPassengers,
+    CEntityPositionSync, CEntityVelocity, CHeadRot, CRemoveEntities, CSetEntityMetadata,
+    CSetEquipment, CSetPassengers, CUpdateEntityPos, CUpdateEntityPosRot, CUpdateEntityRot,
     Metadata,
 };
 use pumpkin_protocol::{BClientPacket, ClientPacket};
@@ -19,12 +32,41 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::version::JavaMinecraftVersion;
 use uuid::Uuid;
 
-use crate::entity::EntityBase;
 use crate::entity::player::Player;
+use crate::entity::{Entity, EntityBase};
 use crate::net::ClientPlatform;
 use crate::net::java::JavaClient;
 use crate::world::World;
 use crate::world::chunker::{get_view_distance, is_within_view_distance};
+
+/// Vanilla `VecDeltaCodec.encode`: Java `Math.round` on the 1/4096
+fn encode_pos(value: f64) -> i64 {
+    (value * 4096.0 + 0.5).floor() as i64
+}
+
+/// Vanilla `Mth.packDegrees`.
+fn pack_degrees(degrees: f32) -> u8 {
+    (degrees * 256.0 / 360.0).floor() as i32 as u8
+}
+
+/// Vanilla `ServerEntity.sendChanges` packet choice.
+#[derive(Clone, Copy)]
+enum MoveSync {
+    Pos(Vector3<i16>),
+    Rot,
+    PosRot(Vector3<i16>),
+    Absolute,
+}
+
+impl MoveSync {
+    const fn sends_position(self) -> bool {
+        !matches!(self, Self::Rot)
+    }
+
+    const fn sends_rotation(self) -> bool {
+        !matches!(self, Self::Pos(_))
+    }
+}
 
 pub struct TrackedEntity {
     pub entity: Arc<dyn EntityBase>,
@@ -34,6 +76,13 @@ pub struct TrackedEntity {
     pub track_deltas: bool,
     pub seen_by: DashSet<Uuid>,
     pub last_section_pos: AtomicCell<Vector3<i32>>,
+    tick_count: AtomicU32,
+    teleport_delay: AtomicU32,
+    was_on_ground: AtomicBool,
+    was_riding: AtomicBool,
+    bedrock_pos: AtomicCell<Vector3<f64>>,
+    /// Packed pitch, yaw, head yaw.
+    bedrock_rot: AtomicCell<[u8; 3]>,
 }
 
 impl TrackedEntity {
@@ -44,8 +93,22 @@ impl TrackedEntity {
         update_interval: u32,
         track_deltas: bool,
     ) -> Self {
-        let entity_id = entity.get_entity().entity_id;
-        let pos = entity.get_entity().pos.load();
+        let base = entity.get_entity();
+        let entity_id = base.entity_id;
+        let pos = base.pos.load();
+        let on_ground = base.on_ground.load(Relaxed);
+        let bedrock_pos = entity.bedrock_pos();
+        let rot = [
+            pack_degrees(base.pitch.load()),
+            pack_degrees(base.yaw.load()),
+            pack_degrees(base.head_yaw.load()),
+        ];
+        // Vanilla `ServerEntity` ctor: sync state starts at the current values.
+        base.last_sent_pos.store(pos);
+        base.last_sent_velocity.store(base.velocity.load());
+        base.last_sent_pitch.store(rot[0], Relaxed);
+        base.last_sent_yaw.store(rot[1], Relaxed);
+        base.last_sent_head_yaw.store(rot[2], Relaxed);
         let last_section_pos = Vector3::new(
             get_section_cord(pos.x.floor() as i32),
             get_section_cord(pos.y.floor() as i32),
@@ -59,7 +122,235 @@ impl TrackedEntity {
             track_deltas,
             seen_by: DashSet::new(),
             last_section_pos: AtomicCell::new(last_section_pos),
+            tick_count: AtomicU32::new(0),
+            teleport_delay: AtomicU32::new(0),
+            was_on_ground: AtomicBool::new(on_ground),
+            was_riding: AtomicBool::new(false),
+            bedrock_pos: AtomicCell::new(bedrock_pos),
+            bedrock_rot: AtomicCell::new(rot),
         }
+    }
+
+    /// Vanilla `ServerEntity.sendChanges`. Non-player entities only.
+    pub fn send_changes(&self, world: &World) {
+        let entity = self.entity.get_entity();
+        self.send_bedrock_move(entity, world);
+        let tick = self.tick_count.fetch_add(1, Relaxed);
+        let needs_sync = entity.velocity_dirty.swap(false, Ordering::SeqCst);
+        if !(tick.is_multiple_of(self.update_interval.max(1))
+            || needs_sync
+            || entity.synched_data.is_dirty())
+        {
+            return;
+        }
+
+        let yaw = pack_degrees(entity.yaw.load());
+        let pitch = pack_degrees(entity.pitch.load());
+        let rot_changed = yaw != entity.last_sent_yaw.load(Relaxed)
+            || pitch != entity.last_sent_pitch.load(Relaxed);
+
+        if self.entity.is_passenger() {
+            if rot_changed {
+                self.send_move(entity, MoveSync::Rot, yaw, pitch, world);
+                entity.last_sent_yaw.store(yaw, Relaxed);
+                entity.last_sent_pitch.store(pitch, Relaxed);
+            }
+            entity.last_sent_pos.store(entity.pos.load());
+            entity.send_dirty_entity_data();
+            self.was_riding.store(true, Relaxed);
+        } else {
+            let pos = entity.pos.load();
+            let sync = self.pick_move(entity, pos, tick, rot_changed);
+            if needs_sync || self.track_deltas || entity.is_fall_flying() {
+                self.send_motion(entity, world);
+            }
+            if let Some(sync) = sync {
+                self.send_move(entity, sync, yaw, pitch, world);
+            }
+            entity.send_dirty_entity_data();
+            if let Some(sync) = sync {
+                if sync.sends_position() {
+                    entity.last_sent_pos.store(pos);
+                }
+                if sync.sends_rotation() {
+                    entity.last_sent_yaw.store(yaw, Relaxed);
+                    entity.last_sent_pitch.store(pitch, Relaxed);
+                }
+            }
+            self.was_riding.store(false, Relaxed);
+        }
+
+        let head_yaw = pack_degrees(entity.head_yaw.load());
+        if head_yaw != entity.last_sent_head_yaw.load(Relaxed) {
+            self.send_to_tracking_players(&CHeadRot::new(VarInt(self.entity_id), head_yaw), world);
+            entity.last_sent_head_yaw.store(head_yaw, Relaxed);
+        }
+    }
+
+    fn pick_move(
+        &self,
+        entity: &Entity,
+        pos: Vector3<f64>,
+        tick: u32,
+        rot_changed: bool,
+    ) -> Option<MoveSync> {
+        let teleport_delay = self.teleport_delay.fetch_add(1, Relaxed) + 1;
+        let base = entity.last_sent_pos.load();
+        let send_pos = (pos - base).length_squared() >= f64::from(7.629_394_5e-6f32)
+            || tick.is_multiple_of(60);
+        let delta = match (
+            i16::try_from(encode_pos(pos.x) - encode_pos(base.x)),
+            i16::try_from(encode_pos(pos.y) - encode_pos(base.y)),
+            i16::try_from(encode_pos(pos.z) - encode_pos(base.z)),
+        ) {
+            (Ok(x), Ok(y), Ok(z)) => Some(Vector3::new(x, y, z)),
+            _ => None,
+        };
+        let on_ground = entity.on_ground.load(Relaxed);
+        let is_arrow = [
+            &EntityType::ARROW,
+            &EntityType::SPECTRAL_ARROW,
+            &EntityType::TRIDENT,
+        ]
+        .contains(&entity.entity_type);
+
+        match delta {
+            Some(delta)
+                if teleport_delay <= 400
+                    && !self.was_riding.load(Relaxed)
+                    && self.was_on_ground.load(Relaxed) == on_ground =>
+            {
+                if (send_pos && rot_changed) || is_arrow {
+                    Some(MoveSync::PosRot(delta))
+                } else if send_pos {
+                    Some(MoveSync::Pos(delta))
+                } else if rot_changed {
+                    Some(MoveSync::Rot)
+                } else {
+                    None
+                }
+            }
+            _ => {
+                self.was_on_ground.store(on_ground, Relaxed);
+                self.teleport_delay.store(0, Relaxed);
+                Some(MoveSync::Absolute)
+            }
+        }
+    }
+
+    fn send_motion(&self, entity: &Entity, world: &World) {
+        let velocity = entity.velocity.load();
+        let diff = (velocity - entity.last_sent_velocity.load()).length_squared();
+        if diff > 1.0e-7 || (diff > 0.0 && velocity.length_squared() == 0.0) {
+            entity.last_sent_velocity.store(velocity);
+            self.send_to_tracking_players_editioned(
+                &CEntityVelocity::new(VarInt(self.entity_id), velocity),
+                &CSetActorMotion {
+                    target_runtime_id: VarULong(self.entity_id as u64),
+                    motion: Vector3::new(velocity.x as f32, velocity.y as f32, velocity.z as f32),
+                    tick: VarULong(0),
+                },
+                world,
+            );
+        }
+    }
+
+    /// Java only -> Bedrock uses [`Self::send_bedrock_move`].
+    fn send_move(&self, entity: &Entity, sync: MoveSync, yaw: u8, pitch: u8, world: &World) {
+        let on_ground = entity.on_ground.load(Relaxed);
+        let id = VarInt(self.entity_id);
+        match sync {
+            MoveSync::Pos(delta) => {
+                self.send_to_tracking_players(&CUpdateEntityPos::new(id, delta, on_ground), world);
+            }
+            MoveSync::Rot => {
+                self.send_to_tracking_players(
+                    &CUpdateEntityRot::new(id, yaw, pitch, on_ground),
+                    world,
+                );
+            }
+            MoveSync::PosRot(delta) => self.send_to_tracking_players(
+                &CUpdateEntityPosRot::new(id, delta, yaw, pitch, on_ground),
+                world,
+            ),
+            MoveSync::Absolute => self.send_to_tracking_players(
+                &CEntityPositionSync::new(
+                    id,
+                    entity.pos.load(),
+                    entity.velocity.load(),
+                    entity.yaw.load(),
+                    entity.pitch.load(),
+                    on_ground,
+                ),
+                world,
+            ),
+        }
+    }
+
+    /// Bedrock -> every tick, only changed fields.
+    fn send_bedrock_move(&self, entity: &Entity, world: &World) {
+        let pos = self.entity.bedrock_pos();
+        let rot = [
+            pack_degrees(entity.pitch.load()),
+            pack_degrees(entity.yaw.load()),
+            pack_degrees(entity.head_yaw.load()),
+        ];
+        let last_pos = self.bedrock_pos.load();
+        let last_rot = self.bedrock_rot.load();
+
+        let mut flags = 0;
+        if !self.entity.is_passenger() {
+            for (now, last, flag) in [
+                (pos.x, last_pos.x, MOVE_ACTOR_DELTA_FLAG_HAS_X),
+                (pos.y, last_pos.y, MOVE_ACTOR_DELTA_FLAG_HAS_Y),
+                (pos.z, last_pos.z, MOVE_ACTOR_DELTA_FLAG_HAS_Z),
+            ] {
+                if (now as f32).to_bits() != (last as f32).to_bits() {
+                    flags |= flag;
+                }
+            }
+        }
+        for (i, flag) in [
+            MOVE_ACTOR_DELTA_FLAG_HAS_PITCH,
+            MOVE_ACTOR_DELTA_FLAG_HAS_YAW,
+            MOVE_ACTOR_DELTA_FLAG_HAS_HEAD_YAW,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            if rot[i] != last_rot[i] {
+                flags |= flag;
+            }
+        }
+        if flags == 0 {
+            return;
+        }
+
+        if flags
+            & (MOVE_ACTOR_DELTA_FLAG_HAS_X
+                | MOVE_ACTOR_DELTA_FLAG_HAS_Y
+                | MOVE_ACTOR_DELTA_FLAG_HAS_Z)
+            != 0
+        {
+            self.bedrock_pos.store(pos);
+        }
+        self.bedrock_rot.store(rot);
+        if entity.on_ground.load(Relaxed) {
+            flags |= MOVE_ACTOR_DELTA_FLAG_ON_GROUND;
+        }
+        self.send_to_tracking_players_bedrock(
+            &CMoveActorDelta::new(
+                VarULong(self.entity_id as u64),
+                flags,
+                pos.x as f32,
+                pos.y as f32,
+                pos.z as f32,
+                rot[0],
+                rot[1],
+                rot[2],
+            ),
+            world,
+        );
     }
 
     fn collect_indirect_passengers(
@@ -605,7 +896,9 @@ impl EntityTracker {
 
         for entry in &self.entity_map {
             let tracked = entry.value();
-            if tracked.entity.get_entity().synched_data.is_dirty() {
+            if tracked.entity.get_player().is_none() {
+                tracked.send_changes(world);
+            } else if tracked.entity.get_entity().synched_data.is_dirty() {
                 tracked.entity.get_entity().send_dirty_entity_data();
             }
         }
