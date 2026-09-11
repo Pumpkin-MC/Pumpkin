@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::Entity;
 use crate::entity::decoration::end_crystal::EndCrystalEntity;
 use crate::entity::player::Player;
@@ -31,11 +32,11 @@ impl ItemBehaviour for EndCrystalItem {
         _cursor_pos: Vector3<f32>,
         _block: &Block,
         _server: &Server,
-    ) {
+    ) -> BlockActionResult {
         let world = player.world();
         let block = world.get_block(&location);
         if block != &Block::OBSIDIAN && block != &Block::BEDROCK {
-            return;
+            return BlockActionResult::Fail;
         }
 
         let location = location.up();
@@ -53,7 +54,7 @@ impl ItemBehaviour for EndCrystalItem {
                 ))
                 .is_empty()
         {
-            return;
+            return BlockActionResult::Fail;
         }
 
         let spawn_pos = Vector3::new(location_vec.x + 0.5, location_vec.y, location_vec.z + 0.5);
@@ -68,6 +69,8 @@ impl ItemBehaviour for EndCrystalItem {
         {
             fight.try_respawn(&world);
         }
+
+        BlockActionResult::Success
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

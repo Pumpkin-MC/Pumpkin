@@ -97,21 +97,20 @@ impl PendingConnection {
 
             self.send_packet_now(&resource_pack).await;
         } else if self.version.load() >= JavaMinecraftVersion::V_1_20_5 {
-            self.send_known_packs().await;
+            self.send_known_packs(server).await;
         } else {
-            self.handle_known_packs().await;
+            self.handle_known_packs(server).await;
         }
         debug!("login acknowledged");
         None
     }
 
-    pub async fn send_known_packs(&mut self) {
+    pub async fn send_known_packs(&mut self, server: &Server) {
+        let features = server.get_enabled_features();
+        self.send_packet_now(&CFeatureFlags::new(&features)).await;
         let version_str = self.version.load().to_string();
-        self.send_packet_now(&CKnownPacks::new(&[KnownPack {
-            namespace: "minecraft",
-            id: "core",
-            version: &version_str,
-        }]))
-        .await;
+        let loaded_packs = server.datapack_manager.get_loaded_packs();
+        let known_packs = server.get_known_packs(&version_str, &loaded_packs);
+        self.send_packet_now(&CKnownPacks::new(&known_packs)).await;
     }
 }

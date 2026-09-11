@@ -7,6 +7,7 @@ use crate::{
     },
 };
 
+#[derive(Clone, Copy, Debug)]
 pub struct TheEndBiomeSupplier;
 
 impl TheEndBiomeSupplier {

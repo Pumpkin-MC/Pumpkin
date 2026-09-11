@@ -59,6 +59,12 @@ fn check_condition(
             };
             rng.next_f32() < chance
         }
+        LootCondition::TableBonus { chances } => {
+            let index = (fortune_level.max(0) as usize).min(chances.len().saturating_sub(1));
+            chances
+                .get(index)
+                .is_some_and(|chance| rng.next_f32() < *chance)
+        }
         LootCondition::AllOf(conditions) => conditions
             .iter()
             .all(|c| check_condition(*c, has_silk_touch, has_shears, fortune_level, params, rng)),
@@ -227,7 +233,7 @@ pub fn generate_loot_with_context(
 pub use generate_loot as generate_chest_loot;
 
 pub fn fill_chest_inventory(
-    inventory: &std::sync::Arc<dyn pumpkin_world::inventory::Inventory>,
+    inventory: &std::sync::Arc<dyn pumpkin_inventory::Inventory>,
     table: &LootTable,
     seed: i64,
 ) {
