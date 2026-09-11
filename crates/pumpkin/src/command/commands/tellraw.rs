@@ -1,44 +1,42 @@
-use crate::command::{
-    CommandError, CommandExecutor, CommandResult, CommandSender,
-    args::{
-        Arg, ConsumedArgs, FindArg, players::PlayersArgumentConsumer,
-        textcomponent::TextComponentArgConsumer,
-    },
-    tree::{CommandTree, builder::argument},
-};
+use pumpkin_util::PermissionLvl;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 
-const NAMES: [&str; 1] = ["tellraw"];
+use crate::command::argument_builder::{ArgumentBuilder, argument, command};
+use crate::command::argument_types::component::ComponentArgumentType;
+use crate::command::argument_types::entity::EntityArgumentType;
+use crate::command::context::command_context::CommandContext;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
 
 const DESCRIPTION: &str = "Send raw message to players.";
-
-const ARG_TARGETS: &str = "targets";
-
-const ARG_MESSAGE: &str = "message";
+const PERMISSION: &str = "minecraft:command.tellraw";
 
 struct TellRawExecutor;
 
 impl CommandExecutor for TellRawExecutor {
-    fn execute(
-        &self,
-        _sender: &CommandSender,
-        _server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        let Some(Arg::Players(targets)) = args.get(ARG_TARGETS) else {
-            return Err(CommandError::InvalidConsumption(Some(ARG_TARGETS.into())));
-        };
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let targets = EntityArgumentType::get_players(context, "targets")?;
+        let text = ComponentArgumentType::get(context, "message")?;
 
-        let text = TextComponentArgConsumer::find_arg(args, ARG_MESSAGE)?;
-        for target in targets {
+        for target in &targets {
             target.send_system_message(&text);
         }
+
         Ok(targets.len() as i32)
     }
 }
 
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).then(
-        argument(ARG_TARGETS, PlayersArgumentConsumer)
-            .then(argument(ARG_MESSAGE, TextComponentArgConsumer).execute(TellRawExecutor)),
-    )
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Two),
+    ));
+
+    dispatcher.register(
+        command("tellraw", DESCRIPTION).requires(PERMISSION).then(
+            argument("targets", EntityArgumentType::Players)
+                .then(argument("message", ComponentArgumentType).executes(TellRawExecutor)),
+        ),
+    );
 }

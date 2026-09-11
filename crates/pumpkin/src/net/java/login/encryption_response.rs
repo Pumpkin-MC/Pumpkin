@@ -29,7 +29,7 @@ impl PendingConnection {
 
     pub async fn handle_encryption_response(
         &mut self,
-        server: &Server,
+        server: &Arc<Server>,
         encryption_response: SEncryptionResponse,
     ) -> Option<PacketHandlerResult> {
         debug!("Handling encryption");
@@ -66,7 +66,10 @@ impl PendingConnection {
         };
 
         if server.advanced_config.networking.java.online_mode {
-            match self.authenticate(server, &shared_secret, &profile_name) {
+            match self
+                .authenticate(server, &shared_secret, &profile_name)
+                .await
+            {
                 Ok(new_profile) => self.gameprofile = Some(new_profile),
                 Err(error) => {
                     self.kick(match error {
@@ -143,9 +146,26 @@ impl PendingConnection {
 
     pub(super) async fn finish_login(
         &mut self,
-        server: &Server,
+        server: &Arc<Server>,
         profile: &GameProfile,
     ) -> Option<PacketHandlerResult> {
+        let mut pre_login_event =
+            crate::plugin::api::events::player::async_player_pre_login::AsyncPlayerPreLoginEvent {
+                player_name: profile.name.clone(),
+                player_uuid: profile.id,
+                ip_address: self.address,
+                kick_message: TextComponent::text("Disconnected"),
+                cancelled: false,
+            };
+        server
+            .plugin_manager
+            .fire(server, &mut pre_login_event)
+            .await;
+        if pre_login_event.cancelled {
+            self.kick(pre_login_event.kick_message).await;
+            return Some(PacketHandlerResult::Stop);
+        }
+
         let props = profile.properties.load();
         let packet = CLoginSuccess::new(
             &profile.id,
@@ -168,7 +188,7 @@ impl PendingConnection {
         Some(PacketHandlerResult::ReadyToPlay(profile.clone(), config))
     }
 
-    fn authenticate(
+    async fn authenticate(
         &self,
         server: &Server,
         shared_secret: &[u8],
@@ -181,7 +201,8 @@ impl PendingConnection {
             &hash,
             &ip,
             &server.advanced_config.networking.java.authentication,
-        )?;
+        )
+        .await?;
 
         if let Some(actions) = &profile.profile_actions {
             if server

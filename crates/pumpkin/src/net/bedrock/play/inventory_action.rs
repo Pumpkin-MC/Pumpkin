@@ -1,7 +1,32 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use crate::item::registry::should_try_block_placement;
 
 impl BedrockClient {
+    fn correct_rejected_food_use(&self, player: &Player) {
+        // Holding use can repeat rejected transactions. Limit prediction corrections
+        // to every 20 ticks, without indefinitely trusting a previously sent snapshot.
+        const CORRECTION_INTERVAL_TICKS: i32 = 20;
+        let tick = player.tick_counter.load(Ordering::Relaxed);
+        let recently_corrected = self.last_food_rejection_tick.load().is_some_and(|last| {
+            tick >= last && tick.saturating_sub(last) < CORRECTION_INTERVAL_TICKS
+        });
+        let has_active_use = player
+            .living_entity
+            .item_in_use
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_some();
+        if recently_corrected && !has_active_use {
+            return;
+        }
+        if player.has_client_loaded() {
+            self.last_food_rejection_tick.store(Some(tick));
+        }
+        player.living_entity.clear_active_hand();
+        player.send_health();
+    }
+
     #[allow(clippy::too_many_lines, clippy::collapsible_if, clippy::unreachable)]
     pub fn handle_inventory_action(&self, player: &Arc<Player>, packet: SInventoryTransaction) {
         tracing::debug!("handle_inventory_action: packet={:?}", packet);
@@ -159,7 +184,15 @@ impl BedrockClient {
                 };
 
                 if player.gamemode.load() == GameMode::Spectator {
-                    // TODO: openMenu ?
+                    if let Some(factory) = server.block_registry.get_screen_handler_factory(
+                        block,
+                        player,
+                        &data.block_position,
+                        &server,
+                        &world,
+                    ) {
+                        player.open_handled_screen(factory.as_ref(), Some(data.block_position));
+                    }
                     return;
                 }
 
@@ -193,7 +226,7 @@ impl BedrockClient {
                     }
 
                     if matches!(result, BlockActionResult::PassToDefaultBlockAction) {
-                        server.block_registry.on_use(
+                        let result = server.block_registry.on_use(
                             block,
                             player,
                             &data.block_position,
@@ -204,11 +237,22 @@ impl BedrockClient {
                             &server,
                             &world,
                         );
+
+                        if result.consumes_action() {
+                            return;
+                        }
                     }
 
                     let mut stack = held_item;
                     if !stack.is_empty() {
-                        server.item_registry.use_on_block(
+                        let item_id = stack.item.id;
+                        let before = stack.clone();
+                        player.increment_stat(
+                            pumpkin_data::statistic::StatisticCategory::Used,
+                            item_id as i32,
+                            1,
+                        );
+                        let item_result = server.item_registry.use_on_block(
                             &mut stack,
                             player,
                             data.block_position,
@@ -218,31 +262,44 @@ impl BedrockClient {
                             &server,
                         );
 
-                        let item_id = stack.item.id;
-                        if let Some(placed_block) = pumpkin_data::Block::from_item_id(item_id) {
-                            let dummy_use_item_on =
-                                pumpkin_protocol::java::server::play::SUseItemOn {
-                                    hand: VarInt(0),
-                                    position: data.block_position,
-                                    face: VarInt(i32::from(data.block_face)),
-                                    cursor_pos: data.click_position,
-                                    inside_block: false,
-                                    is_against_world_border: false,
-                                    sequence: VarInt(0),
-                                };
+                        if should_try_block_placement(&item_result) {
+                            let item_id = stack.item.id;
+                            if let Some(placed_block) = pumpkin_data::Block::from_item_id(item_id) {
+                                let dummy_use_item_on =
+                                    pumpkin_protocol::java::server::play::SUseItemOn {
+                                        hand: VarInt(0),
+                                        position: data.block_position,
+                                        face: VarInt(i32::from(data.block_face)),
+                                        cursor_pos: data.click_position,
+                                        inside_block: false,
+                                        is_against_world_border: false,
+                                        sequence: VarInt(0),
+                                    };
 
-                            if let Ok(Some(_)) = server.block_registry.place_block(
-                                player,
-                                placed_block,
-                                &server,
-                                &dummy_use_item_on,
-                                data.block_position,
-                                face,
-                            ) {
-                                if player.gamemode.load() != GameMode::Creative {
+                                if let Ok(Some(_)) = server.block_registry.place_block(
+                                    player,
+                                    placed_block,
+                                    &server,
+                                    &dummy_use_item_on,
+                                    data.block_position,
+                                    face,
+                                ) && player.gamemode.load() != GameMode::Creative
+                                {
                                     stack.decrement(1);
                                 }
                             }
+                        }
+                        if before.is_damageable() && stack.is_empty() {
+                            player.increment_stat(
+                                pumpkin_data::statistic::StatisticCategory::Broken,
+                                item_id as i32,
+                                1,
+                            );
+                            player.world().send_entity_status(
+                                player.get_entity(),
+                                crate::entity::equipment_break_status(&EquipmentSlot::MAIN_HAND),
+                                None,
+                            );
                         }
                         player.inventory().set_held_item(stack);
                     }
@@ -255,7 +312,14 @@ impl BedrockClient {
                         && (held.is_empty() || held.item.id != client_stack.item.id)
                     {
                         held = client_stack;
-                        player.inventory.set_held_item(held.clone());
+                        player.inventory().set_held_item(held.clone());
+                    }
+                    if !held.is_empty() {
+                        player.increment_stat(
+                            pumpkin_data::statistic::StatisticCategory::Used,
+                            held.item.id as i32,
+                            1,
+                        );
                     }
 
                     let event = PlayerInteractEvent::new(
@@ -280,30 +344,41 @@ impl BedrockClient {
                         }
 
                         if !cooldown_active {
-                            if held.get_data_component::<ConsumableImpl>().is_some()
-                                || held.get_data_component::<BlocksAttacksImpl>().is_some()
+                            // Bedrock can repeat click-air while using an item. Do not
+                            // restart its server-side use timer on these timed inputs.
+                            let already_using =
+                                player.living_entity.item_use_time.load(Ordering::Relaxed) > 0
+                                    && player
+                                        .living_entity
+                                        .item_in_use
+                                        .lock()
+                                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                                        .as_ref()
+                                        .is_some_and(|item| {
+                                            item.are_items_and_components_equal(&held)
+                                        });
+                            if !already_using
+                                && (held.get_data_component::<ConsumableImpl>().is_some()
+                                    || held.get_data_component::<BlocksAttacksImpl>().is_some())
                             {
-                                if let Some(food) = held.get_data_component::<FoodImpl>() {
-                                    if player
+                                if held.get_data_component::<FoodImpl>().is_none_or(|food| {
+                                    player
                                         .abilities
                                         .lock()
                                         .unwrap_or_else(std::sync::PoisonError::into_inner)
                                         .invulnerable
                                         || food.can_always_eat
                                         || player.hunger_manager.level.load() < 20
-                                    {
-                                        player.living_entity.set_active_hand(
-                                            Hand::Left,
-                                            held.clone(),
-                                            held.get_max_use_time(),
-                                        );
-                                    }
-                                } else {
+                                }) {
                                     player.living_entity.set_active_hand(
-                                        Hand::Left,
+                                        Hand::Right,
                                         held.clone(),
                                         held.get_max_use_time(),
                                     );
+                                } else {
+                                    // Correct predicted eating when the server's food
+                                    // level is already full, even if it has not changed.
+                                    self.correct_rejected_food_use(player);
                                 }
                             }
                             if let Some(equippable) = held.get_data_component::<EquippableImpl>() {
@@ -361,6 +436,8 @@ impl BedrockClient {
                         let world = player.world();
                         if let Some(target) = world.get_entity_by_id(target_runtime_id) {
                             let mut stack = player.inventory().held_item();
+                            let item_id = stack.item.id;
+                            let before = stack.clone();
                             if !target.interact(player, &mut stack) {
                                 let Some(server) = world.server.upgrade() else {
                                     return;
@@ -368,8 +445,29 @@ impl BedrockClient {
                                 server
                                     .item_registry
                                     .use_on_entity(&mut stack, player, target);
-                                player.inventory().set_held_item(stack);
                             }
+                            if !stack.are_equal(&before) {
+                                player.increment_stat(
+                                    pumpkin_data::statistic::StatisticCategory::Used,
+                                    item_id as i32,
+                                    1,
+                                );
+                                if before.is_damageable() && stack.is_empty() {
+                                    player.increment_stat(
+                                        pumpkin_data::statistic::StatisticCategory::Broken,
+                                        item_id as i32,
+                                        1,
+                                    );
+                                    player.world().send_entity_status(
+                                        player.get_entity(),
+                                        crate::entity::equipment_break_status(
+                                            &EquipmentSlot::MAIN_HAND,
+                                        ),
+                                        None,
+                                    );
+                                }
+                            }
+                            player.inventory().set_held_item(stack);
                         }
                     }
                     // Attack

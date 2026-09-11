@@ -35,17 +35,18 @@ impl BlockEntity for EndGatewayBlockEntity {
         let age = nbt.get_long("Age").unwrap_or(0);
         let exact_teleport = nbt.get_bool("ExactTeleport").unwrap_or(false);
         let exit_portal = nbt
-            .get_compound("ExitPortal")
-            .map(|c| {
-                BlockPos::new(
-                    c.get_int("X").unwrap_or(0),
-                    c.get_int("Y").unwrap_or(0),
-                    c.get_int("Z").unwrap_or(0),
-                )
-            })
+            .get_int_array("exit_portal")
+            .and_then(|arr| (arr.len() == 3).then(|| BlockPos::new(arr[0], arr[1], arr[2])))
             .or_else(|| {
-                nbt.get_int_array("exit_portal")
-                    .and_then(|arr| (arr.len() == 3).then(|| BlockPos::new(arr[0], arr[1], arr[2])))
+                nbt.get_compound("exit_portal")
+                    .or_else(|| nbt.get_compound("ExitPortal"))
+                    .map(|c| {
+                        BlockPos::new(
+                            c.get_int("X").or_else(|| c.get_int("x")).unwrap_or(0),
+                            c.get_int("Y").or_else(|| c.get_int("y")).unwrap_or(0),
+                            c.get_int("Z").or_else(|| c.get_int("z")).unwrap_or(0),
+                        )
+                    })
             });
         Self {
             position,
@@ -68,11 +69,10 @@ impl BlockEntity for EndGatewayBlockEntity {
         if let Ok(exit_portal) = self.exit_portal.lock()
             && let Some(exit) = exit_portal.as_ref()
         {
-            let mut exit_nbt = NbtCompound::new();
-            exit_nbt.put_int("X", exit.0.x);
-            exit_nbt.put_int("Y", exit.0.y);
-            exit_nbt.put_int("Z", exit.0.z);
-            nbt.put_compound("ExitPortal", exit_nbt);
+            nbt.put(
+                "exit_portal",
+                pumpkin_nbt::tag::NbtTag::IntArray(vec![exit.0.x, exit.0.y, exit.0.z]),
+            );
         }
     }
 
@@ -87,11 +87,10 @@ impl BlockEntity for EndGatewayBlockEntity {
         if let Ok(exit_portal) = self.exit_portal.try_lock()
             && let Some(ref exit) = *exit_portal
         {
-            let mut exit_nbt = NbtCompound::new();
-            exit_nbt.put_int("X", exit.0.x);
-            exit_nbt.put_int("Y", exit.0.y);
-            exit_nbt.put_int("Z", exit.0.z);
-            nbt.put_compound("ExitPortal", exit_nbt);
+            nbt.put(
+                "exit_portal",
+                pumpkin_nbt::tag::NbtTag::IntArray(vec![exit.0.x, exit.0.y, exit.0.z]),
+            );
         }
         Some(nbt)
     }

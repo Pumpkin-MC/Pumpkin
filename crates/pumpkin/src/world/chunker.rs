@@ -3,7 +3,7 @@ use std::{num::NonZero, sync::Arc};
 
 use pumpkin_protocol::{
     bedrock::client::network_chunk_publisher_update::CNetworkChunkPublisherUpdate,
-    java::client::play::{CCenterChunk, CUnloadChunk},
+    java::client::play::CCenterChunk,
 };
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 
@@ -40,6 +40,7 @@ pub fn is_within_view_distance(
     (target.x - center.x).abs().max((target.y - center.y).abs()) <= view_distance
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn update_position(player: &Arc<Player>) {
     let entity = &player.get_entity();
     let new_chunk_center = entity.chunk_pos.load();
@@ -78,30 +79,71 @@ pub fn update_position(player: &Arc<Player>) {
     let loading_chunks: Vec<_> = loading_iter.collect();
     let unloading_chunks: Vec<_> = unloading_iter.collect();
 
-    // Use the chunk_manager's world reference, which is updated on dimension change.
-    // This ensures we load chunks from the correct world after portal teleportation.
-    let world = {
-        let mut chunk_manager = player
-            .chunk_manager
+    let world = player.world();
+    let level = &world.level;
+    let mut held_tickets = player
+        .held_chunk_tickets
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+    let is_spectator = player.is_spectator();
+    let spectators_generate_chunks = world
+        .level_info
+        .load()
+        .game_rules
+        .spectators_generate_chunks;
+
+    let new_view_level = (!is_spectator || spectators_generate_chunks).then(|| {
+        pumpkin_world::chunk_system::ChunkLoading::get_level_from_view_distance(
+            u8::from(view_distance) + 1,
+        )
+    });
+
+    let new_sim_level = (!is_spectator).then(|| {
+        let sim_dist = world.server.upgrade().map_or(10, |s| {
+            s.advanced_config.networking.java.simulation_distance.get()
+        });
+        pumpkin_world::chunk_system::ChunkLoading::get_level_from_simulation_distance(sim_dist)
+    });
+
+    {
+        let mut lock = level
+            .chunk_loading
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let world = chunk_manager.world().clone();
-        chunk_manager.update_center_and_view_distance(
-            new_chunk_center,
-            view_distance.into(),
-            &world.level,
-            &loading_chunks,
-            &unloading_chunks,
-        );
-        world
-    };
-    player.watched_section.store(new_cylindrical);
 
-    if let ClientPlatform::Java(client) = player.client.as_ref() {
-        for chunk in &unloading_chunks {
-            client.try_send_packet(&CUnloadChunk::new(chunk.x, chunk.y));
+        if let Some(view) = new_view_level {
+            lock.add_ticket(new_chunk_center, view);
+        }
+        if let Some(sim) = new_sim_level {
+            lock.add_ticket(new_chunk_center, sim);
+        }
+
+        if let Some((held_view, held_sim)) = held_tickets.replace((new_view_level, new_sim_level)) {
+            if let Some(view) = held_view {
+                lock.remove_ticket(old_cylindrical.center, view);
+            }
+            if let Some(sim) = held_sim {
+                lock.remove_ticket(old_cylindrical.center, sim);
+            }
+        }
+        lock.send_change();
+    };
+    drop(held_tickets);
+
+    {
+        let mut sender = player
+            .chunk_sender
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for pos in &unloading_chunks {
+            sender.unload_chunk(&player.client, *pos);
+        }
+        for pos in &loading_chunks {
+            sender.enqueue_chunk(*pos);
         }
     }
+    player.watched_section.store(new_cylindrical);
 
     // Make sure the watched section and the chunk watcher updates are async atomic. We want to
     // ensure what we unload when the player disconnects is correct.
@@ -133,4 +175,5 @@ pub fn update_position(player: &Arc<Player>) {
     if !loading_chunks.is_empty() {
         world.spawn_world_entity_chunks(player.clone(), loading_chunks, new_chunk_center);
     }
+    world.entity_tracker.update_player_position(player, &world);
 }

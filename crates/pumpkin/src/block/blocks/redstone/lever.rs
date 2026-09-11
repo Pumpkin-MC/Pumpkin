@@ -6,7 +6,9 @@ use crate::block::{
 };
 use pumpkin_data::{
     Block, BlockDirection, BlockStateId, HorizontalFacingExt,
-    block_properties::{AttachFace, BlockProperties, HorizontalFacing, LeverLikeProperties},
+    block_properties::{AttachFace, HorizontalFacing, LeverLikeProperties},
+    game_event::GameEvent,
+    sound::{Sound, SoundCategory},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -23,7 +25,7 @@ use crate::{
 fn toggle_lever(world: &Arc<World>, block_pos: &BlockPos) {
     let (block, state) = world.get_block_and_state_id(block_pos);
 
-    let mut lever_props = LeverLikeProperties::from_state_id(state, block);
+    let mut lever_props = LeverLikeProperties::from_state_id(state);
     lever_props.powered = !lever_props.powered;
     world.set_block_state(
         block_pos,
@@ -32,6 +34,25 @@ fn toggle_lever(world: &Arc<World>, block_pos: &BlockPos) {
     );
 
     LeverBlock::update_neighbors(world, block_pos, lever_props);
+
+    play_lever_sound(world, block_pos, lever_props.powered);
+
+    let game_event = if lever_props.powered {
+        GameEvent::BlockActivate
+    } else {
+        GameEvent::BlockDeactivate
+    };
+    world.emit_game_event(game_event.name(), block_pos.to_centered_f64());
+}
+
+fn play_lever_sound(world: &Arc<World>, block_pos: &BlockPos, powered: bool) {
+    world.play_sound_fine(
+        Sound::BlockLeverClick,
+        SoundCategory::Blocks,
+        &block_pos.to_centered_f64(),
+        0.3,
+        if powered { 0.6 } else { 0.5 },
+    );
 }
 
 #[pumpkin_block("minecraft:lever")]
@@ -48,12 +69,12 @@ impl BlockBehaviour for LeverBlock {
     }
 
     fn get_weak_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
-        let props = LeverLikeProperties::from_state_id(args.state.id, args.block);
+        let props = LeverLikeProperties::from_state_id(args.state.id);
         if props.powered { 15 } else { 0 }
     }
 
     fn get_strong_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
-        let props = LeverLikeProperties::from_state_id(args.state.id, args.block);
+        let props = LeverLikeProperties::from_state_id(args.state.id);
         if props.powered && props.get_direction() == args.direction {
             15
         } else {
@@ -63,9 +84,8 @@ impl BlockBehaviour for LeverBlock {
 
     fn on_state_replaced(&self, args: OnStateReplacedArgs<'_>) {
         let block_pos = args.position;
-        let block = args.block;
 
-        let lever_props = LeverLikeProperties::from_state_id(args.old_state_id, block);
+        let lever_props = LeverLikeProperties::from_state_id(args.old_state_id);
 
         if lever_props.powered {
             Self::update_neighbors(args.world, block_pos, lever_props);
@@ -118,8 +138,8 @@ impl BlockBehaviour for LeverBlock {
 }
 
 impl WallMountedBlock for LeverBlock {
-    fn get_direction(&self, state_id: BlockStateId, block: &Block) -> BlockDirection {
-        let props = LeverLikeProperties::from_state_id(state_id, block);
+    fn get_direction(&self, state_id: BlockStateId, _block: &Block) -> BlockDirection {
+        let props = LeverLikeProperties::from_state_id(state_id);
         match props.face {
             AttachFace::Floor => BlockDirection::Up,
             AttachFace::Ceiling => BlockDirection::Down,

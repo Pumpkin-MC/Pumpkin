@@ -6,10 +6,7 @@ use crate::block::{
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{Axis, NoteblockInstrument};
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::{
-    Block,
-    block_properties::{BlockProperties, NoteBlockLikeProperties},
-};
+use pumpkin_data::{Block, block_properties::NoteBlockLikeProperties};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
@@ -53,7 +50,7 @@ impl NoteBlock {
     ) -> BlockStateId {
         let upper_instrument = world.get_block_state(&pos.up()).instrument;
 
-        let mut note_props = NoteBlockLikeProperties::from_state_id(state, block);
+        let mut note_props = NoteBlockLikeProperties::from_state_id(state);
         if !is_base_block(upper_instrument) {
             note_props.instrument = upper_instrument;
             return note_props.to_state_id(block);
@@ -72,7 +69,7 @@ impl NoteBlock {
 impl BlockBehaviour for NoteBlock {
     fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
         let block_state = args.world.get_block_state(args.position);
-        let mut note_props = NoteBlockLikeProperties::from_state_id(block_state.id, args.block);
+        let mut note_props = NoteBlockLikeProperties::from_state_id(block_state.id);
         let powered = block_receives_redstone_power(args.world, args.position);
         // check if powered state changed
         if note_props.powered != powered {
@@ -90,7 +87,7 @@ impl BlockBehaviour for NoteBlock {
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         let block_state = args.world.get_block_state(args.position);
-        let mut note_props = NoteBlockLikeProperties::from_state_id(block_state.id, args.block);
+        let mut note_props = NoteBlockLikeProperties::from_state_id(block_state.id);
         note_props.note = (note_props.note + 1) % 25;
         args.world.set_block_state(
             args.position,
@@ -115,7 +112,7 @@ impl BlockBehaviour for NoteBlock {
 
     fn on_synced_block_event(&self, args: OnSyncedBlockEventArgs<'_>) -> bool {
         let block_state = args.world.get_block_state(args.position);
-        let note_props = NoteBlockLikeProperties::from_state_id(block_state.id, args.block);
+        let note_props = NoteBlockLikeProperties::from_state_id(block_state.id);
         let instrument = note_props.instrument;
         let pitch = if is_base_block(instrument) {
             // checks if can be pitched

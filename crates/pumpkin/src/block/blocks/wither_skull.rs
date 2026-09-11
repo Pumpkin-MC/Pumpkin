@@ -1,9 +1,14 @@
-use pumpkin_data::{Block, BlockDirection, BlockStateId, entity::EntityType, world::WorldEvent};
+use pumpkin_data::{
+    Block, BlockDirection, BlockState, BlockStateId, entity::EntityType, world::WorldEvent,
+};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::world::BlockFlags;
 
 use crate::{
-    block::{BlockBehaviour, OnPlaceArgs, PlacedArgs, blocks::skull_block::SkullBlock},
+    block::{
+        BlockBehaviour, OnPlaceArgs, PathComputationType, PlacedArgs,
+        blocks::skull_block::SkullBlock,
+    },
     entity::{Entity, boss::wither::WitherEntity},
 };
 
@@ -91,5 +96,9 @@ impl BlockBehaviour for WitherSkeletonSkullBlock {
                 }
             }
         }
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }

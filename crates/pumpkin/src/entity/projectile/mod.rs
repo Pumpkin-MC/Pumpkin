@@ -26,6 +26,8 @@ pub mod trident;
 pub mod wind_charge;
 pub mod wither_skull;
 
+use pumpkin_data::item_stack::ItemStack;
+
 #[must_use]
 pub fn is_projectile(entity_type: &EntityType) -> bool {
     *entity_type == EntityType::ARROW
@@ -43,6 +45,30 @@ pub fn is_projectile(entity_type: &EntityType) -> bool {
         || *entity_type == EntityType::FISHING_BOBBER
         || *entity_type == EntityType::WITHER_SKULL
         || *entity_type == EntityType::LLAMA_SPIT
+}
+
+/// Helper to apply projectile spawned enchantment effects matching vanilla `Projectile::applyOnProjectileSpawned`.
+pub fn apply_on_projectile_spawned(
+    projectile_entity: &Entity,
+    pickup_item_stack: &ItemStack,
+    weapon: Option<&ItemStack>,
+    arrow: Option<&arrow::ArrowEntity>,
+) {
+    crate::enchantment::EnchantmentHelper::on_projectile_spawned(
+        pickup_item_stack,
+        projectile_entity,
+        arrow,
+    );
+    if let Some(weapon) = weapon
+        && weapon.item_count > 0
+        && weapon.item.id != pickup_item_stack.item.id
+    {
+        crate::enchantment::EnchantmentHelper::on_projectile_spawned(
+            weapon,
+            projectile_entity,
+            arrow,
+        );
+    }
 }
 
 pub struct ThrownItemEntity {
@@ -210,6 +236,16 @@ impl ThrownItemEntity {
             // Ensure hit is only processed once per projectile
             if self.has_hit.swap(true, Ordering::SeqCst) {
                 return;
+            }
+
+            if let ProjectileHit::Block { pos, hit_pos, .. } = &h {
+                let block = world.get_block(pos);
+                let state = world.get_block_state(pos);
+                if let Some(server) = world.server.upgrade() {
+                    world
+                        .block_registry
+                        .on_projectile_hit(block, &world, caller, pos, state, hit_pos, &server);
+                }
             }
 
             // Just trigger hit effects and remove

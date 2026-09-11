@@ -12,10 +12,7 @@ use std::{
 };
 use syn::{Ident, LitInt, LitStr};
 
-use crate::{
-    bitsets::{Bitset, gen_u16_bitset},
-    loot::LootTableStruct,
-};
+use crate::bitsets::{Bitset, gen_u16_bitset};
 
 /// Converts a sparse index-value list into a dense array, filling gaps with `None` tokens.
 ///
@@ -62,6 +59,39 @@ fn const_block_name_from_block_name(block: &str) -> String {
 /// – `name` – a base name such as `"oak_slab_like"` which is converted to e.g., `"OakSlabLikeProperties"`.
 fn property_group_name_from_derived_name(name: &str) -> String {
     format!("{name}_properties").to_upper_camel_case()
+}
+
+fn common_suffix_group_alias(blocks: &[(String, u16)]) -> Option<String> {
+    if blocks.is_empty() {
+        return None;
+    }
+    let token_lists: Vec<Vec<&str>> = blocks
+        .iter()
+        .map(|(name, _)| name.split('_').collect())
+        .collect();
+
+    let first = &token_lists[0];
+    let mut common_suffix_len = 0;
+
+    for i in 1..=first.len() {
+        let candidate_suffix = &first[first.len() - i..];
+        let all_match = token_lists
+            .iter()
+            .all(|tokens| tokens.len() >= i && &tokens[tokens.len() - i..] == candidate_suffix);
+        if all_match {
+            common_suffix_len = i;
+        } else {
+            break;
+        }
+    }
+
+    if common_suffix_len > 0 {
+        let suffix_tokens = &first[first.len() - common_suffix_len..];
+        let suffix_str = suffix_tokens.join("_");
+        Some(format!("{suffix_str}_properties").to_upper_camel_case())
+    } else {
+        None
+    }
 }
 
 /// Discriminates between the two runtime representations of a block property.
@@ -202,6 +232,8 @@ impl ToTokens for PropertyStruct {
 struct BlockPropertyStruct {
     /// The property group data used to generate the struct and its trait implementation.
     data: PropertyCollectionData,
+    /// Type aliases for this property struct.
+    aliases: Vec<Ident>,
 }
 
 impl ToTokens for BlockPropertyStruct {
@@ -362,10 +394,46 @@ impl ToTokens for BlockPropertyStruct {
             quote! { if *key == #key { #val } }
         };
 
+        let aliases = self.aliases.iter().map(|alias| {
+            quote! { pub type #alias = #name; }
+        });
+
         tokens.extend(quote! {
             #[derive(Clone, Copy, Eq, PartialEq)]
             pub struct #name {
                 #(#fields),*
+            }
+
+            #(#aliases)*
+
+            impl #name {
+                #[inline]
+                #[must_use]
+                pub fn from_index(mut index: u16) -> Self {
+                    Self {
+                        #(#from_index_body),*
+                    }
+                }
+
+                #[inline]
+                #[must_use]
+                pub fn from_state_id(id: BlockStateId) -> Self {
+                    let block = Block::from_state_id(id);
+                    let min_id = block.states[0].id.as_u16();
+                    Self::from_index(id.as_u16() - min_id)
+                }
+
+                #[inline]
+                #[must_use]
+                pub fn to_state_id(&self, block: &Block) -> BlockStateId {
+                    <Self as BlockProperties>::to_state_id(self, block)
+                }
+
+                #[inline]
+                #[must_use]
+                pub fn default(block: &Block) -> Self {
+                    <Self as BlockProperties>::default(block)
+                }
             }
 
             impl BlockProperties for #name {
@@ -377,10 +445,8 @@ impl ToTokens for BlockPropertyStruct {
                 }
 
                 #[allow(unused_assignments)]
-                fn from_index(mut index: u16) -> Self {
-                    Self {
-                        #(#from_index_body),*
-                    }
+                fn from_index(index: u16) -> Self {
+                    Self::from_index(index)
                 }
 
                 #[inline]
@@ -420,7 +486,7 @@ impl ToTokens for BlockPropertyStruct {
                     if !Self::handles_block_id(block.id) {
                         panic!("{} is not a valid block for {}", block.name, #struct_name);
                     }
-                    Self::from_state_id(block.default_state.id, block)
+                    Self::from_state_id(block.default_state.id)
                 }
 
                 fn to_props(&self) -> Vec<(&'static str, &'static str)> {
@@ -560,6 +626,28 @@ impl PistonBehavior {
     }
 }
 
+#[derive(Deserialize, Copy, Clone)]
+#[serde(rename_all = "snake_case")]
+enum SpawnFloorPredicate {
+    Never,
+    Always,
+    OcelotOrParrot,
+    PolarBear,
+    FireImmune,
+}
+
+impl ToTokens for SpawnFloorPredicate {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        tokens.extend(match self {
+            Self::Never => quote! { SpawnFloorPredicate::Never },
+            Self::Always => quote! { SpawnFloorPredicate::Always },
+            Self::OcelotOrParrot => quote! { SpawnFloorPredicate::OcelotOrParrot },
+            Self::PolarBear => quote! { SpawnFloorPredicate::PolarBear },
+            Self::FireImmune => quote! { SpawnFloorPredicate::FireImmune },
+        });
+    }
+}
+
 impl BlockState {
     /// Bit flag indicating this state is an air block.
     const IS_AIR: u16 = 1 << 0;
@@ -568,6 +656,10 @@ impl BlockState {
 
     /// Bit flag indicating this state receives random tick events.
     const HAS_RANDOM_TICKS: u16 = 1 << 9;
+
+    const IS_SOLID_RENDER: u16 = 1 << 10;
+    const CAN_OCCLUDE: u16 = 1 << 11;
+    const HAS_ANALOG_OUTPUT_SIGNAL: u16 = 1 << 12;
 
     /// Returns `true` if this state receives random tick events.
     const fn has_random_ticks(&self) -> bool {
@@ -581,6 +673,18 @@ impl BlockState {
 
     pub const fn is_liquid(&self) -> bool {
         self.state_flags & Self::IS_LIQUID != 0
+    }
+
+    pub const fn is_solid_render(&self) -> bool {
+        self.state_flags & Self::IS_SOLID_RENDER != 0
+    }
+
+    pub const fn can_occlude(&self) -> bool {
+        self.state_flags & Self::CAN_OCCLUDE != 0
+    }
+
+    pub const fn has_analog_output_signal(&self) -> bool {
+        self.state_flags & Self::HAS_ANALOG_OUTPUT_SIGNAL != 0
     }
 
     /// Emits the `BlockState { … }` struct literal token stream for code generation.
@@ -662,8 +766,6 @@ pub struct Block {
     pub item_id: u16,
     /// Flammability data, present only if the block can catch fire.
     pub flammable: Option<FlammableStruct>,
-    /// Loot table used when the block is broken, if any.
-    pub loot_table: Option<LootTableStruct>,
     /// Friction applied to entities walking on this block.
     pub slipperiness: f32,
     /// Horizontal velocity multiplier for entities inside this block.
@@ -703,12 +805,6 @@ impl ToTokens for Block {
         };
         // Generate state tokens
         let states = self.states.iter().map(BlockState::to_tokens);
-        let loot_table = if let Some(table) = &self.loot_table {
-            let table_tokens = table.to_token_stream();
-            quote! { Some(#table_tokens) }
-        } else {
-            quote! { None }
-        };
 
         let default_state_ref: &BlockState = self
             .states
@@ -738,7 +834,6 @@ impl ToTokens for Block {
                 default_state: &#default_state,
                 states: &[#(#states),*],
                 flammable: #flammable,
-                loot_table: #loot_table,
                 experience: #experience,
             }
         });
@@ -867,6 +962,10 @@ pub fn build() -> TokenStream {
     let blocks_assets: BlockAssets =
         serde_json::from_str(&fs::read_to_string("../../assets/blocks.json").unwrap())
             .expect("Failed to parse blocks.json");
+    let mut spawn_floor_predicates: BTreeMap<String, SpawnFloorPredicate> = serde_json::from_str(
+        &fs::read_to_string("../../assets/spawn_floor_predicates.json").unwrap(),
+    )
+    .expect("Failed to parse spawn_floor_predicates.json");
 
     let shape_offset_arms = blocks_assets
         .blocks
@@ -909,6 +1008,7 @@ pub fn build() -> TokenStream {
     let mut block_from_name_entries = Vec::new();
     let mut block_from_item_id_arms = Vec::new();
     let mut block_state_to_bedrock = Vec::new();
+    let mut spawn_floor_predicate_arms = Vec::new();
 
     let mut raw_id_from_state_id_array = Vec::new();
     let mut type_from_raw_id_array = Vec::new();
@@ -982,6 +1082,12 @@ pub fn build() -> TokenStream {
         let name_str = &block.name;
         let item_id = block.item_id;
         let block_id = block.id;
+
+        if let Some(predicate) = spawn_floor_predicates.remove(&block.name) {
+            spawn_floor_predicate_arms.push(quote! {
+                BlockId::#const_ident => #predicate,
+            });
+        }
 
         // let mut block_with_descriptors = block.clone();
         // block_with_descriptors.property_descriptors = property_descriptors;
@@ -1060,14 +1166,40 @@ pub fn build() -> TokenStream {
         }
     }
 
+    assert!(
+        spawn_floor_predicates.is_empty(),
+        "Unknown blocks in spawn_floor_predicates.json: {:?}",
+        spawn_floor_predicates.keys().collect::<Vec<_>>()
+    );
+
     let mut block_properties_from_state_and_block_id_arms = Vec::new();
     let mut block_properties_from_props_and_name_arms = Vec::new();
 
+    let mut emitted_aliases = HashSet::new();
+    for property_group in property_collection_map.values() {
+        emitted_aliases.insert(property_group_name_from_derived_name(
+            &property_group.derive_name(),
+        ));
+    }
+
     for property_group in property_collection_map.into_values() {
-        let property_name = Ident::new(
-            &property_group_name_from_derived_name(&property_group.derive_name()),
-            Span::call_site(),
-        );
+        let struct_name = property_group_name_from_derived_name(&property_group.derive_name());
+        let property_name = Ident::new(&struct_name, Span::call_site());
+
+        let mut group_aliases = Vec::new();
+
+        if let Some(canonical) = common_suffix_group_alias(&property_group.blocks) {
+            if emitted_aliases.insert(canonical.clone()) {
+                group_aliases.push(Ident::new(&canonical, Span::call_site()));
+            }
+        }
+
+        for (b_name, _) in &property_group.blocks {
+            let alias_name = format!("{}_properties", b_name).to_upper_camel_case();
+            if emitted_aliases.insert(alias_name.clone()) {
+                group_aliases.push(Ident::new(&alias_name, Span::call_site()));
+            }
+        }
 
         let idents: Box<_> = property_group
             .blocks
@@ -1076,7 +1208,7 @@ pub fn build() -> TokenStream {
             .collect();
 
         block_properties_from_state_and_block_id_arms.push(quote! {
-            #(BlockId::#idents)|* => Box::new(#property_name::from_state_id(state_id, self)),
+            #(BlockId::#idents)|* => Box::new(#property_name::from_state_id(state_id)),
         });
         block_properties_from_props_and_name_arms.push(quote! {
             #(BlockId::#idents)|* => Box::new(#property_name::from_props(props, self)),
@@ -1084,6 +1216,7 @@ pub fn build() -> TokenStream {
 
         block_properties.push(BlockPropertyStruct {
             data: property_group,
+            aliases: group_aliases,
         });
     }
 
@@ -1144,11 +1277,10 @@ pub fn build() -> TokenStream {
 
         use crate::{
             BlockState, BlockStateId, Block, BlockId,
-            blocks::{Flammable, ShapeOffset, ShapeOffsetType},
+            blocks::{Flammable, ShapeOffset, ShapeOffsetType, SpawnFloorPredicate},
         };
         use crate::block_state::PistonBehavior;
         use pumpkin_util::math::int_provider::{UniformIntProvider, IntProvider, NormalIntProvider};
-        use pumpkin_util::loot_table::*;
         use pumpkin_util::math::experience::Experience;
         use pumpkin_util::math::vector3::Vector3;
         use std::collections::BTreeMap;
@@ -1287,6 +1419,14 @@ pub fn build() -> TokenStream {
 
         impl Block {
             #(#constants_list)*
+
+            #[must_use]
+            pub const fn spawn_floor_predicate(&self) -> SpawnFloorPredicate {
+                match self.id {
+                    #(#spawn_floor_predicate_arms)*
+                    _ => SpawnFloorPredicate::Default,
+                }
+            }
 
             pub(crate) const fn shape_offset(&self) -> Option<ShapeOffset> {
                 match self.id {

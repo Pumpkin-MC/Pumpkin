@@ -5,6 +5,7 @@ pub mod registry;
 use std::any::Any;
 use std::sync::Arc;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
@@ -32,13 +33,18 @@ pub trait ItemBehaviour: Send + Sync {
         _cursor_pos: Vector3<f32>,
         _block: &Block,
         _server: &Server,
-    ) {
+    ) -> BlockActionResult {
+        BlockActionResult::Pass
     }
 
     fn use_on_entity(&self, _item: &mut ItemStack, _player: &Player, _entity: Arc<dyn EntityBase>) {
     }
 
     fn on_stopped_using(&self, _stack: &ItemStack, _player: &Player) {}
+
+    fn on_spear_jab(&self, _stack: &ItemStack, _player: &Player) {}
+
+    fn on_use_tick(&self, _stack: &ItemStack, _player: &Player, _remaining_use_ticks: i32) {}
 
     /// Returns the maximum number of ticks this item can be used for.
     /// Return 0 if the item does not have a behaviour-driven use duration.

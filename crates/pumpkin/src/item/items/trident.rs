@@ -65,6 +65,22 @@ impl ItemBehaviour for TridentItem {
                 return;
             }
 
+            if let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
+                && let Some(server) = world.server.upgrade()
+            {
+                let mut event =
+                    crate::plugin::api::events::player::player_riptide::PlayerRiptideEvent {
+                        player: player_arc,
+                        item_name: "trident".to_string(),
+                        cancelled: false,
+                    };
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    player.living_entity.clear_active_hand();
+                    return;
+                }
+            }
+
             let f = f64::from(riptide_level);
             let (yaw, pitch) = player.rotation();
             let f_yaw = f32::to_radians(yaw);
@@ -95,10 +111,11 @@ impl ItemBehaviour for TridentItem {
         let trident = TridentEntity::new_shot(
             entity,
             player.get_entity(),
-            stack_guard,
+            stack_guard.clone(),
             ArrowPickup::Allowed,
         );
         trident.set_velocity_from_rotation(pitch, yaw, 0.0, 2.5, 1.0);
+        trident.apply_on_projectile_spawned(&stack_guard);
         world.spawn_entity(Arc::new(trident));
 
         world.play_sound(

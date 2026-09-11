@@ -133,6 +133,32 @@ impl BanIpOptions {
     }
 }
 
+/// Extension trait providing typed cooldown helpers for `Player`.
+pub trait PlayerCooldownExt {
+    /// Sets a client-side item cooldown overlay using any item key or `Item` enum.
+    fn set_cooldown(&self, item: impl crate::item::IntoItemKey, ticks: i32);
+
+    /// Returns the remaining cooldown ticks for an item, if active.
+    fn get_cooldown(&self, item: impl crate::item::IntoItemKey) -> Option<i32>;
+
+    /// Checks if an item is currently on cooldown.
+    fn has_cooldown(&self, item: impl crate::item::IntoItemKey) -> bool;
+}
+
+impl PlayerCooldownExt for Player {
+    fn set_cooldown(&self, item: impl crate::item::IntoItemKey, ticks: i32) {
+        self.set_item_cooldown(&item.into_item_key(), ticks);
+    }
+
+    fn get_cooldown(&self, item: impl crate::item::IntoItemKey) -> Option<i32> {
+        self.get_item_cooldown(&item.into_item_key())
+    }
+
+    fn has_cooldown(&self, item: impl crate::item::IntoItemKey) -> bool {
+        self.has_item_cooldown(&item.into_item_key())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{CustomStatistic, StatisticCategory};
