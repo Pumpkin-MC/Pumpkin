@@ -6,13 +6,18 @@ use pumpkin_data::structures::{
 use pumpkin_util::{
     math::floor_div,
     random::{
-        RandomGenerator, RandomImpl, get_carver_seed, get_region_seed, legacy_rand::LegacyRand,
+        RandomGenerator, RandomImpl, get_large_feature_seed, get_region_seed,
+        legacy_rand::LegacyRand,
     },
 };
+use rayon::prelude::*;
 use std::f64::consts::PI;
 use std::sync::OnceLock;
 
-use crate::ProtoChunk;
+use crate::biome::{BiomeSupplier, MultiNoiseBiomeSupplier};
+use crate::generation::noise::router::{
+    multi_noise_sampler::MultiNoiseSampler, proto_noise_router::ProtoMultiNoiseRouter,
+};
 use dashmap::DashMap;
 use pumpkin_data::structures::StructureKeys;
 
@@ -32,6 +37,13 @@ pub struct GlobalStructureCache {
     /// surrounding chunk whose structure references overlap it.
     structure_starts: OnceLock<DashMap<(StructureKeys, i32, i32), Option<StructurePosition>>>,
 }
+
+struct RingTask {
+    initial_x: i32,
+    initial_z: i32,
+    search_rng: LegacyRand,
+}
+
 impl GlobalStructureCache {
     /// Creates a new, empty global structure cache.
     #[must_use]
@@ -46,6 +58,10 @@ impl GlobalStructureCache {
         self.stronghold_chunks
             .get()
             .map_or(&[], std::vec::Vec::as_slice)
+    }
+
+    pub fn init_strongholds(&self, chunks: Vec<(i32, i32)>) {
+        let _ = self.stronghold_chunks.set(chunks);
     }
 
     /// Returns the memoized structure start for the given structure and start chunk,
@@ -70,98 +86,154 @@ impl GlobalStructureCache {
         computed
     }
 
-    /// Retrieves the list of chunk coordinates for Concentric Ring structures.
-    /// If the cache is empty, it calculates the 128 ring positions mathematically.
-    #[allow(clippy::cast_precision_loss)]
-    pub fn get_or_calculate_strongholds(
-        &self,
+    /// Calculates the 128 ring positions matching vanilla Minecraft's
+    /// `ChunkGeneratorStructureState.generateRingPositions` exactly.
+    #[must_use]
+    pub fn calculate_strongholds(
         seed: i64,
         placement: &ConcentricRingsStructurePlacement,
-        biome_supplier: &ProtoChunk,
-        allowed_biomes: &[u16],
-    ) -> &[(i32, i32)] {
-        self.stronghold_chunks.get_or_init(|| {
-            let mut chunks = Vec::with_capacity(placement.count as usize);
+        multi_noise: &ProtoMultiNoiseRouter,
+    ) -> Vec<(i32, i32)> {
+        let distance_param = f64::from(placement.distance);
+        let mut spread = placement.spread;
+        let count = placement.count;
 
-            let distance_param = f64::from(placement.distance); // Usually 32
-            let mut spread = placement.spread; // Usually 3
-            let count = placement.count; // Usually 128
+        let preferred_biomes = pumpkin_data::tag::get_tag_ids(
+            pumpkin_data::tag::RegistryKey::WorldgenBiome,
+            placement
+                .preferred_biomes
+                .strip_prefix('#')
+                .unwrap_or(placement.preferred_biomes),
+        )
+        .unwrap_or(&[]);
 
-            // The random generator for stronghold placement is based on the world seed and a fixed salt.
-            // This ensures that the stronghold layout is consistent across all worlds with the same seed.
-            let mut random = RandomGenerator::Legacy(LegacyRand::from_seed(seed as u64));
+        let mut random = LegacyRand::from_seed(seed as u64);
+        let mut angle = random.next_f64() * PI * 2.0;
+        let mut position_in_circle = 0;
+        let mut circle = 0;
 
-            // The initial angle includes a random rotation jitter for the whole world
-            let mut angle = random.next_f64() * PI * 2.0;
-            let mut position_in_circle = 0;
-            let mut circle = 0;
+        let mut tasks = Vec::with_capacity(count as usize);
 
-            for i in 0..count {
-                // 1. Distance Formula
-                // dist = (4 * spacing) + (spacing * ring_index * 6) + (random_jitter)
-                // The jitter is +/- (spacing * 1.25)
-                let dist = 4.0 * distance_param
-                    + distance_param * f64::from(circle) * 6.0
-                    + (random.next_f64() - 0.5) * (distance_param * 2.5);
+        for i in 0..count {
+            let dist = 4.0 * distance_param
+                + distance_param * f64::from(circle) * 6.0
+                + (random.next_f64() - 0.5) * (distance_param * 2.5);
 
-                let initial_x = (angle.cos() * dist + 0.5).floor() as i32;
-                let initial_z = (angle.sin() * dist + 0.5).floor() as i32;
+            let initial_x = (angle.cos() * dist + 0.5).floor() as i32;
+            let initial_z = (angle.sin() * dist + 0.5).floor() as i32;
 
-                // 2. RNG Forking
-                // We must fork/split the random generator for the biome search.
-                // This keeps the main angle/distance sequence identical across all worlds.
-                let fork_seed = random.next_i64();
+            let fork_seed = random.next_i64();
+            let search_rng = LegacyRand::from_seed(fork_seed as u64);
 
-                let mut biome_search_generator =
-                    RandomGenerator::Legacy(LegacyRand::from_seed(fork_seed as u64));
+            tasks.push(RingTask {
+                initial_x,
+                initial_z,
+                search_rng,
+            });
 
-                // 3. Reservoir Sampling Biome Search
-                // Strongholds search the entire 112-block square
-                // and pick one valid location at random (Reservoir Sampling).
-                let mut found_pos = None;
-                let mut found_count = 0;
+            angle += (PI * 2.0) / f64::from(spread);
+            position_in_circle += 1;
 
-                let center_block_x = (initial_x << 4) + 8;
-                let center_block_z = (initial_z << 4) + 8;
-                let step = 4;
-                let search_radius = 112;
+            if position_in_circle == spread {
+                circle += 1;
+                position_in_circle = 0;
 
-                for dz in (-search_radius..=search_radius).step_by(step as usize) {
-                    for dx in (-search_radius..=search_radius).step_by(step as usize) {
-                        let test_x = center_block_x + dx;
-                        let test_z = center_block_z + dz;
+                spread += 2 * spread / (circle + 1);
+                spread = spread.min(count - i);
+                angle += random.next_f64() * PI * 2.0;
+            }
+        }
 
-                        let biome = biome_supplier.get_biome(test_x, 0, test_z);
+        tasks
+            .into_par_iter()
+            .map(|mut task| {
+                let mut sampler = MultiNoiseSampler::generate(multi_noise);
+                let noise_center_x = (task.initial_x << 2) + 2;
+                let noise_center_z = (task.initial_z << 2) + 2;
 
-                        if allowed_biomes.contains(&(biome.id as u16)) {
-                            found_count += 1;
-                            // Reservoir sampling: Pick the Nth valid biome with 1/N probability
-                            if found_pos.is_none()
-                                || biome_search_generator.next_bounded_i32(found_count) == 0
+                let mut result = None;
+                let mut found = 0;
+
+                for z in -28..=28 {
+                    for x in -28..=28 {
+                        let noise_x = noise_center_x + x;
+                        let noise_z = noise_center_z + z;
+                        let biome = MultiNoiseBiomeSupplier::OVERWORLD.biome(
+                            noise_x,
+                            0,
+                            noise_z,
+                            &mut sampler,
+                        );
+                        if preferred_biomes.contains(&(biome.id as u16)) {
+                            if result.is_none() || task.search_rng.next_bounded_i32(found + 1) == 0
                             {
-                                found_pos = Some((test_x >> 4, test_z >> 4));
+                                result = Some((noise_x >> 2, noise_z >> 2));
                             }
+                            found += 1;
                         }
                     }
                 }
 
-                let (final_chunk_x, final_chunk_z) = found_pos.unwrap_or((initial_x, initial_z));
-                chunks.push((final_chunk_x, final_chunk_z));
+                result.unwrap_or((task.initial_x, task.initial_z))
+            })
+            .collect()
+    }
 
-                // 4. Dynamic Ring Progression
-                angle += (PI * 2.0) / f64::from(spread);
-                position_in_circle += 1;
+    #[must_use]
+    pub fn calculate_strongholds_without_biomes(
+        seed: i64,
+        placement: &ConcentricRingsStructurePlacement,
+    ) -> Vec<(i32, i32)> {
+        let distance_param = f64::from(placement.distance);
+        let mut spread = placement.spread;
+        let count = placement.count;
 
-                if position_in_circle == spread {
-                    circle += 1;
-                    position_in_circle = 0;
+        let mut random = LegacyRand::from_seed(seed as u64);
+        let mut angle = random.next_f64() * PI * 2.0;
+        let mut position_in_circle = 0;
+        let mut circle = 0;
 
-                    spread += 2 * spread / (circle + 1);
-                    spread = spread.min(count - i);
-                    angle += random.next_f64() * PI * 2.0;
-                }
+        let mut chunks = Vec::with_capacity(count as usize);
+
+        for i in 0..count {
+            let dist = 4.0 * distance_param
+                + distance_param * f64::from(circle) * 6.0
+                + (random.next_f64() - 0.5) * (distance_param * 2.5);
+
+            let initial_x = (angle.cos() * dist + 0.5).floor() as i32;
+            let initial_z = (angle.sin() * dist + 0.5).floor() as i32;
+
+            chunks.push((initial_x, initial_z));
+
+            angle += (PI * 2.0) / f64::from(spread);
+            position_in_circle += 1;
+
+            if position_in_circle == spread {
+                circle += 1;
+                position_in_circle = 0;
+
+                spread += 2 * spread / (circle + 1);
+                spread = spread.min(count - i);
+                angle += random.next_f64() * PI * 2.0;
             }
-            chunks
+        }
+
+        chunks
+    }
+
+    /// Retrieves the list of chunk coordinates for Concentric Ring structures.
+    /// If the cache is empty, it calculates the 128 ring positions.
+    pub fn get_or_calculate_strongholds(
+        &self,
+        seed: i64,
+        placement: &ConcentricRingsStructurePlacement,
+        multi_noise: Option<&ProtoMultiNoiseRouter>,
+    ) -> &[(i32, i32)] {
+        self.stronghold_chunks.get_or_init(|| {
+            multi_noise.map_or_else(
+                || Self::calculate_strongholds_without_biomes(seed, placement),
+                |multi_noise| Self::calculate_strongholds(seed, placement, multi_noise),
+            )
         })
     }
 }
@@ -173,15 +245,12 @@ impl Default for GlobalStructureCache {
 }
 
 #[must_use]
-// #[expect(clippy::too_many_arguments)]
 pub fn should_generate_structure(
     placement: &StructurePlacement,
     calculator: &StructurePlacementCalculator,
     chunk_x: i32,
     chunk_z: i32,
     global_cache: &GlobalStructureCache,
-    biome_supplier: &ProtoChunk,
-    allowed_biomes: &[u16],
 ) -> bool {
     is_start_chunk(
         &placement.placement_type,
@@ -190,8 +259,6 @@ pub fn should_generate_structure(
         chunk_z,
         placement.salt,
         global_cache,
-        biome_supplier,
-        allowed_biomes,
     ) && apply_frequency_reduction(
         placement.frequency_reduction_method,
         calculator.seed,
@@ -205,18 +272,9 @@ pub fn should_generate_structure(
             .strip_prefix("minecraft:")
             .unwrap_or(zone.other_set);
         StructureSet::get(set_name).is_some_and(|set| {
-            let allowed_biomes = ProtoChunk::get_allowed_biomes(set);
             (chunk_x - zone.chunk_count..=chunk_x + zone.chunk_count).any(|x| {
                 (chunk_z - zone.chunk_count..=chunk_z + zone.chunk_count).any(|z| {
-                    should_generate_structure(
-                        &set.placement,
-                        calculator,
-                        x,
-                        z,
-                        global_cache,
-                        biome_supplier,
-                        &allowed_biomes,
-                    )
+                    should_generate_structure(&set.placement, calculator, x, z, global_cache)
                 })
             })
         })
@@ -266,14 +324,13 @@ fn should_generate_frequency(
             random.next_f32() < frequency
         }
         FrequencyReductionMethod::LegacyType3 => {
-            let carver_seed = get_carver_seed(seed as u64, chunk_x, chunk_z);
-            let mut random = LegacyRand::from_seed(carver_seed);
+            let feature_seed = get_large_feature_seed(seed as u64, chunk_x, chunk_z);
+            let mut random = LegacyRand::from_seed(feature_seed);
             random.next_f64() < f64::from(frequency)
         }
     }
 }
 
-#[expect(clippy::too_many_arguments)]
 fn is_start_chunk(
     placement_type: &StructurePlacementType,
     calculator: &StructurePlacementCalculator,
@@ -281,20 +338,14 @@ fn is_start_chunk(
     chunk_z: i32,
     salt: u32,
     global_cache: &GlobalStructureCache,
-    biome_supplier: &ProtoChunk,
-    allowed_biomes: &[u16],
 ) -> bool {
     match placement_type {
         StructurePlacementType::RandomSpread(placement) => {
             is_start_chunk_random_spread(placement, calculator, chunk_x, chunk_z, salt)
         }
         StructurePlacementType::ConcentricRings(placement) => {
-            let strongholds = global_cache.get_or_calculate_strongholds(
-                calculator.seed,
-                placement,
-                biome_supplier,
-                allowed_biomes,
-            );
+            let strongholds =
+                global_cache.get_or_calculate_strongholds(calculator.seed, placement, None);
             strongholds.contains(&(chunk_x, chunk_z))
         }
     }
@@ -351,24 +402,16 @@ fn is_start_chunk_random_spread(
 }
 #[cfg(test)]
 mod tests {
-    use pumpkin_data::{
-        dimension::Dimension,
-        structures::{RandomSpreadStructurePlacement, StructurePlacementCalculator, StructureSet},
+    use pumpkin_data::structures::{
+        RandomSpreadStructurePlacement, StructurePlacementCalculator, StructureSet,
     };
     use pumpkin_util::random::{
         RandomGenerator, RandomImpl, get_region_seed, legacy_rand::LegacyRand,
     };
-    use pumpkin_util::world_seed::Seed;
 
-    use crate::{
-        ProtoChunk,
-        generation::{
-            get_world_gen,
-            structure::placement::{
-                GlobalStructureCache, apply_frequency_reduction, get_start_chunk_random_spread,
-                is_start_chunk, should_generate_structure,
-            },
-        },
+    use crate::generation::structure::placement::{
+        GlobalStructureCache, apply_frequency_reduction, get_start_chunk_random_spread,
+        is_start_chunk, should_generate_structure,
     };
 
     #[test]
@@ -395,14 +438,6 @@ mod tests {
         let seed = 0;
         let calculator = StructurePlacementCalculator::new(seed);
         let cache = GlobalStructureCache::new();
-        let generator = get_world_gen(
-            Seed(seed as u64),
-            Dimension::OVERWORLD,
-            false,
-            Vec::new(),
-            String::new(),
-        );
-        let chunk = ProtoChunk::new(0, 0, &generator);
         let outposts = &StructureSet::PILLAGER_OUTPOSTS;
         let villages = &StructureSet::VILLAGES;
         let excluded = (-1002, -595);
@@ -413,8 +448,6 @@ mod tests {
             excluded.1,
             outposts.placement.salt,
             &cache,
-            &chunk,
-            &[],
         ));
         assert!(apply_frequency_reduction(
             outposts.placement.frequency_reduction_method,
@@ -433,8 +466,6 @@ mod tests {
                     excluded.1 + dz,
                     villages.placement.salt,
                     &cache,
-                    &chunk,
-                    &[],
                 )
             })
         }));
@@ -445,8 +476,6 @@ mod tests {
             excluded.0,
             excluded.1,
             &cache,
-            &chunk,
-            &[],
         ));
     }
 }

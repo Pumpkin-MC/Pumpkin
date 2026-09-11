@@ -4,7 +4,7 @@ use pumpkin_util::math::position::BlockPos;
 
 use crate::{block::entities::BlockEntity, world::World};
 
-pub use pumpkin_world::block::viewer::ViewerCountTracker;
+pub use pumpkin_inventory::ViewerCountTracker;
 
 pub trait ViewerCountTrackerExt {
     fn update_viewer_count<T>(&self, entity: &T, world: &Arc<World>, position: &BlockPos)

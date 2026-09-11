@@ -13,5 +13,8 @@ impl BedrockClient {
         );
         // This is sent when the client has finished loading and rendering the world.
         player.set_client_loaded(true);
+        // Resend persisted vitals after the client is ready, even if an earlier
+        // pre-spawn update already populated the server's change-tracking cache.
+        player.send_health();
     }
 }

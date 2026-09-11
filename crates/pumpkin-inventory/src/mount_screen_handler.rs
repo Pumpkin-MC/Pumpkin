@@ -1,9 +1,9 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use crate::inventory::Inventory;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_world::inventory::Inventory;
 
 use crate::player::player_inventory::PlayerInventory;
 use crate::screen_handler::{InventoryPlayer, ScreenHandler, ScreenHandlerBehaviour};

@@ -25,6 +25,7 @@ pub trait BiomeSupplier {
     fn biome(&self, x: i32, y: i32, z: i32, noise: &mut MultiNoiseSampler<'_>) -> &'static Biome;
 }
 
+#[derive(Clone, Copy)]
 pub struct MultiNoiseBiomeSupplier {
     source: &'static BiomeTree,
 }
@@ -32,6 +33,16 @@ pub struct MultiNoiseBiomeSupplier {
 impl MultiNoiseBiomeSupplier {
     pub const OVERWORLD: Self = Self::new(&OVERWORLD_BIOME_SOURCE);
     pub const NETHER: Self = Self::new(&NETHER_BIOME_SOURCE);
+
+    #[must_use]
+    pub fn from_preset(preset: &str) -> Option<Self> {
+        let preset = preset.strip_prefix("minecraft:").unwrap_or(preset);
+        match preset {
+            "overworld" | "large_biomes" | "amplified" => Some(Self::OVERWORLD),
+            "nether" => Some(Self::NETHER),
+            _ => None,
+        }
+    }
 
     const fn new(source: &'static BiomeTree) -> Self {
         Self { source }
@@ -43,6 +54,94 @@ impl BiomeSupplier for MultiNoiseBiomeSupplier {
         let point = noise.sample(x, y, z);
         let point_list = point.convert_to_list();
         LAST_RESULT_NODE.with_borrow_mut(|last_result| self.source.get(&point_list, last_result))
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct FixedBiomeSupplier {
+    pub biome: &'static Biome,
+}
+
+impl FixedBiomeSupplier {
+    #[must_use]
+    pub const fn new(biome: &'static Biome) -> Self {
+        Self { biome }
+    }
+}
+
+impl BiomeSupplier for FixedBiomeSupplier {
+    fn biome(
+        &self,
+        _x: i32,
+        _y: i32,
+        _z: i32,
+        _noise: &mut MultiNoiseSampler<'_>,
+    ) -> &'static Biome {
+        self.biome
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum ActiveBiomeSupplier {
+    MultiNoise(MultiNoiseBiomeSupplier),
+    End(end::TheEndBiomeSupplier),
+    Fixed(FixedBiomeSupplier),
+}
+
+impl BiomeSupplier for ActiveBiomeSupplier {
+    fn biome(&self, x: i32, y: i32, z: i32, noise: &mut MultiNoiseSampler<'_>) -> &'static Biome {
+        match self {
+            Self::MultiNoise(supplier) => supplier.biome(x, y, z, noise),
+            Self::End(supplier) => supplier.biome(x, y, z, noise),
+            Self::Fixed(supplier) => supplier.biome(x, y, z, noise),
+        }
+    }
+}
+
+impl ActiveBiomeSupplier {
+    #[must_use]
+    pub fn from_biome_source(
+        source: Option<&crate::world_info::BiomeSource>,
+        dimension: &pumpkin_data::dimension::Dimension,
+    ) -> Self {
+        match source {
+            Some(crate::world_info::BiomeSource::Fixed { biome, .. }) => {
+                let clean = biome.strip_prefix("minecraft:").unwrap_or(biome);
+                let resolved = pumpkin_data::biome::Biome::from_name(clean)
+                    .unwrap_or(&pumpkin_data::biome::Biome::PLAINS);
+                Self::Fixed(FixedBiomeSupplier::new(resolved))
+            }
+            Some(crate::world_info::BiomeSource::WithPreset { preset, .. }) => {
+                let clean = preset.strip_prefix("minecraft:").unwrap_or(preset);
+                if clean == "nether" {
+                    Self::MultiNoise(MultiNoiseBiomeSupplier::NETHER)
+                } else {
+                    Self::MultiNoise(MultiNoiseBiomeSupplier::OVERWORLD)
+                }
+            }
+            Some(crate::world_info::BiomeSource::Simple { biome_type }) => {
+                let clean = biome_type.strip_prefix("minecraft:").unwrap_or(biome_type);
+                if clean == "the_end" {
+                    Self::End(end::TheEndBiomeSupplier)
+                } else if clean == "the_nether" {
+                    Self::MultiNoise(MultiNoiseBiomeSupplier::NETHER)
+                } else {
+                    Self::from_dimension(dimension)
+                }
+            }
+            None => Self::from_dimension(dimension),
+        }
+    }
+
+    #[must_use]
+    pub fn from_dimension(dimension: &pumpkin_data::dimension::Dimension) -> Self {
+        if dimension == &pumpkin_data::dimension::Dimension::THE_END {
+            Self::End(end::TheEndBiomeSupplier)
+        } else if dimension == &pumpkin_data::dimension::Dimension::THE_NETHER {
+            Self::MultiNoise(MultiNoiseBiomeSupplier::NETHER)
+        } else {
+            Self::MultiNoise(MultiNoiseBiomeSupplier::OVERWORLD)
+        }
     }
 }
 
