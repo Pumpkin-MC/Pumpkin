@@ -393,6 +393,10 @@ impl TrackedEntity {
     }
 
     pub fn update_player(&self, player: &Arc<Player>, _world: &World) {
+        self.update_player_in_range(player, self.get_effective_range());
+    }
+
+    fn update_player_in_range(&self, player: &Arc<Player>, effective_range: u32) {
         if player.get_entity().entity_id == self.entity_id {
             return;
         }
@@ -405,7 +409,6 @@ impl TrackedEntity {
         let dist_sq = dx.mul_add(dx, dz * dz);
 
         let player_vd = get_view_distance(player).get() as i32;
-        let effective_range = self.get_effective_range();
         let visible_range_blocks = f64::from((effective_range as i32).min(player_vd) * 16);
         let range_sq = visible_range_blocks * visible_range_blocks;
 
@@ -427,9 +430,10 @@ impl TrackedEntity {
         }
     }
 
-    pub fn update_players(&self, players: &[Arc<Player>], world: &World) {
+    pub fn update_players(&self, players: &[Arc<Player>], _world: &World) {
+        let effective_range = self.get_effective_range();
         for player in players {
-            self.update_player(player, world);
+            self.update_player_in_range(player, effective_range);
         }
     }
 
