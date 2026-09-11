@@ -65,6 +65,11 @@ pub struct LootEntry {
     pub condition: LootCondition,
     /// Bonus formula to apply with fortune / looting (if any).
     pub bonus_formula: Option<LootBonusFormula>,
+    /// Clamps the final count after bonuses (vanilla `limit_count`).
+    pub limit: Option<(i32, i32)>,
+    /// Whether each item only survives an explosion with a `1 / radius` chance (vanilla
+    /// `explosion_decay`).
+    pub explosion_decay: bool,
 }
 
 /// One roll pool inside a loot table.

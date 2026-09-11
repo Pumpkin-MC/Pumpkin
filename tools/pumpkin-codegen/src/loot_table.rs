@@ -325,6 +325,16 @@ fn push_count_variants(
         })
         .collect();
 
+    // `limit_count` and `explosion_decay` apply to every variant. Conditional ones are left out,
+    // like before, since they would need the same splitting as `set_count`.
+    let limit = functions
+        .iter()
+        .filter(|f| f.function == "minecraft:limit_count" && f.conditions.is_empty())
+        .find_map(|f| f.limit.as_ref().map(parse_limit));
+    let explosion_decay = functions
+        .iter()
+        .any(|f| f.function == "minecraft:explosion_decay" && f.conditions.is_empty());
+
     let mut push = |condition: LootCondition, (min_count, max_count): (i32, i32)| {
         out.push(ParsedEntry {
             item: item.to_owned(),
@@ -333,6 +343,8 @@ fn push_count_variants(
             max_count,
             condition,
             bonus_formula,
+            limit,
+            explosion_decay,
         });
     };
 
@@ -559,6 +571,21 @@ fn push_smelt_variants(
     }
 }
 
+/// `limit_count`'s range: a number, or `{"min": .., "max": ..}` with either side optional.
+/// A missing minimum is 0, since counts below that drop nothing anyway.
+fn parse_limit(limit: &serde_json::Value) -> (i32, i32) {
+    if let Some(n) = limit.as_f64() {
+        return (n as i32, n as i32);
+    }
+    let bound = |key: &str, default: i32| {
+        limit
+            .get(key)
+            .and_then(serde_json::Value::as_f64)
+            .map_or(default, |v| v as i32)
+    };
+    (bound("min", 0), bound("max", i32::MAX))
+}
+
 fn combine_conditions(conditions: &[ConditionStruct]) -> LootCondition {
     let mut parsed_list: Vec<LootCondition> = Vec::new();
     for c in conditions {
@@ -594,6 +621,8 @@ struct EntryFunctionStruct {
     count: Option<CountStruct>,
     #[serde(default)]
     conditions: Vec<ConditionStruct>,
+    #[serde(default)]
+    limit: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -644,6 +673,8 @@ fn default_rolls() -> RollsStruct {
 struct ChestLootTableJson {
     #[serde(default)]
     pools: Vec<PoolStruct>,
+    #[serde(default)]
+    functions: Vec<EntryFunctionStruct>,
 }
 
 fn path_to_key(relative: &str) -> String {
@@ -661,6 +692,8 @@ struct ParsedEntry {
     max_count: i32,
     condition: LootCondition,
     bonus_formula: Option<LootBonusFormula>,
+    limit: Option<(i32, i32)>,
+    explosion_decay: bool,
 }
 
 fn extract_entries(
@@ -776,6 +809,8 @@ fn extract_entries_with_depth(
                                 max_count: 1,
                                 condition: entry_cond,
                                 bonus_formula: None,
+                                limit: None,
+                                explosion_decay: false,
                             });
                         }
                     }
@@ -1011,11 +1046,19 @@ fn emit_table(
         let mut parsed_entries = Vec::new();
         let mut empty_weight: i32 = 0;
 
+        // Pool- and table-level functions apply to every entry, after the entry's own.
+        let functions: Vec<EntryFunctionStruct> = pool
+            .functions
+            .iter()
+            .chain(&table.functions)
+            .cloned()
+            .collect();
+
         for entry in &pool.entries {
             extract_entries(
                 entry,
                 LootCondition::None,
-                &pool.functions,
+                &functions,
                 &mut parsed_entries,
                 &mut empty_weight,
             );
@@ -1030,6 +1073,11 @@ fn emit_table(
                 let max_count = e.max_count;
                 let cond_tokens = condition_to_tokens(e.condition);
                 let bonus_tokens = bonus_to_tokens(e.bonus_formula);
+                let limit_tokens = match e.limit {
+                    Some((min, max)) => quote! { Some((#min, #max)) },
+                    None => quote! { None },
+                };
+                let explosion_decay = e.explosion_decay;
 
                 quote! {
                     LootEntry {
@@ -1039,6 +1087,8 @@ fn emit_table(
                         max_count: #max_count,
                         condition: #cond_tokens,
                         bonus_formula: #bonus_tokens,
+                        limit: #limit_tokens,
+                        explosion_decay: #explosion_decay,
                     }
                 }
             })

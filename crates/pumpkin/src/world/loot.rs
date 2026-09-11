@@ -105,6 +105,32 @@ fn check_condition(
     }
 }
 
+/// Applies `limit_count` and `explosion_decay` to a rolled count.
+fn apply_limit_and_explosion_decay(
+    entry: &LootEntry,
+    mut count: i32,
+    params: &LootContextParameters,
+    rng: &mut Xoroshiro,
+) -> i32 {
+    if let Some((min, max)) = entry.limit {
+        count = count.max(min).min(max);
+    }
+    if entry.explosion_decay
+        && let Some(radius) = params.explosion_radius
+    {
+        // Like vanilla, each item survives the explosion with a 1 / radius chance.
+        let chance = 1.0 / radius;
+        let mut kept = 0;
+        for _ in 0..count {
+            if rng.next_f32() <= chance {
+                kept += 1;
+            }
+        }
+        count = kept;
+    }
+    count
+}
+
 fn apply_bonus_formula(
     base_count: i32,
     bonus: LootBonusFormula,
@@ -247,6 +273,8 @@ pub fn generate_loot_with_context(
                         final_count =
                             apply_bonus_formula(final_count, bonus, fortune_level, &mut rng);
                     }
+                    final_count =
+                        apply_limit_and_explosion_decay(entry, final_count, params, &mut rng);
 
                     if final_count > 0 {
                         let item_key = entry.item.strip_prefix("minecraft:").unwrap_or(entry.item);
@@ -492,5 +520,41 @@ mod tests {
             16
         );
         assert!(!drops.iter().any(|item| item.id == Item::BEEF.id));
+    }
+
+    /// Glowstone dust counts over 16 seeds.
+    fn glowstone_drops(params: &LootContextParameters) -> Vec<u8> {
+        let table =
+            get_loot_table("minecraft:blocks/glowstone").expect("glowstone has a loot table");
+        (0..16)
+            .flat_map(|seed| generate_loot_with_context(table, seed, params))
+            .map(|stack| stack.item_count)
+            .collect()
+    }
+
+    #[test]
+    fn fortune_respects_limit_count() {
+        let mut tool = ItemStack::new(1, &Item::DIAMOND_PICKAXE);
+        tool.enchant(&pumpkin_data::Enchantment::FORTUNE, 3);
+        let params = LootContextParameters {
+            tool: Some(tool),
+            ..Default::default()
+        };
+        let counts = glowstone_drops(&params);
+        assert_eq!(counts.len(), 16);
+        assert!(counts.iter().all(|count| (1..=4).contains(count)));
+    }
+
+    #[test]
+    fn explosions_decay_block_drops() {
+        let params = LootContextParameters {
+            explosion_radius: Some(1.0e6),
+            ..Default::default()
+        };
+        let total: u32 = glowstone_drops(&params)
+            .iter()
+            .map(|count| u32::from(*count))
+            .sum();
+        assert!(total <= 1);
     }
 }
