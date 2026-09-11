@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{Block, tag};
+use pumpkin_data::{Block, BlockDirection, BlockState, tag};
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::lighting::LightEngine;
 use pumpkin_world::world::BlockFlags;
 use rand::RngExt;
 
@@ -14,19 +15,34 @@ use crate::world::World;
 pub struct NyliumBlock;
 
 impl NyliumBlock {
-    fn can_be_nylium(world: &World, pos: &BlockPos) -> bool {
+    #[must_use]
+    pub(crate) const fn can_be_nylium_with_above(
+        state: &BlockState,
+        above_state: &BlockState,
+    ) -> bool {
+        let dampening = LightEngine::get_light_dampening_into(
+            state,
+            above_state,
+            BlockDirection::Up,
+            above_state.opacity,
+        );
+        dampening < 15
+    }
+
+    fn can_be_nylium(state: &BlockState, world: &World, pos: &BlockPos) -> bool {
         let above_pos = pos.up();
         if !world.is_loaded(&above_pos) {
             return true;
         }
         let above_state = world.get_block_state(&above_pos);
-        above_state.opacity < 15
+        Self::can_be_nylium_with_above(state, above_state)
     }
 }
 
 impl BlockBehaviour for NyliumBlock {
     fn random_tick(&self, args: RandomTickArgs<'_>) {
-        if !Self::can_be_nylium(args.world, args.position) {
+        let state = args.world.get_block_state(args.position);
+        if !Self::can_be_nylium(state, args.world, args.position) {
             args.world.set_block_state(
                 args.position,
                 Block::NETHERRACK.default_state.id,

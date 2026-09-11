@@ -12,13 +12,13 @@ use crate::block::{
 use crate::block::entities::brewing_stand::BrewingStandBlockEntity;
 use pumpkin_data::BlockState;
 use pumpkin_data::translation;
+use pumpkin_inventory::Inventory;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
     InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::inventory::Inventory;
 
 struct BrewingScreenFactory(
     Arc<dyn Inventory>,

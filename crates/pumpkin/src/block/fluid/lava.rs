@@ -7,7 +7,6 @@ use crate::{
 use pumpkin_data::{
     Block, BlockDirection, BlockState, BlockStateId,
     damage::DamageType,
-    dimension::Dimension,
     fluid::{Falling, Fluid, FluidProperties, Level},
     tag::Taggable,
     world::WorldEvent,
@@ -249,17 +248,12 @@ impl FluidBehaviour for FlowingLava {
 
 impl FlowingFluid for FlowingLava {
     fn get_level_decrease_per_block(&self, world: &World) -> i32 {
-        // Ultrawarm logic
-        if world.dimension == Dimension::THE_NETHER {
-            1
-        } else {
-            2
-        }
+        if world.dimension.fast_lava { 1 } else { 2 }
     }
 
     fn get_flow_speed(&self, world: &World) -> u8 {
-        // Ultrawarm logic - lava flows faster in the Nether
-        if world.dimension == Dimension::THE_NETHER {
+        // EnvironmentAttributes.FAST_LAVA
+        if world.dimension.fast_lava {
             LAVA_FLOW_SPEED_NETHER
         } else {
             LAVA_FLOW_SPEED_SLOW
@@ -267,12 +261,7 @@ impl FlowingFluid for FlowingLava {
     }
 
     fn get_max_flow_distance(&self, world: &World) -> i32 {
-        // Ultrawarm logic
-        if world.dimension == Dimension::THE_NETHER {
-            5
-        } else {
-            3
-        }
+        if world.dimension.fast_lava { 5 } else { 3 }
     }
 
     /// Determines if lava can convert to source blocks based on game rules.

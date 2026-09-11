@@ -15,11 +15,10 @@ use crate::{
 };
 
 use super::{
-    chunk_density_function::ChunkNoiseFunctionSampleOptions,
     chunk_noise_router::{ChunkNoiseFunctionComponent, StaticChunkNoiseFunctionComponentImpl},
     density_function::{
-        IndexToNoisePos, NoiseFunctionComponentRange, PassThrough,
-        StaticIndependentChunkNoiseFunctionComponentImpl, Wrapper,
+        NoiseFunctionComponentRange, PassThrough, StaticIndependentChunkNoiseFunctionComponentImpl,
+        Wrapper,
         beardifier::Beardifier,
         math::{Binary, Clamp, Constant, Lerp, Linear, Rounding, Unary},
         misc::{
@@ -93,21 +92,6 @@ impl StaticIndependentChunkNoiseFunctionComponentImpl for IndependentProtoNoiseF
             Self::ClampedYGradient(c) => c.sample(pos),
             Self::Gradient(g) => g.sample(pos),
             Self::DistanceToPoint(d) => d.sample(pos),
-        }
-    }
-
-    #[inline]
-    fn fill(&self, array: &mut [f32], mapper: &impl IndexToNoisePos) {
-        match self {
-            Self::Constant(c) => c.fill(array, mapper),
-            Self::EndIsland(e) => e.fill(array, mapper),
-            Self::Noise(n) => n.fill(array, mapper),
-            Self::ShiftA(s) => s.fill(array, mapper),
-            Self::ShiftB(s) => s.fill(array, mapper),
-            Self::InterpolatedNoise(i) => i.fill(array, mapper),
-            Self::ClampedYGradient(c) => c.fill(array, mapper),
-            Self::Gradient(g) => g.fill(array, mapper),
-            Self::DistanceToPoint(d) => d.fill(array, mapper),
         }
     }
 
@@ -186,45 +170,20 @@ impl StaticChunkNoiseFunctionComponentImpl for DependentProtoNoiseFunctionCompon
         &self,
         component_stack: &mut [ChunkNoiseFunctionComponent],
         pos: &Vector3<i32>,
-        sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> f32 {
         match self {
-            Self::Linear(l) => l.sample(component_stack, pos, sample_options),
-            Self::Unary(u) => u.sample(component_stack, pos, sample_options),
-            Self::Binary(b) => b.sample(component_stack, pos, sample_options),
-            Self::ShiftedNoise(s) => s.sample(component_stack, pos, sample_options),
-            Self::IntervalSelect(i) => i.sample(component_stack, pos, sample_options),
-            Self::FindTopSurface(f) => f.sample(component_stack, pos, sample_options),
-            Self::Clamp(c) => c.sample(component_stack, pos, sample_options),
-            Self::RangeChoice(r) => r.sample(component_stack, pos, sample_options),
-            Self::Spline(s) => s.sample(component_stack, pos, sample_options),
-            Self::Lerp(l) => l.sample(component_stack, pos, sample_options),
-            Self::Rounding(r) => r.sample(component_stack, pos, sample_options),
-            Self::Slice(s) => s.sample(component_stack, pos, sample_options),
-        }
-    }
-
-    #[inline]
-    fn fill(
-        &self,
-        component_stack: &mut [ChunkNoiseFunctionComponent],
-        array: &mut [f32],
-        mapper: &impl IndexToNoisePos,
-        sample_options: &mut ChunkNoiseFunctionSampleOptions,
-    ) {
-        match self {
-            Self::Linear(l) => l.fill(component_stack, array, mapper, sample_options),
-            Self::Unary(u) => u.fill(component_stack, array, mapper, sample_options),
-            Self::Binary(b) => b.fill(component_stack, array, mapper, sample_options),
-            Self::ShiftedNoise(s) => s.fill(component_stack, array, mapper, sample_options),
-            Self::IntervalSelect(i) => i.fill(component_stack, array, mapper, sample_options),
-            Self::FindTopSurface(f) => f.fill(component_stack, array, mapper, sample_options),
-            Self::Clamp(c) => c.fill(component_stack, array, mapper, sample_options),
-            Self::RangeChoice(r) => r.fill(component_stack, array, mapper, sample_options),
-            Self::Spline(s) => s.fill(component_stack, array, mapper, sample_options),
-            Self::Lerp(l) => l.fill(component_stack, array, mapper, sample_options),
-            Self::Rounding(r) => r.fill(component_stack, array, mapper, sample_options),
-            Self::Slice(s) => s.fill(component_stack, array, mapper, sample_options),
+            Self::Linear(l) => l.sample(component_stack, pos),
+            Self::Unary(u) => u.sample(component_stack, pos),
+            Self::Binary(b) => b.sample(component_stack, pos),
+            Self::ShiftedNoise(s) => s.sample(component_stack, pos),
+            Self::IntervalSelect(i) => i.sample(component_stack, pos),
+            Self::FindTopSurface(f) => f.sample(component_stack, pos),
+            Self::Clamp(c) => c.sample(component_stack, pos),
+            Self::RangeChoice(r) => r.sample(component_stack, pos),
+            Self::Spline(s) => s.sample(component_stack, pos),
+            Self::Lerp(l) => l.sample(component_stack, pos),
+            Self::Rounding(r) => r.sample(component_stack, pos),
+            Self::Slice(s) => s.sample(component_stack, pos),
         }
     }
 
@@ -234,29 +193,28 @@ impl StaticChunkNoiseFunctionComponentImpl for DependentProtoNoiseFunctionCompon
         component_stack: &mut [ChunkNoiseFunctionComponent],
         buffer: &mut [f32],
         volume: &DensityVolume,
-        sample_options: &ChunkNoiseFunctionSampleOptions,
     ) {
         match self {
-            Self::Linear(l) => l.sample_volume(component_stack, buffer, volume, sample_options),
-            Self::Unary(u) => u.sample_volume(component_stack, buffer, volume, sample_options),
-            Self::Binary(b) => b.sample_volume(component_stack, buffer, volume, sample_options),
+            Self::Linear(l) => l.sample_volume(component_stack, buffer, volume),
+            Self::Unary(u) => u.sample_volume(component_stack, buffer, volume),
+            Self::Binary(b) => b.sample_volume(component_stack, buffer, volume),
             Self::ShiftedNoise(s) => {
-                s.sample_volume(component_stack, buffer, volume, sample_options);
+                s.sample_volume(component_stack, buffer, volume);
             }
             Self::IntervalSelect(i) => {
-                i.sample_volume(component_stack, buffer, volume, sample_options);
+                i.sample_volume(component_stack, buffer, volume);
             }
             Self::FindTopSurface(f) => {
-                f.sample_volume(component_stack, buffer, volume, sample_options);
+                f.sample_volume(component_stack, buffer, volume);
             }
-            Self::Clamp(c) => c.sample_volume(component_stack, buffer, volume, sample_options),
+            Self::Clamp(c) => c.sample_volume(component_stack, buffer, volume),
             Self::RangeChoice(r) => {
-                r.sample_volume(component_stack, buffer, volume, sample_options);
+                r.sample_volume(component_stack, buffer, volume);
             }
-            Self::Spline(s) => s.sample_volume(component_stack, buffer, volume, sample_options),
-            Self::Lerp(l) => l.sample_volume(component_stack, buffer, volume, sample_options),
-            Self::Rounding(r) => r.sample_volume(component_stack, buffer, volume, sample_options),
-            Self::Slice(s) => s.sample_volume(component_stack, buffer, volume, sample_options),
+            Self::Spline(s) => s.sample_volume(component_stack, buffer, volume),
+            Self::Lerp(l) => l.sample_volume(component_stack, buffer, volume),
+            Self::Rounding(r) => r.sample_volume(component_stack, buffer, volume),
+            Self::Slice(s) => s.sample_volume(component_stack, buffer, volume),
         }
     }
 }

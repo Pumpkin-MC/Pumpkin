@@ -147,21 +147,21 @@ impl SurfaceTerrainBuilder {
         let surface_noise =
             (self
                 .badlands_surface_noise
-                .sample(global_x as f32, 0.0, global_z as f32)
+                .sample(global_x as f64, 0.0, global_z as f64)
                 * 8.25)
                 .abs();
         let pillar_noise =
             self.badlands_pillar_noise
-                .sample(global_x as f32 * 0.2, 0.0, global_z as f32 * 0.2)
+                .sample(global_x as f64 * 0.2, 0.0, global_z as f64 * 0.2)
                 * 15.0;
 
         let threshold = surface_noise.min(pillar_noise);
 
         if threshold > 0.0 {
             let pillar_roof_noise = (self.badlands_pillar_roof_noise.sample(
-                global_x as f32 * 0.75,
+                global_x as f64 * 0.75,
                 0.0,
-                global_z as f32 * 0.75,
+                global_z as f64 * 0.75,
             ) * 1.5)
                 .abs();
 
@@ -212,11 +212,11 @@ impl SurfaceTerrainBuilder {
         random_deriver: &XoroshiroSplitter,
     ) {
         let iceburg_surface_noise =
-            (self.iceberg_surface_noise.sample(x as f32, 0.0, z as f32) * 8.25).abs();
+            (self.iceberg_surface_noise.sample(x as f64, 0.0, z as f64) * 8.25).abs();
 
         let iceburg_pillar_noise =
             self.iceberg_pillar_noise
-                .sample(x as f32 * 1.28, 0.0, z as f32 * 1.28)
+                .sample(x as f64 * 1.28, 0.0, z as f64 * 1.28)
                 * 15.0;
 
         let threshold = iceburg_surface_noise.min(iceburg_pillar_noise);
@@ -224,7 +224,7 @@ impl SurfaceTerrainBuilder {
             let iceburg_pillar_roof_noise =
                 (self
                     .iceberg_pillar_roof_noise
-                    .sample(x as f32 * 1.17, 0.0, z as f32 * 1.17)
+                    .sample(x as f64 * 1.17, 0.0, z as f64 * 1.17)
                     * 1.5)
                     .abs();
 
@@ -279,7 +279,7 @@ impl SurfaceTerrainBuilder {
     pub fn get_terracotta_block(&self, x: i32, y: i32, z: i32) -> &'static BlockState {
         let offset = (self
             .terracotta_bands_offset_noise
-            .sample(x as f32, 0.0, z as f32)
+            .sample(x as f64, 0.0, z as f64)
             * 4.0)
             .round() as i32;
         let offset = y + offset;

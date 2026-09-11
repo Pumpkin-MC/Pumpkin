@@ -8,25 +8,30 @@ use pumpkin_util::math::int_provider::{
     UniformIntProvider, VeryBiasedToBottomIntProvider,
 };
 use pumpkin_util::y_offset::{AboveBottom, Absolute, BelowTop, YOffset};
+#[derive(Clone, Debug)]
 pub enum HeightProvider {
     Uniform(UniformHeightProvider),
     Trapezoid(TrapezoidHeightProvider),
     VeryBiasedToBottom(VeryBiasedToBottomHeightProvider),
 }
+#[derive(Clone, Debug)]
 pub struct UniformHeightProvider {
     pub min_inclusive: YOffset,
     pub max_inclusive: YOffset,
 }
+#[derive(Clone, Debug)]
 pub struct TrapezoidHeightProvider {
     pub min_inclusive: YOffset,
     pub max_inclusive: YOffset,
     pub plateau: Option<i32>,
 }
+#[derive(Clone, Debug)]
 pub struct VeryBiasedToBottomHeightProvider {
     pub min_inclusive: YOffset,
     pub max_inclusive: YOffset,
     pub inner: Option<std::num::NonZero<u32>>,
 }
+#[derive(Clone, Debug)]
 pub struct CaveCarverConfig {
     pub count: IntProvider,
     pub horizontal_radius_multiplier: FloatProvider,
@@ -52,6 +57,7 @@ impl CaveCarverConfig {
         }
     }
 }
+#[derive(Clone, Debug)]
 pub struct CanyonShapeConfig {
     pub distance_factor: FloatProvider,
     pub thickness: FloatProvider,
@@ -59,16 +65,19 @@ pub struct CanyonShapeConfig {
     pub horizontal_radius_factor: FloatProvider,
     pub vertical_radius_default_factor: f32,
     pub vertical_radius_center_factor: f32,
-    pub y_scale: f32,
+    pub y_scale: FloatProvider,
 }
+#[derive(Clone, Debug)]
 pub struct CanyonCarverConfig {
     pub vertical_rotation: FloatProvider,
     pub shape: CanyonShapeConfig,
 }
+#[derive(Clone, Debug)]
 pub enum CarverAdditionalConfig {
     Cave(CaveCarverConfig),
     Canyon(CanyonCarverConfig),
 }
+#[derive(Clone, Debug)]
 pub struct CarverConfig {
     pub probability: f32,
     pub y: HeightProvider,
@@ -98,7 +107,7 @@ pub const CANYON: CarverConfig = CarverConfig {
             )),
             vertical_radius_default_factor: 1f32,
             vertical_radius_center_factor: 0f32,
-            y_scale: 3f32,
+            y_scale: FloatProvider::Constant(3f32),
         },
     }),
 };

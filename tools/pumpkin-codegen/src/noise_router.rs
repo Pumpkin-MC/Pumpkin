@@ -47,6 +47,27 @@ impl<'de> Deserialize<'de> for HashableF32 {
     }
 }
 
+#[derive(Clone, Copy)]
+struct HashableF64(pub f64);
+
+impl Hash for HashableF64 {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.to_le_bytes().hash(state);
+    }
+}
+
+impl ToTokens for HashableF64 {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        self.0.to_tokens(tokens);
+    }
+}
+
+impl<'de> Deserialize<'de> for HashableF64 {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        f64::deserialize(deserializer).map(Self)
+    }
+}
+
 /// Deserialized representation of a cubic spline used inside density functions.
 #[derive(Deserialize, Hash, Clone)]
 #[serde(tag = "_type", content = "value")]
@@ -288,22 +309,23 @@ impl Tiling {
 /// Caching or interpolation wrapper applied around an inner density function.
 #[derive(Copy, Clone, Deserialize, PartialEq, Eq, Hash)]
 enum WrapperType {
-    Interpolated,
-    #[serde(rename(deserialize = "FlatCache"))]
-    CacheFlat,
-    Cache2D,
-    CacheOnce,
-    CellCache,
+    Interpolated { cell_size_xz: i32, cell_size_y: i32 },
+    Cache,
 }
 
 impl WrapperType {
     fn into_token_stream(self) -> TokenStream {
         match self {
-            Self::Interpolated => quote! { WrapperType::Interpolated },
-            Self::CacheFlat => quote! { WrapperType::CacheFlat },
-            Self::Cache2D => quote! { WrapperType::Cache2D },
-            Self::CacheOnce => quote! { WrapperType::CacheOnce },
-            Self::CellCache => quote! { WrapperType::CellCache },
+            Self::Interpolated {
+                cell_size_xz,
+                cell_size_y,
+            } => quote! {
+                WrapperType::Interpolated {
+                    cell_size_xz: #cell_size_xz,
+                    cell_size_y: #cell_size_y,
+                }
+            },
+            Self::Cache => quote! { WrapperType::Cache },
         }
     }
 }
@@ -313,35 +335,33 @@ struct NoiseData {
     #[serde(rename(deserialize = "noise"))]
     noise_id: String,
     #[serde(rename(deserialize = "xzScale"))]
-    xz_scale: HashableF32,
+    xz_scale: HashableF64,
     #[serde(rename(deserialize = "yScale"))]
-    y_scale: HashableF32,
+    y_scale: HashableF64,
 }
 
 #[derive(Deserialize, Hash, Clone)]
 struct ShiftedNoiseData {
     #[serde(rename(deserialize = "xzScale"))]
-    xz_scale: HashableF32,
+    xz_scale: HashableF64,
     #[serde(rename(deserialize = "yScale"))]
-    y_scale: HashableF32,
+    y_scale: HashableF64,
     #[serde(rename(deserialize = "noise"))]
     noise_id: String,
 }
 
 #[derive(Deserialize, Hash, Clone)]
 struct InterpolatedNoiseSamplerData {
-    #[serde(rename(deserialize = "scaledXzScale"))]
-    scaled_xz_scale: HashableF32,
-    #[serde(rename(deserialize = "scaledYScale"))]
-    scaled_y_scale: HashableF32,
+    #[serde(rename(deserialize = "xzScale"))]
+    xz_scale: HashableF64,
+    #[serde(rename(deserialize = "yScale"))]
+    y_scale: HashableF64,
     #[serde(rename(deserialize = "xzFactor"))]
-    xz_factor: HashableF32,
+    xz_factor: HashableF64,
     #[serde(rename(deserialize = "yFactor"))]
-    y_factor: HashableF32,
+    y_factor: HashableF64,
     #[serde(rename(deserialize = "smearScaleMultiplier"))]
-    smear_scale_multiplier: HashableF32,
-    #[serde(rename(deserialize = "maxValue"))]
-    max_value: HashableF32,
+    smear_scale_multiplier: HashableF64,
 }
 
 #[derive(Deserialize, Hash, Clone)]
@@ -582,7 +602,7 @@ impl Axis {
     }
 }
 
-fn noise_domain_axes(xz_scale: f32, y_scale: f32) -> u8 {
+fn noise_domain_axes(xz_scale: f64, y_scale: f64) -> u8 {
     let mut axes = AXES_ALL;
     if y_scale == 0.0 {
         axes &= !AXIS_Y;
@@ -693,7 +713,7 @@ impl DensityFunctionRepr {
         matches!(
             self,
             Self::Wrapper {
-                wrapper: WrapperType::CacheFlat | WrapperType::Cache2D | WrapperType::CacheOnce,
+                wrapper: WrapperType::Cache,
                 ..
             }
         )
@@ -1313,7 +1333,7 @@ impl DensityFunctionRepr {
                 quote! {
                     #[inline(always)]
                     pub fn #fn_name<C: NoiseEvaluationContext>(pos: &pumpkin_util::math::vector3::Vector3<i32>, ctx: &mut C) -> f32 {
-                        ctx.sample_noise(DoublePerlinNoiseParameters::#noise_id, pos.x as f32 * #xz_scale, pos.y as f32 * #y_scale, pos.z as f32 * #xz_scale)
+                        ctx.sample_noise(DoublePerlinNoiseParameters::#noise_id, f64::from(pos.x) * #xz_scale, f64::from(pos.y) * #y_scale, f64::from(pos.z) * #xz_scale)
                     }
                 }
             }
@@ -1917,8 +1937,8 @@ impl DensityFunctionRepr {
                 }
             }
             Self::InterpolatedNoiseSampler { data } => {
-                let scaled_xz_scale = &data.scaled_xz_scale;
-                let scaled_y_scale = &data.scaled_y_scale;
+                let xz_scale = &data.xz_scale;
+                let y_scale = &data.y_scale;
                 let xz_factor = &data.xz_factor;
                 let y_factor = &data.y_factor;
                 let smear_scale_multiplier = &data.smear_scale_multiplier;
@@ -1926,8 +1946,8 @@ impl DensityFunctionRepr {
                 quote! {
                     BaseNoiseFunctionComponent::InterpolatedNoiseSampler {
                         data: &InterpolatedNoiseSamplerData {
-                            scaled_xz_scale: #scaled_xz_scale,
-                            scaled_y_scale: #scaled_y_scale,
+                            xz_scale: #xz_scale,
+                            y_scale: #y_scale,
                             xz_factor: #xz_factor,
                             y_factor: #y_factor,
                             smear_scale_multiplier: #smear_scale_multiplier,
@@ -2409,22 +2429,13 @@ fn parse_vanilla_df(base_df_dir: &std::path::Path, val: &serde_json::Value) -> D
                         .get("smear_scale_multiplier")
                         .and_then(|v| v.as_f64())
                         .unwrap_or(8.0);
-                    let max_value = obj
-                        .get("max_value")
-                        .and_then(|v| v.as_f64())
-                        .unwrap_or(f64::INFINITY);
-
-                    let scaled_xz_scale = xz_scale;
-                    let scaled_y_scale = y_scale * (y_factor / xz_factor);
-
                     DensityFunctionRepr::InterpolatedNoiseSampler {
                         data: InterpolatedNoiseSamplerData {
-                            scaled_xz_scale: HashableF32((scaled_xz_scale) as f32),
-                            scaled_y_scale: HashableF32((scaled_y_scale) as f32),
-                            xz_factor: HashableF32((xz_factor) as f32),
-                            y_factor: HashableF32((y_factor) as f32),
-                            smear_scale_multiplier: HashableF32((smear_scale_multiplier) as f32),
-                            max_value: HashableF32((max_value) as f32),
+                            xz_scale: HashableF64(xz_scale),
+                            y_scale: HashableF64(y_scale),
+                            xz_factor: HashableF64(xz_factor),
+                            y_factor: HashableF64(y_factor),
+                            smear_scale_multiplier: HashableF64(smear_scale_multiplier),
                         },
                     }
                 }
@@ -2662,16 +2673,16 @@ fn parse_vanilla_df(base_df_dir: &std::path::Path, val: &serde_json::Value) -> D
                             shift_z: Box::new(shift_z),
                             data: ShiftedNoiseData {
                                 noise_id: clean_noise_name(noise_name),
-                                xz_scale: HashableF32((xz_scale) as f32),
-                                y_scale: HashableF32((y_scale) as f32),
+                                xz_scale: HashableF64(xz_scale),
+                                y_scale: HashableF64(y_scale),
                             },
                         }
                     } else {
                         DensityFunctionRepr::Noise {
                             data: NoiseData {
                                 noise_id: clean_noise_name(noise_name),
-                                xz_scale: HashableF32((xz_scale) as f32),
-                                y_scale: HashableF32((y_scale) as f32),
+                                xz_scale: HashableF64(xz_scale),
+                                y_scale: HashableF64(y_scale),
                             },
                         }
                     }
@@ -2695,8 +2706,8 @@ fn parse_vanilla_df(base_df_dir: &std::path::Path, val: &serde_json::Value) -> D
                         shift_z: Box::new(shift_z),
                         data: ShiftedNoiseData {
                             noise_id: clean_noise_name(noise_name),
-                            xz_scale: HashableF32((xz_scale) as f32),
-                            y_scale: HashableF32((y_scale) as f32),
+                            xz_scale: HashableF64(xz_scale),
+                            y_scale: HashableF64(y_scale),
                         },
                     }
                 }
@@ -2753,15 +2764,21 @@ fn parse_vanilla_df(base_df_dir: &std::path::Path, val: &serde_json::Value) -> D
                             .or_else(|| obj.get("argument"))
                             .expect("Missing input/argument"),
                     );
-                    let wrapper = match clean_type {
-                        "interpolated" => WrapperType::Interpolated,
-                        "flat_cache" | "cache_flat" => WrapperType::CacheFlat,
-                        "cache_2d" => WrapperType::Cache2D,
-                        "cache_once" => WrapperType::CacheOnce,
-                        "cache" if input.domain_axes() & AXIS_Y == 0 => WrapperType::CacheFlat,
-                        "cache" => WrapperType::CacheOnce,
-                        "cache_all_in_cell" => WrapperType::CellCache,
-                        _ => unreachable!(),
+                    let wrapper = if clean_type == "interpolated" {
+                        let cell_size_xz =
+                            obj.get("cell_size_xz")
+                                .and_then(|v| v.as_i64())
+                                .expect("Missing cell_size_xz") as i32;
+                        let cell_size_y =
+                            obj.get("cell_size_y")
+                                .and_then(|v| v.as_i64())
+                                .expect("Missing cell_size_y") as i32;
+                        WrapperType::Interpolated {
+                            cell_size_xz,
+                            cell_size_y,
+                        }
+                    } else {
+                        WrapperType::Cache
                     };
                     DensityFunctionRepr::Wrapper {
                         input: Box::new(input),
@@ -2954,32 +2971,20 @@ fn load_vanilla_noise_routers() -> NoiseRouterReprs {
     }
 }
 
-macro_rules! fix_final_density {
-    ($router:expr) => {{
-        $router.final_density = DensityFunctionRepr::Wrapper {
-            input: Box::new($router.final_density),
-            wrapper: WrapperType::CellCache,
-        };
-    }};
-}
-
 /// Reads vanilla datapack noise_settings and density_function files and emits the complete noise-router constants `TokenStream`.
 pub fn build() -> TokenStream {
     let mut reprs: NoiseRouterReprs = load_vanilla_noise_routers();
 
-    fix_final_density!(reprs.overworld);
-    fix_final_density!(reprs.overworld_amplified);
-    fix_final_density!(reprs.overworld_large_biomes);
-    fix_final_density!(reprs.nether);
-    fix_final_density!(reprs.end);
-    fix_final_density!(reprs.end_islands);
-
-    let _ = reprs.overworld_amplified;
-    let _ = reprs.overworld_large_biomes;
     let _ = reprs.end_islands;
 
     let (overworld_router, overworld_compiled) =
         reprs.overworld.into_token_stream_compiled("overworld");
+    let (amplified_router, amplified_compiled) = reprs
+        .overworld_amplified
+        .into_token_stream_compiled("amplified");
+    let (large_biomes_router, large_biomes_compiled) = reprs
+        .overworld_large_biomes
+        .into_token_stream_compiled("large_biomes");
     let (nether_router, nether_compiled) = reprs.nether.into_token_stream_compiled("nether");
     let (end_router, end_compiled) = reprs.end.into_token_stream_compiled("end");
 
@@ -2987,10 +2992,10 @@ pub fn build() -> TokenStream {
         use crate::chunk::DoublePerlinNoiseParameters;
 
         pub trait NoiseEvaluationContext {
-            fn sample_noise(&mut self, noise_id: DoublePerlinNoiseParameters, x: f32, y: f32, z: f32) -> f32;
+            fn sample_noise(&mut self, noise_id: DoublePerlinNoiseParameters, x: f64, y: f64, z: f64) -> f32;
             fn sample_shift_a(&mut self, noise_id: DoublePerlinNoiseParameters, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f32;
             fn sample_shift_b(&mut self, noise_id: DoublePerlinNoiseParameters, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f32;
-            fn sample_shifted_noise(&mut self, noise_id: DoublePerlinNoiseParameters, shift_x: f32, shift_y: f32, shift_z: f32, xz_scale: f32, y_scale: f32) -> f32;
+            fn sample_shifted_noise(&mut self, noise_id: DoublePerlinNoiseParameters, shift_x: f32, shift_y: f32, shift_z: f32, xz_scale: f64, y_scale: f64) -> f32;
             fn sample_interpolated_noise(&mut self, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f32;
             fn sample_beardifier(&mut self, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f32;
             fn sample_blend_alpha(&mut self, pos: &pumpkin_util::math::vector3::Vector3<i32>) -> f32;
@@ -3003,13 +3008,15 @@ pub fn build() -> TokenStream {
         }
 
         #overworld_compiled
+        #amplified_compiled
+        #large_biomes_compiled
         #nether_compiled
         #end_compiled
 
         pub struct NoiseData {
             pub noise_id: DoublePerlinNoiseParameters,
-            pub xz_scale: f32,
-            pub y_scale: f32,
+            pub xz_scale: f64,
+            pub y_scale: f64,
         }
 
         pub struct FindTopSurfaceData {
@@ -3018,17 +3025,17 @@ pub fn build() -> TokenStream {
         }
 
         pub struct ShiftedNoiseData {
-            pub xz_scale: f32,
-            pub y_scale: f32,
+            pub xz_scale: f64,
+            pub y_scale: f64,
             pub noise_id: DoublePerlinNoiseParameters,
         }
 
         pub struct InterpolatedNoiseSamplerData {
-            pub scaled_xz_scale: f32,
-            pub scaled_y_scale: f32,
-            pub xz_factor: f32,
-            pub y_factor: f32,
-            pub smear_scale_multiplier: f32,
+            pub xz_scale: f64,
+            pub y_scale: f64,
+            pub xz_factor: f64,
+            pub y_factor: f64,
+            pub smear_scale_multiplier: f64,
         }
 
         pub struct ClampedYGradientData {
@@ -3229,13 +3236,10 @@ pub fn build() -> TokenStream {
             Fixed { value: f32 },
         }
 
-        #[derive(Copy, Clone)]
+        #[derive(Copy, Clone, PartialEq, Eq)]
         pub enum WrapperType {
-            Interpolated,
-            CacheFlat,
-            Cache2D,
-            CacheOnce,
-            CellCache,
+            Interpolated { cell_size_xz: i32, cell_size_y: i32 },
+            Cache,
         }
 
         pub enum BaseNoiseFunctionComponent {
@@ -3368,7 +3372,35 @@ pub fn build() -> TokenStream {
         }
 
         pub const OVERWORLD_BASE_NOISE_ROUTER: BaseNoiseRouters = #overworld_router;
+        pub const AMPLIFIED_BASE_NOISE_ROUTER: BaseNoiseRouters = #amplified_router;
+        pub const LARGE_BIOMES_BASE_NOISE_ROUTER: BaseNoiseRouters = #large_biomes_router;
         pub const NETHER_BASE_NOISE_ROUTER: BaseNoiseRouters = #nether_router;
         pub const END_BASE_NOISE_ROUTER: BaseNoiseRouters = #end_router;
+
+        impl BaseNoiseRouters {
+            #[must_use]
+            pub fn from_name(name: &str) -> Option<&'static Self> {
+                let name = name.strip_prefix("minecraft:").unwrap_or(name);
+                match name {
+                    "overworld" => Some(&OVERWORLD_BASE_NOISE_ROUTER),
+                    "amplified" => Some(&AMPLIFIED_BASE_NOISE_ROUTER),
+                    "large_biomes" => Some(&LARGE_BIOMES_BASE_NOISE_ROUTER),
+                    "nether" => Some(&NETHER_BASE_NOISE_ROUTER),
+                    "end" => Some(&END_BASE_NOISE_ROUTER),
+                    _ => None,
+                }
+            }
+
+            #[must_use]
+            pub fn from_dimension(dimension: &crate::dimension::Dimension) -> &'static Self {
+                if dimension == &crate::dimension::Dimension::OVERWORLD {
+                    &OVERWORLD_BASE_NOISE_ROUTER
+                } else if dimension == &crate::dimension::Dimension::THE_NETHER {
+                    &NETHER_BASE_NOISE_ROUTER
+                } else {
+                    &END_BASE_NOISE_ROUTER
+                }
+            }
+        }
     }
 }
