@@ -3240,65 +3240,9 @@ impl World {
             .iter()
             .filter(|p| p.gameprofile.id != gameprofile.id)
         {
-            let ex_profile = &existing_player.gameprofile;
-            let ex_entity = &existing_player.get_entity();
-            let ex_pos = ex_entity.pos.load();
-            let ex_vel = ex_entity.velocity.load();
-
-            let ex_player_list = CPlayerList {
-                action: CPlayerList::ACTION_ADD,
-                entries: vec![PlayerListEntry {
-                    uuid: ex_profile.id,
-                    entity_unique_id: VarLong(existing_player.entity_id() as i64),
-                    username: ex_profile.name.clone(),
-                    xuid: String::new(),
-                    platform_chat_id: String::new(),
-                    build_platform: BuildPlatform::Unknown,
-                    skin: (**existing_player.bedrock_skin.load()).clone(),
-                    is_teacher: false,
-                    is_host: false,
-                    is_sub_client: false,
-                    player_color: [0, 0, 0, 0],
-                }],
-            };
+            let (ex_player_list, ex_add_player) = existing_player.bedrock_spawn_packets();
             // Send PlayerList FIRST
             client.send_packet(&ex_player_list).await;
-
-            let ex_add_player = CAddPlayer {
-                uuid: ex_profile.id,
-                player_name: ex_profile.name.clone(),
-                target_runtime_id: VarULong(existing_player.entity_id() as u64),
-                platform_chat_id: String::new(),
-                position: Vector3::new(ex_pos.x as f32, ex_pos.y as f32, ex_pos.z as f32),
-                velocity: Vector3::new(ex_vel.x as f32, ex_vel.y as f32, ex_vel.z as f32),
-                rotation: Vector2::new(ex_entity.pitch.load(), ex_entity.yaw.load()),
-                y_head_rotation: ex_entity.head_yaw.load(),
-                carried_item: NetworkItemStackDescriptor::default(),
-                player_game_type: existing_player.gamemode.load().into(),
-                entity_data: ex_entity.bedrock_metadata(),
-                synced_properties: PropertySyncData::default(),
-                abilities_data: pumpkin_protocol::bedrock::client::SerializedAbilitiesData {
-                    target_player_raw_id: existing_player.entity_id() as i64,
-                    player_permissions:
-                        pumpkin_protocol::bedrock::client::PlayerPermissionLevel::Visitor,
-                    command_permissions:
-                        pumpkin_protocol::bedrock::client::CommandPermissionLevel::Any,
-                    layers: vec![
-                        pumpkin_protocol::bedrock::client::SerializedAbilitiesDataSerializedLayer {
-                            serialized_layer: 0,
-                            abilities_set: 0,
-                            ability_value: 0,
-                            fly_speed: 0.05,
-                            vertical_fly_speed: 0.05,
-                            walk_speed: 0.1,
-                        },
-                    ],
-                },
-                actor_links: Vec::new(),
-                device_id: String::new(),
-                build_platform: BuildPlatform::Unknown,
-            };
-
             client.send_packet(&ex_add_player).await;
 
             let ex_held_item = existing_player.inventory().held_item();
@@ -3738,61 +3682,7 @@ impl World {
             let entity = &existing_player.get_entity();
             let pos = entity.pos.load();
             let gameprofile = &existing_player.gameprofile;
-            let bedrock_add_player = CAddPlayer {
-                uuid: gameprofile.id,
-                player_name: gameprofile.name.clone(),
-                target_runtime_id: VarULong(existing_player.entity_id() as u64),
-                platform_chat_id: String::new(),
-                position: Vector3::new(pos.x as f32, pos.y as f32, pos.z as f32),
-                velocity: Vector3::new(
-                    entity.velocity.load().x as f32,
-                    entity.velocity.load().y as f32,
-                    entity.velocity.load().z as f32,
-                ),
-                rotation: Vector2::new(entity.pitch.load(), entity.yaw.load()),
-                y_head_rotation: entity.head_yaw.load(),
-                carried_item: NetworkItemStackDescriptor::default(),
-                player_game_type: existing_player.gamemode.load().into(),
-                entity_data: entity.bedrock_metadata(),
-                synced_properties: PropertySyncData::default(),
-                abilities_data: pumpkin_protocol::bedrock::client::SerializedAbilitiesData {
-                    target_player_raw_id: existing_player.entity_id() as i64,
-                    player_permissions:
-                        pumpkin_protocol::bedrock::client::PlayerPermissionLevel::Visitor,
-                    command_permissions:
-                        pumpkin_protocol::bedrock::client::CommandPermissionLevel::Any,
-                    layers: vec![
-                        pumpkin_protocol::bedrock::client::SerializedAbilitiesDataSerializedLayer {
-                            serialized_layer: 0,
-                            abilities_set: 0,
-                            ability_value: 0,
-                            fly_speed: 0.05,
-                            vertical_fly_speed: 0.05,
-                            walk_speed: 0.1,
-                        },
-                    ],
-                },
-                actor_links: Vec::new(),
-                device_id: String::new(),
-                build_platform: BuildPlatform::Unknown,
-            };
-
-            let bedrock_player_list = CPlayerList {
-                action: CPlayerList::ACTION_ADD,
-                entries: vec![PlayerListEntry {
-                    uuid: gameprofile.id,
-                    entity_unique_id: VarLong(existing_player.entity_id() as i64),
-                    username: gameprofile.name.clone(),
-                    xuid: String::new(),
-                    platform_chat_id: String::new(),
-                    build_platform: BuildPlatform::Unknown,
-                    skin: (**existing_player.bedrock_skin.load()).clone(),
-                    is_teacher: false,
-                    is_host: false,
-                    is_sub_client: false,
-                    player_color: [0, 0, 0, 0],
-                }],
-            };
+            let (bedrock_player_list, bedrock_add_player) = existing_player.bedrock_spawn_packets();
 
             let actions = [
                 PlayerAction::AddPlayer {
@@ -4236,60 +4126,8 @@ impl World {
             return;
         }
 
-        let entity = subject.get_entity();
-        let entity_id = subject.entity_id();
-        let position = entity.pos.load();
-        let velocity = entity.velocity.load();
-        let player_list = CPlayerList {
-            action: CPlayerList::ACTION_ADD,
-            entries: vec![PlayerListEntry {
-                uuid: subject.gameprofile.id,
-                entity_unique_id: VarLong(entity_id.into()),
-                username: subject.gameprofile.name.clone(),
-                xuid: String::new(),
-                platform_chat_id: String::new(),
-                build_platform: BuildPlatform::Unknown,
-                skin: (**subject.bedrock_skin.load()).clone(),
-                is_teacher: false,
-                is_host: false,
-                is_sub_client: false,
-                player_color: [0; 4],
-            }],
-        };
-        let add_player = CAddPlayer {
-            uuid: subject.gameprofile.id,
-            player_name: subject.gameprofile.name.clone(),
-            target_runtime_id: VarULong(entity_id as u64),
-            platform_chat_id: String::new(),
-            position: Vector3::new(position.x as f32, position.y as f32, position.z as f32),
-            velocity: Vector3::new(velocity.x as f32, velocity.y as f32, velocity.z as f32),
-            rotation: Vector2::new(entity.pitch.load(), entity.yaw.load()),
-            y_head_rotation: entity.head_yaw.load(),
-            carried_item: NetworkItemStackDescriptor::default(),
-            player_game_type: subject.gamemode.load().into(),
-            entity_data: entity.bedrock_metadata(),
-            synced_properties: PropertySyncData::default(),
-            abilities_data: pumpkin_protocol::bedrock::client::SerializedAbilitiesData {
-                target_player_raw_id: entity_id as i64,
-                player_permissions:
-                    pumpkin_protocol::bedrock::client::PlayerPermissionLevel::Visitor,
-                command_permissions: pumpkin_protocol::bedrock::client::CommandPermissionLevel::Any,
-                layers: vec![
-                    pumpkin_protocol::bedrock::client::SerializedAbilitiesDataSerializedLayer {
-                        serialized_layer: 0,
-                        abilities_set: 0,
-                        ability_value: 0,
-                        fly_speed: 0.05,
-                        vertical_fly_speed: 0.05,
-                        walk_speed: 0.1,
-                    },
-                ],
-            },
-            actor_links: Vec::new(),
-            device_id: String::new(),
-            build_platform: BuildPlatform::Unknown,
-        };
-        let remove = CRemoveActor::new(VarLong(entity_id.into()));
+        let (player_list, add_player) = subject.bedrock_spawn_packets();
+        let remove = CRemoveActor::new(VarLong(subject.entity_id().into()));
 
         for recipient in self.players.load().iter() {
             if let ClientPlatform::Bedrock(client) = recipient.client.as_ref() {
