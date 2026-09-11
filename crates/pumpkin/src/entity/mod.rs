@@ -358,6 +358,8 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             y_body_rotation: entity.body_yaw.load(),
             attributes_list: Vec::new(),
             actor_data: metadata,
+            // TODO: Bedrock `climate_variant` property for pig/cow/chicken (`TemperatureVariantAnimal`)
+            // empty -> client picks its own variant.
             synced_properties: PropertySyncData {
                 int_entries_list: std::collections::HashMap::new(),
                 float_entries_list: std::collections::HashMap::new(),

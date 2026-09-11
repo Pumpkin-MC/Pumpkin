@@ -982,18 +982,15 @@ impl Player {
         self.client.spawn_task(task)
     }
 
-    /// Bedrock remote-player spawn -> the `PlayerList` entry must precede `AddPlayer`.
+    /// Bedrock tab-list entry -> carries the skin, so it must precede `AddPlayer`.
     #[must_use]
-    pub fn bedrock_spawn_packets(&self) -> (CPlayerList, CAddPlayer) {
-        let entity = self.get_entity();
-        let entity_id = i64::from(self.entity_id());
-        let profile = &self.gameprofile;
-        let player_list = CPlayerList {
+    pub fn bedrock_player_list(&self) -> CPlayerList {
+        CPlayerList {
             action: CPlayerList::ACTION_ADD,
             entries: vec![PlayerListEntry {
-                uuid: profile.id,
-                entity_unique_id: VarLong(entity_id),
-                username: profile.name.clone(),
+                uuid: self.gameprofile.id,
+                entity_unique_id: VarLong(i64::from(self.entity_id())),
+                username: self.gameprofile.name.clone(),
                 xuid: String::new(),
                 platform_chat_id: String::new(),
                 build_platform: BuildPlatform::Unknown,
@@ -1003,7 +1000,21 @@ impl Player {
                 is_sub_client: false,
                 player_color: [0; 4],
             }],
-        };
+        }
+    }
+
+    /// Bedrock remote-player spawn -> the `PlayerList` entry must precede `AddPlayer`.
+    #[must_use]
+    pub fn bedrock_spawn_packets(&self) -> (CPlayerList, CAddPlayer) {
+        let entity = self.get_entity();
+        let entity_id = i64::from(self.entity_id());
+        let profile = &self.gameprofile;
+        let mut entity_data = entity.bedrock_metadata();
+        // name tag only shows on the crosshair without this.
+        entity_data.set(
+            pumpkin_protocol::bedrock::client::set_actor_data::entity_data_key::ALWAYS_SHOW_NAME_TAG,
+            pumpkin_protocol::bedrock::client::set_actor_data::MetadataValue::Byte(1),
+        );
         let add_player = CAddPlayer {
             uuid: profile.id,
             player_name: profile.name.clone(),
@@ -1016,7 +1027,7 @@ impl Player {
             carried_item:
                 pumpkin_protocol::bedrock::network_item::NetworkItemStackDescriptor::default(),
             player_game_type: self.gamemode.load().into(),
-            entity_data: entity.bedrock_metadata(),
+            entity_data,
             synced_properties: PropertySyncData::default(),
             abilities_data: SerializedAbilitiesData {
                 target_player_raw_id: entity_id,
@@ -1035,7 +1046,7 @@ impl Player {
             device_id: String::new(),
             build_platform: BuildPlatform::Unknown,
         };
-        (player_list, add_player)
+        (self.bedrock_player_list(), add_player)
     }
 
     pub const fn inventory(&self) -> &Arc<PlayerInventory> {
