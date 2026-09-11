@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:spring_feature",
+  "config": {
+    "state": {
+      "Name": "minecraft:lava",
+      "Properties": {
+        "falling": "true"
+      }
+    },
+    "valid_blocks": [
+      "minecraft:netherrack",
+      "minecraft:soul_sand",
+      "minecraft:gravel",
+      "minecraft:magma_block",
+      "minecraft:blackstone"
+    ]
+  }
+}

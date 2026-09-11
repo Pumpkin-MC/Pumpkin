@@ -1,0 +1,24 @@
+{
+  "values": [
+    "oak_boat",
+    "spruce_boat",
+    "birch_boat",
+    "jungle_boat",
+    "acacia_boat",
+    "cherry_boat",
+    "dark_oak_boat",
+    "pale_oak_boat",
+    "mangrove_boat",
+    "bamboo_raft",
+    "oak_chest_boat",
+    "spruce_chest_boat",
+    "birch_chest_boat",
+    "jungle_chest_boat",
+    "acacia_chest_boat",
+    "cherry_chest_boat",
+    "pale_oak_chest_boat",
+    "dark_oak_chest_boat",
+    "mangrove_chest_boat",
+    "bamboo_chest_raft"
+  ]
+}

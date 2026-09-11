@@ -1,0 +1,10 @@
+{
+  "gives": {
+    "id": "minecraft:open_eyeblossom"
+  },
+  "max_uses": 7.0,
+  "reputation_discount": 0.05,
+  "wants": {
+    "id": "minecraft:emerald"
+  }
+}

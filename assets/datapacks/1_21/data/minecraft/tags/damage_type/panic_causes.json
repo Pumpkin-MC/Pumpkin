@@ -1,0 +1,24 @@
+{
+  "values": [
+    "#minecraft:panic_environmental_causes",
+    "minecraft:arrow",
+    "minecraft:dragon_breath",
+    "minecraft:explosion",
+    "minecraft:fireball",
+    "minecraft:fireworks",
+    "minecraft:indirect_magic",
+    "minecraft:magic",
+    "minecraft:mob_attack",
+    "minecraft:mob_projectile",
+    "minecraft:player_attack",
+    "minecraft:player_explosion",
+    "minecraft:sonic_boom",
+    "minecraft:sting",
+    "minecraft:thrown",
+    "minecraft:trident",
+    "minecraft:unattributed_fireball",
+    "minecraft:wind_charge",
+    "minecraft:wither",
+    "minecraft:wither_skull"
+  ]
+}

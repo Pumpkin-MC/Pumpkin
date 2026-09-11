@@ -1,7 +1,4 @@
-use std::{
-    pin::Pin,
-    sync::atomic::{AtomicU8, Ordering},
-};
+use std::sync::atomic::{AtomicU8, Ordering};
 
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
@@ -46,16 +43,11 @@ impl BlockEntity for ComparatorBlockEntity {
         }
     }
 
-    fn write_nbt<'a>(
-        &'a self,
-        nbt: &'a mut NbtCompound,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            nbt.put_int(
-                OUTPUT_SIGNAL,
-                self.output_signal.load(Ordering::Relaxed) as i32,
-            );
-        })
+    fn write_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_int(
+            OUTPUT_SIGNAL,
+            self.output_signal.load(Ordering::Relaxed) as i32,
+        );
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {

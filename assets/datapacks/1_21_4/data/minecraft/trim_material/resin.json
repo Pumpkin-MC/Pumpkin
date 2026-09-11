@@ -1,0 +1,8 @@
+{
+  "asset_name": "resin",
+  "ingredient": "minecraft:resin_brick",
+  "description": {
+    "translate": "trim_material.minecraft.resin",
+    "color": "#FC7812"
+  }
+}

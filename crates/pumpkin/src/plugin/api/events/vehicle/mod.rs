@@ -1,0 +1,21 @@
+pub mod vehicle_block_collision;
+pub mod vehicle_collision;
+pub mod vehicle_create;
+pub mod vehicle_damage;
+pub mod vehicle_destroy;
+pub mod vehicle_enter;
+pub mod vehicle_entity_collision;
+pub mod vehicle_exit;
+pub mod vehicle_move;
+pub mod vehicle_update;
+
+pub use vehicle_block_collision::*;
+pub use vehicle_collision::*;
+pub use vehicle_create::*;
+pub use vehicle_damage::*;
+pub use vehicle_destroy::*;
+pub use vehicle_enter::*;
+pub use vehicle_entity_collision::*;
+pub use vehicle_exit::*;
+pub use vehicle_move::*;
+pub use vehicle_update::*;

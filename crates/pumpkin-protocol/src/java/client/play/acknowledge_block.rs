@@ -1,14 +1,14 @@
 use crate::ClientPacket;
 use crate::VarInt;
 use crate::ser::NetworkWriteExt;
-use pumpkin_data::packet::clientbound::PLAY_BLOCK_CHANGED_ACK;
+use pumpkin_data::packet::clientbound::play::BLOCK_CHANGED_ACK;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 /// Sent by the server to acknowledge a sequence of block changes initiated by the client.
 ///
 /// This packet is critical for preventing "ghost blocks" and synchronization issues.
 /// It tells the client that the server has processed all actions up to a specific point.
-#[java_packet(PLAY_BLOCK_CHANGED_ACK)]
+#[java_packet(BLOCK_CHANGED_ACK)]
 pub struct CAcknowledgeBlockChange {
     /// The ID of the last sequence processed by the server.
     ///

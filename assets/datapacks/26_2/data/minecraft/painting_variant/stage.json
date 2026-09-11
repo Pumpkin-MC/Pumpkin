@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:stage",
+  "author": {
+    "color": "gray",
+    "translate": "painting.minecraft.stage.author"
+  },
+  "height": 2,
+  "title": {
+    "color": "yellow",
+    "translate": "painting.minecraft.stage.title"
+  },
+  "width": 2
+}

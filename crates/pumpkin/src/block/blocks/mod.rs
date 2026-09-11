@@ -1,4 +1,5 @@
 // Portals & dimension blocks
+pub mod end_gateway;
 pub mod end_portal;
 pub mod end_portal_frame;
 pub mod end_rod;
@@ -27,6 +28,7 @@ pub mod jigsaw;
 pub mod note;
 pub mod piston;
 pub mod redstone;
+pub mod test_block;
 
 // Doors, gates & openings
 pub mod doors;
@@ -39,10 +41,15 @@ pub mod barrier;
 pub mod chain;
 pub mod glass_panes;
 pub mod glazed_terracotta;
+pub mod honey;
 pub mod iron_bars;
+pub mod scaffolding;
 pub mod slabs;
 pub mod stairs;
+pub mod structure_void;
+pub mod tinted_glass;
 pub mod walls;
+pub mod weathering_copper;
 
 // Decorative & furnishings
 pub mod banners;
@@ -64,6 +71,7 @@ pub mod candle_cakes;
 pub mod candles;
 pub mod fire;
 pub mod lanterns;
+pub mod light;
 pub mod magma;
 pub mod torches;
 
@@ -73,6 +81,7 @@ pub mod carved_pumpkin;
 pub mod dripstone;
 pub mod farmland;
 pub mod hay;
+pub mod leaves;
 pub mod logs;
 pub mod mangrove_roots;
 pub mod plant;
@@ -87,10 +96,16 @@ pub mod dirt_path;
 pub mod dragon_egg;
 pub mod falling;
 pub mod grass_block;
+pub mod ice;
 pub mod infested;
+pub mod mud;
+pub mod nylium;
 pub mod powder_snow;
+pub mod rooted_dirt;
 pub mod snow;
+pub mod soul_sand;
 pub mod sponge;
+pub mod spreading_snowy_block;
 
 // Entities, hazards & misc gameplay blocks
 pub mod anvil;
@@ -110,3 +125,15 @@ pub mod coral;
 pub mod abstract_wall_mounting;
 
 pub mod beacon;
+pub mod brushable_block;
+pub mod cartography_table;
+pub mod creaking_heart;
+pub mod decorated_pot;
+pub mod fletching_table;
+pub mod loom;
+pub mod smithing_table;
+pub mod sniffer_egg;
+pub mod structure_block;
+pub mod trial_spawner;
+pub mod turtle_egg;
+pub mod vault;

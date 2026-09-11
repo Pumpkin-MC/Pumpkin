@@ -64,7 +64,11 @@ fn setup_cache(
     world_gen: &WorldGenerator,
     block_registry: &dyn WorldPortalExt,
 ) -> Cache {
-    let radius = target_stage.get_direct_radius();
+    let radius = if target_stage as u8 >= StagedChunkEnum::Surface as u8 {
+        1
+    } else {
+        target_stage.get_direct_radius()
+    };
     let mut cache = Cache::new(-radius, -radius, radius * 2 + 1);
 
     for dx in -radius..=radius {
@@ -102,15 +106,12 @@ fn setup_cache(
 }
 
 fn bench_full_chunk_generation(c: &mut Criterion) {
-    let dimension = Dimension::OVERWORLD;
     let world_gen = make_world_gen();
     let block_registry = Arc::new(BlockRegistry);
 
     c.bench_function("full_chunk_generation", |b| {
         b.iter(|| {
             black_box(generate_single_chunk(
-                &dimension,
-                0,
                 &world_gen,
                 block_registry.as_ref(),
                 black_box(0),

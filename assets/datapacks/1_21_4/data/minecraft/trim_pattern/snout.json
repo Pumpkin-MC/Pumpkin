@@ -1,0 +1,8 @@
+{
+  "asset_id": "minecraft:snout",
+  "template_item": "minecraft:snout_armor_trim_smithing_template",
+  "description": {
+    "translate": "trim_pattern.minecraft.snout"
+  },
+  "decal": false
+}

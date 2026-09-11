@@ -1,6 +1,4 @@
 use std::any::Any;
-use std::future::Future;
-use std::pin::Pin;
 
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
@@ -16,37 +14,24 @@ impl ItemMetadata for SpyglassItem {
 }
 
 impl ItemBehaviour for SpyglassItem {
-    fn normal_use<'a>(
-        &'a self,
-        _item: &'a Item,
-        player: &'a Player,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            player.world().play_sound(
-                Sound::ItemSpyglassUse,
-                SoundCategory::Players,
-                &player.position(),
-            );
-            let stack = player.inventory().held_item().await;
-            player
-                .living_entity
-                .set_active_hand(pumpkin_util::Hand::Right, stack, Self::USE_DURATION)
-                .await;
-        })
+    fn normal_use(&self, _item: &Item, player: &Player) {
+        player.world().play_sound(
+            Sound::ItemSpyglassUse,
+            SoundCategory::Players,
+            &player.position(),
+        );
+        let stack = player.inventory().held_item();
+        player
+            .living_entity
+            .set_active_hand(pumpkin_util::Hand::Right, stack, Self::USE_DURATION);
     }
 
-    fn on_stopped_using<'a>(
-        &'a self,
-        _stack: &'a pumpkin_data::item_stack::ItemStack,
-        player: &'a Player,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            player.world().play_sound(
-                Sound::ItemSpyglassStopUsing,
-                SoundCategory::Players,
-                &player.position(),
-            );
-        })
+    fn on_stopped_using(&self, _stack: &pumpkin_data::item_stack::ItemStack, player: &Player) {
+        player.world().play_sound(
+            Sound::ItemSpyglassStopUsing,
+            SoundCategory::Players,
+            &player.position(),
+        );
     }
 
     fn get_use_duration(&self) -> i32 {

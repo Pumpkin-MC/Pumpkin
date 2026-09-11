@@ -1,0 +1,18 @@
+{
+  "piglin_safe": 1,
+  "natural": 0,
+  "ambient_light": 0.10000000149011612,
+  "infiniburn": "minecraft:infiniburn_nether",
+  "respawn_anchor_works": 1,
+  "has_skylight": 0,
+  "bed_works": 0,
+  "effects": "minecraft:the_nether",
+  "fixed_time": 18000,
+  "has_raids": 0,
+  "logical_height": 128,
+  "coordinate_scale": 8.0,
+  "min_y": 0,
+  "has_ceiling": 1,
+  "ultrawarm": 1,
+  "height": 256
+}

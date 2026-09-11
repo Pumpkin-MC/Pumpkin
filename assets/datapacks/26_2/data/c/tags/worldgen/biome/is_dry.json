@@ -1,0 +1,21 @@
+{
+  "values": [
+    "desert",
+    "badlands",
+    "wooded_badlands",
+    "eroded_badlands",
+    "savanna",
+    "savanna_plateau",
+    "windswept_savanna",
+    "nether_wastes",
+    "crimson_forest",
+    "warped_forest",
+    "soul_sand_valley",
+    "basalt_deltas",
+    "the_end",
+    "small_end_islands",
+    "end_midlands",
+    "end_highlands",
+    "end_barrens"
+  ]
+}

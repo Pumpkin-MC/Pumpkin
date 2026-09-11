@@ -42,137 +42,181 @@ struct ObjectivesAddExecutor {
 }
 
 impl CommandExecutor for ObjectivesAddExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let objective_name = StringArgumentType::get(context, ARG_OBJECTIVE)?;
-            let criterion = StringArgumentType::get(context, ARG_CRITERION)?;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let objective_name = StringArgumentType::get(context, ARG_OBJECTIVE)?;
+        let criterion = StringArgumentType::get(context, ARG_CRITERION)?;
 
-            let display_name = if self.has_display_name {
-                TextComponent::text(StringArgumentType::get(context, ARG_DISPLAY_NAME)?.to_string())
-            } else {
-                TextComponent::text(objective_name.to_string())
-            };
+        let display_name = if self.has_display_name {
+            TextComponent::text(StringArgumentType::get(context, ARG_DISPLAY_NAME)?.to_string())
+        } else {
+            TextComponent::text(objective_name.to_string())
+        };
 
-            let world = context.world();
-            let mut scoreboard = world.scoreboard.lock().await;
+        let world = context.world().clone();
+        let objective_name_owned = objective_name.to_string();
+        let criterion_owned = criterion.to_string();
+        let display_name_clone = display_name;
 
-            if scoreboard.get_objectives().contains_key(objective_name) {
-                return Err(DUPLICATE_OBJECTIVE_ERROR.create_without_context());
-            }
+        let mut scoreboard = world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-            let obj_name_static = Box::leak(objective_name.to_string().into_boxed_str());
-            let criterion_static = Box::leak(criterion.to_string().into_boxed_str());
+        if scoreboard
+            .get_objectives()
+            .contains_key(&objective_name_owned)
+        {
+            return Err(DUPLICATE_OBJECTIVE_ERROR.create_without_context());
+        }
 
-            let new_objective = ScoreboardObjective::new(
-                obj_name_static,
-                display_name.clone(),
-                RenderType::Integer,
-                None,
-                criterion_static,
-            );
+        let new_objective = ScoreboardObjective::new(
+            &objective_name_owned,
+            display_name_clone.clone(),
+            RenderType::Integer,
+            None,
+            &criterion_owned,
+        );
 
-            scoreboard.add_objective(world, new_objective).await;
+        scoreboard.add_objective(&world, new_objective);
 
-            context
-                .source
-                .send_feedback(
-                    TextComponent::translate_cross(
-                        translation::java::COMMANDS_SCOREBOARD_OBJECTIVES_ADD_SUCCESS,
-                        translation::java::COMMANDS_SCOREBOARD_OBJECTIVES_ADD_SUCCESS,
-                        [display_name],
-                    ),
-                    true,
-                )
-                .await;
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_SCOREBOARD_OBJECTIVES_ADD_SUCCESS,
+                translation::java::COMMANDS_SCOREBOARD_OBJECTIVES_ADD_SUCCESS,
+                [display_name_clone],
+            ),
+            true,
+        );
 
-            Ok(1)
-        })
+        Ok(1)
     }
 }
 
 struct PlayersEnableExecutor;
 
 impl CommandExecutor for PlayersEnableExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let targets = EntityArgumentType::get_players(context, ARG_TARGETS).await?;
-            let objective_name = ObjectiveArgumentType::get(context, ARG_OBJECTIVE)?;
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let targets = EntityArgumentType::get_players(context, ARG_TARGETS)?;
+        let objective_name = ObjectiveArgumentType::get(context, ARG_OBJECTIVE)?;
 
-            let world = context.world();
-            let mut scoreboard = world.scoreboard.lock().await;
+        let world = context.world().clone();
+        let objective_name_owned = objective_name.to_string();
+        let targets_len = targets.len();
+        let first_target_name = targets
+            .first()
+            .map(|p| p.gameprofile.name.clone())
+            .unwrap_or_default();
 
-            let objective = scoreboard
-                .get_objectives()
-                .get(objective_name)
-                .ok_or_else(|| INVALID_ENABLE_ERROR.create_without_context())?;
+        let mut scoreboard = world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-            if objective.criterion != "trigger" {
-                return Err(INVALID_ENABLE_ERROR.create_without_context());
+        let Some(objective) = scoreboard.get_objectives().get(&objective_name_owned) else {
+            return Err(INVALID_ENABLE_ERROR.create_without_context());
+        };
+
+        if objective.criterion != "trigger" {
+            return Err(INVALID_ENABLE_ERROR.create_without_context());
+        }
+
+        let objective_display_name = objective.display_name.clone();
+
+        let mut enabled_count = 0;
+        for player in &targets {
+            let player_name = &player.gameprofile.name;
+            let current_score = scoreboard
+                .get_scores()
+                .get(&objective_name_owned)
+                .and_then(|m| m.get(player_name));
+
+            let is_already_enabled = current_score.is_some_and(|s| !s.locked);
+
+            if !is_already_enabled {
+                let value = current_score.map_or(0, |s| s.value.0);
+                let display_name = current_score.and_then(|s| s.display_name.clone());
+                let number_format = current_score.and_then(|s| s.number_format.clone());
+
+                let updated_score = ScoreboardScore {
+                    entity_name: player_name.clone(),
+                    objective_name: objective_name_owned.clone(),
+                    value: VarInt(value),
+                    display_name,
+                    number_format,
+                    locked: false,
+                };
+
+                scoreboard.update_score(&world, updated_score);
+                enabled_count += 1;
             }
+        }
 
-            let objective_display_name = objective.display_name.clone();
+        if enabled_count == 0 {
+            return Err(FAILED_ENABLE_ERROR.create_without_context());
+        }
 
-            let mut enabled_count = 0;
-            for player in &targets {
-                let player_name = &player.gameprofile.name;
-                let current_score = scoreboard
-                    .get_scores()
-                    .get(objective_name)
-                    .and_then(|m| m.get(player_name));
+        let msg = if targets_len == 1 {
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_SCOREBOARD_PLAYERS_ENABLE_SUCCESS_SINGLE,
+                translation::java::COMMANDS_SCOREBOARD_PLAYERS_ENABLE_SUCCESS_SINGLE,
+                [
+                    objective_display_name,
+                    TextComponent::text(first_target_name),
+                ],
+            )
+        } else {
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_SCOREBOARD_PLAYERS_ENABLE_SUCCESS_MULTIPLE,
+                translation::java::COMMANDS_SCOREBOARD_PLAYERS_ENABLE_SUCCESS_MULTIPLE,
+                [
+                    objective_display_name,
+                    TextComponent::text(targets_len.to_string()),
+                ],
+            )
+        };
 
-                let is_already_enabled = current_score.is_some_and(|s| !s.locked);
+        context.source.send_feedback(msg, true);
 
-                if !is_already_enabled {
-                    let value = current_score.map_or(0, |s| s.value.0);
-                    let display_name = current_score.and_then(|s| s.display_name.clone());
-                    let number_format = current_score.and_then(|s| s.number_format.clone());
-
-                    let updated_score = ScoreboardScore {
-                        entity_name: Box::leak(player_name.clone().into_boxed_str()),
-                        objective_name: Box::leak(objective_name.to_string().into_boxed_str()),
-                        value: VarInt(value),
-                        display_name,
-                        number_format,
-                        locked: false,
-                    };
-
-                    scoreboard.update_score(world, updated_score).await;
-                    enabled_count += 1;
-                }
-            }
-
-            if enabled_count == 0 {
-                return Err(FAILED_ENABLE_ERROR.create_without_context());
-            }
-
-            let msg = if targets.len() == 1 {
-                TextComponent::translate_cross(
-                    translation::java::COMMANDS_SCOREBOARD_PLAYERS_ENABLE_SUCCESS_SINGLE,
-                    translation::java::COMMANDS_SCOREBOARD_PLAYERS_ENABLE_SUCCESS_SINGLE,
-                    [
-                        objective_display_name,
-                        TextComponent::text(targets[0].gameprofile.name.clone()),
-                    ],
-                )
-            } else {
-                TextComponent::translate_cross(
-                    translation::java::COMMANDS_SCOREBOARD_PLAYERS_ENABLE_SUCCESS_MULTIPLE,
-                    translation::java::COMMANDS_SCOREBOARD_PLAYERS_ENABLE_SUCCESS_MULTIPLE,
-                    [
-                        objective_display_name,
-                        TextComponent::text(targets.len().to_string()),
-                    ],
-                )
-            };
-
-            context.source.send_feedback(msg, true).await;
-
-            Ok(enabled_count)
-        })
+        Ok(1)
     }
 }
 
-pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionRegistry) {
+struct ObjectivesRemoveExecutor;
+
+impl CommandExecutor for ObjectivesRemoveExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let objective_name = ObjectiveArgumentType::get(context, ARG_OBJECTIVE)?;
+
+        let world = context.world().clone();
+        let objective_name_owned = objective_name.to_string();
+
+        let mut scoreboard = world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        let Some(objective) = scoreboard.get_objectives().get(&objective_name_owned) else {
+            return Err(INVALID_ENABLE_ERROR.create_without_context());
+        };
+
+        let display_name = objective.display_name.clone();
+
+        scoreboard.remove_objective(&world, &objective_name_owned);
+
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_SCOREBOARD_OBJECTIVES_REMOVE_SUCCESS,
+                translation::bedrock::COMMANDS_SCOREBOARD_OBJECTIVES_REMOVE_SUCCESS,
+                [display_name],
+            ),
+            true,
+        );
+
+        Ok(1)
+    }
+}
+
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
     registry.register_permission_or_panic(Permission::new(
         PERMISSION,
         DESCRIPTION,
@@ -183,22 +227,34 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &mut PermissionReg
         command("scoreboard", DESCRIPTION)
             .requires(PERMISSION)
             .then(
-                literal("objectives").then(
-                    literal("add").then(
-                        argument(ARG_OBJECTIVE, StringArgumentType::SingleWord).then(
-                            argument(ARG_CRITERION, StringArgumentType::SingleWord)
-                                .executes(ObjectivesAddExecutor {
-                                    has_display_name: false,
-                                })
-                                .then(
-                                    argument(ARG_DISPLAY_NAME, StringArgumentType::GreedyPhrase)
-                                        .executes(ObjectivesAddExecutor {
-                                            has_display_name: true,
-                                        }),
-                                ),
+                literal("objectives")
+                    .then(
+                        literal("add").then(
+                            argument(ARG_OBJECTIVE, StringArgumentType::SingleWord).then(
+                                argument(ARG_CRITERION, StringArgumentType::SingleWord)
+                                    .executes(ObjectivesAddExecutor {
+                                        has_display_name: false,
+                                    })
+                                    .then(
+                                        argument(
+                                            ARG_DISPLAY_NAME,
+                                            StringArgumentType::GreedyPhrase,
+                                        )
+                                        .executes(
+                                            ObjectivesAddExecutor {
+                                                has_display_name: true,
+                                            },
+                                        ),
+                                    ),
+                            ),
+                        ),
+                    )
+                    .then(
+                        literal("remove").then(
+                            argument(ARG_OBJECTIVE, ObjectiveArgumentType)
+                                .executes(ObjectivesRemoveExecutor),
                         ),
                     ),
-                ),
             )
             .then(literal("players").then(literal("enable").then(
                 argument(ARG_TARGETS, EntityArgumentType::Players).then(

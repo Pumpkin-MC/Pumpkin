@@ -167,7 +167,24 @@ impl TextComponent {
     /// A legacy Minecraft formatted string with `§` color and style codes.
     #[must_use]
     pub fn to_legacy_string(&self, locale: Locale) -> String {
-        self.to_legacy_string_with_code('§', locale)
+        self.to_legacy_string_for_version(&crate::version::JavaMinecraftVersion::V_26_2, locale)
+    }
+
+    /// Serializes this component into a Java legacy formatted string for a specific Minecraft version.
+    ///
+    /// # Arguments
+    /// - `version` – The Minecraft version to format for.
+    /// - `locale` – The locale to use for resolving translation components.
+    ///
+    /// # Returns
+    /// A legacy Minecraft formatted string with `§` color and style codes.
+    #[must_use]
+    pub fn to_legacy_string_for_version(
+        &self,
+        version: &crate::version::JavaMinecraftVersion,
+        locale: Locale,
+    ) -> String {
+        self.to_legacy_string_with_code_for_version(version, '§', locale)
     }
 
     /// Serializes this component into a legacy formatted string using a custom color code symbol.
@@ -180,6 +197,29 @@ impl TextComponent {
     /// A legacy formatted string with color and style codes using `code_symbol`.
     #[must_use]
     pub fn to_legacy_string_with_code(&self, code_symbol: char, locale: Locale) -> String {
+        self.to_legacy_string_with_code_for_version(
+            &crate::version::JavaMinecraftVersion::V_26_2,
+            code_symbol,
+            locale,
+        )
+    }
+
+    /// Serializes this component into a legacy formatted string for a specific Minecraft version.
+    ///
+    /// # Arguments
+    /// - `version` – The Minecraft version to format for.
+    /// - `code_symbol` – The formatting character symbol (e.g., `'§'` or `'&'`).
+    /// - `locale` – The locale to use for resolving translation components.
+    ///
+    /// # Returns
+    /// A legacy formatted string with color and style codes using `code_symbol`.
+    #[must_use]
+    pub fn to_legacy_string_with_code_for_version(
+        &self,
+        version: &crate::version::JavaMinecraftVersion,
+        code_symbol: char,
+        locale: Locale,
+    ) -> String {
         let mut text = String::new();
 
         // 1. Color formatting
@@ -189,10 +229,15 @@ impl TextComponent {
                     let _ = write!(text, "{code_symbol}{}", named.to_legacy_char());
                 }
                 Color::Rgb(rgb) => {
-                    let hex = format!("{:02x}{:02x}{:02x}", rgb.red, rgb.green, rgb.blue);
-                    let _ = write!(text, "{code_symbol}x");
-                    for ch in hex.chars() {
-                        let _ = write!(text, "{code_symbol}{ch}");
+                    if *version >= crate::version::JavaMinecraftVersion::V_1_16 {
+                        let hex = format!("{:02x}{:02x}{:02x}", rgb.red, rgb.green, rgb.blue);
+                        let _ = write!(text, "{code_symbol}x");
+                        for ch in hex.chars() {
+                            let _ = write!(text, "{code_symbol}{ch}");
+                        }
+                    } else {
+                        let named = rgb.to_nearest_named();
+                        let _ = write!(text, "{code_symbol}{}", named.to_legacy_char());
                     }
                 }
                 Color::Reset => {
@@ -246,7 +291,11 @@ impl TextComponent {
 
         // 4. Recursively append extra components
         for child in &self.0.extra {
-            text.push_str(&Self(child.clone()).to_legacy_string_with_code(code_symbol, locale));
+            text.push_str(&Self(child.clone()).to_legacy_string_with_code_for_version(
+                version,
+                code_symbol,
+                locale,
+            ));
             let _ = write!(text, "{code_symbol}r");
         }
 

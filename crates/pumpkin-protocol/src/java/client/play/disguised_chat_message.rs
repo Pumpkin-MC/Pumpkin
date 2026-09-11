@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_DISGUISED_CHAT;
+use pumpkin_data::packet::clientbound::play::DISGUISED_CHAT;
 use pumpkin_macros::java_packet;
 use pumpkin_util::text::TextComponent;
 
@@ -12,7 +12,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 /// Introduced to support server-side "disguised" identities (like /say or NPC chat),
 /// this packet bypasses the player-to-player chat signing requirements while
 /// still allowing the client to format the message using the standard chat registry.
-#[java_packet(PLAY_DISGUISED_CHAT)]
+#[java_packet(DISGUISED_CHAT)]
 pub struct CDisguisedChatMessage<'a> {
     /// The raw content of the message.
     pub message: &'a TextComponent,
@@ -46,14 +46,14 @@ impl ClientPacket for CDisguisedChatMessage<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        write.write_slice(&self.message.encode())?;
+        write.write_component(self.message, version)?;
         write.write_var_int(&self.chat_type)?;
-        write.write_slice(&self.sender_name.encode())?;
+        write.write_component(self.sender_name, version)?;
         if let Some(target) = self.target_name {
             write.write_bool(true)?;
-            write.write_slice(&target.encode())?;
+            write.write_component(target, version)?;
         } else {
             write.write_bool(false)?;
         }

@@ -1,0 +1,15 @@
+{
+  "additional_wants": {
+    "id": "minecraft:emerald"
+  },
+  "gives": {
+    "count": 10,
+    "id": "minecraft:flint"
+  },
+  "max_uses": 12.0,
+  "reputation_discount": 0.05,
+  "wants": {
+    "count": 10.0,
+    "id": "minecraft:gravel"
+  }
+}

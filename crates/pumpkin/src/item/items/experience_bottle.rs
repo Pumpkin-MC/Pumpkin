@@ -1,6 +1,4 @@
 use std::any::Any;
-use std::future::Future;
-use std::pin::Pin;
 
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::entity::player::Player;
@@ -17,27 +15,21 @@ impl ItemMetadata for ExperienceBottleItem {
 }
 
 impl ItemBehaviour for ExperienceBottleItem {
-    fn normal_use<'a>(
-        &'a self,
-        _item: &'a Item,
-        player: &'a Player,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            let world = player.world();
-            let pos = player.eye_position();
-            world.play_sound(
-                Sound::EntityExperienceBottleThrow,
-                SoundCategory::Players,
-                &pos,
-            );
+    fn normal_use(&self, _item: &Item, player: &Player) {
+        let world = player.world();
+        let pos = player.eye_position();
+        world.play_sound(
+            Sound::EntityExperienceBottleThrow,
+            SoundCategory::Players,
+            &pos,
+        );
 
-            let amount = (rand::random::<u32>() % 9 + 3) as u32; // 3..=11 exp
-            ExperienceOrbEntity::spawn(&world, pos, amount).await;
+        let amount = (rand::random::<u32>() % 9 + 3) as u32; // 3..=11 exp
+        ExperienceOrbEntity::spawn(&world, pos, amount);
 
-            let mut held = player.inventory().held_item().await;
-            held.decrement_unless_creative(player.gamemode.load(), 1);
-            player.inventory().set_held_item(held).await;
-        })
+        let mut held = player.inventory().held_item();
+        held.decrement_unless_creative(player.gamemode.load(), 1);
+        player.inventory().set_held_item(held);
     }
 
     fn as_any(&self) -> &dyn Any {

@@ -1,0 +1,36 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "conditions": [
+        {
+          "condition": "minecraft:survives_explosion"
+        }
+      ],
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "functions": [
+            {
+              "function": "minecraft:copy_components",
+              "include": [
+                "minecraft:custom_name"
+              ],
+              "source": "block_entity"
+            },
+            {
+              "block": "minecraft:waxed_oxidized_copper_golem_statue",
+              "function": "minecraft:copy_state",
+              "properties": [
+                "copper_golem_pose"
+              ]
+            }
+          ],
+          "name": "minecraft:waxed_oxidized_copper_golem_statue"
+        }
+      ],
+      "rolls": 1.0
+    }
+  ],
+  "random_sequence": "minecraft:blocks/waxed_oxidized_copper_golem_statue"
+}

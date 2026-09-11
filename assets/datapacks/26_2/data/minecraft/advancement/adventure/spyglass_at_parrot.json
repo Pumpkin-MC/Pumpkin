@@ -1,0 +1,43 @@
+{
+  "parent": "minecraft:adventure/root",
+  "criteria": {
+    "spyglass_at_parrot": {
+      "conditions": {
+        "item": {
+          "items": "minecraft:spyglass"
+        },
+        "player": [
+          {
+            "condition": "minecraft:entity_properties",
+            "entity": "this",
+            "predicate": {
+              "minecraft:type_specific/player": {
+                "looking_at": {
+                  "minecraft:entity_type": "minecraft:parrot"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "trigger": "minecraft:using_item"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.adventure.spyglass_at_parrot.description"
+    },
+    "icon": {
+      "id": "minecraft:spyglass"
+    },
+    "title": {
+      "translate": "advancements.adventure.spyglass_at_parrot.title"
+    }
+  },
+  "requirements": [
+    [
+      "spyglass_at_parrot"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

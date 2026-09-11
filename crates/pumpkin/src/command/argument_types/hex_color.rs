@@ -7,7 +7,6 @@ use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 use pumpkin_data::translation::java::ARGUMENT_HEXCOLOR_INVALID;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::RGBColor;
-use std::pin::Pin;
 
 pub const INVALID_HEX_ERROR_TYPE: CommandErrorType<1> =
     CommandErrorType::new(ARGUMENT_HEXCOLOR_INVALID, ARGUMENT_HEXCOLOR_INVALID);
@@ -38,12 +37,12 @@ impl ArgumentType for HexColorArgumentType {
         JavaClientArgumentType::HexColor
     }
 
-    fn list_suggestions<'a>(
-        &'a self,
-        _context: &'a CommandContext,
+    fn list_suggestions(
+        &self,
+        _context: &CommandContext,
         builder: SuggestionsBuilder,
-    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
-        Box::pin(async move { builder.filter_and_suggest(&["F00", "FF0000"]).build() })
+    ) -> Suggestions {
+        builder.filter_and_suggest(&["F00", "FF0000"]).build()
     }
 
     fn examples(&self) -> Vec<String> {

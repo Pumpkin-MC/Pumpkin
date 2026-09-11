@@ -9,12 +9,11 @@
 //! Unlike regular inventories, crafting grids are typically cleared when
 //! the container closes, and their contents are used up when crafting.
 
-use std::{any::Any, pin::Pin};
+use std::any::Any;
+use std::sync::RwLock;
 
 use pumpkin_data::item_stack::ItemStack;
-use tokio::sync::RwLock;
-
-use pumpkin_world::inventory::{Clearable, Inventory, InventoryFuture};
+use pumpkin_world::inventory::{Clearable, Inventory};
 
 use super::recipes::RecipeInputInventory;
 
@@ -71,52 +70,57 @@ impl Inventory for CraftingInventory {
         (self.width as usize) * (self.height as usize)
     }
 
-    fn is_empty(&self) -> InventoryFuture<'_, bool> {
-        Box::pin(async move {
-            let items = self.items.read().await;
-            items.iter().all(ItemStack::is_empty)
-        })
+    fn is_empty(&self) -> bool {
+        let items = self
+            .items
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        items.iter().all(ItemStack::is_empty)
     }
 
-    fn get_stack(&self, slot: usize) -> InventoryFuture<'_, ItemStack> {
-        Box::pin(async move {
-            let items = self.items.read().await;
-            items
-                .get(slot)
-                .cloned()
-                .unwrap_or_else(|| ItemStack::EMPTY.clone())
-        })
+    fn get_stack(&self, slot: usize) -> ItemStack {
+        let items = self
+            .items
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        items
+            .get(slot)
+            .cloned()
+            .unwrap_or_else(|| ItemStack::EMPTY.clone())
     }
 
-    fn remove_stack(&self, slot: usize) -> InventoryFuture<'_, ItemStack> {
-        Box::pin(async move {
-            let mut items = self.items.write().await;
-            if slot < items.len() {
-                std::mem::replace(&mut items[slot], ItemStack::EMPTY.clone())
-            } else {
-                ItemStack::EMPTY.clone()
-            }
-        })
+    fn remove_stack(&self, slot: usize) -> ItemStack {
+        let mut items = self
+            .items
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if slot < items.len() {
+            std::mem::replace(&mut items[slot], ItemStack::EMPTY.clone())
+        } else {
+            ItemStack::EMPTY.clone()
+        }
     }
 
-    fn remove_stack_specific(&self, slot: usize, amount: u8) -> InventoryFuture<'_, ItemStack> {
-        Box::pin(async move {
-            let mut items = self.items.write().await;
-            if slot < items.len() && !items[slot].is_empty() && amount > 0 {
-                items[slot].split(amount)
-            } else {
-                ItemStack::EMPTY.clone()
-            }
-        })
+    fn remove_stack_specific(&self, slot: usize, amount: u8) -> ItemStack {
+        let mut items = self
+            .items
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if slot < items.len() && !items[slot].is_empty() && amount > 0 {
+            items[slot].split(amount)
+        } else {
+            ItemStack::EMPTY.clone()
+        }
     }
 
-    fn set_stack(&self, slot: usize, stack: ItemStack) -> InventoryFuture<'_, ()> {
-        Box::pin(async move {
-            let mut items = self.items.write().await;
-            if slot < items.len() {
-                items[slot] = stack;
-            }
-        })
+    fn set_stack(&self, slot: usize, stack: ItemStack) {
+        let mut items = self
+            .items
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if slot < items.len() {
+            items[slot] = stack;
+        }
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -135,10 +139,11 @@ impl RecipeInputInventory for CraftingInventory {
 }
 
 impl Clearable for CraftingInventory {
-    fn clear(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
-        Box::pin(async move {
-            let mut items = self.items.write().await;
-            items.fill_with(|| ItemStack::EMPTY.clone());
-        })
+    fn clear(&self) {
+        let mut items = self
+            .items
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        items.fill_with(|| ItemStack::EMPTY.clone());
     }
 }

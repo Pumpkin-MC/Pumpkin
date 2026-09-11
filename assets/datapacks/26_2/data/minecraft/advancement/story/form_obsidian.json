@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:story/lava_bucket",
+  "criteria": {
+    "obsidian": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:obsidian"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.story.form_obsidian.description"
+    },
+    "icon": {
+      "id": "minecraft:obsidian"
+    },
+    "title": {
+      "translate": "advancements.story.form_obsidian.title"
+    }
+  },
+  "requirements": [
+    [
+      "obsidian"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

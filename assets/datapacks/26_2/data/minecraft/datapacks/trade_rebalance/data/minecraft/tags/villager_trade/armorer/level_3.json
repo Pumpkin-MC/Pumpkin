@@ -1,0 +1,8 @@
+{
+  "replace": true,
+  "values": [
+    "minecraft:armorer/3/lava_bucket_emerald",
+    "minecraft:armorer/3/emerald_shield",
+    "minecraft:armorer/3/emerald_bell"
+  ]
+}

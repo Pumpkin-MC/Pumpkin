@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:smelting",
+  "category": "blocks",
+  "experience": 0.1,
+  "ingredient": "minecraft:polished_blackstone_bricks",
+  "result": {
+    "id": "minecraft:cracked_polished_blackstone_bricks"
+  }
+}

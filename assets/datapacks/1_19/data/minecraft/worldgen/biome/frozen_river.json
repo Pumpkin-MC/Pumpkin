@@ -1,0 +1,17 @@
+{
+  "precipitation": "snow",
+  "effects": {
+    "sky_color": 8364543,
+    "water_fog_color": 329011,
+    "fog_color": 12638463,
+    "water_color": 3750089,
+    "mood_sound": {
+      "tick_delay": 6000,
+      "offset": 2.0,
+      "sound": "minecraft:ambient.cave",
+      "block_search_extent": 8
+    }
+  },
+  "temperature": 0.0,
+  "downfall": 0.5
+}

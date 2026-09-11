@@ -41,18 +41,29 @@ default = [
     "structures",
     "potion",
     "recipe_remainder",
-    "chunk_gen_settings",
+    "material_rule",
+    "noise_settings",
     "advancement",
     "carver",
     "villager",
     "placed_feature",
     "configured_feature",
     "slot_ranges",
-    "bedrock_creative"
+    "bedrock_creative",
+    "bedrock_biome",
+    "map_color",
+    "map_decoration",
+    "dye_color",
+    "block_transformer"
 ]
 
+block_transformer = ["block", "sound", "world", "tag"]
+map_color = []
+map_decoration = []
+dye_color = []
 advancement = []
 bedrock_creative = []
+bedrock_biome = []
 item = []
 packet = []
 jukebox_song = []
@@ -86,7 +97,9 @@ effect = []
 structures = []
 potion = ["potion_brewing"]
 recipe_remainder = []
-chunk_gen_settings = []
+material_rule = []
+noise_settings = []
+chunk_gen_settings = ["noise_settings", "material_rule"]
 carver = []
 villager = ["item", "sound"]
 slot_ranges = []
@@ -107,6 +120,17 @@ item_id_remap = []
 entity_id_remap = []
 sound_id_remap = []
 particle_id_remap = []
+menu_id_remap = []
+recipe_serializer_id_remap = []
+argument_type_id_remap = []
+attribute_id_remap = []
+block_entity_type_id_remap = []
+custom_stat_id_remap = []
+data_component_type_id_remap = []
+enchantment_id_remap = []
+environment_attribute_id_remap = []
+painting_variant_id_remap = []
+slot_display_id_remap = []
 potion_brewing = []
 
 [dependencies]

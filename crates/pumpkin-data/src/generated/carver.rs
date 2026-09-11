@@ -1,7 +1,11 @@
 /* This file is generated. Do not edit manually. */
 use pumpkin_util::math::float_provider::{
-    FloatProvider, NormalFloatProvider,
+    ClampedNormalFloatProvider, ConstantFloatProvider, FloatProvider, NormalFloatProvider,
     TrapezoidFloatProvider, UniformFloatProvider,
+};
+use pumpkin_util::math::int_provider::{
+    BiasedToBottomIntProvider, ConstantIntProvider, IntProvider, NormalIntProvider,
+    UniformIntProvider, VeryBiasedToBottomIntProvider,
 };
 use pumpkin_util::y_offset::{AboveBottom, Absolute, BelowTop, YOffset};
 pub enum HeightProvider {
@@ -21,20 +25,30 @@ pub struct TrapezoidHeightProvider {
 pub struct VeryBiasedToBottomHeightProvider {
     pub min_inclusive: YOffset,
     pub max_inclusive: YOffset,
-    pub inner: Option<std::num::NonZeroU32>,
+    pub inner: Option<std::num::NonZero<u32>>,
 }
 pub struct CaveCarverConfig {
+    pub count: IntProvider,
     pub horizontal_radius_multiplier: FloatProvider,
     pub vertical_radius_multiplier: FloatProvider,
     pub floor_level: FloatProvider,
+    pub room_vertical_radius_multiplier: FloatProvider,
+    pub start_vertical_radius_multiplier: FloatProvider,
+    pub thickness: FloatProvider,
+    pub weird_thickness_bias: bool,
 }
 impl CaveCarverConfig {
     #[must_use]
     pub const fn default() -> Self {
         Self {
+            count: IntProvider::Constant(1),
             horizontal_radius_multiplier: FloatProvider::Constant(1.0),
             vertical_radius_multiplier: FloatProvider::Constant(1.0),
             floor_level: FloatProvider::Constant(-0.7),
+            room_vertical_radius_multiplier: FloatProvider::Constant(0.5),
+            start_vertical_radius_multiplier: FloatProvider::Constant(1.0),
+            thickness: FloatProvider::Constant(1.0),
+            weird_thickness_bias: false,
         }
     }
 }
@@ -45,6 +59,7 @@ pub struct CanyonShapeConfig {
     pub horizontal_radius_factor: FloatProvider,
     pub vertical_radius_default_factor: f32,
     pub vertical_radius_center_factor: f32,
+    pub y_scale: f32,
 }
 pub struct CanyonCarverConfig {
     pub vertical_rotation: FloatProvider,
@@ -52,26 +67,20 @@ pub struct CanyonCarverConfig {
 }
 pub enum CarverAdditionalConfig {
     Cave(CaveCarverConfig),
-    NetherCave(CaveCarverConfig),
     Canyon(CanyonCarverConfig),
 }
 pub struct CarverConfig {
     pub probability: f32,
     pub y: HeightProvider,
-    pub y_scale: FloatProvider,
-    pub lava_level: YOffset,
-    pub replaceable: crate::tag::Tag,
     pub additional: CarverAdditionalConfig,
 }
+use super::*;
 pub const CANYON: CarverConfig = CarverConfig {
     probability: 0.01f32,
     y: HeightProvider::Uniform(UniformHeightProvider {
         min_inclusive: YOffset::Absolute(Absolute { absolute: 10i16 }),
         max_inclusive: YOffset::Absolute(Absolute { absolute: 67i16 }),
     }),
-    y_scale: FloatProvider::Constant(3f32),
-    lava_level: YOffset::AboveBottom(AboveBottom { above_bottom: 8i8 }),
-    replaceable: crate::tag::Block::MINECRAFT_OVERWORLD_CARVER_REPLACEABLES,
     additional: CarverAdditionalConfig::Canyon(CanyonCarverConfig {
         vertical_rotation: FloatProvider::Object(NormalFloatProvider::Uniform(
             UniformFloatProvider::new(-0.125f32, 0.125f32),
@@ -89,6 +98,7 @@ pub const CANYON: CarverConfig = CarverConfig {
             )),
             vertical_radius_default_factor: 1f32,
             vertical_radius_center_factor: 0f32,
+            y_scale: 3f32,
         },
     }),
 };
@@ -98,12 +108,10 @@ pub const CAVE: CarverConfig = CarverConfig {
         min_inclusive: YOffset::AboveBottom(AboveBottom { above_bottom: 8i8 }),
         max_inclusive: YOffset::Absolute(Absolute { absolute: 180i16 }),
     }),
-    y_scale: FloatProvider::Object(NormalFloatProvider::Uniform(UniformFloatProvider::new(
-        0.1f32, 0.9f32,
-    ))),
-    lava_level: YOffset::AboveBottom(AboveBottom { above_bottom: 8i8 }),
-    replaceable: crate::tag::Block::MINECRAFT_OVERWORLD_CARVER_REPLACEABLES,
     additional: CarverAdditionalConfig::Cave(CaveCarverConfig {
+        count: IntProvider::Object(NormalIntProvider::VeryBiasedToBottom(
+            VeryBiasedToBottomIntProvider::new(0i32, 14i32, 1i32),
+        )),
         horizontal_radius_multiplier: FloatProvider::Object(NormalFloatProvider::Uniform(
             UniformFloatProvider::new(0.7f32, 1.4f32),
         )),
@@ -113,6 +121,14 @@ pub const CAVE: CarverConfig = CarverConfig {
         floor_level: FloatProvider::Object(NormalFloatProvider::Uniform(
             UniformFloatProvider::new(-1f32, -0.4f32),
         )),
+        room_vertical_radius_multiplier: FloatProvider::Object(NormalFloatProvider::Uniform(
+            UniformFloatProvider::new(0.1f32, 0.9f32),
+        )),
+        start_vertical_radius_multiplier: FloatProvider::Constant(1.0),
+        thickness: FloatProvider::Object(NormalFloatProvider::Trapezoid(
+            TrapezoidFloatProvider::new(0f32, 3f32, 1f32),
+        )),
+        weird_thickness_bias: true,
     }),
 };
 pub const CAVE_EXTRA_UNDERGROUND: CarverConfig = CarverConfig {
@@ -121,12 +137,10 @@ pub const CAVE_EXTRA_UNDERGROUND: CarverConfig = CarverConfig {
         min_inclusive: YOffset::AboveBottom(AboveBottom { above_bottom: 8i8 }),
         max_inclusive: YOffset::Absolute(Absolute { absolute: 47i16 }),
     }),
-    y_scale: FloatProvider::Object(NormalFloatProvider::Uniform(UniformFloatProvider::new(
-        0.1f32, 0.9f32,
-    ))),
-    lava_level: YOffset::AboveBottom(AboveBottom { above_bottom: 8i8 }),
-    replaceable: crate::tag::Block::MINECRAFT_OVERWORLD_CARVER_REPLACEABLES,
     additional: CarverAdditionalConfig::Cave(CaveCarverConfig {
+        count: IntProvider::Object(NormalIntProvider::VeryBiasedToBottom(
+            VeryBiasedToBottomIntProvider::new(0i32, 14i32, 1i32),
+        )),
         horizontal_radius_multiplier: FloatProvider::Object(NormalFloatProvider::Uniform(
             UniformFloatProvider::new(0.7f32, 1.4f32),
         )),
@@ -136,6 +150,14 @@ pub const CAVE_EXTRA_UNDERGROUND: CarverConfig = CarverConfig {
         floor_level: FloatProvider::Object(NormalFloatProvider::Uniform(
             UniformFloatProvider::new(-1f32, -0.4f32),
         )),
+        room_vertical_radius_multiplier: FloatProvider::Object(NormalFloatProvider::Uniform(
+            UniformFloatProvider::new(0.1f32, 0.9f32),
+        )),
+        start_vertical_radius_multiplier: FloatProvider::Constant(1.0),
+        thickness: FloatProvider::Object(NormalFloatProvider::Trapezoid(
+            TrapezoidFloatProvider::new(0f32, 3f32, 1f32),
+        )),
+        weird_thickness_bias: true,
     }),
 };
 pub const NETHER_CAVE: CarverConfig = CarverConfig {
@@ -144,12 +166,18 @@ pub const NETHER_CAVE: CarverConfig = CarverConfig {
         min_inclusive: YOffset::Absolute(Absolute { absolute: 0i16 }),
         max_inclusive: YOffset::BelowTop(BelowTop { below_top: 1i8 }),
     }),
-    y_scale: FloatProvider::Constant(0.5f32),
-    lava_level: YOffset::AboveBottom(AboveBottom { above_bottom: 10i8 }),
-    replaceable: crate::tag::Block::MINECRAFT_NETHER_CARVER_REPLACEABLES,
-    additional: CarverAdditionalConfig::NetherCave(CaveCarverConfig {
+    additional: CarverAdditionalConfig::Cave(CaveCarverConfig {
+        count: IntProvider::Object(NormalIntProvider::VeryBiasedToBottom(
+            VeryBiasedToBottomIntProvider::new(0i32, 9i32, 1i32),
+        )),
         horizontal_radius_multiplier: FloatProvider::Constant(1f32),
         vertical_radius_multiplier: FloatProvider::Constant(1f32),
         floor_level: FloatProvider::Constant(-0.7f32),
+        room_vertical_radius_multiplier: FloatProvider::Constant(0.5f32),
+        start_vertical_radius_multiplier: FloatProvider::Constant(5f32),
+        thickness: FloatProvider::Object(NormalFloatProvider::Trapezoid(
+            TrapezoidFloatProvider::new(0f32, 6f32, 2f32),
+        )),
+        weird_thickness_bias: false,
     }),
 };

@@ -1,7 +1,7 @@
 use pumpkin_data::{
     Block, BlockState,
     block_properties::{
-        BlockProperties, EndPortalFrameLikeProperties, HorizontalFacing, OakFenceLikeProperties,
+        EndPortalFrameLikeProperties, HorizontalFacing, OakFenceLikeProperties,
         OakStairsLikeProperties,
     },
 };
@@ -81,7 +81,6 @@ impl StructurePieceBase for PortalRoomPiece {
         &self,
         _start: &StructurePiece,
         _random: &mut RandomGenerator,
-        // TODO: this is only for Stronghold and should not be here
         _weights: &mut Vec<PieceWeight>,
         _last_piece_type: &mut Option<StrongholdPieceType>,
         has_portal_room: &mut bool,

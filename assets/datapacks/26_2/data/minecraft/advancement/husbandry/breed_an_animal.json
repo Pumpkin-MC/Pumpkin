@@ -1,0 +1,25 @@
+{
+  "parent": "minecraft:husbandry/root",
+  "criteria": {
+    "bred": {
+      "trigger": "minecraft:bred_animals"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.husbandry.breed_an_animal.description"
+    },
+    "icon": {
+      "id": "minecraft:wheat"
+    },
+    "title": {
+      "translate": "advancements.husbandry.breed_an_animal.title"
+    }
+  },
+  "requirements": [
+    [
+      "bred"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

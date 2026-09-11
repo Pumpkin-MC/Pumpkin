@@ -24,18 +24,11 @@ impl PacketRead for AbilityValue {
     }
 }
 
+#[derive(PacketRead)]
 #[packet(184)]
 pub struct SRequestAbility {
     pub ability: VarInt,
     pub value: AbilityValue,
-}
-
-impl PacketRead for SRequestAbility {
-    fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
-        let ability = VarInt::read(buf)?;
-        let value = AbilityValue::read(buf)?;
-        Ok(Self { ability, value })
-    }
 }
 
 #[cfg(test)]

@@ -1,0 +1,6 @@
+{
+  "wild_texture": "minecraft:entity/wolf/wolf_chestnut",
+  "tame_texture": "minecraft:entity/wolf/wolf_chestnut_tame",
+  "angry_texture": "minecraft:entity/wolf/wolf_chestnut_angry",
+  "biomes": "minecraft:old_growth_spruce_taiga"
+}

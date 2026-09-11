@@ -1,7 +1,7 @@
 use std::io::Write;
 
 use pumpkin_data::{
-    packet::clientbound::PLAY_SOUND, sound::SoundCategory,
+    packet::clientbound::play::SOUND, sound::SoundCategory,
     sound_id_remap::remap_sound_id_for_version,
 };
 use pumpkin_macros::java_packet;
@@ -9,7 +9,7 @@ use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
 
 use crate::{ClientPacket, IdOr, SoundEvent, VarInt, WritingError, ser::NetworkWriteExt};
 
-#[java_packet(PLAY_SOUND)]
+#[java_packet(SOUND)]
 pub struct CSoundEffect {
     pub sound_event: IdOr<SoundEvent>,
     pub sound_category: VarInt,
@@ -50,22 +50,57 @@ impl ClientPacket for CSoundEffect {
         mut write: impl Write,
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        let sound_event = match &self.sound_event {
-            IdOr::Id(id) => IdOr::Id(remap_sound_id_for_version(*id, *version)),
-            IdOr::Value(value) => IdOr::Value(value.clone()),
-        };
+        if *version >= JavaMinecraftVersion::V_1_19_3 {
+            let sound_event = match &self.sound_event {
+                IdOr::Id(id) => IdOr::Id(remap_sound_id_for_version(*id, *version)),
+                IdOr::Value(value) => IdOr::Value(value.clone()),
+            };
 
-        crate::IdOr::<crate::SoundEvent>::write(&sound_event, &mut write, |w, e| {
-            w.write_string(&e.sound_name)?;
-            w.write_option(&e.range, |w2, r| w2.write_f32_be(*r))
-        })?;
-        write.write_var_int(&self.sound_category)?;
+            crate::IdOr::<crate::SoundEvent>::write(&sound_event, &mut write, |w, e| {
+                w.write_string(&e.sound_name)?;
+                w.write_option(&e.range, |w2, r| w2.write_f32_be(*r))
+            })?;
+        } else if *version >= JavaMinecraftVersion::V_1_9 {
+            let sound_id = match &self.sound_event {
+                IdOr::Id(id) => remap_sound_id_for_version(*id, *version),
+                IdOr::Value(_) => 0,
+            };
+            write.write_var_int(&VarInt(i32::from(sound_id)))?;
+        } else {
+            let sound_name: &str = match &self.sound_event {
+                IdOr::Id(id) => {
+                    let remapped = remap_sound_id_for_version(*id, *version);
+                    pumpkin_data::sound::Sound::NAMES
+                        .get(usize::from(remapped))
+                        .copied()
+                        .unwrap_or("ambient.cave")
+                }
+                IdOr::Value(event) => &event.sound_name,
+            };
+            write.write_string(sound_name)?;
+        }
+
+        if *version >= JavaMinecraftVersion::V_1_9 {
+            write.write_var_int(&self.sound_category)?;
+        }
+
         write.write_i32_be(self.position.x)?;
         write.write_i32_be(self.position.y)?;
         write.write_i32_be(self.position.z)?;
         write.write_f32_be(self.volume)?;
-        write.write_f32_be(self.pitch)?;
-        write.write_i64_be(self.seed as i64)
+
+        if *version >= JavaMinecraftVersion::V_1_10 {
+            write.write_f32_be(self.pitch)?;
+        } else {
+            let pitch_byte = (self.pitch * 63.0).round().clamp(0.0, 255.0) as u8;
+            write.write_u8(pitch_byte)?;
+        }
+
+        if *version >= JavaMinecraftVersion::V_1_19 {
+            write.write_i64_be(self.seed as i64)?;
+        }
+
+        Ok(())
     }
 }
 

@@ -48,6 +48,7 @@ pub struct SpreaderConfig {
 
 impl SculkSpreader {
     /// Returns a snapshot of the configuration for cursor updates.
+    #[must_use]
     pub const fn config(&self) -> SpreaderConfig {
         SpreaderConfig {
             is_world_generation: self.is_world_generation,
@@ -114,32 +115,38 @@ impl SculkSpreader {
     }
 
     #[inline]
+    #[must_use]
     pub const fn is_world_generation(&self) -> bool {
         self.is_world_generation
     }
 
     #[inline]
+    #[must_use]
     pub const fn growth_spawn_cost(&self) -> i32 {
         self.growth_spawn_cost
     }
 
     #[inline]
+    #[must_use]
     pub const fn no_growth_radius(&self) -> i32 {
         self.no_growth_radius
     }
 
     #[inline]
+    #[must_use]
     pub const fn charge_decay_rate(&self) -> i32 {
         self.charge_decay_rate
     }
 
     #[inline]
+    #[must_use]
     pub const fn additional_decay_rate(&self) -> i32 {
         self.additional_decay_rate
     }
 
     /// Returns `true` if the given block id is replaceable for this spreader.
     #[inline]
+    #[must_use]
     pub fn is_replaceable(&self, id: BlockId) -> bool {
         if self.replaceable_tag_world_gen {
             super::is_sculk_replaceable_world_gen(id)
@@ -172,6 +179,7 @@ impl SculkSpreader {
 
     /// Returns a reference to the active cursors (for testing).
     #[cfg(test)]
+    #[must_use]
     pub fn cursors(&self) -> &[ChargeCursor] {
         &self.cursors
     }

@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:backyard",
+  "title": {
+    "translate": "painting.minecraft.backyard.title",
+    "color": "yellow"
+  },
+  "author": {
+    "translate": "painting.minecraft.backyard.author",
+    "color": "gray"
+  },
+  "width": 3,
+  "height": 4
+}

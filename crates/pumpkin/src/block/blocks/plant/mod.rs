@@ -2,6 +2,7 @@ use pumpkin_data::{Block, BlockStateId, tag, tag::Taggable};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockAccessor;
 
+pub mod azalea;
 pub mod bamboo;
 pub mod bamboo_sapling;
 pub mod big_dripleaf;
@@ -9,16 +10,21 @@ pub mod big_dripleaf_stem;
 pub mod bush;
 pub mod cactus;
 pub mod cactus_flower;
+pub mod cave_vines;
 pub mod chorus_flower;
 pub mod chorus_plant;
+pub mod cocoa;
 pub mod crop;
 pub mod dry_vegetation;
+pub mod eyeblossom;
 pub mod flower;
 pub mod flowerbed;
 pub mod fungus;
+pub mod hanging_roots;
 pub mod kelp;
 pub mod leaf_litter;
 pub mod lily_pad;
+pub mod mangrove_propagule;
 pub mod mushroom_plant;
 pub mod nether_sprouts;
 pub mod roots;
@@ -42,7 +48,7 @@ trait PlantBlockBase {
         block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_VEGETATION)
     }
 
-    async fn get_state_for_neighbor_update(
+    fn get_state_for_neighbor_update(
         &self,
         block_accessor: &dyn BlockAccessor,
         block_pos: &BlockPos,

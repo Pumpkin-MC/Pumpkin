@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_pointed_dripstone": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:pointed_dripstone"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:dripstone_block"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_pointed_dripstone"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:dripstone_block"
+    ]
+  }
+}

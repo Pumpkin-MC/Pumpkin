@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_hay_block": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:hay_block"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:wheat"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_hay_block"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:wheat"
+    ]
+  }
+}

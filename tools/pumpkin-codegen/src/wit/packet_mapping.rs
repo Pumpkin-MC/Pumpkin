@@ -194,11 +194,22 @@ fn has_attr(attrs: &[Attribute], attr_name: &str) -> bool {
 
 fn get_type_info(ty: &syn::Type) -> (String, bool, bool) {
     match ty {
-        syn::Type::Path(tp) => (
-            tp.path.segments.last().unwrap().ident.to_string(),
-            false,
-            false,
-        ),
+        syn::Type::Path(tp) => {
+            let segment = tp.path.segments.last().unwrap();
+            if segment.ident == "Box"
+                && let syn::PathArguments::AngleBracketed(args) = &segment.arguments
+                && let Some(syn::GenericArgument::Type(syn::Type::Slice(slice))) = args.args.first()
+                && let syn::Type::Path(inner) = &*slice.elem
+                && inner
+                    .path
+                    .segments
+                    .last()
+                    .is_some_and(|segment| segment.ident == "u8")
+            {
+                return ("BoxedU8Slice".to_string(), false, false);
+            }
+            (segment.ident.to_string(), false, false)
+        }
         syn::Type::Reference(tr) => {
             let (name, _, is_slice) = get_type_info(&tr.elem);
             (name, true, is_slice)
@@ -230,14 +241,37 @@ fn convert_value(
     let expr = match type_ident {
         "String" | "str" => match mode {
             MappingMode::Serialize => {
-                if is_ref {
+                if is_slice {
+                    let tmp = dst.unwrap_or("slice");
+                    if is_ref {
+                        prep.push_str(&format!(
+                            "{}let vec_{}: Vec<&str> = {}.iter().map(|s| s.as_str()).collect();\n",
+                            prep_prefix, tmp, src
+                        ));
+                        format!("&vec_{}", tmp)
+                    } else {
+                        format!("{}.clone()", src)
+                    }
+                } else if is_ref {
                     format!("&{}", src)
                 } else {
                     format!("{}.clone()", src)
                 }
             }
-            MappingMode::Deserialize => format!("{}.into()", src),
-            MappingMode::ToWit => format!("{}.to_string()", src),
+            MappingMode::Deserialize => {
+                if is_slice {
+                    format!("{}.iter().map(|s| s.to_string()).collect()", src)
+                } else {
+                    format!("{}.into()", src)
+                }
+            }
+            MappingMode::ToWit => {
+                if is_slice {
+                    format!("{}.iter().map(|s| s.to_string()).collect()", src)
+                } else {
+                    format!("{}.to_string()", src)
+                }
+            }
             MappingMode::Downcast => String::new(),
         },
         "Identifier" => match mode {
@@ -352,6 +386,33 @@ fn convert_value(
             MappingMode::Deserialize | MappingMode::ToWit => {
                 format!("({}.x as _, {}.y as _, {}.z as _)", src, src, src)
             }
+            MappingMode::Downcast => String::new(),
+        },
+
+        "LpVector3d" => match mode {
+            MappingMode::Serialize => {
+                let tmp = dst.unwrap_or("velocity").replace('.', "_");
+                prep.push_str(&format!(
+                    "{}let parsed_{}: [f64; 3] = serde_json::from_str(&{}).ok()?;\n",
+                    prep_prefix, tmp, src
+                ));
+                format!(
+                    "pumpkin_protocol::codec::lp_vector_3d::LpVector3d(pumpkin_util::math::vector3::Vector3::new(parsed_{0}[0], parsed_{0}[1], parsed_{0}[2]))",
+                    tmp
+                )
+            }
+            MappingMode::Deserialize | MappingMode::ToWit => {
+                format!(
+                    "serde_json::to_string(&[{}.0.x, {}.0.y, {}.0.z]).unwrap_or_default()",
+                    src, src, src
+                )
+            }
+            MappingMode::Downcast => String::new(),
+        },
+
+        "BoxedU8Slice" => match mode {
+            MappingMode::Serialize => format!("{}.clone().into_boxed_slice()", src),
+            MappingMode::Deserialize | MappingMode::ToWit => format!("{}.to_vec()", src),
             MappingMode::Downcast => String::new(),
         },
 

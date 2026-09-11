@@ -10,24 +10,16 @@ use crate::entity::ai::pathfinder::{
 pub trait NodeEvaluator {
     fn prepare(&mut self, context: PathfindingContext, mob_data: MobData);
     fn done(&mut self);
-    fn get_start(&mut self) -> impl std::future::Future<Output = Option<Node>> + Send;
+    fn get_start(&mut self) -> Option<Node>;
     fn get_target(&mut self, pos: BlockPos) -> Target;
-    fn get_neighbors(
-        &mut self,
-        current: &Node,
-        out: &mut Vec<Node>,
-    ) -> impl std::future::Future<Output = ()> + Send;
+    fn get_neighbors(&mut self, current: &Node, out: &mut Vec<Node>);
     fn get_path_type_of_mob(
         &mut self,
         context: &mut PathfindingContext,
         pos: Vector3<i32>,
         mob_data: &MobData,
-    ) -> impl std::future::Future<Output = PathType> + Send;
-    fn get_path_type(
-        &mut self,
-        context: &mut PathfindingContext,
-        pos: Vector3<i32>,
-    ) -> impl std::future::Future<Output = PathType> + Send;
+    ) -> PathType;
+    fn get_path_type(&mut self, context: &mut PathfindingContext, pos: Vector3<i32>) -> PathType;
     fn set_can_pass_doors(&mut self, can_pass: bool);
     fn set_can_open_doors(&mut self, can_open: bool);
     fn set_can_float(&mut self, can_float: bool);
@@ -50,6 +42,9 @@ pub struct MobData {
     pub avoids_fire: bool,
     pub avoids_water: bool,
     pub on_ground: bool,
+    pub is_in_water: bool,
+    pub sea_level: i32,
+    pub min_y: i32,
     pub path_type_malus: [Option<f32>; PATH_TYPE_COUNT],
 }
 
@@ -67,6 +62,9 @@ impl MobData {
             avoids_fire: true,
             avoids_water: false,
             on_ground,
+            is_in_water: false,
+            sea_level: 63,
+            min_y: -64,
             path_type_malus: [None; PATH_TYPE_COUNT],
         };
 
@@ -97,6 +95,9 @@ impl MobData {
             avoids_fire: true,
             avoids_water: false,
             on_ground: true,
+            is_in_water: false,
+            sea_level: 63,
+            min_y: -64,
             path_type_malus: [None; PATH_TYPE_COUNT],
         }
     }
@@ -136,7 +137,7 @@ pub struct BaseNodeEvaluator {
     pub nodes: FxHashMap<Vector3<i32>, Node>,
     pub entity_width: i32,
     pub entity_height: i32,
-    pub entity_depth: i32, // Same as width?
+    pub entity_depth: i32,
     pub can_pass_doors: bool,
     pub can_open_doors: bool,
     pub can_float: bool,

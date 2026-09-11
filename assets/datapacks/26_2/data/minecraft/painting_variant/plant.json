@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:plant",
+  "author": {
+    "color": "gray",
+    "translate": "painting.minecraft.plant.author"
+  },
+  "height": 1,
+  "title": {
+    "color": "yellow",
+    "translate": "painting.minecraft.plant.title"
+  },
+  "width": 1
+}

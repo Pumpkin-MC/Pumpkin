@@ -1,0 +1,7 @@
+{
+  "replace": false,
+  "values": [
+    "#minecraft:creeper_drop_music_discs",
+    "minecraft:music_disc_pigstep"
+  ]
+}

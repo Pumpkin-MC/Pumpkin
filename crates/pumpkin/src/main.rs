@@ -49,6 +49,15 @@ static MAIN_THREAD: OnceLock<ThreadId> = OnceLock::new();
 async fn main() {
     let _ = MAIN_THREAD.set(thread::current().id());
 
+    // reqwest is built with `rustls-no-provider`, so pick the ring provider (the one
+    // wasmtime-wasi-http/rtc already force) before any client can be constructed.
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    // Initialize global Rayon thread pool with named worker threads
+    let _ = rayon::ThreadPoolBuilder::new()
+        .thread_name(|i| format!("Rayon-Worker-{i}"))
+        .build_global();
+
     // Set the panic handler.
     std::panic::set_hook(Box::new(handle_panic));
 
@@ -318,15 +327,17 @@ async fn setup_sighandler() -> io::Result<()> {
 // Unix signal handling
 #[cfg(unix)]
 async fn setup_sighandler() -> io::Result<()> {
-    if signal(SignalKind::interrupt())?.recv().await.is_some() {
-        handle_interrupt();
-    }
+    let mut interrupt = signal(SignalKind::interrupt())?;
+    let mut hangup = signal(SignalKind::hangup())?;
+    let mut terminate = signal(SignalKind::terminate())?;
 
-    if signal(SignalKind::hangup())?.recv().await.is_some() {
-        handle_interrupt();
-    }
+    let received = tokio::select! {
+        received = interrupt.recv() => received,
+        received = hangup.recv() => received,
+        received = terminate.recv() => received,
+    };
 
-    if signal(SignalKind::terminate())?.recv().await.is_some() {
+    if received.is_some() {
         handle_interrupt();
     }
 

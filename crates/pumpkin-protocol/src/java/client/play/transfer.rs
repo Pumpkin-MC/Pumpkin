@@ -1,11 +1,11 @@
 use crate::ClientPacket;
 use crate::VarInt;
 use crate::ser::NetworkWriteExt;
-use pumpkin_data::packet::clientbound::PLAY_TRANSFER;
+use pumpkin_data::packet::clientbound::play::TRANSFER;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_TRANSFER)]
+#[java_packet(TRANSFER)]
 pub struct CTransfer<'a> {
     pub host: &'a str,
     pub port: VarInt,

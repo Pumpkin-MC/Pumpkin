@@ -1,0 +1,336 @@
+{
+  "type": "minecraft:simple_random_selector",
+  "config": {
+    "features": [
+      {
+        "feature": {
+          "type": "minecraft:simple_block",
+          "config": {
+            "to_place": {
+              "type": "minecraft:weighted_state_provider",
+              "entries": [
+                {
+                  "data": {
+                    "Name": "minecraft:small_dripleaf",
+                    "Properties": {
+                      "facing": "east",
+                      "half": "lower",
+                      "waterlogged": "false"
+                    }
+                  },
+                  "weight": 1
+                },
+                {
+                  "data": {
+                    "Name": "minecraft:small_dripleaf",
+                    "Properties": {
+                      "facing": "west",
+                      "half": "lower",
+                      "waterlogged": "false"
+                    }
+                  },
+                  "weight": 1
+                },
+                {
+                  "data": {
+                    "Name": "minecraft:small_dripleaf",
+                    "Properties": {
+                      "facing": "north",
+                      "half": "lower",
+                      "waterlogged": "false"
+                    }
+                  },
+                  "weight": 1
+                },
+                {
+                  "data": {
+                    "Name": "minecraft:small_dripleaf",
+                    "Properties": {
+                      "facing": "south",
+                      "half": "lower",
+                      "waterlogged": "false"
+                    }
+                  },
+                  "weight": 1
+                }
+              ]
+            }
+          }
+        },
+        "placement": []
+      },
+      {
+        "feature": {
+          "type": "minecraft:block_column",
+          "config": {
+            "allowed_placement": {
+              "type": "minecraft:any_of",
+              "predicates": [
+                {
+                  "type": "minecraft:matching_block_tag",
+                  "tag": "minecraft:air"
+                },
+                {
+                  "type": "minecraft:matching_blocks",
+                  "blocks": "minecraft:water"
+                }
+              ]
+            },
+            "direction": "up",
+            "layers": [
+              {
+                "height": {
+                  "type": "minecraft:weighted_list",
+                  "distribution": [
+                    {
+                      "data": {
+                        "type": "minecraft:uniform",
+                        "max_inclusive": 4,
+                        "min_inclusive": 0
+                      },
+                      "weight": 2
+                    },
+                    {
+                      "data": 0,
+                      "weight": 1
+                    }
+                  ]
+                },
+                "provider": {
+                  "type": "minecraft:simple_state_provider",
+                  "state": {
+                    "Name": "minecraft:big_dripleaf_stem",
+                    "Properties": {
+                      "facing": "east",
+                      "waterlogged": "false"
+                    }
+                  }
+                }
+              },
+              {
+                "height": 1,
+                "provider": {
+                  "type": "minecraft:simple_state_provider",
+                  "state": {
+                    "Name": "minecraft:big_dripleaf",
+                    "Properties": {
+                      "facing": "east",
+                      "tilt": "none",
+                      "waterlogged": "false"
+                    }
+                  }
+                }
+              }
+            ],
+            "prioritize_tip": true
+          }
+        },
+        "placement": []
+      },
+      {
+        "feature": {
+          "type": "minecraft:block_column",
+          "config": {
+            "allowed_placement": {
+              "type": "minecraft:any_of",
+              "predicates": [
+                {
+                  "type": "minecraft:matching_block_tag",
+                  "tag": "minecraft:air"
+                },
+                {
+                  "type": "minecraft:matching_blocks",
+                  "blocks": "minecraft:water"
+                }
+              ]
+            },
+            "direction": "up",
+            "layers": [
+              {
+                "height": {
+                  "type": "minecraft:weighted_list",
+                  "distribution": [
+                    {
+                      "data": {
+                        "type": "minecraft:uniform",
+                        "max_inclusive": 4,
+                        "min_inclusive": 0
+                      },
+                      "weight": 2
+                    },
+                    {
+                      "data": 0,
+                      "weight": 1
+                    }
+                  ]
+                },
+                "provider": {
+                  "type": "minecraft:simple_state_provider",
+                  "state": {
+                    "Name": "minecraft:big_dripleaf_stem",
+                    "Properties": {
+                      "facing": "west",
+                      "waterlogged": "false"
+                    }
+                  }
+                }
+              },
+              {
+                "height": 1,
+                "provider": {
+                  "type": "minecraft:simple_state_provider",
+                  "state": {
+                    "Name": "minecraft:big_dripleaf",
+                    "Properties": {
+                      "facing": "west",
+                      "tilt": "none",
+                      "waterlogged": "false"
+                    }
+                  }
+                }
+              }
+            ],
+            "prioritize_tip": true
+          }
+        },
+        "placement": []
+      },
+      {
+        "feature": {
+          "type": "minecraft:block_column",
+          "config": {
+            "allowed_placement": {
+              "type": "minecraft:any_of",
+              "predicates": [
+                {
+                  "type": "minecraft:matching_block_tag",
+                  "tag": "minecraft:air"
+                },
+                {
+                  "type": "minecraft:matching_blocks",
+                  "blocks": "minecraft:water"
+                }
+              ]
+            },
+            "direction": "up",
+            "layers": [
+              {
+                "height": {
+                  "type": "minecraft:weighted_list",
+                  "distribution": [
+                    {
+                      "data": {
+                        "type": "minecraft:uniform",
+                        "max_inclusive": 4,
+                        "min_inclusive": 0
+                      },
+                      "weight": 2
+                    },
+                    {
+                      "data": 0,
+                      "weight": 1
+                    }
+                  ]
+                },
+                "provider": {
+                  "type": "minecraft:simple_state_provider",
+                  "state": {
+                    "Name": "minecraft:big_dripleaf_stem",
+                    "Properties": {
+                      "facing": "south",
+                      "waterlogged": "false"
+                    }
+                  }
+                }
+              },
+              {
+                "height": 1,
+                "provider": {
+                  "type": "minecraft:simple_state_provider",
+                  "state": {
+                    "Name": "minecraft:big_dripleaf",
+                    "Properties": {
+                      "facing": "south",
+                      "tilt": "none",
+                      "waterlogged": "false"
+                    }
+                  }
+                }
+              }
+            ],
+            "prioritize_tip": true
+          }
+        },
+        "placement": []
+      },
+      {
+        "feature": {
+          "type": "minecraft:block_column",
+          "config": {
+            "allowed_placement": {
+              "type": "minecraft:any_of",
+              "predicates": [
+                {
+                  "type": "minecraft:matching_block_tag",
+                  "tag": "minecraft:air"
+                },
+                {
+                  "type": "minecraft:matching_blocks",
+                  "blocks": "minecraft:water"
+                }
+              ]
+            },
+            "direction": "up",
+            "layers": [
+              {
+                "height": {
+                  "type": "minecraft:weighted_list",
+                  "distribution": [
+                    {
+                      "data": {
+                        "type": "minecraft:uniform",
+                        "max_inclusive": 4,
+                        "min_inclusive": 0
+                      },
+                      "weight": 2
+                    },
+                    {
+                      "data": 0,
+                      "weight": 1
+                    }
+                  ]
+                },
+                "provider": {
+                  "type": "minecraft:simple_state_provider",
+                  "state": {
+                    "Name": "minecraft:big_dripleaf_stem",
+                    "Properties": {
+                      "facing": "north",
+                      "waterlogged": "false"
+                    }
+                  }
+                }
+              },
+              {
+                "height": 1,
+                "provider": {
+                  "type": "minecraft:simple_state_provider",
+                  "state": {
+                    "Name": "minecraft:big_dripleaf",
+                    "Properties": {
+                      "facing": "north",
+                      "tilt": "none",
+                      "waterlogged": "false"
+                    }
+                  }
+                }
+              }
+            ],
+            "prioritize_tip": true
+          }
+        },
+        "placement": []
+      }
+    ]
+  }
+}

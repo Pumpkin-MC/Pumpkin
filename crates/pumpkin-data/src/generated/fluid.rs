@@ -773,7 +773,7 @@ pub const FLUID_LEVEL_SOURCE: i32 = 0;
 pub const FLUID_LEVEL_FLOWING_MAX: i32 = 8;
 pub const FLUID_MIN_HEIGHT: f32 = 0.0;
 pub const FLUID_MAX_HEIGHT: f32 = 1.0;
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, PartialEq)]
 pub enum Falling {
     True,
     False,
@@ -809,7 +809,7 @@ impl EnumVariants for Falling {
         }
     }
 }
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, PartialEq)]
 pub enum Level {
     L1,
     L2,
@@ -875,7 +875,7 @@ impl EnumVariants for Level {
         }
     }
 }
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, PartialEq)]
 pub struct WaterLikeFluidProperties {
     pub r#falling: Falling,
 }
@@ -916,7 +916,7 @@ impl FluidProperties for WaterLikeFluidProperties {
         if !["water", "lava"].contains(&fluid.name) {
             panic!(
                 "{} is not a valid fluid for {}",
-                fluid.name, "WaterLikeFluidProperties"
+                &fluid.name, "WaterLikeFluidProperties"
             );
         }
         for (idx, state) in fluid.states.iter().enumerate() {
@@ -930,7 +930,7 @@ impl FluidProperties for WaterLikeFluidProperties {
         if !["water", "lava"].contains(&fluid.name) {
             panic!(
                 "{} is not a valid fluid for {}",
-                fluid.name, "WaterLikeFluidProperties"
+                &fluid.name, "WaterLikeFluidProperties"
             );
         }
         Self::from_index(fluid.default_state_index)
@@ -942,7 +942,7 @@ impl FluidProperties for WaterLikeFluidProperties {
         if !["water", "lava"].contains(&fluid.name) {
             panic!(
                 "{} is not a valid fluid for {}",
-                fluid.name, "WaterLikeFluidProperties"
+                &fluid.name, "WaterLikeFluidProperties"
             );
         }
         let mut fluid_props = Self::default(fluid);
@@ -955,7 +955,7 @@ impl FluidProperties for WaterLikeFluidProperties {
         fluid_props
     }
 }
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, PartialEq)]
 pub struct FlowingWaterLikeFluidProperties {
     pub r#falling: Falling,
     pub r#level: Level,
@@ -1004,7 +1004,7 @@ impl FluidProperties for FlowingWaterLikeFluidProperties {
         if !["flowing_water", "flowing_lava"].contains(&fluid.name) {
             panic!(
                 "{} is not a valid fluid for {}",
-                fluid.name, "FlowingWaterLikeFluidProperties"
+                &fluid.name, "FlowingWaterLikeFluidProperties"
             );
         }
         for (idx, state) in fluid.states.iter().enumerate() {
@@ -1018,7 +1018,7 @@ impl FluidProperties for FlowingWaterLikeFluidProperties {
         if !["flowing_water", "flowing_lava"].contains(&fluid.name) {
             panic!(
                 "{} is not a valid fluid for {}",
-                fluid.name, "FlowingWaterLikeFluidProperties"
+                &fluid.name, "FlowingWaterLikeFluidProperties"
             );
         }
         Self::from_index(fluid.default_state_index)
@@ -1033,7 +1033,7 @@ impl FluidProperties for FlowingWaterLikeFluidProperties {
         if !["flowing_water", "flowing_lava"].contains(&fluid.name) {
             panic!(
                 "{} is not a valid fluid for {}",
-                fluid.name, "FlowingWaterLikeFluidProperties"
+                &fluid.name, "FlowingWaterLikeFluidProperties"
             );
         }
         let mut fluid_props = Self::default(fluid);

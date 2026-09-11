@@ -14,6 +14,7 @@ pub fn build() -> TokenStream {
     let variants = array_to_tokenstream(&sound_categories);
 
     quote! {
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
         pub enum ScoreboardDisplaySlot {
             #variants
         }

@@ -1,0 +1,9 @@
+{
+  "gives": {
+    "id": "minecraft:pumpkin"
+  },
+  "reputation_discount": 0.05,
+  "wants": {
+    "id": "minecraft:emerald"
+  }
+}

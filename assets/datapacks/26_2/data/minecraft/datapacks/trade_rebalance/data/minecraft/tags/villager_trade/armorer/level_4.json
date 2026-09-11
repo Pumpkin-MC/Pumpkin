@@ -1,0 +1,31 @@
+{
+  "replace": true,
+  "values": [
+    "minecraft:armorer/4/emerald_enchanted_iron_boots_desert",
+    "minecraft:armorer/4/emerald_enchanted_iron_helmet_desert",
+    "minecraft:armorer/4/emerald_enchanted_iron_leggings_desert",
+    "minecraft:armorer/4/emerald_enchanted_iron_chestplate_desert",
+    "minecraft:armorer/4/emerald_enchanted_iron_boots_plains",
+    "minecraft:armorer/4/emerald_enchanted_iron_helmet_plains",
+    "minecraft:armorer/4/emerald_enchanted_iron_leggings_plains",
+    "minecraft:armorer/4/emerald_enchanted_iron_chestplate_plains",
+    "minecraft:armorer/4/emerald_enchanted_iron_boots_savanna",
+    "minecraft:armorer/4/emerald_enchanted_iron_helmet_savanna",
+    "minecraft:armorer/4/emerald_enchanted_iron_leggings_savanna",
+    "minecraft:armorer/4/emerald_enchanted_iron_chestplate_savanna",
+    "minecraft:armorer/4/emerald_enchanted_iron_boots_snow",
+    "minecraft:armorer/4/emerald_enchanted_iron_helmet_snow",
+    "minecraft:armorer/4/emerald_enchanted_chainmail_boots_jungle",
+    "minecraft:armorer/4/emerald_enchanted_chainmail_helmet_jungle",
+    "minecraft:armorer/4/emerald_enchanted_chainmail_leggings_jungle",
+    "minecraft:armorer/4/emerald_enchanted_chainmail_chestplate_jungle",
+    "minecraft:armorer/4/emerald_enchanted_chainmail_boots_swamp",
+    "minecraft:armorer/4/emerald_enchanted_chainmail_helmet_swamp",
+    "minecraft:armorer/4/emerald_enchanted_chainmail_leggings_swamp",
+    "minecraft:armorer/4/emerald_enchanted_chainmail_chestplate_swamp",
+    "minecraft:armorer/4/emerald_and_diamond_boots_diamond_leggings_taiga",
+    "minecraft:armorer/4/emerald_and_diamond_leggings_diamond_chestplate_taiga",
+    "minecraft:armorer/4/emerald_and_diamond_helmet_diamond_boots_taiga",
+    "minecraft:armorer/4/emerald_and_diamond_chestplate_diamond_helmet_taiga"
+  ]
+}

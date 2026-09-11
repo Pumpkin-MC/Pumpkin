@@ -5,6 +5,7 @@ use crate::{
 };
 use pumpkin_macros::packet;
 use std::io::{Error, Write};
+use uuid::Uuid;
 
 #[derive(Clone, Debug)]
 pub struct ItemDescriptorCount {
@@ -48,7 +49,7 @@ pub struct BedrockShapelessRecipe {
     pub recipe_id: String,
     pub input: Vec<ItemDescriptorCount>,
     pub output: Vec<NetworkItemDescriptor>,
-    pub uuid: [u8; 16],
+    pub uuid: Uuid,
     pub block: String,
     pub priority: VarInt,
     pub unlock_requirement: RecipeUnlockRequirement,
@@ -72,7 +73,7 @@ impl PacketWrite for BedrockShapelessRecipe {
         }
 
         // uuid
-        writer.write_all(&self.uuid)?;
+        self.uuid.write(writer)?;
 
         // block
         self.block.write(writer)?;
@@ -97,7 +98,7 @@ pub struct BedrockShapedRecipe {
     pub height: VarInt,
     pub input: Vec<ItemDescriptorCount>,
     pub output: Vec<NetworkItemDescriptor>,
-    pub uuid: [u8; 16],
+    pub uuid: Uuid,
     pub block: String,
     pub priority: VarInt,
     pub assume_symmetry: bool,
@@ -123,7 +124,7 @@ impl PacketWrite for BedrockShapedRecipe {
         }
 
         // uuid
-        writer.write_all(&self.uuid)?;
+        self.uuid.write(writer)?;
 
         // block
         self.block.write(writer)?;

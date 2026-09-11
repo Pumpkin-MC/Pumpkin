@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_INITIALIZE_BORDER;
+use pumpkin_data::packet::clientbound::play::INITIALIZE_BORDER;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
@@ -11,7 +11,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 /// This packet is sent when a player joins the world or changes dimensions.
 /// It synchronizes the current position, size, and all warning parameters
 /// to ensure the client-side visual barrier matches the server's authority.
-#[java_packet(PLAY_INITIALIZE_BORDER)]
+#[java_packet(INITIALIZE_BORDER)]
 pub struct CInitializeWorldBorder {
     /// The X coordinate of the center of the world border.
     pub x: f64,

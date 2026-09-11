@@ -52,7 +52,7 @@ impl MegaPineFoliagePlacer {
         }
         foliage_positions
     }
-    pub fn get_random_height(&self, random: &mut RandomGenerator, _trunk_height: i32) -> i32 {
+    pub fn get_random_height(&self, random: &mut RandomGenerator) -> i32 {
         self.crown_height.get(random)
     }
 }

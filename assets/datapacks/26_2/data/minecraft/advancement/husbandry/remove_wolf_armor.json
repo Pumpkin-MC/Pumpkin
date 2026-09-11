@@ -1,0 +1,39 @@
+{
+  "parent": "minecraft:husbandry/tame_an_animal",
+  "criteria": {
+    "remove_wolf_armor": {
+      "conditions": {
+        "entity": [
+          {
+            "condition": "minecraft:entity_properties",
+            "entity": "this",
+            "predicate": {
+              "minecraft:entity_type": "minecraft:wolf"
+            }
+          }
+        ],
+        "item": {
+          "items": "minecraft:wolf_armor"
+        }
+      },
+      "trigger": "minecraft:player_sheared_equipment"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.husbandry.remove_wolf_armor.description"
+    },
+    "icon": {
+      "id": "minecraft:shears"
+    },
+    "title": {
+      "translate": "advancements.husbandry.remove_wolf_armor.title"
+    }
+  },
+  "requirements": [
+    [
+      "remove_wolf_armor"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

@@ -1,0 +1,180 @@
+{
+  "type": "minecraft:simple_random_selector",
+  "config": {
+    "features": [
+      {
+        "feature": {
+          "type": "minecraft:simple_block",
+          "config": {
+            "to_place": {
+              "type": "minecraft:simple_state_provider",
+              "state": {
+                "Name": "minecraft:lilac",
+                "Properties": {
+                  "half": "lower"
+                }
+              }
+            }
+          }
+        },
+        "placement": [
+          {
+            "type": "minecraft:count",
+            "count": 96
+          },
+          {
+            "type": "minecraft:random_offset",
+            "xz_spread": {
+              "type": "minecraft:trapezoid",
+              "max": 7,
+              "min": -7,
+              "plateau": 0
+            },
+            "y_spread": {
+              "type": "minecraft:trapezoid",
+              "max": 3,
+              "min": -3,
+              "plateau": 0
+            }
+          },
+          {
+            "type": "minecraft:block_predicate_filter",
+            "predicate": {
+              "type": "minecraft:matching_block_tag",
+              "tag": "minecraft:air"
+            }
+          }
+        ]
+      },
+      {
+        "feature": {
+          "type": "minecraft:simple_block",
+          "config": {
+            "to_place": {
+              "type": "minecraft:simple_state_provider",
+              "state": {
+                "Name": "minecraft:rose_bush",
+                "Properties": {
+                  "half": "lower"
+                }
+              }
+            }
+          }
+        },
+        "placement": [
+          {
+            "type": "minecraft:count",
+            "count": 96
+          },
+          {
+            "type": "minecraft:random_offset",
+            "xz_spread": {
+              "type": "minecraft:trapezoid",
+              "max": 7,
+              "min": -7,
+              "plateau": 0
+            },
+            "y_spread": {
+              "type": "minecraft:trapezoid",
+              "max": 3,
+              "min": -3,
+              "plateau": 0
+            }
+          },
+          {
+            "type": "minecraft:block_predicate_filter",
+            "predicate": {
+              "type": "minecraft:matching_block_tag",
+              "tag": "minecraft:air"
+            }
+          }
+        ]
+      },
+      {
+        "feature": {
+          "type": "minecraft:simple_block",
+          "config": {
+            "to_place": {
+              "type": "minecraft:simple_state_provider",
+              "state": {
+                "Name": "minecraft:peony",
+                "Properties": {
+                  "half": "lower"
+                }
+              }
+            }
+          }
+        },
+        "placement": [
+          {
+            "type": "minecraft:count",
+            "count": 96
+          },
+          {
+            "type": "minecraft:random_offset",
+            "xz_spread": {
+              "type": "minecraft:trapezoid",
+              "max": 7,
+              "min": -7,
+              "plateau": 0
+            },
+            "y_spread": {
+              "type": "minecraft:trapezoid",
+              "max": 3,
+              "min": -3,
+              "plateau": 0
+            }
+          },
+          {
+            "type": "minecraft:block_predicate_filter",
+            "predicate": {
+              "type": "minecraft:matching_block_tag",
+              "tag": "minecraft:air"
+            }
+          }
+        ]
+      },
+      {
+        "feature": {
+          "type": "minecraft:simple_block",
+          "config": {
+            "to_place": {
+              "type": "minecraft:simple_state_provider",
+              "state": {
+                "Name": "minecraft:lily_of_the_valley"
+              }
+            }
+          }
+        },
+        "placement": [
+          {
+            "type": "minecraft:count",
+            "count": 96
+          },
+          {
+            "type": "minecraft:random_offset",
+            "xz_spread": {
+              "type": "minecraft:trapezoid",
+              "max": 7,
+              "min": -7,
+              "plateau": 0
+            },
+            "y_spread": {
+              "type": "minecraft:trapezoid",
+              "max": 3,
+              "min": -3,
+              "plateau": 0
+            }
+          },
+          {
+            "type": "minecraft:block_predicate_filter",
+            "predicate": {
+              "type": "minecraft:matching_block_tag",
+              "tag": "minecraft:air"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

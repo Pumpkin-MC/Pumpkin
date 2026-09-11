@@ -1,6 +1,8 @@
 /* This file is generated. Do not edit manually. */
 use pumpkin_util::math::int_provider::{
-    IntProvider, NormalIntProvider, UniformIntProvider,
+    BiasedToBottomIntProvider, ClampedIntProvider, ClampedNormalIntProvider, ConstantIntProvider,
+    IntProvider, NormalIntProvider, TrapezoidIntProvider, UniformIntProvider, WeightedEntry,
+    WeightedListIntProvider,
 };
 #[derive(Debug, Clone)]
 pub struct Dimension {

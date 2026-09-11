@@ -55,4 +55,16 @@ pub trait Plugin: Send + Sync + 'static {
     fn on_unload(&self, server: Arc<Context>) -> PluginFuture<'_, Result<(), String>> {
         Box::pin(async move { Ok(()) })
     }
+
+    /// Asynchronous method called when the plugin receives an IPC message.
+    ///
+    /// This processes the message, and optionally returns a response
+    #[expect(unused)]
+    fn on_ipc_message(
+        &self,
+        sender: &str,
+        message: &[u8],
+    ) -> PluginFuture<'_, Result<Vec<u8>, String>> {
+        Box::pin(async move { Err("This plugin cannot receive messages.".to_string()) })
+    }
 }

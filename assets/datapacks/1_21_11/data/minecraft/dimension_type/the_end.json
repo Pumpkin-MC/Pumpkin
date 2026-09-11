@@ -1,0 +1,37 @@
+{
+  "has_fixed_time": true,
+  "has_skylight": true,
+  "has_ceiling": false,
+  "coordinate_scale": 1.0,
+  "min_y": 0,
+  "height": 256,
+  "logical_height": 256,
+  "infiniburn": "#minecraft:infiniburn_end",
+  "ambient_light": 0.25,
+  "monster_spawn_light_level": 15,
+  "monster_spawn_block_light_limit": 0,
+  "skybox": "end",
+  "attributes": {
+    "minecraft:visual/sky_color": "#000000",
+    "minecraft:visual/fog_color": "#181318",
+    "minecraft:audio/ambient_sounds": {
+      "mood": {
+        "sound": "minecraft:ambient.cave",
+        "tick_delay": 6000,
+        "block_search_extent": 8,
+        "offset": 2.0
+      }
+    },
+    "minecraft:visual/sky_light_color": "#e580ff",
+    "minecraft:visual/sky_light_factor": 0.0,
+    "minecraft:audio/background_music": {
+      "default": {
+        "sound": "minecraft:music.end",
+        "min_delay": 6000,
+        "max_delay": 24000,
+        "replace_current_music": true
+      }
+    }
+  },
+  "timelines": "#minecraft:in_end"
+}

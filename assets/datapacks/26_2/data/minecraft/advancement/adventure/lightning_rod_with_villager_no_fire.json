@@ -1,0 +1,52 @@
+{
+  "parent": "minecraft:adventure/root",
+  "criteria": {
+    "lightning_rod_with_villager_no_fire": {
+      "conditions": {
+        "bystander": [
+          {
+            "condition": "minecraft:entity_properties",
+            "entity": "this",
+            "predicate": {
+              "minecraft:entity_type": "minecraft:villager"
+            }
+          }
+        ],
+        "lightning": [
+          {
+            "condition": "minecraft:entity_properties",
+            "entity": "this",
+            "predicate": {
+              "minecraft:distance": {
+                "absolute": {
+                  "max": 30.0
+                }
+              },
+              "minecraft:type_specific/lightning": {
+                "blocks_set_on_fire": 0
+              }
+            }
+          }
+        ]
+      },
+      "trigger": "minecraft:lightning_strike"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.adventure.lightning_rod_with_villager_no_fire.description"
+    },
+    "icon": {
+      "id": "minecraft:lightning_rod"
+    },
+    "title": {
+      "translate": "advancements.adventure.lightning_rod_with_villager_no_fire.title"
+    }
+  },
+  "requirements": [
+    [
+      "lightning_rod_with_villager_no_fire"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

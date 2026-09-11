@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:smelting",
+  "experience": 0.1,
+  "ingredient": [
+    "minecraft:copper_pickaxe",
+    "minecraft:copper_shovel",
+    "minecraft:copper_axe",
+    "minecraft:copper_hoe",
+    "minecraft:copper_sword",
+    "minecraft:copper_spear",
+    "minecraft:copper_helmet",
+    "minecraft:copper_chestplate",
+    "minecraft:copper_leggings",
+    "minecraft:copper_boots",
+    "minecraft:copper_horse_armor",
+    "minecraft:copper_nautilus_armor"
+  ],
+  "result": {
+    "id": "minecraft:copper_nugget"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_closed_eyeblossom": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:closed_eyeblossom"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:gray_dye_from_closed_eyeblossom"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_closed_eyeblossom"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:gray_dye_from_closed_eyeblossom"
+    ]
+  }
+}

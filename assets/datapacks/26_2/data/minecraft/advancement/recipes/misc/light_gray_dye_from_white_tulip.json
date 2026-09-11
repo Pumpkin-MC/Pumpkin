@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:light_gray_dye_from_white_tulip"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    },
+    "has_white_tulip": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:white_tulip"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_white_tulip"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:light_gray_dye_from_white_tulip"
+    ]
+  }
+}

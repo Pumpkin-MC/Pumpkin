@@ -1,0 +1,28 @@
+{
+  "type": "minecraft:ruined_portal",
+  "biomes": "#minecraft:has_structure/ruined_portal_standard",
+  "setups": [
+    {
+      "air_pocket_probability": 1.0,
+      "can_be_cold": true,
+      "mossiness": 0.2,
+      "overgrown": false,
+      "placement": "underground",
+      "replace_with_blackstone": false,
+      "vines": false,
+      "weight": 0.5
+    },
+    {
+      "air_pocket_probability": 0.5,
+      "can_be_cold": true,
+      "mossiness": 0.2,
+      "overgrown": false,
+      "placement": "on_land_surface",
+      "replace_with_blackstone": false,
+      "vines": false,
+      "weight": 0.5
+    }
+  ],
+  "spawn_overrides": {},
+  "step": "surface_structures"
+}

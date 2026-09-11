@@ -1,0 +1,41 @@
+{
+  "parent": "minecraft:husbandry/root",
+  "criteria": {
+    "silk_touch_nest": {
+      "conditions": {
+        "block": "minecraft:bee_nest",
+        "item": {
+          "predicates": {
+            "minecraft:enchantments": [
+              {
+                "enchantments": "minecraft:silk_touch",
+                "levels": {
+                  "min": 1
+                }
+              }
+            ]
+          }
+        },
+        "num_bees_inside": 3
+      },
+      "trigger": "minecraft:bee_nest_destroyed"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.husbandry.silk_touch_nest.description"
+    },
+    "icon": {
+      "id": "minecraft:bee_nest"
+    },
+    "title": {
+      "translate": "advancements.husbandry.silk_touch_nest.title"
+    }
+  },
+  "requirements": [
+    [
+      "silk_touch_nest"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

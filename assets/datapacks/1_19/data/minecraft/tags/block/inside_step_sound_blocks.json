@@ -1,0 +1,15 @@
+{
+  "values": [
+    "minecraft:snow",
+    "minecraft:powder_snow",
+    "minecraft:sculk_vein",
+    "minecraft:lily_pad",
+    "minecraft:nether_sprouts",
+    "minecraft:warped_roots",
+    "minecraft:crimson_roots",
+    "minecraft:glow_lichen",
+    "minecraft:small_amethyst_bud",
+    "minecraft:moss_carpet",
+    "#minecraft:wool_carpets"
+  ]
+}

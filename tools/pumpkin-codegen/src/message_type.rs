@@ -26,22 +26,33 @@ pub struct RawChatType {
 //     parameters: Vec<String>,
 // }
 
-/// Generates the `TokenStream` for message type `u8` constants, including a synthetic `RAW` variant.
+/// Generates the `TokenStream` for message type `u8` constants from 26.2 datapack, including a synthetic `RAW` variant.
 pub fn build() -> TokenStream {
-    let json: BTreeMap<String, RawChatType> =
-        serde_json::from_str(&fs::read_to_string("../../assets/message_type.json").unwrap())
-            .expect("Failed to parse message_type.json");
+    let dir = std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/chat_type");
+    let mut entries: Vec<_> = fs::read_dir(dir)
+        .expect("Missing chat_type directory")
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
+        .collect();
+    entries.sort_by_key(|e| e.path());
+
     let mut variants = TokenStream::new();
 
-    for (name, typee) in &json {
-        let i = typee.id as u8;
-        let name = format_ident!("{}", name.to_uppercase());
+    for (i, entry) in entries.iter().enumerate() {
+        let stem = entry
+            .path()
+            .file_stem()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
+        let i = i as u8;
+        let name = format_ident!("{}", stem.to_uppercase());
         variants.extend([quote! {
             pub const #name: u8 = #i;
         }]);
     }
 
-    let raw_id = json.len() as u8;
+    let raw_id = entries.len() as u8;
     variants.extend([quote! {
         pub const RAW: u8 = #raw_id; // One higher than the highest vanilla id
     }]);

@@ -1,0 +1,33 @@
+{
+  "parent": "minecraft:husbandry/root",
+  "criteria": {
+    "obtain_sniffer_egg": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:sniffer_egg"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.husbandry.obtain_sniffer_egg.description"
+    },
+    "hidden": true,
+    "icon": {
+      "id": "minecraft:sniffer_egg"
+    },
+    "title": {
+      "translate": "advancements.husbandry.obtain_sniffer_egg.title"
+    }
+  },
+  "requirements": [
+    [
+      "obtain_sniffer_egg"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_GAME_EVENT;
+use pumpkin_data::packet::clientbound::play::GAME_EVENT;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
@@ -10,7 +10,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 /// This packet is the primary way the server communicates global or
 /// context-specific transitions, such as changing the weather,
 /// altering the player's gamemode, or displaying the credits.
-#[java_packet(PLAY_GAME_EVENT)]
+#[java_packet(GAME_EVENT)]
 pub struct CGameEvent {
     /// The ID of the event type.
     pub event: u8,

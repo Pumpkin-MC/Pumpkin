@@ -1,0 +1,39 @@
+{
+  "parent": "minecraft:husbandry/leash_all_frog_variants",
+  "criteria": {
+    "froglights": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:ochre_froglight"
+          },
+          {
+            "items": "minecraft:pearlescent_froglight"
+          },
+          {
+            "items": "minecraft:verdant_froglight"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.husbandry.froglights.description"
+    },
+    "frame": "challenge",
+    "icon": {
+      "id": "minecraft:verdant_froglight"
+    },
+    "title": {
+      "translate": "advancements.husbandry.froglights.title"
+    }
+  },
+  "requirements": [
+    [
+      "froglights"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

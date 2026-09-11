@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:smelting",
+  "category": "blocks",
+  "experience": 0.1,
+  "ingredient": "minecraft:basalt",
+  "result": {
+    "id": "minecraft:smooth_basalt"
+  }
+}

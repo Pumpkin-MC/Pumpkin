@@ -1,0 +1,50 @@
+{
+  "type": "minecraft:speleothem_cluster",
+  "config": {
+    "base_block": {
+      "Name": "minecraft:dripstone_block"
+    },
+    "chance_of_speleothem_at_max_distance_from_center": 0.1,
+    "density": {
+      "type": "minecraft:uniform",
+      "max_exclusive": 0.7,
+      "min_inclusive": 0.3
+    },
+    "floor_to_ceiling_search_range": 12,
+    "height": {
+      "type": "minecraft:uniform",
+      "max_inclusive": 6,
+      "min_inclusive": 3
+    },
+    "height_deviation": 3,
+    "max_distance_from_center_affecting_height_bias": 8,
+    "max_distance_from_edge_affecting_chance_of_speleothem": 3,
+    "max_stalagmite_stalactite_height_diff": 1,
+    "pointed_block": {
+      "Name": "minecraft:pointed_dripstone",
+      "Properties": {
+        "thickness": "tip",
+        "vertical_direction": "up",
+        "waterlogged": "false"
+      }
+    },
+    "radius": {
+      "type": "minecraft:uniform",
+      "max_inclusive": 8,
+      "min_inclusive": 2
+    },
+    "replaceable_blocks": "#minecraft:dripstone_replaceable_blocks",
+    "speleothem_block_layer_thickness": {
+      "type": "minecraft:uniform",
+      "max_inclusive": 4,
+      "min_inclusive": 2
+    },
+    "wetness": {
+      "type": "minecraft:clamped_normal",
+      "deviation": 0.3,
+      "max": 0.9,
+      "mean": 0.1,
+      "min": 0.1
+    }
+  }
+}

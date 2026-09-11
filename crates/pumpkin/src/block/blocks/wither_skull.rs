@@ -1,10 +1,13 @@
-use pumpkin_data::{Block, BlockDirection, BlockStateId, entity::EntityType, world::WorldEvent};
+use pumpkin_data::{
+    Block, BlockDirection, BlockState, BlockStateId, entity::EntityType, world::WorldEvent,
+};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_world::world::BlockFlags;
 
 use crate::{
     block::{
-        BlockBehaviour, BlockFuture, OnPlaceArgs, PlacedArgs, blocks::skull_block::SkullBlock,
+        BlockBehaviour, OnPlaceArgs, PathComputationType, PlacedArgs,
+        blocks::skull_block::SkullBlock,
     },
     entity::{Entity, boss::wither::WitherEntity},
 };
@@ -13,12 +16,12 @@ use crate::{
 pub struct WitherSkeletonSkullBlock;
 
 impl BlockBehaviour for WitherSkeletonSkullBlock {
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
         SkullBlock::on_place(&SkullBlock, args)
     }
 
-    fn placed<'a>(&'a self, args: PlacedArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
+    fn placed(&self, args: PlacedArgs<'_>) {
+        {
             let entity = crate::block::entities::skull::SkullBlockEntity::new(*args.position);
             args.world.add_block_entity(std::sync::Arc::new(entity));
 
@@ -68,13 +71,11 @@ impl BlockBehaviour for WitherSkeletonSkullBlock {
                         ];
 
                         for p in pattern {
-                            world
-                                .set_block_state(
-                                    &p,
-                                    Block::AIR.default_state.id,
-                                    BlockFlags::NOTIFY_ALL,
-                                )
-                                .await;
+                            world.set_block_state(
+                                &p,
+                                Block::AIR.default_state.id,
+                                BlockFlags::NOTIFY_ALL,
+                            );
                             world.sync_world_event(
                                 WorldEvent::ParticlesDestroyBlock,
                                 p,
@@ -88,11 +89,16 @@ impl BlockBehaviour for WitherSkeletonSkullBlock {
                             &EntityType::WITHER,
                         );
                         let wither = WitherEntity::new(entity);
-                        world.spawn_entity(wither).await;
+                        wither.make_invulnerable();
+                        world.spawn_entity(wither);
                         return;
                     }
                 }
             }
-        })
+        }
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }

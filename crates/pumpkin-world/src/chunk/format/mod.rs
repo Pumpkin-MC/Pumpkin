@@ -1,6 +1,5 @@
 use std::{
     path::PathBuf,
-    pin::Pin,
     str::FromStr,
     sync::{
         RwLock,
@@ -13,7 +12,6 @@ use pumpkin_data::{Block, BlockStateId, chunk::ChunkStatus, fluid::Fluid};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::resource_location::{FromResourceLocation, ResourceLocation, ToResourceLocation};
 use rustc_hash::FxHashMap;
-use tokio::sync::Mutex;
 
 use crate::{
     chunk::{
@@ -43,10 +41,8 @@ impl SingleChunkDataSerializer for ChunkData {
     }
 
     #[inline]
-    fn to_bytes(
-        &self,
-    ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>> {
-        Box::pin(async move { Ok(self.internal_to_bytes()) })
+    fn to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
+        Ok(self.internal_to_bytes())
     }
 
     #[inline]
@@ -94,15 +90,26 @@ fn extract_u16_array(tag: &pumpkin_nbt::tag::NbtTag) -> Option<Box<[BlockStateId
         pumpkin_nbt::tag::NbtTag::List(list) => {
             let ids: Box<[BlockStateId]> = list
                 .iter()
-                .map(|t| {
-                    let val = match t {
-                        pumpkin_nbt::tag::NbtTag::Int(x) => *x as u16,
-                        pumpkin_nbt::tag::NbtTag::Short(x) => *x as u16,
-                        pumpkin_nbt::tag::NbtTag::Byte(x) => *x as u16,
-                        pumpkin_nbt::tag::NbtTag::Long(x) => *x as u16,
-                        _ => 0,
-                    };
-                    BlockStateId::new_or_air(val)
+                .map(|t| match t {
+                    pumpkin_nbt::tag::NbtTag::Int(x) => BlockStateId::new_or_air(*x as u16),
+                    pumpkin_nbt::tag::NbtTag::Short(x) => BlockStateId::new_or_air(*x as u16),
+                    pumpkin_nbt::tag::NbtTag::Byte(x) => BlockStateId::new_or_air(*x as u16),
+                    pumpkin_nbt::tag::NbtTag::Long(x) => BlockStateId::new_or_air(*x as u16),
+                    pumpkin_nbt::tag::NbtTag::Compound(compound) => {
+                        if let Ok(entry) =
+                            crate::generation::structure::template::PaletteEntry::from_nbt_compound(
+                                compound,
+                            )
+                            && let Some(state) =
+                                crate::generation::structure::template::BlockStateResolver::resolve_simple(
+                                    &entry,
+                                )
+                        {
+                            return state.id;
+                        }
+                        BlockStateId::AIR
+                    }
+                    _ => BlockStateId::AIR,
                 })
                 .collect();
             Some(ids)
@@ -122,6 +129,10 @@ fn extract_u8_array(tag: &pumpkin_nbt::tag::NbtTag) -> Option<Box<[u8]>> {
                     pumpkin_nbt::tag::NbtTag::Byte(x) => *x as u8,
                     pumpkin_nbt::tag::NbtTag::Int(x) => *x as u8,
                     pumpkin_nbt::tag::NbtTag::Short(x) => *x as u8,
+                    pumpkin_nbt::tag::NbtTag::String(s) => {
+                        let name = s.strip_prefix("minecraft:").unwrap_or(s);
+                        pumpkin_data::biome::Biome::from_name(name).map_or(0, |b| b.id)
+                    }
                     _ => 0,
                 })
                 .collect();
@@ -372,6 +383,12 @@ impl ChunkData {
             _ => ChunkStatus::Empty,
         };
 
+        let custom_data = root_tag
+            .get_compound("PumpkinCustomData")
+            .or_else(|| root_tag.get_compound("BukkitValues"))
+            .cloned()
+            .unwrap_or_default();
+
         Ok(Self {
             section,
             heightmap: std::sync::Mutex::new(heightmaps),
@@ -387,6 +404,7 @@ impl ChunkData {
             status,
             blending_data: None,
             inhabited_time: AtomicU64::new(root_tag.get_long("InhabitedTime").unwrap_or(0) as u64),
+            custom_data: std::sync::Mutex::new(custom_data),
         })
     }
 
@@ -483,7 +501,27 @@ impl ChunkData {
             let palette_tags: Vec<NbtTag> = block_states_nbt
                 .palette
                 .iter()
-                .map(|id| NbtTag::Int(BlockStateId::as_u16(*id) as i32))
+                .map(|&id| {
+                    let block = Block::from_state_id(id);
+                    let mut comp = NbtCompound::new();
+                    let name = if block.name.starts_with("minecraft:") {
+                        block.name.to_string()
+                    } else {
+                        format!("minecraft:{}", block.name)
+                    };
+                    comp.put_string("Name", name);
+                    if let Some(props) = block.properties(id) {
+                        let prop_vec = props.to_props();
+                        if !prop_vec.is_empty() {
+                            let mut props_comp = NbtCompound::new();
+                            for (k, v) in prop_vec {
+                                props_comp.put_string(k, v.to_string());
+                            }
+                            comp.put_compound("Properties", props_comp);
+                        }
+                    }
+                    NbtTag::Compound(comp)
+                })
                 .collect();
             bs_comp.put_list("palette", palette_tags);
             section_comp.put_compound("block_states", bs_comp);
@@ -497,7 +535,16 @@ impl ChunkData {
             let biome_palette_tags: Vec<NbtTag> = biomes_nbt
                 .palette
                 .iter()
-                .map(|&val| NbtTag::Byte(val as i8))
+                .map(|&val| {
+                    let name = pumpkin_data::biome::Biome::from_id(val)
+                        .map_or("plains", |b| b.registry_id);
+                    let full_name = if name.starts_with("minecraft:") {
+                        name.to_string()
+                    } else {
+                        format!("minecraft:{name}")
+                    };
+                    NbtTag::String(full_name.into())
+                })
                 .collect();
             b_comp.put_list("palette", biome_palette_tags);
             section_comp.put_compound("biomes", b_comp);
@@ -556,8 +603,77 @@ impl ChunkData {
             self.inhabited_time.load(Ordering::Relaxed) as i64,
         );
 
+        let custom_data = self
+            .custom_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !custom_data.is_empty() {
+            root_compound.put_compound("PumpkinCustomData", custom_data.clone());
+        }
+
         let nbt = pumpkin_nbt::Nbt::from(root_compound);
         nbt.write()
+    }
+
+    pub fn set_custom_data(&self, namespace: &str, key: &str, value: pumpkin_nbt::tag::NbtTag) {
+        let mut custom_data = self
+            .custom_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        let mut namespace_data = custom_data
+            .child_tags
+            .remove(namespace)
+            .and_then(|tag| match tag {
+                pumpkin_nbt::tag::NbtTag::Compound(compound) => Some(compound),
+                _ => None,
+            })
+            .unwrap_or_default();
+
+        namespace_data.child_tags.insert(key.into(), value);
+        custom_data.child_tags.insert(
+            namespace.into(),
+            pumpkin_nbt::tag::NbtTag::Compound(namespace_data),
+        );
+        self.dirty.store(true, Ordering::Relaxed);
+    }
+
+    pub fn get_custom_data(&self, namespace: &str, key: &str) -> Option<pumpkin_nbt::tag::NbtTag> {
+        let custom_data = self
+            .custom_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        custom_data
+            .get(namespace)?
+            .extract_compound()?
+            .get(key)
+            .cloned()
+    }
+
+    pub fn remove_custom_data(&self, namespace: &str, key: &str) {
+        let mut custom_data = self
+            .custom_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        let Some(pumpkin_nbt::tag::NbtTag::Compound(mut namespace_data)) =
+            custom_data.child_tags.remove(namespace)
+        else {
+            return;
+        };
+
+        namespace_data.child_tags.remove(key);
+        if !namespace_data.is_empty() {
+            custom_data.child_tags.insert(
+                namespace.into(),
+                pumpkin_nbt::tag::NbtTag::Compound(namespace_data),
+            );
+        }
+        self.dirty.store(true, Ordering::Relaxed);
+    }
+
+    pub fn has_custom_data(&self, namespace: &str, key: &str) -> bool {
+        self.get_custom_data(namespace, key).is_some()
     }
 }
 
@@ -587,10 +703,8 @@ impl SingleChunkDataSerializer for ChunkEntityData {
     }
 
     #[inline]
-    fn to_bytes(
-        &self,
-    ) -> Pin<Box<dyn Future<Output = Result<Bytes, ChunkSerializingError>> + Send + '_>> {
-        Box::pin(async move { self.internal_to_bytes().await })
+    fn to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
+        Ok(self.internal_to_bytes())
     }
 
     #[inline]
@@ -655,12 +769,12 @@ impl ChunkEntityData {
         Ok(Self {
             x: position.x,
             z: position.y,
-            data: Mutex::new(entities),
+            data: std::sync::Mutex::new(entities),
             dirty: AtomicBool::new(false),
         })
     }
 
-    async fn internal_to_bytes(&self) -> Result<Bytes, ChunkSerializingError> {
+    fn internal_to_bytes(&self) -> Bytes {
         let mut root = NbtCompound::new();
         root.put_int("DataVersion", WORLD_DATA_VERSION);
         root.put(
@@ -670,14 +784,14 @@ impl ChunkEntityData {
         let entities_tag: Vec<pumpkin_nbt::tag::NbtTag> = self
             .data
             .lock()
-            .await
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .iter()
             .map(|c| pumpkin_nbt::tag::NbtTag::Compound(c.clone()))
             .collect();
         root.put_list("Entities", entities_tag);
 
         let nbt = pumpkin_nbt::Nbt::from(root);
-        Ok(nbt.write())
+        nbt.write()
     }
 }
 
@@ -731,28 +845,31 @@ impl LightContainer {
         matches!(self, Self::Empty(_))
     }
 
+    #[inline]
     const fn index(x: usize, y: usize, z: usize) -> usize {
         y * 16 * 16 + z * 16 + x
     }
 
+    #[inline]
     #[must_use]
     pub fn get(&self, x: usize, y: usize, z: usize) -> u8 {
         match self {
             Self::Full(data) => {
                 let index = Self::index(x, y, z);
-                data[index >> 1] >> (4 * (index & 1)) & 0x0F
+                (data[index >> 1] >> (4 * (index & 1))) & 0x0F
             }
             Self::Empty(default) => *default,
         }
     }
 
+    #[inline]
     pub fn set(&mut self, x: usize, y: usize, z: usize, value: u8) {
         match self {
             Self::Full(data) => {
                 let index = Self::index(x, y, z);
-                let mask = 0x0F << (4 * (index & 1));
-                data[index >> 1] &= !mask;
-                data[index >> 1] |= value << (4 * (index & 1));
+                let shift = 4 * (index & 1);
+                let mask = 0x0F << shift;
+                data[index >> 1] = (data[index >> 1] & !mask) | (value << shift);
             }
             Self::Empty(default) => {
                 if value != *default {
@@ -763,6 +880,39 @@ impl LightContainer {
         }
     }
 
+    #[inline]
+    pub fn set_column_y_range(
+        &mut self,
+        x: usize,
+        z: usize,
+        y_start: usize,
+        y_end: usize,
+        value: u8,
+    ) {
+        if y_start >= y_end {
+            return;
+        }
+        match self {
+            Self::Full(data) => {
+                let shift = 4 * (x & 1);
+                let mask = 0x0F << shift;
+                let val = (value & 0x0F) << shift;
+                let mut byte_idx = (y_start * 256 + z * 16 + x) >> 1;
+                for _ in y_start..y_end {
+                    data[byte_idx] = (data[byte_idx] & !mask) | val;
+                    byte_idx += 128;
+                }
+            }
+            Self::Empty(default) => {
+                if value != *default {
+                    *self = Self::new_filled(*default);
+                    self.set_column_y_range(x, z, y_start, y_end, value);
+                }
+            }
+        }
+    }
+
+    #[inline]
     pub fn fill(&mut self, value: u8) {
         *self = Self::new_filled(value);
     }
@@ -771,5 +921,65 @@ impl LightContainer {
 impl Default for LightContainer {
     fn default() -> Self {
         Self::new_empty(15)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::Block;
+    use pumpkin_nbt::compound::NbtCompound;
+    use pumpkin_nbt::tag::NbtTag;
+
+    #[test]
+    fn extract_u16_array_from_vanilla_compound_palette() {
+        let mut entry1 = NbtCompound::new();
+        entry1.put_string("Name", "minecraft:stone".to_string());
+
+        let mut entry2 = NbtCompound::new();
+        entry2.put_string("Name", "minecraft:repeater".to_string());
+        let mut props = NbtCompound::new();
+        props.put_string("facing", "north".to_string());
+        props.put_string("delay", "2".to_string());
+        props.put_string("locked", "false".to_string());
+        props.put_string("powered", "false".to_string());
+        entry2.put_compound("Properties", props);
+
+        let list_tag = NbtTag::List(vec![NbtTag::Compound(entry1), NbtTag::Compound(entry2)]);
+        let result = extract_u16_array(&list_tag).expect("should extract palette");
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0], Block::STONE.default_state.id);
+
+        let repeater_state = Block::REPEATER
+            .from_properties(&[
+                ("facing", "north"),
+                ("delay", "2"),
+                ("locked", "false"),
+                ("powered", "false"),
+            ])
+            .to_state_id(&Block::REPEATER);
+        assert_eq!(result[1], repeater_state);
+    }
+
+    #[test]
+    fn extract_u8_array_from_vanilla_string_palette() {
+        let list_tag = NbtTag::List(vec![
+            NbtTag::String("minecraft:plains".to_string().into()),
+            NbtTag::String("minecraft:the_void".to_string().into()),
+        ]);
+        let result = extract_u8_array(&list_tag).expect("should extract biome palette");
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(
+            result[0],
+            pumpkin_data::biome::Biome::from_name("plains").unwrap().id
+        );
+        assert_eq!(
+            result[1],
+            pumpkin_data::biome::Biome::from_name("the_void")
+                .unwrap()
+                .id
+        );
     }
 }

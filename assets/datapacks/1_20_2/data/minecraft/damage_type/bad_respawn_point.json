@@ -1,0 +1,6 @@
+{
+  "scaling": "always",
+  "exhaustion": 0.10000000149011612,
+  "message_id": "badRespawnPoint",
+  "death_message_type": "intentional_game_design"
+}

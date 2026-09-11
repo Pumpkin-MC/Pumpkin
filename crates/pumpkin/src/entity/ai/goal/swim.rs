@@ -1,6 +1,6 @@
 use std::sync::atomic::Ordering;
 
-use super::{Controls, Goal, GoalFuture};
+use super::{Controls, Goal};
 use crate::entity::mob::Mob;
 use rand::RngExt;
 
@@ -27,23 +27,21 @@ impl SwimGoal {
 }
 
 impl Goal for SwimGoal {
-    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move { Self::is_in_fluid(mob) })
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        Self::is_in_fluid(mob)
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move { Self::is_in_fluid(mob) })
+    fn should_continue(&self, mob: &dyn Mob) -> bool {
+        Self::is_in_fluid(mob)
     }
 
-    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            if mob.get_random().random::<f32>() < 0.8 {
-                mob.get_mob_entity()
-                    .living_entity
-                    .jumping
-                    .store(true, Ordering::SeqCst);
-            }
-        })
+    fn tick(&mut self, mob: &dyn Mob) {
+        if mob.get_random().random::<f32>() < 0.8 {
+            mob.get_mob_entity()
+                .living_entity
+                .jumping
+                .store(true, Ordering::SeqCst);
+        }
     }
 
     fn should_run_every_tick(&self) -> bool {

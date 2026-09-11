@@ -125,12 +125,12 @@ pub struct NormalTransactionData;
 #[derive(Debug, PacketRead)]
 pub struct MismatchTransactionData;
 
-#[derive(Debug)]
+#[derive(Debug, PacketRead)]
 pub struct UseItemTransactionData {
     pub action_type: VarInt,
     pub trigger_type: u8,
     pub block_position: BlockPos,
-    pub block_face: i32,
+    pub block_face: u8,
     pub hot_bar_slot: VarInt,
     pub item_in_hand: NetworkItemDescriptor,
     pub player_position: Vector3<f32>,
@@ -140,25 +140,7 @@ pub struct UseItemTransactionData {
     pub client_cooldown_state: u8,
 }
 
-impl PacketRead for UseItemTransactionData {
-    fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
-        Ok(Self {
-            action_type: VarInt::read(buf)?,
-            trigger_type: u8::read(buf)?,
-            block_position: BlockPos::read(buf)?,
-            block_face: i32::from(u8::read(buf)?),
-            hot_bar_slot: VarInt::read(buf)?,
-            item_in_hand: NetworkItemDescriptor::read(buf)?,
-            player_position: Vector3::read(buf)?,
-            click_position: Vector3::read(buf)?,
-            block_runtime_id: VarUInt::read(buf)?,
-            client_prediction: u8::read(buf)?,
-            client_cooldown_state: u8::read(buf)?,
-        })
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, PacketRead)]
 pub struct UseItemOnEntityTransactionData {
     pub target_entity_runtime_id: VarULong,
     pub action_type: VarInt,
@@ -168,36 +150,12 @@ pub struct UseItemOnEntityTransactionData {
     pub click_position: Vector3<f32>,
 }
 
-impl PacketRead for UseItemOnEntityTransactionData {
-    fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
-        Ok(Self {
-            target_entity_runtime_id: VarULong::read(buf)?,
-            action_type: VarInt::read(buf)?,
-            hot_bar_slot: VarInt::read(buf)?,
-            item_in_hand: NetworkItemDescriptor::read(buf)?,
-            player_position: Vector3::read(buf)?,
-            click_position: Vector3::read(buf)?,
-        })
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, PacketRead)]
 pub struct ReleaseItemTransactionData {
     pub action_type: VarInt,
     pub hot_bar_slot: VarInt,
     pub item_in_hand: NetworkItemDescriptor,
     pub head_position: Vector3<f32>,
-}
-
-impl PacketRead for ReleaseItemTransactionData {
-    fn read<R: Read>(buf: &mut R) -> Result<Self, Error> {
-        Ok(Self {
-            action_type: VarInt::read(buf)?,
-            hot_bar_slot: VarInt::read(buf)?,
-            item_in_hand: NetworkItemDescriptor::read(buf)?,
-            head_position: Vector3::read(buf)?,
-        })
-    }
 }
 
 #[derive(Debug)]
@@ -268,5 +226,60 @@ impl PacketRead for SInventoryTransaction {
             transaction_type,
             transaction_data,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decodes_use_item_transaction_with_empty_hand() {
+        let payload = [
+            0x00, 0x00, 0x01, 0x02, 0x01, 0x00, 0x00, 0x01, 0xec, 0x04, 0x80, 0x01, 0xcb, 0x06,
+            0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x8c, 0xf6, 0x9b, 0x43,
+            0x72, 0x3d, 0x83, 0x42, 0xf3, 0xe1, 0xd1, 0xc3, 0x00, 0x90, 0x61, 0x3f, 0x00, 0x8d,
+            0x26, 0x3f, 0x00, 0x00, 0x80, 0x3f, 0xfd, 0x59, 0x01, 0x00,
+        ];
+        let mut reader = payload.as_slice();
+
+        let packet = SInventoryTransaction::read(&mut reader).unwrap();
+        let TransactionData::UseItem(data) = packet.transaction_data else {
+            panic!("expected use-item transaction");
+        };
+
+        assert_eq!(data.action_type.0, 0);
+        assert_eq!(data.item_in_hand.id.0, 0);
+        assert_eq!(data.block_face, 3);
+        assert!(reader.is_empty());
+    }
+
+    #[test]
+    fn decodes_use_item_transaction_with_crafting_table() {
+        let payload = [
+            0x00, 0x00, 0x01, 0x02, 0x01, 0x01, 0x00, 0x01, 0x01, 0x00, 0x01, 0x00, 0x02, 0x3a,
+            0x00, 0x01, 0x00, 0x00, 0x00, 0xfd, 0x59, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+            0xa6, 0x05, 0x7e, 0xd9, 0x06, 0x01, 0x04, 0x3a, 0x00, 0x01, 0x00, 0x00, 0x00, 0xfd,
+            0x59, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x5f, 0x0f,
+            0xaa, 0x43, 0x72, 0x3d, 0x83, 0x42, 0xb8, 0x39, 0xd5, 0xc3, 0x00, 0x16, 0x15, 0x3f,
+            0x00, 0x00, 0x80, 0x3f, 0x00, 0xc8, 0x81, 0x3e, 0xb6, 0x5e, 0x01, 0x00,
+        ];
+        let mut reader = payload.as_slice();
+        let packet = SInventoryTransaction::read(&mut reader).unwrap();
+        let TransactionData::UseItem(data) = packet.transaction_data else {
+            panic!("expected use-item transaction");
+        };
+
+        assert_eq!(packet.actions.len(), 1);
+        assert_eq!(packet.actions[0].old_item.id.0, 58);
+        assert_eq!(packet.actions[0].new_item.id.0, 0);
+        assert_eq!(data.action_type.0, 0);
+        assert_eq!(data.block_face, 1);
+        assert_eq!(data.hot_bar_slot.0, 2);
+        assert_eq!(data.item_in_hand.id.0, 58);
+        assert_eq!(data.item_in_hand.stack_size, 1);
+        assert_eq!(data.item_in_hand.block_runtime_id.0, 11_517);
+        assert!(reader.is_empty());
     }
 }

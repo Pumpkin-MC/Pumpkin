@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_PLAYER_ABILITIES;
+use pumpkin_data::packet::clientbound::play::PLAYER_ABILITIES;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
@@ -10,7 +10,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 /// This packet informs the client about the player's state (flying, invulnerable)
 /// and sets the movement speeds. While the client applies these visuals,
 /// the server must still validate these states to prevent cheating.
-#[java_packet(PLAY_PLAYER_ABILITIES)]
+#[java_packet(PLAYER_ABILITIES)]
 pub struct CPlayerAbilities {
     /// A bitmask of player states.
     /// Bit 0 (0x01): Invulnerable (Creative mode)

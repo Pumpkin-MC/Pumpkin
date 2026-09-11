@@ -1,6 +1,6 @@
 use std::{
     io::{Error, Read, Write},
-    num::NonZeroUsize,
+    num::NonZero,
     ops::Deref,
 };
 
@@ -19,9 +19,7 @@ pub type VarLongType = i64;
 pub struct VarLong(pub VarLongType);
 
 impl VarLong {
-    /// The maximum number of bytes a `VarLong` can occupy.
-    #[allow(clippy::unwrap_used)]
-    pub const MAX_SIZE: NonZeroUsize = NonZeroUsize::new(10).unwrap();
+    pub const MAX_SIZE: NonZero<usize> = NonZero::new(10).expect("10 is non-zero");
 
     #[must_use]
     #[inline]

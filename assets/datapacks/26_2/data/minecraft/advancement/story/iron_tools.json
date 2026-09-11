@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:story/smelt_iron",
+  "criteria": {
+    "iron_pickaxe": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:iron_pickaxe"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.story.iron_tools.description"
+    },
+    "icon": {
+      "id": "minecraft:iron_pickaxe"
+    },
+    "title": {
+      "translate": "advancements.story.iron_tools.title"
+    }
+  },
+  "requirements": [
+    [
+      "iron_pickaxe"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

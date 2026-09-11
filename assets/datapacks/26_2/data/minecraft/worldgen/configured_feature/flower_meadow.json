@@ -1,0 +1,56 @@
+{
+  "type": "minecraft:simple_block",
+  "config": {
+    "to_place": {
+      "type": "minecraft:dual_noise_provider",
+      "noise": {
+        "amplitudes": [
+          1.0
+        ],
+        "firstOctave": -3
+      },
+      "scale": 1.0,
+      "seed": 2345,
+      "slow_noise": {
+        "amplitudes": [
+          1.0
+        ],
+        "firstOctave": -10
+      },
+      "slow_scale": 1.0,
+      "states": [
+        {
+          "Name": "minecraft:tall_grass",
+          "Properties": {
+            "half": "lower"
+          }
+        },
+        {
+          "Name": "minecraft:allium"
+        },
+        {
+          "Name": "minecraft:poppy"
+        },
+        {
+          "Name": "minecraft:azure_bluet"
+        },
+        {
+          "Name": "minecraft:dandelion"
+        },
+        {
+          "Name": "minecraft:cornflower"
+        },
+        {
+          "Name": "minecraft:oxeye_daisy"
+        },
+        {
+          "Name": "minecraft:short_grass"
+        }
+      ],
+      "variety": [
+        1,
+        3
+      ]
+    }
+  }
+}

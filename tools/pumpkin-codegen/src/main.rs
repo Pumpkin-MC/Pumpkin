@@ -27,13 +27,13 @@ use std::{
 
 mod advancement;
 mod attributes;
+mod bedrock_biome;
 mod bedrock_creative;
 mod biome;
 mod bitsets;
 mod block;
+mod block_transformer;
 mod carver;
-pub mod chest_loot;
-mod chunk_gen_settings;
 mod chunk_status;
 mod chunk_view_lut;
 mod composter_increase_chance;
@@ -41,6 +41,7 @@ mod configured_feature;
 mod damage_type;
 mod data_component;
 mod dimension;
+mod dye_color;
 mod effect;
 mod enchantments;
 mod entity_pose;
@@ -53,11 +54,15 @@ mod game_event;
 mod game_rules;
 mod item;
 mod jukebox_song;
-pub mod loot;
+pub mod loot_table;
+mod map_color;
+mod map_decoration;
+mod material_rule;
 mod message_type;
 mod meta_data_type;
 mod noise_parameter;
 mod noise_router;
+mod noise_settings;
 mod packet;
 mod particle;
 mod placed_feature;
@@ -69,6 +74,7 @@ mod registry;
 mod remap;
 mod scoreboard_slot;
 mod screen;
+mod sdk;
 mod sound;
 mod sound_category;
 mod spawn_egg;
@@ -97,6 +103,7 @@ pub fn main() {
 
     let mut build_functions: Vec<(BuilderFn, &str)> = vec![
         (advancement::build, "advancement.rs"),
+        (bedrock_biome::build, "bedrock_biome.rs"),
         (bedrock_creative::build, "bedrock_creative.rs"),
         (packet::build, "packet.rs"),
         (screen::build, "screen.rs"),
@@ -126,7 +133,8 @@ pub fn main() {
         (block::build, "block.rs"),
         (item::build, "item.rs"),
         (structures::build, "structures.rs"),
-        (chunk_gen_settings::build, "chunk_gen_settings.rs"),
+        (material_rule::build, "material_rule.rs"),
+        (noise_settings::build, "noise_settings.rs"),
         (fluid::build, "fluid.rs"),
         (entity_status::build, "entity_status.rs"),
         (tag::build, "tag.rs"),
@@ -157,7 +165,11 @@ pub fn main() {
             "configured_features_generated.rs",
         ),
         (carver::build, "carver.rs"),
-        (chest_loot::build, "chest_loot.rs"),
+        (loot_table::build, "loot_table.rs"),
+        (map_color::build, "map_color.rs"),
+        (map_decoration::build, "map_decoration.rs"),
+        (dye_color::build, "dye_color.rs"),
+        (block_transformer::build, "block_transformer.rs"),
     ];
     build_functions.extend(remap::build());
 
@@ -166,6 +178,7 @@ pub fn main() {
     let filters: Vec<String> = std::env::args().skip(1).collect();
     let build_functions: Vec<_> = if filters.is_empty() {
         wit::main();
+        sdk::main();
         build_functions
     } else {
         build_functions
@@ -231,6 +244,7 @@ pub fn write_generated_file(new_code: &str, out_file: &str) {
 }
 
 /// Error returned when `rustfmt` is unavailable or fails to format code.
+#[derive(Debug)]
 pub struct RustFmtError;
 
 /// Formats a Rust source string by piping it through `rustfmt`.

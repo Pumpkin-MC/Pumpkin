@@ -11,7 +11,6 @@ use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockId;
 use pumpkin_data::BlockState;
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::is_air;
 use pumpkin_data::tag::Block::MINECRAFT_SCULK_REPLACEABLE;
 use pumpkin_data::tag::Block::MINECRAFT_SCULK_REPLACEABLE_WORLD_GEN;
@@ -22,9 +21,11 @@ pub mod growth;
 pub mod spreader;
 pub mod vein;
 
-/// The 18 non-corner neighbours of a block: every offset in the 3×3×3 cube
-/// that shares at least one zero-axis (i.e. is NOT a corner) and is not the
-/// centre itself. This matches vanilla's `NON_CORNER_NEIGHBOURS`.
+/// The 18 non-corner neighbours of a block.
+///
+/// Every offset in the 3×3×3 cube that shares at least one zero-axis
+/// (i.e. is NOT a corner) and is not the centre itself. This matches
+/// vanilla's `NON_CORNER_NEIGHBOURS`.
 pub const NON_CORNER_NEIGHBOURS: [Vector3<i32>; 18] = [
     // Face-adjacent — 6
     Vector3::new(-1, 0, 0),
@@ -50,7 +51,8 @@ pub const NON_CORNER_NEIGHBOURS: [Vector3<i32>; 18] = [
     Vector3::new(0, 1, 1),
 ];
 
-/// Abstraction over the level that the sculk spreader reads from and writes to.
+/// Abstraction over the level that the sculk spreader reads and writes.
+///
 /// Implemented for `T: GenerationCache` (post-terrain) via a blanket impl,
 /// and for proto-chunk generation through [`ProtoChunkSculkView`].
 pub trait SculkLevel {
@@ -87,17 +89,20 @@ pub trait SculkLevel {
 /// (`SculkBlock` / `SculkVeinBlock`). Sensors, shriekers and catalysts are
 /// plain blocks and therefore use `SculkBehaviour.DEFAULT` when a cursor
 /// visits them.
+#[must_use]
 pub const fn is_sculk_behaviour(id: BlockId) -> bool {
     matches!(id, BlockId::SCULK | BlockId::SCULK_VEIN)
 }
 
 /// Returns `true` if the block id is tagged `minecraft:sculk_replaceable`.
+#[must_use]
 pub fn is_sculk_replaceable(id: BlockId) -> bool {
     id.has_tag(MINECRAFT_SCULK_REPLACEABLE)
 }
 
 /// Returns `true` if the block id is tagged
 /// `minecraft:sculk_replaceable_world_gen`.
+#[must_use]
 pub fn is_sculk_replaceable_world_gen(id: BlockId) -> bool {
     id.has_tag(MINECRAFT_SCULK_REPLACEABLE_WORLD_GEN)
 }
@@ -123,6 +128,7 @@ pub fn can_spread_from(level: &dyn SculkLevel, pos: BlockPos) -> bool {
 
 /// Builds the shrieker block state used by the extra-rare-growths pass
 /// (with `can_summon` set when world-gen).
+#[must_use]
 pub fn shrieker_state(can_summon: bool) -> &'static BlockState {
     let mut properties = pumpkin_data::block_properties::SculkShriekerLikeProperties::default(
         &Block::SCULK_SHRIEKER,

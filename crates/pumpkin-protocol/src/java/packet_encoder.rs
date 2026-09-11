@@ -1,12 +1,14 @@
 use aes::cipher::KeyIvInit;
 use bytes::Bytes;
 use flate2::{Compress, Compression, FlushCompress, Status};
+use pumpkin_util::version::JavaMinecraftVersion;
 use thiserror::Error;
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 use crate::{
-    Aes128Cfb8Enc, CompressionLevel, CompressionThreshold, MAX_PACKET_DATA_SIZE, MAX_PACKET_SIZE,
-    PacketEncodeError, StreamEncryptor, VarInt,
+    Aes128Cfb8Enc, ClientPacket, CompressionLevel, CompressionThreshold, MAX_PACKET_DATA_SIZE,
+    MAX_PACKET_SIZE, PacketEncodeError, StreamEncryptor, VarInt, WritingError,
+    ser::NetworkWriteExt,
 };
 
 // raw -> compress -> encrypt
@@ -88,6 +90,7 @@ pub struct TCPNetworkEncoder<W: AsyncWrite + Unpin> {
     compressor: Option<(CompressionLevel, Compress)>,
     // Reused compression buffer to avoid allocating a new Vec for each packet.
     compression_scratch: Vec<u8>,
+    frame_scratch: Vec<u8>,
 }
 
 impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
@@ -97,6 +100,7 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
             compression: None,
             compressor: None,
             compression_scratch: Vec::new(),
+            frame_scratch: Vec::new(),
         }
     }
 
@@ -202,8 +206,41 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
     /// -   `Data`: The packet's data.
     ///
     /// NOTE: This method does not flush. Call [`Self::flush`] to flush buffered data.
-    #[allow(clippy::too_many_lines)]
     pub async fn write_packet(&mut self, packet_data: Bytes) -> Result<(), PacketEncodeError> {
+        let mut frame = std::mem::take(&mut self.frame_scratch);
+        frame.clear();
+        let framed = self.frame_packet(&packet_data, &mut frame);
+        let result = match framed {
+            Ok(()) => self.write_frame(&frame).await,
+            Err(err) => Err(err),
+        };
+        self.frame_scratch = frame;
+        result
+    }
+
+    pub async fn write_frame(&mut self, frame: &[u8]) -> Result<(), PacketEncodeError> {
+        let writer = self
+            .writer
+            .as_mut()
+            .ok_or_else(|| PacketEncodeError::Message("Writer missing".into()))?;
+        writer
+            .write_all(frame)
+            .await
+            .map_err(|err| PacketEncodeError::Message(err.to_string()))
+    }
+
+    #[must_use]
+    pub fn is_compressing_packet(&self, packet_data: &Bytes) -> bool {
+        self.compression
+            .is_some_and(|(threshold, _)| packet_data.len() >= threshold)
+    }
+
+    #[allow(clippy::too_many_lines)]
+    pub fn frame_packet(
+        &mut self,
+        packet_data: &Bytes,
+        out: &mut Vec<u8>,
+    ) -> Result<(), PacketEncodeError> {
         let data_len = packet_data.len();
         if data_len > MAX_PACKET_DATA_SIZE {
             return Err(PacketEncodeError::TooLong(data_len));
@@ -291,19 +328,10 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
 
         let header_len = header_cursor.position() as usize;
         let header_bytes = &header_buf[..header_len];
-        let writer = self
-            .writer
-            .as_mut()
-            .ok_or_else(|| PacketEncodeError::Message("Writer missing".into()))?;
 
-        writer
-            .write_all(header_bytes)
-            .await
-            .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
-        writer
-            .write_all(payload_to_write)
-            .await
-            .map_err(|err| PacketEncodeError::Message(err.to_string()))?;
+        out.reserve(header_len + payload_to_write.len());
+        out.extend_from_slice(header_bytes);
+        out.extend_from_slice(payload_to_write);
 
         Ok(())
     }
@@ -316,6 +344,28 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
             .await
             .map_err(|err| PacketEncodeError::Message(err.to_string()))
     }
+}
+
+pub fn write_packet<P: ClientPacket + ?Sized>(
+    packet: &P,
+    version: &JavaMinecraftVersion,
+    mut write: impl std::io::Write,
+) -> Result<(), WritingError> {
+    let version_number = P::to_id(*version);
+    if version_number == -1 {
+        return Err(WritingError::UnsupportedVersion(*version));
+    }
+    write.write_var_int(&VarInt(version_number))?;
+    packet.write_packet_data(write, version)
+}
+
+pub fn serialize_packet<P: ClientPacket + ?Sized>(
+    packet: &P,
+    version: &JavaMinecraftVersion,
+) -> Result<Bytes, WritingError> {
+    let mut packet_buf = Vec::new();
+    write_packet(packet, version, &mut packet_buf)?;
+    Ok(packet_buf.into())
 }
 
 #[derive(Error, Debug)]
@@ -334,12 +384,12 @@ mod tests {
     use aes::Aes128;
     use cfb8::Decryptor as Cfb8Decryptor;
     use flate2::read::ZlibDecoder;
-    use pumpkin_data::packet::clientbound::STATUS_STATUS_RESPONSE;
+    use pumpkin_data::packet::clientbound::status::STATUS_RESPONSE;
     use pumpkin_macros::java_packet;
     use pumpkin_util::version::JavaMinecraftVersion;
 
     /// Define a custom packet for testing maximum packet size
-    #[java_packet(STATUS_STATUS_RESPONSE)]
+    #[java_packet(STATUS_RESPONSE)]
     pub struct MaxSizePacket {
         data: Vec<u8>,
     }

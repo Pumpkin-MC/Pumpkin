@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:dialog_list",
+  "button_width": 310,
+  "columns": 1,
+  "dialogs": "#minecraft:quick_actions",
+  "exit_action": {
+    "label": {
+      "translate": "gui.back"
+    },
+    "width": 200
+  },
+  "external_title": {
+    "translate": "menu.quick_actions"
+  },
+  "title": {
+    "translate": "menu.quick_actions.title"
+  }
+}

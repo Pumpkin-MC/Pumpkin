@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_slab": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:weathered_cut_copper_slab"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:weathered_chiseled_copper"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_slab"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:weathered_chiseled_copper"
+    ]
+  }
+}

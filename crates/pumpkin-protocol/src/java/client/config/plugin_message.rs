@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use pumpkin_data::packet::clientbound::CONFIG_CUSTOM_PAYLOAD;
+use pumpkin_data::packet::clientbound::config::CUSTOM_PAYLOAD;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -9,7 +9,7 @@ use crate::{
     ser::{NetworkWriteExt, WritingError},
 };
 
-#[java_packet(CONFIG_CUSTOM_PAYLOAD)]
+#[java_packet(CUSTOM_PAYLOAD)]
 pub struct CPluginMessage<'a> {
     pub channel: &'a str,
     pub data: &'a [u8],

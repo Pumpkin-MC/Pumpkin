@@ -1,0 +1,17 @@
+{
+  "given_item_modifiers": [
+    {
+      "function": "minecraft:set_potion",
+      "id": "minecraft:long_invisibility"
+    }
+  ],
+  "gives": {
+    "id": "minecraft:potion"
+  },
+  "max_uses": 1.0,
+  "reputation_discount": 0.05,
+  "wants": {
+    "count": 5.0,
+    "id": "minecraft:emerald"
+  }
+}

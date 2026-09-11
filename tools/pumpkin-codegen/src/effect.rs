@@ -158,6 +158,26 @@ pub fn build() -> TokenStream {
             #variants
 
             #[must_use]
+            pub const fn to_bedrock_id(&self) -> i32 {
+                match self.id {
+                    0..=22 => self.id as i32 + 1,
+                    24 => 24,
+                    27 => 27,
+                    28 => 26,
+                    30 => 28,
+                    31 => 29,
+                    32 => 30,
+                    33 => 31,
+                    34 => 32,
+                    35 => 33,
+                    36 => 34,
+                    37 => 35,
+                    38 => 36,
+                    _ => self.id as i32 + 1,
+                }
+            }
+
+            #[must_use]
             pub fn from_name(name: &str) -> Option<&'static Self> {
                 match name {
                     #name_to_type

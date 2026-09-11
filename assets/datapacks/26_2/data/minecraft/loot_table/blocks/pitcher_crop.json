@@ -1,0 +1,151 @@
+{
+  "type": "minecraft:block",
+  "functions": [
+    {
+      "function": "minecraft:explosion_decay"
+    }
+  ],
+  "pools": [
+    {
+      "entries": [
+        {
+          "type": "minecraft:alternatives",
+          "children": [
+            {
+              "type": "minecraft:item",
+              "conditions": [
+                {
+                  "block": "minecraft:pitcher_crop",
+                  "condition": "minecraft:block_state_property",
+                  "properties": {
+                    "age": "0"
+                  }
+                },
+                {
+                  "block": "minecraft:pitcher_crop",
+                  "condition": "minecraft:block_state_property",
+                  "properties": {
+                    "half": "lower"
+                  }
+                }
+              ],
+              "functions": [
+                {
+                  "count": 1.0,
+                  "function": "minecraft:set_count"
+                }
+              ],
+              "name": "minecraft:pitcher_pod"
+            },
+            {
+              "type": "minecraft:item",
+              "conditions": [
+                {
+                  "block": "minecraft:pitcher_crop",
+                  "condition": "minecraft:block_state_property",
+                  "properties": {
+                    "age": "1"
+                  }
+                },
+                {
+                  "block": "minecraft:pitcher_crop",
+                  "condition": "minecraft:block_state_property",
+                  "properties": {
+                    "half": "lower"
+                  }
+                }
+              ],
+              "functions": [
+                {
+                  "count": 1.0,
+                  "function": "minecraft:set_count"
+                }
+              ],
+              "name": "minecraft:pitcher_pod"
+            },
+            {
+              "type": "minecraft:item",
+              "conditions": [
+                {
+                  "block": "minecraft:pitcher_crop",
+                  "condition": "minecraft:block_state_property",
+                  "properties": {
+                    "age": "2"
+                  }
+                },
+                {
+                  "block": "minecraft:pitcher_crop",
+                  "condition": "minecraft:block_state_property",
+                  "properties": {
+                    "half": "lower"
+                  }
+                }
+              ],
+              "functions": [
+                {
+                  "count": 1.0,
+                  "function": "minecraft:set_count"
+                }
+              ],
+              "name": "minecraft:pitcher_pod"
+            },
+            {
+              "type": "minecraft:item",
+              "conditions": [
+                {
+                  "block": "minecraft:pitcher_crop",
+                  "condition": "minecraft:block_state_property",
+                  "properties": {
+                    "age": "3"
+                  }
+                },
+                {
+                  "block": "minecraft:pitcher_crop",
+                  "condition": "minecraft:block_state_property",
+                  "properties": {
+                    "half": "lower"
+                  }
+                }
+              ],
+              "functions": [
+                {
+                  "count": 1.0,
+                  "function": "minecraft:set_count"
+                }
+              ],
+              "name": "minecraft:pitcher_pod"
+            },
+            {
+              "type": "minecraft:item",
+              "conditions": [
+                {
+                  "block": "minecraft:pitcher_crop",
+                  "condition": "minecraft:block_state_property",
+                  "properties": {
+                    "age": "4"
+                  }
+                },
+                {
+                  "block": "minecraft:pitcher_crop",
+                  "condition": "minecraft:block_state_property",
+                  "properties": {
+                    "half": "lower"
+                  }
+                }
+              ],
+              "functions": [
+                {
+                  "count": 1.0,
+                  "function": "minecraft:set_count"
+                }
+              ],
+              "name": "minecraft:pitcher_plant"
+            }
+          ]
+        }
+      ],
+      "rolls": 1.0
+    }
+  ],
+  "random_sequence": "minecraft:blocks/pitcher_crop"
+}

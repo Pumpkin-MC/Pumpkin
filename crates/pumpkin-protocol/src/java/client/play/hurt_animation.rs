@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_HURT_ANIMATION;
+use pumpkin_data::packet::clientbound::play::HURT_ANIMATION;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
@@ -11,7 +11,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 /// This packet causes the entity to turn red and perform a directional
 /// camera shake or model tilt. It is typically sent immediately after
 /// an entity's health is reduced.
-#[java_packet(PLAY_HURT_ANIMATION)]
+#[java_packet(HURT_ANIMATION)]
 pub struct CHurtAnimation {
     /// The Entity ID of the entity that was hurt.
     pub entity_id: VarInt,

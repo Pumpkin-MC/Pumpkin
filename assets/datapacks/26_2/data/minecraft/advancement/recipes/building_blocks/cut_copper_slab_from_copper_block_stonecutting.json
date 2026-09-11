@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_copper_block": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:copper_block"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:cut_copper_slab_from_copper_block_stonecutting"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_copper_block"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:cut_copper_slab_from_copper_block_stonecutting"
+    ]
+  }
+}

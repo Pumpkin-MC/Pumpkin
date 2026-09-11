@@ -8,7 +8,6 @@ use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockId;
 use pumpkin_data::BlockState;
 use pumpkin_data::BlockStateId;
-use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::block_properties::GlowLichenLikeProperties;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::RandomGenerator;
@@ -30,6 +29,7 @@ pub enum SpreadType {
 
 impl SpreadType {
     /// Computes the target position and the face the new vein should have.
+    #[must_use]
     pub fn spread_pos(
         self,
         pos: BlockPos,
@@ -410,7 +410,7 @@ impl VeinRules {
         match state.to_block_id() {
             BlockId::WATER => level.sculk_is_water(pos),
             BlockId::SCULK_VEIN => {
-                let props = GlowLichenLikeProperties::from_state_id(state, &Block::SCULK_VEIN);
+                let props = GlowLichenLikeProperties::from_state_id(state);
                 props.r#waterlogged
             }
             _ => false,
@@ -432,7 +432,7 @@ impl VeinRules {
         match state.to_block_id() {
             BlockId::WATER => level.sculk_is_water_source(pos),
             BlockId::SCULK_VEIN => {
-                let props = GlowLichenLikeProperties::from_state_id(state, &Block::SCULK_VEIN);
+                let props = GlowLichenLikeProperties::from_state_id(state);
                 props.r#waterlogged
             }
             _ => false,
@@ -440,11 +440,12 @@ impl VeinRules {
     }
 
     /// Returns whether `state` has the given face bit set.
+    #[must_use]
     pub fn has_face(state: BlockStateId, face: BlockDirection) -> bool {
         if state.to_block_id() != BlockId::SCULK_VEIN {
             return false;
         }
-        let props = GlowLichenLikeProperties::from_state_id(state, &Block::SCULK_VEIN);
+        let props = GlowLichenLikeProperties::from_state_id(state);
         match face {
             BlockDirection::Down => props.r#down,
             BlockDirection::Up => props.r#up,
@@ -456,6 +457,7 @@ impl VeinRules {
     }
 
     /// Returns whether any face bit is set.
+    #[must_use]
     pub fn has_any_face(state: BlockStateId) -> bool {
         BlockDirection::all()
             .into_iter()
@@ -463,8 +465,9 @@ impl VeinRules {
     }
 
     /// Returns a new state with the given face set to `value`.
+    #[must_use]
     pub fn with_face(state: BlockStateId, face: BlockDirection, value: bool) -> BlockStateId {
-        let mut props = GlowLichenLikeProperties::from_state_id(state, &Block::SCULK_VEIN);
+        let mut props = GlowLichenLikeProperties::from_state_id(state);
         match face {
             BlockDirection::Down => props.r#down = value,
             BlockDirection::Up => props.r#up = value,
@@ -477,7 +480,7 @@ impl VeinRules {
     }
 
     fn with_waterlogged(state: BlockStateId, value: bool) -> BlockStateId {
-        let mut props = GlowLichenLikeProperties::from_state_id(state, &Block::SCULK_VEIN);
+        let mut props = GlowLichenLikeProperties::from_state_id(state);
         props.r#waterlogged = value;
         BlockState::from_id(props.to_state_id(&Block::SCULK_VEIN)).id
     }

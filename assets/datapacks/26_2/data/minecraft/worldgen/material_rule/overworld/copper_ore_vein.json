@@ -1,0 +1,10 @@
+{
+  "type": "minecraft:ore_vein",
+  "density": "minecraft:overworld/ore_vein/copper_density",
+  "filler_block": "minecraft:granite",
+  "filler_gap": "minecraft:overworld/ore_vein/gap",
+  "ore_block": "minecraft:copper_ore",
+  "raw_ore_block": "minecraft:raw_copper_block",
+  "raw_ore_chance": 0.02,
+  "richness": "minecraft:overworld/ore_vein/richness"
+}

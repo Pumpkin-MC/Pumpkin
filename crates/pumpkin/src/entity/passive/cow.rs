@@ -5,7 +5,7 @@ use pumpkin_data::sound::Sound;
 use pumpkin_data::{entity::EntityType, item::Item};
 
 use crate::entity::{
-    Entity, EntityBaseFuture, NBTStorage, NbtFuture,
+    Entity,
     ageable::AgeableMob,
     ai::goal::{
         breed::BreedGoal, escape_danger::EscapeDangerGoal, follow_parent::FollowParentGoal,
@@ -16,7 +16,6 @@ use crate::entity::{
     passive::animal::Animal,
     player::Player,
 };
-use pumpkin_nbt::compound::NbtCompound;
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::WHEAT];
 
@@ -65,47 +64,47 @@ impl CowEntity {
     }
 }
 
-impl crate::entity::ageable::AgeableMob for CowEntity {
+impl AgeableMob for CowEntity {
     fn get_ageable_data(&self) -> &crate::entity::ageable::AgeableData {
         &self.ageable_data
     }
 }
 
-impl NBTStorage for CowEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.mob_entity.living_entity.write_nbt(nbt).await;
-            self.write_ageable_nbt(nbt);
-            self.write_animal_nbt(nbt);
-        })
-    }
-
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            self.mob_entity.living_entity.read_nbt_non_mut(nbt).await;
-            self.read_ageable_nbt(nbt);
-            self.read_animal_nbt(nbt);
-        })
-    }
-}
-
-impl super::animal::Animal for CowEntity {
+impl Animal for CowEntity {
     fn is_food(&self, item_stack: &ItemStack) -> bool {
-        TEMPT_ITEMS.iter().any(|i| i.id == item_stack.item.id)
+        use pumpkin_data::tag::Taggable;
+        item_stack
+            .item
+            .has_tag(&pumpkin_data::tag::Item::MINECRAFT_COW_FOOD)
+            || TEMPT_ITEMS.iter().any(|i| i.id == item_stack.item.id)
     }
 }
 
 impl Mob for CowEntity {
+    fn as_ageable(&self) -> Option<&dyn AgeableMob> {
+        Some(self)
+    }
+
+    fn as_animal(&self) -> Option<&dyn Animal> {
+        Some(self)
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
     }
 
-    fn mob_interact<'a>(
-        &'a self,
-        player: &'a Arc<Player>,
-        item_stack: &'a mut ItemStack,
-    ) -> EntityBaseFuture<'a, bool> {
-        use super::animal::Animal;
+    fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+        if item_stack.get_item() == &Item::BUCKET && !self.is_baby() {
+            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+            let entity = &self.mob_entity.living_entity.entity;
+            let world = entity.world.load();
+            world.play_sound(
+                Sound::EntityCowMilk,
+                pumpkin_data::sound::SoundCategory::Neutral,
+                &entity.pos.load(),
+            );
+            return true;
+        }
         self.animal_interact(player, item_stack, Sound::EntityCowAmbient)
     }
 }

@@ -28,10 +28,12 @@ pub struct AdvancementDisplay {
 }
 
 impl AdvancementDisplay {
+    #[allow(deprecated)]
     pub fn get_title(&self) -> TextComponent {
         TextComponent::translate(self.title, [])
     }
 
+    #[allow(deprecated)]
     pub fn get_description(&self) -> TextComponent {
         TextComponent::translate(self.description, [])
     }

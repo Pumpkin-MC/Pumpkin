@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:mossy_stone_bricks_from_vine"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    },
+    "has_vine": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:vine"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_vine"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:mossy_stone_bricks_from_vine"
+    ]
+  }
+}

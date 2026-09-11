@@ -1,0 +1,20 @@
+{
+  "precipitation": "rain",
+  "effects": {
+    "sky_color": 8233983,
+    "water_fog_color": 329011,
+    "fog_color": 12638463,
+    "water_color": 4159204,
+    "mood_sound": {
+      "tick_delay": 6000,
+      "offset": 2.0,
+      "sound": "minecraft:ambient.cave",
+      "block_search_extent": 8
+    }
+  },
+  "depth": 0.44999998807907104,
+  "temperature": 0.25,
+  "scale": 0.30000001192092896,
+  "downfall": 0.800000011920929,
+  "category": "taiga"
+}

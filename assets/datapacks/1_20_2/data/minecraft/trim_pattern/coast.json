@@ -1,0 +1,8 @@
+{
+  "template_item": "minecraft:coast_armor_trim_smithing_template",
+  "description": {
+    "translate": "trim_pattern.minecraft.coast"
+  },
+  "asset_id": "minecraft:coast",
+  "decal": 0
+}

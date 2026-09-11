@@ -1,0 +1,8 @@
+{
+  "comparator_output": 7,
+  "description": {
+    "translate": "jukebox_song.minecraft.mellohi"
+  },
+  "length_in_seconds": 96.0,
+  "sound_event": "minecraft:music_disc.mellohi"
+}

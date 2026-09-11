@@ -12,7 +12,9 @@ pub enum PlayerAction<'a> {
     UpdateListed(bool),
     UpdateLatency(VarInt),
     UpdateDisplayName(Option<&'a TextComponent>),
+    /// Added in 1.21.2
     UpdateListOrder(VarInt),
+    /// Added in 1.21.4
     /// Toggles the visibility of the player's hat layer (second skin layer).
     UpdateHat(bool),
 }

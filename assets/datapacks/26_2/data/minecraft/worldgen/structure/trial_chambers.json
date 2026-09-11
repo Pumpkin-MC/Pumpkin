@@ -1,0 +1,147 @@
+{
+  "type": "minecraft:jigsaw",
+  "biomes": "#minecraft:has_structure/trial_chambers",
+  "dimension_padding": 10,
+  "liquid_settings": "ignore_waterlogging",
+  "max_distance_from_center": 116,
+  "pool_aliases": [
+    {
+      "type": "minecraft:random_group",
+      "groups": [
+        {
+          "data": [
+            {
+              "type": "minecraft:direct",
+              "alias": "minecraft:trial_chambers/spawner/contents/ranged",
+              "target": "minecraft:trial_chambers/spawner/ranged/skeleton"
+            },
+            {
+              "type": "minecraft:direct",
+              "alias": "minecraft:trial_chambers/spawner/contents/slow_ranged",
+              "target": "minecraft:trial_chambers/spawner/slow_ranged/skeleton"
+            }
+          ],
+          "weight": 1
+        },
+        {
+          "data": [
+            {
+              "type": "minecraft:direct",
+              "alias": "minecraft:trial_chambers/spawner/contents/ranged",
+              "target": "minecraft:trial_chambers/spawner/ranged/stray"
+            },
+            {
+              "type": "minecraft:direct",
+              "alias": "minecraft:trial_chambers/spawner/contents/slow_ranged",
+              "target": "minecraft:trial_chambers/spawner/slow_ranged/stray"
+            }
+          ],
+          "weight": 1
+        },
+        {
+          "data": [
+            {
+              "type": "minecraft:direct",
+              "alias": "minecraft:trial_chambers/spawner/contents/ranged",
+              "target": "minecraft:trial_chambers/spawner/ranged/poison_skeleton"
+            },
+            {
+              "type": "minecraft:direct",
+              "alias": "minecraft:trial_chambers/spawner/contents/slow_ranged",
+              "target": "minecraft:trial_chambers/spawner/slow_ranged/poison_skeleton"
+            }
+          ],
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "type": "minecraft:random",
+      "alias": "minecraft:trial_chambers/spawner/contents/melee",
+      "targets": [
+        {
+          "data": "minecraft:trial_chambers/spawner/melee/zombie",
+          "weight": 1
+        },
+        {
+          "data": "minecraft:trial_chambers/spawner/melee/husk",
+          "weight": 1
+        },
+        {
+          "data": "minecraft:trial_chambers/spawner/melee/spider",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "type": "minecraft:random",
+      "alias": "minecraft:trial_chambers/spawner/contents/small_melee",
+      "targets": [
+        {
+          "data": "minecraft:trial_chambers/spawner/small_melee/slime",
+          "weight": 1
+        },
+        {
+          "data": "minecraft:trial_chambers/spawner/small_melee/cave_spider",
+          "weight": 1
+        },
+        {
+          "data": "minecraft:trial_chambers/spawner/small_melee/silverfish",
+          "weight": 1
+        },
+        {
+          "data": "minecraft:trial_chambers/spawner/small_melee/baby_zombie",
+          "weight": 1
+        }
+      ]
+    }
+  ],
+  "size": 20,
+  "spawn_overrides": {
+    "ambient": {
+      "bounding_box": "piece",
+      "spawns": []
+    },
+    "axolotls": {
+      "bounding_box": "piece",
+      "spawns": []
+    },
+    "creature": {
+      "bounding_box": "piece",
+      "spawns": []
+    },
+    "misc": {
+      "bounding_box": "piece",
+      "spawns": []
+    },
+    "monster": {
+      "bounding_box": "piece",
+      "spawns": []
+    },
+    "underground_water_creature": {
+      "bounding_box": "piece",
+      "spawns": []
+    },
+    "water_ambient": {
+      "bounding_box": "piece",
+      "spawns": []
+    },
+    "water_creature": {
+      "bounding_box": "piece",
+      "spawns": []
+    }
+  },
+  "start_height": {
+    "type": "minecraft:uniform",
+    "max_inclusive": {
+      "absolute": -20
+    },
+    "min_inclusive": {
+      "absolute": -40
+    }
+  },
+  "start_pool": "minecraft:trial_chambers/chamber/end",
+  "step": "underground_structures",
+  "terrain_adaptation": "encapsulate",
+  "use_expansion_hack": false
+}

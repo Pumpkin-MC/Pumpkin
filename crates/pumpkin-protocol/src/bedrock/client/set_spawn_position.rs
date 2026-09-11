@@ -1,3 +1,5 @@
+// Last verified for v2169
+
 use std::io::{Error, Write};
 
 use pumpkin_macros::packet;
@@ -5,38 +7,24 @@ use pumpkin_util::math::position::BlockPos;
 
 use crate::{codec::var_int::VarInt, serial::PacketWrite};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PacketWrite)]
 #[packet(43)]
 pub struct CSetSpawnPosition {
-    pub spawn_type: VarInt,
-    pub position: BlockPos,
-    pub dimension: VarInt,
-    pub spawn_position: BlockPos,
+    pub spawn_position_type: SpawnPositionType,
+    pub block_position: BlockPos,
+    pub dimension_type: VarInt,
+    pub spawn_block_pos: BlockPos,
 }
 
-impl CSetSpawnPosition {
-    #[must_use]
-    pub const fn new(
-        spawn_type: i32,
-        position: BlockPos,
-        dimension: i32,
-        spawn_position: BlockPos,
-    ) -> Self {
-        Self {
-            spawn_type: VarInt(spawn_type),
-            position,
-            dimension: VarInt(dimension),
-            spawn_position,
-        }
-    }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(i32)]
+pub enum SpawnPositionType {
+    PlayerRespawn,
+    WorldRespawn,
 }
 
-impl PacketWrite for CSetSpawnPosition {
+impl PacketWrite for SpawnPositionType {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        self.spawn_type.write(writer)?;
-        self.position.write(writer)?;
-        self.dimension.write(writer)?;
-        self.spawn_position.write(writer)?;
-        Ok(())
+        VarInt(*self as i32).write(writer)
     }
 }

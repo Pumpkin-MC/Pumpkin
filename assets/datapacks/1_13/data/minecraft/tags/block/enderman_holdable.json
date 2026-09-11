@@ -1,0 +1,32 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:grass_block",
+    "minecraft:dirt",
+    "minecraft:coarse_dirt",
+    "minecraft:podzol",
+    "minecraft:sand",
+    "minecraft:red_sand",
+    "minecraft:gravel",
+    "minecraft:dandelion",
+    "minecraft:poppy",
+    "minecraft:blue_orchid",
+    "minecraft:allium",
+    "minecraft:azure_bluet",
+    "minecraft:red_tulip",
+    "minecraft:orange_tulip",
+    "minecraft:white_tulip",
+    "minecraft:pink_tulip",
+    "minecraft:oxeye_daisy",
+    "minecraft:brown_mushroom",
+    "minecraft:red_mushroom",
+    "minecraft:tnt",
+    "minecraft:cactus",
+    "minecraft:clay",
+    "minecraft:pumpkin",
+    "minecraft:carved_pumpkin",
+    "minecraft:melon",
+    "minecraft:mycelium",
+    "minecraft:netherrack"
+  ]
+}

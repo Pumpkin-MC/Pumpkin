@@ -74,4 +74,46 @@ impl DAG {
             *edge = self.edges.insert(Edge::new(to, *edge));
         }
     }
+
+    pub fn drop_edge_chain(&mut self, mut head: EdgeKey) {
+        while !head.is_null() {
+            if let Some(edge) = self.edges.remove(head) {
+                head = edge.next;
+            } else {
+                break;
+            }
+        }
+    }
+
+    pub fn prune_edge_chain(&mut self, head: &mut EdgeKey) -> bool {
+        let mut cur_edge = *head;
+        let mut prev_edge = EdgeKey::null();
+        let mut change_head = None;
+        let mut has_valid_target = false;
+
+        while !cur_edge.is_null() {
+            let Some(edge) = self.edges.get(cur_edge) else {
+                break;
+            };
+            if self.nodes.contains_key(edge.to) {
+                prev_edge = cur_edge;
+                cur_edge = edge.next;
+                has_valid_target = true;
+            } else {
+                let next = edge.next;
+                self.edges.remove(cur_edge);
+                cur_edge = next;
+                if prev_edge.is_null() {
+                    change_head = Some(next);
+                } else if let Some(prev) = self.edges.get_mut(prev_edge) {
+                    prev.next = next;
+                }
+            }
+        }
+        if let Some(next) = change_head {
+            *head = next;
+        }
+
+        has_valid_target
+    }
 }

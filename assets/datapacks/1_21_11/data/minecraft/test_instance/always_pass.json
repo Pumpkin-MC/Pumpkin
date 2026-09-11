@@ -1,0 +1,9 @@
+{
+  "function": "minecraft:always_pass",
+  "environment": "minecraft:default",
+  "structure": "minecraft:empty",
+  "max_ticks": 1,
+  "setup_ticks": 1,
+  "required": false,
+  "type": "minecraft:function"
+}

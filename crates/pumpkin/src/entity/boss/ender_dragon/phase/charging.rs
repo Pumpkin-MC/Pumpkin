@@ -1,7 +1,6 @@
 use super::EnderDragonPhase;
 use crate::entity::EntityBase;
 use crate::entity::boss::ender_dragon::{EnderDragonEntity, NODE_Y, Vector3Ext};
-use futures::future::BoxFuture;
 use pumpkin_util::math::vector3::Vector3;
 
 pub struct ChargingPhase;
@@ -11,34 +10,41 @@ impl super::Phase for ChargingPhase {
         EnderDragonPhase::Charging
     }
 
-    fn tick<'a>(&'a self, dragon: &'a EnderDragonEntity) -> BoxFuture<'a, ()> {
-        Box::pin(async move {
-            let target_id = {
-                let guard = dragon.target_player.lock().await;
-                *guard
+    fn tick(&self, dragon: &EnderDragonEntity) {
+        let target_id = {
+            let guard = dragon
+                .target_player
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            *guard
+        };
+        let world = dragon.mob_entity.living_entity.entity.world.load();
+        let pos = dragon.mob_entity.living_entity.entity.pos.load();
+
+        let target_pos = if let Some(id) = target_id
+            && let Some(player) = world.players.load().iter().find(|p| p.gameprofile.id == id)
+        {
+            player.get_entity().pos.load()
+        } else {
+            let origin = {
+                let guard = dragon
+                    .fight_origin
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                guard.0
             };
-            let world = dragon.mob_entity.living_entity.entity.world.load();
-            let pos = dragon.mob_entity.living_entity.entity.pos.load();
+            Vector3::new(origin.x as f64, NODE_Y as f64 - 20.0, origin.z as f64)
+        };
 
-            let target_pos = if let Some(id) = target_id
-                && let Some(player) = world.players.load().iter().find(|p| p.gameprofile.id == id)
-            {
-                player.get_entity().pos.load()
-            } else {
-                let origin = {
-                    let guard = dragon.fight_origin.lock().await;
-                    guard.0
-                };
-                Vector3::new(origin.x as f64, NODE_Y as f64 - 20.0, origin.z as f64)
-            };
+        if pos.distance_squared(target_pos) < 25.0 {
+            dragon.set_phase(EnderDragonPhase::Hovering);
+            return;
+        }
 
-            if pos.distance_squared(target_pos) < 25.0 {
-                dragon.set_phase(EnderDragonPhase::Hovering).await;
-                return;
-            }
-
-            *dragon.target_location.lock().await = Some(target_pos);
-        })
+        *dragon
+            .target_location
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(target_pos);
     }
 
     fn get_fly_speed(&self) -> f32 {

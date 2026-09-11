@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_SELECT_ADVANCEMENTS_TAB;
+use pumpkin_data::packet::clientbound::play::SELECT_ADVANCEMENTS_TAB;
 use pumpkin_macros::java_packet;
 use pumpkin_util::identifier::Identifier;
 
@@ -6,7 +6,7 @@ use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_SELECT_ADVANCEMENTS_TAB)]
+#[java_packet(SELECT_ADVANCEMENTS_TAB)]
 pub struct CSelectAdvancementsTab {
     pub tab_id: Option<Identifier>,
 }

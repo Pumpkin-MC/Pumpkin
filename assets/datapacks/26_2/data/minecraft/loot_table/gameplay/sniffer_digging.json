@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:gift",
+  "pools": [
+    {
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:torchflower_seeds"
+        },
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:pitcher_pod"
+        }
+      ],
+      "rolls": 1.0
+    }
+  ],
+  "random_sequence": "minecraft:gameplay/sniffer_digging"
+}

@@ -1,0 +1,8 @@
+{
+  "template_item": "minecraft:shaper_armor_trim_smithing_template",
+  "description": {
+    "translate": "trim_pattern.minecraft.shaper"
+  },
+  "asset_id": "minecraft:shaper",
+  "decal": 0
+}

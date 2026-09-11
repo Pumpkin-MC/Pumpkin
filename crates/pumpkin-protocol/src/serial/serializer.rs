@@ -1,12 +1,11 @@
 use std::{
+    borrow::Cow,
     io::{Error, Write},
     net::SocketAddr,
 };
 
-use pumpkin_util::{
-    GameMode,
-    math::{position::BlockPos, vector2::Vector2, vector3::Vector3},
-};
+use pumpkin_nbt::{Nbt, NbtCompound};
+use pumpkin_util::math::{position::BlockPos, vector2::Vector2, vector3::Vector3};
 
 use crate::{
     codec::{var_int::VarInt, var_uint::VarUInt},
@@ -188,15 +187,14 @@ impl PacketWrite for SocketAddr {
     }
 }
 
-impl PacketWrite for GameMode {
+impl PacketWrite for Cow<'_, str> {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        VarInt(match self {
-            Self::Survival => 0,
-            Self::Creative => 1,
-            Self::Adventure => 2,
-            // I have no idea why
-            Self::Spectator => 6,
-        })
-        .write(writer)
+        self.as_ref().write(writer)
+    }
+}
+
+impl PacketWrite for NbtCompound {
+    fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        writer.write_all(&Nbt::from(self.clone()).write_bedrock())
     }
 }

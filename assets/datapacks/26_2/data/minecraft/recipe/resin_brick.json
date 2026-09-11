@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:smelting",
+  "experience": 0.1,
+  "ingredient": "minecraft:resin_clump",
+  "result": {
+    "id": "minecraft:resin_brick"
+  }
+}

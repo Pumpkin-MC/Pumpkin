@@ -1,0 +1,10 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:tube_coral",
+    "minecraft:brain_coral",
+    "minecraft:bubble_coral",
+    "minecraft:fire_coral",
+    "minecraft:horn_coral"
+  ]
+}

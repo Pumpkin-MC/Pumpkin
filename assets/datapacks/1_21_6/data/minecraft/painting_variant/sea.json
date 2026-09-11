@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:sea",
+  "title": {
+    "translate": "painting.minecraft.sea.title",
+    "color": "yellow"
+  },
+  "author": {
+    "translate": "painting.minecraft.sea.author",
+    "color": "gray"
+  },
+  "width": 2,
+  "height": 1
+}

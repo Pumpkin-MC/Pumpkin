@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_sand": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:sand"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:sandstone"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_sand"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:sandstone"
+    ]
+  }
+}

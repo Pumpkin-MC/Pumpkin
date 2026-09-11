@@ -1,0 +1,30 @@
+{
+  "description": {
+    "translate": "enchantment.minecraft.flame"
+  },
+  "min_cost": {
+    "base": 20,
+    "per_level_above_first": 0
+  },
+  "max_cost": {
+    "base": 50,
+    "per_level_above_first": 0
+  },
+  "anvil_cost": 4,
+  "slots": [
+    "mainhand"
+  ],
+  "supported_items": "#minecraft:enchantable/bow",
+  "weight": 2,
+  "max_level": 1,
+  "effects": {
+    "minecraft:projectile_spawned": [
+      {
+        "effect": {
+          "duration": 100.0,
+          "type": "minecraft:ignite"
+        }
+      }
+    ]
+  }
+}

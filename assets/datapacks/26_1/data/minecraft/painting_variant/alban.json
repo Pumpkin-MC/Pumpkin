@@ -1,0 +1,13 @@
+{
+  "width": 1,
+  "height": 1,
+  "asset_id": "minecraft:alban",
+  "title": {
+    "translate": "painting.minecraft.alban.title",
+    "color": "yellow"
+  },
+  "author": {
+    "translate": "painting.minecraft.alban.author",
+    "color": "gray"
+  }
+}

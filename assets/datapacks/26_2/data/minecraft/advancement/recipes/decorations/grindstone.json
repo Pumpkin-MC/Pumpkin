@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_stone_slab": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:stone_slab"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:grindstone"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_stone_slab"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:grindstone"
+    ]
+  }
+}

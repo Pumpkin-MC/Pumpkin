@@ -1,0 +1,39 @@
+{
+  "has_precipitation": false,
+  "temperature": 2.0,
+  "downfall": 0.0,
+  "attributes": {
+    "minecraft:visual/fog_color": "#1b4745",
+    "minecraft:visual/ambient_particles": [
+      {
+        "particle": {
+          "type": "minecraft:ash"
+        },
+        "probability": 0.00625
+      }
+    ],
+    "minecraft:audio/background_music": {
+      "default": {
+        "sound": "minecraft:music.nether.soul_sand_valley",
+        "min_delay": 12000,
+        "max_delay": 24000
+      }
+    },
+    "minecraft:audio/ambient_sounds": {
+      "loop": "minecraft:ambient.soul_sand_valley.loop",
+      "mood": {
+        "sound": "minecraft:ambient.soul_sand_valley.mood",
+        "tick_delay": 6000,
+        "block_search_extent": 8,
+        "offset": 2.0
+      },
+      "additions": {
+        "sound": "minecraft:ambient.soul_sand_valley.additions",
+        "tick_chance": 0.0111
+      }
+    }
+  },
+  "effects": {
+    "water_color": "#3f76e4"
+  }
+}

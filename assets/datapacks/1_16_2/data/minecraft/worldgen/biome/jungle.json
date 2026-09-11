@@ -1,0 +1,20 @@
+{
+  "category": "jungle",
+  "temperature": 0.949999988079071,
+  "downfall": 0.8999999761581421,
+  "depth": 0.10000000149011612,
+  "effects": {
+    "water_fog_color": 329011,
+    "water_color": 4159204,
+    "fog_color": 12638463,
+    "mood_sound": {
+      "offset": 2.0,
+      "sound": "minecraft:ambient.cave",
+      "block_search_extent": 8,
+      "tick_delay": 6000
+    },
+    "sky_color": 7842047
+  },
+  "precipitation": "rain",
+  "scale": 0.20000000298023224
+}
