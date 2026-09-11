@@ -109,7 +109,6 @@ pub fn find_nearest_structure_start(
     generator: &WorldGenerator,
 ) -> Option<BlockPos> {
     use crate::{
-        ProtoChunk,
         biome::{BiomeSupplier, MultiNoiseBiomeSupplier},
         generation::{
             noise::router::{
@@ -156,15 +155,12 @@ pub fn find_nearest_structure_start(
                     region_origin_z + region_z_offset,
                     structure_set.placement.salt,
                 );
-                let placement_chunk = ProtoChunk::new(chunk_x, chunk_z, generator);
                 if !should_generate_structure(
                     &structure_set.placement,
                     &noise_generator.structure_calculator,
                     chunk_x,
                     chunk_z,
                     global_cache,
-                    &placement_chunk,
-                    &[],
                 ) {
                     continue;
                 }
@@ -194,7 +190,12 @@ pub fn find_nearest_structure_start(
                                 chunk_z,
                                 random: create_chunk_random(world_seed, chunk_x, chunk_z),
                                 sea_level: settings.sea_level,
-                                min_y: noise_generator.dimension.min_y,
+                                min_y: (settings.shape.min_y as i32)
+                                    .max(noise_generator.dimension.min_y),
+                                height: settings
+                                    .shape
+                                    .height
+                                    .min(noise_generator.dimension.height as u16),
                                 height_sampler: Some(&mut height_sampler),
                                 structure_key: Some(key),
                             };

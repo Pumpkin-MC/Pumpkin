@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "crates/pumpkin",
     "crates/pumpkin-api-macros",
+    "crates/pumpkin-auth",
     "crates/pumpkin-codecs",
     "crates/pumpkin-command",
     "crates/pumpkin-config",
@@ -148,9 +149,9 @@ serde_json = { version = "1.0", default-features = false, features = ["std"] }
 tempfile = { version = "3.27.0", default-features = false }
 proc-macro-error2 = { version = "2", default-features = false }
 aes = { version = "0.9", default-features = false }
-async-compression = { version = "0.4.44", default-features = false }
+async-compression = { version = "0.4.46", default-features = false }
 base64 = { version = "0.23.1", default-features = false, features = ["std"] }
-bitflags = { version = "2.13.1", default-features = false, features = ["std"] }
+bitflags = { version = "2.13.2", default-features = false, features = ["std"] }
 cesu8 = { version = "1.1", default-features = false }
 cfb8 = { version = "0.9", default-features = false }
 colored = { version = "3.1", default-features = false }
@@ -176,6 +177,8 @@ num-traits = { version = "0.2", default-features = false, features = ["std"] }
 p384 = { version = "0.14.0", default-features = false, features = ["std", "arithmetic", "pkcs8"] }
 phf = { version = "0.14.0", default-features = false, features = ["std"] }
 proc-macro2 = { version = "1.0", default-features = false, features = ["proc-macro"] }
+pumpkin-api-macros = { path = "crates/pumpkin-api-macros", default-features = false }
+pumpkin-auth = { path = "crates/pumpkin-auth", default-features = false }
 pumpkin-codecs = { path = "crates/pumpkin-codecs", default-features = false }
 pumpkin-command = { path = "crates/pumpkin-command", default-features = false }
 pumpkin-config = { path = "crates/pumpkin-config", default-features = false }
@@ -212,7 +215,7 @@ time = { version = "0.3", default-features = false, features = ["std"] }
 arc-swap = { version = "1.9", default-features = false }
 tokio-util = { version = "0.7.19", default-features = false }
 toml = { version = "1.1", default-features = false, features = ["parse", "display", "serde"] }
-reqwest = { version = "0.13.4", default-features = false, features = ["rustls-no-provider", "json", "http2"] }
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls-no-provider", "json", "http2"] }
 notify = { version = "8.2.0", default-features = false, features = ["macos_fsevent"] }
 
 sysinfo = { version = "0.39", default-features = false, features = ["system"] }

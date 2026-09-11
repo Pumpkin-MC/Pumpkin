@@ -22,6 +22,7 @@ doctest = false
 arc-swap.workspace = true
 rayon.workspace = true
 pumpkin-util.workspace = true
+pumpkin-auth.workspace = true
 pumpkin-nbt.workspace = true
 pumpkin-config.workspace = true
 pumpkin-command.workspace = true
@@ -127,6 +128,8 @@ bitflags = { workspace = true }
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 
 indexmap.workspace = true
+xxhash-rust.workspace = true
+
 
 [dev-dependencies]
 tempfile.workspace = true

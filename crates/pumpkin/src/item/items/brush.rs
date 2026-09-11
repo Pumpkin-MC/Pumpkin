@@ -1,6 +1,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::item::ItemEntity;
 use crate::entity::player::Player;
 use crate::entity::{Entity, EntityBase};
@@ -106,7 +107,7 @@ impl ItemBehaviour for BrushItem {
         _cursor_pos: Vector3<f32>,
         block: &Block,
         _server: &Server,
-    ) {
+    ) -> BlockActionResult {
         let world = player.world();
         let is_sand = block == &Block::SUSPICIOUS_SAND;
         let is_gravel = block == &Block::SUSPICIOUS_GRAVEL;
@@ -129,7 +130,7 @@ impl ItemBehaviour for BrushItem {
                     );
                 server.plugin_manager.fire_blocking(&server, &mut event);
                 if event.cancelled {
-                    return;
+                    return BlockActionResult::Fail;
                 }
             }
 
@@ -194,6 +195,8 @@ impl ItemBehaviour for BrushItem {
         player
             .living_entity
             .set_active_hand(pumpkin_util::Hand::Right, stack, Self::USE_DURATION);
+
+        BlockActionResult::Success
     }
 
     fn use_on_entity(&self, _item: &mut ItemStack, player: &Player, entity: Arc<dyn EntityBase>) {

@@ -147,7 +147,8 @@ pub fn try_generate_structure(
         chunk_z: chunk.z,
         random,
         sea_level,
-        min_y: chunk.bottom_y() as i32,
+        min_y: (chunk.generation_bottom_y() as i32).max(chunk.bottom_y() as i32),
+        height: chunk.generation_height().min(chunk.height()),
         height_sampler,
         structure_key: Some(*key),
     };
