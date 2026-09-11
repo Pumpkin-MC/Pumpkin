@@ -32,6 +32,7 @@ use crate::entity::attributes::ModifierOperation;
 use crate::entity::combat::{CombatRules, CombatTracker, FallLocation, knockback_after_resistance};
 use crate::entity::mob::equipment::DEFAULT_EQUIPMENT_DROP_CHANCE;
 use crate::entity::mob::slime::SlimeEntity;
+use crate::entity::passive::copper_golem::CopperGolemEntity;
 use crate::entity::passive::nautilus::NautilusEntity;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
 use crate::server::Server;
@@ -1750,7 +1751,7 @@ impl LivingEntity {
 
             // Plays the death sound
             world.play_sound_fine(
-                self.death_sound(),
+                self.death_sound(&*dyn_self),
                 SoundCategory::Players,
                 &self.entity.pos.load(),
                 1.0,
@@ -2336,22 +2337,24 @@ impl LivingEntity {
         self.entity.movement.load()
     }
 
-    fn death_sound(&self) -> Sound {
-        if self.entity.entity_type == &EntityType::NAUTILUS {
-            NautilusEntity::death_sound(&self.entity)
-        } else {
-            Self::death_sound_for_entity(self.entity.entity_type)
+    fn death_sound(&self, entity: &dyn EntityBase) -> Sound {
+        if let Some(sound_source) = entity.get_mob().map(|x| x.as_custom_sound()).flatten()
+            && let Some(audio) = sound_source.death_sound()
+        {
+            return audio;
         }
+
+        Self::death_sound_for_entity(self.entity.entity_type)
     }
 
-    fn hurt_sound(&self) -> Sound {
-        if self.entity.entity_type == &EntityType::SLIME {
-            SlimeEntity::hurt_sound_for_size(self.entity.data.load(Relaxed))
-        } else if self.entity.entity_type == &EntityType::NAUTILUS {
-            NautilusEntity::hurt_sound(&self.entity)
-        } else {
-            Self::hurt_sound_for_entity(self.entity.entity_type)
+    fn hurt_sound(&self, entity: &dyn EntityBase) -> Sound {
+        if let Some(sound_source) = entity.get_mob().map(|x| x.as_custom_sound()).flatten()
+            && let Some(audio) = sound_source.hurt_sound()
+        {
+            return audio;
         }
+
+        Self::hurt_sound_for_entity(self.entity.entity_type)
     }
 }
 
@@ -2821,7 +2824,7 @@ impl LivingEntity {
                 (effective_amount - last_damage, false)
             } else {
                 self.hurt_cooldown.store(20, Relaxed);
-                (effective_amount, true)
+                (effective_amount, self.health.load() > effective_amount)
             };
 
         // Finalize state
@@ -2864,7 +2867,7 @@ impl LivingEntity {
 
         if play_sound {
             world.play_sound_fine(
-                self.hurt_sound(),
+                self.hurt_sound(caller),
                 SoundCategory::Players,
                 &self.entity.pos.load(),
                 1.0,

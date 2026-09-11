@@ -1,11 +1,10 @@
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
-use pumpkin_data::attributes::Attributes;
+use pumpkin_data::{attributes::Attributes, sound::Sound};
 
 use crate::entity::{
-    Entity, EntityBase,
-    mob::{Mob, MobEntity, slime::SlimeEntity},
+    Entity, EntityBase, custom_sound::CustomSound, mob::{Mob, MobEntity, slime::SlimeEntity},
 };
 
 pub struct MagmaCubeEntity {
@@ -37,6 +36,25 @@ impl MagmaCubeEntity {
             }
         }
         Arc::new(Self { slime })
+    }
+}
+
+impl CustomSound for MagmaCubeEntity {
+     fn death_sound(&self) -> Option<Sound> {
+        let size = self.slime.get_size();
+        Some(if size == 1 {
+            Sound::EntityMagmaCubeDeathSmall
+        } else {
+            Sound::EntityMagmaCubeDeath
+        })
+    }
+    fn hurt_sound(&self) -> Option<Sound> {
+        let size = self.slime.get_size();
+        Some(if size == 1 {
+            Sound::EntityMagmaCubeHurtSmall
+        } else {
+            Sound::EntityMagmaCubeHurt
+        })
     }
 }
 

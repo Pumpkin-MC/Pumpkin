@@ -94,6 +94,7 @@ pub mod interaction;
 pub mod item;
 pub mod item_steerable;
 pub mod lightning;
+pub mod custom_sound;
 pub mod living;
 pub mod marker;
 pub mod mob;
