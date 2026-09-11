@@ -15,8 +15,10 @@ use pumpkin_protocol::java::client::play::{
 use pumpkin_protocol::{BClientPacket, ClientPacket};
 use pumpkin_util::GameMode;
 use pumpkin_util::math::get_section_cord;
+use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::version::JavaMinecraftVersion;
+use rustc_hash::FxHashSet;
 use uuid::Uuid;
 
 use crate::entity::EntityBase;
@@ -116,7 +118,15 @@ impl TrackedEntity {
         let player_chunk = player_entity.chunk_pos.load();
         let in_view = is_within_view_distance(entity_chunk, player_chunk, player_vd);
 
-        let is_visible = dist_sq <= range_sq && self.broadcast_to_player(player) && in_view;
+        // Vanilla `isChunkTracked`: never spawn before the chunk packet.
+        let is_visible = dist_sq <= range_sq
+            && self.broadcast_to_player(player)
+            && in_view
+            && player
+                .chunk_sender
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_chunk_ready(&entity_chunk);
 
         if is_visible {
             if self.seen_by.insert(player.gameprofile.id) {
@@ -522,6 +532,24 @@ impl EntityTracker {
         for entry in &self.entity_map {
             if *entry.key() != entity_id {
                 entry.value().update_player(player_arc, world);
+            }
+        }
+    }
+
+    /// Pairs entities in chunks whose packet was just queued for `player`.
+    pub fn update_player_chunks(
+        &self,
+        player: &Arc<Player>,
+        world: &World,
+        chunks: &[Vector2<i32>],
+    ) {
+        let chunks: FxHashSet<_> = chunks.iter().copied().collect();
+        let entity_id = player.get_entity().entity_id;
+        for entry in &self.entity_map {
+            if *entry.key() != entity_id
+                && chunks.contains(&entry.value().entity.get_entity().chunk_pos.load())
+            {
+                entry.value().update_player(player, world);
             }
         }
     }

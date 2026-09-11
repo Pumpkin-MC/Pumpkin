@@ -56,6 +56,8 @@ impl EncodedChunk {
 pub struct ChunkSender {
     pub pending_chunks: FxHashSet<Vector2<i32>>,
     sent_chunks: FxHashSet<Vector2<i32>>,
+    /// Committed Bedrock chunks packets are still being encoded.
+    awaiting_delivery: FxHashSet<Vector2<i32>>,
     pub in_flight_batches: u16,
     pub desired_rate: f32,
     pub send_quota: f32,
@@ -68,6 +70,7 @@ impl ChunkSender {
         Self {
             pending_chunks: FxHashSet::default(),
             sent_chunks: FxHashSet::default(),
+            awaiting_delivery: FxHashSet::default(),
             in_flight_batches: 0,
             desired_rate: INITIAL_CHUNKS_PER_TICK,
             send_quota: 0.0,
@@ -78,6 +81,7 @@ impl ChunkSender {
     pub fn reset(&mut self) {
         self.pending_chunks.clear();
         self.sent_chunks.clear();
+        self.awaiting_delivery.clear();
         self.in_flight_batches = 0;
         self.send_quota = 0.0;
     }
@@ -85,6 +89,19 @@ impl ChunkSender {
     #[must_use]
     pub fn is_chunk_sent(&self, pos: &Vector2<i32>) -> bool {
         self.sent_chunks.contains(pos)
+    }
+
+    /// Vanilla `ChunkMap.isChunkTracked` -> chunk packet is already queued for this player.
+    #[must_use]
+    pub fn is_chunk_ready(&self, pos: &Vector2<i32>) -> bool {
+        self.sent_chunks.contains(pos) && !self.awaiting_delivery.contains(pos)
+    }
+
+    /// Bedrock chunks become ready `send_chunks` has queued them.
+    pub fn mark_delivered(&mut self, positions: &[Vector2<i32>]) {
+        for pos in positions {
+            self.awaiting_delivery.remove(pos);
+        }
     }
 
     #[must_use]
@@ -114,11 +131,13 @@ impl ChunkSender {
 
     pub fn enqueue_chunk(&mut self, pos: Vector2<i32>) {
         self.sent_chunks.remove(&pos);
+        self.awaiting_delivery.remove(&pos);
         self.pending_chunks.insert(pos);
     }
 
     pub fn unload_chunk(&mut self, client: &ClientPlatform, pos: Vector2<i32>) {
         self.pending_chunks.remove(&pos);
+        self.awaiting_delivery.remove(&pos);
         if self.sent_chunks.remove(&pos)
             && let ClientPlatform::Java(java_client) = client
             && !java_client.is_closed()
@@ -310,11 +329,12 @@ impl ChunkSender {
     /// Bedrock chunks use a different encoder from Java chunks, but they must still move from
     /// `pending_chunks` to `sent_chunks`. Otherwise the same batch is selected every tick and the
     /// Bedrock login flow never reaches its minimum-chunk spawn threshold.
+    /// They stay not ready until [`Self::mark_delivered`].
     pub fn commit_bedrock_batch(
         &mut self,
         batch: &PreparedBatch,
         current_epoch: u32,
-    ) -> Vec<SyncChunk> {
+    ) -> Vec<PreparedChunk> {
         if current_epoch != batch.epoch_snapshot || batch.chunks.is_empty() {
             return Vec::new();
         }
@@ -326,7 +346,11 @@ impl ChunkSender {
             }
 
             self.sent_chunks.insert(candidate.position);
-            dispatched_chunks.push(candidate.chunk.clone());
+            self.awaiting_delivery.insert(candidate.position);
+            dispatched_chunks.push(PreparedChunk {
+                position: candidate.position,
+                chunk: candidate.chunk.clone(),
+            });
         }
 
         self.send_quota -= dispatched_chunks.len() as f32;
@@ -363,7 +387,7 @@ mod tests {
         let dispatched = sender.commit_bedrock_batch(&batch, 7);
 
         assert_eq!(dispatched.len(), 1);
-        assert!(Arc::ptr_eq(&dispatched[0], &chunk));
+        assert!(Arc::ptr_eq(&dispatched[0].chunk, &chunk));
         assert!(!sender.pending_chunks.contains(&position));
         assert!(sender.is_chunk_sent(&position));
         assert_eq!(sender.sent_chunks_count(), 1);
@@ -395,5 +419,39 @@ mod tests {
         assert!(dispatched.is_empty());
         assert!(sender.pending_chunks.contains(&position));
         assert_eq!(sender.sent_chunks_count(), 0);
+    }
+
+    #[test]
+    fn watchers_become_ready_on_their_own_delivery() {
+        let position = Vector2::new(1, 4);
+        let batch = PreparedBatch {
+            chunks: vec![PreparedChunk {
+                position,
+                chunk: ChunkData::empty_sync(position.x, position.y),
+            }],
+            epoch_snapshot: 0,
+            target_version: JavaMinecraftVersion::V_1_20_2,
+        };
+        let mut first = ChunkSender::new();
+        let mut second = ChunkSender::new();
+        first.enqueue_chunk(position);
+        second.enqueue_chunk(position);
+        assert!(!first.is_chunk_ready(&position));
+        assert!(!second.is_chunk_ready(&position));
+
+        first.commit_bedrock_batch(&batch, 0);
+        assert!(!first.is_chunk_ready(&position));
+        first.mark_delivered(&[position]);
+        assert!(first.is_chunk_ready(&position));
+        assert!(!second.is_chunk_ready(&position));
+
+        second.commit_bedrock_batch(&batch, 0);
+        assert!(!second.is_chunk_ready(&position));
+        second.mark_delivered(&[position]);
+        assert!(second.is_chunk_ready(&position));
+
+        first.enqueue_chunk(position);
+        assert!(!first.is_chunk_ready(&position));
+        assert!(second.is_chunk_ready(&position));
     }
 }
