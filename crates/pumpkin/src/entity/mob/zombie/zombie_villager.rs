@@ -191,6 +191,8 @@ impl ZombieVillagerEntity {
         }
         if let Some(custom_name) = &**entity.custom_name.load() {
             villager_entity.set_custom_name(custom_name.clone());
+            villager_entity
+                .set_custom_name_visible(entity.custom_name_visible.load(Ordering::Relaxed));
         }
         villager
             .mob_entity
