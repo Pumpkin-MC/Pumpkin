@@ -2338,7 +2338,7 @@ impl LivingEntity {
     }
 
     fn death_sound(&self, entity: &dyn EntityBase) -> Sound {
-        if let Some(sound_source) = entity.get_mob().map(|x| x.as_custom_sound()).flatten()
+        if let Some(sound_source) = entity.get_mob().and_then(|x| x.as_custom_sound())
             && let Some(audio) = sound_source.death_sound()
         {
             return audio;
@@ -2348,7 +2348,7 @@ impl LivingEntity {
     }
 
     fn hurt_sound(&self, entity: &dyn EntityBase) -> Sound {
-        if let Some(sound_source) = entity.get_mob().map(|x| x.as_custom_sound()).flatten()
+        if let Some(sound_source) = entity.get_mob().and_then(|x| x.as_custom_sound())
             && let Some(audio) = sound_source.hurt_sound()
         {
             return audio;
