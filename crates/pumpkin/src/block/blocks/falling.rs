@@ -7,6 +7,7 @@ use crate::{
 };
 use pumpkin_data::{
     Block, BlockDirection, BlockId, BlockState, BlockStateId,
+    fluid::Fluid,
     tag::{self, Taggable},
 };
 use pumpkin_util::math::position::BlockPos;
@@ -25,17 +26,29 @@ impl FallingBlock {
     }
 
     #[must_use]
+    pub fn can_solidify(state: &BlockState) -> bool {
+        state.is_waterlogged()
+            || Fluid::from_state_id(state.id)
+                .is_some_and(|f| f.has_tag(&tag::Fluid::MINECRAFT_WATER))
+    }
+
+    #[must_use]
     pub fn touches_liquid(world: &dyn BlockAccessor, pos: &BlockPos) -> bool {
         for dir in BlockDirection::all() {
             if dir == BlockDirection::Down {
                 continue;
             }
             let neighbor = world.get_block_state(&pos.offset(dir.to_offset()));
-            if neighbor.is_liquid() {
+            if Self::can_solidify(neighbor) {
                 return true;
             }
         }
         false
+    }
+
+    #[must_use]
+    pub fn should_solidify(world: &dyn BlockAccessor, pos: &BlockPos) -> bool {
+        Self::can_solidify(world.get_block_state(pos)) || Self::touches_liquid(world, pos)
     }
 }
 

@@ -96,7 +96,9 @@ impl LoadConfiguration for PumpkinConfig {
         self.advanced.validate();
         self.telemetry.validate();
 
-        let min_vd = NonZero::<u8>::MIN;
+        let Some(min_vd) = NonZero::new(2) else {
+            return;
+        };
         let Some(max_vd) = NonZero::new(64) else {
             return;
         };

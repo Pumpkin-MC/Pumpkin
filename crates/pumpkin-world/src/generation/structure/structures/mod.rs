@@ -835,6 +835,15 @@ pub trait HeightSampler {
     fn estimate_ocean_floor_height(&mut self, block_x: i32, block_z: i32) -> i32 {
         self.estimate_height(block_x, block_z)
     }
+
+    fn sample_column_block(
+        &mut self,
+        _block_x: i32,
+        _block_z: i32,
+        _y: i32,
+    ) -> Option<&'static pumpkin_data::BlockState> {
+        None
+    }
 }
 
 impl HeightSampler
@@ -852,6 +861,7 @@ pub struct StructureGeneratorContext<'a> {
     pub random: RandomGenerator,
     pub sea_level: i32,
     pub min_y: i32,
+    pub height: u16,
     pub height_sampler: Option<&'a mut dyn HeightSampler>,
     pub structure_key: Option<pumpkin_data::structures::StructureKeys>,
 }
