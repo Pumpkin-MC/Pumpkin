@@ -1,11 +1,11 @@
 use crate::block::entities::BlockEntity;
 use crate::entity::experience_orb::ExperienceOrbEntity;
 use crate::world::World;
-use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{FacingHopper, HopperLikeProperties};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
+use pumpkin_data::{BlockId, BlockStateId};
 use pumpkin_inventory::{Clearable, Inventory, sync_write_items_to_nbt};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
@@ -37,6 +37,23 @@ pub fn to_offset(facing: &FacingHopper) -> Vector3<i32> {
         FacingHopper::East => (1, 0, 0),
     }
     .into()
+}
+
+/// Properties of one state snapshot, `None` for any other block. `from_state_id` parses whatever
+/// it is handed, so only the block id can reject a replacement state.
+fn hopper_properties(block: BlockId, state_id: BlockStateId) -> Option<HopperLikeProperties> {
+    (block == BlockId::HOPPER).then(|| HopperLikeProperties::from_state_id(state_id))
+}
+
+/// One item taken out of a slot, with what the slot held before and after the removal.
+///
+/// A compare-and-swap: the offer runs without the source lock (holding it across
+/// [`HopperBlockEntity::add_one_item`] deadlocks two hoppers facing each other), so the rollback
+/// has to compare against `remainder` to tell an untouched slot from someone else's write.
+struct Extraction {
+    one_item: ItemStack,
+    snapshot: ItemStack,
+    remainder: ItemStack,
 }
 
 impl BlockEntity for HopperBlockEntity {
@@ -75,15 +92,20 @@ impl BlockEntity for HopperBlockEntity {
     fn tick(&self, world: &Arc<World>) {
         self.ticked_game_time
             .store(world.get_world_age(), Ordering::Relaxed);
+        // The block entity outlives its block by a tick when another Rayon worker replaces it,
+        // so guard like `trial_spawner.rs::tick` does. One snapshot for id and state: a second
+        // read could already be the replacement, and the pair would not belong together.
+        let (block, state) = world.get_block_and_state(&self.position);
+        let Some(properties) = hopper_properties(block.id, state.id) else {
+            return;
+        };
         if self.cooldown_time.fetch_sub(1, Ordering::Relaxed) <= 0 {
             self.cooldown_time.store(0, Ordering::Relaxed);
-            let state =
-                HopperLikeProperties::from_state_id(world.get_block_state(&self.position).id);
-            if state.enabled
+            if properties.enabled
                 && let Some(entity) = world.get_block_entity(&self.position)
                 && let Some(hopper) = entity.as_any().downcast_ref::<Self>()
             {
-                hopper.try_move_items(state, world);
+                hopper.try_move_items(properties, world);
             }
         }
     }
@@ -285,6 +307,56 @@ impl HopperBlockEntity {
         false
     }
 
+    /// Splits one item off `slot`. One lock for read and write, so the snapshot is the state the
+    /// removal really happened on and not an older one. `None` when the slot is empty by then.
+    fn take_one(&self, slot: usize) -> Option<Extraction> {
+        let mut items = self
+            .items
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if items[slot].is_empty() {
+            return None;
+        }
+        let snapshot = items[slot].clone();
+        let one_item = items[slot].split(1);
+        let remainder = items[slot].clone();
+        self.mark_dirty();
+        Some(Extraction {
+            one_item,
+            snapshot,
+            remainder,
+        })
+    }
+
+    /// Undoes [`Self::take_one`] after a failed offer, handing the item back when the slot has no
+    /// room for it any more.
+    ///
+    /// The snapshot only fits a slot nobody wrote to, so it is restored on a match and dropped on
+    /// a mismatch, writing it anyway would undo the other write, in either direction.
+    fn put_back(&self, slot: usize, extraction: Extraction) -> Option<ItemStack> {
+        let mut items = self
+            .items
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        self.mark_dirty();
+        let current = &mut items[slot];
+        if current.are_equal(&extraction.remainder) {
+            *current = extraction.snapshot;
+            return None;
+        }
+        if current.is_empty() {
+            *current = extraction.one_item;
+            return None;
+        }
+        if current.are_items_and_components_equal(&extraction.one_item)
+            && current.item_count < current.get_max_stack_size()
+        {
+            current.item_count += 1;
+            return None;
+        }
+        Some(extraction.one_item)
+    }
+
     fn eject_items(&self, world: &Arc<World>) -> bool {
         // TODO getEntityContainer
 
@@ -304,32 +376,41 @@ impl HopperBlockEntity {
                 return false;
             }
             let target_pos = self.position.offset(to_offset(&self.facing));
-            let items: [ItemStack; 5] = self
-                .items
-                .read()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .clone();
-            for item in &items {
-                if !item.is_empty() {
-                    let mut move_event = crate::plugin::api::events::inventory::inventory_move_item::InventoryMoveItemEvent::new(
-                        self.position,
-                        target_pos,
-                        item.item.registry_key.to_string(),
-                        1,
-                    );
-                    if let Some(server) = world.server.upgrade() {
-                        server
-                            .plugin_manager
-                            .fire_blocking(&server, &mut move_event);
-                    }
-                    if move_event.cancelled {
-                        continue;
-                    }
-                    let mut item_clone = item.clone();
-                    let one_item = item_clone.split(1);
-                    if Self::add_one_item(self, container.as_ref(), &one_item) {
-                        return true;
-                    }
+            for slot in 0..Self::INVENTORY_SIZE {
+                let item = self.get_stack(slot);
+                if item.is_empty() {
+                    continue;
+                }
+                let mut move_event = crate::plugin::api::events::inventory::inventory_move_item::InventoryMoveItemEvent::new(
+                    self.position,
+                    target_pos,
+                    item.item.registry_key.to_string(),
+                    1,
+                );
+                if let Some(server) = world.server.upgrade() {
+                    server
+                        .plugin_manager
+                        .fire_blocking(&server, &mut move_event);
+                }
+                if move_event.cancelled {
+                    continue;
+                }
+                // Vanilla `HopperBlockEntity.ejectItems`: actually remove the item from the
+                // hopper before offering it to the target, restoring it on failure. Reading a
+                // clone and never writing back left the source stack untouched, duplicating
+                // the item into the target while the hopper kept its full stack.
+                let Some(extraction) = self.take_one(slot) else {
+                    // Emptied while the event was firing. An empty stack takes `add_one_item`'s
+                    // `dst.is_empty()` branch and reports a transfer that never happened.
+                    continue;
+                };
+                if Self::add_one_item(self, container.as_ref(), &extraction.one_item) {
+                    return true;
+                }
+                if let Some(leftover) = self.put_back(slot, extraction) {
+                    // Slot is someone else's now and full -> dropping beats overwriting or voiding.
+                    let pos = self.position.to_centered_f64();
+                    world.scatter_stack(pos.x, pos.y, pos.z, leftover);
                 }
             }
         }
@@ -448,5 +529,142 @@ impl Clearable for HopperBlockEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         items.fill_with(|| ItemStack::EMPTY.clone());
         self.mark_dirty();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::{Block, item::Item};
+
+    #[test]
+    fn hopper_state_yields_its_properties() {
+        let properties =
+            hopper_properties(Block::HOPPER.id, Block::HOPPER.default_state.id).unwrap();
+
+        assert!(properties.enabled);
+        assert_eq!(properties.facing, FacingHopper::Down);
+    }
+
+    #[test]
+    fn disabled_hopper_state_is_read_as_disabled() {
+        let disabled = HopperLikeProperties {
+            facing: FacingHopper::North,
+            enabled: false,
+        }
+        .to_state_id(&Block::HOPPER);
+
+        let properties = hopper_properties(Block::HOPPER.id, disabled).unwrap();
+
+        assert!(!properties.enabled);
+        assert_eq!(properties.facing, FacingHopper::North);
+    }
+
+    /// Every one of these decodes cleanly through `from_state_id` into some `facing`/`enabled`.
+    /// Nothing about the state marks it as foreign, so rejection has to come from the id.
+    #[test]
+    fn replacement_state_yields_no_properties() {
+        for replacement in [Block::AIR, Block::CHEST, Block::DROPPER, Block::PISTON] {
+            assert!(
+                hopper_properties(replacement.id, replacement.default_state.id).is_none(),
+                "{} was accepted as a hopper",
+                replacement.name
+            );
+        }
+    }
+
+    /// The other direction: a hopper state under a foreign id is still foreign. Pins that the id
+    /// decides, not a range check on the state.
+    #[test]
+    fn hopper_state_id_under_another_block_yields_no_properties() {
+        assert!(hopper_properties(Block::CHEST.id, Block::HOPPER.default_state.id).is_none());
+    }
+
+    fn hopper_holding(stack: ItemStack) -> HopperBlockEntity {
+        let hopper = HopperBlockEntity::new(BlockPos::new(0, 0, 0), FacingHopper::Down);
+        hopper.set_stack(0, stack);
+        hopper
+    }
+
+    #[test]
+    fn take_one_splits_a_single_item_off() {
+        let hopper = hopper_holding(ItemStack::new(10, &Item::DIAMOND));
+
+        let extraction = hopper.take_one(0).unwrap();
+
+        assert_eq!(extraction.one_item.item_count, 1);
+        assert_eq!(extraction.snapshot.item_count, 10);
+        assert_eq!(extraction.remainder.item_count, 9);
+        assert_eq!(hopper.get_stack(0).item_count, 9);
+    }
+
+    #[test]
+    fn take_one_on_an_empty_slot_extracts_nothing() {
+        let hopper = hopper_holding(ItemStack::EMPTY.clone());
+
+        assert!(hopper.take_one(0).is_none());
+    }
+
+    #[test]
+    fn untouched_slot_gets_the_snapshot_back() {
+        let hopper = hopper_holding(ItemStack::new(10, &Item::DIAMOND));
+        let extraction = hopper.take_one(0).unwrap();
+
+        assert!(hopper.put_back(0, extraction).is_none());
+        assert_eq!(hopper.get_stack(0).item_count, 10);
+    }
+
+    /// The snapshot says 10, the slot says 3 because someone took 7 while the offer was out.
+    /// Restoring the snapshot would conjure those 7 back, so only the one item returns.
+    #[test]
+    fn changed_count_takes_back_one_item_not_the_snapshot() {
+        let hopper = hopper_holding(ItemStack::new(10, &Item::DIAMOND));
+        let extraction = hopper.take_one(0).unwrap();
+        hopper.set_stack(0, ItemStack::new(3, &Item::DIAMOND));
+
+        assert!(hopper.put_back(0, extraction).is_none());
+        assert_eq!(hopper.get_stack(0).item_count, 4);
+    }
+
+    /// A foreign item cannot absorb the one item and must not be overwritten, so nothing fits and
+    /// the item comes back out.
+    #[test]
+    fn foreign_item_in_the_slot_is_left_alone() {
+        let hopper = hopper_holding(ItemStack::new(1, &Item::DIAMOND));
+        let extraction = hopper.take_one(0).unwrap();
+        hopper.set_stack(0, ItemStack::new(64, &Item::DIRT));
+
+        let leftover = hopper.put_back(0, extraction).unwrap();
+
+        assert_eq!(leftover.get_item().id, Item::DIAMOND.id);
+        assert_eq!(leftover.item_count, 1);
+        let current = hopper.get_stack(0);
+        assert_eq!(current.get_item().id, Item::DIRT.id);
+        assert_eq!(current.item_count, 64);
+    }
+
+    /// Emptied in the meantime, so there is room and nothing to overwrite.
+    #[test]
+    fn emptied_slot_takes_the_single_item() {
+        let hopper = hopper_holding(ItemStack::new(10, &Item::DIAMOND));
+        let extraction = hopper.take_one(0).unwrap();
+        hopper.set_stack(0, ItemStack::EMPTY.clone());
+
+        assert!(hopper.put_back(0, extraction).is_none());
+        assert_eq!(hopper.get_stack(0).item_count, 1);
+    }
+
+    /// Same item but no room left. Incrementing would push it past `get_max_stack_size`.
+    #[test]
+    fn full_slot_of_the_same_item_hands_the_item_back() {
+        let hopper = hopper_holding(ItemStack::new(10, &Item::DIAMOND));
+        let extraction = hopper.take_one(0).unwrap();
+        let max = ItemStack::new(1, &Item::DIAMOND).get_max_stack_size();
+        hopper.set_stack(0, ItemStack::new(max, &Item::DIAMOND));
+
+        let leftover = hopper.put_back(0, extraction).unwrap();
+
+        assert_eq!(leftover.item_count, 1);
+        assert_eq!(hopper.get_stack(0).item_count, max);
     }
 }
