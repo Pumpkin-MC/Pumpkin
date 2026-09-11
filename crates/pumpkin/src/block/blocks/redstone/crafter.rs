@@ -21,6 +21,7 @@ use pumpkin_data::recipe_remainder::get_recipe_remainder_id;
 use pumpkin_data::translation;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, BlockDirection, BlockStateId};
+use pumpkin_inventory::Inventory;
 use pumpkin_inventory::crafting::crafting_screen_handler::match_crafting_recipe;
 use pumpkin_inventory::generic_container_screen_handler::create_crafter_3x3;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
@@ -31,7 +32,6 @@ use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::inventory::Inventory;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 

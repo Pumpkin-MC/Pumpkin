@@ -20,6 +20,7 @@ use tracing::{debug, error, info, trace, warn};
 mod active_chunks;
 pub mod chunker;
 pub mod explosion;
+pub mod generation_cache;
 pub mod loot;
 pub mod map;
 pub mod portal;
@@ -86,6 +87,7 @@ use pumpkin_data::{
 };
 use pumpkin_inventory::crafting::recipe_provider::RecipeProvider;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
+use pumpkin_inventory::{Clearable, Inventory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::bedrock::client::set_actor_data::{CSetActorData, PropertySyncData};
 use pumpkin_protocol::bedrock::client::start_game::{CStartGame, ServerTelemetryData};
@@ -147,12 +149,10 @@ use pumpkin_util::{
     math::{get_section_cord, position::chunk_section_from_pos, vector2::Vector2},
     random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
-use pumpkin_world::inventory::Clearable;
 use pumpkin_world::world::{GetBlockError, WorldPortalExt};
 use pumpkin_world::{
     CURRENT_BEDROCK_MC_VERSION, biome,
     chunk::{io::Dirtiable, palette::bedrock_water_state},
-    inventory::Inventory,
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
 use pumpkin_world::{level::Level, tick::TickPriority};
@@ -169,9 +169,13 @@ pub mod custom_bossbar;
 pub mod dragon_fight;
 pub mod end_podium;
 pub mod entity_tracker;
+pub mod environment;
 pub mod natural_spawner;
 pub mod scoreboard;
 pub mod weather;
+
+pub use environment::EnvironmentAttributes;
+pub use pumpkin_data::environment_attribute::{Activity, MoonPhase};
 
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
 use pumpkin_config::lighting::LightingEngineConfig;
@@ -5553,13 +5557,153 @@ impl World {
             Block::AIR.default_state.id
         };
 
-        Some(self.set_block_state(position, new_state_id, flags))
+        let broken_state_id = self.set_block_state(position, new_state_id, flags);
+        let broken_block = Block::from_state_id(broken_state_id);
+        if !broken_block.is_air()
+            && broken_state_id != new_state_id
+            && broken_block != &Block::FIRE
+            && broken_block != &Block::SOUL_FIRE
+        {
+            let je_packet = CWorldEvent::new(
+                WorldEvent::ParticlesDestroyBlock as i32,
+                *position,
+                broken_state_id.as_u16().into(),
+                false,
+            );
+            let be_packet = CLevelEvent {
+                event_id: VarInt(LevelEvent::ParticlesDestroyBlock as i32),
+                position: position.to_centered_f64().to_f32_lossy(),
+                data: VarInt(BlockState::to_be_network_id(broken_state_id).into()),
+            };
+            let chunk_pos = position.chunk_position();
+            if let Some(player) = cause {
+                // Java predicts its own break effect; Bedrock needs the server event.
+                if let ClientPlatform::Bedrock(client) = player.client.as_ref() {
+                    client.try_enqueue_client_packet(&be_packet);
+                }
+                self.broadcast_to_chunk_except_editioned(
+                    chunk_pos,
+                    &[player.get_entity().entity_uuid],
+                    &je_packet,
+                    &be_packet,
+                );
+            } else {
+                self.broadcast_to_chunk_editioned(chunk_pos, &je_packet, &be_packet);
+            }
+        }
+
+        Some(broken_state_id)
+    }
+
+    #[must_use]
+    pub const fn environment_attributes(&self) -> EnvironmentAttributes<'_> {
+        EnvironmentAttributes::new(self)
+    }
+
+    #[must_use]
+    pub fn get_sky_darken(&self) -> i32 {
+        let sky_light_level = self.environment_attributes().get_dimension_value_f32(
+            pumpkin_data::environment_attribute::EnvironmentAttribute::GameplaySkyLightLevel,
+        );
+        (15.0 - sky_light_level).clamp(0.0, 15.0) as i32
+    }
+
+    #[must_use]
+    pub fn is_bright_outside(&self) -> bool {
+        !self.dimension.has_fixed_time && self.get_sky_darken() < 4
+    }
+
+    #[must_use]
+    pub fn is_dark_outside(&self) -> bool {
+        !self.dimension.has_fixed_time && !self.is_bright_outside()
+    }
+
+    /// Checks if daylight burns undead monsters (`EnvironmentAttributes.MONSTERS_BURN`).
+    #[must_use]
+    pub fn monsters_burn(&self, pos: &BlockPos) -> bool {
+        self.environment_attributes().get_value_bool(
+            pumpkin_data::environment_attribute::EnvironmentAttribute::GameplayMonstersBurn,
+            pos,
+        )
+    }
+
+    /// Checks if bees should stay inside beehives/nests (`EnvironmentAttributes.BEES_STAY_IN_HIVE`).
+    #[must_use]
+    pub fn bees_stay_in_hive(&self, pos: &BlockPos) -> bool {
+        self.environment_attributes().get_value_bool(
+            pumpkin_data::environment_attribute::EnvironmentAttribute::GameplayBeesStayInHive,
+            pos,
+        )
+    }
+
+    /// Checks if a creaking heart is active (`EnvironmentAttributes.CREAKING_ACTIVE`).
+    #[must_use]
+    pub fn creaking_active(&self, pos: &BlockPos) -> bool {
+        self.environment_attributes().get_value_bool(
+            pumpkin_data::environment_attribute::EnvironmentAttribute::GameplayCreakingActive,
+            pos,
+        )
+    }
+
+    /// Checks if an eyeblossom flower should be open (`EnvironmentAttributes.EYEBLOSSOM_OPEN`).
+    #[must_use]
+    pub fn eyeblossom_open(&self, pos: &BlockPos) -> Option<bool> {
+        self.environment_attributes().get_value_tri_state(
+            pumpkin_data::environment_attribute::EnvironmentAttribute::GameplayEyeblossomOpen,
+            pos,
+        )
+    }
+
+    #[must_use]
+    pub fn get_effective_sky_brightness(&self, pos: &BlockPos) -> i32 {
+        let sky_light = self.get_sky_light_level(pos) as i32;
+        sky_light - self.get_sky_darken()
+    }
+
+    #[must_use]
+    pub fn get_sun_angle(&self, pos: &BlockPos) -> f32 {
+        let sun_angle_deg = self.environment_attributes().get_value_f32(
+            pumpkin_data::environment_attribute::EnvironmentAttribute::VisualSunAngle,
+            pos,
+        );
+        sun_angle_deg * (std::f32::consts::PI / 180.0)
+    }
+
+    #[must_use]
+    pub fn get_moon_phase(&self) -> MoonPhase {
+        self.environment_attributes()
+            .get_dimension_value_moon_phase()
+    }
+
+    #[must_use]
+    pub fn can_pillager_patrol_spawn(&self, pos: &BlockPos) -> bool {
+        self.environment_attributes().get_value_bool(
+            pumpkin_data::environment_attribute::EnvironmentAttribute::GameplayCanPillagerPatrolSpawn,
+            pos,
+        )
+    }
+
+    #[must_use]
+    pub fn surface_slime_spawn_chance(&self, pos: &BlockPos) -> f32 {
+        self.environment_attributes().get_value_f32(
+            pumpkin_data::environment_attribute::EnvironmentAttribute::GameplaySurfaceSlimeSpawnChance,
+            pos,
+        )
+    }
+
+    #[must_use]
+    pub fn villager_activity(&self, pos: &BlockPos, baby: bool) -> Activity {
+        self.environment_attributes().get_value_activity(baby, pos)
+    }
+
+    pub fn get_raw_brightness(&self, pos: &BlockPos, sky_darken: u8) -> u8 {
+        let sky_light = self.get_sky_light_level(pos).saturating_sub(sky_darken);
+        let block_light = self.get_block_light_level(pos).unwrap_or(0);
+        sky_light.max(block_light)
     }
 
     pub fn get_max_local_raw_brightness(&self, pos: &BlockPos) -> u8 {
-        let sky_light = self.get_sky_light_level(pos);
-        let block_light = self.get_block_light_level(pos).unwrap_or(0);
-        sky_light.max(block_light) // TODO: getSkyDarken
+        self.get_raw_brightness(pos, self.get_sky_darken() as u8)
     }
 
     pub fn get_block_light_level(&self, position: &BlockPos) -> Option<u8> {
@@ -5860,6 +6004,10 @@ impl World {
         );
     }
 
+    pub fn sync_global_world_event(&self, world_event: WorldEvent, position: BlockPos, data: i32) {
+        self.broadcast_packet_all(&CWorldEvent::new(world_event as i32, position, data, true));
+    }
+
     pub fn set_block_destroy_stage(&self, entity_id: i32, location: BlockPos, stage: i8) {
         let chunk_pos = location.chunk_position();
         let packet = CSetBlockDestroyStage::new(entity_id.into(), location, stage);
@@ -5929,11 +6077,59 @@ impl World {
         if let Some(fluid) = Fluid::from_state_id(id) {
             return fluid.to_flowing();
         }
-        if id.is_waterlogged() {
+        // These blocks contain source water without a `waterlogged` property.
+        if matches!(
+            id.to_block_id(),
+            pumpkin_data::BlockId::KELP
+                | pumpkin_data::BlockId::KELP_PLANT
+                | pumpkin_data::BlockId::SEAGRASS
+                | pumpkin_data::BlockId::TALL_SEAGRASS
+                | pumpkin_data::BlockId::BUBBLE_COLUMN
+        ) || id.is_waterlogged()
+        {
             &Fluid::FLOWING_WATER
         } else {
             &Fluid::EMPTY
         }
+    }
+
+    fn fluid_state_from_block_state(id: BlockStateId) -> (&'static Fluid, FluidState) {
+        let fluid = Self::get_fluid_from_state_id(id);
+        let source = if fluid.matches_type(&Fluid::WATER) {
+            &Fluid::WATER
+        } else if fluid.matches_type(&Fluid::LAVA) {
+            &Fluid::LAVA
+        } else {
+            &Fluid::EMPTY
+        };
+        let mut state = source.states[source.default_state_index as usize].clone();
+
+        if matches!(
+            id.to_block_id(),
+            pumpkin_data::BlockId::WATER | pumpkin_data::BlockId::LAVA
+        ) {
+            // LiquidBlock#getFluidState: source, amounts 7..1, then falling amount 8.
+            // The fluid family's first state is not the state of the actual block.
+            let level =
+                pumpkin_data::block_properties::WaterLikeProperties::from_state_id(id).level;
+            let amount = if level == 0 || level >= 8 {
+                8
+            } else {
+                8 - level
+            };
+            state.height = f32::from(amount) / 9.0;
+            state.level = i16::from(amount);
+            state.is_source = level == 0;
+            state.is_still = state.is_source;
+            state.falling = level >= 8;
+            state.block_state_id = pumpkin_data::block_properties::WaterLikeProperties {
+                level: level.min(8),
+            }
+            .to_state_id(id.to_block());
+        }
+
+        // Keep the normalized family used by fluid callbacks, independently of source state.
+        (fluid, state)
     }
 
     pub fn get_fluid(&self, position: &BlockPos) -> &'static pumpkin_data::fluid::Fluid {
@@ -5952,13 +6148,21 @@ impl World {
         (id.to_block(), Self::get_fluid_from_state_id(id))
     }
 
-    pub fn get_fluid_and_fluid_state(
-        &self,
-        position: &BlockPos,
-    ) -> (&'static Fluid, &'static FluidState) {
+    pub fn get_fluid_and_fluid_state(&self, position: &BlockPos) -> (&'static Fluid, FluidState) {
         let id = self.get_block_state_id(position);
-        let fluid = Self::get_fluid_from_state_id(id);
-        (fluid, &fluid.states[0])
+        Self::fluid_state_from_block_state(id)
+    }
+
+    /// `FluidState#getHeight` includes the full block when the same fluid is above.
+    /// Keep `state.height` as the own height used by flow-velocity calculations.
+    pub fn get_fluid_height(&self, position: &BlockPos, fluid: &Fluid, state: &FluidState) -> f32 {
+        if state.is_empty {
+            0.0
+        } else if fluid.matches_type(self.get_fluid(&position.up())) {
+            1.0
+        } else {
+            state.height
+        }
     }
 
     pub fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
@@ -7293,7 +7497,7 @@ impl WorldPortalExt for WorldPortal {
     ) -> bool {
         self.0.block_registry.can_place_at(
             None,
-            None,
+            Some(&self.0),
             block_accessor,
             None,
             block,
@@ -7351,15 +7555,150 @@ impl WorldPortalExt for WorldPortal {
     }
 }
 
+struct CubicCurve {
+    a: f32,
+    b: f32,
+    c: f32,
+}
+
+impl CubicCurve {
+    fn new(v1: f32, v2: f32) -> Self {
+        Self {
+            a: 3.0 * v1 - 3.0 * v2 + 1.0,
+            b: -6.0 * v1 + 3.0 * v2,
+            c: 3.0 * v1,
+        }
+    }
+
+    fn sample(&self, t: f32) -> f32 {
+        ((self.a * t + self.b) * t + self.c) * t
+    }
+
+    fn sample_gradient(&self, t: f32) -> f32 {
+        (3.0 * self.a * t + 2.0 * self.b) * t + self.c
+    }
+}
+
+/// Calculates the celestial (sun) angle fraction in `[0.0, 1.0]`.
+/// Matches vanilla 26.2 `EnvironmentAttributes.SUN_ANGLE` easing with `symmetricCubicBezier(0.362, 0.241)`.
+#[must_use]
+pub fn calculate_celestial_angle(time_of_day: i64) -> f32 {
+    let ticks = time_of_day.rem_euclid(24000);
+    let alpha = if ticks < 6000 {
+        (ticks + 18000) as f32 / 24000.0
+    } else {
+        (ticks - 6000) as f32 / 24000.0
+    };
+
+    let x_curve = CubicCurve::new(0.362, 0.638);
+    let y_curve = CubicCurve::new(0.241, 0.759);
+
+    let mut t = alpha;
+    let mut solved = false;
+    for _ in 0..4 {
+        let error = x_curve.sample(t) - alpha;
+        if error.abs() < 1e-5 {
+            solved = true;
+            break;
+        }
+        let gradient = x_curve.sample_gradient(t);
+        if gradient < 1e-5 {
+            break;
+        }
+        t -= (error / gradient).clamp(-0.25, 0.25);
+    }
+
+    if !solved {
+        let mut t0 = 0.0f32;
+        let mut t1 = 1.0f32;
+        for _ in 0..64 {
+            if t0 >= t1 {
+                break;
+            }
+            let error = x_curve.sample(t) - alpha;
+            if error.abs() < 1e-5 {
+                break;
+            }
+            if error < 0.0 {
+                t0 = t;
+            } else {
+                t1 = t;
+            }
+            t = f32::midpoint(t1, t0);
+        }
+    }
+
+    y_curve.sample(t)
+}
+
 #[cfg(test)]
 mod tests {
     use pumpkin_data::{
         Block,
-        block_properties::{ChestLikeProperties, ChestType, HorizontalFacing},
+        block_properties::{ChestLikeProperties, ChestType, HorizontalFacing, WaterLikeProperties},
+        fluid::Fluid,
     };
     use pumpkin_util::math::position::BlockPos;
 
-    use super::{bedrock_block_breaking_rate, bedrock_chest_block_actor};
+    use super::{World, bedrock_block_breaking_rate, bedrock_chest_block_actor};
+
+    #[test]
+    fn liquid_block_states_preserve_source_flow_and_falling_depths() {
+        // Liquid block level and fluid amount are different: all falling levels
+        // resolve to amount 8, rather than wrapping through the fluid state array.
+        let amounts = [8, 7, 6, 5, 4, 3, 2, 1, 8, 8, 8, 8, 8, 8, 8, 8];
+        for (block, expected_fluid) in [
+            (&Block::WATER, &Fluid::FLOWING_WATER),
+            (&Block::LAVA, &Fluid::FLOWING_LAVA),
+        ] {
+            for (level, amount) in amounts.into_iter().enumerate() {
+                let id = WaterLikeProperties { level: level as u8 }.to_state_id(block);
+                let (fluid, state) = World::fluid_state_from_block_state(id);
+                assert_eq!(fluid.id, expected_fluid.id);
+                assert_eq!(state.level, amount);
+                assert!((state.height - f32::from(amount) / 9.0).abs() < f32::EPSILON);
+                assert_eq!(state.is_source, level == 0);
+                assert_eq!(state.is_still, level == 0);
+                assert_eq!(state.falling, level >= 8);
+                assert!(!state.is_empty);
+                assert_eq!(
+                    state.block_state_id,
+                    WaterLikeProperties {
+                        level: level.min(8) as u8
+                    }
+                    .to_state_id(block)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn aquatic_and_waterlogged_blocks_contain_source_water() {
+        let wet_stairs = Block::OAK_STAIRS
+            .set_waterlogged(Block::OAK_STAIRS.default_state.id, true)
+            .unwrap();
+        for id in [
+            Block::KELP.default_state.id,
+            Block::KELP_PLANT.default_state.id,
+            Block::SEAGRASS.default_state.id,
+            Block::TALL_SEAGRASS.default_state.id,
+            Block::BUBBLE_COLUMN.default_state.id,
+            wet_stairs,
+        ] {
+            let (fluid, state) = World::fluid_state_from_block_state(id);
+            assert!(fluid.matches_type(&Fluid::WATER));
+            assert!(state.is_source && state.is_still && !state.is_empty && !state.falling);
+            assert_eq!(state.level, 8);
+            assert!((state.height - 8.0 / 9.0).abs() < f32::EPSILON);
+        }
+
+        for block in [&Block::AIR, &Block::OAK_STAIRS, &Block::WATER_CAULDRON] {
+            let (fluid, state) = World::fluid_state_from_block_state(block.default_state.id);
+            assert_eq!(fluid.id, Fluid::EMPTY.id);
+            assert!(state.is_empty);
+            assert_eq!(state.height, 0.0);
+        }
+    }
 
     #[test]
     fn bedrock_block_breaking_rate_uses_progress_per_tick() {

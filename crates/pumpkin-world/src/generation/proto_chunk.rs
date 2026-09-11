@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use pumpkin_data::block_properties::is_air;
 use pumpkin_data::chunk::DoublePerlinNoiseParameters;
-use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::{Fluid, FluidState};
 use pumpkin_data::structures::{
     Structure, StructureKeys, StructurePlacementType, StructureSet, WeightedEntry,
@@ -12,14 +11,11 @@ use pumpkin_data::tag::RegistryKey;
 use pumpkin_data::{Block, BlockState, block_properties::blocks_movement, chunk::Biome};
 use pumpkin_data::{BlockId, BlockStateId, tag};
 use pumpkin_util::random::xoroshiro128::XoroshiroSplitter;
-use pumpkin_util::random::{RandomImpl, get_carver_seed};
+use pumpkin_util::random::{RandomImpl, get_large_feature_seed, legacy_rand::LegacyRand};
 use pumpkin_util::{
     HeightMap,
     math::{block_box::BlockBox, position::BlockPos, vector3::Vector3},
-    random::{
-        RandomGenerator, get_decorator_seed, worldgen_random::WorldgenRandom,
-        xoroshiro128::Xoroshiro,
-    },
+    random::{RandomGenerator, get_decorator_seed, worldgen_random::WorldgenRandom},
 };
 use rustc_hash::FxHashMap;
 
@@ -36,7 +32,7 @@ use super::{
     section_coords,
     surface::{MaterialRuleContext, estimate_surface_height, terrain::SurfaceTerrainBuilder},
 };
-use crate::biome::{BiomeSupplier, MultiNoiseBiomeSupplier, end::TheEndBiomeSupplier};
+use crate::biome::BiomeSupplier;
 use crate::chunk::format::LightContainer;
 use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight};
 use crate::chunk_system::{StagedChunkEnum, generation_cache::SurfaceBiomeNeighborhood};
@@ -64,12 +60,6 @@ use pumpkin_nbt::compound::NbtCompound;
 
 use crate::generation::structure::template::BlockPlacer;
 use crate::tick::{ScheduledTick, TickPriority};
-
-enum ActiveSupplier {
-    Overworld(MultiNoiseBiomeSupplier),
-    Nether(MultiNoiseBiomeSupplier),
-    End(TheEndBiomeSupplier),
-}
 
 pub trait GenerationCache: HeightLimitView + BlockAccessor {
     fn get_center_chunk_mut(&mut self) -> &mut ProtoChunk;
@@ -152,7 +142,6 @@ pub struct ProtoChunk {
     generation_bottom_y: i8,
     pub stage: StagedChunkEnum,
     pub light: ChunkLight,
-    pub carving_mask: crate::generation::carver::mask::CarvingMask,
     pub blending_data: Option<crate::generation::blender::blending_data::BlendingData>,
     pub pending_block_entities: Vec<NbtCompound>,
     pending_structure_entities: Vec<NbtCompound>,
@@ -262,10 +251,6 @@ impl ProtoChunk {
                     .map(|_| LightContainer::new_empty(0))
                     .collect(),
             },
-            carving_mask: crate::generation::carver::mask::CarvingMask::new(
-                height as i32,
-                bottom_y as i32,
-            ),
             blending_data: None,
             pending_block_entities: Vec::new(),
             pending_structure_entities: Vec::new(),
@@ -795,18 +780,7 @@ impl ProtoChunk {
         generator: &super::generator::VanillaGenerator,
         multi_noise_sampler: &mut MultiNoiseSampler,
     ) {
-        let dimension = &generator.dimension;
-        let active_supplier = if dimension == &Dimension::THE_END {
-            ActiveSupplier::End(TheEndBiomeSupplier)
-        } else if dimension == &Dimension::THE_NETHER {
-            ActiveSupplier::Nether(MultiNoiseBiomeSupplier::NETHER)
-        } else {
-            ActiveSupplier::Overworld(MultiNoiseBiomeSupplier::OVERWORLD)
-        };
-        let base_supplier: &dyn BiomeSupplier = match &active_supplier {
-            ActiveSupplier::End(s) => s,
-            ActiveSupplier::Nether(s) | ActiveSupplier::Overworld(s) => s,
-        };
+        let base_supplier: &dyn BiomeSupplier = &generator.biome_supplier;
         let blender = Blender::empty();
         let biome_supplier = blender.get_biome_supplier(base_supplier);
         let min_y = self.bottom_y();
@@ -1289,17 +1263,14 @@ impl ProtoChunk {
             crate::generation::structure::height_sampler::NoiseHeightSampler::new(generator);
 
         for (i, set) in StructureSet::ALL.iter().enumerate() {
-            let allowed_biomes = &generator.structure_allowed_biomes[&i];
+            if let Some(ref enabled) = generator.enabled_structure_sets
+                && !enabled.contains(&i)
+            {
+                continue;
+            }
 
-            if !should_generate_structure(
-                &set.placement,
-                calculator,
-                self.x,
-                self.z,
-                global_cache,
-                self,
-                allowed_biomes,
-            ) {
+            if !should_generate_structure(&set.placement, calculator, self.x, self.z, global_cache)
+            {
                 continue;
             }
 
@@ -1317,9 +1288,8 @@ impl ProtoChunk {
             }
 
             let mut candidates = set.structures.to_vec();
-            let carver_seed = get_carver_seed(seed, self.x, self.z);
-            let mut random: RandomGenerator =
-                RandomGenerator::Xoroshiro(Xoroshiro::from_seed(carver_seed));
+            let large_feature_seed = get_large_feature_seed(seed, self.x, self.z);
+            let mut random = LegacyRand::from_seed(large_feature_seed);
 
             let mut total_weight: u32 = candidates.iter().map(|e| e.weight).sum();
 
@@ -1368,7 +1338,7 @@ impl ProtoChunk {
             let center_z = chunk_pos::get_center_z(self.z);
             let start_y = height_sampler.estimate_ocean_floor_height(center_x, center_z);
             if !crate::generation::structure::structures::ocean_monument::has_valid_biomes(
-                &MultiNoiseBiomeSupplier::OVERWORLD,
+                &generator.biome_supplier,
                 &mut sampler,
                 self.x,
                 self.z,
@@ -1407,7 +1377,6 @@ impl ProtoChunk {
         debug_assert_eq!(self.stage, StagedChunkEnum::StructureStart);
         let random_config = &generator.random_config;
         let settings = generator.settings;
-        let dimension = &generator.dimension;
         let noise_router = &generator.base_router;
         let global_cache = &generator.global_structure_cache;
         let calculator = &generator.structure_calculator;
@@ -1419,18 +1388,7 @@ impl ProtoChunk {
 
         let seed = random_config.seed as i64;
 
-        let active_supplier = if *dimension == Dimension::THE_END {
-            ActiveSupplier::End(TheEndBiomeSupplier)
-        } else if *dimension == Dimension::THE_NETHER {
-            ActiveSupplier::Nether(MultiNoiseBiomeSupplier::NETHER)
-        } else {
-            ActiveSupplier::Overworld(MultiNoiseBiomeSupplier::OVERWORLD)
-        };
-
-        let base_supplier: &dyn BiomeSupplier = match &active_supplier {
-            ActiveSupplier::End(s) => s,
-            ActiveSupplier::Nether(s) | ActiveSupplier::Overworld(s) => s,
-        };
+        let base_supplier: &dyn BiomeSupplier = &generator.biome_supplier;
         let blender = Blender::empty();
         let biome_supplier = blender.get_biome_supplier(base_supplier);
         let mut multi_noise_sampler = MultiNoiseSampler::generate(&noise_router.multi_noise);
@@ -1441,9 +1399,19 @@ impl ProtoChunk {
         let mut references = Vec::new();
         // Constant across every chunk in the dimension, so hoist it out of the loop
         // and out of the (cached) structure-start computation below.
-        let chunk_min_y = self.bottom_y() as i32;
+        // Matches vanilla WorldGenerationContext:
+        // minY = Math.max(heightAccessor.getMinY(), generator.getMinY())
+        // height = Math.min(heightAccessor.getHeight(), generator.getGenDepth())
+        let chunk_min_y = (self.generation_bottom_y() as i32).max(self.bottom_y() as i32);
+        let chunk_height = self.generation_height().min(self.height());
 
         for (set_index, set) in StructureSet::ALL.iter().enumerate() {
+            if let Some(ref enabled) = generator.enabled_structure_sets
+                && !enabled.contains(&set_index)
+            {
+                continue;
+            }
+
             let mut candidate_chunks = Vec::new();
 
             match &set.placement.placement_type {
@@ -1465,15 +1433,8 @@ impl ProtoChunk {
                         }
                     }
                 }
-                StructurePlacementType::ConcentricRings(rings) => {
-                    let allowed_biomes = Self::get_allowed_biomes(set);
-                    let strongholds = global_cache.get_or_calculate_strongholds(
-                        seed,
-                        rings,
-                        self,
-                        &allowed_biomes,
-                    );
-                    for &(cx, cz) in strongholds {
+                StructurePlacementType::ConcentricRings(_) => {
+                    for &(cx, cz) in global_cache.get_stronghold_chunks() {
                         if (cx - self.x).abs() <= 8 && (cz - self.z).abs() <= 8 {
                             candidate_chunks.push((cx, cz));
                         }
@@ -1488,8 +1449,6 @@ impl ProtoChunk {
                     candidate_chunk_x,
                     candidate_chunk_z,
                     global_cache,
-                    self,
-                    &generator.structure_allowed_biomes[&set_index],
                 ) {
                     continue;
                 }
@@ -1520,6 +1479,7 @@ impl ProtoChunk {
                                     ),
                                     sea_level: settings.sea_level,
                                     min_y: chunk_min_y,
+                                    height: chunk_height,
                                     height_sampler: Some(&mut height_sampler),
                                     structure_key: Some(entry.structure),
                                 };

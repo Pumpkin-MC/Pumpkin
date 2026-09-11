@@ -47,6 +47,7 @@ mod enchantments;
 mod entity_pose;
 mod entity_status;
 mod entity_type;
+mod environment_attribute;
 mod flower_pot_transformations;
 mod fluid;
 mod fuels;
@@ -83,6 +84,7 @@ mod structures;
 mod tag;
 mod tracked_data;
 mod translations;
+mod trial_spawner;
 mod version;
 mod villager;
 mod wit;
@@ -153,6 +155,7 @@ pub fn main() {
         (fuels::build, "fuels.rs"),
         (data_component::build, "data_component.rs"),
         (attributes::build, "attributes.rs"),
+        (environment_attribute::build, "environment_attribute.rs"),
         (effect::build, "effect.rs"),
         (potion::build, "potion.rs"),
         (potion_brewing::build, "potion_brewing.rs"),
@@ -170,6 +173,7 @@ pub fn main() {
         (map_decoration::build, "map_decoration.rs"),
         (dye_color::build, "dye_color.rs"),
         (block_transformer::build, "block_transformer.rs"),
+        (trial_spawner::build, "trial_spawner.rs"),
     ];
     build_functions.extend(remap::build());
 

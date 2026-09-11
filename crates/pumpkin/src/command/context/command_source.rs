@@ -1,12 +1,16 @@
 use crate::command::CommandSender;
-use crate::command::argument_types::entity_anchor::EntityAnchor;
-use crate::command::errors::command_syntax_error::CommandSyntaxError;
-use crate::command::errors::error_types::CommandErrorType;
+use crate::command::argument_types::entity_anchor::{EntityAnchor, EntityAnchorExt};
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::server::Server;
 use crate::world::World;
+use pumpkin_command::errors::command_syntax_error::CommandSyntaxError;
+use pumpkin_command::errors::error_types::CommandErrorType;
+pub use pumpkin_command::source::{
+    ResultValueTaker, ReturnValue, ReturnValueCallable, ReturnValueCallback,
+};
 use pumpkin_data::translation;
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::wrap_degrees;
@@ -22,50 +26,6 @@ pub const REQUIRES_ENTITY: CommandErrorType<0> = CommandErrorType::new(
     translation::java::PERMISSIONS_REQUIRES_ENTITY,
     translation::java::PERMISSIONS_REQUIRES_ENTITY,
 );
-
-pub trait ReturnValueCallable: Send + Sync {
-    fn call(&self, value: ReturnValue);
-}
-
-pub type ReturnValueCallback = Arc<dyn ReturnValueCallable>;
-
-/// Represents a collection of 'return value callbacks'.
-#[derive(Clone)]
-pub struct ResultValueTaker(pub Vec<ReturnValueCallback>);
-
-impl ResultValueTaker {
-    /// Merges two takers, returning one.
-    #[must_use]
-    pub fn merge(taker_1: &Self, taker_2: &Self) -> Self {
-        let mut takers = Vec::with_capacity(taker_1.0.len() + taker_2.0.len());
-        for taker in &taker_1.0 {
-            takers.push(taker.clone());
-        }
-        for taker in &taker_2.0 {
-            takers.push(taker.clone());
-        }
-        Self(takers)
-    }
-
-    /// Constructs a new, empty result value taker.
-    #[must_use]
-    pub fn new() -> Self {
-        Self(Vec::new())
-    }
-
-    /// Calls all the contained callbacks of this taker with the returned result.
-    pub fn call(&self, return_value: ReturnValue) {
-        for callback in &self.0 {
-            callback.call(return_value);
-        }
-    }
-}
-
-impl Default for ResultValueTaker {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 /// Represents a source of a command, which
 /// contains its own state, which could keep track of its:
@@ -505,28 +465,60 @@ impl CommandSource {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub enum ReturnValue {
-    Success(i32),
-    Failure,
-}
+impl pumpkin_command::source::CommandSource for CommandSource {
+    fn send_message(&self, message: TextComponent) {
+        self.send_message(message);
+    }
 
-impl ReturnValue {
-    /// Get the success value of this return value.
-    #[must_use]
-    pub const fn success_value(self) -> bool {
-        match self {
-            Self::Success(_) => true,
-            Self::Failure => false,
+    fn send_error(&self, error: TextComponent) {
+        self.send_error(error);
+    }
+
+    fn call_result(&self, result: ReturnValue) {
+        self.command_result_taker.call(result);
+    }
+
+    fn has_permission(&self, permission: &str) -> bool {
+        self.has_permission(permission)
+    }
+
+    fn position(&self) -> Vector3<f64> {
+        self.position
+    }
+
+    fn rotation(&self) -> Vector2<f32> {
+        self.rotation
+    }
+
+    fn check_block_loaded(&self, pos: &BlockPos) -> Result<(), CommandSyntaxError> {
+        let world = self.world();
+        if world
+            .level
+            .read_chunk_sync(&pos.chunk_position(), |_| ())
+            .is_none()
+        {
+            Err(
+                pumpkin_command::argument_types::coordinates::block_pos::NOT_LOADED_ERROR_TYPE
+                    .create_without_context(),
+            )
+        } else if !world.is_in_build_limit(*pos) {
+            Err(
+                pumpkin_command::argument_types::coordinates::block_pos::OUT_OF_WORLD_ERROR_TYPE
+                    .create_without_context(),
+            )
+        } else {
+            Ok(())
         }
     }
 
-    /// Get the result integral value of this return value.
-    #[must_use]
-    pub const fn result_value(self) -> i32 {
-        match self {
-            Self::Success(value) => value,
-            Self::Failure => 0,
-        }
+    fn entity_anchor(&self) -> EntityAnchor {
+        self.entity_anchor
+    }
+
+    fn anchor_position(&self, anchor: EntityAnchor) -> Vector3<f64> {
+        let pos = self.position;
+        self.entity
+            .as_ref()
+            .map_or_else(|| pos, |e| anchor.position_at_entity(e.get_entity()))
     }
 }
