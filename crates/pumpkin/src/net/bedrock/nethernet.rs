@@ -1,5 +1,6 @@
 use std::{
     fs::OpenOptions,
+    future::Future,
     io::{ErrorKind, Write},
     net::{IpAddr, SocketAddr},
     path::Path as FsPath,
@@ -68,8 +69,30 @@ const MAX_FRAGMENT_SIZE: usize = 10_000;
 #[allow(dead_code)]
 const MAX_INBOUND_MESSAGE_SIZE: usize = 262_144;
 const MAX_SDP_SIZE: usize = 1 << 20;
+const RELIABLE_FLUSH_POLL_INTERVAL: Duration = Duration::from_millis(5);
 
 type IncomingSession = (Arc<NetherNetSession>, SocketAddr);
+
+async fn wait_for_reliable_delivery<F, Fut>(
+    timeout: Duration,
+    mut outstanding_bytes: F,
+) -> Result<(), String>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<usize, String>>,
+{
+    tokio::time::timeout(timeout, async {
+        loop {
+            match outstanding_bytes().await {
+                Ok(0) => return Ok(()),
+                Ok(_) => tokio::time::sleep(RELIABLE_FLUSH_POLL_INTERVAL).await,
+                Err(error) => return Err(error),
+            }
+        }
+    })
+    .await
+    .map_err(|_| "timed out waiting for reliable messages to be acknowledged".to_string())?
+}
 
 /// Accepts Bedrock `NetherNet` connections negotiated through Mojang's HTTP endpoint.
 pub struct NetherNetListener {
@@ -744,6 +767,31 @@ impl NetherNetSession {
         Ok(())
     }
 
+    /// Waits for every reliable message handed to SCTP to be acknowledged by the peer.
+    ///
+    /// [`DataChannel::send`] only queues data, so closing the peer immediately afterwards can
+    /// discard the final message before it reaches the client. This is intended for terminal
+    /// protocol messages where delivery matters more than keeping the connection alive.
+    pub(super) async fn flush_reliable(&self, timeout: Duration) -> Result<(), String> {
+        let channel = self
+            .reliable
+            .read()
+            .await
+            .clone()
+            .ok_or_else(|| "reliable channel is not open".to_string())?;
+
+        wait_for_reliable_delivery(timeout, || {
+            let channel = channel.clone();
+            async move {
+                channel
+                    .outstanding_bytes()
+                    .await
+                    .map_err(|error| error.to_string())
+            }
+        })
+        .await
+    }
+
     pub const fn client_public_key(&self) -> Option<&PublicKey> {
         self.client_public_key.as_ref()
     }
@@ -1013,6 +1061,7 @@ fn unix_time() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::AtomicUsize;
 
     #[test]
     fn fragments_round_trip() {
@@ -1038,6 +1087,32 @@ mod tests {
         assert!(fragments.push(2, b"one").unwrap().is_none());
         assert!(fragments.push(0, b"three").is_err());
         assert_eq!(fragments.push(0, b"complete").unwrap().unwrap(), "complete");
+    }
+
+    #[tokio::test]
+    async fn reliable_delivery_waits_until_no_bytes_are_outstanding() {
+        let polls = Arc::new(AtomicUsize::new(0));
+        let result = wait_for_reliable_delivery(Duration::from_secs(1), || {
+            let polls = polls.clone();
+            async move {
+                let poll = polls.fetch_add(1, Ordering::Relaxed);
+                Ok(usize::from(poll == 0))
+            }
+        })
+        .await;
+
+        assert!(result.is_ok());
+        assert_eq!(polls.load(Ordering::Relaxed), 2);
+    }
+
+    #[tokio::test]
+    async fn reliable_delivery_wait_is_bounded() {
+        let result = wait_for_reliable_delivery(Duration::from_millis(1), || async { Ok(1) }).await;
+
+        assert_eq!(
+            result.unwrap_err(),
+            "timed out waiting for reliable messages to be acknowledged"
+        );
     }
 
     #[test]
