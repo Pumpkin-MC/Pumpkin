@@ -33858,14 +33858,34 @@ static ENTITIES_CHICKEN_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     condition: LootCondition::None,
     bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
 }];
-static ENTITIES_CHICKEN_POOL1_ENTRIES: &[LootEntry] = &[LootEntry {
-    item: "minecraft:chicken",
-    weight: 1i32,
-    min_count: 1i32,
-    max_count: 1i32,
-    condition: LootCondition::None,
-    bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
-}];
+static ENTITIES_CHICKEN_POOL1_ENTRIES: &[LootEntry] = &[
+    LootEntry {
+        item: "minecraft:cooked_chicken",
+        weight: 1i32,
+        min_count: 1i32,
+        max_count: 1i32,
+        condition: LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ]),
+        bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
+    },
+    LootEntry {
+        item: "minecraft:chicken",
+        weight: 1i32,
+        min_count: 1i32,
+        max_count: 1i32,
+        condition: LootCondition::Inverted(&LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ])),
+        bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
+    },
+];
 static ENTITIES_CHICKEN_POOLS: &[LootPool] = &[
     LootPool {
         entries: ENTITIES_CHICKEN_POOL0_ENTRIES,
@@ -33885,14 +33905,34 @@ static ENTITIES_CHICKEN_POOLS: &[LootPool] = &[
 pub static ENTITIES_CHICKEN: LootTable = LootTable {
     pools: ENTITIES_CHICKEN_POOLS,
 };
-static ENTITIES_COD_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
-    item: "minecraft:cod",
-    weight: 1i32,
-    min_count: 1i32,
-    max_count: 1i32,
-    condition: LootCondition::None,
-    bonus_formula: None,
-}];
+static ENTITIES_COD_POOL0_ENTRIES: &[LootEntry] = &[
+    LootEntry {
+        item: "minecraft:cooked_cod",
+        weight: 1i32,
+        min_count: 1i32,
+        max_count: 1i32,
+        condition: LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ]),
+        bonus_formula: None,
+    },
+    LootEntry {
+        item: "minecraft:cod",
+        weight: 1i32,
+        min_count: 1i32,
+        max_count: 1i32,
+        condition: LootCondition::Inverted(&LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ])),
+        bonus_formula: None,
+    },
+];
 static ENTITIES_COD_POOL1_ENTRIES: &[LootEntry] = &[LootEntry {
     item: "minecraft:bone_meal",
     weight: 1i32,
@@ -33946,14 +33986,34 @@ static ENTITIES_COW_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     condition: LootCondition::None,
     bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
 }];
-static ENTITIES_COW_POOL1_ENTRIES: &[LootEntry] = &[LootEntry {
-    item: "minecraft:beef",
-    weight: 1i32,
-    min_count: 1i32,
-    max_count: 3i32,
-    condition: LootCondition::None,
-    bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
-}];
+static ENTITIES_COW_POOL1_ENTRIES: &[LootEntry] = &[
+    LootEntry {
+        item: "minecraft:cooked_beef",
+        weight: 1i32,
+        min_count: 1i32,
+        max_count: 3i32,
+        condition: LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ]),
+        bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
+    },
+    LootEntry {
+        item: "minecraft:beef",
+        weight: 1i32,
+        min_count: 1i32,
+        max_count: 3i32,
+        condition: LootCondition::Inverted(&LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ])),
+        bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
+    },
+];
 static ENTITIES_COW_POOLS: &[LootPool] = &[
     LootPool {
         entries: ENTITIES_COW_POOL0_ENTRIES,
@@ -34096,20 +34156,49 @@ static ENTITIES_CREEPER_POOLS: &[LootPool] = &[
         min_rolls: 1i32,
         max_rolls: 1i32,
         empty_weight: 0i32,
-        condition: LootCondition::None,
+        condition: LootCondition::KillerType {
+            types: &[
+                "minecraft:skeleton",
+                "minecraft:stray",
+                "minecraft:wither_skeleton",
+                "minecraft:skeleton_horse",
+                "minecraft:bogged",
+                "minecraft:parched",
+            ],
+        },
     },
 ];
 pub static ENTITIES_CREEPER: LootTable = LootTable {
     pools: ENTITIES_CREEPER_POOLS,
 };
-static ENTITIES_DOLPHIN_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
-    item: "minecraft:cod",
-    weight: 1i32,
-    min_count: 0i32,
-    max_count: 1i32,
-    condition: LootCondition::None,
-    bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
-}];
+static ENTITIES_DOLPHIN_POOL0_ENTRIES: &[LootEntry] = &[
+    LootEntry {
+        item: "minecraft:cooked_cod",
+        weight: 1i32,
+        min_count: 0i32,
+        max_count: 1i32,
+        condition: LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ]),
+        bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
+    },
+    LootEntry {
+        item: "minecraft:cod",
+        weight: 1i32,
+        min_count: 0i32,
+        max_count: 1i32,
+        condition: LootCondition::Inverted(&LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ])),
+        bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
+    },
+];
 static ENTITIES_DOLPHIN_POOLS: &[LootPool] = &[LootPool {
     entries: ENTITIES_DOLPHIN_POOL0_ENTRIES,
     min_rolls: 1i32,
@@ -34190,11 +34279,29 @@ static ENTITIES_ELDER_GUARDIAN_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
 }];
 static ENTITIES_ELDER_GUARDIAN_POOL1_ENTRIES: &[LootEntry] = &[
     LootEntry {
+        item: "minecraft:cooked_cod",
+        weight: 3i32,
+        min_count: 1i32,
+        max_count: 1i32,
+        condition: LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ]),
+        bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
+    },
+    LootEntry {
         item: "minecraft:cod",
         weight: 3i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::Inverted(&LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ])),
         bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
     },
     LootEntry {
@@ -34458,11 +34565,29 @@ static ENTITIES_GUARDIAN_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
 }];
 static ENTITIES_GUARDIAN_POOL1_ENTRIES: &[LootEntry] = &[
     LootEntry {
+        item: "minecraft:cooked_cod",
+        weight: 2i32,
+        min_count: 1i32,
+        max_count: 1i32,
+        condition: LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ]),
+        bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
+    },
+    LootEntry {
         item: "minecraft:cod",
         weight: 2i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::Inverted(&LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ])),
         bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
     },
     LootEntry {
@@ -34545,14 +34670,34 @@ static ENTITIES_HAPPY_GHAST_POOLS: &[LootPool] = &[];
 pub static ENTITIES_HAPPY_GHAST: LootTable = LootTable {
     pools: ENTITIES_HAPPY_GHAST_POOLS,
 };
-static ENTITIES_HOGLIN_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
-    item: "minecraft:porkchop",
-    weight: 1i32,
-    min_count: 2i32,
-    max_count: 4i32,
-    condition: LootCondition::None,
-    bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
-}];
+static ENTITIES_HOGLIN_POOL0_ENTRIES: &[LootEntry] = &[
+    LootEntry {
+        item: "minecraft:cooked_porkchop",
+        weight: 1i32,
+        min_count: 2i32,
+        max_count: 4i32,
+        condition: LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ]),
+        bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
+    },
+    LootEntry {
+        item: "minecraft:porkchop",
+        weight: 1i32,
+        min_count: 2i32,
+        max_count: 4i32,
+        condition: LootCondition::Inverted(&LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ])),
+        bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
+    },
+];
 static ENTITIES_HOGLIN_POOL1_ENTRIES: &[LootEntry] = &[LootEntry {
     item: "minecraft:leather",
     weight: 1i32,
@@ -34632,11 +34777,29 @@ static ENTITIES_HUSK_POOL2_ENTRIES: &[LootEntry] = &[
         bonus_formula: None,
     },
     LootEntry {
+        item: "minecraft:baked_potato",
+        weight: 1i32,
+        min_count: 1i32,
+        max_count: 1i32,
+        condition: LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ]),
+        bonus_formula: None,
+    },
+    LootEntry {
         item: "minecraft:potato",
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::Inverted(&LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ])),
         bonus_formula: None,
     },
 ];
@@ -34786,14 +34949,34 @@ static ENTITIES_MOOSHROOM_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     condition: LootCondition::None,
     bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
 }];
-static ENTITIES_MOOSHROOM_POOL1_ENTRIES: &[LootEntry] = &[LootEntry {
-    item: "minecraft:beef",
-    weight: 1i32,
-    min_count: 1i32,
-    max_count: 3i32,
-    condition: LootCondition::None,
-    bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
-}];
+static ENTITIES_MOOSHROOM_POOL1_ENTRIES: &[LootEntry] = &[
+    LootEntry {
+        item: "minecraft:cooked_beef",
+        weight: 1i32,
+        min_count: 1i32,
+        max_count: 3i32,
+        condition: LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ]),
+        bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
+    },
+    LootEntry {
+        item: "minecraft:beef",
+        weight: 1i32,
+        min_count: 1i32,
+        max_count: 3i32,
+        condition: LootCondition::Inverted(&LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ])),
+        bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
+    },
+];
 static ENTITIES_MOOSHROOM_POOLS: &[LootPool] = &[
     LootPool {
         entries: ENTITIES_MOOSHROOM_POOL0_ENTRIES,
@@ -34964,14 +35147,34 @@ static ENTITIES_PHANTOM_POOLS: &[LootPool] = &[LootPool {
 pub static ENTITIES_PHANTOM: LootTable = LootTable {
     pools: ENTITIES_PHANTOM_POOLS,
 };
-static ENTITIES_PIG_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
-    item: "minecraft:porkchop",
-    weight: 1i32,
-    min_count: 1i32,
-    max_count: 3i32,
-    condition: LootCondition::None,
-    bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
-}];
+static ENTITIES_PIG_POOL0_ENTRIES: &[LootEntry] = &[
+    LootEntry {
+        item: "minecraft:cooked_porkchop",
+        weight: 1i32,
+        min_count: 1i32,
+        max_count: 3i32,
+        condition: LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ]),
+        bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
+    },
+    LootEntry {
+        item: "minecraft:porkchop",
+        weight: 1i32,
+        min_count: 1i32,
+        max_count: 3i32,
+        condition: LootCondition::Inverted(&LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ])),
+        bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
+    },
+];
 static ENTITIES_PIG_POOLS: &[LootPool] = &[LootPool {
     entries: ENTITIES_PIG_POOL0_ENTRIES,
     min_rolls: 1i32,
@@ -35014,11 +35217,42 @@ pub static ENTITIES_PLAYER: LootTable = LootTable {
 };
 static ENTITIES_POLAR_BEAR_POOL0_ENTRIES: &[LootEntry] = &[
     LootEntry {
+        item: "minecraft:cooked_cod",
+        weight: 3i32,
+        min_count: 0i32,
+        max_count: 2i32,
+        condition: LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ]),
+        bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
+    },
+    LootEntry {
         item: "minecraft:cod",
         weight: 3i32,
         min_count: 0i32,
         max_count: 2i32,
-        condition: LootCondition::None,
+        condition: LootCondition::Inverted(&LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ])),
+        bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
+    },
+    LootEntry {
+        item: "minecraft:cooked_salmon",
+        weight: 1i32,
+        min_count: 0i32,
+        max_count: 2i32,
+        condition: LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ]),
         bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
     },
     LootEntry {
@@ -35026,7 +35260,12 @@ static ENTITIES_POLAR_BEAR_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 0i32,
         max_count: 2i32,
-        condition: LootCondition::None,
+        condition: LootCondition::Inverted(&LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ])),
         bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
     },
 ];
@@ -35083,14 +35322,34 @@ static ENTITIES_RABBIT_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     condition: LootCondition::None,
     bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
 }];
-static ENTITIES_RABBIT_POOL1_ENTRIES: &[LootEntry] = &[LootEntry {
-    item: "minecraft:rabbit",
-    weight: 1i32,
-    min_count: 1i32,
-    max_count: 1i32,
-    condition: LootCondition::None,
-    bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
-}];
+static ENTITIES_RABBIT_POOL1_ENTRIES: &[LootEntry] = &[
+    LootEntry {
+        item: "minecraft:cooked_rabbit",
+        weight: 1i32,
+        min_count: 1i32,
+        max_count: 1i32,
+        condition: LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ]),
+        bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
+    },
+    LootEntry {
+        item: "minecraft:rabbit",
+        weight: 1i32,
+        min_count: 1i32,
+        max_count: 1i32,
+        condition: LootCondition::Inverted(&LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ])),
+        bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
+    },
+];
 static ENTITIES_RABBIT_POOL2_ENTRIES: &[LootEntry] = &[LootEntry {
     item: "minecraft:rabbit_foot",
     weight: 1i32,
@@ -35150,14 +35409,34 @@ static ENTITIES_RAVAGER_POOLS: &[LootPool] = &[LootPool {
 pub static ENTITIES_RAVAGER: LootTable = LootTable {
     pools: ENTITIES_RAVAGER_POOLS,
 };
-static ENTITIES_SALMON_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
-    item: "minecraft:salmon",
-    weight: 1i32,
-    min_count: 1i32,
-    max_count: 1i32,
-    condition: LootCondition::None,
-    bonus_formula: None,
-}];
+static ENTITIES_SALMON_POOL0_ENTRIES: &[LootEntry] = &[
+    LootEntry {
+        item: "minecraft:cooked_salmon",
+        weight: 1i32,
+        min_count: 1i32,
+        max_count: 1i32,
+        condition: LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ]),
+        bonus_formula: None,
+    },
+    LootEntry {
+        item: "minecraft:salmon",
+        weight: 1i32,
+        min_count: 1i32,
+        max_count: 1i32,
+        condition: LootCondition::Inverted(&LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ])),
+        bonus_formula: None,
+    },
+];
 static ENTITIES_SALMON_POOL1_ENTRIES: &[LootEntry] = &[LootEntry {
     item: "minecraft:bone_meal",
     weight: 1i32,
@@ -35185,14 +35464,34 @@ static ENTITIES_SALMON_POOLS: &[LootPool] = &[
 pub static ENTITIES_SALMON: LootTable = LootTable {
     pools: ENTITIES_SALMON_POOLS,
 };
-static ENTITIES_SHEEP_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
-    item: "minecraft:mutton",
-    weight: 1i32,
-    min_count: 1i32,
-    max_count: 2i32,
-    condition: LootCondition::None,
-    bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
-}];
+static ENTITIES_SHEEP_POOL0_ENTRIES: &[LootEntry] = &[
+    LootEntry {
+        item: "minecraft:cooked_mutton",
+        weight: 1i32,
+        min_count: 1i32,
+        max_count: 2i32,
+        condition: LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ]),
+        bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
+    },
+    LootEntry {
+        item: "minecraft:mutton",
+        weight: 1i32,
+        min_count: 1i32,
+        max_count: 2i32,
+        condition: LootCondition::Inverted(&LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ])),
+        bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
+    },
+];
 static ENTITIES_SHEEP_POOL1_ENTRIES: &[LootEntry] = &[
     LootEntry {
         item: "minecraft:white_wool",
@@ -36218,11 +36517,29 @@ static ENTITIES_ZOMBIE_POOL2_ENTRIES: &[LootEntry] = &[
         bonus_formula: None,
     },
     LootEntry {
+        item: "minecraft:baked_potato",
+        weight: 1i32,
+        min_count: 1i32,
+        max_count: 1i32,
+        condition: LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ]),
+        bonus_formula: None,
+    },
+    LootEntry {
         item: "minecraft:potato",
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::Inverted(&LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ])),
         bonus_formula: None,
     },
 ];
@@ -36336,11 +36653,29 @@ static ENTITIES_ZOMBIE_VILLAGER_POOL1_ENTRIES: &[LootEntry] = &[
         bonus_formula: None,
     },
     LootEntry {
+        item: "minecraft:baked_potato",
+        weight: 1i32,
+        min_count: 1i32,
+        max_count: 1i32,
+        condition: LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ]),
+        bonus_formula: None,
+    },
+    LootEntry {
         item: "minecraft:potato",
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::Inverted(&LootCondition::AnyOf(&[
+            LootCondition::ThisOnFire,
+            LootCondition::ToolEnchanted {
+                enchantments: &["minecraft:fire_aspect"],
+            },
+        ])),
         bonus_formula: None,
     },
 ];

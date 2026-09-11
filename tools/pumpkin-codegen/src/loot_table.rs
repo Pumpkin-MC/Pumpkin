@@ -76,6 +76,8 @@ struct PredicateStruct {
     items: Option<serde_json::Value>,
     #[serde(default)]
     predicates: Option<serde_json::Value>,
+    #[serde(flatten)]
+    other: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -114,6 +116,8 @@ struct ConditionStruct {
     terms: Option<Vec<ConditionStruct>>,
     #[serde(default)]
     properties: Option<serde_json::Map<String, serde_json::Value>>,
+    #[serde(default)]
+    entity: Option<String>,
 }
 
 fn parse_condition(cond: &ConditionStruct) -> LootCondition {
@@ -175,6 +179,7 @@ fn parse_condition(cond: &ConditionStruct) -> LootCondition {
                 }
             }
         }
+        "minecraft:entity_properties" => parse_entity_properties(cond),
         "minecraft:all_of" => {
             if let Some(terms) = &cond.terms {
                 combine_conditions(terms)
@@ -285,7 +290,10 @@ fn is_deterministic(cond: LootCondition) -> bool {
         | LootCondition::SilkTouchOrShears
         | LootCondition::NoSilkTouchOrShears
         | LootCondition::KilledByPlayer
-        | LootCondition::BlockStateProperty { .. } => true,
+        | LootCondition::BlockStateProperty { .. }
+        | LootCondition::ThisOnFire
+        | LootCondition::KillerType { .. }
+        | LootCondition::ToolEnchanted { .. } => true,
         LootCondition::Inverted(inner) => is_deterministic(*inner),
         LootCondition::AllOf(list) | LootCondition::AnyOf(list) => {
             list.iter().copied().all(is_deterministic)
@@ -363,6 +371,192 @@ fn push_count_variants(
     let mut parts = vec![condition];
     parts.extend(later.iter().copied().map(invert));
     push(all_of(parts), (1, 1));
+}
+
+fn leak_list(values: Vec<String>) -> &'static [&'static str] {
+    let values: Vec<&'static str> = values.iter().map(|v| leak_str(v)).collect();
+    Box::leak(values.into_boxed_slice())
+}
+
+/// Expands `#namespace:tag` into its values (recursively); a plain id is returned as-is.
+fn expand_tag(registry: &str, id: &str) -> Vec<String> {
+    let Some(tag) = id.strip_prefix('#') else {
+        return vec![id.to_owned()];
+    };
+    let name = tag.strip_prefix("minecraft:").unwrap_or(tag);
+    let path = Path::new("../../assets/datapacks/26_2/data/minecraft/tags")
+        .join(registry)
+        .join(format!("{name}.json"));
+    let Ok(content) = fs::read_to_string(&path) else {
+        return Vec::new();
+    };
+    let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) else {
+        return Vec::new();
+    };
+    json.get("values")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|v| {
+            v.as_str()
+                .or_else(|| v.get("id").and_then(serde_json::Value::as_str))
+        })
+        .flat_map(|v| expand_tag(registry, v))
+        .collect()
+}
+
+/// Supports the `entity_properties` checks vanilla uses for cooked drops and for creeper
+/// music discs. Anything else stays unconditional, like before.
+fn parse_entity_properties(cond: &ConditionStruct) -> LootCondition {
+    let Some(pred) = &cond.predicate else {
+        return LootCondition::None;
+    };
+    // Only predicates with exactly one known check, so nothing gets silently ignored.
+    if pred.items.is_some() || pred.predicates.is_some() || pred.other.len() != 1 {
+        return LootCondition::None;
+    }
+    let Some((key, value)) = pred.other.iter().next() else {
+        return LootCondition::None;
+    };
+    match (cond.entity.as_deref(), key.as_str()) {
+        (Some("this"), "minecraft:flags")
+            if value.as_object().is_some_and(|flags| flags.len() == 1)
+                && value.get("is_on_fire") == Some(&serde_json::Value::Bool(true)) =>
+        {
+            LootCondition::ThisOnFire
+        }
+        (Some("attacker"), "minecraft:entity_type") => {
+            let types = value
+                .as_str()
+                .map(|id| expand_tag("entity_type", id))
+                .unwrap_or_default();
+            if types.is_empty() {
+                LootCondition::None
+            } else {
+                LootCondition::KillerType {
+                    types: leak_list(types),
+                }
+            }
+        }
+        (Some("direct_attacker"), "minecraft:equipment") => parse_mainhand_enchantments(value),
+        _ => LootCondition::None,
+    }
+}
+
+/// Parses `{"mainhand": {"predicates": {"minecraft:enchantments": [{"enchantments": ..}]}}}`.
+fn parse_mainhand_enchantments(equipment: &serde_json::Value) -> LootCondition {
+    let single = |v: &serde_json::Value, key: &str| {
+        v.as_object()
+            .filter(|o| o.len() == 1)
+            .and_then(|o| o.get(key))
+            .cloned()
+    };
+    let Some(list) = single(equipment, "mainhand")
+        .and_then(|mainhand| single(&mainhand, "predicates"))
+        .and_then(|predicates| single(&predicates, "minecraft:enchantments"))
+    else {
+        return LootCondition::None;
+    };
+    let mut enchantments = Vec::new();
+    for entry in list.as_array().into_iter().flatten() {
+        // Level requirements aren't supported.
+        let Some(id) = single(entry, "enchantments") else {
+            return LootCondition::None;
+        };
+        let Some(id) = id.as_str() else {
+            return LootCondition::None;
+        };
+        enchantments.extend(expand_tag("enchantment", id));
+    }
+    if enchantments.is_empty() {
+        LootCondition::None
+    } else {
+        LootCondition::ToolEnchanted {
+            enchantments: leak_list(enchantments),
+        }
+    }
+}
+
+/// Raw item → smelted result, from the vanilla smelting recipes.
+fn smelting_result(item: &str) -> Option<String> {
+    static RECIPES: std::sync::OnceLock<std::collections::HashMap<String, String>> =
+        std::sync::OnceLock::new();
+    RECIPES
+        .get_or_init(|| {
+            let mut map = std::collections::HashMap::new();
+            let dir = Path::new("../../assets/datapacks/26_2/data/minecraft/recipe");
+            for entry in fs::read_dir(dir).into_iter().flatten().flatten() {
+                let Ok(content) = fs::read_to_string(entry.path()) else {
+                    continue;
+                };
+                let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) else {
+                    continue;
+                };
+                if json.get("type").and_then(serde_json::Value::as_str)
+                    != Some("minecraft:smelting")
+                {
+                    continue;
+                }
+                if let (Some(ingredient), Some(result)) = (
+                    json.get("ingredient").and_then(serde_json::Value::as_str),
+                    json.get("result")
+                        .and_then(|r| r.get("id"))
+                        .and_then(serde_json::Value::as_str),
+                ) {
+                    map.insert(ingredient.to_owned(), result.to_owned());
+                }
+            }
+            map
+        })
+        .get(item)
+        .cloned()
+}
+
+/// Emits cooked and raw variants for `furnace_smelt`, whose condition (e.g. "on fire") picks
+/// which one drops. Smelting with a condition that can't be parsed is skipped, like before.
+fn push_smelt_variants(
+    item: &str,
+    weight: i32,
+    condition: LootCondition,
+    bonus_formula: Option<LootBonusFormula>,
+    functions: &[&EntryFunctionStruct],
+    out: &mut Vec<ParsedEntry>,
+) {
+    let smelt = functions
+        .iter()
+        .find(|f| f.function == "minecraft:furnace_smelt")
+        .and_then(|f| {
+            let cooked = smelting_result(item)?;
+            let fully_parsed = f
+                .conditions
+                .iter()
+                .all(|c| parse_condition(c) != LootCondition::None);
+            let smelt_cond = combine_conditions(&f.conditions);
+            (fully_parsed && is_deterministic(smelt_cond)).then_some((smelt_cond, cooked))
+        });
+
+    let Some((smelt_cond, cooked)) = smelt else {
+        push_count_variants(item, weight, condition, bonus_formula, functions, out);
+        return;
+    };
+    push_count_variants(
+        &cooked,
+        weight,
+        all_of(vec![condition, smelt_cond]),
+        bonus_formula,
+        functions,
+        out,
+    );
+    if smelt_cond != LootCondition::None {
+        push_count_variants(
+            item,
+            weight,
+            all_of(vec![condition, invert(smelt_cond)]),
+            bonus_formula,
+            functions,
+            out,
+        );
+    }
 }
 
 fn combine_conditions(conditions: &[ConditionStruct]) -> LootCondition {
@@ -549,7 +743,7 @@ fn extract_entries_with_depth(
                     }
                 });
 
-                push_count_variants(
+                push_smelt_variants(
                     name,
                     entry.weight,
                     entry_cond,
@@ -769,6 +963,13 @@ fn condition_to_tokens(cond: LootCondition) -> TokenStream {
         LootCondition::AnyOf(list) => {
             let tokens: Vec<TokenStream> = list.iter().copied().map(condition_to_tokens).collect();
             quote! { LootCondition::AnyOf(&[#(#tokens),*]) }
+        }
+        LootCondition::ThisOnFire => quote! { LootCondition::ThisOnFire },
+        LootCondition::KillerType { types } => {
+            quote! { LootCondition::KillerType { types: &[#(#types),*] } }
+        }
+        LootCondition::ToolEnchanted { enchantments } => {
+            quote! { LootCondition::ToolEnchanted { enchantments: &[#(#enchantments),*] } }
         }
         LootCondition::AllOf(list) => {
             let tokens: Vec<TokenStream> = list.iter().copied().map(condition_to_tokens).collect();

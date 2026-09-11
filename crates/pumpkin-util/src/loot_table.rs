@@ -29,6 +29,16 @@ pub enum LootCondition {
     Inverted(&'static Self),
     /// Matches when any of the inner conditions does.
     AnyOf(&'static [Self]),
+    /// Matches when the entity that drops the loot is on fire.
+    ThisOnFire,
+    /// Matches when the killer's entity type is one of these ids.
+    KillerType {
+        types: &'static [&'static str],
+    },
+    /// Matches when the tool (the attacker's main hand) has one of these enchantments.
+    ToolEnchanted {
+        enchantments: &'static [&'static str],
+    },
     AllOf(&'static [Self]),
 }
 

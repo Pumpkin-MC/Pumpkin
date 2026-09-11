@@ -87,6 +87,18 @@ fn check_condition(
         LootCondition::AnyOf(conditions) => conditions
             .iter()
             .any(|c| check_condition(*c, has_silk_touch, has_shears, fortune_level, params, rng)),
+        LootCondition::ThisOnFire => params.is_on_fire.unwrap_or(false),
+        LootCondition::KillerType { types } => params.killer_entity.is_some_and(|killer| {
+            types
+                .iter()
+                .any(|name| EntityType::from_name(name).is_some_and(|t| t.id == killer.id))
+        }),
+        LootCondition::ToolEnchanted { enchantments } => params.tool.as_ref().is_some_and(|tool| {
+            enchantments.iter().any(|name| {
+                pumpkin_data::Enchantment::from_name(name)
+                    .is_some_and(|e| tool.get_enchantment_level(e) > 0)
+            })
+        }),
         LootCondition::AllOf(conditions) => conditions
             .iter()
             .all(|c| check_condition(*c, has_silk_touch, has_shears, fortune_level, params, rng)),
@@ -422,5 +434,63 @@ mod tests {
             .filter(|(id, _)| *id == Item::WHEAT.id)
             .count();
         assert_eq!(wheat_drops, 16);
+    }
+
+    /// Items an entity drops over 16 seeds.
+    fn entity_drops(key: &str, params: &LootContextParameters) -> Vec<&'static Item> {
+        let table = get_loot_table(key).expect("entity has a loot table");
+        (0..16)
+            .flat_map(|seed| generate_loot_with_context(table, seed, params))
+            .map(|stack| stack.item)
+            .collect()
+    }
+
+    fn is_music_disc(item: &Item) -> bool {
+        item.registry_key.contains("music_disc")
+    }
+
+    #[test]
+    fn creepers_only_drop_music_discs_when_killed_by_skeletons() {
+        let by_player = LootContextParameters {
+            killer_entity: Some(&EntityType::PLAYER),
+            ..Default::default()
+        };
+        let drops = entity_drops("minecraft:entities/creeper", &by_player);
+        assert!(!drops.iter().any(|item| is_music_disc(item)));
+
+        let by_skeleton = LootContextParameters {
+            killer_entity: Some(&EntityType::SKELETON),
+            ..Default::default()
+        };
+        let drops = entity_drops("minecraft:entities/creeper", &by_skeleton);
+        assert_eq!(drops.iter().filter(|item| is_music_disc(item)).count(), 16);
+    }
+
+    #[test]
+    fn burning_cows_drop_cooked_beef() {
+        let normal = LootContextParameters {
+            is_on_fire: Some(false),
+            ..Default::default()
+        };
+        let drops = entity_drops("minecraft:entities/cow", &normal);
+        assert_eq!(
+            drops.iter().filter(|item| item.id == Item::BEEF.id).count(),
+            16
+        );
+        assert!(!drops.iter().any(|item| item.id == Item::COOKED_BEEF.id));
+
+        let burning = LootContextParameters {
+            is_on_fire: Some(true),
+            ..Default::default()
+        };
+        let drops = entity_drops("minecraft:entities/cow", &burning);
+        assert_eq!(
+            drops
+                .iter()
+                .filter(|item| item.id == Item::COOKED_BEEF.id)
+                .count(),
+            16
+        );
+        assert!(!drops.iter().any(|item| item.id == Item::BEEF.id));
     }
 }
