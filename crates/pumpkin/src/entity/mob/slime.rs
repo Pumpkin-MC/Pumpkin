@@ -11,6 +11,7 @@ use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
+use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
     ai::control::{Control, MoveControlTrait},
@@ -214,14 +215,6 @@ impl SlimeEntity {
     //     }
     // }
 
-    pub(crate) const fn hurt_sound_for_size(size: i32) -> Sound {
-        if size == 1 {
-            Sound::EntitySlimeHurtSmall
-        } else {
-            Sound::EntitySlimeHurt
-        }
-    }
-
     fn get_jump_delay() -> i32 {
         rand::random_range(10..30)
     }
@@ -264,7 +257,30 @@ impl SlimeEntity {
     }
 }
 
+impl CustomSound for SlimeEntity {
+    fn death_sound(&self) -> Option<Sound> {
+        let size = self.get_size();
+        Some(if size == 1 {
+            Sound::EntitySlimeDeathSmall
+        } else {
+            Sound::EntitySlimeDeath
+        })
+    }
+    fn hurt_sound(&self) -> Option<Sound> {
+        let size = self.get_size();
+        Some(if size == 1 {
+            Sound::EntitySlimeHurtSmall
+        } else {
+            Sound::EntitySlimeHurt
+        })
+    }
+}
+
 impl Mob for SlimeEntity {
+    fn as_custom_sound(&self) -> Option<&dyn crate::entity::custom_sound::CustomSound> {
+        Some(self)
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_int("Size", self.get_size() - 1);
         nbt.put_bool("wasOnGround", self.was_on_ground.load(Ordering::Relaxed));

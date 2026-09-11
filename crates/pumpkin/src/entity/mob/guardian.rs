@@ -1,8 +1,10 @@
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 
-use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::{damage::DamageType, sound::Sound};
 
+use crate::entity::custom_sound::CustomSound;
 use crate::entity::{
     Entity, EntityBase,
     ai::goal::{
@@ -65,6 +67,28 @@ impl GuardianEntity {
         };
 
         mob_arc
+    }
+}
+
+impl CustomSound for GuardianEntity {
+    fn hurt_sound(&self) -> Option<Sound> {
+        let entity = self.get_entity();
+        let is_water = entity.touching_water.load(Ordering::Relaxed);
+        Some(if is_water {
+            Sound::EntityGuardianHurt
+        } else {
+            Sound::EntityGuardianHurtLand
+        })
+    }
+
+    fn death_sound(&self) -> Option<Sound> {
+        let entity = self.get_entity();
+        let is_water = entity.touching_water.load(Ordering::Relaxed);
+        Some(if is_water {
+            Sound::EntityGuardianDeath
+        } else {
+            Sound::EntityGuardianDeathLand
+        })
     }
 }
 

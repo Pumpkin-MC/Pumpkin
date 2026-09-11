@@ -17,6 +17,7 @@ use crate::entity::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
+    custom_sound::CustomSound,
     mob::{Mob, MobEntity},
     player::Player,
 };
@@ -168,24 +169,6 @@ impl CopperGolemEntity {
     }
 
     #[must_use]
-    pub fn hurt_sound(&self) -> Sound {
-        match self.get_weather_state() {
-            WeatherState::Unaffected | WeatherState::Exposed => Sound::EntityCopperGolemHurt,
-            WeatherState::Weathered => Sound::EntityCopperGolemWeatheredHurt,
-            WeatherState::Oxidized => Sound::EntityCopperGolemOxidizedHurt,
-        }
-    }
-
-    #[must_use]
-    pub fn death_sound(&self) -> Sound {
-        match self.get_weather_state() {
-            WeatherState::Unaffected | WeatherState::Exposed => Sound::EntityCopperGolemDeath,
-            WeatherState::Weathered => Sound::EntityCopperGolemWeatheredDeath,
-            WeatherState::Oxidized => Sound::EntityCopperGolemOxidizedDeath,
-        }
-    }
-
-    #[must_use]
     pub fn step_sound(&self) -> Sound {
         match self.get_weather_state() {
             WeatherState::Unaffected | WeatherState::Exposed => Sound::EntityCopperGolemStep,
@@ -195,7 +178,29 @@ impl CopperGolemEntity {
     }
 }
 
+impl CustomSound for CopperGolemEntity {
+    fn hurt_sound(&self) -> Option<Sound> {
+        Some(match self.get_weather_state() {
+            WeatherState::Unaffected | WeatherState::Exposed => Sound::EntityCopperGolemHurt,
+            WeatherState::Weathered => Sound::EntityCopperGolemWeatheredHurt,
+            WeatherState::Oxidized => Sound::EntityCopperGolemOxidizedHurt,
+        })
+    }
+
+    fn death_sound(&self) -> Option<Sound> {
+        Some(match self.get_weather_state() {
+            WeatherState::Unaffected | WeatherState::Exposed => Sound::EntityCopperGolemDeath,
+            WeatherState::Weathered => Sound::EntityCopperGolemWeatheredDeath,
+            WeatherState::Oxidized => Sound::EntityCopperGolemOxidizedDeath,
+        })
+    }
+}
+
 impl Mob for CopperGolemEntity {
+    fn as_custom_sound(&self) -> Option<&dyn crate::entity::custom_sound::CustomSound> {
+        Some(self)
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_long(
             "next_weather_age",

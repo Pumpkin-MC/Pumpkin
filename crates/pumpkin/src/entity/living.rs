@@ -25,12 +25,12 @@ use super::experience_orb::ExperienceOrbEntity;
 use super::{Entity, EntityBase, NBTStorageInit};
 use crate::block::OnLandedUponArgs;
 use crate::entity::NBTStorage;
+use crate::entity::ageable::AgeableMob;
 use crate::entity::attributes::AttributeInstance;
 use crate::entity::attributes::Modifier;
 use crate::entity::attributes::ModifierOperation;
 use crate::entity::combat::{CombatRules, CombatTracker, FallLocation, knockback_after_resistance};
 use crate::entity::mob::equipment::DEFAULT_EQUIPMENT_DROP_CHANCE;
-use crate::entity::mob::slime::SlimeEntity;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
 use crate::server::Server;
 use crate::world::loot::LootContextParameters;
@@ -235,6 +235,24 @@ impl LivingEntity {
 
     fn hurt_sound_for_entity(entity_type: &'static EntityType) -> Sound {
         entity_type.hurt_sound.unwrap_or(Sound::EntityGenericHurt)
+    }
+
+    fn death_sound_for_entity(entity_type: &'static EntityType) -> Sound {
+        entity_type.death_sound.unwrap_or(Sound::EntityGenericDeath)
+    }
+
+    fn get_pitch(&self) -> f32 {
+        let is_baby = self
+            .get_mob()
+            .and_then(|x| x.as_ageable())
+            .is_some_and(AgeableMob::is_baby);
+
+        let mut rng = rand::rng();
+        if is_baby {
+            (rng.random::<f32>() - rng.random::<f32>()) * 0.2 + 1.5
+        } else {
+            (rng.random::<f32>() - rng.random::<f32>()) * 0.2 + 1.0
+        }
     }
 
     pub fn new(entity: Entity) -> Self {
@@ -1824,6 +1842,7 @@ impl LivingEntity {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn on_death(
         &self,
         damage_type: DamageType,
@@ -1848,6 +1867,13 @@ impl LivingEntity {
             self.update_death_stats(&*dyn_self, killer);
 
             // Plays the death sound
+            world.play_sound_fine(
+                self.death_sound(&*dyn_self),
+                SoundCategory::Players,
+                &self.entity.pos.load(),
+                1.0,
+                self.get_pitch(),
+            );
             world.send_entity_status(&self.entity, EntityStatus::Death, Some(ActorEventID::Death));
             let looting_level;
             let tool = if let Some(cause_ent) = cause {
@@ -2428,12 +2454,24 @@ impl LivingEntity {
         self.entity.movement.load()
     }
 
-    fn hurt_sound(&self) -> Sound {
-        if self.entity.entity_type == &EntityType::SLIME {
-            SlimeEntity::hurt_sound_for_size(self.entity.data.load(Relaxed))
-        } else {
-            Self::hurt_sound_for_entity(self.entity.entity_type)
+    fn death_sound(&self, entity: &dyn EntityBase) -> Sound {
+        if let Some(sound_source) = entity.get_mob().and_then(|x| x.as_custom_sound())
+            && let Some(audio) = sound_source.death_sound()
+        {
+            return audio;
         }
+
+        Self::death_sound_for_entity(self.entity.entity_type)
+    }
+
+    fn hurt_sound(&self, entity: &dyn EntityBase) -> Sound {
+        if let Some(sound_source) = entity.get_mob().and_then(|x| x.as_custom_sound())
+            && let Some(audio) = sound_source.hurt_sound()
+        {
+            return audio;
+        }
+
+        Self::hurt_sound_for_entity(self.entity.entity_type)
     }
 }
 
@@ -2903,7 +2941,7 @@ impl LivingEntity {
                 (effective_amount - last_damage, false)
             } else {
                 self.hurt_cooldown.store(20, Relaxed);
-                (effective_amount, true)
+                (effective_amount, self.health.load() > effective_amount)
             };
 
         // Finalize state
@@ -2945,10 +2983,12 @@ impl LivingEntity {
         );
 
         if play_sound {
-            world.play_sound(
-                self.hurt_sound(),
+            world.play_sound_fine(
+                self.hurt_sound(caller),
                 SoundCategory::Players,
                 &self.entity.pos.load(),
+                1.0,
+                self.get_pitch(),
             );
 
             if let Some(source) = source {
@@ -3748,7 +3788,7 @@ mod tests {
     #[test]
     fn hurt_sound_for_entity_defaults_to_generic_hurt() {
         assert_eq!(
-            LivingEntity::hurt_sound_for_entity(&EntityType::CREEPER),
+            LivingEntity::hurt_sound_for_entity(&EntityType::ITEM),
             Sound::EntityGenericHurt
         );
     }
