@@ -20,6 +20,13 @@ use self::test_loader::{
     TestInstance, TestInstanceRegistry, load_test_instances_from_dir, to_registry_entry,
 };
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct KnownPackData {
+    pub namespace: String,
+    pub id: String,
+    pub version: String,
+}
+
 #[derive(Clone, Debug)]
 pub struct LoadedDatapack {
     pub id: String,
@@ -29,6 +36,7 @@ pub struct LoadedDatapack {
     pub root_path: PathBuf,
     pub recipe_count: usize,
     pub function_count: usize,
+    pub known_packs: Vec<KnownPackData>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -121,7 +129,7 @@ impl DatapackManager {
                             continue;
                         }
 
-                        let (description, pack_format) = read_pack_mcmeta(&pack_path);
+                        let (description, pack_format, known_packs) = read_pack_mcmeta(&pack_path);
 
                         let (pack_recipe_count, pack_function_count, pack_test_instance_count) =
                             load_pack_contents(
@@ -144,6 +152,7 @@ impl DatapackManager {
                             root_path: pack_path,
                             recipe_count: pack_recipe_count,
                             function_count: pack_function_count,
+                            known_packs,
                         });
                     }
                 }
@@ -224,6 +233,119 @@ impl DatapackManager {
             .collect();
         entries.sort_unstable_by(|left, right| left.entry_id.cmp(&right.entry_id));
         entries
+    }
+
+    /// Returns the list of known packs for client configuration / pack synchronization,
+    /// matching vanilla's `server.getResourceManager().listPacks().flatMap(p -> p.location().knownPackInfo().stream())`.
+    pub fn get_known_packs<'a>(
+        &self,
+        server: &Server,
+        server_version: &'a str,
+        loaded_packs: &'a [LoadedDatapack],
+    ) -> Vec<pumpkin_protocol::KnownPack<'a>> {
+        use pumpkin_protocol::KnownPack;
+
+        let mut known_packs = Vec::new();
+
+        // 1. Primary vanilla core pack
+        known_packs.push(KnownPack {
+            namespace: "minecraft",
+            id: "core",
+            version: server_version,
+        });
+
+        // 2. Built-in feature packs that are enabled
+        let enabled_packs = Self::get_enabled_packs(server);
+        for pack_name in &enabled_packs {
+            let id: &'static str = match pack_name.as_str() {
+                "trade_rebalance" => "trade_rebalance",
+                "minecart_improvements" => "minecart_improvements",
+                "redstone_experiments" => "redstone_experiments",
+                "bundle" => "bundle",
+                _ => continue,
+            };
+            let pack = KnownPack {
+                namespace: "minecraft",
+                id,
+                version: server_version,
+            };
+            if !known_packs
+                .iter()
+                .any(|p| p.namespace == pack.namespace && p.id == pack.id)
+            {
+                known_packs.push(pack);
+            }
+        }
+
+        // 3. Loaded packs with known_pack info from pack.mcmeta
+        for pack in loaded_packs {
+            for kp in &pack.known_packs {
+                let p = KnownPack {
+                    namespace: &kp.namespace,
+                    id: &kp.id,
+                    version: &kp.version,
+                };
+                if !known_packs.iter().any(|existing| {
+                    existing.namespace == p.namespace
+                        && existing.id == p.id
+                        && existing.version == p.version
+                }) {
+                    known_packs.push(p);
+                }
+            }
+        }
+
+        known_packs
+    }
+
+    /// Returns the enabled world feature flags (e.g. `minecraft:vanilla`, `minecraft:trade_rebalance`,
+    /// `minecraft:minecart_improvements`, `minecraft:redstone_experiments`, `minecraft:bundle`).
+    #[must_use]
+    pub fn get_enabled_features(&self, server: &Server) -> Vec<&'static str> {
+        let enabled_packs = Self::get_enabled_packs(server);
+        Self::resolve_enabled_features(&enabled_packs)
+    }
+
+    /// Resolves enabled feature flag names given a list of enabled pack names.
+    #[must_use]
+    pub fn resolve_enabled_features(enabled_packs: &[String]) -> Vec<&'static str> {
+        let mut features = vec!["minecraft:vanilla"];
+
+        for pack_name in enabled_packs {
+            let feature: &'static str = match pack_name.as_str() {
+                "trade_rebalance" | "file/trade_rebalance" => "minecraft:trade_rebalance",
+                "minecart_improvements" | "file/minecart_improvements" => {
+                    "minecraft:minecart_improvements"
+                }
+                "redstone_experiments" | "file/redstone_experiments" => {
+                    "minecraft:redstone_experiments"
+                }
+                "bundle" | "file/bundle" => "minecraft:bundle",
+                _ => {
+                    if let Some(stripped) = pack_name.strip_prefix("file/") {
+                        match stripped {
+                            "trade_rebalance" => "minecraft:trade_rebalance",
+                            "minecart_improvements" => "minecraft:minecart_improvements",
+                            "redstone_experiments" => "minecraft:redstone_experiments",
+                            "bundle" => "minecraft:bundle",
+                            _ => continue,
+                        }
+                    } else {
+                        continue;
+                    }
+                }
+            };
+            if !features.contains(&feature) {
+                features.push(feature);
+            }
+        }
+
+        features
+    }
+
+    #[must_use]
+    pub fn is_feature_enabled(&self, server: &Server, feature: &str) -> bool {
+        self.get_enabled_features(server).contains(&feature)
     }
 
     /// Loads a Java Edition structure NBT from the currently enabled datapacks.
@@ -520,7 +642,7 @@ impl DatapackManager {
                 .get_world_path()
                 .join("datapacks")
                 .join(stripped);
-            let (desc, format) = read_pack_mcmeta(&pack_path);
+            let (desc, format, _) = read_pack_mcmeta(&pack_path);
             (resolved_name.clone(), stripped.to_string(), desc, format)
         } else {
             (
@@ -821,7 +943,7 @@ fn load_pack_contents(
     )
 }
 
-fn read_pack_mcmeta(pack_path: &Path) -> (String, u32) {
+fn read_pack_mcmeta(pack_path: &Path) -> (String, u32, Vec<KnownPackData>) {
     let mcmeta_path = pack_path.join("pack.mcmeta");
     if let Ok(content) = fs::read_to_string(mcmeta_path)
         && let Ok(val) = serde_json::from_str::<serde_json::Value>(&content)
@@ -838,34 +960,80 @@ fn read_pack_mcmeta(pack_path: &Path) -> (String, u32) {
             .and_then(|p| p.get("pack_format"))
             .and_then(serde_json::Value::as_u64)
             .unwrap_or(61) as u32;
-        return (description, pack_format);
+
+        let mut known_packs = Vec::new();
+        let parse_item = |item: &serde_json::Value| -> Option<KnownPackData> {
+            let ns = item.get("namespace").and_then(serde_json::Value::as_str)?;
+            let id = item.get("id").and_then(serde_json::Value::as_str)?;
+            let ver = item.get("version").and_then(serde_json::Value::as_str)?;
+            Some(KnownPackData {
+                namespace: ns.to_string(),
+                id: id.to_string(),
+                version: ver.to_string(),
+            })
+        };
+
+        if let Some(packs_array) = val.get("known_packs").and_then(serde_json::Value::as_array) {
+            for item in packs_array {
+                if let Some(kp) = parse_item(item) {
+                    known_packs.push(kp);
+                }
+            }
+        } else if let Some(item) = val.get("known_pack") {
+            if let Some(kp) = parse_item(item) {
+                known_packs.push(kp);
+            }
+        } else if let Some(pack_obj) = pack {
+            if let Some(packs_array) = pack_obj
+                .get("known_packs")
+                .and_then(serde_json::Value::as_array)
+            {
+                for item in packs_array {
+                    if let Some(kp) = parse_item(item) {
+                        known_packs.push(kp);
+                    }
+                }
+            } else if let Some(item) = pack_obj.get("known_pack")
+                && let Some(kp) = parse_item(item)
+            {
+                known_packs.push(kp);
+            }
+        }
+
+        return (description, pack_format, known_packs);
     }
-    (String::new(), 61)
+    (String::new(), 61, Vec::new())
 }
 
-fn load_recipes_from_dir(
+fn load_recipes_recursive(
     namespace: &str,
-    dir: &Path,
+    base_dir: &Path,
+    current_dir: &Path,
     all_recipes: &mut Vec<DynamicRecipe>,
     count: &mut usize,
 ) {
-    let Ok(entries) = fs::read_dir(dir) else {
+    let Ok(entries) = fs::read_dir(current_dir) else {
         return;
     };
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
-            load_recipes_from_dir(namespace, &path, all_recipes, count);
+            load_recipes_recursive(namespace, base_dir, &path, all_recipes, count);
         } else if path
             .extension()
             .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
         {
-            let stem = path
-                .file_stem()
-                .map(|s| s.to_string_lossy().to_string())
-                .unwrap_or_default();
+            let Ok(relative_path) = path.strip_prefix(base_dir) else {
+                continue;
+            };
+
+            let recipe_name = relative_path
+                .with_extension("")
+                .to_string_lossy()
+                .replace('\\', "/");
+
             if let Ok(content) = fs::read_to_string(&path)
-                && let Some(recipe) = recipe_loader::parse_recipe(namespace, &stem, &content)
+                && let Some(recipe) = recipe_loader::parse_recipe(namespace, &recipe_name, &content)
             {
                 all_recipes.push(recipe);
                 *count += 1;
@@ -874,6 +1042,14 @@ fn load_recipes_from_dir(
     }
 }
 
+fn load_recipes_from_dir(
+    namespace: &str,
+    dir: &Path,
+    all_recipes: &mut Vec<DynamicRecipe>,
+    count: &mut usize,
+) {
+    load_recipes_recursive(namespace, dir, dir, all_recipes, count);
+}
 #[cfg(test)]
 mod tests {
     use super::DatapackManager;
@@ -944,6 +1120,89 @@ mod tests {
                 .visit_function_lines("#test:missing", |_| {})
                 .expect_err("unknown function tag must fail"),
             "Unknown function tag: #test:missing"
+        );
+    }
+
+    #[test]
+    fn read_pack_mcmeta_parses_known_packs() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let pack_path = temp_dir.path();
+
+        // 1. Test root known_packs array
+        let mcmeta_content = r#"{
+            "pack": {
+                "description": "Test Pack",
+                "pack_format": 61
+            },
+            "known_packs": [
+                {
+                    "namespace": "example",
+                    "id": "content",
+                    "version": "1.0.0"
+                }
+            ]
+        }"#;
+        std::fs::write(pack_path.join("pack.mcmeta"), mcmeta_content).unwrap();
+
+        let (desc, format, known_packs) = super::read_pack_mcmeta(pack_path);
+        assert_eq!(desc, "Test Pack");
+        assert_eq!(format, 61);
+        assert_eq!(known_packs.len(), 1);
+        assert_eq!(known_packs[0].namespace, "example");
+        assert_eq!(known_packs[0].id, "content");
+        assert_eq!(known_packs[0].version, "1.0.0");
+
+        // 2. Test nested pack.known_packs
+        let mcmeta_content_nested = r#"{
+            "pack": {
+                "description": "Nested Pack",
+                "pack_format": 61,
+                "known_packs": [
+                    {
+                        "namespace": "nested",
+                        "id": "pack",
+                        "version": "2.0.0"
+                    }
+                ]
+            }
+        }"#;
+        std::fs::write(pack_path.join("pack.mcmeta"), mcmeta_content_nested).unwrap();
+
+        let (_, _, known_packs) = super::read_pack_mcmeta(pack_path);
+        assert_eq!(known_packs.len(), 1);
+        assert_eq!(known_packs[0].namespace, "nested");
+        assert_eq!(known_packs[0].id, "pack");
+        assert_eq!(known_packs[0].version, "2.0.0");
+    }
+
+    #[test]
+    fn resolve_enabled_features_works() {
+        // Default only vanilla
+        let default_features = DatapackManager::resolve_enabled_features(&[]);
+        assert_eq!(default_features, ["minecraft:vanilla"]);
+
+        // With minecart improvements
+        let minecart_features =
+            DatapackManager::resolve_enabled_features(&["file/minecart_improvements".to_string()]);
+        assert_eq!(
+            minecart_features,
+            ["minecraft:vanilla", "minecraft:minecart_improvements"]
+        );
+
+        // Multiple experimental features
+        let multi_features = DatapackManager::resolve_enabled_features(&[
+            "trade_rebalance".to_string(),
+            "redstone_experiments".to_string(),
+            "file/bundle".to_string(),
+        ]);
+        assert_eq!(
+            multi_features,
+            [
+                "minecraft:vanilla",
+                "minecraft:trade_rebalance",
+                "minecraft:redstone_experiments",
+                "minecraft:bundle"
+            ]
         );
     }
 }

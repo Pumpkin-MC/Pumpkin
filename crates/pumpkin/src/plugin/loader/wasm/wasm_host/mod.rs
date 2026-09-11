@@ -400,7 +400,7 @@ impl WasmPlugin {
         self.store
             .call_guest(move |mut guest| {
                 Box::pin(async move {
-                    let (context_res, context_rep) = guest.with(|mut store| {
+                    let context_res = guest.with(|mut store| {
                         if let Some(mb) = max_memory_mb {
                             let limit_bytes = (mb as usize).saturating_mul(1024 * 1024);
                             store.data_mut().limits = wasmtime::StoreLimitsBuilder::new()
@@ -413,23 +413,13 @@ impl WasmPlugin {
                         store.data_mut().wasi_http_hooks.allow_outbound = allow_http_outbound;
                         store.data_mut().server = Some(server);
                         store.data_mut().name = Some(name);
-
-                        let resource = store.data_mut().add_context(context)?;
-                        let rep = resource.rep();
-                        Ok::<_, wasmtime::Error>((resource, rep))
+                        store.data_mut().add_context(context)
                     })?;
 
-                    let result = guest
+                    guest
                         .call(function, (context_res,))
                         .await
-                        .map(|(result,)| result);
-
-                    guest.with(|mut store| {
-                        let _ = store.data_mut().resource_table.delete::<
-                            crate::plugin::loader::wasm::wasm_host::state::ContextResource,
-                        >(wasmtime::component::Resource::new_own(context_rep));
-                    });
-                    result
+                        .map(|(result,)| result)
                 })
             })
             .await

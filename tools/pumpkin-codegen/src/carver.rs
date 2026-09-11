@@ -77,7 +77,7 @@ pub fn build() -> TokenStream {
                 let vertical_radius_center_factor = shape["vertical_radius_center_factor"]
                     .as_f64()
                     .unwrap_or(0.0) as f32;
-                let y_scale = shape["y_scale"].as_f64().unwrap_or(0.0) as f32;
+                let y_scale = value_to_float_provider(&shape["y_scale"]);
 
                 quote! {
                     CarverAdditionalConfig::Canyon(CanyonCarverConfig {
@@ -117,29 +117,34 @@ pub fn build() -> TokenStream {
         };
         use pumpkin_util::y_offset::{AboveBottom, Absolute, BelowTop, YOffset};
 
+        #[derive(Clone, Debug)]
         pub enum HeightProvider {
             Uniform(UniformHeightProvider),
             Trapezoid(TrapezoidHeightProvider),
             VeryBiasedToBottom(VeryBiasedToBottomHeightProvider),
         }
 
+        #[derive(Clone, Debug)]
         pub struct UniformHeightProvider {
             pub min_inclusive: YOffset,
             pub max_inclusive: YOffset,
         }
 
+        #[derive(Clone, Debug)]
         pub struct TrapezoidHeightProvider {
             pub min_inclusive: YOffset,
             pub max_inclusive: YOffset,
             pub plateau: Option<i32>,
         }
 
+        #[derive(Clone, Debug)]
         pub struct VeryBiasedToBottomHeightProvider {
             pub min_inclusive: YOffset,
             pub max_inclusive: YOffset,
             pub inner: Option<std::num::NonZero<u32>>,
         }
 
+        #[derive(Clone, Debug)]
         pub struct CaveCarverConfig {
             pub count: IntProvider,
             pub horizontal_radius_multiplier: FloatProvider,
@@ -167,6 +172,7 @@ pub fn build() -> TokenStream {
             }
         }
 
+        #[derive(Clone, Debug)]
         pub struct CanyonShapeConfig {
             pub distance_factor: FloatProvider,
             pub thickness: FloatProvider,
@@ -174,19 +180,22 @@ pub fn build() -> TokenStream {
             pub horizontal_radius_factor: FloatProvider,
             pub vertical_radius_default_factor: f32,
             pub vertical_radius_center_factor: f32,
-            pub y_scale: f32,
+            pub y_scale: FloatProvider,
         }
 
+        #[derive(Clone, Debug)]
         pub struct CanyonCarverConfig {
             pub vertical_rotation: FloatProvider,
             pub shape: CanyonShapeConfig,
         }
 
+        #[derive(Clone, Debug)]
         pub enum CarverAdditionalConfig {
             Cave(CaveCarverConfig),
             Canyon(CanyonCarverConfig),
         }
 
+        #[derive(Clone, Debug)]
         pub struct CarverConfig {
             pub probability: f32,
             pub y: HeightProvider,
