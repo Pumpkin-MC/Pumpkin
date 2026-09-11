@@ -491,6 +491,8 @@ impl DataComponentCodec<Self> for ConsumableImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        const MAX_CONSUME_EFFECTS: i32 = 256;
+
         let consume_seconds = seq.get_f32()?;
         let animation_id = seq.get_var_int()?;
 
@@ -509,6 +511,10 @@ impl DataComponentCodec<Self> for ConsumableImpl {
             "Invalid sound in ConsumableImpl".into(),
         ))?;
         let effects_len = seq.get_var_int()?.0;
+        if !(0..=MAX_CONSUME_EFFECTS).contains(&effects_len) {
+            return Err(ReadingError::Message("Invalid consume effect count".into()));
+        }
+
         let mut effects_vec = Vec::with_capacity(effects_len as usize);
 
         for _ in 0..effects_len {
