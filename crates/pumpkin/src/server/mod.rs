@@ -104,6 +104,8 @@ pub struct Server {
     container_id: AtomicU32,
     pub recipe_manager: Arc<recipe::RecipeManager>,
     pub datapack_manager: Arc<crate::data::datapack::DatapackManager>,
+    /// Runs the latest load tag on the next game tick, coalescing resource reloads.
+    datapack_load_pending: AtomicBool,
     pub enchantment_manager: Arc<enchantment::EnchantmentManager>,
     /// Assigns unique IDs to maps.
     map_id: AtomicI32,
@@ -287,6 +289,7 @@ impl Server {
             container_id: 0.into(),
             recipe_manager: Arc::new(recipe::RecipeManager::new()),
             datapack_manager: Arc::new(crate::data::datapack::DatapackManager::new()),
+            datapack_load_pending: AtomicBool::new(true),
             enchantment_manager: Arc::new(enchantment::EnchantmentManager::new()),
             map_id: level_info.load().map_id.into(),
             worlds: ArcSwap::from_pointee(vec![]),
@@ -433,11 +436,6 @@ impl Server {
             .datapack_manager
             .load_all(&world_path, &enabled_packs, &server.recipe_manager);
 
-        let source = crate::command::CommandSender::Console.into_source(&server);
-        let _ = server
-            .datapack_manager
-            .execute_function(&server, &source, "#minecraft:load");
-
         server
     }
 
@@ -539,16 +537,13 @@ impl Server {
             .write_world_info(&level_data, &self.basic_config.get_world_path())
     }
 
-    pub fn reload_datapacks(&self, server: &Arc<Self>) {
+    pub fn reload_datapacks(&self) {
         let enabled_packs = self.level_info.load().data_packs.enabled.clone();
         let world_path = self.basic_config.get_world_path();
         self.datapack_manager
             .load_all(&world_path, &enabled_packs, &self.recipe_manager);
 
-        let source = crate::command::CommandSender::Console.into_source(server);
-        let _ = self
-            .datapack_manager
-            .execute_function(server, &source, "#minecraft:load");
+        self.datapack_load_pending.store(true, Ordering::Release);
 
         let dynamic_recipes = self.recipe_manager.get_dynamic_recipes_internal();
         for player in self.get_all_players() {
@@ -1133,6 +1128,11 @@ impl Server {
         let source = crate::command::CommandSender::Console
             .into_source(self)
             .with_silent();
+        if self.datapack_load_pending.swap(false, Ordering::AcqRel) {
+            let _ = self
+                .datapack_manager
+                .execute_function(self, &source, "#minecraft:load");
+        }
         let _ = self
             .datapack_manager
             .execute_function(self, &source, "#minecraft:tick");
