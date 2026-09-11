@@ -24,7 +24,7 @@ use crate::net::{lan_broadcast::LANBroadcast, query, rcon::RCONServer};
 use crate::plugin::server::server_command::ServerCommandEvent;
 use crate::server::{Server, ticker::Ticker};
 use plugin::server::server_load::{LoadType, ServerLoadEvent};
-use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
+use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::{Color, NamedColor};
 use rustyline::Editor;
@@ -61,6 +61,7 @@ pub mod logging;
 pub mod net;
 pub mod plugin;
 pub mod server;
+pub mod telemetry;
 pub mod world;
 
 pub struct LoggingConfig {
@@ -248,9 +249,16 @@ impl PumpkinServer {
     pub async fn new(
         basic_config: BasicConfiguration,
         advanced_config: AdvancedConfiguration,
+        telemetry_config: TelemetryConfig,
         vanilla_data: VanillaData,
     ) -> Self {
-        let server = Server::new(basic_config, advanced_config, vanilla_data).await;
+        let server = Server::new(
+            basic_config,
+            advanced_config,
+            telemetry_config,
+            vanilla_data,
+        )
+        .await;
 
         #[cfg(target_family = "unix")]
         adjust_file_descriptor_limit();
@@ -465,6 +473,8 @@ impl PumpkinServer {
             .plugin_manager
             .fire(&self.server, &mut ServerLoadEvent::new(LoadType::Startup))
             .await;
+
+        self.server.start_telemetry();
 
         while !SHOULD_STOP.load(Ordering::Relaxed) {
             if !self

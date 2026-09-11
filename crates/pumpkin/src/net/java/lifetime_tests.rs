@@ -1,6 +1,6 @@
 use super::*;
 use crate::data::VanillaData;
-use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
+use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
 use pumpkin_util::GameMode;
 use std::sync::RwLock;
 use tokio::net::{TcpListener, TcpStream};
@@ -25,7 +25,11 @@ async fn disconnected_players_are_released() -> Result<(), Box<dyn std::error::E
         user_cache: RwLock::default(),
         whitelist_config: RwLock::default(),
     };
-    let server = Server::new(basic, advanced, data).await;
+    let telemetry = TelemetryConfig {
+        enabled: false,
+        ..Default::default()
+    };
+    let server = Server::new(basic, advanced, telemetry, data).await;
     let world = server.get_world_from_dimension(&pumpkin_data::dimension::Dimension::OVERWORLD);
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let mut retained_players = Vec::new();
