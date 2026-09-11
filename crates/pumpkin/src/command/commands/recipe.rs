@@ -46,6 +46,7 @@ fn get_recipe_id(recipe: &DynamicRecipe) -> String {
                 r.recipe_id.clone()
             }
         },
+        DynamicRecipe::Brewing(brewing) => brewing.recipe_id.clone(),
     }
 }
 

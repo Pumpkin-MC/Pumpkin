@@ -19,7 +19,6 @@ pumpkin-data = { workspace = true, features = [
     "statistic",
 ] }
 
-pumpkin-world.workspace = true
 pumpkin-util.workspace = true
 pumpkin-nbt.workspace = true
 
