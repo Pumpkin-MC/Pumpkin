@@ -195,6 +195,18 @@ pub enum GeneratorSettings {
     Compound(serde_json::Value),
 }
 
+impl GeneratorSettings {
+    #[must_use]
+    pub fn as_flat_settings(&self) -> Option<FlatPresetSettings> {
+        match self {
+            Self::Reference(preset_name) => {
+                FlatLevelGeneratorPreset::from_name(preset_name).map(|p| p.settings)
+            }
+            Self::Compound(val) => serde_json::from_value(val.clone()).ok(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum BiomeSource {
@@ -203,10 +215,175 @@ pub enum BiomeSource {
         #[serde(rename = "type")]
         biome_type: String,
     },
+    Fixed {
+        biome: String,
+        #[serde(rename = "type")]
+        biome_type: String,
+    },
     Simple {
         #[serde(rename = "type")]
         biome_type: String,
     },
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct WorldPreset {
+    pub dimensions: Dimensions,
+}
+
+impl WorldPreset {
+    pub const NORMAL_RAW: &'static str = include_str!(
+        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/world_preset/normal.json"
+    );
+    pub const AMPLIFIED_RAW: &'static str = include_str!(
+        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/world_preset/amplified.json"
+    );
+    pub const LARGE_BIOMES_RAW: &'static str = include_str!(
+        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/world_preset/large_biomes.json"
+    );
+    pub const FLAT_RAW: &'static str = include_str!(
+        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/world_preset/flat.json"
+    );
+    pub const FLAT_ALL_DIMENSIONS_RAW: &'static str = include_str!(
+        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/world_preset/flat_all_dimensions.json"
+    );
+    pub const SINGLE_BIOME_SURFACE_RAW: &'static str = include_str!(
+        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/world_preset/single_biome_surface.json"
+    );
+    pub const DEBUG_ALL_BLOCK_STATES_RAW: &'static str = include_str!(
+        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/world_preset/debug_all_block_states.json"
+    );
+
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        let name = name.strip_prefix("minecraft:").unwrap_or(name);
+        let raw = match name {
+            "normal" => Self::NORMAL_RAW,
+            "amplified" => Self::AMPLIFIED_RAW,
+            "large_biomes" => Self::LARGE_BIOMES_RAW,
+            "flat" => Self::FLAT_RAW,
+            "flat_all_dimensions" => Self::FLAT_ALL_DIMENSIONS_RAW,
+            "single_biome_surface" => Self::SINGLE_BIOME_SURFACE_RAW,
+            "debug_all_block_states" => Self::DEBUG_ALL_BLOCK_STATES_RAW,
+            _ => return None,
+        };
+        serde_json::from_str(raw).ok()
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum StructureOverrides {
+    Single(String),
+    Multiple(Vec<String>),
+}
+
+impl StructureOverrides {
+    #[must_use]
+    pub fn to_vec(&self) -> Vec<String> {
+        match self {
+            Self::Single(s) => vec![s.clone()],
+            Self::Multiple(list) => list.clone(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct FlatPresetLayer {
+    pub block: String,
+    #[serde(default = "default_layer_height")]
+    pub height: i32,
+}
+
+const fn default_layer_height() -> i32 {
+    1
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct FlatPresetSettings {
+    pub biome: String,
+    #[serde(default)]
+    pub features: bool,
+    #[serde(default)]
+    pub lakes: bool,
+    #[serde(default)]
+    pub layers: Vec<FlatPresetLayer>,
+    #[serde(default)]
+    pub structure_overrides: Option<StructureOverrides>,
+}
+
+impl FlatPresetSettings {
+    #[must_use]
+    pub fn to_flat_layers(&self) -> Vec<crate::generation::generator::FlatLayer> {
+        self.layers
+            .iter()
+            .map(|l| crate::generation::generator::FlatLayer {
+                block: l.block.clone(),
+                height: l.height,
+            })
+            .collect()
+    }
+
+    #[must_use]
+    pub fn structure_overrides_vec(&self) -> Option<Vec<String>> {
+        self.structure_overrides
+            .as_ref()
+            .map(StructureOverrides::to_vec)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct FlatLevelGeneratorPreset {
+    pub display: String,
+    pub settings: FlatPresetSettings,
+}
+
+impl FlatLevelGeneratorPreset {
+    pub const BOTTOMLESS_PIT_RAW: &'static str = include_str!(
+        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/flat_level_generator_preset/bottomless_pit.json"
+    );
+    pub const CLASSIC_FLAT_RAW: &'static str = include_str!(
+        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/flat_level_generator_preset/classic_flat.json"
+    );
+    pub const DESERT_RAW: &'static str = include_str!(
+        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/flat_level_generator_preset/desert.json"
+    );
+    pub const OVERWORLD_RAW: &'static str = include_str!(
+        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/flat_level_generator_preset/overworld.json"
+    );
+    pub const REDSTONE_READY_RAW: &'static str = include_str!(
+        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/flat_level_generator_preset/redstone_ready.json"
+    );
+    pub const SNOWY_KINGDOM_RAW: &'static str = include_str!(
+        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/flat_level_generator_preset/snowy_kingdom.json"
+    );
+    pub const THE_VOID_RAW: &'static str = include_str!(
+        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/flat_level_generator_preset/the_void.json"
+    );
+    pub const TUNNELERS_DREAM_RAW: &'static str = include_str!(
+        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/flat_level_generator_preset/tunnelers_dream.json"
+    );
+    pub const WATER_WORLD_RAW: &'static str = include_str!(
+        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/flat_level_generator_preset/water_world.json"
+    );
+
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        let name = name.strip_prefix("minecraft:").unwrap_or(name);
+        let raw = match name {
+            "bottomless_pit" => Self::BOTTOMLESS_PIT_RAW,
+            "classic_flat" => Self::CLASSIC_FLAT_RAW,
+            "desert" => Self::DESERT_RAW,
+            "overworld" => Self::OVERWORLD_RAW,
+            "redstone_ready" => Self::REDSTONE_READY_RAW,
+            "snowy_kingdom" => Self::SNOWY_KINGDOM_RAW,
+            "the_void" => Self::THE_VOID_RAW,
+            "tunnelers_dream" => Self::TUNNELERS_DREAM_RAW,
+            "water_world" => Self::WATER_WORLD_RAW,
+            _ => return None,
+        };
+        serde_json::from_str(raw).ok()
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -223,56 +400,72 @@ pub struct DataPacks {
 impl WorldGenSettings {
     #[must_use]
     pub fn new(seed: Seed) -> Self {
-        // TODO: Adjust according to enabled worlds
-        let mut dimensions = Dimensions::new();
-        dimensions.insert(
-            "minecraft:overworld".to_string(),
-            Dimension {
-                generator: Generator {
-                    settings: Some(GeneratorSettings::Reference(
-                        "minecraft:overworld".to_string(),
-                    )),
-                    biome_source: Some(BiomeSource::WithPreset {
-                        preset: "minecraft:overworld".to_string(),
-                        biome_type: "minecraft:multi_noise".to_string(),
-                    }),
-                    generator_type: "minecraft:noise".to_string(),
+        Self::from_preset_name("minecraft:normal", seed).unwrap_or_else(|| {
+            let mut dimensions = Dimensions::new();
+            dimensions.insert(
+                "minecraft:overworld".to_string(),
+                Dimension {
+                    generator: Generator {
+                        settings: Some(GeneratorSettings::Reference(
+                            "minecraft:overworld".to_string(),
+                        )),
+                        biome_source: Some(BiomeSource::WithPreset {
+                            preset: "minecraft:overworld".to_string(),
+                            biome_type: "minecraft:multi_noise".to_string(),
+                        }),
+                        generator_type: "minecraft:noise".to_string(),
+                    },
+                    dimension_type: "minecraft:overworld".to_string(),
                 },
-                dimension_type: "minecraft:overworld".to_string(),
-            },
-        );
-        dimensions.insert(
-            "minecraft:the_nether".to_string(),
-            Dimension {
-                generator: Generator {
-                    settings: Some(GeneratorSettings::Reference("minecraft:nether".to_string())),
-                    biome_source: Some(BiomeSource::WithPreset {
-                        preset: "minecraft:nether".to_string(),
-                        biome_type: "minecraft:multi_noise".to_string(),
-                    }),
-                    generator_type: "minecraft:noise".to_string(),
+            );
+            dimensions.insert(
+                "minecraft:the_nether".to_string(),
+                Dimension {
+                    generator: Generator {
+                        settings: Some(GeneratorSettings::Reference(
+                            "minecraft:nether".to_string(),
+                        )),
+                        biome_source: Some(BiomeSource::WithPreset {
+                            preset: "minecraft:nether".to_string(),
+                            biome_type: "minecraft:multi_noise".to_string(),
+                        }),
+                        generator_type: "minecraft:noise".to_string(),
+                    },
+                    dimension_type: "minecraft:the_nether".to_string(),
                 },
-                dimension_type: "minecraft:the_nether".to_string(),
-            },
-        );
-        dimensions.insert(
-            "minecraft:the_end".to_string(),
-            Dimension {
-                generator: Generator {
-                    settings: Some(GeneratorSettings::Reference("minecraft:end".to_string())),
-                    biome_source: Some(BiomeSource::Simple {
-                        biome_type: "minecraft:the_end".to_string(),
-                    }),
-                    generator_type: "minecraft:noise".to_string(),
+            );
+            dimensions.insert(
+                "minecraft:the_end".to_string(),
+                Dimension {
+                    generator: Generator {
+                        settings: Some(GeneratorSettings::Reference("minecraft:end".to_string())),
+                        biome_source: Some(BiomeSource::Simple {
+                            biome_type: "minecraft:the_end".to_string(),
+                        }),
+                        generator_type: "minecraft:noise".to_string(),
+                    },
+                    dimension_type: "minecraft:the_end".to_string(),
                 },
-                dimension_type: "minecraft:the_end".to_string(),
-            },
-        );
+            );
 
+            Self {
+                dimensions,
+                seed: seed.0 as i64,
+            }
+        })
+    }
+
+    #[must_use]
+    pub fn from_preset(preset: &WorldPreset, seed: Seed) -> Self {
         Self {
-            dimensions,
+            dimensions: preset.dimensions.clone(),
             seed: seed.0 as i64,
         }
+    }
+
+    #[must_use]
+    pub fn from_preset_name(preset_name: &str, seed: Seed) -> Option<Self> {
+        WorldPreset::from_name(preset_name).map(|preset| Self::from_preset(&preset, seed))
     }
 }
 
@@ -341,6 +534,15 @@ impl LevelData {
     }
 
     #[must_use]
+    pub fn default_with_preset(seed: Seed, preset_name: &str) -> Self {
+        let mut data = Self::default(seed);
+        if let Some(wgs) = WorldGenSettings::from_preset_name(preset_name, seed) {
+            data.world_gen_settings = wgs;
+        }
+        data
+    }
+
+    #[must_use]
     pub fn from_world_generator(
         seed: Seed,
         generator: &crate::generation::generator::VanillaGenerator,
@@ -384,5 +586,150 @@ impl From<std::io::Error> for WorldInfoError {
             std::io::ErrorKind::NotFound => Self::InfoNotFound,
             value => Self::IoError(value),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn world_presets_parse() {
+        let preset_names = [
+            "normal",
+            "amplified",
+            "large_biomes",
+            "flat",
+            "flat_all_dimensions",
+            "single_biome_surface",
+            "debug_all_block_states",
+        ];
+
+        for name in preset_names {
+            let preset = WorldPreset::from_name(name)
+                .unwrap_or_else(|| panic!("failed to load preset {name}"));
+            assert!(
+                !preset.dimensions.is_empty(),
+                "preset {name} has no dimensions"
+            );
+
+            let with_prefix = format!("minecraft:{name}");
+            assert!(
+                WorldPreset::from_name(&with_prefix).is_some(),
+                "failed to load preset with prefix {with_prefix}"
+            );
+        }
+    }
+
+    #[test]
+    fn world_gen_settings_from_preset() {
+        let seed = Seed(12345);
+        let normal = WorldGenSettings::from_preset_name("normal", seed).unwrap();
+        assert_eq!(normal.seed, 12345);
+        let overworld = normal.dimensions.get("minecraft:overworld").unwrap();
+        assert_eq!(overworld.generator.generator_type, "minecraft:noise");
+        assert_eq!(
+            overworld.generator.settings,
+            Some(GeneratorSettings::Reference(
+                "minecraft:overworld".to_string()
+            ))
+        );
+
+        let amplified = WorldGenSettings::from_preset_name("amplified", seed).unwrap();
+        let amp_overworld = amplified.dimensions.get("minecraft:overworld").unwrap();
+        assert_eq!(
+            amp_overworld.generator.settings,
+            Some(GeneratorSettings::Reference(
+                "minecraft:amplified".to_string()
+            ))
+        );
+
+        let large_biomes = WorldGenSettings::from_preset_name("large_biomes", seed).unwrap();
+        let lb_overworld = large_biomes.dimensions.get("minecraft:overworld").unwrap();
+        assert_eq!(
+            lb_overworld.generator.settings,
+            Some(GeneratorSettings::Reference(
+                "minecraft:large_biomes".to_string()
+            ))
+        );
+
+        let flat = WorldGenSettings::from_preset_name("flat", seed).unwrap();
+        let flat_overworld = flat.dimensions.get("minecraft:overworld").unwrap();
+        assert_eq!(flat_overworld.generator.generator_type, "minecraft:flat");
+        assert!(matches!(
+            flat_overworld.generator.settings,
+            Some(GeneratorSettings::Compound(_))
+        ));
+        let flat_settings = flat_overworld
+            .generator
+            .settings
+            .as_ref()
+            .unwrap()
+            .as_flat_settings()
+            .unwrap();
+        assert_eq!(flat_settings.biome, "minecraft:plains");
+        assert_eq!(flat_settings.layers.len(), 3);
+        assert_eq!(flat_settings.to_flat_layers().len(), 3);
+    }
+
+    #[test]
+    fn flat_level_generator_presets_parse() {
+        let preset_names = [
+            "bottomless_pit",
+            "classic_flat",
+            "desert",
+            "overworld",
+            "redstone_ready",
+            "snowy_kingdom",
+            "the_void",
+            "tunnelers_dream",
+            "water_world",
+        ];
+
+        for name in preset_names {
+            let preset = FlatLevelGeneratorPreset::from_name(name)
+                .unwrap_or_else(|| panic!("failed to load flat preset {name}"));
+            assert!(!preset.settings.biome.is_empty());
+            assert!(!preset.settings.layers.is_empty());
+            assert_eq!(
+                preset.settings.layers.len(),
+                preset.settings.to_flat_layers().len()
+            );
+
+            let with_prefix = format!("minecraft:{name}");
+            assert!(
+                FlatLevelGeneratorPreset::from_name(&with_prefix).is_some(),
+                "failed to load flat preset with prefix {with_prefix}"
+            );
+
+            let from_ref = GeneratorSettings::Reference(with_prefix)
+                .as_flat_settings()
+                .expect("failed to parse reference as flat settings");
+            assert_eq!(from_ref.biome, preset.settings.biome);
+        }
+
+        // Test classic flat structure overrides (single string "minecraft:villages")
+        let classic = FlatLevelGeneratorPreset::from_name("classic_flat").unwrap();
+        assert_eq!(
+            classic.settings.structure_overrides_vec(),
+            Some(vec!["minecraft:villages".to_string()])
+        );
+
+        // Test tunnelers dream structure overrides (multiple)
+        let tunnelers = FlatLevelGeneratorPreset::from_name("tunnelers_dream").unwrap();
+        assert_eq!(
+            tunnelers.settings.structure_overrides_vec(),
+            Some(vec![
+                "minecraft:mineshafts".to_string(),
+                "minecraft:strongholds".to_string(),
+            ])
+        );
+
+        // Test the void structure overrides (empty list)
+        let void = FlatLevelGeneratorPreset::from_name("the_void").unwrap();
+        assert_eq!(
+            void.settings.structure_overrides_vec(),
+            Some(Vec::<String>::new())
+        );
     }
 }

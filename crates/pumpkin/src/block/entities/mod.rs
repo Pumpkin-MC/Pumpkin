@@ -6,7 +6,7 @@ use pumpkin_util::math::position::BlockPos;
 
 use crate::world::World;
 use pumpkin_data::BlockStateId;
-use pumpkin_world::inventory::Inventory;
+use pumpkin_inventory::Inventory;
 
 pub mod barrel;
 pub mod beacon;
@@ -64,7 +64,7 @@ pub mod trial_spawner;
 pub mod vault;
 
 pub use furnace_like_block_entity::ExperienceContainer;
-pub use pumpkin_world::block::entities::PropertyDelegate;
+pub use pumpkin_inventory::PropertyDelegate;
 
 //TODO: We need a mark_dirty for chests
 pub trait BlockEntity: Any + Send + Sync {
@@ -429,9 +429,9 @@ pub fn create_block_entity(
 mod test {
     use super::{BlockEntity, block_entity_from_nbt, furnace::FurnaceBlockEntity};
     use pumpkin_data::{item::Item, item_stack::ItemStack};
+    use pumpkin_inventory::Inventory;
     use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_util::math::position::BlockPos;
-    use pumpkin_world::inventory::Inventory;
     use std::sync::Arc;
 
     /// A loaded block entity is serialized back into its chunk with

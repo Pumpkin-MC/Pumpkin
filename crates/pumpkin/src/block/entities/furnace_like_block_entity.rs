@@ -1,8 +1,8 @@
 use pumpkin_data::{item_stack::ItemStack, recipes::CookingRecipe};
 
 use crate::block::entities::{BlockEntity, PropertyDelegate};
-pub use pumpkin_world::block::entities::ExperienceContainer;
-use pumpkin_world::inventory::{Clearable, Inventory};
+pub use pumpkin_inventory::ExperienceContainer;
+use pumpkin_inventory::{Clearable, Inventory};
 
 /// Trait for extracting smelting experience from cooking block entities.
 pub trait CookingBlockEntityBase:
@@ -239,7 +239,7 @@ macro_rules! impl_property_delegate_for_cooking {
 #[macro_export]
 macro_rules! impl_clearable_for_cooking {
     ($struct_name:ty) => {
-        impl pumpkin_world::inventory::Clearable for $struct_name {
+        impl pumpkin_inventory::Clearable for $struct_name {
             fn clear(&self) {
                 let mut items = self
                     .items
@@ -269,7 +269,7 @@ macro_rules! impl_experience_container_for_cooking {
 #[macro_export]
 macro_rules! impl_inventory_for_cooking {
     ($struct_name:ty) => {
-        impl pumpkin_world::inventory::Inventory for $struct_name {
+        impl pumpkin_inventory::Inventory for $struct_name {
             fn size(&self) -> usize {
                 Self::INVENTORY_SIZE
             }
@@ -398,6 +398,8 @@ macro_rules! impl_block_entity_for_cooking {
                             base_fuel_ticks
                         };
 
+                        let mut burn_ticks = adjusted_fuel_ticks;
+                        let mut burn_cancelled = false;
                         if let Some(server) = world.server.upgrade() {
                             let mut burn_event = $crate::plugin::api::events::inventory::furnace_burn::FurnaceBurnEvent::new(
                                 self.position,
@@ -405,24 +407,31 @@ macro_rules! impl_block_entity_for_cooking {
                                 adjusted_fuel_ticks as u32,
                             );
                             server.plugin_manager.fire_blocking(&server, &mut burn_event);
+                            if burn_event.cancelled {
+                                burn_cancelled = true;
+                            } else {
+                                burn_ticks = burn_event.burn_time as u16;
+                            }
                         }
-                        self.set_lit_time_remaining(adjusted_fuel_ticks);
-                        self.set_lit_total_time(adjusted_fuel_ticks);
+                        if !burn_cancelled {
+                            self.set_lit_time_remaining(burn_ticks);
+                            self.set_lit_total_time(burn_ticks);
 
-                        if self.is_burning() {
-                            is_dirty = true;
-                            if let Ok(mut items_guard) = self.items.try_write() {
-                                if !items_guard[1].is_empty() {
-                                    items_guard[1].decrement(1);
-                                    if let Some(remainder_id) =
-                                        pumpkin_data::recipe_remainder::get_recipe_remainder_id(
-                                            items_guard[1].item.id,
-                                        )
-                                        && items_guard[1].is_empty()
-                                        && let Some(remainder_item) =
-                                            pumpkin_data::item::Item::from_id(remainder_id)
-                                    {
-                                        items_guard[1] = ItemStack::new(1, remainder_item);
+                            if self.is_burning() {
+                                is_dirty = true;
+                                if let Ok(mut items_guard) = self.items.try_write() {
+                                    if !items_guard[1].is_empty() {
+                                        items_guard[1].decrement(1);
+                                        if let Some(remainder_id) =
+                                            pumpkin_data::recipe_remainder::get_recipe_remainder_id(
+                                                items_guard[1].item.id,
+                                            )
+                                            && items_guard[1].is_empty()
+                                            && let Some(remainder_item) =
+                                                pumpkin_data::item::Item::from_id(remainder_id)
+                                        {
+                                            items_guard[1] = ItemStack::new(1, remainder_item);
+                                        }
                                     }
                                 }
                             }
@@ -430,6 +439,7 @@ macro_rules! impl_block_entity_for_cooking {
                     }
 
                     if self.is_burning() && can_accept_output {
+                        let mut start_cancelled = false;
                         if self.get_cooking_time_spent() == 0 {
                             if let Some(server) = world.server.upgrade() {
                                 let mut start_event = $crate::plugin::api::events::inventory::furnace_start_smelt::FurnaceStartSmeltEvent::new(
@@ -438,26 +448,39 @@ macro_rules! impl_block_entity_for_cooking {
                                     self.get_cooking_total_time() as u32,
                                 );
                                 server.plugin_manager.fire_blocking(&server, &mut start_event);
+                                if start_event.cancelled {
+                                    start_cancelled = true;
+                                } else {
+                                    self.set_cooking_total_time(start_event.cooking_time as u16);
+                                }
                             }
                         }
-                        self.cooking_time_spent.fetch_add(1, Ordering::Relaxed);
+                        if !start_cancelled {
+                            self.cooking_time_spent.fetch_add(1, Ordering::Relaxed);
 
-                        if self.get_cooking_time_spent() == self.get_cooking_total_time() {
-                            self.set_cooking_time_spent(0);
-                            if let Some(cooking_recipe) = furnace_recipe {
-                                let cooking_total_time = cooking_recipe.cookingtime;
-                                self.set_cooking_total_time(cooking_total_time as u16);
+                            if self.get_cooking_time_spent() == self.get_cooking_total_time() {
+                                self.set_cooking_time_spent(0);
+                                if let Some(cooking_recipe) = furnace_recipe {
+                                    let cooking_total_time = cooking_recipe.cookingtime;
+                                    self.set_cooking_total_time(cooking_total_time as u16);
 
-                                if let Some(server) = world.server.upgrade() {
-                                    let mut smelt_event = $crate::plugin::api::events::inventory::furnace_smelt::FurnaceSmeltEvent::new(
-                                        self.position,
-                                        top_item.item.registry_key.to_string(),
-                                        cooking_recipe.result.id.to_string(),
-                                    );
-                                    server.plugin_manager.fire_blocking(&server, &mut smelt_event);
+                                    let mut smelt_cancelled = false;
+                                    if let Some(server) = world.server.upgrade() {
+                                        let mut smelt_event = $crate::plugin::api::events::inventory::furnace_smelt::FurnaceSmeltEvent::new(
+                                            self.position,
+                                            top_item.item.registry_key.to_string(),
+                                            cooking_recipe.result.id.to_string(),
+                                        );
+                                        server.plugin_manager.fire_blocking(&server, &mut smelt_event);
+                                        if smelt_event.cancelled {
+                                            smelt_cancelled = true;
+                                        }
+                                    }
+                                    if !smelt_cancelled {
+                                        self.craft_recipe(Some(cooking_recipe));
+                                        is_dirty = true;
+                                    }
                                 }
-                                self.craft_recipe(Some(cooking_recipe));
-                                is_dirty = true;
                             }
                         }
                     } else {
@@ -544,7 +567,7 @@ macro_rules! impl_block_entity_for_cooking {
                     lit_time_remaining,
                     recipes_used: std::sync::Mutex::new(recipes_used_map),
                 };
-                pumpkin_world::inventory::sync_read_items_from_nbt(nbt, furnace.items.get_mut().unwrap_or_else(std::sync::PoisonError::into_inner));
+                pumpkin_inventory::sync_read_items_from_nbt(nbt, furnace.items.get_mut().unwrap_or_else(std::sync::PoisonError::into_inner));
 
                 furnace
             }
@@ -581,7 +604,7 @@ macro_rules! impl_block_entity_for_cooking {
 
             fn get_inventory(
                 self: Arc<Self>,
-            ) -> Option<Arc<dyn pumpkin_world::inventory::Inventory>> {
+            ) -> Option<Arc<dyn pumpkin_inventory::Inventory>> {
                 Some(self)
             }
 
@@ -613,7 +636,7 @@ macro_rules! impl_block_entity_for_cooking {
                 }
 
                 if let Ok(guard) = self.items.try_read() {
-                    pumpkin_world::inventory::sync_write_items_to_nbt(&*guard, &mut nbt);
+                    pumpkin_inventory::sync_write_items_to_nbt(&*guard, &mut nbt);
                 }
                 Some(nbt)
             }

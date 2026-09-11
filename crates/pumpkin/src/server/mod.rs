@@ -20,7 +20,7 @@ use crate::{
 use arc_swap::ArcSwap;
 use connection_cache::{CachedBranding, CachedStatus};
 use key_store::KeyStore;
-use pumpkin_config::{AdvancedConfiguration, BasicConfiguration};
+use pumpkin_config::{AdvancedConfiguration, BasicConfiguration, TelemetryConfig};
 use pumpkin_data::dimension::Dimension;
 use pumpkin_util::permission::PermissionManager;
 use pumpkin_util::text::color::NamedColor;
@@ -57,6 +57,7 @@ mod key_store;
 pub mod recipe;
 pub mod scheduler;
 pub mod seasonal_events;
+pub mod server_test_manager;
 pub mod tick_rate_manager;
 pub mod ticker;
 
@@ -69,6 +70,7 @@ use crate::server::scheduler::TaskScheduler;
 pub struct Server {
     pub basic_config: BasicConfiguration,
     pub advanced_config: AdvancedConfiguration,
+    pub telemetry_config: TelemetryConfig,
 
     pub data: VanillaData,
 
@@ -81,9 +83,9 @@ pub struct Server {
     /// Handles cryptographic keys for secure communication.
     key_store: OnceCell<Arc<KeyStore>>,
     /// Bedrock OIDC provider keys, fetched on startup for 1.26.10+ token validation.
-    pub bedrock_oidc_keys: Arc<OnceCell<(String, pumpkin_util::jwt::Jwks)>>,
+    pub bedrock_oidc_keys: Arc<OnceCell<(String, pumpkin_auth::jwt::Jwks)>>,
     /// Cached Bedrock server private key (process-lifetime). Generated on first Bedrock login and reused.
-    pub bedrock_private_key: OnceCell<Arc<pumpkin_util::p384::ecdsa::SigningKey>>,
+    pub bedrock_private_key: OnceCell<Arc<pumpkin_auth::p384::ecdsa::SigningKey>>,
     /// Manages server status information.
     listing: std::sync::Mutex<CachedStatus>,
     /// Saves server branding information.
@@ -159,6 +161,7 @@ impl Server {
     pub async fn new(
         basic_config: BasicConfiguration,
         advanced_config: AdvancedConfiguration,
+        telemetry_config: TelemetryConfig,
         vanilla_data: VanillaData,
     ) -> Arc<Self> {
         let permission_manager = Arc::new(PermissionManager::new());
@@ -277,6 +280,7 @@ impl Server {
         let server = Self {
             basic_config,
             advanced_config,
+            telemetry_config,
             data: vanilla_data,
             plugin_manager: Arc::new(PluginManager::new(verify_plugin_signatures)),
             permission_manager,
@@ -365,7 +369,7 @@ impl Server {
                     .bedrock
                     .authentication
                     .clone();
-                let keys = match pumpkin_util::jwt::fetch_oidc_jwks(
+                let keys = match pumpkin_auth::jwt::fetch_oidc_jwks(
                     auth.url.as_deref(),
                     auth.connect_timeout,
                     auth.read_timeout,
@@ -375,7 +379,7 @@ impl Server {
                     Ok(keys) => keys,
                     Err(error) => {
                         error!("Failed to fetch Bedrock OIDC keys: {error}");
-                        (String::new(), pumpkin_util::jwt::Jwks { keys: Vec::new() })
+                        (String::new(), pumpkin_auth::jwt::Jwks { keys: Vec::new() })
                     }
                 };
                 let _ = server_clone.bedrock_oidc_keys.set(keys);
@@ -558,6 +562,26 @@ impl Server {
                 }
             }
         }
+    }
+
+    #[must_use]
+    pub fn get_known_packs<'a>(
+        &self,
+        server_version: &'a str,
+        loaded_packs: &'a [crate::data::datapack::LoadedDatapack],
+    ) -> Vec<pumpkin_protocol::KnownPack<'a>> {
+        self.datapack_manager
+            .get_known_packs(self, server_version, loaded_packs)
+    }
+
+    #[must_use]
+    pub fn get_enabled_features(&self) -> Vec<&'static str> {
+        self.datapack_manager.get_enabled_features(self)
+    }
+
+    #[must_use]
+    pub fn is_feature_enabled(&self, feature: &str) -> bool {
+        self.datapack_manager.is_feature_enabled(self, feature)
     }
 
     pub async fn save_all(&self) -> Result<(), String> {
@@ -996,6 +1020,17 @@ impl Server {
             }
         }
         false
+    }
+
+    /// Returns the maximum number of players allowed on the server.
+    #[must_use]
+    pub const fn max_players(&self) -> u32 {
+        self.advanced_config.networking.java.max_players
+    }
+
+    /// Starts the background telemetry task if enabled in configuration.
+    pub fn start_telemetry(self: &Arc<Self>) {
+        crate::telemetry::start_telemetry(self.clone());
     }
 
     /// Generates a new container id.

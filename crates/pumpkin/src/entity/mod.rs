@@ -305,6 +305,14 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     }
 
     fn java_spawn_metadata(&self, version: JavaMinecraftVersion) -> Option<Box<[u8]>> {
+        if version < JavaMinecraftVersion::V_1_9 {
+            let entity = self.get_entity();
+            let shared_flags = entity.flags.load(Ordering::Relaxed);
+            return (shared_flags != 0).then(|| {
+                // (0 << 5) | 0 = 0 (type: byte, index: 0 flags), value, 127 (terminator)
+                Box::<[u8]>::from([0x00u8, shared_flags as u8, 127u8])
+            });
+        }
         self.get_mob().map_or_else(
             || {
                 let entity = self.get_entity();
@@ -382,7 +390,9 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             if let Ok(data) = client.serialize_packet(&spawn_packet) {
                 client.try_enqueue_packet(data);
             }
-            if let Some(meta) = metadata {
+            if let Some(meta) = metadata
+                && (version >= JavaMinecraftVersion::V_1_9 || meta.last().copied() == Some(127))
+            {
                 let meta_packet = CSetEntityMetadata::new(entity.entity_id.into(), meta);
                 if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
                     client.try_enqueue_packet(meta_data);
@@ -507,7 +517,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
                 vel.x -= dx;
                 vel.z -= dz;
                 self_entity.velocity.store(vel);
-                self_entity.send_velocity();
+                self_entity.velocity_dirty.store(true, Ordering::SeqCst);
             }
 
             if !other_entity.has_passengers() && entity.is_pushable() {
@@ -515,7 +525,7 @@ pub trait EntityBase: Send + Sync + std::any::Any {
                 vel.x += dx;
                 vel.z += dz;
                 other_entity.velocity.store(vel);
-                other_entity.send_velocity();
+                other_entity.velocity_dirty.store(true, Ordering::SeqCst);
             }
         }
     }
@@ -1961,7 +1971,8 @@ impl Entity {
 
         let mut fluid_height: [f64; 2] = [0.0, 0.0];
 
-        let bounding_box = self.bounding_box.load().expand(-0.001, -0.001, -0.001);
+        let entity_box = self.bounding_box.load();
+        let bounding_box = entity_box.expand(-0.001, -0.001, -0.001);
 
         let min = bounding_box.min_block_pos();
 
@@ -1977,10 +1988,11 @@ impl Entity {
                     let (fluid, state) = world.get_fluid_and_fluid_state(&pos);
 
                     if fluid.id != Fluid::EMPTY.id {
-                        let marginal_height =
-                            f64::from(state.height) + f64::from(y) - bounding_box.min.y;
+                        let surface_y =
+                            f64::from(world.get_fluid_height(&pos, fluid, &state)) + f64::from(y);
 
-                        if marginal_height >= 0.0 {
+                        if surface_y >= bounding_box.min.y {
+                            let marginal_height = surface_y - entity_box.min.y;
                             let i = usize::from(
                                 fluid.id == Fluid::FLOWING_LAVA.id || fluid.id == Fluid::LAVA.id,
                             );
@@ -1995,7 +2007,7 @@ impl Entity {
                                 continue;
                             }
 
-                            let mut fluid_velo = world.get_fluid_velocity(pos, fluid, state);
+                            let mut fluid_velo = world.get_fluid_velocity(pos, fluid, &state);
 
                             if fluid_height[i] < 0.4 {
                                 fluid_velo = fluid_velo * fluid_height[i];
@@ -2020,7 +2032,7 @@ impl Entity {
                 .on_entity_collision_fluid(fluid, caller);
         }
 
-        let lava_speed = if world.dimension == Dimension::THE_NETHER {
+        let lava_speed = if world.dimension.fast_lava {
             0.007
         } else {
             0.002_333_333
@@ -2747,11 +2759,14 @@ impl Entity {
     #[must_use]
     pub fn is_submerged_in_water(&self) -> bool {
         let pos = self.pos.load();
-        let eye_height = self.get_eye_height();
-        let eye_pos = BlockPos::floored(pos.x, pos.y + eye_height - 0.111_111_11, pos.z);
+        let eye_y = pos.y + self.get_eye_height();
+        let eye_pos = BlockPos::floored(pos.x, eye_y, pos.z);
         let world = self.world.load();
-        let (fluid, _) = world.get_fluid_and_fluid_state(&eye_pos);
-        fluid.id == Fluid::WATER.id || fluid.id == Fluid::FLOWING_WATER.id
+        let (fluid, state) = world.get_fluid_and_fluid_state(&eye_pos);
+        fluid.matches_type(&Fluid::WATER)
+            && eye_y
+                <= f64::from(eye_pos.0.y)
+                    + f64::from(world.get_fluid_height(&eye_pos, fluid, &state))
     }
 
     #[must_use]
@@ -3356,6 +3371,24 @@ impl Entity {
 
     pub fn leash_to(&self, holder: Arc<dyn EntityBase>) {
         let holder_entity_id = holder.get_entity().entity_id;
+        let world = self.world.load();
+        if let Some(server) = world.server.upgrade()
+            && let Some(player) = holder.get_player()
+            && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
+        {
+            let mut event =
+                crate::plugin::api::events::player::player_leash_entity::PlayerLeashEntityEvent {
+                    player: player_arc,
+                    entity_id: self.entity_id,
+                    holder_id: holder_entity_id,
+                    cancelled: false,
+                };
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return;
+            }
+        }
+
         *self
             .leashed_to
             .lock()
@@ -3387,6 +3420,19 @@ impl Entity {
     }
 
     pub fn unleash(&self) {
+        let world = self.world.load();
+        if let Some(server) = world.server.upgrade() {
+            let mut event =
+                crate::plugin::api::events::entity::entity_unleash::EntityUnleashEvent::new(
+                    self.entity_id,
+                    "unleashed".to_string(),
+                );
+            server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return;
+            }
+        }
+
         let old_holder = self
             .leashed_to
             .lock()
@@ -3394,6 +3440,19 @@ impl Entity {
             .take();
         if old_holder.is_none() {
             return;
+        }
+
+        if let Some(holder) = &old_holder
+            && let Some(server) = world.server.upgrade()
+            && let Some(player) = holder.get_player()
+            && let Some(player_arc) = world.get_player_by_uuid(player.gameprofile.id)
+        {
+            let mut event = crate::plugin::api::events::player::player_unleash_entity::PlayerUnleashEntityEvent {
+                player: player_arc,
+                entity_id: self.entity_id,
+                cancelled: false,
+            };
+            server.plugin_manager.fire_blocking(&server, &mut event);
         }
 
         let je_packet =
