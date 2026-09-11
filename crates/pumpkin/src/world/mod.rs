@@ -40,7 +40,12 @@ use crate::{
         {OnNeighborUpdateArgs, OnScheduledTickArgs},
     },
     command::client_suggestions,
-    entity::{Entity, EntityBase, RemovalReason, player::Player, r#type::from_type},
+    entity::{
+        Entity, EntityBase, RemovalReason,
+        boss::ender_dragon::{EnderDragonEntity, EnderDragonPart},
+        player::Player,
+        r#type::from_type,
+    },
     error::PumpkinError,
     net::{ClientPlatform, bedrock::BedrockClient, java::JavaClient},
     plugin::{
@@ -256,6 +261,9 @@ pub struct World {
     /// A map of active entities within the world, keyed by their unique UUID.
     /// This does not include players.
     pub entities: ArcSwap<Vec<Arc<dyn EntityBase>>>,
+    /// Ender dragon hitboxes, keyed by entity id. They are addressable but never
+    /// ticked, saved or tracked
+    pub dragon_parts: DashMap<i32, Arc<EnderDragonPart>>,
     /// The world's scoreboard, used for tracking scores, objectives, and display information.
     pub scoreboard: std::sync::Mutex<Scoreboard>,
     /// The world's worldborder, defining the playable area and controlling its expansion or contraction.
@@ -417,6 +425,7 @@ impl World {
             active_chunk_tracker: std::sync::Mutex::new(ActiveChunkTracker::default()),
             forced_chunks: std::sync::Mutex::new(FxHashSet::default()),
             server,
+            dragon_parts: DashMap::new(),
             block_entities: DashMap::new(),
             pending_block_entity_migrations: crossbeam::queue::SegQueue::new(),
             custom_data: std::sync::Mutex::new(custom_data),
@@ -4513,7 +4522,28 @@ impl World {
                 return Some(player.clone() as Arc<dyn EntityBase>);
             }
         }
-        None
+        // Vanilla `getEntityOrPart`: the client attacks dragon parts by id.
+        self.dragon_parts
+            .get(&id)
+            .map(|part| part.clone() as Arc<dyn EntityBase>)
+    }
+
+    /// Vanilla `onTrackingStart`: parts are addressable by id, but never tracked.
+    fn add_dragon_parts(&self, entity: &dyn EntityBase) {
+        if let Some(dragon) = entity.cast_any().downcast_ref::<EnderDragonEntity>() {
+            for part in &dragon.parts {
+                self.dragon_parts
+                    .insert(part.entity.entity_id, part.clone());
+            }
+        }
+    }
+
+    /// Vanilla `onTrackingEnd`. Keyed by uuid, removal also comes in as a bare `Entity`.
+    fn remove_dragon_parts(&self, entity: &Entity) {
+        if entity.entity_type == &EntityType::ENDER_DRAGON {
+            self.dragon_parts
+                .retain(|_, part| part.dragon_uuid != entity.entity_uuid);
+        }
     }
 
     /// Gets a `Player` by a username
@@ -4545,12 +4575,20 @@ impl World {
 
     // Gets all non Player entities at a Box
     pub fn get_entities_at_box(&self, aabb: &BoundingBox) -> Vec<Arc<dyn EntityBase>> {
-        self.entities
+        let mut found: Vec<Arc<dyn EntityBase>> = self
+            .entities
             .load()
             .iter()
             .filter(|entity| entity.get_entity().bounding_box.load().intersects(aabb))
             .cloned()
-            .collect()
+            .collect();
+        // Vanilla `Level.getEntities` merges the dragon parts in.
+        for part in &self.dragon_parts {
+            if part.entity.bounding_box.load().intersects(aabb) {
+                found.push(part.value().clone() as Arc<dyn EntityBase>);
+            }
+        }
+        found
     }
 
     // Gets all Player entities at a Box
@@ -4910,6 +4948,7 @@ impl World {
     pub fn spawn_entity_non_save(&self, entity: Arc<dyn EntityBase>) {
         let _base_entity = entity.get_entity();
         self.entity_tracker.add_entity(&entity, self);
+        self.add_dragon_parts(entity.as_ref());
         self.spawn_state.load().add_entity(self, entity.as_ref());
 
         self.entities.rcu(|current_entities| {
@@ -4958,6 +4997,7 @@ impl World {
         // serialized at once (which would double it on the next reload).
         self.spawn_state.load().add_entity(self, entity.as_ref());
         self.entity_tracker.add_entity(&entity, self);
+        self.add_dragon_parts(entity.as_ref());
 
         self.entities.rcu(|current_entities| {
             let mut new_entities = (**current_entities).clone();
@@ -4979,6 +5019,7 @@ impl World {
 
         self.spawn_state.load().remove_entity(self, entity);
         self.entity_tracker.remove_entity(entity, self);
+        self.remove_dragon_parts(base_entity);
         self.entities.rcu(|current_entities| {
             let mut new_entities = (**current_entities).clone();
             new_entities.retain(|e| e.get_entity().entity_uuid != base_entity.entity_uuid);
@@ -5013,6 +5054,7 @@ impl World {
 
         for entity in entities_to_remove {
             self.entity_tracker.remove_entity(entity.as_ref(), self);
+            self.remove_dragon_parts(entity.get_entity());
             self.save_entity(&entity).await;
             self.spawn_state.load().remove_entity(self, entity.as_ref());
         }

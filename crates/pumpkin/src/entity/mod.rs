@@ -634,7 +634,8 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         } else {
             let other_entities = world.get_entities_at_box(&entity_bb);
             for other in other_entities {
-                if other.get_entity().entity_id != self_entity.entity_id {
+                // Vanilla `pushableBy` skips unpushable entities, dragon parts among them.
+                if other.get_entity().entity_id != self_entity.entity_id && other.is_pushable() {
                     dyn_self.push(other.as_ref());
                     pushed = true;
                 }
@@ -921,8 +922,10 @@ impl Entity {
         Self::from_uuid(Uuid::new_v4(), world, position, entity_type)
     }
 
-    pub fn reserve_ids(count: i32) -> i32 {
-        CURRENT_ID.fetch_add(count, Relaxed)
+    /// Claims the `count` ids right after `after`, if they are still free.
+    /// Dragon parts must keep these ids, the client derives them from the dragon's.
+    pub fn reserve_ids_after(after: i32, count: i32) {
+        let _ = CURRENT_ID.compare_exchange(after + 1, after + 1 + count, Relaxed, Relaxed);
     }
 
     pub fn from_uuid(

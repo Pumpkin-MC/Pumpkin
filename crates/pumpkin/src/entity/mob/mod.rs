@@ -744,6 +744,36 @@ pub trait Mob: EntityBase + Send + Sync {
         amount
     }
 
+    /// Whole damage path, so a mob can replace it (vanilla `hurtServer` override).
+    fn mob_damage_with_context(
+        &self,
+        caller: &dyn EntityBase,
+        amount: f32,
+        damage_type: DamageType,
+        position: Option<Vector3<f64>>,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        // pre_damage, allows mobs to dodge/cancel damage
+        if !self.pre_damage(damage_type, source) {
+            return false;
+        }
+        // Mob-specific damage modifier
+        let amount = self.modify_incoming_damage(amount, damage_type);
+        let damaged = self.get_mob_entity().living_entity.damage_with_context(
+            caller,
+            amount,
+            damage_type,
+            position,
+            source,
+            cause,
+        );
+        if damaged {
+            self.on_damage(damage_type, source);
+        }
+        damaged
+    }
+
     fn can_attack_with_owner(&self, _target: &dyn EntityBase, _owner: &dyn EntityBase) -> bool {
         true
     }
@@ -1226,24 +1256,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         source: Option<&dyn EntityBase>,
         cause: Option<&dyn EntityBase>,
     ) -> bool {
-        // pre_damage hook: allows mobs to dodge/cancel damage (e.g. enderman projectile dodge)
-        if !self.pre_damage(damage_type, source) {
-            return false;
-        }
-        // Mob-specific damage modifier (e.g. shulker armor when closed).
-        let amount = self.modify_incoming_damage(amount, damage_type);
-        let damaged = self.get_mob_entity().living_entity.damage_with_context(
-            caller,
-            amount,
-            damage_type,
-            position,
-            source,
-            cause,
-        );
-        if damaged {
-            self.on_damage(damage_type, source);
-        }
-        damaged
+        self.mob_damage_with_context(caller, amount, damage_type, position, source, cause)
     }
 
     fn interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
