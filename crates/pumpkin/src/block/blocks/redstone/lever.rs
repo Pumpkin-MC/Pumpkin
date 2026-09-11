@@ -6,7 +6,7 @@ use crate::block::{
 };
 use pumpkin_data::{
     Block, BlockDirection, BlockStateId, HorizontalFacingExt,
-    block_properties::{AttachFace, HorizontalFacing, LeverLikeProperties},
+    block_properties::{AttachFace, LeverLikeProperties},
     game_event::GameEvent,
     sound::{Sound, SoundCategory},
 };
