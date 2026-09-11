@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use crate::{
     block::{
-        BlockBehaviour, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
-        PathComputationType, PlacedArgs,
+        BlockBehaviour, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
+        OnLandedUponArgs, OnPlaceArgs, PathComputationType, PlacedArgs,
     },
     entity::player::Player,
     world::World,
@@ -11,6 +11,7 @@ use crate::{
 use pumpkin_data::{
     Block, BlockDirection, BlockState, BlockStateId,
     block_properties::{PointedDripstoneLikeProperties, SpeleothemThickness, VerticalDirection},
+    damage::DamageType,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -20,6 +21,28 @@ use pumpkin_world::world::{BlockAccessor, BlockFlags};
 pub struct DripstoneBlock;
 
 impl BlockBehaviour for DripstoneBlock {
+    fn on_landed_upon(&self, args: OnLandedUponArgs<'_>) {
+        let Some(living) = args.entity.get_living_entity() else {
+            return;
+        };
+        let props = PointedDripstoneLikeProperties::from_state_id(
+            args.world.get_block_state_id(args.position),
+        );
+        // Like vanilla, landing on the tip of a stalagmite deals extra stalagmite damage.
+        if props.vertical_direction == VerticalDirection::Up
+            && props.thickness == SpeleothemThickness::Tip
+        {
+            living.handle_fall_damage_from(
+                args.entity,
+                args.fall_distance + 2.5,
+                2.0,
+                DamageType::STALAGMITE,
+            );
+        } else {
+            living.handle_fall_damage(args.entity, args.fall_distance, 1.0);
+        }
+    }
+
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         can_place_at_pos(
             args.block_accessor,
