@@ -848,6 +848,8 @@ impl LivingEntity {
         if effect.effect_type == &StatusEffect::INSTANT_HEALTH {
             let heal_amount = 4.0 * (1 << effect.amplifier) as f32;
             self.heal(heal_amount);
+            // Like vanilla, instant effects are never sent or stored as active effects.
+            return;
         } else if effect.effect_type == &StatusEffect::INSTANT_DAMAGE {
             let damage_amount = 6.0 * (1 << effect.amplifier) as f32;
             let dyn_self = self
@@ -858,65 +860,63 @@ impl LivingEntity {
             if let Some(dyn_self) = dyn_self {
                 let _ = dyn_self.damage(&*dyn_self, damage_amount, DamageType::MAGIC);
             }
-        } else {
-            // Apply non-instant effects
+            return;
+        }
 
-            // Effects that modify attributes (ex. speed) should also update the
-            // entity's attribute instances (server-side) and then notify clients.
-            if !effect.effect_type.attribute_modifiers.is_empty() {
-                // Apply each attribute modifier into the local AttributeInstance
-                for m in effect.effect_type.attribute_modifiers {
-                    let id = m.id.to_string();
-                    let op = match m.operation {
-                        Operation::AddValue => ModifierOperation::Add,
-                        Operation::AddMultipliedBase => ModifierOperation::MultiplyBase,
-                        Operation::AddMultipliedTotal => ModifierOperation::MultiplyTotal,
-                    };
-                    let scaled_amount = m.base_value * (f64::from(effect.amplifier) + 1.);
-                    let mod_inst = Modifier {
-                        id,
-                        amount: scaled_amount,
-                        operation: op,
-                    };
+        // Apply non-instant effects
 
-                    self.update_attribute(m.attribute, |inst| {
-                        inst.add_or_replace_modifier(mod_inst.clone());
-                    });
-                }
+        // Effects that modify attributes (ex. speed) should also update the
+        // entity's attribute instances (server-side) and then notify clients.
+        if !effect.effect_type.attribute_modifiers.is_empty() {
+            // Apply each attribute modifier into the local AttributeInstance
+            for m in effect.effect_type.attribute_modifiers {
+                let id = m.id.to_string();
+                let op = match m.operation {
+                    Operation::AddValue => ModifierOperation::Add,
+                    Operation::AddMultipliedBase => ModifierOperation::MultiplyBase,
+                    Operation::AddMultipliedTotal => ModifierOperation::MultiplyTotal,
+                };
+                let scaled_amount = m.base_value * (f64::from(effect.amplifier) + 1.);
+                let mod_inst = Modifier {
+                    id,
+                    amount: scaled_amount,
+                    operation: op,
+                };
 
-                // Recompute packet modifiers from active effects for each affected attribute
-                let mut touched_attrs: Vec<pumpkin_data::attributes::Attributes> = Vec::new();
-                for m in effect.effect_type.attribute_modifiers {
-                    if !touched_attrs.iter().any(|a| a.id == m.attribute.id) {
-                        touched_attrs.push(m.attribute.clone());
-                    }
-                }
+                self.update_attribute(m.attribute, |inst| {
+                    inst.add_or_replace_modifier(mod_inst.clone());
+                });
+            }
 
-                if !touched_attrs.is_empty() {
-                    crate::entity::attributes::send_attribute_updates_for_living(
-                        self,
-                        touched_attrs,
-                    );
+            // Recompute packet modifiers from active effects for each affected attribute
+            let mut touched_attrs: Vec<pumpkin_data::attributes::Attributes> = Vec::new();
+            for m in effect.effect_type.attribute_modifiers {
+                if !touched_attrs.iter().any(|a| a.id == m.attribute.id) {
+                    touched_attrs.push(m.attribute.clone());
                 }
             }
 
-            // Apply absorption effect (+4 absorption per level)
-            if effect.effect_type == &StatusEffect::ABSORPTION {
-                let added = 4.0 * (effect.amplifier as f32 + 1.0);
-                let max_abs = self.get_attribute_value(&Attributes::MAX_ABSORPTION) as f32;
-                let new_abs = (self.absorption.load() + added).min(max_abs);
-                self.set_absorption(new_abs);
+            if !touched_attrs.is_empty() {
+                crate::entity::attributes::send_attribute_updates_for_living(self, touched_attrs);
             }
+        }
 
-            // Apply invisible effect
-            if effect.effect_type == &StatusEffect::INVISIBILITY {
-                self.entity.set_invisible(true);
-            }
+        // Apply absorption effect (+4 absorption per level)
+        if effect.effect_type == &StatusEffect::ABSORPTION {
+            let added = 4.0 * (effect.amplifier as f32 + 1.0);
+            let max_abs = self.get_attribute_value(&Attributes::MAX_ABSORPTION) as f32;
+            let new_abs = (self.absorption.load() + added).min(max_abs);
+            self.set_absorption(new_abs);
+        }
 
-            // Apply glowing effect
-            if effect.effect_type == &StatusEffect::GLOWING {
-                self.entity.set_glowing(true);
-            }
+        // Apply invisible effect
+        if effect.effect_type == &StatusEffect::INVISIBILITY {
+            self.entity.set_invisible(true);
+        }
+
+        // Apply glowing effect
+        if effect.effect_type == &StatusEffect::GLOWING {
+            self.entity.set_glowing(true);
         }
 
         // Broadcast effect to nearby players
