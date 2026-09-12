@@ -978,6 +978,22 @@ impl Player {
         self.client.spawn_task(task)
     }
 
+    /// Pairs tracked entities in chunks that were just queued for a player.
+    fn pair_entities_in_chunks(
+        &self,
+        world: &crate::world::World,
+        chunks: &[pumpkin_util::math::vector2::Vector2<i32>],
+    ) {
+        if chunks.is_empty() {
+            return;
+        }
+        if let Some(player) = world.get_player_by_uuid(self.gameprofile.id) {
+            world
+                .entity_tracker
+                .update_player_chunks(&player, world, chunks);
+        }
+    }
+
     pub const fn inventory(&self) -> &Arc<PlayerInventory> {
         &self.inventory
     }
@@ -1082,11 +1098,13 @@ impl Player {
     }
 
     pub(crate) fn try_restore_vehicle(self: &Arc<Self>, vehicle: &Arc<dyn EntityBase>) {
-        let Some(expected_uuid) = self.root_vehicle_uuid.swap(None) else {
-            return;
-        };
-        if vehicle.get_entity().entity_uuid != expected_uuid {
-            self.root_vehicle_uuid.store(Some(expected_uuid));
+        // Claim the UUID atomically, otherwise blank it
+        // between a non-matching swap and restore.
+        if self
+            .root_vehicle_uuid
+            .compare_exchange(Some(vehicle.get_entity().entity_uuid), None)
+            .is_err()
+        {
             return;
         }
 
@@ -2600,10 +2618,16 @@ impl Player {
                     let encoded =
                         crate::net::ChunkSender::encode_batch(&batch, &mut per_player_cache);
                     let current_epoch = self.chunk_send_epoch.load(Ordering::Relaxed);
-                    self.chunk_sender.try_lock().map_or(0, |mut sender| {
-                        sender.commit_batch(&batch, &encoded, &self.client, current_epoch);
-                        sender.sent_chunks_count()
-                    })
+                    let (sent, total_sent_chunks) = self.chunk_sender.try_lock().map_or_else(
+                        |_| (Vec::new(), 0),
+                        |mut sender| {
+                            let sent =
+                                sender.commit_batch(&batch, &encoded, &self.client, current_epoch);
+                            (sent, sender.sent_chunks_count())
+                        },
+                    );
+                    self.pair_entities_in_chunks(&world, &sent);
+                    total_sent_chunks
                 }
                 ClientPlatform::Bedrock(_) => {
                     let current_epoch = self.chunk_send_epoch.load(Ordering::Relaxed);
@@ -2617,8 +2641,27 @@ impl Player {
                     );
                     if !chunks.is_empty() {
                         let client = self.client.clone();
+                        let world = world.clone();
+                        let uuid = self.gameprofile.id;
                         self.spawn_task(async move {
+                            let (positions, chunks): (Vec<_>, Vec<_>) =
+                                chunks.into_iter().map(|c| (c.position, c.chunk)).unzip();
                             client.send_chunks(&chunks).await;
+                            if let Some(player) = world.get_player_by_uuid(uuid) {
+                                // Hold chunk_sender across check so a concurrent
+                                // change_world_chunks reset can't land between the check and
+                                // mark_delivered.
+                                let mut sender = player
+                                    .chunk_sender
+                                    .lock()
+                                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                                if player.chunk_send_epoch.load(Ordering::Relaxed) == current_epoch
+                                {
+                                    sender.mark_delivered(&positions);
+                                    drop(sender);
+                                    player.pair_entities_in_chunks(&world, &positions);
+                                }
+                            }
                         });
                     }
                     total_sent_chunks
