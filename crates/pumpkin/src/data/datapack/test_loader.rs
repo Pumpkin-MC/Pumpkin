@@ -96,14 +96,11 @@ fn load_test_instances_recursive(
 #[must_use]
 pub fn to_registry_entry(entry_id: String, instance: &TestInstance) -> RegistryEntryData {
     let mut nbt = NbtCompound::new();
-    nbt.put_string(
-        "type",
-        match instance.instance_type {
-            TestType::BlockBased => "minecraft:block_based",
-        }
-        .to_string(),
-    );
+    nbt.put_string("type", instance.instance_type.serialized_name().to_string());
     nbt.put("environment", json_value_to_nbt(&instance.environment));
+    if let Some(function) = &instance.function {
+        nbt.put_string("function", function.clone());
+    }
     nbt.put_string("structure", instance.structure.clone());
     nbt.put_int("max_ticks", instance.max_ticks);
     nbt.put_int("setup_ticks", instance.setup_ticks);
@@ -202,5 +199,67 @@ mod tests {
         assert_eq!(instance.required_successes, 1);
         assert!(!instance.sky_access);
         assert_eq!(instance.padding, 0);
+    }
+
+    #[test]
+    fn loads_function_test_instance_with_vanilla_defaults() {
+        let dir = tempfile::tempdir().expect("temp dir");
+
+        fs::write(
+            dir.path().join("always_pass.json"),
+            r#"{
+                "type": "minecraft:function",
+                "environment": "minecraft:default",
+                "function": "minecraft:always_pass",
+                "max_ticks": 1,
+                "required": false,
+                "setup_ticks": 1,
+                "structure": "minecraft:empty"
+            }"#,
+        )
+        .expect("write test instance");
+
+        let mut registry = TestInstanceRegistry::new();
+        let loaded = load_test_instances_from_dir("minecraft", dir.path(), &mut registry);
+
+        assert_eq!(loaded, 1);
+
+        let instance = registry
+            .get("minecraft:always_pass")
+            .expect("test instance should be registered");
+
+        assert_eq!(instance.instance_type, TestType::Function);
+        assert_eq!(
+            instance.environment,
+            Value::String("minecraft:default".into())
+        );
+        assert_eq!(instance.function.as_deref(), Some("minecraft:always_pass"));
+        assert_eq!(instance.structure, "minecraft:empty");
+        assert_eq!(instance.max_ticks, 1);
+        assert_eq!(instance.setup_ticks, 1);
+        assert!(!instance.required);
+        assert_eq!(instance.rotation, GameTestRotation::None);
+        assert!(!instance.manual_only);
+        assert_eq!(instance.max_attempts, 1);
+        assert_eq!(instance.required_successes, 1);
+        assert!(!instance.sky_access);
+        assert_eq!(instance.padding, 0);
+    }
+
+    #[test]
+    fn loads_embedded_test_instances_including_always_pass() {
+        let mut registry = TestInstanceRegistry::new();
+        let count = load_embedded_test_instances(&mut registry);
+        assert!(count > 0);
+
+        let always_pass = registry
+            .get("minecraft:always_pass")
+            .expect("minecraft:always_pass should be successfully parsed and registered");
+        assert_eq!(always_pass.instance_type, TestType::Function);
+        assert_eq!(
+            always_pass.function.as_deref(),
+            Some("minecraft:always_pass")
+        );
+        assert_eq!(always_pass.structure, "minecraft:empty");
     }
 }
