@@ -316,6 +316,7 @@ enum StoreMessage<T> {
 
 enum ControlMessage {
     Dropped,
+    Discarded,
 }
 
 type ReentrySender<T> = mpsc::Sender<Box<dyn GuestStoreJob<T>>>;
@@ -757,7 +758,7 @@ where
 {
     handle: StoreHandle<T, P>,
     control: mpsc::UnboundedSender<ControlMessage>,
-    shutdown_admitted: AtomicBool,
+    terminal_admitted: AtomicBool,
 }
 
 impl<T, P> StoreExecutor<T, P>
@@ -831,7 +832,7 @@ where
         Ok(Self {
             handle: StoreHandle { shared },
             control,
-            shutdown_admitted: AtomicBool::new(false),
+            terminal_admitted: AtomicBool::new(false),
         })
     }
 
@@ -843,6 +844,23 @@ where
     #[must_use]
     pub fn driver_join(&self) -> DriverJoin {
         self.handle.driver_join()
+    }
+
+    /// Stops admission and drains accepted work without running a final Store
+    /// operation.
+    ///
+    /// This is intended for a Store whose owner was prepared but never admitted
+    /// to its higher-level lifecycle. Dropping an executor without either
+    /// calling this method or completing [`Self::shutdown`] remains an error.
+    pub fn discard(&self) {
+        if self.terminal_admitted.load(Ordering::Acquire)
+            || !self.handle.shared.accepting.swap(false, Ordering::AcqRel)
+        {
+            return;
+        }
+
+        self.terminal_admitted.store(true, Ordering::Release);
+        let _ = self.control.send(ControlMessage::Discarded);
     }
 }
 
@@ -886,7 +904,7 @@ where
                 .terminal_error("Wasm plugin store driver is not running")
         })?;
         self.handle.shared.accepting.store(false, Ordering::Release);
-        self.shutdown_admitted.store(true, Ordering::Release);
+        self.terminal_admitted.store(true, Ordering::Release);
         permit.send(StoreMessage::Shutdown {
             job: Box::new(ShutdownStoreCall {
                 call,
@@ -936,7 +954,7 @@ where
     P: StorePolicy,
 {
     fn drop(&mut self) {
-        if self.shutdown_admitted.load(Ordering::Acquire)
+        if self.terminal_admitted.load(Ordering::Acquire)
             || !self.handle.shared.accepting.swap(false, Ordering::AcqRel)
         {
             return;
@@ -972,7 +990,7 @@ async fn run_driver<T>(
                     Some(()) = active_calls.next(), if !active_calls.is_empty() => {
                         continue;
                     }
-                    Some(ControlMessage::Dropped) = control.recv() => {
+                    Some(control_message) = control.recv() => {
                         loop_lifecycle.transition(DriverState::Draining);
                         receiver.close();
                         loop {
@@ -1008,9 +1026,12 @@ async fn run_driver<T>(
                         while active_calls.next().await.is_some() {}
                         loop_lifecycle.transition(DriverState::Stopping);
                         poll_fn(|cx| accessor.poll_no_interesting_tasks(cx)).await;
-                        return Err(wasmtime::Error::msg(
-                            "Wasm plugin store lifecycle control was dropped before shutdown",
-                        ));
+                        return match control_message {
+                            ControlMessage::Dropped => Err(wasmtime::Error::msg(
+                                "Wasm plugin store lifecycle control was dropped before shutdown",
+                            )),
+                            ControlMessage::Discarded => Ok(()),
+                        };
                     }
                     message = receiver.recv() => message,
                 };
