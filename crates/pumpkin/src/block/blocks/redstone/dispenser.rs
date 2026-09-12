@@ -459,14 +459,11 @@ impl DispenserBlock {
     }
 
     fn dispense_tnt(ctx: &DispenseContext<'_>, item: &mut ItemStack) {
-        const TNT_POWER: f32 = 4.0;
-        const TNT_FUSE: u32 = 80;
-
         let _ = item.split(1);
-        let spawn_pos = Self::target_position(ctx).to_f64();
+        let target = Self::target_position(ctx);
 
-        let entity = Entity::new(ctx.world.clone(), spawn_pos, &EntityType::TNT);
-        let tnt = Arc::new(TNTEntity::new(entity, TNT_POWER, TNT_FUSE));
+        let tnt = TNTEntity::primed(ctx.world, &target, TNTEntity::DEFAULT_FUSE);
+        let spawn_pos = tnt.get_entity().pos.load();
         ctx.world.spawn_entity(tnt);
         ctx.world
             .play_sound(Sound::EntityTntPrimed, SoundCategory::Blocks, &spawn_pos);

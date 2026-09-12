@@ -1,17 +1,14 @@
 use pumpkin_data::Block;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::TntLikeProperties;
-use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::translation;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use pumpkin_world::world::BlockFlags;
-use rand::RngExt;
 use std::sync::Arc;
 
 use super::redstone::block_receives_redstone_power;
@@ -20,20 +17,48 @@ use crate::block::{
     BlockBehaviour, BrokenArgs, ExplodeArgs, OnNeighborUpdateArgs, OnProjectileHitArgs, PlacedArgs,
     UseWithItemArgs,
 };
-use crate::entity::Entity;
+use crate::entity::EntityBase;
 use crate::entity::tnt::TNTEntity;
 use crate::world::World;
 
 #[pumpkin_block("minecraft:tnt")]
 pub struct TNTBlock;
 
-const DEFAULT_FUSE: u32 = 80;
-const DEFAULT_POWER: f32 = 4.0;
-
 impl TNTBlock {
+    /// Vanilla `TntBlock.prime` plus the block removal its callers do.
     pub fn prime(world: &Arc<World>, location: &BlockPos) -> bool {
-        if !world.level_info.load().game_rules.tnt_explodes {
+        let Some(tnt) = Self::prepare(world, location) else {
             return false;
+        };
+
+        // Swap in air to claim the block: `set_block_state` locks the chunk section, so a task
+        // racing for the same spot gets a non-TNT old state back and drops out here. Nothing is
+        // restored, the events above already ran and cannot re-enter through `placed`.
+        if world
+            .set_block_state(location, BlockStateId::AIR, BlockFlags::NOTIFY_ALL)
+            .to_block()
+            != &Block::TNT
+        {
+            return false;
+        }
+
+        Self::ignite(world, tnt);
+        true
+    }
+
+    /// Primes a TNT block the caller already took out of the world.
+    pub fn spawn_primed(world: &Arc<World>, location: &BlockPos) -> bool {
+        let Some(tnt) = Self::prepare(world, location) else {
+            return false;
+        };
+        Self::ignite(world, tnt);
+        true
+    }
+
+    /// Gamerule and plugin events; `None` when priming is denied.
+    fn prepare(world: &Arc<World>, location: &BlockPos) -> Option<Arc<TNTEntity>> {
+        if !world.level_info.load().game_rules.tnt_explodes {
+            return None;
         }
 
         let mut event = crate::plugin::api::events::block::tnt_prime::TNTPrimeEvent::new(
@@ -44,19 +69,14 @@ impl TNTBlock {
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
         if event.cancelled {
-            return false;
+            return None;
         }
 
-        let spawn_pos = Vector3::new(
-            location.0.x as f64 + 0.5,
-            location.0.y as f64,
-            location.0.z as f64 + 0.5,
-        );
-        let entity = Entity::new(world.clone(), spawn_pos, &EntityType::TNT);
+        let tnt = TNTEntity::primed(world, location, TNTEntity::DEFAULT_FUSE);
         let mut prime_event =
             crate::plugin::api::events::entity::explosion_prime::ExplosionPrimeEvent::new(
-                entity.entity_id,
-                DEFAULT_POWER,
+                tnt.get_entity().entity_id,
+                TNTEntity::DEFAULT_POWER,
                 false,
             );
         if let Some(server) = world.server.upgrade() {
@@ -65,18 +85,20 @@ impl TNTBlock {
                 .fire_blocking(&server, &mut prime_event);
         }
         if prime_event.cancelled {
-            return false;
+            return None;
         }
 
-        let tnt = Arc::new(TNTEntity::new(entity, DEFAULT_POWER, DEFAULT_FUSE));
+        Some(tnt)
+    }
+
+    fn ignite(world: &Arc<World>, tnt: Arc<TNTEntity>) {
+        let pos = tnt.get_entity().pos.load();
         world.spawn_entity(tnt);
         world.play_sound(
             pumpkin_data::sound::Sound::EntityTntPrimed,
             SoundCategory::Blocks,
-            &spawn_pos,
+            &pos,
         );
-        world.set_block_state(location, BlockStateId::AIR, BlockFlags::NOTIFY_ALL);
-        true
     }
 }
 
@@ -125,7 +147,8 @@ impl BlockBehaviour for TNTBlock {
         if args.player.gamemode.load() != GameMode::Creative {
             let props = TntLikeProperties::from_state_id(args.state.id);
             if props.r#unstable {
-                Self::prime(args.world, args.position);
+                // `break_block` already swapped the TNT away, so `prime` would find no TNT here.
+                Self::spawn_primed(args.world, args.position);
             }
         }
     }
@@ -137,17 +160,12 @@ impl BlockBehaviour for TNTBlock {
     }
 
     fn explode(&self, args: ExplodeArgs<'_>) {
+        // Vanilla `TntBlock.wasExploded`: gated on `GameRules.TNT_EXPLODES`, no sound.
         if !args.world.level_info.load().game_rules.tnt_explodes {
             return;
         }
-        let spawn_pos = Vector3::new(
-            args.position.0.x as f64 + 0.5,
-            args.position.0.y as f64,
-            args.position.0.z as f64 + 0.5,
-        );
-        let entity = Entity::new(args.world.clone(), spawn_pos, &EntityType::TNT);
-        let fuse = rand::rng().random_range(0..DEFAULT_FUSE / 4) + DEFAULT_FUSE / 8;
-        let tnt = Arc::new(TNTEntity::new(entity, DEFAULT_POWER, fuse));
+        let fuse = TNTEntity::random_short_fuse(TNTEntity::DEFAULT_FUSE);
+        let tnt = TNTEntity::primed(args.world, args.position, fuse);
         args.world.spawn_entity(tnt);
     }
 
