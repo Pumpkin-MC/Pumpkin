@@ -1824,6 +1824,10 @@ impl LivingEntity {
         }
     }
 
+    /// Marks the entity as dead exactly once and runs the server-side death
+    /// flow: stop movement input, attribute the kill, drop loot, broadcast the
+    /// `Death` (3) entity event, and hand out XP. Safe to call on every lethal
+    /// damage event; only the first call has an effect.
     pub fn on_death(
         &self,
         damage_type: DamageType,

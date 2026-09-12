@@ -6904,6 +6904,11 @@ impl World {
         self.ray_trace_entities(start, end).into_iter().next()
     }
 
+    /// Traces the block grid from `start_pos` to `end_pos` (vanilla
+    /// `Block.clip` semantics) and returns the first block for which
+    /// `hit_check` returns true, together with the face direction the ray
+    /// entered it. The start block is tested like any other; returns `None`
+    /// when the ray hits nothing or starts and ends in the same block.
     pub fn raycast(
         self: &Arc<Self>,
         start_pos: Vector3<f64>,
