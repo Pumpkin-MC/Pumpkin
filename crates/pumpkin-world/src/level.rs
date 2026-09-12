@@ -234,6 +234,8 @@ impl Level {
             }
         }
 
+        let dim_min_y = dimension.min_y;
+        let dim_height = dimension.height;
         let seed = Seed(seed as u64);
         let world_gen: Arc<WorldGenerator> = Arc::from(get_world_gen_with_all_settings(
             seed,
@@ -272,7 +274,7 @@ impl Level {
             world_gen: ArcSwap::new(world_gen),
             level_folder,
             lighting_config: level_config.lighting,
-            light_engine: DynamicLightEngine::new(),
+            light_engine: DynamicLightEngine::new(dim_min_y, dim_min_y + dim_height),
             chunk_saver,
             entity_saver,
             schedule_tick_counts: AtomicU64::new(0),
