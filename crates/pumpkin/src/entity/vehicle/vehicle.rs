@@ -2,6 +2,7 @@ use crossbeam::atomic::AtomicCell;
 use std::sync::atomic::{AtomicI32, Ordering};
 
 use crate::entity::Entity;
+use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::EntityBase;
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -26,13 +27,19 @@ impl VehicleEntity {
 
     pub fn tick(&self) {
         let current_hurt = self.hurt_time.load(Ordering::Relaxed);
-        if current_hurt > 0 {
+        let hurt_ticked = current_hurt > 0;
+        if hurt_ticked {
             self.hurt_time.store(current_hurt - 1, Ordering::Relaxed);
         }
 
         let current_damage = self.damage.load();
-        if current_damage > 0.0 {
+        let damage_ticked = current_damage > 0.0;
+        if damage_ticked {
             self.damage.store(current_damage - 1.0);
+        }
+
+        if hurt_ticked || damage_ticked {
+            self.send_wobble_metadata();
         }
 
         let mut update_event =
@@ -138,17 +145,25 @@ impl VehicleEntity {
     }
 
     pub fn send_wobble_metadata(&self) {
-        self.entity.set_synced_data(
-            pumpkin_data::tracked_data::boat::ID_HURT,
-            VarInt(self.get_hurt_time()),
+        self.entity.send_meta_data(
+            &[
+                Metadata::new(
+                    pumpkin_data::tracked_data::boat::ID_HURT,
+                    VarInt(self.get_hurt_time()),
+                ),
+                Metadata::new(
+                    pumpkin_data::tracked_data::boat::ID_HURTDIR,
+                    VarInt(self.get_hurt_dir()),
+                ),
+            ],
+            None,
         );
-        self.entity.set_synced_data(
-            pumpkin_data::tracked_data::boat::ID_HURTDIR,
-            VarInt(self.get_hurt_dir()),
-        );
-        self.entity.set_synced_data(
-            pumpkin_data::tracked_data::boat::ID_DAMAGE,
-            self.get_damage(),
+        self.entity.send_meta_data(
+            &[Metadata::new(
+                pumpkin_data::tracked_data::boat::ID_DAMAGE,
+                self.get_damage(),
+            )],
+            None,
         );
     }
 
@@ -246,28 +261,26 @@ mod tests {
     use pumpkin_protocol::java::client::play::Metadata;
     use pumpkin_util::version::JavaMinecraftVersion;
 
-    fn wobble_integer_metadata(version: JavaMinecraftVersion) -> Vec<u8> {
+    fn wobble_metadata(version: JavaMinecraftVersion) -> Vec<u8> {
         let mut bytes = Vec::new();
-        for metadata in [
-            Metadata::new(pumpkin_data::tracked_data::boat::ID_HURT, VarInt(10)),
-            Metadata::new(pumpkin_data::tracked_data::boat::ID_HURTDIR, VarInt(-1)),
-        ] {
-            metadata.write(&mut bytes, &version).unwrap();
-        }
+        Metadata::new(pumpkin_data::tracked_data::boat::ID_HURT, VarInt(10))
+            .write(&mut bytes, &version)
+            .unwrap();
+        Metadata::new(pumpkin_data::tracked_data::boat::ID_HURTDIR, VarInt(-1))
+            .write(&mut bytes, &version)
+            .unwrap();
+        Metadata::new(pumpkin_data::tracked_data::boat::ID_DAMAGE, 10.0f32)
+            .write(&mut bytes, &version)
+            .unwrap();
         bytes
     }
 
     #[test]
-    fn wobble_integers_serialize_for_legacy_and_current_clients() {
-        let expected = vec![8, 1, 10, 9, 1, 0xff, 0xff, 0xff, 0xff, 0x0f];
+    fn wobble_metadata_serializes_hurt_and_damage_together() {
+        let mut expected = vec![8, 1, 10, 9, 1, 0xff, 0xff, 0xff, 0xff, 0x0f, 10, 3];
+        expected.extend(10.0f32.to_be_bytes());
 
-        assert_eq!(
-            wobble_integer_metadata(JavaMinecraftVersion::V_1_21_11),
-            expected
-        );
-        assert_eq!(
-            wobble_integer_metadata(JavaMinecraftVersion::V_26_2),
-            expected
-        );
+        assert_eq!(wobble_metadata(JavaMinecraftVersion::V_1_21_11), expected);
+        assert_eq!(wobble_metadata(JavaMinecraftVersion::V_26_2), expected);
     }
 }

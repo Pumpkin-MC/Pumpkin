@@ -204,7 +204,7 @@ impl TrackedEntity {
         if let ClientPlatform::Java(client) = player.client.as_ref() {
             let version = client.version.load();
             // TODO: Support older versions
-            if version >= JavaMinecraftVersion::V_26_2
+            if version >= JavaMinecraftVersion::V_1_21
                 && let Some(non_default) = self
                     .entity
                     .get_entity()

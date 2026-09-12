@@ -3076,6 +3076,67 @@ impl Entity {
         }
     }
 
+    pub fn send_meta_data<T: MetadataSerializer>(
+        &self,
+        meta: &[Metadata<T>],
+        bedrock_meta: Option<&SyncedActorDataList>,
+    ) {
+        let world = self.world.load();
+        let players = world.players.load();
+
+        let mut java_recipients = Vec::new();
+
+        if let Some(tracked) = world.entity_tracker.get_tracked_entity(self.entity_id) {
+            for player in players.iter() {
+                if (tracked.seen_by.contains(&player.gameprofile.id)
+                    || player.entity_id() == self.entity_id)
+                    && let ClientPlatform::Java(_) = player.client.as_ref()
+                {
+                    java_recipients.push(player);
+                }
+            }
+        } else {
+            let chunk_pos = self.chunk_pos.load();
+            for player in players.iter() {
+                if player
+                    .watched_section
+                    .load()
+                    .is_within_distance(chunk_pos.x, chunk_pos.y)
+                    && let ClientPlatform::Java(_) = player.client.as_ref()
+                {
+                    java_recipients.push(player);
+                }
+            }
+        }
+
+        let recipients_by_version =
+            World::collect_java_recipients_by_version(java_recipients.into_iter());
+
+        for (version, recipients) in recipients_by_version {
+            if version < JavaMinecraftVersion::V_1_21 {
+                continue;
+            }
+            let mut buf = Vec::new();
+            for m in meta {
+                let _ = m.write(&mut buf, &version);
+            }
+            if buf.is_empty() {
+                continue;
+            }
+            buf.put_u8(255);
+            let packet = CSetEntityMetadata::new(self.entity_id.into(), buf.into());
+            if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version) {
+                for recipient in recipients {
+                    recipient.try_enqueue_packet(packet_data.clone());
+                }
+            }
+        }
+
+        if let Some(bedrock_meta) = bedrock_meta {
+            self.send_bedrock_actor_data(bedrock_meta);
+        }
+    }
+
     pub fn send_dirty_entity_data(&self) {
         if !self.synched_data.is_dirty() {
             return;
@@ -3117,10 +3178,6 @@ impl Entity {
             World::collect_java_recipients_by_version(java_recipients.into_iter());
 
         for (version, recipients) in recipients_by_version {
-            // TODO: Support older versions
-            if version < JavaMinecraftVersion::V_26_2 {
-                continue;
-            }
             if let Some(buf) = self.synched_data.pack_dirty_for_version(&version) {
                 let packet = CSetEntityMetadata::new(self.entity_id.into(), buf);
                 if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version)
