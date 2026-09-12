@@ -14,6 +14,7 @@ use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::data::SaveJSONConfiguration;
 use crate::data::banlist_serializer::BannedIpEntry;
+use crate::entity::EntityBase;
 use crate::net::DisconnectReason;
 use crate::server::Server;
 
@@ -80,6 +81,26 @@ fn ban_ip(context: &CommandContext, target: &str, reason: Option<String>) -> Com
         .cloned()
         .collect();
 
+    let kick_count = players_to_kick.len();
+    if !players_to_kick.is_empty() {
+        let player_names = players_to_kick
+            .iter()
+            .map(|p| p.get_display_name())
+            .reduce(|acc, name| {
+                TextComponent::text(format!("{}, {}", acc.get_text(), name.get_text()))
+            })
+            .unwrap_or_else(TextComponent::empty);
+
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                translation::java::COMMANDS_BANIP_INFO,
+                translation::java::COMMANDS_BANIP_INFO,
+                [TextComponent::text(kick_count.to_string()), player_names],
+            ),
+            true,
+        );
+    }
+
     for player in players_to_kick {
         let kick_msg = TextComponent::translate_cross(
             translation::java::MULTIPLAYER_DISCONNECT_IP_BANNED,
@@ -89,7 +110,7 @@ fn ban_ip(context: &CommandContext, target: &str, reason: Option<String>) -> Com
         player.kick(DisconnectReason::Kicked, &kick_msg);
     }
 
-    Ok(1)
+    Ok(kick_count as i32)
 }
 
 struct BanIpExecutor {
@@ -98,7 +119,7 @@ struct BanIpExecutor {
 
 impl CommandExecutor for BanIpExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
-        let target = StringArgumentType::get(context, "ip")?;
+        let target = StringArgumentType::get(context, "target")?;
         let reason = if self.has_reason {
             Some(StringArgumentType::get(context, "reason")?.to_string())
         } else {
@@ -117,7 +138,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
     ));
 
     let cmd = command("ban-ip", DESCRIPTION).requires(PERMISSION).then(
-        argument("ip", StringArgumentType::SingleWord)
+        argument("target", StringArgumentType::SingleWord)
             .executes(BanIpExecutor { has_reason: false })
             .then(
                 argument("reason", StringArgumentType::GreedyPhrase)

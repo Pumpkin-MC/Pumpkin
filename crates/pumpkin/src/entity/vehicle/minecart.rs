@@ -16,17 +16,17 @@ use crate::{
     server::Server,
 };
 use pumpkin_data::Block;
-use pumpkin_data::block_properties::{BlockProperties, PoweredRailLikeProperties};
+use pumpkin_data::block_properties::PoweredRailLikeProperties;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
+use pumpkin_inventory::Inventory;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::inventory::Inventory;
 
 use crate::entity::vehicle::vehicle::VehicleEntity;
 use chest::ChestMinecart;
@@ -178,7 +178,7 @@ impl EntityBase for MinecartEntity {
         }
 
         if is_powered_rail || is_activator_rail {
-            let props = PoweredRailLikeProperties::from_state_id(state_id, block);
+            let props = PoweredRailLikeProperties::from_state_id(state_id);
             let powered = props.powered;
 
             if is_activator_rail && let MinecartKind::Hopper(minecart) = &self.kind {
@@ -319,10 +319,10 @@ impl EntityBase for MinecartEntity {
             use pumpkin_data::block_properties::{RailShape, RailShapeStraight};
 
             let shape = if block.id == Block::RAIL.id {
-                let props = RailLikeProperties::from_state_id(state_id, block);
+                let props = RailLikeProperties::from_state_id(state_id);
                 props.shape
             } else {
-                let props = PoweredRailLikeProperties::from_state_id(state_id, block);
+                let props = PoweredRailLikeProperties::from_state_id(state_id);
                 match props.shape {
                     RailShapeStraight::NorthSouth => RailShape::NorthSouth,
                     RailShapeStraight::EastWest => RailShape::EastWest,

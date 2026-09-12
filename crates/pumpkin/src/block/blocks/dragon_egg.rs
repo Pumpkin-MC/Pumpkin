@@ -1,7 +1,10 @@
 use crate::block::blocks::falling::FallingBlock;
 use crate::block::registry::BlockActionResult;
-use crate::block::{BlockBehaviour, BrokenArgs, NormalUseArgs, PlacedArgs};
+use crate::block::{
+    BlockBehaviour, BrokenArgs, NormalUseArgs, OnScheduledTickArgs, PathComputationType, PlacedArgs,
+};
 use crate::world::World;
+use pumpkin_data::BlockState;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
@@ -56,7 +59,11 @@ impl BlockBehaviour for DragonEggBlock {
         Self::teleport(args.world, args.position);
     }
 
-    fn on_scheduled_tick(&self, args: crate::block::OnScheduledTickArgs<'_>) {
+    fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         FallingBlock::on_scheduled_tick(&FallingBlock, args);
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }

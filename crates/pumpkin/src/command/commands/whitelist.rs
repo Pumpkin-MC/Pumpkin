@@ -12,6 +12,8 @@ use crate::command::context::command_context::CommandContext;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
+use crate::command::suggestion::provider::{SuggestionProvider, SuggestionProviderResult};
+use crate::command::suggestion::suggestions::SuggestionsBuilder;
 use crate::data::{LoadJSONConfiguration, SaveJSONConfiguration, whitelist::WhitelistConfig};
 use crate::net::DisconnectReason;
 use crate::server::Server;
@@ -39,11 +41,14 @@ const ERROR_REMOVE_FAILED: CommandErrorType<0> = CommandErrorType::new(
     translation::bedrock::COMMANDS_ALLOWLIST_REMOVE_FAILED,
 );
 
-fn kick_non_whitelisted_players(server: &Server) {
+pub fn kick_non_whitelisted_players(server: &Server) {
     let whitelist = server.data.whitelist_config.read().unwrap();
+    let ops = server.data.operator_config.read().unwrap();
     if server.basic_config.enforce_whitelist && server.white_list.load(Ordering::Relaxed) {
         for player in server.get_all_players() {
-            if whitelist.is_whitelisted(&player.gameprofile) {
+            if ops.get_entry(&player.gameprofile.id).is_some()
+                || whitelist.is_whitelisted(&player.gameprofile)
+            {
                 continue;
             }
             player.kick(
@@ -66,7 +71,6 @@ impl CommandExecutor for OnExecutor {
         if previous {
             Err(ERROR_ALREADY_ON.create_without_context())
         } else {
-            kick_non_whitelisted_players(server);
             context.source.send_feedback(
                 pumpkin_macros::translate_cross!(
                     translation::java::COMMANDS_WHITELIST_ENABLED,
@@ -74,6 +78,7 @@ impl CommandExecutor for OnExecutor {
                 ),
                 true,
             );
+            kick_non_whitelisted_players(server);
             Ok(1)
         }
     }
@@ -109,9 +114,10 @@ impl CommandExecutor for ListExecutor {
         let whitelist = &whitelist_guard.whitelist;
         if whitelist.is_empty() {
             context.source.send_feedback(
-                pumpkin_macros::translate_cross!(
+                TextComponent::translate_cross(
                     translation::java::COMMANDS_WHITELIST_NONE,
-                    translation::bedrock::COMMANDS_ALLOWLIST_LIST
+                    translation::java::COMMANDS_WHITELIST_NONE,
+                    [],
                 ),
                 false,
             );
@@ -124,19 +130,21 @@ impl CommandExecutor for ListExecutor {
             .collect::<Vec<&str>>()
             .join(", ");
 
-        let names_len = names.len() as i32;
+        let count = whitelist.len() as i32;
 
         context.source.send_feedback(
-            pumpkin_macros::translate_cross!(
+            TextComponent::translate_cross(
                 translation::java::COMMANDS_WHITELIST_LIST,
-                translation::bedrock::COMMANDS_ALLOWLIST_LIST,
-                TextComponent::text(whitelist.len().to_string()),
-                TextComponent::text(names)
+                translation::java::COMMANDS_WHITELIST_LIST,
+                [
+                    TextComponent::text(count.to_string()),
+                    TextComponent::text(names),
+                ],
             ),
             false,
         );
 
-        Ok(names_len)
+        Ok(count)
     }
 }
 
@@ -146,7 +154,6 @@ impl CommandExecutor for ReloadExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
         let server = context.source.server();
         *server.data.whitelist_config.write().unwrap() = WhitelistConfig::load();
-        kick_non_whitelisted_players(server);
         context.source.send_feedback(
             pumpkin_macros::translate_cross!(
                 translation::java::COMMANDS_WHITELIST_RELOADED,
@@ -154,7 +161,26 @@ impl CommandExecutor for ReloadExecutor {
             ),
             true,
         );
+        kick_non_whitelisted_players(server);
         Ok(1)
+    }
+}
+
+struct AddSuggestionProvider;
+
+impl SuggestionProvider for AddSuggestionProvider {
+    fn suggest(
+        &self,
+        context: &CommandContext,
+        mut builder: SuggestionsBuilder,
+    ) -> SuggestionProviderResult {
+        let whitelist = context.server().data.whitelist_config.read().unwrap();
+        for player in context.server().get_all_players() {
+            if !whitelist.is_whitelisted(&player.gameprofile) {
+                builder = builder.suggest(player.gameprofile.name.clone());
+            }
+        }
+        builder.build()
     }
 }
 
@@ -166,6 +192,8 @@ impl CommandExecutor for AddExecutor {
         let server = context.source.server();
         let mut whitelist = server.data.whitelist_config.write().unwrap();
         let mut successes: i32 = 0;
+        let mut modified = false;
+
         for profile in &targets {
             if let Some(existing_entry) = whitelist
                 .whitelist
@@ -174,6 +202,7 @@ impl CommandExecutor for AddExecutor {
             {
                 if existing_entry.name != profile.name {
                     existing_entry.name.clone_from(&profile.name);
+                    modified = true;
                 }
                 continue;
             }
@@ -189,15 +218,34 @@ impl CommandExecutor for AddExecutor {
                 true,
             );
             successes += 1;
+            modified = true;
         }
 
-        whitelist.save();
+        if modified {
+            whitelist.save();
+        }
 
         if successes == 0 {
             Err(ERROR_ADD_FAILED.create_without_context())
         } else {
             Ok(successes)
         }
+    }
+}
+
+struct RemoveSuggestionProvider;
+
+impl SuggestionProvider for RemoveSuggestionProvider {
+    fn suggest(
+        &self,
+        context: &CommandContext,
+        mut builder: SuggestionsBuilder,
+    ) -> SuggestionProviderResult {
+        let whitelist = context.server().data.whitelist_config.read().unwrap();
+        for entry in &whitelist.whitelist {
+            builder = builder.suggest(entry.name.clone());
+        }
+        builder.build()
     }
 }
 
@@ -229,14 +277,14 @@ impl CommandExecutor for RemoveExecutor {
             }
         }
 
-        whitelist.save();
-        drop(whitelist);
-
-        kick_non_whitelisted_players(server);
-
         if successes == 0 {
             Err(ERROR_REMOVE_FAILED.create_without_context())
         } else {
+            whitelist.save();
+            drop(whitelist);
+
+            kick_non_whitelisted_players(server);
+
             Ok(successes)
         }
     }
@@ -255,14 +303,20 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
             .then(literal("on").executes(OnExecutor))
             .then(literal("off").executes(OffExecutor))
             .then(literal("list").executes(ListExecutor))
-            .then(literal("reload").executes(ReloadExecutor))
             .then(
-                literal("add")
-                    .then(argument("targets", GameProfileArgumentType).executes(AddExecutor)),
+                literal("add").then(
+                    argument("targets", GameProfileArgumentType)
+                        .suggests(AddSuggestionProvider)
+                        .executes(AddExecutor),
+                ),
             )
             .then(
-                literal("remove")
-                    .then(argument("targets", GameProfileArgumentType).executes(RemoveExecutor)),
-            ),
+                literal("remove").then(
+                    argument("targets", GameProfileArgumentType)
+                        .suggests(RemoveSuggestionProvider)
+                        .executes(RemoveExecutor),
+                ),
+            )
+            .then(literal("reload").executes(ReloadExecutor)),
     );
 }

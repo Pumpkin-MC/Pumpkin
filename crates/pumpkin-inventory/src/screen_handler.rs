@@ -31,11 +31,16 @@ use crate::{
     slot::{NormalSlot, Slot},
     sync_handler::{SyncHandler, TrackedStack},
 };
+use crate::{
+    inventory::{ComparableInventory, Inventory},
+    window_property::PropertyDelegate,
+};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{
     Enchantment,
     data_component_impl::{EquipmentSlot, EquipmentType, EquippableImpl},
     screen::WindowType,
+    sound::Sound,
     statistic::StatisticCategory,
 };
 use pumpkin_protocol::{
@@ -49,10 +54,6 @@ use pumpkin_protocol::{
     },
 };
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::{
-    block::entities::PropertyDelegate,
-    inventory::{ComparableInventory, Inventory},
-};
 use std::cmp::max;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -135,6 +136,11 @@ pub trait InventoryPlayer: Send + Sync {
     /// Checks if the player is in creative mode.
     fn is_creative(&self) -> bool;
 
+    /// Checks if the player is in spectator mode.
+    fn is_spectator(&self) -> bool {
+        false
+    }
+
     /// Gets the player's experience level.
     fn experience_level(&self) -> i32;
 
@@ -183,6 +189,9 @@ pub trait InventoryPlayer: Send + Sync {
     /// Increments a statistic for the player.
     fn increment_stat(&self, category: StatisticCategory, stat_id: i32, amount: i32);
 
+    /// Plays a block sound at the open container position.
+    fn play_block_sound(&self, sound: Sound, pitch: f32);
+
     /// Fires a prepare item enchant event. Returns true if cancelled.
     fn fire_prepare_item_enchant_event(
         &self,
@@ -211,6 +220,9 @@ pub trait InventoryPlayer: Send + Sync {
 
     /// Performs anvil block damage and plays anvil sound events.
     fn use_anvil(&self) {}
+
+    /// Performs grindstone experience drop and plays grindstone sound events.
+    fn use_grindstone(&self, _xp_amount: i32) {}
 }
 
 /// Gives a stack to the player or drops it if inventory is full.
@@ -1139,33 +1151,50 @@ pub trait ScreenHandler: Send + Sync {
 
                 slot.mark_dirty();
             }
-        } else if action_type == SlotActionType::Swap && (0..9).contains(&button) || button == 40 {
+        } else if action_type == SlotActionType::Swap && ((0..9).contains(&button) || button == 40)
+        {
             if slot_index < 0 {
                 return;
             }
-            let mut button_stack = player.get_inventory().get_stack(button as usize);
+            let player_inventory = player.get_inventory();
+            let mut button_stack = player_inventory.get_stack(button as usize);
             let source_slot = self.get_behaviour().slots[slot_index as usize].clone();
             let source_stack = source_slot.get_cloned_stack();
 
             if !button_stack.is_empty() || !source_stack.is_empty() {
                 if button_stack.is_empty() {
                     if source_slot.can_take_items(player) {
-                        player
-                            .get_inventory()
-                            .set_stack(button as usize, source_stack.clone());
+                        player_inventory.set_stack(button as usize, source_stack.clone());
                         source_slot.set_stack(ItemStack::EMPTY.clone());
                         source_slot.on_take_item(player, &source_stack);
                     }
                 } else if source_stack.is_empty() && source_slot.can_insert(&button_stack) {
                     let max_count = source_slot.get_max_item_count_for_stack(&button_stack);
                     if button_stack.item_count > max_count {
-                        // button_stack might need to be a ref instead of a clone
                         source_slot.set_stack(button_stack.split(max_count));
+                        player_inventory.set_stack(button as usize, button_stack);
                     } else {
-                        player
-                            .get_inventory()
-                            .set_stack(button as usize, ItemStack::EMPTY.clone());
+                        player_inventory.set_stack(button as usize, ItemStack::EMPTY.clone());
                         source_slot.set_stack(button_stack);
+                    }
+                } else if source_slot.can_take_items(player)
+                    && source_slot.can_insert(&button_stack)
+                {
+                    let max_count = source_slot.get_max_item_count_for_stack(&button_stack);
+                    if button_stack.item_count > max_count {
+                        source_slot.set_stack(button_stack.split(max_count));
+                        player_inventory.set_stack(button as usize, button_stack);
+                        source_slot.on_take_item(player, &source_stack);
+
+                        let mut displaced_stack = source_stack;
+                        player_inventory.insert_stack_anywhere(&mut displaced_stack);
+                        if !displaced_stack.is_empty() {
+                            player.drop_item(displaced_stack, true);
+                        }
+                    } else {
+                        player_inventory.set_stack(button as usize, source_stack.clone());
+                        source_slot.set_stack(button_stack);
+                        source_slot.on_take_item(player, &source_stack);
                     }
                 }
             }

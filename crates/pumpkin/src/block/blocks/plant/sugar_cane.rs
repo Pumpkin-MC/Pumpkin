@@ -1,11 +1,7 @@
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::HorizontalFacing;
 use pumpkin_data::tag::Taggable;
-use pumpkin_data::{
-    Block,
-    block_properties::{BlockProperties, CactusLikeProperties},
-    tag,
-};
+use pumpkin_data::{Block, block_properties::CactusLikeProperties, tag};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
@@ -33,7 +29,7 @@ impl BlockBehaviour for SugarCaneBlock {
                 && args.world.get_block(&args.position.down().down()) == &Block::SUGAR_CANE)
         {
             let state_id = args.world.get_block_state(args.position).id;
-            let age = CactusLikeProperties::from_state_id(state_id, args.block).age;
+            let age = CactusLikeProperties::from_state_id(state_id).age;
             if age == 15 {
                 args.world
                     .set_block_state(&args.position.up(), state_id, BlockFlags::NOTIFY_ALL);

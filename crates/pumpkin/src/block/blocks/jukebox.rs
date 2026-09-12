@@ -13,10 +13,7 @@ use pumpkin_data::data_component_impl::JukeboxPlayableImpl;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::jukebox_song::JukeboxSong;
 use pumpkin_data::world::WorldEvent;
-use pumpkin_data::{
-    Block, BlockStateId,
-    block_properties::{BlockProperties, JukeboxLikeProperties},
-};
+use pumpkin_data::{Block, BlockStateId, block_properties::JukeboxLikeProperties};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -29,8 +26,8 @@ use tracing::error;
 pub struct JukeboxBlock;
 
 impl JukeboxBlock {
-    fn has_record_state(block: &Block, state_id: BlockStateId) -> bool {
-        JukeboxLikeProperties::from_state_id(state_id, block).has_record
+    fn has_record_state(_block: &Block, state_id: BlockStateId) -> bool {
+        JukeboxLikeProperties::from_state_id(state_id).has_record
     }
 
     fn set_record_state(has_record: bool, block: &Block, position: &BlockPos, world: &Arc<World>) {

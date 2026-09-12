@@ -157,6 +157,10 @@ impl TridentEntity {
 }
 
 impl EntityBase for TridentEntity {
+    fn get_owner_id(&self) -> Option<i32> {
+        self.owner_id
+    }
+
     fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
         let entity = self.get_entity();
         let world = entity.world.load();
@@ -370,7 +374,8 @@ impl EntityBase for TridentEntity {
                     1.0,
                     0.0,
                 );
-                world.broadcast_packet_all(&sound_packet);
+                let chunk_pos = entity.chunk_pos.load();
+                world.broadcast_to_chunk(chunk_pos, &sound_packet);
 
                 // Standard bounce/fall-back behavior
                 entity.velocity.store(Vector3::new(0.0, -0.1, 0.0));
@@ -401,6 +406,11 @@ impl EntityBase for TridentEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone();
         if player.is_creative() || player.inventory.insert_stack_anywhere(&mut stack) {
+            player.increment_stat(
+                pumpkin_data::statistic::StatisticCategory::PickedUp,
+                stack.item.id as i32,
+                1,
+            );
             player.living_entity.pickup(&self.entity, 1);
             self.get_entity().remove();
         }

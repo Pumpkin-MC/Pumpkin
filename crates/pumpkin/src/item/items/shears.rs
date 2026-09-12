@@ -1,12 +1,18 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::Entity;
 use crate::entity::EntityBase;
 use crate::entity::item::ItemEntity;
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
+use pumpkin_data::BlockId;
+use pumpkin_data::block_properties::BeeNestLikeProperties;
+use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::block_properties::CaveVinesLikeProperties;
+use pumpkin_data::block_properties::KelpLikeProperties;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -55,19 +61,23 @@ impl ItemBehaviour for ShearsItem {
         _cursor_pos: Vector3<f32>,
         block: &Block,
         _server: &Server,
-    ) {
+    ) -> BlockActionResult {
         let world = player.world();
         let state_id = world.get_block_state_id(&location);
 
         if handle_growing_plant(player, &location, block, state_id) {
-            return;
+            return BlockActionResult::Success;
         }
 
         if handle_beehive(player, &location, block, state_id) {
-            return;
+            return BlockActionResult::Success;
         }
 
-        handle_pumpkin(player, &location, block);
+        if handle_pumpkin(player, &location, block) {
+            BlockActionResult::Success
+        } else {
+            BlockActionResult::Pass
+        }
     }
 
     fn use_on_entity(&self, _item: &mut ItemStack, player: &Player, entity: Arc<dyn EntityBase>) {
@@ -76,6 +86,20 @@ impl ItemBehaviour for ShearsItem {
             .downcast_ref::<crate::entity::passive::sheep::SheepEntity>()
             && !sheep.is_sheared()
         {
+            if let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id)
+                && let Some(server) = player.world().server.upgrade()
+            {
+                let mut event = crate::plugin::api::events::player::player_shear_entity::PlayerShearEntityEvent {
+                    player: player_arc,
+                    entity_id: sheep.mob_entity.living_entity.entity.entity_id,
+                    hand: 0,
+                    cancelled: false,
+                };
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return;
+                }
+            }
             sheep.set_sheared(true);
             let world = player.world();
             let pos = sheep.mob_entity.living_entity.entity.pos.load();
@@ -103,45 +127,33 @@ fn handle_growing_plant(
     block: &Block,
     state_id: BlockStateId,
 ) -> bool {
-    let is_growing_plant = block.id == Block::KELP.id
-        || block.id == Block::CAVE_VINES.id
-        || block.id == Block::CAVE_VINES_PLANT.id
-        || block.id == Block::TWISTING_VINES.id
-        || block.id == Block::WEEPING_VINES.id;
-
-    if !is_growing_plant {
+    let new_state_id = if KelpLikeProperties::handles_block_id(block.id) {
+        let mut props = KelpLikeProperties::from_state_id(state_id);
+        if props.age >= 25 {
+            return false;
+        }
+        props.age = 25;
+        props.to_state_id(block)
+    } else if CaveVinesLikeProperties::handles_block_id(block.id) {
+        let mut props = CaveVinesLikeProperties::from_state_id(state_id);
+        if props.age >= 25 {
+            return false;
+        }
+        props.age = 25;
+        props.to_state_id(block)
+    } else {
         return false;
-    }
+    };
 
     let world = player.world();
-    let action = block.properties(state_id).and_then(|props| {
-        let prop_map = props.to_props();
-        prop_map
-            .iter()
-            .find(|(k, _)| *k == "age")
-            .and_then(|(_, age_str)| age_str.parse::<u8>().ok())
-            .filter(|&age| age < 25)
-            .map(|_| {
-                let new_props: Vec<(&str, &str)> = prop_map
-                    .iter()
-                    .map(|(k, v)| if *k == "age" { (*k, "25") } else { (*k, *v) })
-                    .collect();
-                block.from_properties(&new_props).to_state_id(block)
-            })
-    });
-
-    if let Some(new_state_id) = action {
-        world.set_block_state(location, new_state_id, BlockFlags::NOTIFY_ALL);
-        world.play_sound(
-            Sound::BlockGrowingPlantCrop,
-            SoundCategory::Blocks,
-            &location.to_f64(),
-        );
-        player.damage_held_item(1);
-        return true;
-    }
-
-    false
+    world.set_block_state(location, new_state_id, BlockFlags::NOTIFY_ALL);
+    world.play_sound(
+        Sound::BlockGrowingPlantCrop,
+        SoundCategory::Blocks,
+        &location.to_f64(),
+    );
+    player.damage_held_item(1);
+    true
 }
 
 fn handle_beehive(
@@ -150,58 +162,59 @@ fn handle_beehive(
     block: &Block,
     state_id: BlockStateId,
 ) -> bool {
-    if block.id != Block::BEEHIVE.id && block.id != Block::BEE_NEST.id {
+    if !BeeNestLikeProperties::handles_block_id(block.id) {
         return false;
     }
 
-    let world = player.world();
-    let action = block.properties(state_id).and_then(|props| {
-        let prop_map = props.to_props();
-        prop_map
-            .iter()
-            .find(|(k, v)| *k == "honey_level" && *v == "5")
-            .map(|_| {
-                let new_props: Vec<(&str, &str)> = prop_map
-                    .iter()
-                    .map(|(k, v)| {
-                        if *k == "honey_level" {
-                            (*k, "0")
-                        } else {
-                            (*k, *v)
-                        }
-                    })
-                    .collect();
-                block.from_properties(&new_props).to_state_id(block)
-            })
-    });
+    let mut props = BeeNestLikeProperties::from_state_id(state_id);
 
-    if let Some(new_state_id) = action {
-        world.set_block_state(location, new_state_id, BlockFlags::NOTIFY_ALL);
-        world.play_sound(
-            Sound::BlockBeehiveShear,
-            SoundCategory::Blocks,
-            &location.to_f64(),
-        );
-
-        let drop_pos = Vector3::new(
-            f64::from(location.0.x) + 0.5,
-            f64::from(location.0.y) + 0.5,
-            f64::from(location.0.z) + 0.5,
-        );
-        let item_entity = Arc::new(ItemEntity::new(
-            Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
-            ItemStack::new(3, &Item::HONEYCOMB),
-        ));
-        world.spawn_entity(item_entity);
-        player.damage_held_item(1);
-        return true;
+    if props.honey_level != 5 {
+        return false;
     }
 
-    false
+    let mut drops = vec![ItemStack::new(3, &Item::HONEYCOMB)];
+    if let Some(player_arc) = player.world().get_player_by_uuid(player.gameprofile.id)
+        && let Some(server) = player.world().server.upgrade()
+    {
+        let mut event =
+            crate::plugin::api::events::player::player_harvest_block::PlayerHarvestBlockEvent {
+                player: player_arc,
+                block_pos: *location,
+                harvested_items: drops.clone(),
+                cancelled: false,
+            };
+        server.plugin_manager.fire_blocking(&server, &mut event);
+        if event.cancelled {
+            return false;
+        }
+        drops = event.harvested_items;
+    }
+
+    props.honey_level = 0;
+    let new_state_id = props.to_state_id(block);
+
+    let world = player.world();
+    world.set_block_state(location, new_state_id, BlockFlags::NOTIFY_ALL);
+    world.play_sound(
+        Sound::BlockBeehiveShear,
+        SoundCategory::Blocks,
+        &location.to_f64(),
+    );
+
+    let drop_pos = location.to_centered_f64();
+    for item in drops {
+        let item_entity = Arc::new(ItemEntity::new(
+            Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
+            item,
+        ));
+        world.spawn_entity(item_entity);
+    }
+    player.damage_held_item(1);
+    true
 }
 
-fn handle_pumpkin(player: &Player, location: &BlockPos, block: &Block) {
-    if block.id == Block::PUMPKIN.id {
+fn handle_pumpkin(player: &Player, location: &BlockPos, block: &Block) -> bool {
+    if block.id == BlockId::PUMPKIN {
         let world = player.world();
         let carved_state = Block::CARVED_PUMPKIN.default_state.id;
         world.set_block_state(location, carved_state, BlockFlags::NOTIFY_ALL);
@@ -211,16 +224,15 @@ fn handle_pumpkin(player: &Player, location: &BlockPos, block: &Block) {
             &location.to_f64(),
         );
 
-        let drop_pos = Vector3::new(
-            f64::from(location.0.x) + 0.5,
-            f64::from(location.0.y) + 0.5,
-            f64::from(location.0.z) + 0.5,
-        );
+        let drop_pos = location.to_centered_f64();
         let item_entity = Arc::new(ItemEntity::new(
             Entity::new(world.clone(), drop_pos, &EntityType::ITEM),
             ItemStack::new(4, &Item::PUMPKIN_SEEDS),
         ));
         world.spawn_entity(item_entity);
         player.damage_held_item(1);
+        true
+    } else {
+        false
     }
 }

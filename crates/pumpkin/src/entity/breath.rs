@@ -2,12 +2,8 @@ use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::effect::StatusEffect;
-use pumpkin_data::tag;
-use pumpkin_data::tag::Taggable;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::GameMode;
-use pumpkin_util::math::position::BlockPos;
 use std::sync::atomic::{AtomicI32, Ordering};
 
 pub const MAX_AIR: i32 = 300;
@@ -58,15 +54,12 @@ impl BreathManager {
             return;
         }
 
-        let in_water = Self::is_eye_in_water(player);
+        let in_water = player.get_entity().is_submerged_in_water();
+        let prev = self.air_supply.load(Ordering::Relaxed);
 
         if in_water {
-            let prev = self
-                .air_supply
-                .fetch_sub(AIR_DEPLETION_RATE, Ordering::Relaxed);
-            let new_air = (prev - AIR_DEPLETION_RATE).max(0);
+            let mut new_air = (prev - AIR_DEPLETION_RATE).max(0);
             if new_air != prev {
-                self.air_supply.store(new_air, Ordering::Relaxed);
                 let server = player.world().server.upgrade();
                 if let Some(server) = server {
                     let mut event = crate::plugin::api::events::entity::entity_air_change::EntityAirChangeEvent::new(
@@ -74,7 +67,12 @@ impl BreathManager {
                         new_air,
                     );
                     server.plugin_manager.fire_blocking(&server, &mut event);
+                    if event.cancelled {
+                        return;
+                    }
+                    new_air = event.amount.clamp(0, MAX_AIR);
                 }
+                self.air_supply.store(new_air, Ordering::Relaxed);
                 self.send_air_supply(player);
             }
 
@@ -89,67 +87,25 @@ impl BreathManager {
                 }
             }
         } else {
-            let prev = self.air_supply.load(Ordering::Relaxed);
-            let new_air = (prev + AIR_RECOVERY_RATE).min(MAX_AIR);
+            let mut new_air = (prev + AIR_RECOVERY_RATE).min(MAX_AIR);
             if new_air != prev {
+                let server = player.world().server.upgrade();
+                if let Some(server) = server {
+                    let mut event = crate::plugin::api::events::entity::entity_air_change::EntityAirChangeEvent::new(
+                        player.entity_id(),
+                        new_air,
+                    );
+                    server.plugin_manager.fire_blocking(&server, &mut event);
+                    if event.cancelled {
+                        return;
+                    }
+                    new_air = event.amount.clamp(0, MAX_AIR);
+                }
                 self.air_supply.store(new_air, Ordering::Relaxed);
                 self.send_air_supply(player);
             }
             self.drowning_tick.store(0, Ordering::Relaxed);
         }
-    }
-
-    fn is_eye_in_water(player: &Player) -> bool {
-        let e = &player.get_entity();
-        let pos = e.pos.load();
-        let eye_y = e.get_eye_y();
-
-        let bp = BlockPos::new(
-            pos.x.floor() as i32,
-            eye_y.floor() as i32,
-            pos.z.floor() as i32,
-        );
-        let world = player.world();
-
-        let (fluid, state) = world.get_fluid_and_fluid_state(&bp);
-
-        let mut in_water_fluid = fluid.has_tag(&tag::Fluid::MINECRAFT_WATER);
-
-        if !in_water_fluid {
-            let state_here = world.get_block_state(&bp);
-            if !state_here.is_solid() {
-                let above = BlockPos::new(bp.0.x, bp.0.y + 1, bp.0.z);
-                let fluid_above_x = world.get_fluid(&above);
-                if fluid_above_x.has_tag(&tag::Fluid::MINECRAFT_WATER) {
-                    in_water_fluid = true;
-                }
-            }
-        }
-
-        if !in_water_fluid {
-            return false;
-        }
-
-        let above = BlockPos::new(bp.0.x, bp.0.y + 1, bp.0.z);
-        let fluid_above = world.get_fluid(&above);
-
-        let surface_y = if fluid_above.has_tag(&tag::Fluid::MINECRAFT_WATER) {
-            f64::from(bp.0.y as f32 + 1.0)
-        } else {
-            let height: f32 = if state.is_still {
-                1.0
-            } else {
-                let lvl = i32::from(state.level);
-                if lvl >= 8 {
-                    1.0
-                } else {
-                    ((8 - lvl).clamp(1, 8) as f32) / 8.0
-                }
-            };
-            f64::from(bp.0.y as f32 + height)
-        };
-
-        surface_y > eye_y
     }
 
     pub fn send_air_supply(&self, player: &Player) {
@@ -162,16 +118,11 @@ impl BreathManager {
             pumpkin_protocol::bedrock::client::set_actor_data::MetadataValue::Short(air as i16),
         );
 
-        player.get_entity().send_meta_data(
-            &[
-                Metadata::new(
-                    pumpkin_data::tracked_data::entity::DATA_AIR_SUPPLY_ID,
-                    VarInt(air),
-                ),
-                Metadata::new(pumpkin_data::tracked_data::entity::AIR, VarInt(air)),
-            ],
-            Some(&bedrock_meta),
+        player.get_entity().set_synced_data(
+            pumpkin_data::tracked_data::entity::DATA_AIR_SUPPLY_ID,
+            VarInt(air),
         );
+        player.get_entity().send_bedrock_actor_data(&bedrock_meta);
     }
 
     pub fn reset(&self, player: &Player) {

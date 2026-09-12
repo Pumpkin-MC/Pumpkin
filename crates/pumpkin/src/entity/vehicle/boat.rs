@@ -10,8 +10,6 @@ use crate::server::Server;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::item_stack::ItemStack;
 
-use pumpkin_protocol::java::client::play::Metadata;
-
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::vehicle::vehicle::VehicleEntity;
@@ -37,13 +35,12 @@ impl BoatEntity {
         self.left_paddle_moving.store(left, Ordering::Relaxed);
         self.right_paddle_moving.store(right, Ordering::Relaxed);
 
-        self.vehicle.entity.send_meta_data(
-            &[
-                Metadata::new(pumpkin_data::tracked_data::boat::ID_PADDLE_LEFT, left),
-                Metadata::new(pumpkin_data::tracked_data::boat::ID_PADDLE_RIGHT, right),
-            ],
-            None,
-        );
+        self.vehicle
+            .entity
+            .set_synced_data(pumpkin_data::tracked_data::boat::ID_PADDLE_LEFT, left);
+        self.vehicle
+            .entity
+            .set_synced_data(pumpkin_data::tracked_data::boat::ID_PADDLE_RIGHT, right);
     }
 
     fn send_wobble_metadata(&self) {

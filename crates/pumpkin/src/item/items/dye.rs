@@ -13,6 +13,9 @@ use crate::{
     item::{ItemBehaviour, ItemMetadata},
 };
 
+use crate::entity::EntityBase;
+use pumpkin_data::item_stack::ItemStack;
+
 pub struct DyeItem;
 
 impl ItemMetadata for DyeItem {
@@ -22,6 +25,27 @@ impl ItemMetadata for DyeItem {
 }
 
 impl ItemBehaviour for DyeItem {
+    fn use_on_entity(&self, item: &mut ItemStack, player: &Player, entity: Arc<dyn EntityBase>) {
+        if let Some(sheep) = entity
+            .cast_any()
+            .downcast_ref::<crate::entity::passive::sheep::SheepEntity>()
+            && let Some(color) =
+                crate::entity::passive::animal::get_dye_color_from_item(item.get_item())
+            && !sheep.is_sheared()
+            && color != sheep.get_color()
+        {
+            sheep.set_color(color);
+            let ent = entity.get_entity();
+            let world = ent.world.load();
+            world.play_sound(
+                pumpkin_data::sound::Sound::ItemDyeUse,
+                pumpkin_data::sound::SoundCategory::Players,
+                &ent.pos.load(),
+            );
+            item.decrement_unless_creative(player.gamemode.load(), 1);
+        }
+    }
+
     fn can_mine(&self, player: &Player) -> bool {
         player.gamemode.load() != GameMode::Creative
     }

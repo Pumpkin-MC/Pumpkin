@@ -22,14 +22,18 @@ doctest = false
 arc-swap.workspace = true
 rayon.workspace = true
 pumpkin-util.workspace = true
+pumpkin-auth.workspace = true
 pumpkin-nbt.workspace = true
 pumpkin-config.workspace = true
+pumpkin-command.workspace = true
 pumpkin-inventory.workspace = true
 pumpkin-world.workspace = true
 pumpkin-data = { workspace = true, features = ["default"] }
 pumpkin-protocol = { workspace = true, features = ["default"] }
 pumpkin-macros.workspace = true
-pumpkin-codecs.workspace = true
+pumpkin-plugin-runtime.workspace = true
+pumpkin-gametest = { path = "../pumpkin-gametest" }
+pumpkin-host-bindings.workspace = true
 
 dashmap.workspace = true
 crossbeam.workspace = true
@@ -73,10 +77,11 @@ rsa.workspace = true
 ed25519-dalek.workspace = true
 hex.workspace = true
 wasmparser.workspace = true
-wasm-encoder = "0.257"
+wasm-encoder.workspace = true
 
 # authentication
 reqwest = { workspace = true, features = ["json"] }
+rustls.workspace = true
 
 sha1.workspace = true
 
@@ -100,6 +105,7 @@ rustc-hash.workspace = true
 tokio-util = { workspace = true, features = ["rt"] }
 
 # System details & Rustc version
+libc = { workspace = true }
 sysinfo.workspace = true
 rustc_version_runtime.workspace = true
 
@@ -123,6 +129,8 @@ bitflags = { workspace = true }
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 
 indexmap.workspace = true
+xxhash-rust.workspace = true
+
 
 [dev-dependencies]
 tempfile.workspace = true

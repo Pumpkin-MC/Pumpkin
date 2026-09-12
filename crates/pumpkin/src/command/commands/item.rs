@@ -1,5 +1,6 @@
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::translation;
+use pumpkin_inventory::Inventory;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::java::client::play::CSetContainerSlot;
@@ -7,7 +8,6 @@ use pumpkin_util::PermissionLvl;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_world::inventory::Inventory;
 
 use crate::command::argument_builder::{
     ArgumentBuilder, RequiredArgumentBuilder, argument, command, literal,
@@ -290,21 +290,15 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
         PermissionDefault::Op(PermissionLvl::Two),
     ));
 
-    let block_node = literal("block").then(
-        argument("pos", BlockPosArgumentType).then(
-            argument("slot", SlotArgumentType)
-                .then(block_item_node())
-                .then(literal("with").then(block_item_node())),
-        ),
-    );
+    let block_node = literal("block")
+        .then(argument("pos", BlockPosArgumentType).then(
+            argument("slot", SlotArgumentType).then(literal("with").then(block_item_node())),
+        ));
 
-    let entity_node = literal("entity").then(
-        argument("targets", EntityArgumentType::Entities).then(
-            argument("slot", SlotArgumentType)
-                .then(entity_item_node())
-                .then(literal("with").then(entity_item_node())),
-        ),
-    );
+    let entity_node =
+        literal("entity").then(argument("targets", EntityArgumentType::Entities).then(
+            argument("slot", SlotArgumentType).then(literal("with").then(entity_item_node())),
+        ));
 
     dispatcher.register(
         command("item", DESCRIPTION)

@@ -1,0 +1,21 @@
+[package]
+name = "pumpkin-command"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+pumpkin-util.workspace = true
+pumpkin-protocol = { workspace = true, features = ["default"] }
+pumpkin-data = { workspace = true, features = ["default"] }
+pumpkin-nbt.workspace = true
+pumpkin-codecs.workspace = true
+
+uuid.workspace = true
+rustc-hash.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+
+[lints]
+workspace = true

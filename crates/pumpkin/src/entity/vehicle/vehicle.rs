@@ -5,7 +5,6 @@ use crate::entity::Entity;
 use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::EntityBase;
-use crate::world::loot::{LootContextParameters, LootTableExt};
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::GameMode;
 
@@ -28,13 +27,20 @@ impl VehicleEntity {
 
     pub fn tick(&self) {
         let current_hurt = self.hurt_time.load(Ordering::Relaxed);
+        let mut wobble_changed = false;
         if current_hurt > 0 {
             self.hurt_time.store(current_hurt - 1, Ordering::Relaxed);
+            wobble_changed = true;
         }
 
         let current_damage = self.damage.load();
         if current_damage > 0.0 {
             self.damage.store(current_damage - 1.0);
+            wobble_changed = true;
+        }
+
+        if wobble_changed {
+            self.send_wobble_metadata();
         }
 
         let mut update_event =
@@ -45,6 +51,11 @@ impl VehicleEntity {
             server
                 .plugin_manager
                 .fire_blocking(&server, &mut update_event);
+        }
+
+        // Coalesce pushed velocity to once per tick (boats use the default push()).
+        if self.entity.velocity_dirty.swap(false, Ordering::SeqCst) {
+            self.entity.send_velocity();
         }
     }
 
@@ -145,28 +156,14 @@ impl VehicleEntity {
                     pumpkin_data::tracked_data::boat::ID_HURTDIR,
                     VarInt(self.get_hurt_dir()),
                 ),
-                Metadata::new(
-                    pumpkin_data::tracked_data::boat_entity::DAMAGE_WOBBLE_TICKS,
-                    VarInt(self.get_hurt_time()),
-                ),
-                Metadata::new(
-                    pumpkin_data::tracked_data::boat_entity::DAMAGE_WOBBLE_SIDE,
-                    VarInt(self.get_hurt_dir()),
-                ),
             ],
             None,
         );
         self.entity.send_meta_data(
-            &[
-                Metadata::new(
-                    pumpkin_data::tracked_data::boat::ID_DAMAGE,
-                    self.get_damage(),
-                ),
-                Metadata::new(
-                    pumpkin_data::tracked_data::boat_entity::DAMAGE_WOBBLE_STRENGTH,
-                    self.get_damage(),
-                ),
-            ],
+            &[Metadata::new(
+                pumpkin_data::tracked_data::boat::ID_DAMAGE,
+                self.get_damage(),
+            )],
             None,
         );
     }
@@ -175,18 +172,15 @@ impl VehicleEntity {
         let world = self.entity.world.load();
         let entity_drops = world.level_info.load().game_rules.entity_drops;
 
-        if entity_drops && let Some(loot_table) = &self.entity.entity_type.loot_table {
-            let pos = self.entity.block_pos.load();
-            let is_raining = world.is_raining();
-            let is_thundering = world.is_thundering();
-            let params = LootContextParameters {
-                is_raining: Some(is_raining),
-                is_thundering: Some(is_thundering),
-                world_time: world.level_info.load().day_time as u64,
-                ..Default::default()
-            };
-            for stack in loot_table.get_loot(params) {
-                world.drop_stack(&pos, stack);
+        if entity_drops {
+            let resource_name = self.entity.entity_type.resource_name;
+            let key = format!("minecraft:entities/{resource_name}");
+            if let Some(loot_table) = pumpkin_data::loot_table::get_loot_table(&key) {
+                let pos = self.entity.block_pos.load();
+                let seed: i64 = rand::random();
+                for stack in crate::world::loot::generate_loot(loot_table, seed) {
+                    world.drop_stack(&pos, stack);
+                }
             }
         }
 
@@ -268,36 +262,26 @@ mod tests {
     use pumpkin_protocol::java::client::play::Metadata;
     use pumpkin_util::version::JavaMinecraftVersion;
 
-    fn wobble_integer_metadata(version: JavaMinecraftVersion) -> Vec<u8> {
+    fn wobble_metadata(version: JavaMinecraftVersion) -> Vec<u8> {
         let mut bytes = Vec::new();
-        for metadata in [
-            Metadata::new(pumpkin_data::tracked_data::boat::ID_HURT, VarInt(10)),
-            Metadata::new(pumpkin_data::tracked_data::boat::ID_HURTDIR, VarInt(-1)),
-            Metadata::new(
-                pumpkin_data::tracked_data::boat_entity::DAMAGE_WOBBLE_TICKS,
-                VarInt(10),
-            ),
-            Metadata::new(
-                pumpkin_data::tracked_data::boat_entity::DAMAGE_WOBBLE_SIDE,
-                VarInt(-1),
-            ),
-        ] {
-            metadata.write(&mut bytes, &version).unwrap();
-        }
+        Metadata::new(pumpkin_data::tracked_data::boat::ID_HURT, VarInt(10))
+            .write(&mut bytes, &version)
+            .unwrap();
+        Metadata::new(pumpkin_data::tracked_data::boat::ID_HURTDIR, VarInt(-1))
+            .write(&mut bytes, &version)
+            .unwrap();
+        Metadata::new(pumpkin_data::tracked_data::boat::ID_DAMAGE, 10.0f32)
+            .write(&mut bytes, &version)
+            .unwrap();
         bytes
     }
 
     #[test]
-    fn wobble_integers_serialize_for_legacy_and_current_clients() {
-        let expected = vec![8, 1, 10, 9, 1, 0xff, 0xff, 0xff, 0xff, 0x0f];
+    fn wobble_metadata_serializes_hurt_and_damage_together() {
+        let mut expected = vec![8, 1, 10, 9, 1, 0xff, 0xff, 0xff, 0xff, 0x0f, 10, 3];
+        expected.extend(10.0f32.to_be_bytes());
 
-        assert_eq!(
-            wobble_integer_metadata(JavaMinecraftVersion::V_1_21_11),
-            expected
-        );
-        assert_eq!(
-            wobble_integer_metadata(JavaMinecraftVersion::V_26_2),
-            expected
-        );
+        assert_eq!(wobble_metadata(JavaMinecraftVersion::V_1_21_11), expected);
+        assert_eq!(wobble_metadata(JavaMinecraftVersion::V_26_2), expected);
     }
 }
