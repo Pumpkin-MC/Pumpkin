@@ -448,8 +448,6 @@ impl EntityBase for MinecartEntity {
                 }
             }
 
-            self.vehicle.entity.send_pos_rot();
-
             #[allow(clippy::useless_let_if_seq)]
             let mut friction = 0.95; // Vanilla minecart air drag
 

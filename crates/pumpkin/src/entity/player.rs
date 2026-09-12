@@ -31,7 +31,11 @@ use pumpkin_protocol::bedrock::client::{
 };
 use pumpkin_protocol::bedrock::client::{
     SerializedAbilitiesDataSerializedLayer,
+    add_player::CAddPlayer,
+    common::BuildPlatform,
     move_player::CMovePlayer as CBedrockMovePlayer,
+    player_list::{CPlayerList, PlayerListEntry},
+    set_actor_data::PropertySyncData,
     update_attributes::{
         AttributeData as BedrockAttribute, CUpdateAttributes as CBedrockAttributes,
     },
@@ -992,6 +996,73 @@ impl Player {
                 .entity_tracker
                 .update_player_chunks(&player, world, chunks);
         }
+    }
+
+    /// Bedrock tab-list entry -> carries the skin, so it must precede `AddPlayer`.
+    #[must_use]
+    pub fn bedrock_player_list(&self) -> CPlayerList {
+        CPlayerList {
+            action: CPlayerList::ACTION_ADD,
+            entries: vec![PlayerListEntry {
+                uuid: self.gameprofile.id,
+                entity_unique_id: VarLong(i64::from(self.entity_id())),
+                username: self.gameprofile.name.clone(),
+                xuid: String::new(),
+                platform_chat_id: String::new(),
+                build_platform: BuildPlatform::Unknown,
+                skin: (**self.bedrock_skin.load()).clone(),
+                is_teacher: false,
+                is_host: false,
+                is_sub_client: false,
+                player_color: [0; 4],
+            }],
+        }
+    }
+
+    /// Bedrock remote-player spawn -> the `PlayerList` entry must precede `AddPlayer`.
+    #[must_use]
+    pub fn bedrock_spawn_packets(&self) -> (CPlayerList, CAddPlayer) {
+        let entity = self.get_entity();
+        let entity_id = i64::from(self.entity_id());
+        let profile = &self.gameprofile;
+        let mut entity_data = entity.bedrock_metadata();
+        // name tag only shows on the crosshair without this.
+        entity_data.set(
+            pumpkin_protocol::bedrock::client::set_actor_data::entity_data_key::ALWAYS_SHOW_NAME_TAG,
+            pumpkin_protocol::bedrock::client::set_actor_data::MetadataValue::Byte(1),
+        );
+        let add_player = CAddPlayer {
+            uuid: profile.id,
+            player_name: profile.name.clone(),
+            target_runtime_id: VarULong(entity_id as u64),
+            platform_chat_id: String::new(),
+            position: entity.pos.load().to_f32_lossy(),
+            velocity: entity.velocity.load().to_f32_lossy(),
+            rotation: Vector2::new(entity.pitch.load(), entity.yaw.load()),
+            y_head_rotation: entity.head_yaw.load(),
+            carried_item:
+                pumpkin_protocol::bedrock::network_item::NetworkItemStackDescriptor::default(),
+            player_game_type: self.gamemode.load().into(),
+            entity_data,
+            synced_properties: PropertySyncData::default(),
+            abilities_data: SerializedAbilitiesData {
+                target_player_raw_id: entity_id,
+                player_permissions: PlayerPermissionLevel::Visitor,
+                command_permissions: CommandPermissionLevel::Any,
+                layers: vec![SerializedAbilitiesDataSerializedLayer {
+                    serialized_layer: 0,
+                    abilities_set: 0,
+                    ability_value: 0,
+                    fly_speed: 0.05,
+                    vertical_fly_speed: 0.05,
+                    walk_speed: 0.1,
+                }],
+            },
+            actor_links: Vec::new(),
+            device_id: String::new(),
+            build_platform: BuildPlatform::Unknown,
+        };
+        (self.bedrock_player_list(), add_player)
     }
 
     pub const fn inventory(&self) -> &Arc<PlayerInventory> {
@@ -6574,6 +6645,28 @@ impl EntityBase for Player {
 
     fn get_player(&self) -> Option<&Player> {
         Some(self)
+    }
+
+    /// Bedrock renders remote players only from `AddPlayer`, never `AddActor`.
+    fn send_bedrock_spawn_packet(&self, client: &crate::net::bedrock::BedrockClient) {
+        let (player_list, add_player) = self.bedrock_spawn_packets();
+        let equipment = pumpkin_protocol::bedrock::client::CMobEquipment {
+            target_runtime_id: (self.entity_id() as u64).into(),
+            item: (&self.inventory.held_item()).into(),
+            slot: 0,
+            selected_slot: 0,
+            container_id: 0,
+        };
+        for data in [
+            client.serialize_packet(&player_list),
+            client.serialize_packet(&add_player),
+            client.serialize_packet(&equipment),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            client.try_enqueue_packet(data);
+        }
     }
 
     fn is_spectator(&self) -> bool {

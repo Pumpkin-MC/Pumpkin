@@ -3153,14 +3153,6 @@ impl EntityBase for LivingEntity {
             self.entity.send_velocity();
         }
 
-        // TODO
-        let player = caller.get_player();
-        let is_player = player.is_some();
-
-        if !is_player {
-            self.entity.send_pos_rot();
-        }
-
         // Fetch supporting blocks for players or other entities
         let supporting_pos = caller.get_player().map_or_else(
             || self.entity.get_supporting_block_pos(),
