@@ -133,9 +133,14 @@ xxhash-rust.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+criterion.workspace = true
 
 [features]
 console-subscriber = ["dep:console-subscriber"]
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "nearest_entity"
+harness = false
