@@ -555,18 +555,18 @@ impl ChargeCursor {
             if !Self::is_movement_unobstructed(level, pos, neighbour) {
                 continue;
             }
-            if result.is_none() {
-                result = Some(neighbour);
-            }
+            // Vanilla overwrites the candidate on every valid neighbour and
+            // only stops early on substrate access, so without substrate
+            // the LAST valid neighbour wins.
+            result = Some(neighbour);
             if VeinRules::has_substrate_access(level, state, neighbour) {
                 // Found a substrate-accessible target — take it immediately.
                 break;
             }
         }
 
-        // Vanilla returns null if it found no movement AND no substrate access.
-        // But if it found a valid target (even without substrate), it returns it.
-        if result.is_some() { result } else { None }
+        // Vanilla returns null when no valid target was found.
+        result
     }
 
     /// Vanilla `isMovementUnobstructed`.
@@ -754,6 +754,24 @@ mod tests {
         assert_eq!(
             ChargeCursor::valid_movement_position(&level, pos, &mut random),
             None,
+        );
+    }
+
+    #[test]
+    fn cursor_moves_to_last_valid_neighbour_without_substrate() {
+        // Vanilla `getValidMovementPos` overwrites the candidate on every
+        // valid neighbour and only stops early on substrate access, so with
+        // no substrate anywhere the LAST valid neighbour in shuffled order
+        // wins (seed 1 shuffles `up` after `east`).
+        let mut level = MockSculkLevel::new();
+        let pos = BlockPos::new(0, 60, 0);
+        level.set_id(pos, Block::SCULK.default_state.id);
+        level.set_id(pos.up(), Block::SCULK.default_state.id);
+        level.set_id(pos.east(), Block::SCULK.default_state.id);
+        let mut random = RandomGenerator::Legacy(LegacyRand::from_seed(1));
+        assert_eq!(
+            ChargeCursor::valid_movement_position(&level, pos, &mut random),
+            Some(pos.up()),
         );
     }
 

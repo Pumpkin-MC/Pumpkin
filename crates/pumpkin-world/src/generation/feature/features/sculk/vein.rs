@@ -240,10 +240,16 @@ impl VeinRules {
         pos: BlockPos,
         spread_types: &[SpreadType],
     ) -> bool {
+        // Vanilla `MultifaceSpreader.spreadAll` receives the source state
+        // once and reuses it for every face: faces added at `pos` during
+        // the call must not become new sources within the same call.
+        let Some(source_state) = level.sculk_get(pos) else {
+            return false;
+        };
         let mut any = false;
         for face in BlockDirection::all() {
-            if Self::can_spread_from_face(level, pos, face)
-                && Self::spread_from_face(level, pos, face, spread_types)
+            if Self::can_spread_from_face(source_state, face)
+                && Self::spread_from_face(level, pos, source_state, face, spread_types)
             {
                 any = true;
             }
@@ -251,10 +257,7 @@ impl VeinRules {
         any
     }
 
-    fn can_spread_from_face(level: &dyn SculkLevel, pos: BlockPos, face: BlockDirection) -> bool {
-        let Some(state) = level.sculk_get(pos) else {
-            return false;
-        };
+    fn can_spread_from_face(state: BlockStateId, face: BlockDirection) -> bool {
         let id = state.to_block_id();
         // Must have the face or be a non-vein block.
         if id == BlockId::SCULK_VEIN {
@@ -267,14 +270,14 @@ impl VeinRules {
     fn spread_from_face(
         level: &mut dyn SculkLevel,
         pos: BlockPos,
+        source_state: BlockStateId,
         from_face: BlockDirection,
         spread_types: &[SpreadType],
     ) -> bool {
         // Vanilla iterates directions in the outer loop and spread types in
         // the inner loop (`MultifaceSpreader.getSpreadFromFaceTowardDirection`),
         // placing at most one vein per (face, direction) pair.
-        let source_state = level.sculk_get(pos);
-        let source_id = source_state.map_or(BlockId::AIR, BlockStateId::to_block_id);
+        let source_id = source_state.to_block_id();
         let is_vein = source_id == BlockId::SCULK_VEIN;
         let mut any = false;
 
@@ -284,13 +287,8 @@ impl VeinRules {
             }
             // Vanilla: for sculk-vein sources, the spread direction must not
             // already have a face set.
-            if is_vein {
-                let Some(state) = source_state else {
-                    continue;
-                };
-                if Self::has_face(state, spread_dir) {
-                    continue;
-                }
+            if is_vein && Self::has_face(source_state, spread_dir) {
+                continue;
             }
             for spread_type in spread_types {
                 let (target_pos, target_face) = spread_type.spread_pos(pos, spread_dir, from_face);
@@ -489,7 +487,40 @@ impl VeinRules {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::generation::feature::features::sculk::test_utils::MockSculkLevel;
     use pumpkin_util::math::vector3::Vector3;
+
+    #[test]
+    fn spread_all_ignores_faces_added_during_call() {
+        // Vanilla `MultifaceSpreader.spreadAll` snapshots the source state:
+        // the North face placed below must not source an Up spread within
+        // the same call (regression: helpers reread `pos` per face).
+        let mut level = MockSculkLevel::new();
+        let pos = BlockPos::new(0, 60, 0);
+        let base = VeinRules::with_face(
+            Block::SCULK_VEIN.default_state.id,
+            BlockDirection::Down,
+            true,
+        );
+        level.set_id(pos, base);
+        level.set_id(
+            pos.offset(BlockDirection::Down.to_offset()),
+            Block::STONE.default_state.id,
+        );
+        level.set_id(
+            pos.offset(BlockDirection::North.to_offset()),
+            Block::STONE.default_state.id,
+        );
+        level.set_id(
+            pos.offset(BlockDirection::Up.to_offset()),
+            Block::STONE.default_state.id,
+        );
+        assert!(VeinRules::spread_all(&mut level, pos));
+        let result = level.sculk_get(pos).expect("vein persists");
+        assert!(VeinRules::has_face(result, BlockDirection::Down));
+        assert!(VeinRules::has_face(result, BlockDirection::North));
+        assert!(!VeinRules::has_face(result, BlockDirection::Up));
+    }
 
     #[test]
     fn spread_type_same_position() {

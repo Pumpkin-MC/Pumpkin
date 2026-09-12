@@ -12,6 +12,7 @@ use pumpkin_data::BlockId;
 use pumpkin_data::BlockState;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::is_air;
+use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Block::MINECRAFT_SCULK_REPLACEABLE;
 use pumpkin_data::tag::Block::MINECRAFT_SCULK_REPLACEABLE_WORLD_GEN;
 use pumpkin_util::math::position::BlockPos;
@@ -117,7 +118,10 @@ pub fn can_spread_from(level: &dyn SculkLevel, pos: BlockPos) -> bool {
     if is_sculk_behaviour(block_id) {
         return true;
     }
-    if !level.sculk_is_air(pos) && !level.sculk_is_water_source(pos) {
+    // Vanilla only accepts air or an actual water block holding a source;
+    // a waterlogged non-water block does not qualify as an origin.
+    if !level.sculk_is_air(pos) && !(block_id == BlockId::WATER && level.sculk_is_water_source(pos))
+    {
         return false;
     }
     // Position is air or water source — needs a full-cube neighbour.
@@ -167,12 +171,12 @@ impl<T: GenerationCache> SculkLevel for T {
 
     fn sculk_is_water_source(&self, pos: BlockPos) -> bool {
         let (fluid, fluid_state) = GenerationCache::get_fluid_and_fluid_state(self, &pos.0);
-        fluid.id == 2 && fluid_state.is_source
+        fluid == Fluid::WATER && fluid_state.is_source
     }
 
     fn sculk_is_water(&self, pos: BlockPos) -> bool {
         let (fluid, _fluid_state) = GenerationCache::get_fluid_and_fluid_state(self, &pos.0);
-        fluid.id == 2
+        fluid == Fluid::WATER
     }
 
     fn sculk_is_face_sturdy(&self, pos: BlockPos, face: BlockDirection) -> bool {
@@ -362,6 +366,53 @@ mod tests {
         assert!(!is_sculk_behaviour(BlockId::SCULK_SENSOR));
         assert!(!is_sculk_behaviour(BlockId::CALIBRATED_SCULK_SENSOR));
         assert!(!is_sculk_behaviour(BlockId::SCULK_SHRIEKER));
+    }
+
+    #[test]
+    fn can_spread_from_rejects_waterlogged_non_water_origin() {
+        // Vanilla `SculkPatchFeature.canSpreadFrom` requires air or an
+        // actual water block; a waterlogged slab (water fluid, non-water
+        // block) with a full-cube neighbour must not start spreading.
+        struct WaterloggedSlabLevel {
+            inner: MockSculkLevel,
+            slab: BlockPos,
+        }
+        impl SculkLevel for WaterloggedSlabLevel {
+            fn sculk_get(&self, pos: BlockPos) -> Option<BlockStateId> {
+                self.inner.sculk_get(pos)
+            }
+            fn sculk_set(&mut self, pos: BlockPos, state: &'static BlockState) {
+                self.inner.sculk_set(pos, state);
+            }
+            fn sculk_is_air(&self, pos: BlockPos) -> bool {
+                self.inner.sculk_is_air(pos)
+            }
+            fn sculk_is_water_source(&self, pos: BlockPos) -> bool {
+                // Models the `GenerationCache` view: the slab holds a water
+                // source fluid despite not being a water block.
+                pos == self.slab || self.inner.sculk_is_water_source(pos)
+            }
+            fn sculk_is_water(&self, pos: BlockPos) -> bool {
+                pos == self.slab || self.inner.sculk_is_water(pos)
+            }
+            fn sculk_is_face_sturdy(&self, pos: BlockPos, face: BlockDirection) -> bool {
+                self.inner.sculk_is_face_sturdy(pos, face)
+            }
+            fn sculk_is_full_cube(&self, pos: BlockPos) -> bool {
+                self.inner.sculk_is_full_cube(pos)
+            }
+        }
+
+        let origin = BlockPos::new(0, 60, 0);
+        let mut inner = MockSculkLevel::new();
+        inner.set_id(origin, Block::OAK_SLAB.default_state.id);
+        inner.set_id(origin.up(), Block::STONE.default_state.id);
+        let level = WaterloggedSlabLevel {
+            inner,
+            slab: origin,
+        };
+        assert!(level.sculk_is_water_source(origin));
+        assert!(!can_spread_from(&level, origin));
     }
 
     #[test]
