@@ -147,7 +147,7 @@ impl HopperMinecart {
 #[cfg(test)]
 mod tests {
     use super::HopperMinecart;
-    use pumpkin_world::inventory::Inventory;
+    use pumpkin_inventory::Inventory;
 
     #[test]
     fn hopper_minecart_inventory_has_five_slots() {

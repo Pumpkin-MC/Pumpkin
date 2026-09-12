@@ -2,6 +2,7 @@
 use crate::BlockState;
 use crate::biome::ParameterPoint;
 use crate::dimension::Dimension;
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NoiseSettings {
     pub aquifers_enabled: bool,
     pub ore_veins_enabled: bool,
@@ -13,6 +14,7 @@ pub struct NoiseSettings {
     pub spawn_target: &'static [ParameterPoint],
 }
 pub type GenerationSettings = NoiseSettings;
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct GenerationShapeConfig {
     pub min_y: i8,
     pub height: u16,
@@ -223,6 +225,20 @@ impl NoiseSettings {
             },
         ],
     };
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<&'static Self> {
+        let name = name.strip_prefix("minecraft:").unwrap_or(name);
+        match name {
+            "overworld" => Some(&Self::OVERWORLD),
+            "amplified" => Some(&Self::AMPLIFIED),
+            "large_biomes" => Some(&Self::LARGE_BIOMES),
+            "nether" => Some(&Self::NETHER),
+            "end" => Some(&Self::END),
+            "caves" => Some(&Self::CAVES),
+            "floating_islands" => Some(&Self::FLOATING_ISLANDS),
+            _ => None,
+        }
+    }
     #[must_use]
     pub fn from_dimension(dimension: &Dimension) -> &'static Self {
         if dimension == &Dimension::OVERWORLD {

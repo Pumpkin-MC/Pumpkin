@@ -19,6 +19,7 @@ use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::Receiver;
 use crossbeam::queue::SegQueue;
 use pumpkin_data::dimension::Dimension;
+use pumpkin_inventory::Inventory;
 use pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler;
 use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
 use pumpkin_protocol::RawPacket;
@@ -43,7 +44,6 @@ use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_util::translation::Locale;
 use pumpkin_util::version::JavaMinecraftVersion;
 use pumpkin_world::chunk::ChunkData;
-use pumpkin_world::inventory::Inventory;
 use tokio::task::JoinHandle;
 use tracing::{debug, warn};
 use uuid::Uuid;
@@ -575,13 +575,13 @@ impl Player {
         let bytes = if let Ok(handle) = tokio::runtime::Handle::try_current() {
             tokio::task::block_in_place(|| {
                 handle.block_on(async {
-                    let client = pumpkin_util::client();
+                    let client = pumpkin_auth::client();
                     client.get(&url).send().await.ok()?.bytes().await.ok()
                 })
             })?
         } else {
             tokio::runtime::Runtime::new().ok()?.block_on(async {
-                let client = pumpkin_util::client();
+                let client = pumpkin_auth::client();
                 client.get(&url).send().await.ok()?.bytes().await.ok()
             })?
         };
@@ -3280,8 +3280,17 @@ impl Player {
             PermissionLvl::Three => EntityStatus::PermissionLevelAdmins,
             PermissionLvl::Four => EntityStatus::PermissionLevelOwners,
         };
-        self.world()
-            .send_entity_status(&self.living_entity.entity, status, None);
+        // The player may not have a tracking entry yet after changing dimensions.
+        // Permission levels belong to this connection, not to tracking clients.
+        if let ClientPlatform::Java(java) = self.client.as_ref() {
+            let packet = pumpkin_protocol::java::client::play::CEntityStatus::new(
+                self.living_entity.entity.entity_id,
+                status as i8,
+            );
+            if let Ok(data) = java.serialize_packet(&packet) {
+                java.try_enqueue_packet(data);
+            }
+        }
     }
 
     /// Sets the player's difficulty level.
@@ -3299,7 +3308,7 @@ impl Player {
     /// Sets the player's permission level and notifies the client.
     pub fn set_permission_lvl(
         self: &Arc<Self>,
-        server: &Server,
+        server: &Arc<Server>,
         lvl: PermissionLvl,
         command_dispatcher: &CommandDispatcher,
     ) {
@@ -4122,7 +4131,9 @@ impl Player {
                         5.0,
                     ),
                 ],
-                tick: VarULong(self.tick_counter.load(Ordering::Relaxed).max(0) as u64),
+                // This is a client input tick, not our independent server tick counter.
+                // Zero applies the authoritative values without prediction-history matching.
+                tick: VarULong(0),
             },
         );
     }
@@ -4176,6 +4187,9 @@ impl Player {
             && !self.has_effect(&StatusEffect::RAID_OMEN)
         {
             let world = self.world();
+            if !world.dimension.can_start_raid {
+                return;
+            }
             let player_pos = self.living_entity.entity.block_pos.load();
             let pos_f64 = self.living_entity.entity.pos.load();
 
@@ -6241,9 +6255,20 @@ impl Player {
         advancement: &'static pumpkin_data::advancement::Advancement,
         criterion: &str,
     ) {
-        if let Ok(mut advancements) = self.advancements.try_lock() {
-            advancements.award(advancement, criterion);
-        }
+        let Some((player, result)) =
+            self.advancements
+                .try_lock()
+                .ok()
+                .and_then(|mut advancements| {
+                    let player = advancements.player.upgrade()?;
+                    let result = advancements.award(advancement, criterion);
+                    Some((player, result))
+                })
+        else {
+            return;
+        };
+
+        PlayerAdvancement::finish_award(&player, advancement, result);
     }
 
     pub fn check_inventory_advancements(&self) {
@@ -7556,6 +7581,18 @@ impl InventoryPlayer for Player {
 
     fn increment_stat(&self, category: StatisticCategory, stat_id: i32, amount: i32) {
         self.increment_stat(category, stat_id, amount);
+    }
+
+    fn play_block_sound(&self, sound: Sound, pitch: f32) {
+        if let Some(pos) = self.open_container_pos.load() {
+            self.world().play_sound_fine(
+                sound,
+                SoundCategory::Blocks,
+                &pos.to_centered_f64(),
+                1.0,
+                pitch,
+            );
+        }
     }
 
     fn fire_prepare_item_enchant_event(
