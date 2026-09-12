@@ -2715,23 +2715,19 @@ impl Player {
                         let world = world.clone();
                         let uuid = self.gameprofile.id;
                         self.spawn_task(async move {
-                            let (positions, chunks): (Vec<_>, Vec<_>) =
-                                chunks.into_iter().map(|c| (c.position, c.chunk)).unzip();
+                            let (deliveries, chunks): (Vec<_>, Vec<_>) = chunks
+                                .into_iter()
+                                .map(|c| ((c.position, c.delivery_token), c.chunk))
+                                .unzip();
                             client.send_chunks(&chunks).await;
                             if let Some(player) = world.get_player_by_uuid(uuid) {
-                                // Hold chunk_sender across check so a concurrent
-                                // change_world_chunks reset can't land between the check and
-                                // mark_delivered.
-                                let mut sender = player
+                                // dispatcher sets a reset or a re-enqueue since then holds a newer token.
+                                let delivered = player
                                     .chunk_sender
                                     .lock()
-                                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                                if player.chunk_send_epoch.load(Ordering::Relaxed) == current_epoch
-                                {
-                                    sender.mark_delivered(&positions);
-                                    drop(sender);
-                                    player.pair_entities_in_chunks(&world, &positions);
-                                }
+                                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                                    .mark_delivered(&deliveries);
+                                player.pair_entities_in_chunks(&world, &delivered);
                             }
                         });
                     }
