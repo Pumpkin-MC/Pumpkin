@@ -1091,6 +1091,10 @@ pub trait Mob: EntityBase + Send + Sync {
         target_entity
             .portal_cooldown
             .store(source_entity.portal_cooldown.load(Relaxed), Relaxed);
+        
+        target_entity.yaw.store(source_entity.yaw.load());
+        target_entity.pitch.store(source_entity.pitch.load());
+
         target_entity.set_custom_name_visible(source_entity.custom_name_visible.load(Relaxed));
         target_entity.set_on_fire(source_entity.is_on_fire());
         target_entity.set_invulnerable(source_entity.invulnerable.load(Relaxed));
