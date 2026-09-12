@@ -106,11 +106,8 @@ pub struct BedrockClient {
     tasks: TaskTracker,
     rt_handle: tokio::runtime::Handle,
     outgoing_packet_queue_send: UnboundedSender<OutgoingPacket>,
-    /// A queue of serialized packets to send to the network
+    /// FIFO queue of serialized packets for the network
     outgoing_packet_queue_recv: Mutex<Option<UnboundedReceiver<OutgoingPacket>>>,
-
-    outgoing_packet_priority_send: UnboundedSender<OutgoingPacket>,
-    outgoing_packet_priority_recv: Mutex<Option<UnboundedReceiver<OutgoingPacket>>>,
 
     /// Tracks total buffered payload bytes in the outgoing queues.
     pub pending_bytes: Arc<AtomicUsize>,
@@ -145,7 +142,6 @@ impl BedrockClient {
         packet_limiter: PacketRateLimiter,
     ) -> Self {
         let (send, recv) = tokio::sync::mpsc::unbounded_channel();
-        let (priority_send, priority_recv) = tokio::sync::mpsc::unbounded_channel();
         let (incoming_send, incoming_recv) = tokio::sync::mpsc::channel(4096);
         let rt_handle = tokio::runtime::Handle::current();
         Self {
@@ -161,8 +157,6 @@ impl BedrockClient {
             rt_handle,
             outgoing_packet_queue_send: send,
             outgoing_packet_queue_recv: Mutex::new(Some(recv)),
-            outgoing_packet_priority_send: priority_send,
-            outgoing_packet_priority_recv: Mutex::new(Some(priority_recv)),
             pending_bytes: Arc::new(AtomicUsize::new(0)),
             next_form_id: AtomicU32::new(0),
             inventory_opened: AtomicBool::new(false),
@@ -195,17 +189,11 @@ impl BedrockClient {
             else {
                 return;
             };
-            let Some(mut priority_packet_receiver) =
-                client.outgoing_packet_priority_recv.lock().await.take()
-            else {
-                return;
-            };
             let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
 
             loop {
                 let recv_result = tokio::select! {
                     biased;
-                    res = priority_packet_receiver.recv() => res,
                     res = packet_receiver.recv() => res,
                     _ = interval.tick() => {
                         if !client.tick_connection().await {
@@ -214,10 +202,7 @@ impl BedrockClient {
                         continue;
                     }
                     () = client.close_token.cancelled() => {
-                        priority_packet_receiver
-                            .try_recv()
-                            .ok()
-                            .or_else(|| packet_receiver.try_recv().ok())
+                        packet_receiver.try_recv().ok()
                     }
                 };
 
@@ -229,14 +214,6 @@ impl BedrockClient {
                 packet_batch.push(packet);
 
                 while packet_batch.len() < MAX_BATCH_SIZE {
-                    match priority_packet_receiver.try_recv() {
-                        Ok(packet) => {
-                            packet_batch.push(packet);
-                            continue;
-                        }
-                        Err(TryRecvError::Disconnected | TryRecvError::Empty) => {}
-                    }
-
                     match packet_receiver.try_recv() {
                         Ok(packet) => packet_batch.push(packet),
                         Err(TryRecvError::Disconnected | TryRecvError::Empty) => break,
@@ -318,7 +295,7 @@ impl BedrockClient {
             let packet_len = data.len();
             let _ = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
             let _ = self
-                .outgoing_packet_priority_send
+                .outgoing_packet_queue_send
                 .send(OutgoingPacket::normal(data));
         }
         if !self.close_token.is_cancelled() {
@@ -587,12 +564,12 @@ impl BedrockClient {
 
         let (tx, rx) = oneshot::channel();
         if let Err(err) = self
-            .outgoing_packet_priority_send
+            .outgoing_packet_queue_send
             .send(OutgoingPacket::priority(packet_data, tx))
         {
             decrement_pending_bytes(&self.pending_bytes, packet_len);
             if !self.is_closed() {
-                error!("Failed to add priority packet to the outgoing packet queue: {err}");
+                error!("Failed to add packet to the outgoing packet queue: {err}");
             }
         } else {
             let _ = rx.await;
