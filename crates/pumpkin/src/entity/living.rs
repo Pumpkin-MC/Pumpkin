@@ -1794,6 +1794,10 @@ impl LivingEntity {
     }
 
     #[allow(clippy::redundant_closure_for_method_calls)]
+    /// Builds the chat death message for this entity: picks the
+    /// `death.attack.<id>` (or the `.player` variant when a killer entity is
+    /// known, or the kill-credit name when the killer is offline/removed)
+    /// translation and fills in the victim and killer display names.
     pub fn get_death_message(
         dyn_self: &dyn EntityBase,
         damage_type: DamageType,
@@ -1838,6 +1842,10 @@ impl LivingEntity {
         }
     }
 
+    /// Marks the entity as dead exactly once and runs the server-side death
+    /// flow: stop movement input, attribute the kill, drop loot, broadcast the
+    /// `Death` (3) entity event, and hand out XP. Safe to call on every lethal
+    /// damage event; only the first call has an effect.
     pub fn on_death(
         &self,
         damage_type: DamageType,
@@ -3118,6 +3126,10 @@ impl EntityBase for LivingEntity {
         self.get_attribute_value(&Attributes::GRAVITY)
     }
 
+    /// Advances the living entity by one tick: base entity tick, movement and
+    /// physics while alive (still applied during the 20-tick death animation so
+    /// knockback lands), velocity coalescing, status effects, void damage, and
+    /// death-animation completion.
     #[allow(clippy::too_many_lines)]
     fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         self.entity.tick(caller, server);
@@ -3370,14 +3382,15 @@ impl EntityBase for LivingEntity {
                 // respawn. Removing one here breaks reconnecting while dead.
                 return;
             }
-            // Only send death particles once (on the exact tick death_time reaches 20)
-            // and then remove the entity, preventing entity_event spam.
-            if time == 20 && !self.entity.removed.swap(true, Ordering::Relaxed) {
-                self.entity.world.load().send_entity_status(
-                    &self.entity,
-                    EntityStatus::Death,
-                    Some(ActorEventID::Death),
-                );
+            // Vanilla `LivingEntity.tickDeath` sends the POOF (60) particle event
+            // once the death animation finished; the death event (3) was already
+            // broadcast in `on_death`. Sending it again here would restart the
+            // client-side death animation.
+            if time >= 20 && !self.entity.removed.swap(true, Ordering::Relaxed) {
+                self.entity
+                    .world
+                    .load()
+                    .send_entity_status(&self.entity, EntityStatus::Poof, None);
                 self.entity.remove();
             }
         }
