@@ -3696,43 +3696,7 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
             .clone();
 
         let config = player.config.load();
-        let mask = config.skin_parts;
-        let mut parts = SkinParts::empty();
-        if mask & 0x01 != 0 {
-            parts |= SkinParts::CAPE;
-        }
-        if mask & 0x02 != 0 {
-            parts |= SkinParts::JACKET;
-        }
-        if mask & 0x04 != 0 {
-            parts |= SkinParts::LEFT_SLEEVE;
-        }
-        if mask & 0x08 != 0 {
-            parts |= SkinParts::RIGHT_SLEEVE;
-        }
-        if mask & 0x10 != 0 {
-            parts |= SkinParts::LEFT_PANTS_LEG;
-        }
-        if mask & 0x20 != 0 {
-            parts |= SkinParts::RIGHT_PANTS_LEG;
-        }
-        if mask & 0x40 != 0 {
-            parts |= SkinParts::HAT;
-        }
-
-        Ok(pumpkin::plugin::player::JavaPlayerSettings {
-            locale: config.locale.clone(),
-            view_distance: config.view_distance.get(),
-            chat_mode: to_wasm_chat_mode(&config.chat_mode),
-            chat_colors: config.chat_colors,
-            skin_parts: parts,
-            main_hand: match config.main_hand {
-                pumpkin_util::Hand::Left => pumpkin::plugin::common::Hand::Left,
-                pumpkin_util::Hand::Right => pumpkin::plugin::common::Hand::Right,
-            },
-            text_filtering: config.text_filtering,
-            server_listing: config.server_listing,
-        })
+        Ok(to_wasm_settings(&config))
     }
 
     async fn send_packet(
@@ -3753,10 +3717,10 @@ impl pumpkin::plugin::player::HostJavaPlayer for PluginHostState {
             .client
             .java()
             .ok_or_else(|| wasmtime::Error::msg("Not a java player"))?;
-        if let Some(bytes) = crate::plugin::loader::wasm::wasm_host::wit::v0_1::generated_packets::serialize_java_packet(
+        if let Some((state, bytes)) = crate::plugin::loader::wasm::wasm_host::wit::v0_1::generated_packets::serialize_java_packet_with_state(
             &packet, client.version.load(),
         ) {
-            client.send_packet_now_data(bytes).await;
+            client.send_packet_now_data_in_state(bytes, state).await;
         }
         Ok(())
     }
@@ -4451,7 +4415,12 @@ impl pumpkin::plugin::player::HostBedrockPlayer for PluginHostState {
         if let Some(bytes) = crate::plugin::loader::wasm::wasm_host::wit::v0_1::generated_packets::serialize_bedrock_packet(
             &packet,
         ) {
-            player.client.send_packet_now_data(bytes).await;
+            let packet = crate::plugin::server::packet::decode_packet(bytes)?;
+            let client = player
+                .client
+                .bedrock()
+                .ok_or_else(|| wasmtime::Error::msg("Not a bedrock player"))?;
+            client.user.send_packet(packet.id, &packet.payload, false)?;
         }
         Ok(())
     }
@@ -4664,5 +4633,46 @@ impl pumpkin::plugin::player::HostBedrockPlayerWithStore<PluginHostState>
         };
 
         plugin.store.pump_reentry(&mut host, operation).await?
+    }
+}
+pub(crate) fn to_wasm_settings(
+    config: &crate::net::PlayerConfig,
+) -> pumpkin::plugin::player::JavaPlayerSettings {
+    let mask = config.skin_parts;
+    let mut parts = SkinParts::empty();
+    if mask & 0x01 != 0 {
+        parts |= SkinParts::CAPE;
+    }
+    if mask & 0x02 != 0 {
+        parts |= SkinParts::JACKET;
+    }
+    if mask & 0x04 != 0 {
+        parts |= SkinParts::LEFT_SLEEVE;
+    }
+    if mask & 0x08 != 0 {
+        parts |= SkinParts::RIGHT_SLEEVE;
+    }
+    if mask & 0x10 != 0 {
+        parts |= SkinParts::LEFT_PANTS_LEG;
+    }
+    if mask & 0x20 != 0 {
+        parts |= SkinParts::RIGHT_PANTS_LEG;
+    }
+    if mask & 0x40 != 0 {
+        parts |= SkinParts::HAT;
+    }
+
+    pumpkin::plugin::player::JavaPlayerSettings {
+        locale: config.locale.clone(),
+        view_distance: config.view_distance.get(),
+        chat_mode: to_wasm_chat_mode(&config.chat_mode),
+        chat_colors: config.chat_colors,
+        skin_parts: parts,
+        main_hand: match config.main_hand {
+            pumpkin_util::Hand::Left => pumpkin::plugin::common::Hand::Left,
+            pumpkin_util::Hand::Right => pumpkin::plugin::common::Hand::Right,
+        },
+        text_filtering: config.text_filtering,
+        server_listing: config.server_listing,
     }
 }

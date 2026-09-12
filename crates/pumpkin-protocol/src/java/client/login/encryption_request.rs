@@ -23,6 +23,10 @@ pub struct CEncryptionRequest<'a> {
 }
 
 impl MultiVersionJavaPacket for CEncryptionRequest<'_> {
+    fn state() -> crate::ConnectionState {
+        crate::ConnectionState::Login
+    }
+
     fn to_id(_version: JavaMinecraftVersion) -> i32 {
         1
     }
