@@ -21,6 +21,14 @@ pub enum LootCondition {
     TableBonus {
         chances: &'static [f32],
     },
+    /// Matches when the broken block's state has all of these property values.
+    BlockStateProperty {
+        properties: &'static [(&'static str, &'static str)],
+    },
+    /// Matches when the inner condition doesn't.
+    Inverted(&'static Self),
+    /// Matches when any of the inner conditions does.
+    AnyOf(&'static [Self]),
     AllOf(&'static [Self]),
 }
 
