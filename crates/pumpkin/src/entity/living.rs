@@ -3104,6 +3104,10 @@ impl EntityBase for LivingEntity {
         self.get_attribute_value(&Attributes::GRAVITY)
     }
 
+    /// Advances the living entity by one tick: base entity tick, movement and
+    /// physics while alive (still applied during the 20-tick death animation so
+    /// knockback lands), velocity coalescing, status effects, void damage, and
+    /// death-animation completion.
     #[allow(clippy::too_many_lines)]
     fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         self.entity.tick(caller, server);
@@ -3356,14 +3360,15 @@ impl EntityBase for LivingEntity {
                 // respawn. Removing one here breaks reconnecting while dead.
                 return;
             }
-            // Only send death particles once (on the exact tick death_time reaches 20)
-            // and then remove the entity, preventing entity_event spam.
-            if time == 20 && !self.entity.removed.swap(true, Ordering::Relaxed) {
-                self.entity.world.load().send_entity_status(
-                    &self.entity,
-                    EntityStatus::Death,
-                    Some(ActorEventID::Death),
-                );
+            // Vanilla `LivingEntity.tickDeath` sends the POOF (60) particle event
+            // once the death animation finished; the death event (3) was already
+            // broadcast in `on_death`. Sending it again here would restart the
+            // client-side death animation.
+            if time >= 20 && !self.entity.removed.swap(true, Ordering::Relaxed) {
+                self.entity
+                    .world
+                    .load()
+                    .send_entity_status(&self.entity, EntityStatus::Poof, None);
                 self.entity.remove();
             }
         }
