@@ -22,6 +22,7 @@ pub struct HopperBlockEntity {
     pub position: BlockPos,
     pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
     pub dirty: AtomicBool,
+    pub comparator_dirty: AtomicBool,
     pub facing: FacingHopper,
     pub cooldown_time: AtomicI32,
     pub ticked_game_time: AtomicI64,
@@ -73,6 +74,7 @@ impl BlockEntity for HopperBlockEntity {
             position,
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
             facing: FacingHopper::Down,
             cooldown_time: AtomicI32::from(nbt.get_int("TransferCooldown").unwrap_or(-1)),
             ticked_game_time: AtomicI64::new(0),
@@ -127,6 +129,14 @@ impl BlockEntity for HopperBlockEntity {
         self.facing = HopperLikeProperties::from_state_id(block_state).facing;
     }
 
+    fn is_comparator_dirty(&self) -> bool {
+        self.comparator_dirty.load(Ordering::Relaxed)
+    }
+
+    fn clear_comparator_dirty(&self) {
+        self.comparator_dirty.store(false, Ordering::Relaxed);
+    }
+
     fn is_dirty(&self) -> bool {
         self.dirty.load(Ordering::Relaxed)
     }
@@ -162,6 +172,7 @@ impl HopperBlockEntity {
             position,
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
             facing,
             cooldown_time: AtomicI32::new(-1),
             ticked_game_time: AtomicI64::new(0),
@@ -514,6 +525,7 @@ impl Inventory for HopperBlockEntity {
 
     fn mark_dirty(&self) {
         self.dirty.store(true, Ordering::Relaxed);
+        self.comparator_dirty.store(true, Ordering::Relaxed);
     }
 
     fn as_any(&self) -> &dyn Any {

@@ -85,21 +85,7 @@ impl BlockBehaviour for BrewingStandBlock {
     }
 
     fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
-        if let Some(block_entity) = args.world.get_block_entity(args.position)
-            && let Some(inventory) = block_entity.get_inventory()
-        {
-            let mut bottles = 0u8;
-            // Bottle slots are 0, 1, 2 in brewing stands
-            for slot in 0..3 {
-                let stack = inventory.get_stack(slot);
-                if !stack.is_empty() {
-                    bottles += 1;
-                }
-            }
-            Some(bottles)
-        } else {
-            None
-        }
+        crate::block::container_comparator_output(&args)
     }
 
     fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {

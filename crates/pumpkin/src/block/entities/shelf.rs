@@ -14,6 +14,7 @@ pub struct ShelfBlockEntity {
     pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
     pub align_items_to_bottom: AtomicBool,
     pub dirty: AtomicBool,
+    pub comparator_dirty: AtomicBool,
 }
 
 impl BlockEntity for ShelfBlockEntity {
@@ -34,6 +35,7 @@ impl BlockEntity for ShelfBlockEntity {
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             align_items_to_bottom: AtomicBool::new(align_items_to_bottom),
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
         };
 
         pumpkin_inventory::sync_read_items_from_nbt(
@@ -57,6 +59,14 @@ impl BlockEntity for ShelfBlockEntity {
 
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
         Some(self)
+    }
+
+    fn is_comparator_dirty(&self) -> bool {
+        self.comparator_dirty.load(Ordering::Relaxed)
+    }
+
+    fn clear_comparator_dirty(&self) {
+        self.comparator_dirty.store(false, Ordering::Relaxed);
     }
 
     fn is_dirty(&self) -> bool {
@@ -94,6 +104,7 @@ impl ShelfBlockEntity {
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             align_items_to_bottom: AtomicBool::new(false),
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
         }
     }
 }
@@ -154,6 +165,7 @@ impl Inventory for ShelfBlockEntity {
 
     fn mark_dirty(&self) {
         self.dirty.store(true, Ordering::Relaxed);
+        self.comparator_dirty.store(true, Ordering::Relaxed);
     }
 
     fn as_any(&self) -> &dyn Any {
