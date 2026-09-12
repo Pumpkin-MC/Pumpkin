@@ -1896,6 +1896,7 @@ impl World {
     #[expect(clippy::too_many_lines)]
     pub fn tick_chunks(self: &Arc<Self>, server: &Arc<Server>) {
         const BATCH_SIZE: usize = 32;
+        const INHABITED_TIME_BATCH_SIZE: usize = 1024;
         let random_tick_speed = self.level_info.load().game_rules.random_tick_speed;
 
         let active_chunks = self
@@ -2038,7 +2039,7 @@ impl World {
         let active_chunks_vec: Vec<_> = active_chunks.iter().copied().collect();
         active_chunks_vec
             .par_iter()
-            .with_min_len(1024)
+            .with_min_len(INHABITED_TIME_BATCH_SIZE)
             .for_each(|pos| {
                 if let Some(chunk) = loaded_chunks.get(pos) {
                     chunk.inhabited_time.fetch_add(1, Relaxed);
