@@ -127,6 +127,14 @@ pub trait InventoryPlayer: Send + Sync {
     /// - `retain_ownership` - If true, the player keeps ownership (for pickup delay)
     fn drop_item(&self, item: ItemStack, retain_ownership: bool);
 
+    /// Returns whether `item` is allowed to be dropped from an open screen.
+    ///
+    /// Defaults to `true`, but the player implementation fires `PlayerDropItemEvent`
+    /// so plugins can cancel the drop.
+    fn can_drop_item(&self, _item: &ItemStack) -> bool {
+        true
+    }
+
     /// Gets the player's inventory.
     fn get_inventory(&self) -> Arc<PlayerInventory>;
 
@@ -366,19 +374,46 @@ pub trait ScreenHandler: Send + Sync {
         self.default_on_closed(player);
     }
 
-    /// Default close behavior - drops the cursor item.
+    /// Default close behavior - returns the cursor item to the inventory,
+    /// dropping any remainder that doesn't fit.
     fn default_on_closed(&mut self, player: &dyn InventoryPlayer) {
         let behaviour = self.get_behaviour_mut();
+
+        let mut remainder = {
+            let cursor_stack_lock = behaviour
+                .cursor_stack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+            if cursor_stack_lock.is_empty() {
+                return;
+            }
+            cursor_stack_lock.clone()
+        };
+
+        // Try to give the item back to the player's own inventory first; this
+        // isn't a "drop" and doesn't need `can_drop_item`/`PlayerDropItemEvent`.
+        player.get_inventory().insert_stack_anywhere(&mut remainder);
+
+        if !remainder.is_empty() && !player.can_drop_item(&remainder) {
+            // Drop was cancelled by a plugin - keep whatever didn't fit in the cursor.
+            let mut cursor_stack_lock = behaviour
+                .cursor_stack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            *cursor_stack_lock = remainder;
+            return;
+        }
+
+        if !remainder.is_empty() {
+            player.drop_item(remainder, false);
+        }
 
         let mut cursor_stack_lock = behaviour
             .cursor_stack
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-        if !cursor_stack_lock.is_empty() {
-            offer_or_drop_stack(player, cursor_stack_lock.clone());
-            *cursor_stack_lock = ItemStack::EMPTY.clone();
-        }
+        *cursor_stack_lock = ItemStack::EMPTY.clone();
     }
 
     /// Drops all items from an inventory into the world.
@@ -909,7 +944,12 @@ pub trait ScreenHandler: Send + Sync {
             {
                 let slot = self.get_behaviour().slots[slot_index as usize].clone();
                 let prev_stack = slot.get_cloned_stack();
-                if !prev_stack.is_empty() {
+                let intended_drop = if button == 1 {
+                    prev_stack.clone()
+                } else {
+                    prev_stack.copy_with_count(1)
+                };
+                if !prev_stack.is_empty() && player.can_drop_item(&intended_drop) {
                     if button == 1 {
                         // Throw all
                         while slot
@@ -955,17 +995,39 @@ pub trait ScreenHandler: Send + Sync {
 
             // Drop item if outside inventory
             if slot_index == SLOT_INDEX_OUTSIDE {
-                let mut cursor_stack = self
-                    .get_behaviour()
-                    .cursor_stack
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                if !cursor_stack.is_empty() {
-                    if click_type == MouseClick::Left {
-                        player.drop_item(cursor_stack.clone(), true);
-                        *cursor_stack = ItemStack::EMPTY.clone();
+                let (is_empty, intended_drop) = {
+                    let cursor_stack = self
+                        .get_behaviour()
+                        .cursor_stack
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    let intended_drop = if click_type == MouseClick::Left {
+                        cursor_stack.clone()
                     } else {
-                        player.drop_item(cursor_stack.split(1), true);
+                        cursor_stack.copy_with_count(1)
+                    };
+                    (cursor_stack.is_empty(), intended_drop)
+                };
+
+                // `can_drop_item` may fire `PlayerDropItemEvent`, which plugins can
+                // block on; the cursor mutex must not be held while it runs.
+                if !is_empty && player.can_drop_item(&intended_drop) {
+                    let mut cursor_stack = self
+                        .get_behaviour()
+                        .cursor_stack
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+                    // Revalidate: the cursor may have changed while the mutex was released.
+                    if cursor_stack.are_items_and_components_equal(&intended_drop)
+                        && cursor_stack.item_count >= intended_drop.item_count
+                    {
+                        if click_type == MouseClick::Left {
+                            player.drop_item(cursor_stack.clone(), true);
+                            *cursor_stack = ItemStack::EMPTY.clone();
+                        } else {
+                            player.drop_item(cursor_stack.split(1), true);
+                        }
                     }
                 }
             } else if action_type == SlotActionType::QuickMove {
