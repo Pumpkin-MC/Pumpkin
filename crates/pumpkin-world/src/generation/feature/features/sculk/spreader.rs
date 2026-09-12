@@ -1,6 +1,4 @@
-//! Vanilla-faithful `SculkSpreader` and `ChargeCursor`.
-//!
-//! Reference: `net.minecraft.world.level.block.SculkSpreader` (mc-26_2).
+//! Sculk spreading: charge cursors that convert blocks and place growths.
 
 use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockId;
@@ -19,16 +17,14 @@ use super::is_sculk_replaceable;
 use super::is_sculk_replaceable_world_gen;
 use super::vein::VeinRules;
 
-/// Maximum number of simultaneous cursors (vanilla: `MAX_CURSORS = 32`).
+/// Maximum number of simultaneous cursors.
 pub const MAX_CURSORS: usize = 32;
-/// Maximum charge a single cursor may carry (vanilla: `MAX_CHARGE = 1000`).
+/// Maximum charge a single cursor may carry.
 pub const MAX_CHARGE: u16 = 1000;
-/// Maximum chessboard distance from origin before a cursor is discarded
-/// (vanilla: `MAX_CURSOR_DISTANCE = 1024`).
+/// Maximum chessboard distance from origin before a cursor is discarded.
 const MAX_CURSOR_DISTANCE: i32 = 1024;
-/// Squared XZ radius limit during world generation (vanilla: cursors are
-/// discarded once `distSqr(vec3i(x0, y, z0)) >= Mth.square(15.0)`, i.e.
-/// `dx² + dz² >= 225`).
+/// Squared XZ radius limit during world generation: cursors are discarded
+/// once `dx² + dz² >= 225` (15 blocks from the origin).
 const WORLD_GEN_RADIUS_SQ: i64 = 225;
 
 /// Configuration values extracted from [`SculkSpreader`] so that cursor
@@ -80,15 +76,13 @@ pub struct SculkSpreader {
 }
 
 impl SculkSpreader {
-    /// Creates a spreader for catalyst-driven (level) spreading.
-    /// Mirrors vanilla `SculkSpreader.createLevelSpreader()`.
+    /// Creates a spreader for catalyst-driven (in-level) spreading.
     #[must_use]
     pub const fn new_level_spreader() -> Self {
         Self::new(false, false, 10, 4, 10, 5)
     }
 
     /// Creates a spreader for world-generation spreading.
-    /// Mirrors vanilla `SculkSpreader.createWorldGenSpreader()`.
     #[must_use]
     pub const fn new_world_gen_spreader() -> Self {
         Self::new(true, true, 50, 1, 5, 10)
@@ -156,7 +150,7 @@ impl SculkSpreader {
     }
 
     /// Adds charge at a position, splitting into multiple cursors if
-    /// charge exceeds [`MAX_CHARGE`] (vanilla `addCursors`).
+    /// charge exceeds [`MAX_CHARGE`].
     pub fn add_cursors(&mut self, start_pos: BlockPos, mut charge: i32) {
         while charge > 0 {
             let current = std::cmp::min(charge, MAX_CHARGE as i32);
@@ -184,7 +178,7 @@ impl SculkSpreader {
         &self.cursors
     }
 
-    /// Main update loop. Mirrors vanilla `updateCursors`.
+    /// Main update loop over all active cursors.
     pub fn update_cursors(
         &mut self,
         level: &mut dyn SculkLevel,
@@ -197,8 +191,7 @@ impl SculkSpreader {
         }
 
         let mut processed: Vec<ChargeCursor> = Vec::with_capacity(self.cursors.len());
-        // Merge map: position -> index into `processed` (vanilla
-        // `mergeableCursors`).
+        // Merge map: position -> index into `processed`.
         let mut merge_index: HashMap<BlockPos, usize> = HashMap::with_capacity(self.cursors.len());
 
         let config = self.config();
@@ -221,8 +214,8 @@ impl SculkSpreader {
             // Attempt merge with the existing cursor at the same position.
             if let Some(existing_idx) = merge_index.get(&pos).copied() {
                 let existing_charge = processed[existing_idx].charge;
-                // Vanilla: merge when not world-gen and the combined
-                // charge fits within MAX_CHARGE.
+                // Merge when not world-gen and the combined charge fits
+                // within MAX_CHARGE.
                 if !config.is_world_generation {
                     let combined = existing_charge as u32 + cursor.charge as u32;
                     if combined <= MAX_CHARGE as u32 {
@@ -237,8 +230,8 @@ impl SculkSpreader {
                 // is intentionally NOT registered in merge_index — the
                 // existing entry must remain the merge target for future
                 // lookups — unless it carries less charge than the
-                // existing cursor, in which case vanilla replaces the
-                // merge target (SculkSpreader.updateCursors).
+                // existing cursor, in which case the merge target is
+                // replaced by the new cursor.
                 processed.push(cursor);
                 let new_idx = processed.len() - 1;
                 if processed[new_idx].charge < existing_charge {
@@ -260,9 +253,9 @@ pub struct ChargeCursor {
     pub charge: u16,
     pub update_delay: u8,
     pub decay_delay: u8,
-    /// Optional bitset of faces for this cursor. `None` mirrors vanilla's
-    /// `null` facings (same-space spreading only), `Some(0)` is the empty set
-    /// and `Some(bits)` holds face bits (bit 0 = Down … bit 5 = East).
+    /// Optional bitset of faces for this cursor. `None` means same-space
+    /// spreading only, `Some(0)` is the empty set and `Some(bits)` holds
+    /// face bits (bit 0 = Down … bit 5 = East).
     pub faces: Option<u8>,
 }
 
@@ -286,7 +279,7 @@ impl ChargeCursor {
             .filter(move |dir| bits & (1 << dir.to_index()) != 0)
     }
 
-    /// Core update logic — mirrors vanilla `ChargeCursor.update`.
+    /// Core per-tick update logic for one cursor.
     pub fn update(
         &mut self,
         level: &mut dyn SculkLevel,
@@ -306,20 +299,18 @@ impl ChargeCursor {
         let mut current_state = level.sculk_get(self.pos);
         let mut current_id = current_state.map_or(BlockId::AIR, BlockStateId::to_block_id);
 
-        // Attempt vein spreading first. Vanilla dispatches on the block
-        // behaviour: sculk behaviour blocks (sculk / sculk vein) use the
-        // multiface `spreadAll`, while every other block uses
-        // `SculkBehaviour.DEFAULT`, which switches on the cursor's facings
-        // (null → same-space, empty → spreadAll, non-empty → regrow).
+        // Attempt vein spreading first. Sculk behaviour blocks (sculk /
+        // sculk vein) use the multiface `spread_all`, while every other
+        // block switches on the cursor's facings (`None` → same-space,
+        // empty → `spread_all`, non-empty → regrow).
         if spread_veins {
             let spread = if is_sculk_behaviour(current_id) {
                 VeinRules::spread_all(level, self.pos)
             } else {
                 VeinRules::attempt_spread_vein(level, self.pos, current_state, self.faces)
             };
-            // Vanilla re-reads the state after a successful spread unless the
-            // block cannot change state on spread (`canChangeBlockStateOnSpread`
-            // is false only for sculk).
+            // Re-read the state after a successful spread, except for
+            // sculk: only sculk never changes state when spread over.
             if spread && current_id != BlockId::SCULK {
                 current_state = level.sculk_get(self.pos);
                 current_id = current_state.map_or(BlockId::AIR, BlockStateId::to_block_id);
@@ -338,8 +329,8 @@ impl ChargeCursor {
         );
 
         if self.charge == 0 {
-            // Vanilla: `sculkBehaviour.onDischarged(...)` — only sculk veins
-            // actually remove faces (other behaviours are no-ops).
+            // On discharge only sculk veins remove faces; every other
+            // block type is a no-op.
             if current_id == BlockId::SCULK_VEIN {
                 VeinRules::on_discharged(level, self.pos);
             }
@@ -353,8 +344,7 @@ impl ChargeCursor {
             }
             self.pos = new_pos;
 
-            // World-gen radius limit (XZ only). Vanilla:
-            // `!closerThan(originX, y, originZ, 15.0)` → `dx² + dz² >= 225`.
+            // World-gen radius limit (XZ only): `dx² + dz² >= 225`.
             if config.is_world_generation {
                 let dx = (self.pos.0.x - origin_pos.0.x) as i64;
                 let dz = (self.pos.0.z - origin_pos.0.z) as i64;
@@ -374,21 +364,19 @@ impl ChargeCursor {
         }
 
         // Update delays.
-        // Vanilla uses the (pre-movement) block behaviour for the decay delay:
-        // sculk behaviours reset it to 1, `DEFAULT` decrements it.
+        // The decay delay uses the pre-movement block behaviour:
+        // sculk behaviours reset it to 1, others decrement it.
         self.decay_delay =
             Self::update_decay_delay(self.decay_delay, is_sculk_behaviour(current_id));
-        self.update_delay = 1; // vanilla: getSculkSpreadDelay() == 1
+        self.update_delay = 1; // spread delay is always a single tick
     }
 
-    /// Vanilla `attemptUseCharge` — determines how much charge is consumed
-    /// this tick. Dispatches on the block at the cursor position, mirroring
-    /// `ChargeCursor.getBlockBehaviour`:
-    /// - sculk vein → `SculkVeinBlock.attemptUseCharge`
-    /// - sculk → `SculkBlock.attemptUseCharge`
-    /// - everything else (including sensors, shriekers and catalysts, which
-    ///   do not implement `SculkBehaviour`) →
-    ///   `SculkBehaviour.DEFAULT.attemptUseCharge`
+    /// Determines how much charge is consumed this tick, dispatching on
+    /// the block at the cursor position:
+    /// - sculk vein → convert-or-halve rule below
+    /// - sculk → growth placement with distance-based decay
+    /// - everything else (including sensors, shriekers and catalysts) →
+    ///   keep charge while the decay delay lasts, else discharge
     fn attempt_use_charge(
         &self,
         current_id: BlockId,
@@ -404,7 +392,6 @@ impl ChargeCursor {
         }
         match current_id {
             BlockId::SCULK_VEIN => {
-                // Vanilla `SculkVeinBlock.attemptUseCharge`.
                 let replaceable = |id: BlockId| {
                     if config.replaceable_world_gen {
                         is_sculk_replaceable_world_gen(id)
@@ -427,8 +414,7 @@ impl ChargeCursor {
             BlockId::SCULK => {
                 Self::sculk_block_use_charge(self.pos, level, origin_pos, random, config, charge)
             }
-            // Vanilla `SculkBehaviour.DEFAULT.attemptUseCharge`:
-            // `decayDelay > 0 ? charge : 0`.
+            // Default rule: `decay_delay > 0 ? charge : 0`.
             _ => {
                 if self.decay_delay > 0 {
                     charge
@@ -439,8 +425,7 @@ impl ChargeCursor {
         }
     }
 
-    /// Vanilla `SculkBlock.attemptUseCharge` — growth placement and
-    /// distance-based charge decay.
+    /// Growth placement and distance-based charge decay for sculk.
     fn sculk_block_use_charge(
         pos: BlockPos,
         level: &mut dyn SculkLevel,
@@ -489,7 +474,7 @@ impl ChargeCursor {
         }
     }
 
-    /// Vanilla `Vec3i.closerThan` — strict squared-Euclidean comparison.
+    /// Strict squared-Euclidean closeness comparison.
     const fn is_close_to_catalyst(
         pos: BlockPos,
         origin_pos: BlockPos,
@@ -502,7 +487,7 @@ impl ChargeCursor {
         dx * dx + dy * dy + dz * dz < radius * radius
     }
 
-    /// Vanilla `getDecayPenalty` — distance-based charge decay.
+    /// Distance-based charge decay penalty.
     fn decay_penalty(
         config: &SpreaderConfig,
         pos: BlockPos,
@@ -513,8 +498,8 @@ impl ChargeCursor {
         let dx = (pos.0.x - origin_pos.0.x) as f64;
         let dy = (pos.0.y - origin_pos.0.y) as f64;
         let dz = (pos.0.z - origin_pos.0.z) as f64;
-        // Vanilla: `Mth.square((float)Math.sqrt(distSqr) - noGrowthRadius)`,
-        // i.e. the distance is computed in double then cast to float.
+        // The distance is computed in double precision, then cast to
+        // float before squaring (matches the reference behaviour).
         let distance = (dx * dx + dy * dy + dz * dz).sqrt();
         let outer_distance_sq = (distance as f32 - no_growth_radius as f32).powi(2);
         // `Mth.square(24 - noGrowthRadius)` is an int.
@@ -525,8 +510,8 @@ impl ChargeCursor {
         penalty.max(1)
     }
 
-    /// Vanilla `getValidMovementPos` — scans non-corner neighbours for a
-    /// sculk-behaviour block the cursor can move to.
+    /// Scans non-corner neighbours for a sculk-behaviour block the
+    /// cursor can move to.
     fn valid_movement_position(
         level: &dyn SculkLevel,
         pos: BlockPos,
@@ -555,9 +540,9 @@ impl ChargeCursor {
             if !Self::is_movement_unobstructed(level, pos, neighbour) {
                 continue;
             }
-            // Vanilla overwrites the candidate on every valid neighbour and
-            // only stops early on substrate access, so without substrate
-            // the LAST valid neighbour wins.
+            // Overwrite the candidate on every valid neighbour and only
+            // stop early on substrate access, so without substrate the
+            // LAST valid neighbour wins.
             result = Some(neighbour);
             if VeinRules::has_substrate_access(level, state, neighbour) {
                 // Found a substrate-accessible target — take it immediately.
@@ -565,11 +550,11 @@ impl ChargeCursor {
             }
         }
 
-        // Vanilla returns null when no valid target was found.
+        // Returns `None` when no valid target was found.
         result
     }
 
-    /// Vanilla `isMovementUnobstructed`.
+    /// Checks whether movement between two adjacent offsets is blocked.
     fn is_movement_unobstructed(level: &dyn SculkLevel, from: BlockPos, to: BlockPos) -> bool {
         let delta = Vector3::new(to.0.x - from.0.x, to.0.y - from.0.y, to.0.z - from.0.z);
         // Manhattan distance == 1 → always unobstructed.
@@ -605,9 +590,9 @@ impl ChargeCursor {
         !level.sculk_is_face_sturdy(test_pos, direction.opposite())
     }
 
-    /// Vanilla `MultifaceBlock.availableFaces` — derives the face bitset from
-    /// the block state's own face properties. Only multiface blocks (sculk
-    /// vein) expose faces; every other block yields an empty bitset.
+    /// Derives the face bitset from the block state's own face
+    /// properties. Only multiface blocks (sculk vein) expose faces;
+    /// every other block yields an empty bitset.
     fn available_faces(state: BlockStateId, id: BlockId) -> u8 {
         if id != BlockId::SCULK_VEIN {
             return 0;
@@ -621,8 +606,8 @@ impl ChargeCursor {
         faces
     }
 
-    /// Vanilla `SculkBehaviour.updateDecayDelay`: sculk behaviours reset the
-    /// delay to 1, `DEFAULT` decrements it (`Math.max(age - 1, 0)`).
+    /// Decay-delay update: sculk behaviours reset the delay to 1,
+    /// others decrement it (saturating at 0).
     const fn update_decay_delay(current: u8, is_sculk: bool) -> u8 {
         if is_sculk {
             1
@@ -744,8 +729,8 @@ mod tests {
 
     #[test]
     fn cursor_does_not_move_onto_sensor() {
-        // Vanilla `getValidMovementPos` only accepts `SculkBehaviour` blocks;
-        // a lone sensor neighbour is not a valid movement target.
+        // Only `SculkBehaviour` blocks are valid movement targets;
+        // a lone sensor neighbour is not.
         let mut level = MockSculkLevel::new();
         let pos = BlockPos::new(0, 60, 0);
         level.set_id(pos, Block::SCULK.default_state.id);
@@ -759,10 +744,10 @@ mod tests {
 
     #[test]
     fn cursor_moves_to_last_valid_neighbour_without_substrate() {
-        // Vanilla `getValidMovementPos` overwrites the candidate on every
-        // valid neighbour and only stops early on substrate access, so with
-        // no substrate anywhere the LAST valid neighbour in shuffled order
-        // wins (seed 1 shuffles `up` after `east`).
+        // The candidate is overwritten on every valid neighbour and the
+        // scan only stops early on substrate access, so with no substrate
+        // anywhere the LAST valid neighbour in shuffled order wins
+        // (seed 1 shuffles `up` after `east`).
         let mut level = MockSculkLevel::new();
         let pos = BlockPos::new(0, 60, 0);
         level.set_id(pos, Block::SCULK.default_state.id);

@@ -1,6 +1,4 @@
-//! Vanilla-faithful sculk growth rules (sensor / shrieker placement).
-//!
-//! Reference: `net.minecraft.world.level.block.SculkBlock` (mc-26_2).
+//! Sculk growth rules: sensor / shrieker placement above sculk.
 
 use pumpkin_data::Block;
 use pumpkin_data::BlockId;
@@ -14,27 +12,25 @@ use pumpkin_util::random::RandomImpl;
 
 use super::SculkLevel;
 
-/// Radius for the growth density check (vanilla: scans -4..4 XZ, 0..2 Y).
+/// Radius of the nearby-growth scan: -4..4 on XZ, 0..2 on Y.
 const GROWTH_CHECK_RADIUS: i32 = 4;
 const GROWTH_CHECK_HEIGHT: i32 = 2;
-/// Maximum allowed nearby growths before placement is blocked (vanilla: 2).
+/// Maximum nearby growths allowed before placement is blocked.
 const MAX_NEARBY_GROWTHS: i32 = 2;
 
 /// Rules governing sculk sensor / shrieker placement.
 pub struct GrowthRules;
 
 impl GrowthRules {
-    /// Vanilla `SculkBlock.canPlaceGrowth` — checks whether a growth can be
-    /// placed above `pos` based on the block above being air/water and the
-    /// density of nearby growths.
+    /// Checks whether a growth can be placed above `pos`: the block above
+    /// must be air or water and nearby growths must be few.
     pub fn can_place_growth(level: &dyn SculkLevel, pos: BlockPos) -> bool {
         let above = pos.up();
         let Some(above_state) = level.sculk_get(above) else {
             return false;
         };
         let above_id = above_state.to_block_id();
-        // Vanilla: `stateAbove.isAir() || (stateAbove.is(WATER) && the fluid
-        // state is water)`.
+        // The block above must be air, or a water block holding water.
         if !(above_state.to_state().is_air()
             || (above_id == BlockId::WATER && level.sculk_is_water(above)))
         {
@@ -48,8 +44,8 @@ impl GrowthRules {
                     let check_pos = pos.offset(Vector3::new(dx, dy, dz));
                     if let Some(s) = level.sculk_get(check_pos) {
                         let id = s.to_block_id();
-                        // Vanilla counts only sculk sensors and shriekers
-                        // (exact block match — calibrated sensors don't count).
+                        // Only sculk sensors and shriekers count
+                        // (exact block match — calibrated sensors don't).
                         if id == BlockId::SCULK_SENSOR || id == BlockId::SCULK_SHRIEKER {
                             growth_count += 1;
                             if growth_count > MAX_NEARBY_GROWTHS {
@@ -63,8 +59,8 @@ impl GrowthRules {
         true
     }
 
-    /// Vanilla `SculkBlock.getRandomGrowthState` — returns either a sculk
-    /// sensor (10/11 chance) or a sculk shrieker (1/11 chance).
+    /// Returns a sculk sensor (10/11 chance) or a sculk shrieker
+    /// (1/11 chance), waterlogged when placed in water.
     pub fn random_growth_state(
         level: &dyn SculkLevel,
         pos: BlockPos,
@@ -110,8 +106,8 @@ mod tests {
 
     #[test]
     fn can_place_growth_accepts_air_like_states() {
-        // Cavity/void air are `isAir()` in vanilla and must be accepted, not
-        // just the plain `minecraft:air` block id.
+        // Cavity and void air count as air here, not just the plain
+        // `minecraft:air` block.
         let mut level = MockSculkLevel::new();
         let pos = BlockPos::new(0, 60, 0);
         level.set_id(pos.up(), Block::CAVE_AIR.default_state.id);
@@ -128,7 +124,7 @@ mod tests {
 
     #[test]
     fn density_ignores_calibrated_sensors() {
-        // Vanilla counts only SCULK_SENSOR / SCULK_SHRIEKER; three nearby
+        // Only SCULK_SENSOR / SCULK_SHRIEKER count; three nearby
         // calibrated sensors must not block placement.
         let mut level = MockSculkLevel::new();
         let pos = BlockPos::new(0, 60, 0);

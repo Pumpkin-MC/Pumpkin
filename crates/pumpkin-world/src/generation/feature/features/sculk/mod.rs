@@ -1,5 +1,5 @@
-//! Sculk generation — faithful reimplementation of the vanilla Minecraft
-//! `SculkSpreader` / `SculkBlock` / `SculkVeinBlock` algorithm.
+//! Sculk-patch generation: charge cursors that spread sculk and place
+//! sensor / shrieker growths.
 //!
 //! Organised into three sub-modules:
 //! - [`spreader`] — cursor movement, charge decay, merging.
@@ -25,8 +25,7 @@ pub mod vein;
 /// The 18 non-corner neighbours of a block.
 ///
 /// Every offset in the 3×3×3 cube that shares at least one zero-axis
-/// (i.e. is NOT a corner) and is not the centre itself. This matches
-/// vanilla's `NON_CORNER_NEIGHBOURS`.
+/// (i.e. is NOT a corner) and is not the centre itself.
 pub const NON_CORNER_NEIGHBOURS: [Vector3<i32>; 18] = [
     // Face-adjacent — 6
     Vector3::new(-1, 0, 0),
@@ -71,8 +70,7 @@ pub trait SculkLevel {
     /// Whether the position holds water (source).
     fn sculk_is_water_source(&self, pos: BlockPos) -> bool;
 
-    /// Whether the position holds water (any water fluid state, matching
-    /// vanilla `FluidState.is(Fluids.WATER)`).
+    /// Whether the position holds water (any water fluid state).
     fn sculk_is_water(&self, pos: BlockPos) -> bool;
 
     /// Whether the face of the block at `pos` in the given direction is
@@ -84,12 +82,11 @@ pub trait SculkLevel {
     fn sculk_is_full_cube(&self, pos: BlockPos) -> bool;
 }
 
-/// Returns `true` if the block id implements vanilla `SculkBehaviour`.
+/// Returns `true` if the block id behaves like sculk for spreading.
 ///
-/// Only `sculk` and `sculk_vein` implement `SculkBehaviour` in vanilla
-/// (`SculkBlock` / `SculkVeinBlock`). Sensors, shriekers and catalysts are
-/// plain blocks and therefore use `SculkBehaviour.DEFAULT` when a cursor
-/// visits them.
+/// Only `sculk` and `sculk_vein` qualify. Sensors, shriekers and catalysts
+/// are plain blocks and use the default behaviour when a cursor visits
+/// them.
 #[must_use]
 pub const fn is_sculk_behaviour(id: BlockId) -> bool {
     matches!(id, BlockId::SCULK | BlockId::SCULK_VEIN)
@@ -108,8 +105,7 @@ pub fn is_sculk_replaceable_world_gen(id: BlockId) -> bool {
     id.has_tag(MINECRAFT_SCULK_REPLACEABLE_WORLD_GEN)
 }
 
-/// Vanilla `canSpreadFrom` — checks whether a sculk patch can originate at
-/// the given position.
+/// Checks whether a sculk patch can originate at the given position.
 pub fn can_spread_from(level: &dyn SculkLevel, pos: BlockPos) -> bool {
     let Some(state) = level.sculk_get(pos) else {
         return false;
@@ -118,8 +114,8 @@ pub fn can_spread_from(level: &dyn SculkLevel, pos: BlockPos) -> bool {
     if is_sculk_behaviour(block_id) {
         return true;
     }
-    // Vanilla only accepts air or an actual water block holding a source;
-    // a waterlogged non-water block does not qualify as an origin.
+    // Only air or an actual water block holding a source qualifies;
+    // a waterlogged non-water block does not.
     if !level.sculk_is_air(pos) && !(block_id == BlockId::WATER && level.sculk_is_water_source(pos))
     {
         return false;
@@ -250,8 +246,7 @@ impl SculkLevel for ProtoChunkSculkView<'_> {
 
     fn sculk_is_water_source(&self, pos: BlockPos) -> bool {
         // Proto chunks have no fluid simulation; water is stored as a block
-        // state. Vanilla derives the fluid from the block state during
-        // world-gen, where water blocks are (by convention) sources, so a
+        // state, where water blocks are (by convention) sources, so a
         // WATER block state is treated as a water source.
         self.sculk_get(pos)
             .is_some_and(|s| s.to_block_id() == BlockId::WATER)
@@ -357,9 +352,8 @@ mod tests {
     }
 
     #[test]
-    fn sculk_behaviour_matches_vanilla_implementations() {
-        // Vanilla: only sculk and sculk vein implement `SculkBehaviour`.
-        // Sensors, shriekers and catalysts use `SculkBehaviour.DEFAULT`.
+    fn sculk_behaviour_implementations() {
+        // Only sculk and sculk vein count as sculk behaviour here.
         assert!(is_sculk_behaviour(BlockId::SCULK));
         assert!(is_sculk_behaviour(BlockId::SCULK_VEIN));
         assert!(!is_sculk_behaviour(BlockId::SCULK_CATALYST));
@@ -370,9 +364,9 @@ mod tests {
 
     #[test]
     fn can_spread_from_rejects_waterlogged_non_water_origin() {
-        // Vanilla `SculkPatchFeature.canSpreadFrom` requires air or an
-        // actual water block; a waterlogged slab (water fluid, non-water
-        // block) with a full-cube neighbour must not start spreading.
+        // Spreading requires air or an actual water block; a waterlogged
+        // slab (water fluid, non-water block) with a full-cube neighbour
+        // must not start spreading.
         struct WaterloggedSlabLevel {
             inner: MockSculkLevel,
             slab: BlockPos,
@@ -417,8 +411,8 @@ mod tests {
 
     #[test]
     fn can_spread_from_rejects_sensor_origin() {
-        // Vanilla `SculkPatchFeature.canSpreadFrom`: a sensor is not a
-        // `SculkBehaviour` and not air/water, so spreading cannot start at it.
+        // A sensor is neither sculk behaviour nor air/water, so spreading
+        // cannot start at it.
         let mut level = MockSculkLevel::new();
         let origin = BlockPos::new(0, 60, 0);
         level.set_id(origin, Block::SCULK_SENSOR.default_state.id);

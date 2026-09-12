@@ -58,7 +58,7 @@ impl SculkPatchFeature {
             spreader.clear();
         }
 
-        // Catalyst placement (vanilla: block below must be a full cube).
+        // Catalyst needs a full cube below it.
         if random.next_f32() <= self.catalyst_chance && chunk.sculk_is_full_cube(pos.down()) {
             chunk.sculk_set(pos, Block::SCULK_CATALYST.default_state);
         }
