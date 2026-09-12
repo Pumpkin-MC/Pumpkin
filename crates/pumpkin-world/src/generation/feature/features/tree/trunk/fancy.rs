@@ -102,14 +102,15 @@ impl FancyTrunkPlacer {
             }
         }
 
-        Self::make_or_check_branch(
+        let (_, new_logs) = Self::make_or_check_branch(
             chunk,
             start_pos.0,
             start_pos.up_height(k).0,
             trunk_block,
             true,
         );
-        Self::make_branches(chunk, j, start_pos.0, trunk_block, &list);
+        logs.extend_from_slice(&new_logs);
+        Self::make_branches(chunk, j, start_pos.0, trunk_block, &list, &mut logs);
 
         let mut list_2: Vec<TreeNode> = Vec::new();
         for branch_position in list {
@@ -180,6 +181,7 @@ impl FancyTrunkPlacer {
         start_pos: Vector3<i32>,
         trunk_provider: &BlockState,
         branch_positions: &[BranchPosition],
+        logs: &mut Vec<BlockPos>,
     ) {
         for branch_position in branch_positions {
             let i = branch_position.get_end_y();
@@ -189,13 +191,14 @@ impl FancyTrunkPlacer {
             {
                 continue;
             }
-            Self::make_or_check_branch(
+            let (_, new_logs) = Self::make_or_check_branch(
                 chunk,
                 block_pos.0,
                 branch_position.node.center.0,
                 trunk_provider,
                 true,
             );
+            logs.extend_from_slice(&new_logs);
         }
     }
 
