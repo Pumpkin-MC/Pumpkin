@@ -1898,6 +1898,7 @@ impl World {
     #[expect(clippy::too_many_lines)]
     pub fn tick_chunks(self: &Arc<Self>, server: &Arc<Server>) {
         const BATCH_SIZE: usize = 32;
+        const INHABITED_TIME_BATCH_SIZE: usize = 1024;
         let random_tick_speed = self.level_info.load().game_rules.random_tick_speed;
 
         let active_chunks = self
@@ -2034,14 +2035,18 @@ impl World {
             });
         }
 
-        // Update chunk inhabited time for active chunks in parallel with Rayon
+        // Batch these cheap lookups and atomic increments to avoid waking Rayon
+        // workers for tiny tasks every tick, while retaining parallelism for large sets.
         let loaded_chunks = self.level.loaded_chunks.clone();
         let active_chunks_vec: Vec<_> = active_chunks.iter().copied().collect();
-        active_chunks_vec.par_iter().for_each(|pos| {
-            if let Some(chunk) = loaded_chunks.get(pos) {
-                chunk.inhabited_time.fetch_add(1, Relaxed);
-            }
-        });
+        active_chunks_vec
+            .par_iter()
+            .with_min_len(INHABITED_TIME_BATCH_SIZE)
+            .for_each(|pos| {
+                if let Some(chunk) = loaded_chunks.get(pos) {
+                    chunk.inhabited_time.fetch_add(1, Relaxed);
+                }
+            });
     }
 
     pub fn check_fluid_collision(&self, bounding_box: BoundingBox) -> bool {
