@@ -1172,8 +1172,7 @@ impl Player {
         {
             let stack = &item_stack;
             if stack.is_empty() {
-                // Vanilla fist: base_attack_damage = -1.0, base_attack_speed = -2.4
-                add_damage = -1.0;
+                // Vanilla fist: base_attack_speed = -2.4
                 add_speed = -2.4;
             } else if let Some(modifiers) = stack.get_data_component::<AttributeModifiersImpl>() {
                 for item_mod in modifiers.attribute_modifiers.iter() {

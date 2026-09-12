@@ -182,6 +182,33 @@ impl<T> Metadata<T> {
             return Ok(());
         }
 
+        if self.r#type == MetaDataType::PARTICLES {
+            let mut serialized_value = Vec::new();
+            self.value.write_metadata(&mut serialized_value, version)?;
+
+            let mut cursor = Cursor::new(serialized_value);
+            let count = VarInt::decode(&mut cursor).map_err(|e| {
+                WritingError::Message(format!("Failed to decode effect particle count: {e}"))
+            })?;
+            writer.write_var_int(&count)?;
+            for _ in 0..count.0 {
+                let particle_id = VarInt::decode(&mut cursor).map_err(|e| {
+                    WritingError::Message(format!("Failed to decode effect particle id: {e}"))
+                })?;
+                writer.write_var_int(&particle_id_for_version(particle_id, *version))?;
+                let remainder_start = cursor.position() as usize;
+                let inner = cursor.get_ref();
+                if remainder_start + 4 > inner.len() {
+                    return Err(WritingError::Message(
+                        "Truncated effect particle color".into(),
+                    ));
+                }
+                writer.write_slice(&inner[remainder_start..remainder_start + 4])?;
+                cursor.set_position((remainder_start + 4) as u64);
+            }
+            return Ok(());
+        }
+
         self.value.write_metadata(&mut writer, version)?;
 
         Ok(())
@@ -528,23 +555,17 @@ mod tests {
             data: particle_data,
         };
         let mut bytes = Vec::new();
-        for metadata in [
-            Metadata::new(
-                pumpkin_data::tracked_data::area_effect_cloud::DATA_PARTICLE,
-                particle,
-            ),
-            Metadata::new(
-                pumpkin_data::tracked_data::area_effect_cloud::PARTICLE,
-                particle,
-            ),
-        ] {
-            metadata.write(&mut bytes, &version).unwrap();
-        }
+        Metadata::new(
+            pumpkin_data::tracked_data::area_effect_cloud::DATA_PARTICLE,
+            particle,
+        )
+        .write(&mut bytes, &version)
+        .unwrap();
 
-        let slot = pumpkin_data::tracked_data::area_effect_cloud::DATA_PARTICLE
-            .get(&version)
-            .min(pumpkin_data::tracked_data::area_effect_cloud::PARTICLE.get(&version));
-        assert_eq!(bytes[0], slot);
+        assert_eq!(
+            bytes[0],
+            pumpkin_data::tracked_data::area_effect_cloud::DATA_PARTICLE.get(&version)
+        );
         assert_eq!(bytes[1], MetaDataType::PARTICLE.id(version) as u8);
 
         let mut cursor = Cursor::new(&bytes[2..]);
@@ -578,17 +599,14 @@ mod tests {
 
         let stack = ItemStackSerializer::from(ItemStack::new(1, &Item::WHEAT_SEEDS));
         let mut bytes = Vec::new();
-        for metadata in [
-            Metadata::new(pumpkin_data::tracked_data::item::ITEM, stack.clone()),
-            Metadata::new(pumpkin_data::tracked_data::item::STACK, stack),
-        ] {
-            metadata.write(&mut bytes, &version).unwrap();
-        }
+        Metadata::new(pumpkin_data::tracked_data::item::DATA_ITEM, stack)
+            .write(&mut bytes, &version)
+            .unwrap();
 
-        let slot = pumpkin_data::tracked_data::item::ITEM
-            .get(&version)
-            .min(pumpkin_data::tracked_data::item::STACK.get(&version));
-        assert_eq!(bytes[0], slot);
+        assert_eq!(
+            bytes[0],
+            pumpkin_data::tracked_data::item::DATA_ITEM.get(&version)
+        );
         assert_eq!(bytes[1], MetaDataType::ITEM_STACK.id(version) as u8);
 
         let mut cursor = Cursor::new(&bytes[2..]);
