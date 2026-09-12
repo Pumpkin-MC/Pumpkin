@@ -27,19 +27,18 @@ impl VehicleEntity {
 
     pub fn tick(&self) {
         let current_hurt = self.hurt_time.load(Ordering::Relaxed);
-        let mut wobble_changed = false;
-        if current_hurt > 0 {
+        let hurt_ticked = current_hurt > 0;
+        if hurt_ticked {
             self.hurt_time.store(current_hurt - 1, Ordering::Relaxed);
-            wobble_changed = true;
         }
 
         let current_damage = self.damage.load();
-        if current_damage > 0.0 {
+        let damage_ticked = current_damage > 0.0;
+        if damage_ticked {
             self.damage.store(current_damage - 1.0);
-            wobble_changed = true;
         }
 
-        if wobble_changed {
+        if hurt_ticked || damage_ticked {
             self.send_wobble_metadata();
         }
 
