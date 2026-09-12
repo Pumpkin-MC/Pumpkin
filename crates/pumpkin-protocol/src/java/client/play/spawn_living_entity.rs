@@ -366,16 +366,65 @@ impl ClientPacket for CSpawnLivingEntity {
                     write.write_u8(0xFF)?;
                 }
             } else if let Some(metadata) = &self.metadata
+                && metadata.len() >= 3
+                && metadata.first().copied() != Some(127)
                 && metadata.last().copied() == Some(127)
             {
                 write.write_slice(metadata)?;
             } else {
-                // In <= 1.8, write the 127 (0x7F) terminator byte for the DataWatcher list,
-                // matching vanilla and PacketEvents.
-                write.write_u8(127)?;
+                // The 1.7.x spawn-mob packet lazily falls back to its server-side
+                // DataWatcher when the decoded list is null. That watcher is absent on
+                // the client, so a terminator-only list causes a NullPointerException.
+                // Include the default shared-flags entry to force a non-null list.
+                write.write_slice(&[0x00, 0x00, 127])?;
             }
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CSpawnLivingEntity;
+    use crate::{ClientPacket, VarInt};
+    use pumpkin_data::entity::EntityType;
+    use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
+
+    fn encode_1_7_2(metadata: Option<Box<[u8]>>) -> Vec<u8> {
+        let packet = CSpawnLivingEntity::new(
+            VarInt(1),
+            uuid::Uuid::nil(),
+            VarInt(i32::from(EntityType::VILLAGER.id)),
+            Vector3::new(1.0, 2.0, 3.0),
+            0.0,
+            0.0,
+            0.0,
+            Vector3::new(0.0, 0.0, 0.0),
+            metadata,
+        );
+        let mut out = Vec::new();
+        packet
+            .write_packet_data(&mut out, &JavaMinecraftVersion::V_1_7_2)
+            .unwrap();
+        out
+    }
+
+    #[test]
+    fn legacy_spawn_mob_uses_non_empty_metadata_fallback() {
+        assert!(encode_1_7_2(None).ends_with(&[0x00, 0x00, 0x7F]));
+    }
+
+    #[test]
+    fn legacy_spawn_mob_replaces_terminator_only_metadata() {
+        assert!(encode_1_7_2(Some(Box::<[u8]>::from([0x7F]))).ends_with(&[0x00, 0x00, 0x7F]));
+    }
+
+    #[test]
+    fn legacy_spawn_mob_keeps_valid_metadata() {
+        assert!(
+            encode_1_7_2(Some(Box::<[u8]>::from([0x00, 0x02, 0x7F])))
+                .ends_with(&[0x00, 0x02, 0x7F])
+        );
     }
 }

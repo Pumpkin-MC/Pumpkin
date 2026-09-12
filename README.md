@@ -37,6 +37,7 @@ and customizable experience. It prioritizes performance and player enjoyment whi
   - [x] Encryption
   - [x] Packet Compression
   - [x] Java Edition
+    - 1.7.2 ~ 26.2
   - [x] Bedrock Edition (W.I.P)
   - ...
 - [Tracking: World](https://github.com/Pumpkin-MC/Pumpkin/issues/1403)

@@ -401,40 +401,40 @@
         "protocol_id": 65
       },
       "minecraft:set_display_objective": {
-        "protocol_id": 66
-      },
-      "minecraft:set_entity_data": {
         "protocol_id": 67
       },
-      "minecraft:set_entity_link": {
+      "minecraft:set_entity_data": {
         "protocol_id": 68
       },
-      "minecraft:set_entity_motion": {
+      "minecraft:set_entity_link": {
         "protocol_id": 69
       },
-      "minecraft:set_equipment": {
+      "minecraft:set_entity_motion": {
         "protocol_id": 70
       },
-      "minecraft:set_experience": {
+      "minecraft:set_equipment": {
         "protocol_id": 71
       },
-      "minecraft:set_health": {
+      "minecraft:set_experience": {
         "protocol_id": 72
       },
-      "minecraft:set_objective": {
+      "minecraft:set_health": {
         "protocol_id": 73
       },
-      "minecraft:set_passengers": {
+      "minecraft:set_objective": {
         "protocol_id": 74
       },
-      "minecraft:set_player_team": {
+      "minecraft:set_passengers": {
         "protocol_id": 75
       },
-      "minecraft:set_score": {
+      "minecraft:set_player_team": {
         "protocol_id": 76
       },
-      "minecraft:set_default_spawn_position": {
+      "minecraft:set_score": {
         "protocol_id": 77
+      },
+      "minecraft:set_default_spawn_position": {
+        "protocol_id": 66
       },
       "minecraft:set_time": {
         "protocol_id": 78

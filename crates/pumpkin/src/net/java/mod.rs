@@ -733,7 +733,6 @@ impl JavaClient {
     /// - **Status:** Handles status request and ping packets.
     /// - **Login/Transfer:** Handles login and transfer packets.
     /// - **Config:** Handles configuration packets.
-    #[expect(clippy::too_many_lines)]
     pub fn start_outgoing_packet_task(&mut self) {
         const MAX_BATCH_SIZE: usize = 64;
 
@@ -758,14 +757,11 @@ impl JavaClient {
             loop {
                 let recv_result = tokio::select! {
                     biased;
+                    // 关闭后只保留优先队列的发送机会，让 try_kick 的断开包可以送达；
+                    // 普通积压包必须丢弃，不能继续拖延玩家清理。
+                    () = close_token.cancelled() => priority_packet_receiver.try_recv().ok(),
                     res = priority_packet_receiver.recv() => res,
                     res = packet_receiver.recv() => res,
-                    () = close_token.cancelled() => {
-                        priority_packet_receiver
-                            .try_recv()
-                            .ok()
-                            .or_else(|| packet_receiver.try_recv().ok())
-                    }
                 };
 
                 let Some(packet_data) = recv_result else {
@@ -782,6 +778,11 @@ impl JavaClient {
                             continue;
                         }
                         Err(TryRecvError::Disconnected | TryRecvError::Empty) => {}
+                    }
+
+                    // 已经开始的批次照常完成；关闭期间不再向批次补入普通包。
+                    if close_token.is_cancelled() {
+                        break;
                     }
 
                     match packet_receiver.try_recv() {
@@ -1357,5 +1358,123 @@ impl JavaClient {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod outgoing_queue_tests {
+    use super::*;
+    use std::time::Duration;
+    use tokio::io::AsyncReadExt;
+    use tokio::net::{TcpListener, TcpStream};
+
+    // 直接构造真实 TCP 编解码器和发送任务，不启动 Server、世界或遥测。
+    async fn client_pair(version: JavaMinecraftVersion) -> (JavaClient, TcpStream) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let (accepted, connected) = tokio::join!(listener.accept(), TcpStream::connect(address));
+        let (stream, peer_address) = accepted.unwrap();
+        let pending = PendingConnection::new(
+            stream,
+            peer_address,
+            1,
+            PacketRateLimiter::new(false, 0.0, 0.0),
+        );
+        pending.version.store(version);
+        pending.connection_state.store(ConnectionState::Play);
+        let profile = GameProfile {
+            id: uuid::Uuid::nil(),
+            name: "QueueTest".to_string(),
+            properties: ArcSwap::from_pointee(Vec::new()),
+            profile_actions: None,
+        };
+        (
+            JavaClient::from_pending(pending, profile, PlayerConfig::default()),
+            connected.unwrap(),
+        )
+    }
+
+    // 等待真实发送任务退出并读取到 EOF；超时使清理卡死能明确表现为测试失败。
+    async fn read_closed_connection(client: &JavaClient, peer: &mut TcpStream) -> Vec<u8> {
+        tokio::time::timeout(Duration::from_secs(5), async {
+            client.await_tasks().await;
+            let mut bytes = Vec::new();
+            peer.read_to_end(&mut bytes).await.unwrap();
+            bytes
+        })
+        .await
+        .expect("outgoing task should finish and close its TCP write half")
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn open_connection_sends_normal_queue() {
+        for version in [JavaMinecraftVersion::V_1_7_2, JavaMinecraftVersion::V_26_2] {
+            let (mut client, mut peer) = client_pair(version).await;
+            client.start_outgoing_packet_task();
+
+            // 连接保持打开时，普通包仍须跨批次完整发送，关闭修正不能丢弃正常流量。
+            for _ in 0..65 {
+                client.try_enqueue_packet_data(Bytes::from_static(&[0, 0x55]));
+            }
+            let expected = [2, 0, 0x55].repeat(65);
+            let mut received = vec![0; expected.len()];
+            tokio::time::timeout(Duration::from_secs(5), peer.read_exact(&mut received))
+                .await
+                .expect("normal queue should be sent while the connection is open")
+                .unwrap();
+            assert_eq!(received, expected, "normal packets changed: {version:?}");
+            client.close();
+            assert!(read_closed_connection(&client, &mut peer).await.is_empty());
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn close_does_not_drain_normal_queue() {
+        for version in [JavaMinecraftVersion::V_1_7_2, JavaMinecraftVersion::V_26_2] {
+            let (mut client, mut peer) = client_pair(version).await;
+            client.start_outgoing_packet_task();
+
+            // 单线程运行时在下一次 await 前不会执行新任务，因此关闭时积压必然存在；
+            // 65 个小包超过一批上限，避免依赖内核发送缓冲或慢网络制造积压。
+            for _ in 0..65 {
+                client.try_enqueue_packet_data(Bytes::from_static(&[0, 0x55]));
+            }
+            client.close();
+
+            let bytes = read_closed_connection(&client, &mut peer).await;
+            assert!(
+                bytes.is_empty(),
+                "normal packets sent after close: {version:?}"
+            );
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn try_kick_sends_disconnect_without_draining_normal_queue() {
+        for version in [JavaMinecraftVersion::V_1_7_2, JavaMinecraftVersion::V_26_2] {
+            let (mut client, mut peer) = client_pair(version).await;
+            let reason = TextComponent::text("queue test disconnect");
+            let payload = client
+                .serialize_packet(&CPlayDisconnect::new(&reason))
+                .unwrap();
+            let mut expected_frame = Vec::new();
+            expected_frame
+                .write_var_int(&VarInt(i32::try_from(payload.len()).unwrap()))
+                .unwrap();
+            expected_frame.extend_from_slice(&payload);
+
+            client.start_outgoing_packet_task();
+            // 与直接 close 使用同一确定性排队顺序，同时验证断开包没有被取消分支丢弃。
+            for _ in 0..65 {
+                client.try_enqueue_packet_data(Bytes::from_static(&[0, 0x55]));
+            }
+            client.try_kick(&reason);
+
+            let bytes = read_closed_connection(&client, &mut peer).await;
+            assert_eq!(
+                bytes, expected_frame,
+                "unexpected packets after kick: {version:?}"
+            );
+        }
     }
 }

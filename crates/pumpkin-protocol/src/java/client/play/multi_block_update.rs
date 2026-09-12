@@ -217,3 +217,87 @@ impl<'a> ServerPacket<'a> for CMultiBlockUpdate {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::CMultiBlockUpdate;
+    use crate::{ClientPacket, ServerPacket};
+    use pumpkin_data::BlockStateId;
+    use pumpkin_util::math::position::BlockPos;
+    use pumpkin_util::math::vector3::{self, Vector3};
+    use pumpkin_util::version::JavaMinecraftVersion;
+
+    fn sample() -> CMultiBlockUpdate {
+        CMultiBlockUpdate::new_with_section(
+            Vector3::new(1, 2, 3),
+            false,
+            vec![(BlockPos::new(17, 35, 50), BlockStateId::AIR)],
+        )
+    }
+
+    fn encode(version: JavaMinecraftVersion) -> Vec<u8> {
+        let mut out = Vec::new();
+        sample().write_packet_data(&mut out, &version).unwrap();
+        out
+    }
+
+    #[test]
+    fn v1_7_uses_short_count_and_four_byte_records() {
+        let out = encode(JavaMinecraftVersion::V_1_7_6);
+
+        assert_eq!(&out[0..4], &1i32.to_be_bytes());
+        assert_eq!(&out[4..8], &3i32.to_be_bytes());
+        assert_eq!(&out[8..10], &1i16.to_be_bytes());
+        assert_eq!(&out[10..14], &4i32.to_be_bytes());
+        assert_eq!(&out[14..16], &0x1223u16.to_be_bytes());
+        assert_eq!(out.len(), 18);
+    }
+
+    #[test]
+    fn v1_8_through_v1_15_use_chunk_coordinates_and_short_positions() {
+        for version in [JavaMinecraftVersion::V_1_8, JavaMinecraftVersion::V_1_13] {
+            let out = encode(version);
+
+            assert_eq!(&out[0..4], &1i32.to_be_bytes());
+            assert_eq!(&out[4..8], &3i32.to_be_bytes());
+            assert_eq!(out[8], 1);
+            assert_eq!(&out[9..11], &0x1223u16.to_be_bytes());
+        }
+    }
+
+    #[test]
+    fn v1_16_introduces_packed_sections_and_temporary_light_flag() {
+        let expected_section = vector3::packed_chunk_pos(&Vector3::new(1, 2, 3)).to_be_bytes();
+
+        for version in [JavaMinecraftVersion::V_1_16, JavaMinecraftVersion::V_1_19_4] {
+            let out = encode(version);
+            assert_eq!(&out[0..8], &expected_section);
+            assert_eq!(out[8], 0, "suppress-light-updates flag");
+            assert_eq!(out[9], 1, "record count");
+        }
+
+        let out = encode(JavaMinecraftVersion::V_1_20);
+        assert_eq!(&out[0..8], &expected_section);
+        assert_eq!(out[8], 1, "record count follows the section directly");
+    }
+
+    #[test]
+    fn representative_versions_round_trip() {
+        for version in [
+            JavaMinecraftVersion::V_1_7_6,
+            JavaMinecraftVersion::V_1_8,
+            JavaMinecraftVersion::V_1_13,
+            JavaMinecraftVersion::V_1_16,
+            JavaMinecraftVersion::V_1_19_4,
+            JavaMinecraftVersion::V_1_20,
+            JavaMinecraftVersion::V_26_2,
+        ] {
+            let encoded = encode(version);
+            let mut input = encoded.as_slice();
+            let decoded = CMultiBlockUpdate::read(&mut input, &version).unwrap();
+
+            assert_eq!(decoded, sample());
+            assert!(input.is_empty());
+        }
+    }
+}
