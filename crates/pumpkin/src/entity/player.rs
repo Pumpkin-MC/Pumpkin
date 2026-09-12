@@ -1673,11 +1673,11 @@ impl Player {
             return;
         }
 
-        input.decrement_unless_creative(self.gamemode.load(), 1);
-
         if input.is_empty() {
             return;
         }
+
+        input.decrement_unless_creative(self.gamemode.load(), 1);
 
         if !self.inventory.insert_stack_anywhere(&mut output) {
             self.drop_item(output);

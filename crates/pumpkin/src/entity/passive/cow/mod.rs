@@ -102,11 +102,7 @@ impl Mob for CowEntityBase {
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         if item_stack.get_item() == &Item::BUCKET && !self.is_baby() {
-            player.exchange_stack(
-                &mut ItemStack::new(1, &Item::BUCKET),
-                ItemStack::new(1, &Item::MILK_BUCKET),
-                None,
-            );
+            player.exchange_stack(item_stack, ItemStack::new(1, &Item::MILK_BUCKET), None);
             let entity = &self.mob_entity.living_entity.entity;
             let world = entity.world.load();
             world.play_sound(

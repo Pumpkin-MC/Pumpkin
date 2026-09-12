@@ -207,7 +207,7 @@ impl Mob for MooshroomEntity {
                 )
             };
 
-            player.exchange_stack(&mut ItemStack::new(1, &Item::BOWL), item, Some(false));
+            player.exchange_stack(item_stack, item, Some(false));
             world.play_sound(sound, SoundCategory::Neutral, &pos);
             return true;
         }
@@ -242,7 +242,7 @@ impl Mob for MooshroomEntity {
 
             player.damage_held_item(1);
             entity.convert_to(&EntityType::COW, true);
-            
+
             return true;
         }
 
