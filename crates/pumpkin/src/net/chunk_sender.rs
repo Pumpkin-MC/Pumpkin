@@ -1,6 +1,7 @@
 use bytes::Bytes;
 use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
+use std::num::NonZero;
 use std::sync::{Arc, Weak};
 
 use crate::net::java::chunk_data::{CChunkData, ChunkLightExt};
@@ -13,6 +14,7 @@ use pumpkin_protocol::{ClientPacket, MultiVersionJavaPacket};
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::version::JavaMinecraftVersion;
 use pumpkin_world::chunk::ChunkData;
+use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 use pumpkin_world::level::{Level, SyncChunk};
 
 use crate::net::ClientPlatform;
@@ -127,27 +129,68 @@ impl ChunkSender {
         }
     }
 
-    fn collect_sorted_candidates(&self, level: &Level, center: Vector2<i32>) -> Vec<PreparedChunk> {
+    fn collect_sorted_candidates(
+        &self,
+        level: &Level,
+        center: Vector2<i32>,
+        view_distance: NonZero<u8>,
+    ) -> Vec<PreparedChunk> {
         let quota_limit = self.send_quota.floor() as usize;
-        let mut sorted: Vec<Vector2<i32>> = self.pending_chunks.iter().copied().collect();
-
-        sorted.sort_by_key(|pos| {
-            let dx = (pos.x - center.x).unsigned_abs() as u64;
-            let dz = (pos.y - center.y).unsigned_abs() as u64;
-            dx * dx + dz * dz
-        });
-
         let mut ready = Vec::with_capacity(quota_limit);
-        for pos in sorted {
-            if ready.len() >= quota_limit {
-                break;
+
+        // If pending_chunks is small, sorting it directly avoids scanning offsets.
+        if self.pending_chunks.len() <= 16 {
+            let mut sorted: Vec<Vector2<i32>> = self.pending_chunks.iter().copied().collect();
+            sorted.sort_unstable_by_key(|pos| {
+                let dx = (pos.x - center.x).unsigned_abs() as u64;
+                let dz = (pos.y - center.y).unsigned_abs() as u64;
+                dx * dx + dz * dz
+            });
+
+            for pos in sorted {
+                if ready.len() >= quota_limit {
+                    break;
+                }
+
+                if let Some(chunk) = level.loaded_chunks.get(&pos) {
+                    ready.push(PreparedChunk {
+                        position: pos,
+                        chunk: chunk.value().clone(),
+                    });
+                }
+            }
+        } else {
+            // Re-use precompiled cylindrical chunk view LUT which is already sorted center-outward.
+            let offsets = Cylindrical::get_offsets(view_distance.get());
+            for &(dx, dy) in offsets {
+                if ready.len() >= quota_limit {
+                    break;
+                }
+
+                let pos = Vector2::new(center.x + i32::from(dx), center.y + i32::from(dy));
+                if self.pending_chunks.contains(&pos)
+                    && let Some(chunk) = level.loaded_chunks.get(&pos)
+                {
+                    ready.push(PreparedChunk {
+                        position: pos,
+                        chunk: chunk.value().clone(),
+                    });
+                }
             }
 
-            if let Some(chunk) = level.loaded_chunks.get(&pos) {
-                ready.push(PreparedChunk {
-                    position: pos,
-                    chunk: chunk.value().clone(),
-                });
+            // Fallback for any pending chunks outside the precomputed table
+            if ready.is_empty() {
+                for &pos in &self.pending_chunks {
+                    if ready.len() >= quota_limit {
+                        break;
+                    }
+                    if let Some(chunk) = level.loaded_chunks.get(&pos) {
+                        ready.push(PreparedChunk {
+                            position: pos,
+                            chunk: chunk.value().clone(),
+                        });
+                    }
+                }
             }
         }
 
@@ -158,6 +201,7 @@ impl ChunkSender {
         &mut self,
         level: &Level,
         player_chunk: Vector2<i32>,
+        view_distance: NonZero<u8>,
         epoch: u32,
         version: JavaMinecraftVersion,
     ) -> Option<PreparedBatch> {
@@ -173,7 +217,7 @@ impl ChunkSender {
             return None;
         }
 
-        let candidates = self.collect_sorted_candidates(level, player_chunk);
+        let candidates = self.collect_sorted_candidates(level, player_chunk, view_distance);
         if candidates.is_empty() {
             return None;
         }
