@@ -6896,6 +6896,8 @@ impl World {
             .collect()
     }
 
+    /// Returns the closest entity the segment from `start` to `end` hits, or
+    /// `None`. Convenience wrapper over [`Self::ray_trace_entities`].
     pub fn ray_trace_entity(
         &self,
         start: Vector3<f64>,
@@ -6905,10 +6907,13 @@ impl World {
     }
 
     /// Traces the block grid from `start_pos` to `end_pos` (vanilla
-    /// `Block.clip` semantics) and returns the first block for which
-    /// `hit_check` returns true, together with the face direction the ray
-    /// entered it. The start block is tested like any other; returns `None`
-    /// when the ray hits nothing or starts and ends in the same block.
+    /// `Block.clip` semantics) and returns the first block the ray actually
+    /// passes through whose outline collides and whose `hit_check` returns
+    /// true, together with the direction reported for that hit. The start
+    /// block is tested like any other; since the ray begins inside it, the
+    /// reported direction there is a fallback rather than a true entry face.
+    /// Returns `None` when nothing is hit or the ray starts and ends in the
+    /// same block.
     pub fn raycast(
         self: &Arc<Self>,
         start_pos: Vector3<f64>,

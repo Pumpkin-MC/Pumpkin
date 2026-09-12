@@ -1780,6 +1780,10 @@ impl LivingEntity {
     }
 
     #[allow(clippy::redundant_closure_for_method_calls)]
+    /// Builds the chat death message for this entity: picks the
+    /// `death.attack.<id>` (or the `.player` variant when a killer entity is
+    /// known, or the kill-credit name when the killer is offline/removed)
+    /// translation and fills in the victim and killer display names.
     pub fn get_death_message(
         dyn_self: &dyn EntityBase,
         damage_type: DamageType,
