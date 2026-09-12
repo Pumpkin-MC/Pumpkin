@@ -4903,11 +4903,27 @@ impl Player {
 
             self.last_sent_xp.store(level, Ordering::Relaxed);
 
-            self.try_send_client_packet(&CSetExperience::new(
-                progress.clamp(0.0, 1.0),
-                level.into(),
-                points.into(),
-            ));
+            let attribute = |name: &str, current_value, max_value| BedrockAttribute {
+                min_value: 0.0,
+                max_value,
+                current_value,
+                default_min_value: 0.0,
+                default_max_value: max_value,
+                default_value: 0.0,
+                name: name.to_string(),
+                modifiers: Vec::new(),
+            };
+            self.try_enqueue_packet_editioned(
+                &CSetExperience::new(progress.clamp(0.0, 1.0), level.into(), points.into()),
+                &CBedrockAttributes {
+                    target_runtime_id: VarULong(self.entity_id() as u64),
+                    attribute_list: vec![
+                        attribute("minecraft:player.experience", progress.clamp(0.0, 1.0), 1.0),
+                        attribute("minecraft:player.level", level.max(0) as f32, 24_791.0),
+                    ],
+                    tick: VarULong(0),
+                },
+            );
         }
     }
 
