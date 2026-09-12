@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::Entity;
 use crate::entity::EntityBase;
 use crate::entity::projectile::eye_of_ender::EyeOfEnder;
@@ -7,6 +8,8 @@ use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use crate::world::World;
 use crate::world::portal::end::EndPortal;
+use pumpkin_data::BlockId;
+use pumpkin_data::block_properties::EndPortalFrameLikeProperties;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -39,32 +42,21 @@ impl ItemBehaviour for EnderEyeItem {
         _cursor_pos: Vector3<f32>,
         block: &Block,
         _server: &Server,
-    ) {
-        if block.id != Block::END_PORTAL_FRAME.id {
-            return;
+    ) -> BlockActionResult {
+        if block.id != BlockId::END_PORTAL_FRAME {
+            return BlockActionResult::Pass;
         }
 
         let world = player.world();
         let state_id = world.get_block_state_id(&location);
 
-        let new_state_id = {
-            // Skip if the frame already holds an eye.
-            let Some(props) = block.properties(state_id) else {
-                return;
-            };
-            let props_raw = props.to_props();
-            if props_raw.iter().any(|(k, v)| *k == "eye" && *v == "true") {
-                return;
-            }
-
-            // Build new state with eye=true.
-            let props: Vec<(&str, &str)> = props_raw
-                .iter()
-                .map(|(k, v)| if *k == "eye" { (*k, "true") } else { (*k, *v) })
-                .collect();
-
-            block.from_properties(&props).to_state_id(block)
-        };
+        // Skip if the frame already holds an eye.
+        let mut props = EndPortalFrameLikeProperties::from_state_id(state_id);
+        if props.eye {
+            return BlockActionResult::Pass;
+        }
+        props.eye = true;
+        let new_state_id = props.to_state_id(block);
 
         world.set_block_state(&location, new_state_id, BlockFlags::NOTIFY_LISTENERS);
         // Consume one item.
@@ -73,6 +65,8 @@ impl ItemBehaviour for EnderEyeItem {
 
         // Try to complete the portal.
         EndPortal::get_new_portal(&world, location);
+
+        BlockActionResult::Success
     }
 
     fn normal_use(&self, _item: &Item, player: &Player) {
