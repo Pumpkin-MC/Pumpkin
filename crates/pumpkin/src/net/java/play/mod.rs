@@ -223,6 +223,7 @@ pub mod chat_message;
 pub mod chunk_batch;
 pub mod client_command;
 pub mod client_information;
+pub mod client_tick_end;
 pub mod close_container;
 pub mod command_suggestion;
 pub mod configuration_acknowledged;

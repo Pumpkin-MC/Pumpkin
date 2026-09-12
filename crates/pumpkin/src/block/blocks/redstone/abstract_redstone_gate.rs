@@ -241,13 +241,35 @@ pub fn get_power_on_side(
 ) -> u8 {
     let side_pos = pos.offset(side.to_block_direction().to_offset());
     let (side_block, side_state) = world.get_block_and_state(&side_pos);
-    if !only_gate || is_diode(side_block) {
-        world.block_registry.get_weak_redstone_power(
+    let side_direction = side.to_block_direction();
+
+    if only_gate {
+        if is_diode(side_block) {
+            world.block_registry.get_strong_redstone_power(
+                side_block,
+                world,
+                &side_pos,
+                side_state,
+                side_direction,
+            )
+        } else {
+            0
+        }
+    } else if side_block == &Block::REDSTONE_BLOCK {
+        15
+    } else if side_block == &Block::REDSTONE_WIRE {
+        let props = RedstoneWireLikeProperties::from_state_id(side_state.id);
+        props.power
+    } else if world
+        .block_registry
+        .emits_redstone_power(side_block, side_state, side_direction)
+    {
+        world.block_registry.get_strong_redstone_power(
             side_block,
             world,
             &side_pos,
             side_state,
-            side.to_block_direction(),
+            side_direction,
         )
     } else {
         0

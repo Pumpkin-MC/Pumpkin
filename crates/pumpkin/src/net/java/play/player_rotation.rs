@@ -6,6 +6,9 @@ impl JavaClient {
         if !player.has_client_loaded() {
             return;
         }
+        // A movement packet was received this tick — tracked for SClientTickEnd zeroing.
+        self.received_movement_this_tick
+            .store(true, Ordering::Relaxed);
         if !rotation.yaw.is_finite() || !rotation.pitch.is_finite() {
             self.try_kick(&TextComponent::translate_cross(
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_PLAYER_MOVEMENT,

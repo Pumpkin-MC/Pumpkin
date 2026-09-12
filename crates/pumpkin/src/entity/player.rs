@@ -2607,11 +2607,9 @@ impl Player {
         if let Ok(listener) = self.chunk_listener.try_lock()
             && let Ok(mut sender) = self.chunk_sender.try_lock()
         {
-            let center = self.get_entity().chunk_pos.load();
-            let view_dist =
-                std::num::NonZeroI32::from(self.watched_section.load().view_distance).get();
+            let watched = self.watched_section.load();
             while let Ok((pos, _)) = listener.try_recv() {
-                if (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_dist {
+                if watched.is_within_distance(pos.x, pos.y) {
                     sender.enqueue_chunk(pos);
                 }
             }
@@ -2625,8 +2623,9 @@ impl Player {
             ClientPlatform::Bedrock(_) => JavaMinecraftVersion::V_1_20_2,
         };
 
+        let view_distance = self.watched_section.load().view_distance;
         let prepared_batch = self.chunk_sender.try_lock().ok().and_then(|mut sender| {
-            sender.prepare_batch(&world.level, player_chunk, epoch, version)
+            sender.prepare_batch(&world.level, player_chunk, view_distance, epoch, version)
         });
 
         let total_sent_chunks = prepared_batch.map_or_else(
