@@ -21,7 +21,7 @@ impl HostRecipeManager for PluginHostState {
         id: String,
         recipe: WitShapedRecipe,
     ) -> wasmtime::Result<()> {
-        let result_stack = self.get_item_stack(&recipe.output)?;
+        let result_stack = self.take(recipe.output)?;
         let result_stack = result_stack.lock().await;
 
         let category = recipe
@@ -61,7 +61,7 @@ impl HostRecipeManager for PluginHostState {
         id: String,
         recipe: WitShapelessRecipe,
     ) -> wasmtime::Result<()> {
-        let result_stack = self.get_item_stack(&recipe.output)?;
+        let result_stack = self.take(recipe.output)?;
         let result_stack = result_stack.lock().await;
 
         let category = recipe
@@ -100,7 +100,7 @@ impl HostRecipeManager for PluginHostState {
         station_type: WitCookingType,
         recipe: WitCookingRecipe,
     ) -> wasmtime::Result<()> {
-        let result_stack = self.get_item_stack(&recipe.output)?;
+        let result_stack = self.take(recipe.output)?;
         let result_stack = result_stack.lock().await;
 
         let category = recipe

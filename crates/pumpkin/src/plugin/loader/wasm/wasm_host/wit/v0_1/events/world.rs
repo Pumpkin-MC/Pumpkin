@@ -24,7 +24,7 @@ use crate::plugin::{
 impl ToFromWasmEvent for SpawnChangeEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
 
         Event::SpawnChangeEvent(SpawnChangeEventData {
@@ -57,7 +57,7 @@ impl ToFromWasmEvent for SpawnChangeEvent {
 impl ToFromWasmEvent for ChunkLoad {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
 
         let (chunk_x, chunk_z) = self
@@ -110,7 +110,7 @@ impl ToFromWasmEvent for ChunkLoad {
 impl ToFromWasmEvent for ChunkSave {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
 
         let (chunk_x, chunk_z) = self
@@ -163,7 +163,7 @@ impl ToFromWasmEvent for ChunkSave {
 impl ToFromWasmEvent for ChunkSend {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
 
         Event::ChunkSendEvent(ChunkSendEventData {
@@ -212,7 +212,7 @@ impl ToFromWasmEvent for ChunkSend {
 impl ToFromWasmEvent for crate::plugin::api::events::world::weather_change::WeatherChangeEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
 
         Event::WeatherChangeEvent(WeatherChangeEventData {
@@ -237,7 +237,7 @@ impl ToFromWasmEvent for crate::plugin::api::events::world::weather_change::Weat
 impl ToFromWasmEvent for crate::plugin::api::events::world::weather_change::ThunderChangeEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
 
         Event::ThunderChangeEvent(ThunderChangeEventData {
@@ -262,7 +262,7 @@ impl ToFromWasmEvent for crate::plugin::api::events::world::weather_change::Thun
 impl ToFromWasmEvent for crate::plugin::api::events::world::world_load::WorldLoadEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
 
         Event::WorldLoadEvent(WorldLoadEventData { target_world })
@@ -281,7 +281,7 @@ impl ToFromWasmEvent for crate::plugin::api::events::world::world_load::WorldLoa
 impl ToFromWasmEvent for crate::plugin::api::events::world::world_load::WorldUnloadEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
 
         Event::WorldUnloadEvent(WorldUnloadEventData {
@@ -647,7 +647,7 @@ impl ToFromWasmEvent for crate::plugin::api::events::world::time_skip::TimeSkipE
 impl ToFromWasmEvent for crate::plugin::api::events::world::world_init::WorldInitEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
         let target_world = state
-            .add_world(self.world.clone())
+            .add(self.world.clone())
             .expect("failed to add world resource");
 
         Event::WorldInitEvent(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::event::WorldInitEventData {
