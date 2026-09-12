@@ -10,6 +10,7 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
@@ -787,6 +788,10 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn as_zombie_base(&self) -> Option<&crate::entity::mob::zombie::ZombieEntityBase> {
+        None
+    }
+
     fn as_crossbow_attack_mob(&self) -> Option<&dyn crossbow_attack_mob::CrossbowAttackMob> {
         None
     }
@@ -1062,7 +1067,124 @@ pub trait Mob: EntityBase + Send + Sync {
             .living_entity
             .on_lightning_strike(caller, lightning);
     }
+
+    fn copy_data(&self, output: &dyn Mob) {
+        self.default_copy_data(output);
+    }
+
+    fn convert_to(
+        &self,
+        entity_type: &'static EntityType,
+        remove_existing: bool,
+        setup: &dyn Fn(Arc<dyn EntityBase>),
+    ) {
+        self.default_convert_to(entity_type, remove_existing, setup);
+    }
+
+    fn default_copy_data(&self, output: &dyn Mob) {
+        let source_entity = self.get_entity();
+        let target_entity = output.get_entity();
+
+        target_entity
+            .age
+            .store(source_entity.age.load(Relaxed), Relaxed);
+        target_entity
+            .portal_cooldown
+            .store(source_entity.portal_cooldown.load(Relaxed), Relaxed);
+        target_entity.set_custom_name_visible(source_entity.custom_name_visible.load(Relaxed));
+        target_entity.set_on_fire(source_entity.is_on_fire());
+        target_entity.set_invulnerable(source_entity.invulnerable.load(Relaxed));
+        target_entity.set_has_no_gravity(source_entity.has_no_gravity());
+        target_entity.set_silent(source_entity.is_silent());
+
+        if let Some(custom_name) = &**source_entity.custom_name.load() {
+            target_entity.set_custom_name(custom_name.clone());
+        }
+
+        let tags = source_entity
+            .scoreboard_tags
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        for tag in tags {
+            target_entity.add_scoreboard_tag(&tag);
+        }
+
+        if let (Some(source_living), Some(target_living)) =
+            (self.get_living_entity(), output.get_living_entity())
+        {
+            {
+                let src_equip = source_living
+                    .entity_equipment
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let mut dst_equip = target_living
+                    .entity_equipment
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                for (slot, item) in &src_equip.equipment {
+                    dst_equip.put(slot, item.clone());
+                }
+            }
+
+            let effects = source_living
+                .active_effects
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .values()
+                .cloned()
+                .collect::<Vec<_>>();
+            for effect in effects {
+                target_living.add_effect(effect);
+            }
+            target_living.set_absorption(source_living.get_absorption());
+        }
+
+        let source_mob = self.get_mob_entity();
+        let target_mob = output.get_mob_entity();
+        target_mob.set_left_handed(source_mob.is_left_handed());
+        target_mob.set_no_ai(source_mob.is_no_ai());
+        target_mob.set_can_pick_up_loot(source_mob.can_pick_up_loot());
+        target_mob
+            .persistence_required
+            .store(source_mob.persistence_required.load(Relaxed), Relaxed);
+
+        if let (Some(source_ageable), Some(target_ageable)) =
+            (self.as_ageable(), output.as_ageable())
+        {
+            let source_age = source_ageable.get_ageable_data();
+            let target_age = target_ageable.get_ageable_data();
+            target_age
+                .forced_age
+                .store(source_age.forced_age.load(Relaxed), Relaxed);
+            target_age
+                .forced_age_timer
+                .store(source_age.forced_age_timer.load(Relaxed), Relaxed);
+        }
+    }
+    fn default_convert_to(
+        &self,
+        entity_type: &'static EntityType,
+        remove_existing: bool,
+        setup: &dyn Fn(Arc<dyn EntityBase>),
+    ) {
+        let entity = self.get_entity();
+        let world = entity.world.load();
+        let pos = entity.pos.load();
+        let new_entity = crate::entity::r#type::from_type(entity_type, pos, &world, Uuid::new_v4());
+
+        if let Some(new_mob) = new_entity.get_mob() {
+            self.copy_data(new_mob);
+        }
+        setup(new_entity.clone());
+
+        world.spawn_entity(new_entity);
+        if remove_existing {
+            world.remove_entity(self.get_entity());
+        }
+    }
 }
+
 impl<T: Mob + Send + 'static> EntityBase for T {
     fn get_mob(&self) -> Option<&dyn Mob> {
         Some(self)

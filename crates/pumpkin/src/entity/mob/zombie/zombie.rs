@@ -51,6 +51,13 @@ impl Mob for ZombieEntity {
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
         self.entity.mob_read_nbt(nbt);
     }
+
+    fn copy_data(&self, output: &dyn Mob) {
+        self.entity.copy_data(output);
+    }
+    fn as_zombie_base(&self) -> Option<&crate::entity::mob::zombie::ZombieEntityBase> {
+        Some(&*self.entity)
+    }
 }
 
 impl ZombieEntity {

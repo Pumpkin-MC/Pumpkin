@@ -2,7 +2,9 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::attributes::Attributes;
+use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::potion::Effect;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::vector3::Vector3;
@@ -137,28 +139,19 @@ impl HoglinEntity {
             );
         }
 
-        let zoglin = crate::entity::r#type::from_type(
-            &EntityType::ZOGLIN,
-            pos,
-            &world,
-            uuid::Uuid::new_v4(),
-        );
-
-        let zoglin_base = zoglin.get_entity();
-        zoglin_base.set_rotation(entity.yaw.load(), entity.pitch.load());
-        zoglin_base.head_yaw.store(entity.head_yaw.load());
-        zoglin_base.velocity.store(entity.velocity.load());
-
-        if let Some(living) = zoglin.get_living_entity() {
-            living.set_health(self.mob_entity.living_entity.health.load());
-        }
-
-        if let Some(custom_name) = &**entity.custom_name.load() {
-            zoglin_base.set_custom_name(custom_name.clone());
-        }
-
-        world.spawn_entity(zoglin);
-        entity.remove();
+        self.convert_to(&EntityType::ZOGLIN, true, &|entity| {
+            if let Some(living) = entity.get_living_entity() {
+                living.add_effect(Effect {
+                    ambient: false,
+                    amplifier: 0,
+                    blend: true,
+                    duration: 200,
+                    effect_type: &StatusEffect::NAUSEA,
+                    show_icon: false,
+                    show_particles: true,
+                });
+            }
+        });
     }
 }
 

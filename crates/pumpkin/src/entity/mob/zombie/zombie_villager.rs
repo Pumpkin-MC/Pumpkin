@@ -395,8 +395,14 @@ impl Mob for ZombieVillagerEntity {
             self.start_converting(nbt.get_uuid("ConversionPlayer"), conversion_time);
         }
     }
-}
 
+    fn copy_data(&self, output: &dyn Mob) {
+        self.mob_entity.copy_data(output);
+    }
+    fn as_zombie_base(&self) -> Option<&crate::entity::mob::zombie::ZombieEntityBase> {
+        Some(&*self.mob_entity)
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::{Block, speeds_up_conversion};

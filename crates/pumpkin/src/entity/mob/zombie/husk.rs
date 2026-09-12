@@ -38,4 +38,7 @@ impl Mob for HuskEntity {
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
         self.entity.mob_read_nbt(nbt);
     }
+    fn copy_data(&self, output: &dyn Mob) {
+        self.entity.copy_data(output);
+    }
 }

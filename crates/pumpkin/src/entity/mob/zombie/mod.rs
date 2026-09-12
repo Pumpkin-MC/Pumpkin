@@ -207,4 +207,15 @@ impl Mob for ZombieEntityBase {
             self.set_can_break_doors(can_break_doors, self);
         }
     }
+
+    fn copy_data(&self, mob: &dyn Mob) {
+        self.default_copy_data(mob);
+
+        if let Some(zombie) = mob.as_zombie_base()
+            && self.can_break_doors()
+            && zombie.can_break_doors()
+        {
+            zombie.set_can_break_doors(true, mob);
+        }
+    }
 }
