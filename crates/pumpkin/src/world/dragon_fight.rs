@@ -19,7 +19,9 @@ use super::{
     World,
     bossbar::{Bossbar, BossbarColor, BossbarDivisions, BossbarFlags},
 };
-use crate::entity::{Entity, EntityBase, decoration::end_crystal::EndCrystalEntity};
+use crate::entity::{
+    Entity, EntityBase, decoration::end_crystal::EndCrystalEntity, player::Player,
+};
 
 // ── Constants (match vanilla exactly) ────────────────────────────────────────
 
@@ -73,9 +75,12 @@ pub struct DragonFight {
     ticks_since_crystals_scanned: i32,
     ticks_since_last_player_scan: i32,
 
-    // ── Boss bar ──────────────────────────────────────────────────────────────
+    // ── Boss bar (vanilla `ServerBossEvent`) ──────────────────────────────────
     bossbar_uuid: Uuid,
-    bossbar_players: Vec<Uuid>,
+    bossbar_players: Vec<Arc<Player>>,
+    bossbar_visible: bool,
+    bossbar_progress: f32,
+    bossbar_title: Option<String>,
 }
 
 impl Default for DragonFight {
@@ -124,6 +129,9 @@ impl DragonFight {
             ticks_since_last_player_scan: TIME_BETWEEN_PLAYER_SCANS + 1,
             bossbar_uuid: Uuid::new_v4(),
             bossbar_players: Vec::new(),
+            bossbar_visible: true,
+            bossbar_progress: 1.0,
+            bossbar_title: None,
         }
     }
 
@@ -155,6 +163,11 @@ impl DragonFight {
         let mut fight = fight_mutex
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        // Vanilla sets the visibility before the player scan, so a bar that must not
+        // be shown is never added and never receives updates.
+        let dragon_killed = fight.dragon_killed;
+        fight.set_bossbar_visible(!dragon_killed);
 
         // 1. Update boss-bar recipients every 20 ticks
         fight.ticks_since_last_player_scan += 1;
@@ -232,19 +245,18 @@ impl DragonFight {
         };
 
         match existing {
-            Some((uuid, _entity)) if !active_portal_exists => {
+            Some((uuid, entity)) => {
                 info!("Found that there's a dragon still alive ({:?})", uuid);
                 self.dragon_uuid = Some(uuid);
                 self.dragon_killed = false;
-            }
-            Some((uuid, entity)) => {
-                info!(
-                    "Found that there's a dragon still alive ({:?}), but we have an active portal. Removing it.",
-                    uuid
-                );
-                entity.get_entity().remove();
-                self.dragon_uuid = None;
-                self.dragon_killed = true;
+                // A dragon without any portal is a pre-1.9 world removed so a
+                // fresh one can spawn. An active portal means a finished fight, and the
+                // dragon then belongs to a later respawn.
+                if !active_portal_exists {
+                    info!("But we didn't have a portal, let's remove it.");
+                    entity.get_entity().remove();
+                    self.dragon_uuid = None;
+                }
             }
             None => {
                 self.dragon_killed = true;
@@ -465,10 +477,10 @@ impl DragonFight {
         } else {
             0.0
         };
-        self.update_bossbar_health(world, fraction);
+        self.update_bossbar_health(fraction);
 
         if let Some(name) = custom_name {
-            self.update_bossbar_title(world, name);
+            self.update_bossbar_title(name);
         }
 
         if let Some(loc) = self.exit_portal_location
@@ -491,8 +503,9 @@ impl DragonFight {
             return;
         }
 
-        self.update_bossbar_health(world, 0.0);
-        self.remove_all_bossbar(world);
+        // Vanilla keeps the viewers and only hides the bar.
+        self.update_bossbar_health(0.0);
+        self.set_bossbar_visible(false);
 
         // Activate the exit portal.
         self.spawn_exit_portal(world, true);
@@ -1008,6 +1021,12 @@ impl DragonFight {
     // ── Exit portal ───────────────────────────────────────────────────────────
 
     pub fn spawn_exit_portal(&mut self, world: &Arc<World>, active: bool) {
+        // Vanilla restores the location from saved data. Without that, look the podium
+        // up first.
+        if self.exit_portal_location.is_none() {
+            self.find_exit_portal(world);
+        }
+
         if self.exit_portal_location.is_none() {
             let mut portal_y = 65;
             for y in (50..=100).rev() {
@@ -1036,36 +1055,59 @@ impl DragonFight {
                 "entity.minecraft.ender_dragon",
                 Vec::<TextComponent>::new(),
             ),
-            health: 1.0,
+            health: self.bossbar_progress,
             color: BossbarColor::Pink,
             division: BossbarDivisions::NoDivision,
             flags: BossbarFlags::DRAGON_BAR | BossbarFlags::CREATE_FOG | BossbarFlags::DARKEN_SKY,
         }
     }
 
-    fn update_bossbar_health(&self, world: &Arc<World>, health: f32) {
-        for player in world.players.load().iter() {
-            if self.bossbar_players.contains(&player.gameprofile.id) {
-                player.update_bossbar_health(&self.bossbar_uuid, health);
-            }
+    /// Vanilla `ServerBossEvent.setVisible` -> the bar is shown while the dragon is alive.
+    fn set_bossbar_visible(&mut self, visible: bool) {
+        if self.bossbar_visible == visible {
+            return;
         }
-    }
+        self.bossbar_visible = visible;
 
-    fn update_bossbar_title(&self, world: &Arc<World>, title: &TextComponent) {
-        for player in world.players.load().iter() {
-            if self.bossbar_players.contains(&player.gameprofile.id) {
-                player.update_bossbar_title(&self.bossbar_uuid, title.clone());
-            }
-        }
-    }
-
-    fn remove_all_bossbar(&mut self, world: &Arc<World>) {
-        for player in world.players.load().iter() {
-            if self.bossbar_players.contains(&player.gameprofile.id) {
+        let bossbar = self.make_bossbar();
+        for player in &self.bossbar_players {
+            if visible {
+                player.send_bossbar(&bossbar);
+            } else {
                 player.remove_bossbar(self.bossbar_uuid);
             }
         }
-        self.bossbar_players.clear();
+    }
+
+    /// Vanilla `ServerBossEvent.setProgress`-> only on change, and only while visible.
+    fn update_bossbar_health(&mut self, health: f32) {
+        if self.bossbar_progress == health {
+            return;
+        }
+        self.bossbar_progress = health;
+
+        if !self.bossbar_visible {
+            return;
+        }
+        for player in &self.bossbar_players {
+            player.update_bossbar_health(&self.bossbar_uuid, health);
+        }
+    }
+
+    /// Vanilla `ServerBossEvent.setName`.
+    fn update_bossbar_title(&mut self, title: &TextComponent) {
+        let text = title.clone().get_text();
+        if self.bossbar_title.as_deref() == Some(text.as_str()) {
+            return;
+        }
+        self.bossbar_title = Some(text);
+
+        if !self.bossbar_visible {
+            return;
+        }
+        for player in &self.bossbar_players {
+            player.update_bossbar_title(&self.bossbar_uuid, title.clone());
+        }
     }
 
     fn update_players(&mut self, world: &Arc<World>) {
@@ -1074,7 +1116,7 @@ impl DragonFight {
         let origin_x = self.origin.0.x as f64;
         let origin_z = self.origin.0.z as f64;
 
-        let current: Vec<Uuid> = players
+        let current: Vec<Arc<Player>> = players
             .iter()
             .filter(|p| {
                 let pos = p.living_entity.entity.pos.load();
@@ -1083,35 +1125,39 @@ impl DragonFight {
                 let dz = pos.z - origin_z;
                 dx * dx + dy * dy + dz * dz < ARENA_RADIUS * ARENA_RADIUS
             })
-            .map(|p| p.gameprofile.id)
+            .cloned()
             .collect();
 
         // Add newly-in-range players
-        for &uid in &current {
-            if !self.bossbar_players.contains(&uid) {
-                if !self.dragon_killed
-                    && let Some(p) = players.iter().find(|p| p.gameprofile.id == uid)
-                {
-                    p.send_bossbar(&self.make_bossbar());
+        for player in &current {
+            if !self
+                .bossbar_players
+                .iter()
+                .any(|known| known.gameprofile.id == player.gameprofile.id)
+            {
+                if self.bossbar_visible {
+                    player.send_bossbar(&self.make_bossbar());
                 }
-                self.bossbar_players.push(uid);
+                self.bossbar_players.push(player.clone());
             }
         }
 
-        // Remove out-of-range players
-        let to_remove: Vec<Uuid> = self
-            .bossbar_players
-            .iter()
-            .filter(|uid| !current.contains(uid))
-            .copied()
-            .collect();
-
-        for uid in &to_remove {
-            if let Some(player) = players.iter().find(|player| &player.gameprofile.id == uid) {
-                player.remove_bossbar(self.bossbar_uuid);
+        // Remove out-of-range players. Vanilla holds the players itself, so this also
+        // reaches players who left the dimension or disconnected.
+        let uuid = self.bossbar_uuid;
+        let visible = self.bossbar_visible;
+        self.bossbar_players.retain(|known| {
+            if current
+                .iter()
+                .any(|player| player.gameprofile.id == known.gameprofile.id)
+            {
+                return true;
             }
-            self.bossbar_players.retain(|u| u != uid);
-        }
+            if visible {
+                known.remove_bossbar(uuid);
+            }
+            false
+        });
     }
 
     // ── Public queries ────────────────────────────────────────────────────────

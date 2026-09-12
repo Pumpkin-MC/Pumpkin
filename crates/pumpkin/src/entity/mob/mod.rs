@@ -16,7 +16,6 @@ use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot};
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
@@ -85,9 +84,6 @@ pub struct MobEntity {
     pub breeder: AtomicCell<Option<Uuid>>,
     pub persistence_required: AtomicBool,
     mob_flags: AtomicU8,
-    last_sent_yaw: AtomicU8,
-    last_sent_pitch: AtomicU8,
-    last_sent_head_yaw: AtomicU8,
 }
 impl MobEntity {
     const AI_DISABLED_FLAG: u8 = 1;
@@ -171,9 +167,6 @@ impl MobEntity {
             breeder: AtomicCell::new(None),
             persistence_required: AtomicBool::new(false),
             mob_flags: AtomicU8::new(0),
-            last_sent_yaw: AtomicU8::new(0),
-            last_sent_pitch: AtomicU8::new(0),
-            last_sent_head_yaw: AtomicU8::new(0),
         }
     }
 
@@ -751,6 +744,36 @@ pub trait Mob: EntityBase + Send + Sync {
         amount
     }
 
+    /// Whole damage path, so a mob can replace it (vanilla `hurtServer` override).
+    fn mob_damage_with_context(
+        &self,
+        caller: &dyn EntityBase,
+        amount: f32,
+        damage_type: DamageType,
+        position: Option<Vector3<f64>>,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        // pre_damage, allows mobs to dodge/cancel damage
+        if !self.pre_damage(damage_type, source) {
+            return false;
+        }
+        // Mob-specific damage modifier
+        let amount = self.modify_incoming_damage(amount, damage_type);
+        let damaged = self.get_mob_entity().living_entity.damage_with_context(
+            caller,
+            amount,
+            damage_type,
+            position,
+            source,
+            cause,
+        );
+        if damaged {
+            self.on_damage(damage_type, source);
+        }
+        damaged
+    }
+
     fn can_attack_with_owner(&self, _target: &dyn EntityBase, _owner: &dyn EntityBase) -> bool {
         true
     }
@@ -1214,39 +1237,6 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
         mob_entity.living_entity.tick(caller, server);
         self.post_tick();
-
-        // --- Packet logic remains the same ---
-        let entity = &mob_entity.living_entity.entity;
-        let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0) as u8;
-        let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0) as u8;
-        let head_yaw = (entity.head_yaw.load() * 256.0 / 360.0).rem_euclid(256.0) as u8;
-
-        let last_yaw = mob_entity.last_sent_yaw.load(Relaxed);
-        let last_pitch = mob_entity.last_sent_pitch.load(Relaxed);
-        let last_head_yaw = mob_entity.last_sent_head_yaw.load(Relaxed);
-
-        let chunk_pos = entity.chunk_pos.load();
-        if yaw.abs_diff(last_yaw) >= 1 || pitch.abs_diff(last_pitch) >= 1 {
-            let world = entity.world.load();
-            world.broadcast_to_chunk(
-                chunk_pos,
-                &CUpdateEntityRot::new(
-                    entity.entity_id.into(),
-                    yaw,
-                    pitch,
-                    entity.on_ground.load(Relaxed),
-                ),
-            );
-            mob_entity.last_sent_yaw.store(yaw, Relaxed);
-            mob_entity.last_sent_pitch.store(pitch, Relaxed);
-        }
-
-        if head_yaw.abs_diff(last_head_yaw) >= 1 {
-            let world = entity.world.load();
-
-            world.broadcast_to_chunk(chunk_pos, &CHeadRot::new(entity.entity_id.into(), head_yaw));
-            mob_entity.last_sent_head_yaw.store(head_yaw, Relaxed);
-        }
     }
 
     fn is_collidable(&self, _entity: Option<Box<dyn EntityBase>>) -> bool {
@@ -1266,24 +1256,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         source: Option<&dyn EntityBase>,
         cause: Option<&dyn EntityBase>,
     ) -> bool {
-        // pre_damage hook: allows mobs to dodge/cancel damage (e.g. enderman projectile dodge)
-        if !self.pre_damage(damage_type, source) {
-            return false;
-        }
-        // Mob-specific damage modifier (e.g. shulker armor when closed).
-        let amount = self.modify_incoming_damage(amount, damage_type);
-        let damaged = self.get_mob_entity().living_entity.damage_with_context(
-            caller,
-            amount,
-            damage_type,
-            position,
-            source,
-            cause,
-        );
-        if damaged {
-            self.on_damage(damage_type, source);
-        }
-        damaged
+        self.mob_damage_with_context(caller, amount, damage_type, position, source, cause)
     }
 
     fn interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {

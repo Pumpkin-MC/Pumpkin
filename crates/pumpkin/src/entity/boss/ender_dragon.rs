@@ -1,6 +1,8 @@
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::{Block, BlockStateId};
+use pumpkin_util::math::boundingbox::{BoundingBox, EntityDimensions};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::{chunk::ChunkHeightmapType, world::BlockFlags};
@@ -141,16 +143,42 @@ pub fn find_path(
     path
 }
 
+/// Vanilla `EnderDragon` sub entities, in `subEntities`: name, width, height.
+pub const PART_DIMENSIONS: [(&str, f32, f32); 8] = [
+    ("head", 1.0, 1.0),
+    ("neck", 3.0, 3.0),
+    ("body", 5.0, 3.0),
+    ("tail", 2.0, 2.0),
+    ("tail", 2.0, 2.0),
+    ("tail", 2.0, 2.0),
+    ("wing", 4.0, 2.0),
+    ("wing", 4.0, 2.0),
+];
+
+/// Only the head takes undivided damage.
+pub const PART_HEAD: usize = 0;
+/// Direct hits on the dragon count as body hits.
+pub const PART_BODY: usize = 2;
+
 pub struct EnderDragonPart {
     pub entity: Entity,
     pub dragon_uuid: uuid::Uuid,
+    pub index: usize,
+    pub name: &'static str,
 }
 
 impl EnderDragonPart {
-    pub const fn new(entity: Entity, dragon_uuid: uuid::Uuid) -> Self {
+    pub const fn new(
+        entity: Entity,
+        dragon_uuid: uuid::Uuid,
+        index: usize,
+        name: &'static str,
+    ) -> Self {
         Self {
             entity,
             dragon_uuid,
+            index,
+            name,
         }
     }
 }
@@ -160,17 +188,31 @@ impl EntityBase for EnderDragonPart {
         &self.entity
     }
 
-    fn damage(&self, source: &dyn EntityBase, amount: f32, damage_type: DamageType) -> bool {
+    fn damage_with_context(
+        &self,
+        _caller: &dyn EntityBase,
+        amount: f32,
+        damage_type: DamageType,
+        position: Option<Vector3<f64>>,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) -> bool {
         let world = self.entity.world.load();
-        if let Some(dragon_base) = world
-            .entities
-            .load()
-            .iter()
-            .find(|e| e.get_entity().entity_uuid == self.dragon_uuid)
-        {
-            return dragon_base.damage(source, amount, damage_type);
-        }
-        false
+        let Some(dragon) = world.get_entity_by_uuid(self.dragon_uuid) else {
+            return false;
+        };
+        let Some(dragon_entity) = dragon.cast_any().downcast_ref::<EnderDragonEntity>() else {
+            return false;
+        };
+        dragon_entity.hurt_part(
+            dragon.as_ref(),
+            self.index,
+            amount,
+            damage_type,
+            position,
+            source,
+            cause,
+        )
     }
 
     fn cast_any(&self) -> &dyn std::any::Any {
@@ -196,6 +238,8 @@ pub struct EnderDragonEntity {
     pub in_wall: Mutex<bool>,
     pub dragon_death_time: Mutex<i32>,
     pub sitting_damage_received: Mutex<f32>,
+    /// Crystal currently healing the dragon
+    pub nearest_crystal: Mutex<Option<uuid::Uuid>>,
 
     pub nodes_initialized: Mutex<bool>,
 
@@ -227,20 +271,31 @@ impl EnderDragonEntity {
         let dragon_uuid = entity.entity_uuid;
         let world = entity.world.load();
 
-        let _ = Entity::reserve_ids(8);
-
+        // The part ids follow the dragon's, `from_type` reserved them with it.
         let mut parts = Vec::new();
-        for i in 1..=8 {
+        for (i, (name, width, height)) in PART_DIMENSIONS.iter().enumerate() {
             let part_entity = Entity::from_uuid_with_id(
-                base_id + i,
+                base_id + i as i32 + 1,
                 uuid::Uuid::new_v4(),
                 world.clone(),
                 entity.pos.load(),
                 &EntityType::ENDER_DRAGON,
             );
-            let part = Arc::new(EnderDragonPart::new(part_entity, dragon_uuid));
-            // TODO: world.add_entity_silent(part.clone() as Arc<dyn EntityBase>);
-            parts.push(part);
+            let dimensions = EntityDimensions::new(*width, *height, *height);
+            part_entity.entity_dimension.store(dimensions);
+            let part_pos = part_entity.pos.load();
+            part_entity.bounding_box.store(BoundingBox::new_from_pos(
+                part_pos.x,
+                part_pos.y,
+                part_pos.z,
+                &dimensions,
+            ));
+            parts.push(Arc::new(EnderDragonPart::new(
+                part_entity,
+                dragon_uuid,
+                i,
+                name,
+            )));
         }
 
         Arc::new(Self {
@@ -252,6 +307,7 @@ impl EnderDragonEntity {
             in_wall: Mutex::new(false),
             dragon_death_time: Mutex::new(0),
             sitting_damage_received: Mutex::new(0.0),
+            nearest_crystal: Mutex::new(None),
             nodes_initialized: Mutex::new(false),
             fight_origin: Mutex::new(BlockPos::new(0, 128, 0)),
             phase_manager: PhaseManager::new(),
@@ -618,29 +674,47 @@ impl EnderDragonEntity {
         }
     }
 
-    fn tick_crystal_healing(&self) {
-        let world = self.mob_entity.living_entity.entity.world.load();
-        let pos = self.mob_entity.living_entity.entity.pos.load();
+    /// Vanilla `EnderDragon.checkCrystals`. The client picks the beam's crystal the
+    /// same way, so the beam itself needs no packet.
+    fn check_crystals(&self) {
+        let entity = &self.mob_entity.living_entity.entity;
+        let world = entity.world.load();
+        let mut nearest = self
+            .nearest_crystal
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-        let mut nearest_crystal = None;
-        let mut min_dist_sq = 1024.0; // 32 blocks
-
-        for entity in world.entities.load().iter() {
-            if entity.get_entity().entity_type == &EntityType::END_CRYSTAL {
-                let crystal_pos = entity.get_entity().pos.load();
-                let dist_sq = pos.distance_squared(crystal_pos);
-                if dist_sq < min_dist_sq {
-                    min_dist_sq = dist_sq;
-                    nearest_crystal = Some(entity.clone());
+        if let Some(uuid) = *nearest {
+            let alive = world
+                .get_entity_by_uuid(uuid)
+                .is_some_and(|crystal| !crystal.get_entity().is_removed());
+            if alive {
+                let living = &self.mob_entity.living_entity;
+                if entity.age.load(Ordering::Relaxed) % 10 == 0
+                    && living.health.load() < living.get_max_health()
+                {
+                    living.heal(1.0);
                 }
+            } else {
+                *nearest = None;
             }
         }
 
-        if let Some(_crystal) = nearest_crystal {
-            let living = &self.mob_entity.living_entity;
-            if living.health.load() < living.get_max_health() {
-                living.heal(1.0);
-            }
+        if rand::random_range(0..10) == 0 {
+            let pos = entity.pos.load();
+            let search = entity.bounding_box.load().expand_all(32.0);
+            *nearest = world
+                .get_entities_at_box(&search)
+                .into_iter()
+                .filter(|e| e.get_entity().entity_type == &EntityType::END_CRYSTAL)
+                .min_by(|a, b| {
+                    a.get_entity()
+                        .pos
+                        .load()
+                        .distance_squared(pos)
+                        .total_cmp(&b.get_entity().pos.load().distance_squared(pos))
+                })
+                .map(|e| e.get_entity().entity_uuid);
         }
     }
 
@@ -756,10 +830,6 @@ impl EnderDragonEntity {
                 pos.z + (cc1 * 1.5 + cc * dd) * cc_tilt,
             ));
         }
-
-        for part in &self.parts {
-            part.entity.send_pos_rot();
-        }
     }
 
     pub fn ai_step(&self) {
@@ -780,7 +850,7 @@ impl EnderDragonEntity {
         };
 
         self.tick_growl();
-        self.tick_crystal_healing();
+        self.check_crystals();
 
         {
             let world = self.mob_entity.living_entity.entity.world.load();
@@ -832,21 +902,66 @@ impl EnderDragonEntity {
             }
         }
 
-        self.mob_entity.living_entity.entity.send_pos_rot();
         self.tick_parts();
     }
 
-    pub fn hurt(&self, damage: f32) {
+    /// Vanilla `EnderDragon.hurt(level, part, source, damage)`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn hurt_part(
+        &self,
+        caller: &dyn EntityBase,
+        part: usize,
+        amount: f32,
+        damage_type: DamageType,
+        position: Option<Vector3<f64>>,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) -> bool {
         let phase_type: EnderDragonPhase = *self
             .phase
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if phase_type == EnderDragonPhase::Dying {
+            return false;
+        }
+
+        let amount = if part == PART_HEAD {
+            amount
+        } else {
+            amount / 4.0 + amount.min(1.0)
+        };
+        if amount < 0.01 {
+            return false;
+        }
+
+        let by_player = source.or(cause).is_some_and(|e| e.get_player().is_some());
+        if !by_player
+            && !damage_type.has_tag(&tag::DamageType::MINECRAFT_ALWAYS_HURTS_ENDER_DRAGONS)
+        {
+            return true;
+        }
+
+        let living = &self.mob_entity.living_entity;
+        let health_before = living.health.load();
+        // bypasses the dragon's own `hurtServer`.
+        if living.damage_with_context(caller, amount, damage_type, position, source, cause) {
+            self.on_damage(damage_type, source);
+        }
+
         if phase_type.is_sitting() {
-            *self
+            let mut received = self
                 .sitting_damage_received
                 .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) += damage;
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            *received += health_before - living.health.load();
+            if *received > 0.25 * living.get_max_health() {
+                *received = 0.0;
+                drop(received);
+                self.set_phase(EnderDragonPhase::TakingOff);
+            }
         }
+
+        true
     }
 }
 
@@ -864,6 +979,32 @@ impl Mob for EnderDragonEntity {
         if living.health.load() <= 0.0 {
             self.set_phase(EnderDragonPhase::Dying);
         }
+    }
+
+    /// a hit that does not name a part counts as a body hit.
+    fn mob_damage_with_context(
+        &self,
+        caller: &dyn EntityBase,
+        amount: f32,
+        damage_type: DamageType,
+        position: Option<Vector3<f64>>,
+        source: Option<&dyn EntityBase>,
+        cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        self.hurt_part(
+            caller,
+            PART_BODY,
+            amount,
+            damage_type,
+            position,
+            source,
+            cause,
+        )
+    }
+
+    /// overrides `checkDespawn` to do nothing.
+    fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
+        false
     }
 
     fn get_mob_gravity(&self) -> f64 {
