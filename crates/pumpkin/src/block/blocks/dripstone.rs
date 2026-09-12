@@ -34,7 +34,7 @@ impl BlockBehaviour for DripstoneBlock {
         {
             living.handle_fall_damage_from(
                 args.entity,
-                args.fall_distance + 2.5,
+                args.fall_distance + 2.0,
                 2.0,
                 DamageType::STALAGMITE,
             );
