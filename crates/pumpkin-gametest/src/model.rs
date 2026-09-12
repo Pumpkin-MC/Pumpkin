@@ -6,6 +6,18 @@ use serde_json::Value;
 pub enum TestType {
     #[serde(rename = "minecraft:block_based")]
     BlockBased,
+    #[serde(rename = "minecraft:function")]
+    Function,
+}
+
+impl TestType {
+    #[must_use]
+    pub const fn serialized_name(self) -> &'static str {
+        match self {
+            Self::BlockBased => "minecraft:block_based",
+            Self::Function => "minecraft:function",
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
@@ -71,6 +83,8 @@ pub struct GameTestDefinition {
     pub instance_type: TestType,
     pub environment: Value,
     pub structure: String,
+    #[serde(default)]
+    pub function: Option<String>,
     pub max_ticks: i32,
     #[serde(default)]
     pub setup_ticks: i32,
@@ -93,7 +107,13 @@ pub struct GameTestDefinition {
 impl GameTestDefinition {
     #[must_use]
     pub fn is_valid(&self) -> bool {
-        self.max_ticks > 0
+        let function_valid = match self.instance_type {
+            TestType::BlockBased => true,
+            TestType::Function => self.function.as_ref().is_some_and(|f| !f.is_empty()),
+        };
+
+        function_valid
+            && self.max_ticks > 0
             && self.setup_ticks >= 0
             && self.max_attempts > 0
             && self.required_successes > 0

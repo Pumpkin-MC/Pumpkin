@@ -564,6 +564,26 @@ impl Server {
         }
     }
 
+    #[must_use]
+    pub fn get_known_packs<'a>(
+        &self,
+        server_version: &'a str,
+        loaded_packs: &'a [crate::data::datapack::LoadedDatapack],
+    ) -> Vec<pumpkin_protocol::KnownPack<'a>> {
+        self.datapack_manager
+            .get_known_packs(self, server_version, loaded_packs)
+    }
+
+    #[must_use]
+    pub fn get_enabled_features(&self) -> Vec<&'static str> {
+        self.datapack_manager.get_enabled_features(self)
+    }
+
+    #[must_use]
+    pub fn is_feature_enabled(&self, feature: &str) -> bool {
+        self.datapack_manager.is_feature_enabled(self, feature)
+    }
+
     pub async fn save_all(&self) -> Result<(), String> {
         if let Err(err) = self.save_world_info() {
             error!("Failed to save world info: {err}");
@@ -1110,6 +1130,13 @@ impl Server {
 
     /// Ticks the game logic for all worlds. This is the part that is affected by `/tick freeze`.
     pub fn tick_worlds(self: &Arc<Self>) {
+        let source = crate::command::CommandSender::Console
+            .into_source(self)
+            .with_silent();
+        let _ = self
+            .datapack_manager
+            .execute_function(self, &source, "#minecraft:tick");
+
         self.task_scheduler.tick(self);
         self.scheduled_functions.tick(
             self,

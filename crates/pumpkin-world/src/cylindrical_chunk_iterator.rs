@@ -38,30 +38,6 @@ impl Cylindrical {
 
     #[must_use]
     #[inline]
-    pub const fn left(&self) -> i32 {
-        self.center.x - self.view_distance.get() as i32 - 1
-    }
-
-    #[must_use]
-    #[inline]
-    pub const fn bottom(&self) -> i32 {
-        self.center.y - self.view_distance.get() as i32 - 1
-    }
-
-    #[must_use]
-    #[inline]
-    pub const fn right(&self) -> i32 {
-        self.center.x + self.view_distance.get() as i32 + 1
-    }
-
-    #[must_use]
-    #[inline]
-    pub const fn top(&self) -> i32 {
-        self.center.y + self.view_distance.get() as i32 + 1
-    }
-
-    #[must_use]
-    #[inline]
     pub const fn is_within_distance(&self, x: i32, z: i32) -> bool {
         let vd = self.view_distance.get() as i64;
         if vd == 1 {
@@ -111,17 +87,18 @@ mod test {
 
         for view_distance in 1..=32 {
             cylinder.view_distance = NonZero::new(view_distance).unwrap();
+            let bound = view_distance as i32 + 1;
 
             for chunk in cylinder.all_chunks_within() {
-                assert!(chunk.x >= cylinder.left() && chunk.x <= cylinder.right());
-                assert!(chunk.y >= cylinder.bottom() && chunk.y <= cylinder.top());
+                assert!(chunk.x >= -bound && chunk.x <= bound);
+                assert!(chunk.y >= -bound && chunk.y <= bound);
             }
 
-            for x in (cylinder.left() - 2)..=(cylinder.right() + 2) {
-                for z in (cylinder.bottom() - 2)..=(cylinder.top() + 2) {
+            for x in (-bound - 2)..=(bound + 2) {
+                for z in (-bound - 2)..=(bound + 2) {
                     if cylinder.is_within_distance(x, z) {
-                        assert!(x >= cylinder.left() && x <= cylinder.right());
-                        assert!(z >= cylinder.bottom() && z <= cylinder.top());
+                        assert!(x >= -bound && x <= bound);
+                        assert!(z >= -bound && z <= bound);
                     }
                 }
             }

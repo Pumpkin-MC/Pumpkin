@@ -69,16 +69,15 @@ impl JavaClient {
                 self.id
             );
         }
-        self.send_known_packs().await;
+        self.send_known_packs(server).await;
     }
 
-    pub async fn send_known_packs(&self) {
+    pub async fn send_known_packs(&self, server: &Server) {
+        let features = server.get_enabled_features();
+        self.send_packet(&CFeatureFlags::new(&features)).await;
         let version_str = self.version.load().to_string();
-        self.send_packet(&CKnownPacks::new(&[KnownPack {
-            namespace: "minecraft",
-            id: "core",
-            version: &version_str,
-        }]))
-        .await;
+        let loaded_packs = server.datapack_manager.get_loaded_packs();
+        let known_packs = server.get_known_packs(&version_str, &loaded_packs);
+        self.send_packet(&CKnownPacks::new(&known_packs)).await;
     }
 }

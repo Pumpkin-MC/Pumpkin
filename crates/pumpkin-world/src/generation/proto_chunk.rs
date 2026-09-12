@@ -142,7 +142,6 @@ pub struct ProtoChunk {
     generation_bottom_y: i8,
     pub stage: StagedChunkEnum,
     pub light: ChunkLight,
-    pub carving_mask: crate::generation::carver::mask::CarvingMask,
     pub blending_data: Option<crate::generation::blender::blending_data::BlendingData>,
     pub pending_block_entities: Vec<NbtCompound>,
     pending_structure_entities: Vec<NbtCompound>,
@@ -252,10 +251,6 @@ impl ProtoChunk {
                     .map(|_| LightContainer::new_empty(0))
                     .collect(),
             },
-            carving_mask: crate::generation::carver::mask::CarvingMask::new(
-                height as i32,
-                bottom_y as i32,
-            ),
             blending_data: None,
             pending_block_entities: Vec::new(),
             pending_structure_entities: Vec::new(),
@@ -1237,6 +1232,7 @@ impl ProtoChunk {
         }
     }
 
+    /// Returns every biome allowed by at least one structure in the set.
     #[must_use]
     pub fn get_allowed_biomes(set: &StructureSet) -> Vec<u16> {
         let mut allowed_biomes = Vec::new();
@@ -1255,6 +1251,40 @@ impl ProtoChunk {
         allowed_biomes
     }
 
+    /// Returns the deterministic weighted fallback order for structures in a set.
+    fn weighted_structure_order(
+        entries: &[WeightedEntry],
+        seed: u64,
+        chunk_x: i32,
+        chunk_z: i32,
+    ) -> Vec<WeightedEntry> {
+        let mut candidates = entries.to_vec();
+        let large_feature_seed = get_large_feature_seed(seed, chunk_x, chunk_z);
+        let mut random = LegacyRand::from_seed(large_feature_seed);
+        let mut total_weight: u32 = candidates.iter().map(|entry| entry.weight).sum();
+        let mut ordered = Vec::with_capacity(candidates.len());
+
+        while !candidates.is_empty() {
+            let mut roll = random.next_bounded_i32(total_weight as i32);
+            let mut selected_idx = 0;
+
+            for (index, entry) in candidates.iter().enumerate() {
+                roll -= entry.weight as i32;
+                if roll < 0 {
+                    selected_idx = index;
+                    break;
+                }
+            }
+
+            let selected = candidates.remove(selected_idx);
+            total_weight -= selected.weight;
+            ordered.push(selected);
+        }
+
+        ordered
+    }
+
+    /// Creates the structure starts owned by this chunk.
     pub fn set_structure_starts(&mut self, generator: &super::generator::VanillaGenerator) {
         debug_assert_eq!(self.stage, StagedChunkEnum::Biomes);
         let random_config = &generator.random_config;
@@ -1292,43 +1322,22 @@ impl ProtoChunk {
                 continue;
             }
 
-            let mut candidates = set.structures.to_vec();
-            let large_feature_seed = get_large_feature_seed(seed, self.x, self.z);
-            let mut random = LegacyRand::from_seed(large_feature_seed);
-
-            let mut total_weight: u32 = candidates.iter().map(|e| e.weight).sum();
-
-            while !candidates.is_empty() {
-                let mut roll = random.next_bounded_i32(total_weight as i32);
-                let mut selected_idx = 0;
-
-                for (i, entry) in candidates.iter().enumerate() {
-                    roll -= entry.weight as i32;
-                    if roll < 0 {
-                        selected_idx = i;
-                        break;
-                    }
-                }
-
-                let selected_entry = &candidates[selected_idx];
-
+            for entry in Self::weighted_structure_order(set.structures, seed, self.x, self.z) {
                 if self.try_set_structure_start(
                     global_cache,
                     settings.sea_level,
-                    selected_entry,
+                    &entry,
                     generator,
                     &mut height_sampler,
                 ) {
                     break;
                 }
-
-                let failed_entry = candidates.remove(selected_idx);
-                total_weight -= failed_entry.weight;
             }
         }
         self.stage = StagedChunkEnum::StructureStart;
     }
 
+    /// Attempts to create and store the selected structure start in this chunk.
     fn try_set_structure_start(
         &mut self,
         global_cache: &GlobalStructureCache,
@@ -1377,6 +1386,7 @@ impl ProtoChunk {
         false
     }
 
+    /// Adds references to nearby structure starts that intersect this chunk.
     #[expect(clippy::too_many_lines)]
     pub fn set_structure_references(&mut self, generator: &super::generator::VanillaGenerator) {
         debug_assert_eq!(self.stage, StagedChunkEnum::StructureStart);
@@ -1461,7 +1471,18 @@ impl ProtoChunk {
                 if (candidate_chunk_x - self.x).abs() <= 8
                     && (candidate_chunk_z - self.z).abs() <= 8
                 {
-                    for entry in set.structures {
+                    let entries = if set.structures.len() == 1 {
+                        set.structures.to_vec()
+                    } else {
+                        Self::weighted_structure_order(
+                            set.structures,
+                            random_config.seed,
+                            candidate_chunk_x,
+                            candidate_chunk_z,
+                        )
+                    };
+
+                    for entry in entries {
                         let structure = Structure::get(&entry.structure);
 
                         // A structure's placement depends only on its start chunk and the
@@ -1498,12 +1519,13 @@ impl ProtoChunk {
                             },
                         );
 
-                        if let Some(start_data) = start_data
-                            && start_data
+                        if let Some(start_data) = start_data {
+                            if start_data
                                 .get_bounding_box()
                                 .intersects_raw_xz(start_x, start_z, end_x, end_z)
-                        {
-                            references.push((entry.structure, start_data.collector.clone()));
+                            {
+                                references.push((entry.structure, start_data.collector.clone()));
+                            }
                             break;
                         }
                     }

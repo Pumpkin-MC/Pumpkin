@@ -28,16 +28,15 @@ pub fn get_view_distance(player: &Player) -> NonZero<u8> {
         .clamp(fallback, max_view_distance)
 }
 
-// Checks if the target chunk is within the view distance
-// of the center chunk. Uses Chebyshev distance.
+// Checks if the target chunk is within Chebyshev distance (L_infinity) of the center chunk.
 #[must_use]
 #[inline]
-pub fn is_within_view_distance(
+pub fn is_within_chebyshev_distance(
     center: Vector2<i32>,
     target: Vector2<i32>,
-    view_distance: i32,
+    distance: i32,
 ) -> bool {
-    (target.x - center.x).abs().max((target.y - center.y).abs()) <= view_distance
+    (target.x - center.x).abs().max((target.y - center.y).abs()) <= distance
 }
 
 #[allow(clippy::too_many_lines)]
@@ -99,7 +98,7 @@ pub fn update_position(player: &Arc<Player>) {
         )
     });
 
-    let new_sim_level = (!is_spectator).then(|| {
+    let new_sim_level = (!is_spectator || spectators_generate_chunks).then(|| {
         let sim_dist = world.server.upgrade().map_or(10, |s| {
             s.advanced_config.networking.java.simulation_distance.get()
         });
@@ -173,7 +172,7 @@ pub fn update_position(player: &Arc<Player>) {
     }
 
     if !loading_chunks.is_empty() {
-        world.spawn_world_entity_chunks(player.clone(), loading_chunks, new_chunk_center);
+        world.spawn_world_entity_chunks(player.clone(), loading_chunks);
     }
     world.entity_tracker.update_player_position(player, &world);
 }

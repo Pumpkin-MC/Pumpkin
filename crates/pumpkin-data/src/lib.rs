@@ -415,7 +415,7 @@ pub use block_rotation::{Mirror, Rotation, transform_block_properties, transform
 #[cfg(feature = "block")]
 pub use block_state::{BlockState, BlockStateId};
 #[cfg(feature = "block")]
-pub use blocks::{Block, BlockId};
+pub use blocks::{Block, BlockId, SpawnFloorPredicate};
 
 #[cfg(feature = "material_rule")]
 #[rustfmt::skip]
