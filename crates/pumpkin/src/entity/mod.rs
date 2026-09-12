@@ -1359,6 +1359,24 @@ impl Entity {
         self.supporting_block_pos.load()
     }
 
+    // TODO: make this more vanilla
+    pub fn convert_to(&self, entity: &'static EntityType, remove_existing: bool) {
+        let world = self.world.load();
+        let pos = self.pos.load();
+        let mut new_entity = crate::entity::r#type::from_type(entity, pos, &world, Uuid::new_v4());
+
+        let mut data = NbtCompound::new();
+        self.write_nbt(&mut data);
+        if let Some(trait_mut) = Arc::get_mut(&mut new_entity) {
+            trait_mut.read_nbt(&mut data);
+        }
+
+        world.spawn_entity(new_entity);
+        if remove_existing {
+            world.remove_entity(self.get_entity());
+        }
+    }
+
     #[expect(clippy::float_cmp)]
     fn adjust_movement_for_collisions(
         &self,

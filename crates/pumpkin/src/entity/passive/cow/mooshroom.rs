@@ -241,6 +241,8 @@ impl Mob for MooshroomEntity {
             );
 
             player.damage_held_item(1);
+            entity.convert_to(&EntityType::COW, true);
+            
             return true;
         }
 
