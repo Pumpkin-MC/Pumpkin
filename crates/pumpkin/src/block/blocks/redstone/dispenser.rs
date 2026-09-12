@@ -895,11 +895,11 @@ impl DispenserBlock {
                 return None;
             }
             Some(if PoweredRailLikeProperties::handles_block_id(block.id) {
-                PoweredRailLikeProperties::from_state_id(state_id, block)
+                PoweredRailLikeProperties::from_state_id(state_id)
                     .shape
                     .is_ascending()
             } else {
-                RailLikeProperties::from_state_id(state_id, block)
+                RailLikeProperties::from_state_id(state_id)
                     .shape
                     .is_ascending()
             })
@@ -960,7 +960,7 @@ impl DispenserBlock {
             return false;
         }
 
-        let mut props = BeeNestLikeProperties::from_state_id(state_id, block);
+        let mut props = BeeNestLikeProperties::from_state_id(state_id);
         if props.honey_level < FULL_HONEY_LEVEL {
             return false;
         }
@@ -1020,7 +1020,7 @@ impl DispenserBlock {
         let (block, state_id) = ctx.world.get_block_and_state_id(&target);
 
         if block.has_tag(&tag::Block::MINECRAFT_BEEHIVES) {
-            let mut props = BeeNestLikeProperties::from_state_id(state_id, block);
+            let mut props = BeeNestLikeProperties::from_state_id(state_id);
             if props.honey_level < FULL_HONEY_LEVEL {
                 return false;
             }
@@ -1084,7 +1084,7 @@ impl DispenserBlock {
             return None;
         }
 
-        let mut props = RespawnAnchorLikeProperties::from_state_id(state_id, block);
+        let mut props = RespawnAnchorLikeProperties::from_state_id(state_id);
         if props.charges >= MAX_CHARGES {
             return Some(false);
         }

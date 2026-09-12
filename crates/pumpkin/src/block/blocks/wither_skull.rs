@@ -1,10 +1,10 @@
-use std::sync::Arc;
 use pumpkin_data::{
     Block, BlockDirection, BlockState, BlockStateId, entity::EntityType, world::WorldEvent,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
+use std::sync::Arc;
 
 use crate::block::entities::skull::SkullBlockEntity;
 use crate::{
