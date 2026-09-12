@@ -41,6 +41,10 @@ impl<'a> CLoginSuccess<'a> {
 }
 
 impl MultiVersionJavaPacket for CLoginSuccess<'_> {
+    fn state() -> crate::ConnectionState {
+        crate::ConnectionState::Login
+    }
+
     fn to_id(version: JavaMinecraftVersion) -> i32 {
         if version >= JavaMinecraftVersion::V_1_21_2 {
             LOGIN_FINISHED.to_id(version)

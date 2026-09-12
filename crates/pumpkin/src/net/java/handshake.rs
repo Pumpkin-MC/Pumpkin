@@ -11,12 +11,18 @@ use crate::net::java::pending::PendingConnection;
 impl PendingConnection {
     pub async fn handle_handshake(&mut self, handshake: SHandShake) {
         let version = handshake.protocol_version.0 as u32;
+        self.user
+            .protocol_version
+            .store(Some(handshake.protocol_version.0));
+        self.user
+            .update_info(|info| info.server_port = Some(handshake.server_port));
         self.server_address = handshake.server_address.to_string();
         self.version
             .store(JavaMinecraftVersion::from_protocol(version));
 
         debug!("Handshake: next state is {:?}", &handshake.next_state);
         self.connection_state.store(handshake.next_state);
+        self.user.encoder_state.store(handshake.next_state);
         if self.connection_state.load() != ConnectionState::Status {
             let protocol = version;
             if protocol < LOWEST_SUPPORTED_MC_VERSION.protocol_version() as u32 {

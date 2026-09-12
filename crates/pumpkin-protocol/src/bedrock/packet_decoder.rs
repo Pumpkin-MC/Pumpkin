@@ -98,6 +98,14 @@ impl BedrockBatchDecoder {
         &mut self,
         decompressed_reader: &mut Cursor<Vec<u8>>,
     ) -> Result<RawPacket, PacketDecodeError> {
+        self.get_game_packet_with_header(decompressed_reader)
+            .map(|(_, packet)| packet)
+    }
+
+    pub fn get_game_packet_with_header(
+        &mut self,
+        decompressed_reader: &mut Cursor<Vec<u8>>,
+    ) -> Result<(u16, RawPacket), PacketDecodeError> {
         let packet_len = VarUInt::decode(decompressed_reader).map_err(|err| match err {
             ReadingError::CleanEOF(_) => PacketDecodeError::ConnectionClosed,
             err => PacketDecodeError::MalformedLength(err.to_string()),
@@ -112,11 +120,12 @@ impl BedrockBatchDecoder {
             return Err(PacketDecodeError::TooLong);
         }
 
+        let header_start = decompressed_reader.position();
         let var_header = VarUInt::decode(decompressed_reader)?;
         let header = var_header.0 & 0x3FFF;
         let gamepacket_id = (header & 0x3FF) as u16;
 
-        let header_size = var_header.written_size();
+        let header_size = (decompressed_reader.position() - header_start) as usize;
         if packet_len < header_size {
             return Err(PacketDecodeError::MalformedLength(format!(
                 "Bedrock game packet length {packet_len} is smaller than header size {header_size}"
@@ -139,10 +148,13 @@ impl BedrockBatchDecoder {
             .read_exact(&mut payload)
             .map_err(|err| PacketDecodeError::FailedDecompression(err.to_string()))?;
 
-        Ok(RawPacket {
-            id: i32::from(gamepacket_id),
-            payload: payload.into(),
-        })
+        Ok((
+            header as u16,
+            RawPacket {
+                id: i32::from(gamepacket_id),
+                payload: payload.into(),
+            },
+        ))
     }
 }
 

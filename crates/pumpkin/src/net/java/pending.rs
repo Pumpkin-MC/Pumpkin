@@ -1,4 +1,8 @@
-use std::{net::SocketAddr, num::NonZero, sync::Arc};
+use std::{
+    net::SocketAddr,
+    num::NonZero,
+    sync::{Arc, Weak},
+};
 
 use bytes::Bytes;
 use crossbeam::atomic::AtomicCell;
@@ -41,6 +45,10 @@ use crate::{
 };
 
 use super::JavaClient;
+use crate::net::user::{Edition, OutgoingPacket, User};
+use crate::plugin::server::packet::{
+    PacketReceivedEvent, PacketSentEvent, decode_packet, encode_packet,
+};
 
 const BRAND_CHANNEL_PREFIX: &str = "minecraft:brand";
 
@@ -55,11 +63,13 @@ const BRAND_CHANNEL_PREFIX: &str = "minecraft:brand";
 const HANDSHAKE_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
 pub struct PendingConnection {
+    pub user: Arc<User>,
+    pub(crate) outgoing: Option<tokio::sync::mpsc::UnboundedReceiver<OutgoingPacket>>,
     pub id: u64,
     pub address: SocketAddr,
     pub server_address: String,
-    pub version: AtomicCell<JavaMinecraftVersion>,
-    pub connection_state: AtomicCell<ConnectionState>,
+    pub version: Arc<AtomicCell<JavaMinecraftVersion>>,
+    pub connection_state: Arc<AtomicCell<ConnectionState>>,
     pub close_token: CancellationToken,
     pub network_writer: TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>,
     pub network_reader: TCPNetworkDecoder<BufReader<OwnedReadHalf>>,
@@ -78,15 +88,20 @@ impl PendingConnection {
         address: SocketAddr,
         id: u64,
         packet_limiter: PacketRateLimiter,
+        server: Weak<Server>,
     ) -> Self {
         let (read, write) = tcp_stream.into_split();
+        let user = User::new(address, Edition::Java, server);
+        user.java_version.store(CURRENT_MC_VERSION);
         Self {
+            outgoing: user.take_outgoing(),
+            version: user.java_version.clone(),
+            connection_state: user.decoder_state.clone(),
+            close_token: user.close_token.clone(),
+            user,
             id,
             address,
             server_address: String::new(),
-            version: AtomicCell::new(CURRENT_MC_VERSION),
-            connection_state: AtomicCell::new(ConnectionState::HandShake),
-            close_token: CancellationToken::new(),
             network_writer: TCPNetworkEncoder::new(BufWriter::new(write)),
             network_reader: TCPNetworkDecoder::new(BufReader::new(read)),
             gameprofile: None,
@@ -137,53 +152,173 @@ impl PendingConnection {
 
     pub async fn get_packet(&mut self) -> Option<RawPacket> {
         let close_token = self.close_token.clone();
-        let packet_result = tokio::select! {
-            () = close_token.cancelled() => {
-                debug!("Canceling pending connection packet processing");
-                return None;
-            },
-            () = tokio::time::sleep(HANDSHAKE_IDLE_TIMEOUT) => {
-                debug!(
-                    "Client {} sent nothing for {}s before finishing login, dropping it",
-                    self.id,
-                    HANDSHAKE_IDLE_TIMEOUT.as_secs()
-                );
-                return None;
-            },
-            res = self.network_reader.get_raw_packet() => res,
-        };
-
-        match packet_result {
-            Ok(packet) => Some(packet),
-            Err(err) => {
-                if !matches!(err, PacketDecodeError::ConnectionClosed) {
-                    debug!("Failed to decode packet from client {}: {}", self.id, err);
-                    let text = format!("Error while reading incoming packet {err}");
-                    self.kick(TextComponent::text(text)).await;
+        let deadline = tokio::time::Instant::now() + HANDSHAKE_IDLE_TIMEOUT;
+        self.sync_user_info();
+        let user = self.user.clone();
+        let compression = self.network_reader.compression_state();
+        let read_packet = self.network_reader.get_raw_packet();
+        tokio::pin!(read_packet);
+        loop {
+            let result = tokio::select! {
+                () = close_token.cancelled() => return None,
+                () = tokio::time::sleep_until(deadline) => return None,
+                outgoing = async {
+                    match self.outgoing.as_mut() {
+                        Some(receiver) => receiver.recv().await,
+                        None => std::future::pending().await,
+                    }
+                } => {
+                    if let Some(packet) = outgoing {
+                        let len = packet.data.len();
+                        let _ = Self::write_raw_packet(&user, &mut self.network_writer, &compression, packet.data, packet.silent).await;
+                        crate::net::decrement_pending_bytes(&self.user.pending_bytes, len);
+                        if let Some(completion) = packet.completion { let _ = completion.send(()); }
+                    }
+                    continue;
+                },
+                result = &mut read_packet => result,
+            };
+            return match result {
+                Ok(packet) => Some(packet),
+                Err(error) => {
+                    if !matches!(error, PacketDecodeError::ConnectionClosed) {
+                        debug!("Failed to decode packet from client {}: {error}", self.id);
+                    }
+                    user.close();
+                    None
                 }
-                None
-            }
+            };
         }
     }
 
     pub async fn send_packet_now<P: ClientPacket>(&mut self, packet: &P) {
+        let _ = self.send_packet_checked(packet).await;
+    }
+
+    pub(super) async fn send_packet_checked<P: ClientPacket>(
+        &mut self,
+        packet: &P,
+    ) -> Option<RawPacket> {
+        while let Some(queued) = self
+            .outgoing
+            .as_mut()
+            .and_then(|queue| queue.try_recv().ok())
+        {
+            let len = queued.data.len();
+            let _ = self.send_raw_packet_now(queued.data, queued.silent).await;
+            crate::net::decrement_pending_bytes(&self.user.pending_bytes, len);
+            if let Some(completion) = queued.completion {
+                let _ = completion.send(());
+            }
+        }
         let mut packet_buf = Vec::new();
+        let state = self.user.encoder_state.load();
+        let expected = P::state();
+        if self.is_closed()
+            || (state != expected
+                && !matches!(
+                    (state, expected),
+                    (
+                        ConnectionState::Login | ConnectionState::Transfer,
+                        ConnectionState::Login | ConnectionState::Transfer
+                    )
+                ))
+        {
+            return None;
+        }
         if let Err(err) =
             JavaClient::write_packet_for_version(packet, self.version.load(), &mut packet_buf)
         {
             error!("Failed to write packet: {err:?}");
-            return;
+            return None;
         }
-        let payload = Bytes::from(packet_buf);
-        if let Err(err) = self.network_writer.write_packet(payload).await {
-            warn!("Failed to send packet to client {}: {}", self.id, err);
+        self.send_raw_packet_now(packet_buf.into(), false).await
+    }
+
+    fn sync_user_info(&self) {
+        self.user.update_info(|info| {
+            info.address = self.address;
+            info.server_address.clone_from(&self.server_address);
+            info.profile.clone_from(&self.gameprofile);
+            info.config.clone_from(&self.config);
+            info.brand.clone_from(&self.brand);
+        });
+    }
+
+    async fn send_raw_packet_now(&mut self, data: Bytes, silent: bool) -> Option<RawPacket> {
+        self.sync_user_info();
+        Self::write_raw_packet(
+            &self.user,
+            &mut self.network_writer,
+            &self.network_reader.compression_state(),
+            data,
+            silent,
+        )
+        .await
+    }
+
+    async fn write_raw_packet(
+        user: &Arc<User>,
+        writer: &mut TCPNetworkEncoder<BufWriter<OwnedWriteHalf>>,
+        compression: &pumpkin_protocol::java::packet_decoder::CompressionState,
+        data: Bytes,
+        silent: bool,
+    ) -> Option<RawPacket> {
+        let packet = decode_packet(data).ok()?;
+        let packet = PacketSentEvent::filter(user, packet, silent).await?;
+        let compression_threshold = if matches!(
+            user.encoder_state.load(),
+            ConnectionState::Login | ConnectionState::Transfer
+        ) && packet.id
+            == pumpkin_protocol::java::client::login::CSetCompression::to_id(
+                user.java_version.load(),
+            ) {
+            let mut body = packet.payload.as_ref();
+            match pumpkin_protocol::codec::var_int::VarInt::decode(&mut body) {
+                Ok(threshold) if body.is_empty() => Some(threshold.0),
+                _ => {
+                    user.close();
+                    return None;
+                }
+            }
+        } else {
+            None
+        };
+        let bytes = encode_packet(packet.id, &packet.payload).ok()?;
+        if let Err(err) = writer.write_packet(bytes).await {
+            warn!("Failed to send packet to client {}: {err}", user.id);
+            user.close();
+            return None;
         }
-        let _ = self.network_writer.flush().await;
+        if writer.flush().await.is_err() {
+            user.close();
+            return None;
+        }
+        if let Some(threshold) = compression_threshold {
+            if threshold < 0 {
+                compression.set(None);
+                writer.disable_compression();
+            } else {
+                let level = user.server.upgrade().map_or(4, |server| {
+                    server
+                        .advanced_config
+                        .networking
+                        .java
+                        .compression
+                        .info
+                        .level
+                });
+                compression.set(Some(threshold as usize));
+                writer.set_compression((threshold as usize, level));
+            }
+        }
+        super::advance_encoder_state(user, packet.id);
+        Some(packet)
     }
 
     pub async fn kick(&mut self, reason: TextComponent) {
-        match self.connection_state.load() {
-            ConnectionState::Login => {
+        match self.user.encoder_state.load() {
+            ConnectionState::Login | ConnectionState::Transfer => {
                 self.send_packet_now(&CLoginDisconnect::new(
                     serde_json::to_string(&reason.0).unwrap_or_else(|_| String::new()),
                 ))
@@ -223,6 +358,33 @@ impl PendingConnection {
                 return PacketHandlerResult::Stop;
             }
 
+            self.sync_user_info();
+            let encrypted_response = matches!(
+                self.connection_state.load(),
+                ConnectionState::Login | ConnectionState::Transfer
+            ) && packet.id
+                == pumpkin_protocol::java::server::login::SEncryptionResponse::to_id(
+                    self.version.load(),
+                );
+            let Some(packet) = PacketReceivedEvent::filter(&self.user, packet).await else {
+                if encrypted_response {
+                    self.close();
+                    return PacketHandlerResult::Stop;
+                }
+                continue;
+            };
+            if self.is_closed() {
+                return PacketHandlerResult::Stop;
+            }
+            if encrypted_response
+                && packet.id
+                    != pumpkin_protocol::java::server::login::SEncryptionResponse::to_id(
+                        self.version.load(),
+                    )
+            {
+                self.close();
+                return PacketHandlerResult::Stop;
+            }
             match self.handle_packet(server, &packet).await {
                 Ok(result) => {
                     if let Some(result) = result {
@@ -374,6 +536,11 @@ impl PendingConnection {
             id if id
                 == pumpkin_protocol::java::server::login::SLoginAcknowledged::to_id(version) =>
             {
+                if !self.user.acknowledge_state(ConnectionState::Config) {
+                    return Err(ReadingError::Message(
+                        "Unexpected login acknowledgement".into(),
+                    ));
+                }
                 Ok(self.handle_login_acknowledged(server).await)
             }
             _ => Err(ReadingError::Message(format!(
@@ -407,6 +574,12 @@ impl PendingConnection {
                 Ok(None)
             }
             id if id == SAcknowledgeFinishConfig::to_id(version) => {
+                let _ = SAcknowledgeFinishConfig::read(&mut payload, &version)?;
+                if !self.user.acknowledge_state(ConnectionState::Play) {
+                    return Err(ReadingError::Message(
+                        "Unexpected configuration acknowledgement".into(),
+                    ));
+                }
                 let Some(profile) = self.gameprofile.clone() else {
                     return Ok(Some(PacketHandlerResult::Stop));
                 };

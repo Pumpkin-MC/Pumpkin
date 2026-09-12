@@ -144,8 +144,18 @@ fn generate_struct<T>(versions: &BTreeMap<JavaMinecraftVersion, T>) -> TokenStre
     }
 
     quote! {
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        pub enum PacketState {
+            Handshake,
+            Status,
+            Login,
+            Config,
+            Play,
+        }
+
         #[derive(Clone, Copy, Debug)]
         pub struct PacketId {
+            pub state: PacketState,
             #struct_fields
         }
 
@@ -355,6 +365,14 @@ fn generate_phase_modules(
 
     for phase_name in expected_phases {
         let phase_ident = format_ident!("{}", phase_name);
+        let phase_state = match phase_name {
+            "handshake" => quote!(Handshake),
+            "status" => quote!(Status),
+            "login" => quote!(Login),
+            "config" => quote!(Config),
+            "play" => quote!(Play),
+            _ => unreachable!(),
+        };
         let mut consts_ts = TokenStream::new();
         let empty_map = BTreeMap::new();
         let packets_in_phase = phase_packets.get(phase_name).unwrap_or(&empty_map);
@@ -371,6 +389,7 @@ fn generate_phase_modules(
             let const_name = format_ident!("{}", name);
             consts_ts.extend(quote! {
                 pub const #const_name: super::super::PacketId = super::super::PacketId {
+                    state: super::super::PacketState::#phase_state,
                     #init_pairs
                 };
             });

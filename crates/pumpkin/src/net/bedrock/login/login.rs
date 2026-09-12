@@ -102,6 +102,15 @@ impl BedrockClient {
             ));
         }
 
+        let new_config = PlayerConfig {
+            locale: client_data.language_code.clone(),
+            ..Default::default()
+        };
+        self.user.update_info(|info| {
+            info.profile = Some(profile.clone());
+            info.config = Some(new_config.clone());
+        });
+
         self.enqueue_client_packet(&CPlayStatus::LoginSuccess).await;
         let br_config = &server.advanced_config.resource_pack.bedrock;
 
@@ -131,11 +140,6 @@ impl BedrockClient {
             resource_packs: entries,
         };
         self.enqueue_client_packet(&packs_info).await;
-
-        let new_config = PlayerConfig {
-            locale: client_data.language_code.clone(),
-            ..Default::default()
-        };
 
         self.client_data
             .store(std::sync::Arc::new(Some(std::sync::Arc::new(client_data))));

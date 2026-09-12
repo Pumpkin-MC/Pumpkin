@@ -41,6 +41,7 @@ pub use packet_limiter::PacketRateLimiter;
 mod proxy;
 pub mod query;
 pub mod rcon;
+pub mod user;
 
 #[derive(Deserialize, Debug)]
 pub struct GameProfile {

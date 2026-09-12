@@ -111,6 +111,10 @@ impl<W: AsyncWrite + Unpin> TCPNetworkEncoder<W> {
         self.compression = Some(compression_info);
     }
 
+    pub const fn disable_compression(&mut self) {
+        self.compression = None;
+    }
+
     /// NOTE: Encryption can only be set; a minecraft stream cannot go back to being unencrypted
     pub fn set_encryption(&mut self, key: &[u8; 16]) -> Result<(), PacketEncodeError> {
         if matches!(self.writer, Some(EncryptionWriter::Encrypt(_))) {

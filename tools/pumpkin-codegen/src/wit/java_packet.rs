@@ -1,3 +1,4 @@
+use crate::wit::packet_mapping::implemented_types;
 use crate::wit::utils::map_type_with_defined;
 use heck::ToKebabCase;
 use semver::Version;
@@ -92,17 +93,26 @@ fn collect_defined_types(dirs: &[(String, &str)]) -> HashSet<String> {
         for entry in paths.flatten() {
             let path = entry.path();
             if path.extension().is_some_and(|ext| ext == "rs")
-                && path.file_name().is_some_and(|name| name != "mod.rs")
+                && path
+                    .file_name()
+                    .is_some_and(|name| name != "mod.rs" || *state == "handshake")
             {
                 if let Ok(content) = fs::read_to_string(&path)
                     && let Ok(file) = syn::parse_file(&content)
                 {
+                    let packet_types = implemented_types(&file, "MultiVersionJavaPacket");
                     for item in file.items {
                         match item {
-                            Item::Struct(s) if has_java_packet_attr(&s.attrs) => {
+                            Item::Struct(s)
+                                if has_java_packet_attr(&s.attrs)
+                                    || packet_types.contains(&s.ident.to_string()) =>
+                            {
                                 defined.insert(wit_name(s.ident.to_string(), state));
                             }
-                            Item::Enum(e) if has_java_packet_attr(&e.attrs) => {
+                            Item::Enum(e)
+                                if has_java_packet_attr(&e.attrs)
+                                    || packet_types.contains(&e.ident.to_string()) =>
+                            {
                                 defined.insert(wit_name(e.ident.to_string(), state));
                             }
                             Item::Struct(s) if is_valid_helper_struct(&s) => {
@@ -161,7 +171,9 @@ fn process_packets(
             continue;
         }
         if path.extension().is_some_and(|ext| ext == "rs")
-            && path.file_name().is_some_and(|name| name != "mod.rs")
+            && path
+                .file_name()
+                .is_some_and(|name| name != "mod.rs" || state == "handshake")
         {
             parse_packet_file(
                 &path,
@@ -185,13 +197,20 @@ fn parse_packet_file(
 ) {
     let content = fs::read_to_string(path).expect("Failed to read file");
     let file = syn::parse_file(&content).expect("Failed to parse file");
+    let packet_types = implemented_types(&file, "MultiVersionJavaPacket");
 
     for item in file.items {
         match item {
-            Item::Struct(s) if has_java_packet_attr(&s.attrs) => {
+            Item::Struct(s)
+                if has_java_packet_attr(&s.attrs)
+                    || packet_types.contains(&s.ident.to_string()) =>
+            {
                 process_struct(s, state, interface, variant, defined_cases, defined_types);
             }
-            Item::Enum(e) if has_java_packet_attr(&e.attrs) => {
+            Item::Enum(e)
+                if has_java_packet_attr(&e.attrs)
+                    || packet_types.contains(&e.ident.to_string()) =>
+            {
                 process_enum(e, state, interface, variant, defined_cases, defined_types);
             }
             Item::Struct(s) if is_valid_helper_struct(&s) => {
@@ -278,14 +297,28 @@ fn process_struct(
     defined_cases: &mut HashSet<String>,
     defined_types: &HashSet<String>,
 ) {
+    // Tag packets remain raw-only until a full payload codec is available.
+    if matches!(
+        s.ident.to_string().as_str(),
+        "CUpdateTags" | "CUpdateTagsPlay"
+    ) {
+        return;
+    }
     let wit_name = wit_name(s.ident.to_string(), state);
     if !defined_cases.insert(wit_name.clone()) {
         return;
     }
-    let fields_list = match s.fields {
+    let mut fields_list = match s.fields {
         Fields::Named(fields) => collect_fields(fields.named, defined_types),
         _ => Vec::new(),
     };
+    if s.ident == "SHandShake"
+        && let Some(port) = fields_list
+            .iter_mut()
+            .find(|field| field.name().raw_name() == "server-port")
+    {
+        port.set_type(WitType::U16);
+    }
 
     register_wit_type(wit_name, fields_list, interface, variant, None);
 }
@@ -463,5 +496,22 @@ fn extract_type_name(ty: &syn::Type) -> String {
             _ => String::new(),
         },
         _ => String::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn handshake_port_uses_unsigned_short() {
+        let wit = super::build();
+        let handshake = wit.split("record handshake-s-hand-shake {").nth(1).unwrap();
+        let handshake = handshake.split('}').next().unwrap();
+        assert!(handshake.contains("server-port: u16,"));
+    }
+
+    #[test]
+    fn update_tags_remains_raw_only() {
+        let wit = super::build();
+        assert!(!wit.contains("c-update-tags"));
     }
 }

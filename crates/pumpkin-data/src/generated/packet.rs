@@ -3,8 +3,17 @@ use pumpkin_util::version::JavaMinecraftVersion;
 pub const CURRENT_MC_VERSION: JavaMinecraftVersion =
     pumpkin_util::version::JavaMinecraftVersion::V_26_2;
 pub const LOWEST_SUPPORTED_MC_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_1_7_2;
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PacketState {
+    Handshake,
+    Status,
+    Login,
+    Config,
+    Play,
+}
 #[derive(Clone, Copy, Debug)]
 pub struct PacketId {
+    pub state: PacketState,
     pub v1_7_2: i32,
     pub v1_7_6: i32,
     pub v1_8: i32,
@@ -132,6 +141,7 @@ impl PartialEq<PacketId> for i32 {
 pub mod serverbound {
     pub mod handshake {
         pub const INTENTION: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Handshake,
             v1_7_2: 0i32,
             v1_7_6: 0i32,
             v1_8: 0i32,
@@ -189,6 +199,7 @@ pub mod serverbound {
     }
     pub mod status {
         pub const PING_REQUEST: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Status,
             v1_7_2: 1i32,
             v1_7_6: 1i32,
             v1_8: 1i32,
@@ -242,6 +253,7 @@ pub mod serverbound {
             v26_2: 1i32,
         };
         pub const STATUS_REQUEST: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Status,
             v1_7_2: 0i32,
             v1_7_6: 0i32,
             v1_8: 0i32,
@@ -297,6 +309,7 @@ pub mod serverbound {
     }
     pub mod login {
         pub const COOKIE_RESPONSE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Login,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -350,6 +363,7 @@ pub mod serverbound {
             v26_2: 4i32,
         };
         pub const CUSTOM_QUERY_ANSWER: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Login,
             v1_7_2: 2i32,
             v1_7_6: 2i32,
             v1_8: 2i32,
@@ -403,6 +417,7 @@ pub mod serverbound {
             v26_2: 2i32,
         };
         pub const HELLO: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Login,
             v1_7_2: 0i32,
             v1_7_6: 0i32,
             v1_8: 0i32,
@@ -456,6 +471,7 @@ pub mod serverbound {
             v26_2: 0i32,
         };
         pub const KEY: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Login,
             v1_7_2: 1i32,
             v1_7_6: 1i32,
             v1_8: 1i32,
@@ -509,6 +525,7 @@ pub mod serverbound {
             v26_2: 1i32,
         };
         pub const LOGIN_ACKNOWLEDGED: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Login,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -567,6 +584,7 @@ pub mod serverbound {
     }
     pub mod config {
         pub const ACCEPT_CODE_OF_CONDUCT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -620,6 +638,7 @@ pub mod serverbound {
             v26_2: 9i32,
         };
         pub const CLIENT_INFORMATION: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -673,6 +692,7 @@ pub mod serverbound {
             v26_2: 0i32,
         };
         pub const COOKIE_RESPONSE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -726,6 +746,7 @@ pub mod serverbound {
             v26_2: 1i32,
         };
         pub const CUSTOM_CLICK_ACTION: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -779,6 +800,7 @@ pub mod serverbound {
             v26_2: 8i32,
         };
         pub const CUSTOM_PAYLOAD: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -832,6 +854,7 @@ pub mod serverbound {
             v26_2: 2i32,
         };
         pub const FINISH_CONFIGURATION: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -885,6 +908,7 @@ pub mod serverbound {
             v26_2: 3i32,
         };
         pub const KEEP_ALIVE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -938,6 +962,7 @@ pub mod serverbound {
             v26_2: 4i32,
         };
         pub const PONG: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -991,6 +1016,7 @@ pub mod serverbound {
             v26_2: 5i32,
         };
         pub const RESOURCE_PACK: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -1044,6 +1070,7 @@ pub mod serverbound {
             v26_2: 6i32,
         };
         pub const SELECT_KNOWN_PACKS: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -1099,6 +1126,7 @@ pub mod serverbound {
     }
     pub mod play {
         pub const ACCEPT_TELEPORTATION: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -1152,6 +1180,7 @@ pub mod serverbound {
             v26_2: 0i32,
         };
         pub const ATTACK: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -1205,6 +1234,7 @@ pub mod serverbound {
             v26_2: 1i32,
         };
         pub const BLOCK_ENTITY_TAG_QUERY: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -1258,6 +1288,7 @@ pub mod serverbound {
             v26_2: 2i32,
         };
         pub const BUNDLE_ITEM_SELECTED: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -1311,6 +1342,7 @@ pub mod serverbound {
             v26_2: 3i32,
         };
         pub const CHANGE_DIFFICULTY: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -1364,6 +1396,7 @@ pub mod serverbound {
             v26_2: 4i32,
         };
         pub const CHANGE_GAME_MODE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -1417,6 +1450,7 @@ pub mod serverbound {
             v26_2: 5i32,
         };
         pub const CHAT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 1i32,
             v1_7_6: 1i32,
             v1_8: 1i32,
@@ -1470,6 +1504,7 @@ pub mod serverbound {
             v26_2: 9i32,
         };
         pub const CHAT_ACK: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -1523,6 +1558,7 @@ pub mod serverbound {
             v26_2: 6i32,
         };
         pub const CHAT_COMMAND: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -1576,6 +1612,7 @@ pub mod serverbound {
             v26_2: 7i32,
         };
         pub const CHAT_COMMAND_SIGNED: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -1629,6 +1666,7 @@ pub mod serverbound {
             v26_2: 8i32,
         };
         pub const CHAT_PREVIEW: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -1682,6 +1720,7 @@ pub mod serverbound {
             v26_2: -1i32,
         };
         pub const CHAT_SESSION_UPDATE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -1735,6 +1774,7 @@ pub mod serverbound {
             v26_2: 10i32,
         };
         pub const CHUNK_BATCH_RECEIVED: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -1788,6 +1828,7 @@ pub mod serverbound {
             v26_2: 11i32,
         };
         pub const CLIENT_COMMAND: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 22i32,
             v1_7_6: 22i32,
             v1_8: 22i32,
@@ -1841,6 +1882,7 @@ pub mod serverbound {
             v26_2: 12i32,
         };
         pub const CLIENT_INFORMATION: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 21i32,
             v1_7_6: 21i32,
             v1_8: 21i32,
@@ -1894,6 +1936,7 @@ pub mod serverbound {
             v26_2: 14i32,
         };
         pub const CLIENT_TICK_END: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -1947,6 +1990,7 @@ pub mod serverbound {
             v26_2: 13i32,
         };
         pub const COMMAND_SUGGESTION: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -2000,6 +2044,7 @@ pub mod serverbound {
             v26_2: 15i32,
         };
         pub const COMMAND_SUGGESTIONS: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 20i32,
             v1_7_6: 20i32,
             v1_8: 20i32,
@@ -2053,6 +2098,7 @@ pub mod serverbound {
             v26_2: -1i32,
         };
         pub const CONFIGURATION_ACKNOWLEDGED: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -2106,6 +2152,7 @@ pub mod serverbound {
             v26_2: 16i32,
         };
         pub const CONTAINER_BUTTON_CLICK: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 17i32,
             v1_7_6: 17i32,
             v1_8: 17i32,
@@ -2159,6 +2206,7 @@ pub mod serverbound {
             v26_2: 17i32,
         };
         pub const CONTAINER_CLICK: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 14i32,
             v1_7_6: 14i32,
             v1_8: 14i32,
@@ -2212,6 +2260,7 @@ pub mod serverbound {
             v26_2: 18i32,
         };
         pub const CONTAINER_CLOSE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 13i32,
             v1_7_6: 13i32,
             v1_8: 13i32,
@@ -2265,6 +2314,7 @@ pub mod serverbound {
             v26_2: 19i32,
         };
         pub const CONTAINER_SLOT_STATE_CHANGED: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -2318,6 +2368,7 @@ pub mod serverbound {
             v26_2: 20i32,
         };
         pub const COOKIE_RESPONSE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -2371,6 +2422,7 @@ pub mod serverbound {
             v26_2: 21i32,
         };
         pub const CUSTOM_CLICK_ACTION: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -2424,6 +2476,7 @@ pub mod serverbound {
             v26_2: 68i32,
         };
         pub const CUSTOM_PAYLOAD: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 23i32,
             v1_7_6: 23i32,
             v1_8: 23i32,
@@ -2477,6 +2530,7 @@ pub mod serverbound {
             v26_2: 22i32,
         };
         pub const DEBUG_SAMPLE_SUBSCRIPTION: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -2530,6 +2584,7 @@ pub mod serverbound {
             v26_2: -1i32,
         };
         pub const DEBUG_SUBSCRIPTION_REQUEST: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -2583,6 +2638,7 @@ pub mod serverbound {
             v26_2: 23i32,
         };
         pub const EDIT_BOOK: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -2636,6 +2692,7 @@ pub mod serverbound {
             v26_2: 24i32,
         };
         pub const ENTITY_TAG_QUERY: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -2689,6 +2746,7 @@ pub mod serverbound {
             v26_2: 25i32,
         };
         pub const INTERACT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 2i32,
             v1_7_6: 2i32,
             v1_8: 2i32,
@@ -2742,6 +2800,7 @@ pub mod serverbound {
             v26_2: 26i32,
         };
         pub const JIGSAW_GENERATE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -2795,6 +2854,7 @@ pub mod serverbound {
             v26_2: 27i32,
         };
         pub const KEEP_ALIVE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 0i32,
             v1_7_6: 0i32,
             v1_8: 0i32,
@@ -2848,6 +2908,7 @@ pub mod serverbound {
             v26_2: 28i32,
         };
         pub const LOCK_DIFFICULTY: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -2901,6 +2962,7 @@ pub mod serverbound {
             v26_2: 29i32,
         };
         pub const MOVE_PLAYER_POS: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 4i32,
             v1_7_6: 4i32,
             v1_8: 4i32,
@@ -2954,6 +3016,7 @@ pub mod serverbound {
             v26_2: 30i32,
         };
         pub const MOVE_PLAYER_POS_ROT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 6i32,
             v1_7_6: 6i32,
             v1_8: 6i32,
@@ -3007,6 +3070,7 @@ pub mod serverbound {
             v26_2: 31i32,
         };
         pub const MOVE_PLAYER_ROT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 5i32,
             v1_7_6: 5i32,
             v1_8: 5i32,
@@ -3060,6 +3124,7 @@ pub mod serverbound {
             v26_2: 32i32,
         };
         pub const MOVE_PLAYER_STATUS_ONLY: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 3i32,
             v1_7_6: 3i32,
             v1_8: 3i32,
@@ -3113,6 +3178,7 @@ pub mod serverbound {
             v26_2: 33i32,
         };
         pub const MOVE_VEHICLE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -3166,6 +3232,7 @@ pub mod serverbound {
             v26_2: 34i32,
         };
         pub const PADDLE_BOAT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -3219,6 +3286,7 @@ pub mod serverbound {
             v26_2: 35i32,
         };
         pub const PICK_ITEM: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -3272,6 +3340,7 @@ pub mod serverbound {
             v26_2: -1i32,
         };
         pub const PICK_ITEM_FROM_BLOCK: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -3325,6 +3394,7 @@ pub mod serverbound {
             v26_2: 36i32,
         };
         pub const PICK_ITEM_FROM_ENTITY: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -3378,6 +3448,7 @@ pub mod serverbound {
             v26_2: 37i32,
         };
         pub const PING_REQUEST: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -3431,6 +3502,7 @@ pub mod serverbound {
             v26_2: 38i32,
         };
         pub const PLACE_RECIPE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -3484,6 +3556,7 @@ pub mod serverbound {
             v26_2: 39i32,
         };
         pub const PLAYER_ABILITIES: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 19i32,
             v1_7_6: 19i32,
             v1_8: 19i32,
@@ -3537,6 +3610,7 @@ pub mod serverbound {
             v26_2: 40i32,
         };
         pub const PLAYER_ACTION: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 7i32,
             v1_7_6: 7i32,
             v1_8: 7i32,
@@ -3590,6 +3664,7 @@ pub mod serverbound {
             v26_2: 41i32,
         };
         pub const PLAYER_COMMAND: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 11i32,
             v1_7_6: 11i32,
             v1_8: 11i32,
@@ -3643,6 +3718,7 @@ pub mod serverbound {
             v26_2: 42i32,
         };
         pub const PLAYER_INPUT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -3696,6 +3772,7 @@ pub mod serverbound {
             v26_2: 43i32,
         };
         pub const PLAYER_LOADED: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -3749,6 +3826,7 @@ pub mod serverbound {
             v26_2: 44i32,
         };
         pub const PONG: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -3802,6 +3880,7 @@ pub mod serverbound {
             v26_2: 45i32,
         };
         pub const RECIPE_BOOK_CHANGE_SETTINGS: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -3855,6 +3934,7 @@ pub mod serverbound {
             v26_2: 46i32,
         };
         pub const RECIPE_BOOK_DATA: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -3908,6 +3988,7 @@ pub mod serverbound {
             v26_2: -1i32,
         };
         pub const RECIPE_BOOK_SEEN_RECIPE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -3961,6 +4042,7 @@ pub mod serverbound {
             v26_2: 47i32,
         };
         pub const RENAME_ITEM: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -4014,6 +4096,7 @@ pub mod serverbound {
             v26_2: 48i32,
         };
         pub const RESOURCE_PACK: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: 25i32,
@@ -4067,6 +4150,7 @@ pub mod serverbound {
             v26_2: 49i32,
         };
         pub const SEEN_ADVANCEMENTS: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -4120,6 +4204,7 @@ pub mod serverbound {
             v26_2: 50i32,
         };
         pub const SELECT_TRADE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -4173,6 +4258,7 @@ pub mod serverbound {
             v26_2: 51i32,
         };
         pub const SET_BEACON: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -4226,6 +4312,7 @@ pub mod serverbound {
             v26_2: 52i32,
         };
         pub const SET_CARRIED_ITEM: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 9i32,
             v1_7_6: 9i32,
             v1_8: 9i32,
@@ -4279,6 +4366,7 @@ pub mod serverbound {
             v26_2: 53i32,
         };
         pub const SET_COMMAND_BLOCK: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -4332,6 +4420,7 @@ pub mod serverbound {
             v26_2: 54i32,
         };
         pub const SET_COMMAND_MINECART: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -4385,6 +4474,7 @@ pub mod serverbound {
             v26_2: 55i32,
         };
         pub const SET_CREATIVE_MODE_SLOT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 16i32,
             v1_7_6: 16i32,
             v1_8: 16i32,
@@ -4438,6 +4528,7 @@ pub mod serverbound {
             v26_2: 56i32,
         };
         pub const SET_GAME_RULE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -4491,6 +4582,7 @@ pub mod serverbound {
             v26_2: 57i32,
         };
         pub const SET_JIGSAW_BLOCK: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -4544,6 +4636,7 @@ pub mod serverbound {
             v26_2: 58i32,
         };
         pub const SET_STRUCTURE_BLOCK: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -4597,6 +4690,7 @@ pub mod serverbound {
             v26_2: 59i32,
         };
         pub const SET_TEST_BLOCK: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -4650,6 +4744,7 @@ pub mod serverbound {
             v26_2: 60i32,
         };
         pub const SIGN_UPDATE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 18i32,
             v1_7_6: 18i32,
             v1_8: 18i32,
@@ -4703,6 +4798,7 @@ pub mod serverbound {
             v26_2: 61i32,
         };
         pub const SPECTATE_ENTITY: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: 24i32,
@@ -4756,6 +4852,7 @@ pub mod serverbound {
             v26_2: -1i32,
         };
         pub const SPECTATOR_ACTION: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -4809,6 +4906,7 @@ pub mod serverbound {
             v26_2: 62i32,
         };
         pub const STEER_VEHICLE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 12i32,
             v1_7_6: 12i32,
             v1_8: 12i32,
@@ -4862,6 +4960,7 @@ pub mod serverbound {
             v26_2: -1i32,
         };
         pub const SWING: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 10i32,
             v1_7_6: 10i32,
             v1_8: 10i32,
@@ -4915,6 +5014,7 @@ pub mod serverbound {
             v26_2: 63i32,
         };
         pub const TELEPORT_TO_ENTITY: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -4968,6 +5068,7 @@ pub mod serverbound {
             v26_2: 64i32,
         };
         pub const TEST_INSTANCE_BLOCK_ACTION: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -5021,6 +5122,7 @@ pub mod serverbound {
             v26_2: 65i32,
         };
         pub const USE_ITEM: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -5074,6 +5176,7 @@ pub mod serverbound {
             v26_2: 67i32,
         };
         pub const USE_ITEM_ON: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 8i32,
             v1_7_6: 8i32,
             v1_8: 8i32,
@@ -5127,6 +5230,7 @@ pub mod serverbound {
             v26_2: 66i32,
         };
         pub const WINDOW_CONFIRMATION: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 15i32,
             v1_7_6: 15i32,
             v1_8: 15i32,
@@ -5207,6 +5311,7 @@ pub mod clientbound {
     pub mod handshake {}
     pub mod status {
         pub const PONG_RESPONSE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Status,
             v1_7_2: 1i32,
             v1_7_6: 1i32,
             v1_8: 1i32,
@@ -5260,6 +5365,7 @@ pub mod clientbound {
             v26_2: 1i32,
         };
         pub const STATUS_RESPONSE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Status,
             v1_7_2: 0i32,
             v1_7_6: 0i32,
             v1_8: 0i32,
@@ -5315,6 +5421,7 @@ pub mod clientbound {
     }
     pub mod login {
         pub const COOKIE_REQUEST: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Login,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -5368,6 +5475,7 @@ pub mod clientbound {
             v26_2: 5i32,
         };
         pub const CUSTOM_QUERY: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Login,
             v1_7_2: 4i32,
             v1_7_6: 4i32,
             v1_8: 4i32,
@@ -5421,6 +5529,7 @@ pub mod clientbound {
             v26_2: 4i32,
         };
         pub const GAME_PROFILE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Login,
             v1_7_2: 2i32,
             v1_7_6: 2i32,
             v1_8: 2i32,
@@ -5474,6 +5583,7 @@ pub mod clientbound {
             v26_2: -1i32,
         };
         pub const HELLO: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Login,
             v1_7_2: 1i32,
             v1_7_6: 1i32,
             v1_8: 1i32,
@@ -5527,6 +5637,7 @@ pub mod clientbound {
             v26_2: 1i32,
         };
         pub const LOGIN_COMPRESSION: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Login,
             v1_7_2: 3i32,
             v1_7_6: 3i32,
             v1_8: 3i32,
@@ -5580,6 +5691,7 @@ pub mod clientbound {
             v26_2: 3i32,
         };
         pub const LOGIN_DISCONNECT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Login,
             v1_7_2: 0i32,
             v1_7_6: 0i32,
             v1_8: 0i32,
@@ -5633,6 +5745,7 @@ pub mod clientbound {
             v26_2: 0i32,
         };
         pub const LOGIN_FINISHED: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Login,
             v1_7_2: 2i32,
             v1_7_6: 2i32,
             v1_8: 2i32,
@@ -5692,6 +5805,7 @@ pub mod clientbound {
     }
     pub mod config {
         pub const CLEAR_DIALOG: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -5745,6 +5859,7 @@ pub mod clientbound {
             v26_2: 17i32,
         };
         pub const CODE_OF_CONDUCT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -5798,6 +5913,7 @@ pub mod clientbound {
             v26_2: 19i32,
         };
         pub const COOKIE_REQUEST: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -5851,6 +5967,7 @@ pub mod clientbound {
             v26_2: 0i32,
         };
         pub const CUSTOM_PAYLOAD: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -5904,6 +6021,7 @@ pub mod clientbound {
             v26_2: 1i32,
         };
         pub const CUSTOM_REPORT_DETAILS: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -5957,6 +6075,7 @@ pub mod clientbound {
             v26_2: 15i32,
         };
         pub const DISCONNECT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -6010,6 +6129,7 @@ pub mod clientbound {
             v26_2: 2i32,
         };
         pub const FINISH_CONFIGURATION: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -6063,6 +6183,7 @@ pub mod clientbound {
             v26_2: 3i32,
         };
         pub const KEEP_ALIVE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -6116,6 +6237,7 @@ pub mod clientbound {
             v26_2: 4i32,
         };
         pub const PING: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -6169,6 +6291,7 @@ pub mod clientbound {
             v26_2: 5i32,
         };
         pub const REGISTRY_DATA: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -6222,6 +6345,7 @@ pub mod clientbound {
             v26_2: 7i32,
         };
         pub const RESET_CHAT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -6275,6 +6399,7 @@ pub mod clientbound {
             v26_2: 6i32,
         };
         pub const RESOURCE_PACK_POP: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -6328,6 +6453,7 @@ pub mod clientbound {
             v26_2: 8i32,
         };
         pub const RESOURCE_PACK_PUSH: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -6381,6 +6507,7 @@ pub mod clientbound {
             v26_2: 9i32,
         };
         pub const SELECT_KNOWN_PACKS: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -6434,6 +6561,7 @@ pub mod clientbound {
             v26_2: 14i32,
         };
         pub const SERVER_LINKS: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -6487,6 +6615,7 @@ pub mod clientbound {
             v26_2: 16i32,
         };
         pub const SHOW_DIALOG: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -6540,6 +6669,7 @@ pub mod clientbound {
             v26_2: 18i32,
         };
         pub const STORE_COOKIE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -6593,6 +6723,7 @@ pub mod clientbound {
             v26_2: 10i32,
         };
         pub const TRANSFER: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -6646,6 +6777,7 @@ pub mod clientbound {
             v26_2: 11i32,
         };
         pub const UPDATE_ENABLED_FEATURES: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -6699,6 +6831,7 @@ pub mod clientbound {
             v26_2: 12i32,
         };
         pub const UPDATE_TAGS: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Config,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -6754,6 +6887,7 @@ pub mod clientbound {
     }
     pub mod play {
         pub const ACKNOWLEDGE_PLAYER_DIGGING: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -6807,6 +6941,7 @@ pub mod clientbound {
             v26_2: -1i32,
         };
         pub const ADD_ENTITY: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 14i32,
             v1_7_6: 14i32,
             v1_8: 14i32,
@@ -6860,6 +6995,7 @@ pub mod clientbound {
             v26_2: 1i32,
         };
         pub const ANIMATE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 11i32,
             v1_7_6: 11i32,
             v1_8: 11i32,
@@ -6913,6 +7049,7 @@ pub mod clientbound {
             v26_2: 2i32,
         };
         pub const AWARD_STATS: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 55i32,
             v1_7_6: 55i32,
             v1_8: 55i32,
@@ -6966,6 +7103,7 @@ pub mod clientbound {
             v26_2: 3i32,
         };
         pub const BLOCK_CHANGED_ACK: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -7019,6 +7157,7 @@ pub mod clientbound {
             v26_2: 4i32,
         };
         pub const BLOCK_DESTRUCTION: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 37i32,
             v1_7_6: 37i32,
             v1_8: 37i32,
@@ -7072,6 +7211,7 @@ pub mod clientbound {
             v26_2: 5i32,
         };
         pub const BLOCK_ENTITY_DATA: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 53i32,
             v1_7_6: 53i32,
             v1_8: 53i32,
@@ -7125,6 +7265,7 @@ pub mod clientbound {
             v26_2: 6i32,
         };
         pub const BLOCK_EVENT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 36i32,
             v1_7_6: 36i32,
             v1_8: 36i32,
@@ -7178,6 +7319,7 @@ pub mod clientbound {
             v26_2: 7i32,
         };
         pub const BLOCK_UPDATE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 35i32,
             v1_7_6: 35i32,
             v1_8: 35i32,
@@ -7231,6 +7373,7 @@ pub mod clientbound {
             v26_2: 8i32,
         };
         pub const BOSS_EVENT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -7284,6 +7427,7 @@ pub mod clientbound {
             v26_2: 9i32,
         };
         pub const BUNDLE_DELIMITER: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -7337,6 +7481,7 @@ pub mod clientbound {
             v26_2: 0i32,
         };
         pub const CHANGE_DIFFICULTY: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: 65i32,
@@ -7390,6 +7535,7 @@ pub mod clientbound {
             v26_2: 10i32,
         };
         pub const CHAT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 2i32,
             v1_7_6: 2i32,
             v1_8: 2i32,
@@ -7443,6 +7589,7 @@ pub mod clientbound {
             v26_2: -1i32,
         };
         pub const CHAT_PREVIEW_PACKET: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -7496,6 +7643,7 @@ pub mod clientbound {
             v26_2: -1i32,
         };
         pub const CHUNKS_BIOMES: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -7549,6 +7697,7 @@ pub mod clientbound {
             v26_2: 13i32,
         };
         pub const CHUNK_BATCH_FINISHED: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -7602,6 +7751,7 @@ pub mod clientbound {
             v26_2: 11i32,
         };
         pub const CHUNK_BATCH_START: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -7655,6 +7805,7 @@ pub mod clientbound {
             v26_2: 12i32,
         };
         pub const CLEAR_DIALOG: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -7708,6 +7859,7 @@ pub mod clientbound {
             v26_2: 139i32,
         };
         pub const CLEAR_TITLES: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -7761,6 +7913,7 @@ pub mod clientbound {
             v26_2: 14i32,
         };
         pub const COMBAT_EVENT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: 66i32,
@@ -7814,6 +7967,7 @@ pub mod clientbound {
             v26_2: -1i32,
         };
         pub const COMMANDS: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -7867,6 +8021,7 @@ pub mod clientbound {
             v26_2: 16i32,
         };
         pub const COMMAND_SUGGESTIONS: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 58i32,
             v1_7_6: 58i32,
             v1_8: 58i32,
@@ -7920,6 +8075,7 @@ pub mod clientbound {
             v26_2: 15i32,
         };
         pub const CONTAINER_CLOSE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 46i32,
             v1_7_6: 46i32,
             v1_8: 46i32,
@@ -7973,6 +8129,7 @@ pub mod clientbound {
             v26_2: 17i32,
         };
         pub const CONTAINER_SET_CONTENT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 48i32,
             v1_7_6: 48i32,
             v1_8: 48i32,
@@ -8026,6 +8183,7 @@ pub mod clientbound {
             v26_2: 18i32,
         };
         pub const CONTAINER_SET_DATA: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 49i32,
             v1_7_6: 49i32,
             v1_8: 49i32,
@@ -8079,6 +8237,7 @@ pub mod clientbound {
             v26_2: 19i32,
         };
         pub const CONTAINER_SET_SLOT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 47i32,
             v1_7_6: 47i32,
             v1_8: 47i32,
@@ -8132,6 +8291,7 @@ pub mod clientbound {
             v26_2: 20i32,
         };
         pub const COOKIE_REQUEST: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -8185,6 +8345,7 @@ pub mod clientbound {
             v26_2: 21i32,
         };
         pub const COOLDOWN: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -8238,6 +8399,7 @@ pub mod clientbound {
             v26_2: 22i32,
         };
         pub const CUSTOM_CHAT_COMPLETIONS: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -8291,6 +8453,7 @@ pub mod clientbound {
             v26_2: 23i32,
         };
         pub const CUSTOM_PAYLOAD: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 63i32,
             v1_7_6: 63i32,
             v1_8: 63i32,
@@ -8344,6 +8507,7 @@ pub mod clientbound {
             v26_2: 24i32,
         };
         pub const CUSTOM_REPORT_DETAILS: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -8397,6 +8561,7 @@ pub mod clientbound {
             v26_2: 136i32,
         };
         pub const DAMAGE_EVENT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -8450,6 +8615,7 @@ pub mod clientbound {
             v26_2: 25i32,
         };
         pub const DEBUG_BLOCK_VALUE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -8503,6 +8669,7 @@ pub mod clientbound {
             v26_2: 26i32,
         };
         pub const DEBUG_CHUNK_VALUE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -8556,6 +8723,7 @@ pub mod clientbound {
             v26_2: 27i32,
         };
         pub const DEBUG_ENTITY_VALUE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -8609,6 +8777,7 @@ pub mod clientbound {
             v26_2: 28i32,
         };
         pub const DEBUG_EVENT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -8662,6 +8831,7 @@ pub mod clientbound {
             v26_2: 29i32,
         };
         pub const DEBUG_SAMPLE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -8715,6 +8885,7 @@ pub mod clientbound {
             v26_2: 30i32,
         };
         pub const DELETE_CHAT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -8768,6 +8939,7 @@ pub mod clientbound {
             v26_2: 31i32,
         };
         pub const DISCONNECT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 64i32,
             v1_7_6: 64i32,
             v1_8: 64i32,
@@ -8821,6 +8993,7 @@ pub mod clientbound {
             v26_2: 32i32,
         };
         pub const DISGUISED_CHAT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -8874,6 +9047,7 @@ pub mod clientbound {
             v26_2: 33i32,
         };
         pub const DISPLAY_CHAT_PREVIEW: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -8927,6 +9101,7 @@ pub mod clientbound {
             v26_2: -1i32,
         };
         pub const ENTITY_EVENT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 26i32,
             v1_7_6: 26i32,
             v1_8: 26i32,
@@ -8980,6 +9155,7 @@ pub mod clientbound {
             v26_2: 34i32,
         };
         pub const ENTITY_MOVEMENT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 20i32,
             v1_7_6: 20i32,
             v1_8: 20i32,
@@ -9033,6 +9209,7 @@ pub mod clientbound {
             v26_2: -1i32,
         };
         pub const ENTITY_POSITION_SYNC: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -9086,6 +9263,7 @@ pub mod clientbound {
             v26_2: 35i32,
         };
         pub const EXPLODE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 39i32,
             v1_7_6: 39i32,
             v1_8: 39i32,
@@ -9139,6 +9317,7 @@ pub mod clientbound {
             v26_2: 36i32,
         };
         pub const FORGET_LEVEL_CHUNK: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -9192,6 +9371,7 @@ pub mod clientbound {
             v26_2: 37i32,
         };
         pub const GAME_EVENT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 43i32,
             v1_7_6: 43i32,
             v1_8: 43i32,
@@ -9245,6 +9425,7 @@ pub mod clientbound {
             v26_2: 38i32,
         };
         pub const GAME_RULE_VALUES: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -9298,6 +9479,7 @@ pub mod clientbound {
             v26_2: 39i32,
         };
         pub const GAME_TEST_HIGHLIGHT_POS: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -9351,6 +9533,7 @@ pub mod clientbound {
             v26_2: 40i32,
         };
         pub const HURT_ANIMATION: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -9404,6 +9587,7 @@ pub mod clientbound {
             v26_2: 42i32,
         };
         pub const INITIALIZE_BORDER: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -9457,6 +9641,7 @@ pub mod clientbound {
             v26_2: 43i32,
         };
         pub const KEEP_ALIVE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 0i32,
             v1_7_6: 0i32,
             v1_8: 0i32,
@@ -9510,6 +9695,7 @@ pub mod clientbound {
             v26_2: 44i32,
         };
         pub const LEVEL_CHUNK_WITH_LIGHT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 33i32,
             v1_7_6: 33i32,
             v1_8: 33i32,
@@ -9563,6 +9749,7 @@ pub mod clientbound {
             v26_2: 45i32,
         };
         pub const LEVEL_EVENT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 40i32,
             v1_7_6: 40i32,
             v1_8: 40i32,
@@ -9616,6 +9803,7 @@ pub mod clientbound {
             v26_2: 46i32,
         };
         pub const LEVEL_PARTICLES: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 42i32,
             v1_7_6: 42i32,
             v1_8: 42i32,
@@ -9669,6 +9857,7 @@ pub mod clientbound {
             v26_2: 47i32,
         };
         pub const LIGHT_UPDATE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -9722,6 +9911,7 @@ pub mod clientbound {
             v26_2: 48i32,
         };
         pub const LOGIN: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 1i32,
             v1_7_6: 1i32,
             v1_8: 1i32,
@@ -9775,6 +9965,7 @@ pub mod clientbound {
             v26_2: 49i32,
         };
         pub const LOW_DISK_SPACE_WARNING: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -9828,6 +10019,7 @@ pub mod clientbound {
             v26_2: 50i32,
         };
         pub const MAP_CHUNK_BULK: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 38i32,
             v1_7_6: 38i32,
             v1_8: 38i32,
@@ -9881,6 +10073,7 @@ pub mod clientbound {
             v26_2: -1i32,
         };
         pub const MAP_ITEM_DATA: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 52i32,
             v1_7_6: 52i32,
             v1_8: 52i32,
@@ -9934,6 +10127,7 @@ pub mod clientbound {
             v26_2: 51i32,
         };
         pub const MERCHANT_OFFERS: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -9987,6 +10181,7 @@ pub mod clientbound {
             v26_2: 52i32,
         };
         pub const MOUNT_SCREEN_OPEN: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -10040,6 +10235,7 @@ pub mod clientbound {
             v26_2: 41i32,
         };
         pub const MOVE_ENTITY_POS: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 21i32,
             v1_7_6: 21i32,
             v1_8: 21i32,
@@ -10093,6 +10289,7 @@ pub mod clientbound {
             v26_2: 53i32,
         };
         pub const MOVE_ENTITY_POS_ROT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 23i32,
             v1_7_6: 23i32,
             v1_8: 23i32,
@@ -10146,6 +10343,7 @@ pub mod clientbound {
             v26_2: 54i32,
         };
         pub const MOVE_ENTITY_ROT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 22i32,
             v1_7_6: 22i32,
             v1_8: 22i32,
@@ -10199,6 +10397,7 @@ pub mod clientbound {
             v26_2: 56i32,
         };
         pub const MOVE_MINECART_ALONG_TRACK: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -10252,6 +10451,7 @@ pub mod clientbound {
             v26_2: 55i32,
         };
         pub const MOVE_PLAYER_ROT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -10305,6 +10505,7 @@ pub mod clientbound {
             v26_2: -1i32,
         };
         pub const MOVE_VEHICLE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -10358,6 +10559,7 @@ pub mod clientbound {
             v26_2: 57i32,
         };
         pub const NAMED_SOUND_EFFECT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -10411,6 +10613,7 @@ pub mod clientbound {
             v26_2: -1i32,
         };
         pub const OPEN_BOOK: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -10464,6 +10667,7 @@ pub mod clientbound {
             v26_2: 58i32,
         };
         pub const OPEN_SCREEN: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 45i32,
             v1_7_6: 45i32,
             v1_8: 45i32,
@@ -10517,6 +10721,7 @@ pub mod clientbound {
             v26_2: 59i32,
         };
         pub const OPEN_SIGN_EDITOR: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 54i32,
             v1_7_6: 54i32,
             v1_8: 54i32,
@@ -10570,6 +10775,7 @@ pub mod clientbound {
             v26_2: 60i32,
         };
         pub const PING: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -10623,6 +10829,7 @@ pub mod clientbound {
             v26_2: 61i32,
         };
         pub const PLACE_GHOST_RECIPE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -10676,6 +10883,7 @@ pub mod clientbound {
             v26_2: 63i32,
         };
         pub const PLAYER_ABILITIES: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 57i32,
             v1_7_6: 57i32,
             v1_8: 57i32,
@@ -10729,6 +10937,7 @@ pub mod clientbound {
             v26_2: 64i32,
         };
         pub const PLAYER_CHAT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -10782,6 +10991,7 @@ pub mod clientbound {
             v26_2: 65i32,
         };
         pub const PLAYER_CHAT_HEADER: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -10835,6 +11045,7 @@ pub mod clientbound {
             v26_2: -1i32,
         };
         pub const PLAYER_COMBAT_END: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -10888,6 +11099,7 @@ pub mod clientbound {
             v26_2: 66i32,
         };
         pub const PLAYER_COMBAT_ENTER: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -10941,6 +11153,7 @@ pub mod clientbound {
             v26_2: 67i32,
         };
         pub const PLAYER_COMBAT_KILL: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -10994,6 +11207,7 @@ pub mod clientbound {
             v26_2: 68i32,
         };
         pub const PLAYER_INFO: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 56i32,
             v1_7_6: 56i32,
             v1_8: 56i32,
@@ -11047,6 +11261,7 @@ pub mod clientbound {
             v26_2: -1i32,
         };
         pub const PLAYER_INFO_REMOVE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -11100,6 +11315,7 @@ pub mod clientbound {
             v26_2: 69i32,
         };
         pub const PLAYER_INFO_UPDATE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -11153,6 +11369,7 @@ pub mod clientbound {
             v26_2: 70i32,
         };
         pub const PLAYER_LOOK_AT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -11206,6 +11423,7 @@ pub mod clientbound {
             v26_2: 71i32,
         };
         pub const PLAYER_POSITION: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 8i32,
             v1_7_6: 8i32,
             v1_8: 8i32,
@@ -11259,6 +11477,7 @@ pub mod clientbound {
             v26_2: 72i32,
         };
         pub const PLAYER_ROTATION: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -11312,6 +11531,7 @@ pub mod clientbound {
             v26_2: 73i32,
         };
         pub const PONG_RESPONSE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -11365,6 +11585,7 @@ pub mod clientbound {
             v26_2: 62i32,
         };
         pub const PROJECTILE_POWER: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -11418,6 +11639,7 @@ pub mod clientbound {
             v26_2: 135i32,
         };
         pub const RECIPE_BOOK_ADD: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -11471,6 +11693,7 @@ pub mod clientbound {
             v26_2: 74i32,
         };
         pub const RECIPE_BOOK_REMOVE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -11524,6 +11747,7 @@ pub mod clientbound {
             v26_2: 75i32,
         };
         pub const RECIPE_BOOK_SETTINGS: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -11577,6 +11801,7 @@ pub mod clientbound {
             v26_2: 76i32,
         };
         pub const REMOVE_ENTITIES: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 19i32,
             v1_7_6: 19i32,
             v1_8: 19i32,
@@ -11630,6 +11855,7 @@ pub mod clientbound {
             v26_2: 77i32,
         };
         pub const REMOVE_MOB_EFFECT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 30i32,
             v1_7_6: 30i32,
             v1_8: 30i32,
@@ -11683,6 +11909,7 @@ pub mod clientbound {
             v26_2: 78i32,
         };
         pub const RESET_SCORE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -11736,6 +11963,7 @@ pub mod clientbound {
             v26_2: 79i32,
         };
         pub const RESOURCE_PACK_POP: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -11789,6 +12017,7 @@ pub mod clientbound {
             v26_2: 80i32,
         };
         pub const RESOURCE_PACK_PUSH: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: 72i32,
@@ -11842,6 +12071,7 @@ pub mod clientbound {
             v26_2: 81i32,
         };
         pub const RESPAWN: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 7i32,
             v1_7_6: 7i32,
             v1_8: 7i32,
@@ -11895,6 +12125,7 @@ pub mod clientbound {
             v26_2: 82i32,
         };
         pub const ROTATE_HEAD: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 25i32,
             v1_7_6: 25i32,
             v1_8: 25i32,
@@ -11948,6 +12179,7 @@ pub mod clientbound {
             v26_2: 83i32,
         };
         pub const SCULK_VIBRATION_SIGNAL: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -12001,6 +12233,7 @@ pub mod clientbound {
             v26_2: -1i32,
         };
         pub const SECTION_BLOCKS_UPDATE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 34i32,
             v1_7_6: 34i32,
             v1_8: 34i32,
@@ -12054,6 +12287,7 @@ pub mod clientbound {
             v26_2: 84i32,
         };
         pub const SELECT_ADVANCEMENTS_TAB: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -12107,6 +12341,7 @@ pub mod clientbound {
             v26_2: 85i32,
         };
         pub const SERVER_DATA: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -12160,6 +12395,7 @@ pub mod clientbound {
             v26_2: 86i32,
         };
         pub const SERVER_LINKS: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -12213,6 +12449,7 @@ pub mod clientbound {
             v26_2: 137i32,
         };
         pub const SET_ACTION_BAR_TEXT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -12266,6 +12503,7 @@ pub mod clientbound {
             v26_2: 87i32,
         };
         pub const SET_BORDER_CENTER: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -12319,6 +12557,7 @@ pub mod clientbound {
             v26_2: 88i32,
         };
         pub const SET_BORDER_LERP_SIZE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -12372,6 +12611,7 @@ pub mod clientbound {
             v26_2: 89i32,
         };
         pub const SET_BORDER_SIZE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -12425,6 +12665,7 @@ pub mod clientbound {
             v26_2: 90i32,
         };
         pub const SET_BORDER_WARNING_DELAY: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -12478,6 +12719,7 @@ pub mod clientbound {
             v26_2: 91i32,
         };
         pub const SET_BORDER_WARNING_DISTANCE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -12531,6 +12773,7 @@ pub mod clientbound {
             v26_2: 92i32,
         };
         pub const SET_CAMERA: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: 67i32,
@@ -12584,6 +12827,7 @@ pub mod clientbound {
             v26_2: 93i32,
         };
         pub const SET_CARRIED_ITEM: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 9i32,
             v1_7_6: 9i32,
             v1_8: 9i32,
@@ -12637,6 +12881,7 @@ pub mod clientbound {
             v26_2: -1i32,
         };
         pub const SET_CHUNK_CACHE_CENTER: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -12690,6 +12935,7 @@ pub mod clientbound {
             v26_2: 94i32,
         };
         pub const SET_CHUNK_CACHE_RADIUS: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -12743,6 +12989,7 @@ pub mod clientbound {
             v26_2: 95i32,
         };
         pub const SET_COMPRESSION: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: 70i32,
@@ -12796,6 +13043,7 @@ pub mod clientbound {
             v26_2: -1i32,
         };
         pub const SET_CURSOR_ITEM: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -12849,6 +13097,7 @@ pub mod clientbound {
             v26_2: 96i32,
         };
         pub const SET_DEFAULT_SPAWN_POSITION: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 5i32,
             v1_7_6: 5i32,
             v1_8: 5i32,
@@ -12902,6 +13151,7 @@ pub mod clientbound {
             v26_2: 97i32,
         };
         pub const SET_DISPLAY_OBJECTIVE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 61i32,
             v1_7_6: 61i32,
             v1_8: 61i32,
@@ -12955,6 +13205,7 @@ pub mod clientbound {
             v26_2: 98i32,
         };
         pub const SET_ENTITY_DATA: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 28i32,
             v1_7_6: 28i32,
             v1_8: 28i32,
@@ -13008,6 +13259,7 @@ pub mod clientbound {
             v26_2: 99i32,
         };
         pub const SET_ENTITY_LINK: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 27i32,
             v1_7_6: 27i32,
             v1_8: 27i32,
@@ -13061,6 +13313,7 @@ pub mod clientbound {
             v26_2: 100i32,
         };
         pub const SET_ENTITY_MOTION: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 18i32,
             v1_7_6: 18i32,
             v1_8: 18i32,
@@ -13114,6 +13367,7 @@ pub mod clientbound {
             v26_2: 101i32,
         };
         pub const SET_EQUIPMENT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 4i32,
             v1_7_6: 4i32,
             v1_8: 4i32,
@@ -13167,6 +13421,7 @@ pub mod clientbound {
             v26_2: 102i32,
         };
         pub const SET_EXPERIENCE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 31i32,
             v1_7_6: 31i32,
             v1_8: 31i32,
@@ -13220,6 +13475,7 @@ pub mod clientbound {
             v26_2: 103i32,
         };
         pub const SET_HEALTH: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 6i32,
             v1_7_6: 6i32,
             v1_8: 6i32,
@@ -13273,6 +13529,7 @@ pub mod clientbound {
             v26_2: 104i32,
         };
         pub const SET_HELD_SLOT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -13326,6 +13583,7 @@ pub mod clientbound {
             v26_2: 105i32,
         };
         pub const SET_OBJECTIVE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 59i32,
             v1_7_6: 59i32,
             v1_8: 59i32,
@@ -13379,6 +13637,7 @@ pub mod clientbound {
             v26_2: 106i32,
         };
         pub const SET_PASSENGERS: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -13432,6 +13691,7 @@ pub mod clientbound {
             v26_2: 107i32,
         };
         pub const SET_PLAYER_INVENTORY: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -13485,6 +13745,7 @@ pub mod clientbound {
             v26_2: 108i32,
         };
         pub const SET_PLAYER_TEAM: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 62i32,
             v1_7_6: 62i32,
             v1_8: 62i32,
@@ -13538,6 +13799,7 @@ pub mod clientbound {
             v26_2: 109i32,
         };
         pub const SET_SCORE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 60i32,
             v1_7_6: 60i32,
             v1_8: 60i32,
@@ -13591,6 +13853,7 @@ pub mod clientbound {
             v26_2: 110i32,
         };
         pub const SET_SIMULATION_DISTANCE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -13644,6 +13907,7 @@ pub mod clientbound {
             v26_2: 111i32,
         };
         pub const SET_SUBTITLE_TEXT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -13697,6 +13961,7 @@ pub mod clientbound {
             v26_2: 112i32,
         };
         pub const SET_TIME: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 3i32,
             v1_7_6: 3i32,
             v1_8: 3i32,
@@ -13750,6 +14015,7 @@ pub mod clientbound {
             v26_2: 113i32,
         };
         pub const SET_TITLES_ANIMATION: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -13803,6 +14069,7 @@ pub mod clientbound {
             v26_2: 115i32,
         };
         pub const SET_TITLE_TEXT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -13856,6 +14123,7 @@ pub mod clientbound {
             v26_2: 114i32,
         };
         pub const SHOW_DIALOG: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -13909,6 +14177,7 @@ pub mod clientbound {
             v26_2: 140i32,
         };
         pub const SIGN_UPDATE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 51i32,
             v1_7_6: 51i32,
             v1_8: 51i32,
@@ -13962,6 +14231,7 @@ pub mod clientbound {
             v26_2: -1i32,
         };
         pub const SOUND: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 41i32,
             v1_7_6: 41i32,
             v1_8: 41i32,
@@ -14015,6 +14285,7 @@ pub mod clientbound {
             v26_2: 117i32,
         };
         pub const SOUND_ENTITY: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -14068,6 +14339,7 @@ pub mod clientbound {
             v26_2: 116i32,
         };
         pub const SPAWN_EXPERIENCE_ORB: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 17i32,
             v1_7_6: 17i32,
             v1_8: 17i32,
@@ -14121,6 +14393,7 @@ pub mod clientbound {
             v26_2: -1i32,
         };
         pub const SPAWN_LIVING_ENTITY: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 15i32,
             v1_7_6: 15i32,
             v1_8: 15i32,
@@ -14174,6 +14447,7 @@ pub mod clientbound {
             v26_2: -1i32,
         };
         pub const SPAWN_PAINTING: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 16i32,
             v1_7_6: 16i32,
             v1_8: 16i32,
@@ -14227,6 +14501,7 @@ pub mod clientbound {
             v26_2: -1i32,
         };
         pub const SPAWN_PLAYER: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 12i32,
             v1_7_6: 12i32,
             v1_8: 12i32,
@@ -14280,6 +14555,7 @@ pub mod clientbound {
             v26_2: -1i32,
         };
         pub const SPAWN_WEATHER_ENTITY: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 44i32,
             v1_7_6: 44i32,
             v1_8: 44i32,
@@ -14333,6 +14609,7 @@ pub mod clientbound {
             v26_2: -1i32,
         };
         pub const START_CONFIGURATION: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -14386,6 +14663,7 @@ pub mod clientbound {
             v26_2: 118i32,
         };
         pub const STOP_SOUND: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -14439,6 +14717,7 @@ pub mod clientbound {
             v26_2: 119i32,
         };
         pub const STORE_COOKIE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -14492,6 +14771,7 @@ pub mod clientbound {
             v26_2: 120i32,
         };
         pub const SYSTEM_CHAT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -14545,6 +14825,7 @@ pub mod clientbound {
             v26_2: 121i32,
         };
         pub const TAB_LIST: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: 71i32,
@@ -14598,6 +14879,7 @@ pub mod clientbound {
             v26_2: 122i32,
         };
         pub const TAG_QUERY: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -14651,6 +14933,7 @@ pub mod clientbound {
             v26_2: 123i32,
         };
         pub const TAKE_ITEM_ENTITY: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 13i32,
             v1_7_6: 13i32,
             v1_8: 13i32,
@@ -14704,6 +14987,7 @@ pub mod clientbound {
             v26_2: 124i32,
         };
         pub const TELEPORT_ENTITY: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 24i32,
             v1_7_6: 24i32,
             v1_8: 24i32,
@@ -14757,6 +15041,7 @@ pub mod clientbound {
             v26_2: 125i32,
         };
         pub const TEST_INSTANCE_BLOCK_STATUS: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -14810,6 +15095,7 @@ pub mod clientbound {
             v26_2: 126i32,
         };
         pub const TICKING_STATE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -14863,6 +15149,7 @@ pub mod clientbound {
             v26_2: 127i32,
         };
         pub const TICKING_STEP: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -14916,6 +15203,7 @@ pub mod clientbound {
             v26_2: 128i32,
         };
         pub const TITLE: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: 69i32,
@@ -14969,6 +15257,7 @@ pub mod clientbound {
             v26_2: -1i32,
         };
         pub const TRANSFER: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -15022,6 +15311,7 @@ pub mod clientbound {
             v26_2: 129i32,
         };
         pub const UNLOCK_RECIPES: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -15075,6 +15365,7 @@ pub mod clientbound {
             v26_2: -1i32,
         };
         pub const UPDATE_ADVANCEMENTS: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -15128,6 +15419,7 @@ pub mod clientbound {
             v26_2: 130i32,
         };
         pub const UPDATE_ATTRIBUTES: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 32i32,
             v1_7_6: 32i32,
             v1_8: 32i32,
@@ -15181,6 +15473,7 @@ pub mod clientbound {
             v26_2: 131i32,
         };
         pub const UPDATE_ENABLED_FEATURES: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -15234,6 +15527,7 @@ pub mod clientbound {
             v26_2: -1i32,
         };
         pub const UPDATE_ENTITY_NBT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: 73i32,
@@ -15287,6 +15581,7 @@ pub mod clientbound {
             v26_2: -1i32,
         };
         pub const UPDATE_MOB_EFFECT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 29i32,
             v1_7_6: 29i32,
             v1_8: 29i32,
@@ -15340,6 +15635,7 @@ pub mod clientbound {
             v26_2: 132i32,
         };
         pub const UPDATE_RECIPES: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -15393,6 +15689,7 @@ pub mod clientbound {
             v26_2: 133i32,
         };
         pub const UPDATE_TAGS: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -15446,6 +15743,7 @@ pub mod clientbound {
             v26_2: 134i32,
         };
         pub const USE_BED: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 10i32,
             v1_7_6: 10i32,
             v1_8: 10i32,
@@ -15499,6 +15797,7 @@ pub mod clientbound {
             v26_2: -1i32,
         };
         pub const WAYPOINT: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: -1i32,
@@ -15552,6 +15851,7 @@ pub mod clientbound {
             v26_2: 138i32,
         };
         pub const WINDOW_CONFIRMATION: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: 50i32,
             v1_7_6: 50i32,
             v1_8: 50i32,
@@ -15605,6 +15905,7 @@ pub mod clientbound {
             v26_2: -1i32,
         };
         pub const WORLD_BORDER: super::super::PacketId = super::super::PacketId {
+            state: super::super::PacketState::Play,
             v1_7_2: -1i32,
             v1_7_6: -1i32,
             v1_8: 68i32,

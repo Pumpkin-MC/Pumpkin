@@ -16,7 +16,9 @@ pub fn map_type_with_defined(ty: &Type, defined_types: Option<&HashSet<String>>)
                 "String" | "TextComponent" | "str" | "Identifier" | "ResourceLocation"
                 | "LpVector3d" => WitType::String,
                 "Uuid" => WitType::Named("uuid".into()),
-                "i32" | "VarInt" | "u32" | "VarUInt" | "usize" | "u24" => WitType::S32,
+                "i32" | "VarInt" | "u32" | "VarUInt" | "usize" | "u24" | "ConnectionState" => {
+                    WitType::S32
+                }
                 "i64" | "u64" | "VarLong" | "VarULong" => WitType::S64,
                 "bool" => WitType::Bool,
                 "f32" => WitType::F32,
