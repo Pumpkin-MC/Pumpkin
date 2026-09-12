@@ -1656,6 +1656,34 @@ impl Player {
         true
     }
 
+    pub fn exchange_stack(
+        &self,
+        input: &mut ItemStack,
+        mut output: ItemStack,
+        creative_override: Option<bool>,
+    ) {
+        let is_in_creative = self.is_creative() && creative_override.unwrap_or(true);
+        if is_in_creative {
+            if !self
+                .inventory
+                .contains_any_predicate(&|item| item.are_equal(&output))
+            {
+                self.inventory.insert_stack_anywhere(&mut output);
+            }
+            return;
+        }
+
+        input.decrement_unless_creative(self.gamemode.load(), 1);
+
+        if input.is_empty() {
+            return;
+        }
+
+        if !self.inventory.insert_stack_anywhere(&mut output) {
+            self.drop_item(output);
+        }
+    }
+
     /// Calculates the player's respawn point based on stored spawn data.
     ///
     /// Returns `Some(CalculatedRespawnPoint)` if a valid respawn point exists, `None` otherwise.

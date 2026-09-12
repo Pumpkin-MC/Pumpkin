@@ -4,6 +4,12 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::{entity::EntityType, item::Item};
 
+pub mod cow;
+pub mod mooshroom;
+
+pub use cow::CowEntity;
+pub use mooshroom::MooshroomEntity;
+
 use crate::entity::{
     Entity,
     ageable::AgeableMob,
@@ -22,12 +28,12 @@ const TEMPT_ITEMS: &[&Item] = &[&Item::WHEAT];
 /// Represents a Cow, a common passive mob that provides milk, leather, and beef.
 ///
 /// Wiki: <https://minecraft.wiki/w/Cow>
-pub struct CowEntity {
+pub struct CowEntityBase {
     pub mob_entity: MobEntity,
     pub ageable_data: crate::entity::ageable::AgeableData,
 }
 
-impl CowEntity {
+impl CowEntityBase {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
         let cow = Self {
@@ -64,13 +70,13 @@ impl CowEntity {
     }
 }
 
-impl AgeableMob for CowEntity {
+impl AgeableMob for CowEntityBase {
     fn get_ageable_data(&self) -> &crate::entity::ageable::AgeableData {
         &self.ageable_data
     }
 }
 
-impl Animal for CowEntity {
+impl Animal for CowEntityBase {
     fn is_food(&self, item_stack: &ItemStack) -> bool {
         use pumpkin_data::tag::Taggable;
         item_stack
@@ -80,7 +86,7 @@ impl Animal for CowEntity {
     }
 }
 
-impl Mob for CowEntity {
+impl Mob for CowEntityBase {
     fn as_ageable(&self) -> Option<&dyn AgeableMob> {
         Some(self)
     }
@@ -95,7 +101,11 @@ impl Mob for CowEntity {
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         if item_stack.get_item() == &Item::BUCKET && !self.is_baby() {
-            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+            player.exchange_stack(
+                &mut ItemStack::new(1, &Item::BUCKET),
+                ItemStack::new(1, &Item::MILK_BUCKET),
+                None,
+            );
             let entity = &self.mob_entity.living_entity.entity;
             let world = entity.world.load();
             world.play_sound(

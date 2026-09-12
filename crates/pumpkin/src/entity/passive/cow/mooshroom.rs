@@ -25,7 +25,7 @@ use crate::entity::{
     },
     item::ItemEntity,
     mob::{Mob, MobEntity},
-    passive::animal::Animal,
+    passive::{animal::Animal, cow::CowEntityBase},
     player::Player,
 };
 
@@ -71,8 +71,7 @@ impl MooshroomVariant {
 }
 
 pub struct MooshroomEntity {
-    pub mob_entity: MobEntity,
-    pub ageable_data: AgeableData,
+    pub entity: Arc<CowEntityBase>,
     pub variant: AtomicI32,
     pub stew_effect: AtomicCell<Option<u32>>,
     pub last_lightning_bolt_uuid: AtomicCell<Option<Uuid>>,
@@ -80,10 +79,9 @@ pub struct MooshroomEntity {
 
 impl MooshroomEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
-        let mob_entity = MobEntity::new(entity);
+        let mob_entity = CowEntityBase::new(entity);
         let mooshroom = Self {
-            mob_entity,
-            ageable_data: AgeableData::default(),
+            entity: mob_entity,
             variant: AtomicI32::new(MooshroomVariant::Red.id()),
             stew_effect: AtomicCell::new(None),
             last_lightning_bolt_uuid: AtomicCell::new(None),
@@ -96,11 +94,13 @@ impl MooshroomEntity {
 
         {
             let mut goal_selector = mob_arc
+                .entity
                 .mob_entity
                 .goals_selector
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
+            // TODO: make it prefer MYCELIUM blocks and only be spawnable in valid blocks and in the correct light values
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(2.0));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
@@ -134,14 +134,13 @@ impl MooshroomEntity {
 
 impl AgeableMob for MooshroomEntity {
     fn get_ageable_data(&self) -> &AgeableData {
-        &self.ageable_data
+        &self.entity.ageable_data
     }
 }
 
 impl Animal for MooshroomEntity {
     fn is_food(&self, item_stack: &ItemStack) -> bool {
-        item_stack.item.has_tag(&tag::Item::MINECRAFT_COW_FOOD)
-            || TEMPT_ITEMS.iter().any(|i| i.id == item_stack.item.id)
+        self.entity.is_food(item_stack)
     }
 }
 
@@ -165,7 +164,7 @@ impl Mob for MooshroomEntity {
     }
 
     fn get_mob_entity(&self) -> &MobEntity {
-        &self.mob_entity
+        &self.entity.mob_entity
     }
 
     fn mob_tick(&self, _caller: &dyn EntityBase) {
@@ -187,34 +186,33 @@ impl Mob for MooshroomEntity {
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         let item = item_stack.get_item();
 
-        if item == &Item::BOWL && !self.is_baby() {
-            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+        if self.is_baby() {
+            return self.entity.mob_interact(player, item_stack);
+        }
+
+        if item == &Item::BOWL {
             let entity = self.get_entity();
             let world = entity.world.load();
             let pos = entity.pos.load();
-            let is_suspicious = self.stew_effect.swap(None).is_some();
-            let sound = if is_suspicious {
-                Sound::EntityMooshroomSuspiciousMilk
+
+            let effect = self.stew_effect.swap(None);
+            let (item, sound) = if let Some(_) = effect {
+                let item = ItemStack::new(1, &Item::SUSPICIOUS_STEW);
+                // TODO: set custom effects to the item (Needs DataComponentTypes to be implemented)
+                (item, Sound::EntityMooshroomSuspiciousMilk)
             } else {
-                Sound::EntityMooshroomMilk
+                (
+                    ItemStack::new(1, &Item::MUSHROOM_STEW),
+                    Sound::EntityMooshroomMilk,
+                )
             };
+
+            player.exchange_stack(&mut ItemStack::new(1, &Item::BOWL), item, Some(false));
             world.play_sound(sound, SoundCategory::Neutral, &pos);
             return true;
         }
 
-        if item == &Item::BUCKET && !self.is_baby() {
-            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
-            let entity = self.get_entity();
-            let world = entity.world.load();
-            world.play_sound(
-                Sound::EntityCowMilk,
-                SoundCategory::Neutral,
-                &entity.pos.load(),
-            );
-            return true;
-        }
-
-        if item == &Item::SHEARS && !self.is_baby() {
+        if item == &Item::SHEARS {
             let entity = self.get_entity();
             let world = entity.world.load();
             let pos = entity.pos.load();
@@ -247,7 +245,6 @@ impl Mob for MooshroomEntity {
         }
 
         if self.get_variant() == MooshroomVariant::Brown
-            && !self.is_baby()
             && item.has_tag(&tag::Item::MINECRAFT_SMALL_FLOWERS)
         {
             item_stack.decrement_unless_creative(player.gamemode.load(), 1);
@@ -266,6 +263,34 @@ impl Mob for MooshroomEntity {
             return true;
         }
 
-        self.animal_interact(player, item_stack, Sound::EntityCowAmbient)
+        self.entity.mob_interact(player, item_stack)
+    }
+
+    fn mob_on_lightning_strike(
+        &self,
+        _: &dyn EntityBase,
+        lightning: &crate::entity::lightning::LightningBoltEntity,
+    ) {
+        let lightning_entity = lightning.get_entity();
+
+        if self
+            .last_lightning_bolt_uuid
+            .load()
+            .is_some_and(|x| x == lightning_entity.entity_uuid)
+        {
+            return;
+        }
+        let entity = self.get_entity();
+        let world = entity.world.load();
+        let pos = entity.pos.load();
+
+        self.set_variant(if self.get_variant() == MooshroomVariant::Brown {
+            MooshroomVariant::Red
+        } else {
+            MooshroomVariant::Brown
+        });
+        self.last_lightning_bolt_uuid
+            .store(Some(lightning_entity.entity_uuid.clone()));
+        world.play_sound(Sound::EntityMooshroomConvert, SoundCategory::Neutral, &pos);
     }
 }

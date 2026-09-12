@@ -19,7 +19,6 @@ pub mod happy_ghast;
 pub mod horse;
 pub mod iron_golem;
 pub mod llama;
-pub mod mooshroom;
 pub mod mule;
 pub mod nautilus;
 pub mod ocelot;
