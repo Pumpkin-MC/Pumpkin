@@ -1748,6 +1748,20 @@ impl LivingEntity {
             return;
         }
 
+        // Vanilla parity: the fall_damage gamerule only affects players.
+        if caller.get_player().is_some()
+            && !self
+                .entity
+                .world
+                .load()
+                .level_info
+                .load()
+                .game_rules
+                .fall_damage
+        {
+            return;
+        }
+
         if fall_distance >= 2.0
             && let Some(player) = caller.get_player()
         {

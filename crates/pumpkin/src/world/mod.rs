@@ -31,8 +31,7 @@ pub mod time;
 pub mod villager_poi;
 
 use crate::block::RandomTickArgs;
-use crate::world::chunker::get_view_distance;
-use crate::world::chunker::is_within_view_distance;
+use crate::world::chunker::is_within_chebyshev_distance;
 use crate::{block::BlockEvent, entity::item::ItemEntity};
 use crate::{
     block::{
@@ -447,8 +446,11 @@ impl World {
         let mut newly_active = Vec::new();
         let mut current_players = FxHashSet::default();
 
+        let spectators_generate_chunks =
+            self.level_info.load().game_rules.spectators_generate_chunks;
+
         for player in players.iter() {
-            if player.is_spectator() {
+            if player.is_spectator() && !spectators_generate_chunks {
                 continue;
             }
             let id = player.gameprofile.id;
@@ -1351,7 +1353,7 @@ impl World {
         let chunk_pos = BlockPos::floored_v(*position).chunk_position();
 
         for player in self.players.load().iter() {
-            if is_within_view_distance(chunk_pos, player.get_entity().chunk_pos.load(), 1)
+            if is_within_chebyshev_distance(chunk_pos, player.get_entity().chunk_pos.load(), 1)
                 && let ClientPlatform::Bedrock(client) = player.client.as_ref()
                 && let Ok(data) = client.serialize_packet(&packet)
             {
@@ -1389,7 +1391,7 @@ impl World {
         let recipients = players.iter().filter(|p| {
             let center = p.get_entity().chunk_pos.load();
             // If the sound reaches their chunk, send it!
-            is_within_view_distance(chunk_pos, center, audible_chunks)
+            is_within_chebyshev_distance(chunk_pos, center, audible_chunks)
         });
 
         let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
@@ -1419,7 +1421,7 @@ impl World {
             }
 
             let center = p.get_entity().chunk_pos.load();
-            is_within_view_distance(chunk_pos, center, audible_chunks)
+            is_within_chebyshev_distance(chunk_pos, center, audible_chunks)
         });
 
         let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
@@ -1705,9 +1707,9 @@ impl World {
                 let mut java_recipients = Vec::new();
 
                 let recipients = players.iter().filter(|p| {
-                    let center = p.get_entity().chunk_pos.load();
-                    let view_distance = get_view_distance(p).get() as i32;
-                    is_within_view_distance(chunk_pos, center, view_distance)
+                    p.watched_section
+                        .load()
+                        .is_within_distance(chunk_pos.x, chunk_pos.y)
                 });
 
                 let mut bedrock_packets = Vec::new();
@@ -1784,9 +1786,10 @@ impl World {
             if !bedrock_water_packets.is_empty() {
                 let players = self.players.load();
                 let recipients = players.iter().filter(|player| {
-                    let center = player.get_entity().chunk_pos.load();
-                    let view_distance = get_view_distance(player).get() as i32;
-                    is_within_view_distance(chunk_pos, center, view_distance)
+                    player
+                        .watched_section
+                        .load()
+                        .is_within_distance(chunk_pos.x, chunk_pos.y)
                 });
                 for player in recipients {
                     if let ClientPlatform::Bedrock(client) = player.client.as_ref() {
@@ -4625,22 +4628,13 @@ impl World {
 
     // NOTE: This function doesn't actually await on anything, it just spawns two tokio tasks
     /// IMPORTANT: Chunks have to be non-empty
-    fn spawn_world_entity_chunks(
-        self: &Arc<Self>,
-        player: Arc<Player>,
-        chunks: Vec<Vector2<i32>>,
-        center_chunk: Vector2<i32>,
-    ) {
+    fn spawn_world_entity_chunks(self: &Arc<Self>, player: Arc<Player>, chunks: Vec<Vector2<i32>>) {
         #[cfg(debug_assertions)]
         let inst = std::time::Instant::now();
 
-        // Sort such that the first chunks are closest to the center.
-        let mut chunks = chunks;
-        chunks.sort_unstable_by_key(|pos| {
-            let rel_x = pos.x - center_chunk.x;
-            let rel_z = pos.y - center_chunk.y;
-            rel_x * rel_x + rel_z * rel_z
-        });
+        // Note: `chunks` originates from `Cylindrical::changed_chunks`, which is
+        // already ordered from closest to farthest from center by the precompiled
+        // cylindrical chunk view LUT. No re-sorting needed.
 
         let mut entity_receiver = self.level.receive_entity_chunks(chunks);
         let level = self.level.clone();
@@ -5204,10 +5198,11 @@ impl World {
 
         let players = self.players.load();
         for player in players.iter() {
-            let center = player.get_entity().chunk_pos.load();
-            let view_distance = get_view_distance(player).get() as i32;
-
-            if is_within_view_distance(chunk_pos, center, view_distance) {
+            if player
+                .watched_section
+                .load()
+                .is_within_distance(chunk_pos.x, chunk_pos.y)
+            {
                 player.client.try_enqueue_spawn_packet(entity);
             }
         }
@@ -7018,16 +7013,13 @@ impl World {
     }
 
     /// Broadcasts a packet to all players who currently have the target chunk loaded.
-    /// This uses highly optimized Chebyshev distance math (Chunk Grid) instead of floating point distance checks.
     pub fn broadcast_to_chunk<P: ClientPacket>(&self, chunk_pos: Vector2<i32>, packet: &P) {
         let players = self.players.load();
 
         let recipients = players.iter().filter(|p| {
-            let center = p.get_entity().chunk_pos.load();
-            let view_distance = get_view_distance(p).get() as i32;
-
-            // Chebyshev distance (Minecraft's chunk loading shape)
-            is_within_view_distance(chunk_pos, center, view_distance)
+            p.watched_section
+                .load()
+                .is_within_distance(chunk_pos.x, chunk_pos.y)
         });
 
         let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
@@ -7041,9 +7033,10 @@ impl World {
     ) {
         let players = self.players.load();
         let recipients = players.iter().filter_map(|player| {
-            let center = player.get_entity().chunk_pos.load();
-            let view_distance = get_view_distance(player).get() as i32;
-            if is_within_view_distance(chunk_pos, center, view_distance)
+            if player
+                .watched_section
+                .load()
+                .is_within_distance(chunk_pos.x, chunk_pos.y)
                 && let ClientPlatform::Bedrock(client) = player.client.as_ref()
             {
                 return Some(client);
@@ -7064,9 +7057,9 @@ impl World {
         let mut bedrock_recipients = Vec::new();
 
         let recipients = players.iter().filter(|p| {
-            let center = p.get_entity().chunk_pos.load();
-            let view_distance = get_view_distance(p).get() as i32;
-            is_within_view_distance(chunk_pos, center, view_distance)
+            p.watched_section
+                .load()
+                .is_within_distance(chunk_pos.x, chunk_pos.y)
         });
 
         for p in recipients {
@@ -7095,10 +7088,9 @@ impl World {
             if except.contains(&p.get_entity().entity_uuid) {
                 return false;
             }
-            let center = p.get_entity().chunk_pos.load();
-            let view_distance = get_view_distance(p).get() as i32;
-
-            is_within_view_distance(chunk_pos, center, view_distance)
+            p.watched_section
+                .load()
+                .is_within_distance(chunk_pos.x, chunk_pos.y)
         });
 
         let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
@@ -7117,10 +7109,9 @@ impl World {
             if except.contains(&p.get_entity().entity_uuid) {
                 return false;
             }
-            let center = p.get_entity().chunk_pos.load();
-            let view_distance = get_view_distance(p).get() as i32;
-
-            is_within_view_distance(chunk_pos, center, view_distance)
+            p.watched_section
+                .load()
+                .is_within_distance(chunk_pos.x, chunk_pos.y)
         });
 
         let mut java_recipients = Vec::new();
