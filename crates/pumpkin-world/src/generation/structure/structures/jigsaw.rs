@@ -20,25 +20,24 @@ pub enum JigsawProjection {
     TerrainMatching,
 }
 
-#[derive(Clone)]
 pub struct TemplatePool {
     pub id: String,
     pub fallback: String,
-    pub elements: Vec<PoolElement>,
+    pub elements: Vec<Arc<PoolElement>>,
 }
 
-#[derive(Clone)]
 pub struct PoolElement {
     pub weight: u32,
     pub projection: JigsawProjection,
     pub kind: PoolElementKind,
 }
 
-#[derive(Clone)]
 pub enum PoolElementKind {
     Empty,
     Single {
         template: String,
+        /// Resolved template, loaded once when the pool element is created.
+        resolved_template: Option<Arc<StructureTemplate>>,
         processors: ProcessorListRef,
         legacy: bool,
     },
@@ -131,9 +130,11 @@ impl RawPoolElement {
                 ProcessorListRef::Empty
             }
         };
+        let resolved_template = crate::generation::structure::template::get_template(&location);
         (
             PoolElementKind::Single {
                 template: location,
+                resolved_template,
                 processors,
                 legacy,
             },
@@ -187,9 +188,9 @@ impl PoolElement {
     pub fn first_template(&self) -> Option<Arc<StructureTemplate>> {
         fn find(kind: &PoolElementKind) -> Option<Arc<StructureTemplate>> {
             match kind {
-                PoolElementKind::Single { template, .. } => {
-                    crate::generation::structure::template::get_template(template)
-                }
+                PoolElementKind::Single {
+                    resolved_template, ..
+                } => resolved_template.clone(),
                 PoolElementKind::List(elements) => elements.iter().find_map(find),
                 PoolElementKind::Empty | PoolElementKind::Feature(_) => None,
             }
@@ -209,13 +210,17 @@ impl PoolElement {
             match kind {
                 PoolElementKind::Single {
                     template,
+                    resolved_template,
                     processors,
                     legacy,
                 } => {
-                    if let Some(structure_template) =
-                        crate::generation::structure::template::get_template(template)
-                    {
-                        consumer(template, processors, *legacy, structure_template);
+                    if let Some(structure_template) = resolved_template {
+                        consumer(
+                            template,
+                            processors,
+                            *legacy,
+                            Arc::clone(structure_template),
+                        );
                     }
                 }
                 PoolElementKind::List(elements) => {
@@ -249,9 +254,9 @@ impl PoolElementKind {
     #[must_use]
     pub fn get_y_size(&self) -> Option<i32> {
         match self {
-            Self::Single { template, .. } => {
-                crate::generation::structure::template::get_template(template).map(|t| t.size.y)
-            }
+            Self::Single {
+                resolved_template, ..
+            } => resolved_template.as_ref().map(|t| t.size.y),
             Self::List(elements) => elements.iter().filter_map(Self::get_y_size).max(),
             Self::Feature(_) => Some(1),
             Self::Empty => None,
@@ -261,16 +266,16 @@ impl PoolElementKind {
     #[must_use]
     pub fn get_bounding_box(&self, offset: BlockPos, rotation: pumpkin_data::Rotation) -> BlockBox {
         match self {
-            Self::Single { template, .. } => {
-                crate::generation::structure::template::get_template(template).map_or_else(
-                    || {
-                        BlockBox::new(
-                            offset.0.x, offset.0.y, offset.0.z, offset.0.x, offset.0.y, offset.0.z,
-                        )
-                    },
-                    |t| super::jigsaw_placement::rotated_box(offset, t.size, rotation),
-                )
-            }
+            Self::Single {
+                resolved_template, ..
+            } => resolved_template.as_ref().map_or_else(
+                || {
+                    BlockBox::new(
+                        offset.0.x, offset.0.y, offset.0.z, offset.0.x, offset.0.y, offset.0.z,
+                    )
+                },
+                |t| super::jigsaw_placement::rotated_box(offset, t.size, rotation),
+            ),
             Self::List(elements) => {
                 let mut bbox: Option<BlockBox> = None;
                 for element in elements {
@@ -304,20 +309,13 @@ impl PoolElementKind {
         random: &mut pumpkin_util::random::RandomGenerator,
     ) -> Vec<JigsawBlock> {
         match self {
-            Self::Single { template, .. } => {
-                let Some(template) = crate::generation::structure::template::get_template(template)
-                else {
+            Self::Single {
+                resolved_template, ..
+            } => {
+                let Some(template) = resolved_template else {
                     return Vec::new();
                 };
-                let mut jigsaws = Vec::new();
-                for block in &template.blocks {
-                    if let Some(jigsaw) = JigsawBlock::from_template_block(
-                        block,
-                        &template.palette[block.state as usize],
-                    ) {
-                        jigsaws.push(jigsaw);
-                    }
-                }
+                let mut jigsaws = template.jigsaw_blocks().to_vec();
                 for i in (1..jigsaws.len()).rev() {
                     let j = random.next_bounded_i32(i as i32 + 1) as usize;
                     jigsaws.swap(i, j);
@@ -393,36 +391,36 @@ impl TemplatePool {
     pub fn get_max_size(&self) -> i32 {
         self.elements
             .iter()
-            .filter_map(PoolElement::get_y_size)
+            .filter_map(|element| element.get_y_size())
             .max()
             .unwrap_or(0)
     }
     pub fn get_random_element(
         &self,
         random: &mut pumpkin_util::random::RandomGenerator,
-    ) -> &PoolElement {
+    ) -> Arc<PoolElement> {
         let total_weight: u32 = self.elements.iter().map(|e| e.weight).sum();
         if total_weight == 0 {
-            return &self.elements[0];
+            return Arc::clone(&self.elements[0]);
         }
         let mut r = random.next_bounded_i32(total_weight as i32) as u32;
         for element in &self.elements {
             if r < element.weight {
-                return element;
+                return Arc::clone(element);
             }
             r -= element.weight;
         }
-        &self.elements[0]
+        Arc::clone(&self.elements[0])
     }
 
     /// Discovers a pool from the filesystem/embedded assets.
     #[must_use]
-    pub fn discover(id: &str) -> Option<Self> {
-        static CACHE: std::sync::LazyLock<dashmap::DashMap<String, TemplatePool>> =
+    pub fn discover(id: &str) -> Option<Arc<Self>> {
+        static CACHE: std::sync::LazyLock<dashmap::DashMap<String, Arc<TemplatePool>>> =
             std::sync::LazyLock::new(dashmap::DashMap::new);
 
         if let Some(pool) = CACHE.get(id) {
-            return Some(pool.clone());
+            return Some(Arc::clone(&pool));
         }
 
         let pool = if id == "minecraft:empty" || id == "empty" {
@@ -445,14 +443,13 @@ impl TemplatePool {
                 .elements
                 .into_iter()
                 .filter_map(|weighted| {
-                    weighted
-                        .element
-                        .into_element()
-                        .map(|(kind, projection)| PoolElement {
+                    weighted.element.into_element().map(|(kind, projection)| {
+                        Arc::new(PoolElement {
                             weight: weighted.weight,
                             projection,
                             kind,
                         })
+                    })
                 })
                 .collect();
             Self {
@@ -473,19 +470,24 @@ impl TemplatePool {
                 fallback: "minecraft:empty".to_string(),
                 elements: elements
                     .iter()
-                    .map(|e| PoolElement {
-                        weight: 1,
-                        projection,
-                        kind: PoolElementKind::Single {
-                            template: (*e).to_string(),
-                            processors: ProcessorListRef::Empty,
-                            legacy: false,
-                        },
+                    .map(|e| {
+                        Arc::new(PoolElement {
+                            weight: 1,
+                            projection,
+                            kind: PoolElementKind::Single {
+                                template: (*e).to_string(),
+                                resolved_template:
+                                    crate::generation::structure::template::get_template(e),
+                                processors: ProcessorListRef::Empty,
+                                legacy: false,
+                            },
+                        })
                     })
                     .collect(),
             }
         };
-        CACHE.insert(id.to_owned(), pool.clone());
+        let pool = Arc::new(pool);
+        CACHE.insert(id.to_owned(), Arc::clone(&pool));
         Some(pool)
     }
 
@@ -493,11 +495,11 @@ impl TemplatePool {
     pub fn get_shuffled_elements(
         &self,
         random: &mut pumpkin_util::random::RandomGenerator,
-    ) -> Vec<PoolElement> {
+    ) -> Vec<Arc<PoolElement>> {
         let mut elements = self
             .elements
             .iter()
-            .flat_map(|element| std::iter::repeat_n(element.clone(), element.weight as usize))
+            .flat_map(|element| std::iter::repeat_n(Arc::clone(element), element.weight as usize))
             .collect::<Vec<_>>();
         for index in (1..elements.len()).rev() {
             let other = random.next_bounded_i32(index as i32 + 1) as usize;
@@ -625,7 +627,7 @@ pub struct JigsawJunction {
 
 pub struct PoolElementStructurePiece {
     pub piece: crate::generation::structure::structures::StructurePiece,
-    pub element: PoolElement,
+    pub element: Arc<PoolElement>,
     pub pos: BlockPos,
     pub rotation: BlockRotation,
     pub mirror: BlockMirror,
@@ -949,7 +951,7 @@ mod tests {
     #[test]
     fn ancient_city_start_templates_and_anchor_exist() {
         let pool = TemplatePool::discover("minecraft:ancient_city/city_center").unwrap();
-        for element in pool.elements {
+        for element in &pool.elements {
             let template = element.first_template().expect("missing start template");
             assert!(
                 template.blocks.iter().any(|block| {
@@ -994,7 +996,8 @@ mod tests {
             "minecraft:ancient_city/city_center/walls",
             "minecraft:ancient_city/walls/no_corners",
         ] {
-            for element in TemplatePool::discover(id).unwrap().elements {
+            let pool = TemplatePool::discover(id).unwrap();
+            for element in &pool.elements {
                 check(&element.kind);
             }
         }

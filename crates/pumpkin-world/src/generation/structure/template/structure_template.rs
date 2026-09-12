@@ -4,6 +4,7 @@
 //! into a runtime representation with palettes, entities, block info, and transformations.
 
 use std::io::Cursor;
+use std::sync::OnceLock;
 
 use pumpkin_data::{Mirror, Rotation};
 use pumpkin_nbt::{compound::NbtCompound, nbt_compress::read_gzip_compound_tag, tag::NbtTag};
@@ -11,7 +12,7 @@ use pumpkin_util::math::{block_box::BlockBox, vector3::Vector3};
 use thiserror::Error;
 
 use super::processor::StructureProcessor;
-use crate::generation::structure::structures::jigsaw::JigsawJointType;
+use crate::generation::structure::structures::jigsaw::{JigsawBlock, JigsawJointType};
 
 /// Errors that can occur when loading or saving a structure template.
 #[derive(Debug, Error)]
@@ -187,6 +188,20 @@ impl StructurePlaceSettings {
     }
 }
 
+/// Lazily-parsed jigsaw blocks for a template.
+///
+/// Wrapped so the template's `Debug` derive does not require `JigsawBlock: Debug`.
+#[derive(Clone, Default)]
+struct JigsawBlockCache(Vec<JigsawBlock>);
+
+impl std::fmt::Debug for JigsawBlockCache {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("JigsawBlockCache")
+            .field(&self.0.len())
+            .finish()
+    }
+}
+
 /// A loaded structure template from an NBT file matching vanilla `StructureTemplate`.
 #[derive(Debug, Clone, Default)]
 pub struct StructureTemplate {
@@ -196,9 +211,16 @@ pub struct StructureTemplate {
     pub author: String,
 
     // Backward-compatible fields
+    // TODO: make these fields private with accessors. They are public now, so a
+    // caller can change them after the jigsaw cache is filled. The cache then
+    // goes stale. `load()` resets the cache, but a direct mutation does not.
     pub palette: Vec<PaletteEntry>,
     pub blocks: Vec<TemplateBlock>,
     pub entities: Vec<TemplateEntity>,
+
+    /// Jigsaw blocks parsed from the flat `blocks`/`palette` view, computed lazily
+    /// on first use so placement never rescans the template's block list.
+    jigsaw_blocks_cache: OnceLock<JigsawBlockCache>,
 }
 
 /// A single entry in the template's block palette.
@@ -558,6 +580,30 @@ impl StructureTemplate {
         &mut self.palettes
     }
 
+    /// Returns the template's jigsaw blocks in template-local coordinates.
+    ///
+    /// Parsed once from the flat `blocks`/`palette` view and cached, rather than
+    /// being re-scanned and re-parsed on every placement attempt.
+    #[must_use]
+    pub fn jigsaw_blocks(&self) -> &[JigsawBlock] {
+        &self
+            .jigsaw_blocks_cache
+            .get_or_init(|| {
+                JigsawBlockCache(
+                    self.blocks
+                        .iter()
+                        .filter_map(|block| {
+                            JigsawBlock::from_template_block(
+                                block,
+                                &self.palette[block.state as usize],
+                            )
+                        })
+                        .collect(),
+                )
+            })
+            .0
+    }
+
     #[must_use]
     pub fn entity_info_list(&self) -> &[StructureEntityInfo] {
         &self.entity_info_list
@@ -892,6 +938,7 @@ impl StructureTemplate {
     pub fn load(&mut self, compound: &NbtCompound) -> Result<(), TemplateError> {
         self.palettes.clear();
         self.entity_info_list.clear();
+        self.jigsaw_blocks_cache = OnceLock::new();
 
         // 1. size
         self.size = Self::parse_size(compound)?;
