@@ -4,6 +4,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::{entity::EntityType, item::Item};
 
+#[allow(clippy::module_inception)]
 pub mod cow;
 pub mod mooshroom;
 

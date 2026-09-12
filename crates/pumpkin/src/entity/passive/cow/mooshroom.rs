@@ -196,7 +196,7 @@ impl Mob for MooshroomEntity {
             let pos = entity.pos.load();
 
             let effect = self.stew_effect.swap(None);
-            let (item, sound) = if let Some(_) = effect {
+            let (item, sound) = if effect.is_some() {
                 let item = ItemStack::new(1, &Item::SUSPICIOUS_STEW);
                 // TODO: set custom effects to the item (Needs DataComponentTypes to be implemented)
                 (item, Sound::EntityMooshroomSuspiciousMilk)
@@ -290,7 +290,7 @@ impl Mob for MooshroomEntity {
             MooshroomVariant::Brown
         });
         self.last_lightning_bolt_uuid
-            .store(Some(lightning_entity.entity_uuid.clone()));
+            .store(Some(lightning_entity.entity_uuid));
         world.play_sound(Sound::EntityMooshroomConvert, SoundCategory::Neutral, &pos);
     }
 }

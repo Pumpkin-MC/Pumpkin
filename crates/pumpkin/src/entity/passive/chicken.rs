@@ -167,7 +167,7 @@ impl Mob for ChickenEntity {
             VarInt(self.variant.load(Ordering::Relaxed) as i32),
         );
     }
-    
+
     fn mob_tick(&self, _caller: &dyn EntityBase) {
         if self.mob_entity.living_entity.dead.load(Relaxed) {
             return;
