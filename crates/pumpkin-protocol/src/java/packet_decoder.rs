@@ -11,7 +11,7 @@ use crate::{
 // decrypt -> decompress -> raw
 
 pub enum DecompressionReader<R: AsyncRead + Unpin> {
-    Decompress(ZlibDecoder<BufReader<R>>),
+    Decompress(Box<ZlibDecoder<BufReader<R>>>),
     None(R),
 }
 
@@ -143,7 +143,9 @@ impl<R: AsyncRead + Unpin> TCPNetworkDecoder<R> {
             if decompressed_length > 0 {
                 expected_packet_data_len = decompressed_length;
                 expected_uncompressed_packet_data_len = Some(decompressed_length);
-                DecompressionReader::Decompress(ZlibDecoder::new(BufReader::new(bounded_reader)))
+                DecompressionReader::Decompress(Box::new(ZlibDecoder::new(BufReader::new(
+                    bounded_reader,
+                ))))
             } else {
                 // Validate that we are not less than the compression threshold
                 if raw_packet_length > threshold as u64 {
