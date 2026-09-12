@@ -55,9 +55,8 @@ impl ItemMetadata for MilkBucketItem {
     }
 }
 
-fn get_start_and_end_pos(player: &Player) -> (Vector3<f64>, Vector3<f64>) {
+fn get_start_and_end_pos(player: &Player, yaw: f32, pitch: f32) -> (Vector3<f64>, Vector3<f64>) {
     let start_pos = player.eye_position();
-    let (yaw, pitch) = player.rotation();
     let (yaw_rad, pitch_rad) = (f64::from(yaw.to_radians()), f64::from(pitch.to_radians()));
     let block_interaction_range = 4.5;
     let direction = Vector3::new(
@@ -286,9 +285,14 @@ pub(crate) fn try_place_filled_bucket(
 }
 
 impl ItemBehaviour for EmptyBucketItem {
-    fn normal_use(&self, _block: &Item, player: &Player) {
+    fn normal_use(&self, item: &Item, player: &Player) {
+        let (yaw, pitch) = player.rotation();
+        self.normal_use_with_rotation(item, player, yaw, pitch);
+    }
+
+    fn normal_use_with_rotation(&self, _block: &Item, player: &Player, yaw: f32, pitch: f32) {
         let world = player.world();
-        let (start_pos, end_pos) = get_start_and_end_pos(player);
+        let (start_pos, end_pos) = get_start_and_end_pos(player, yaw, pitch);
 
         let checker = |pos: &BlockPos, world_inner: &Arc<World>| {
             let state_id = world_inner.get_block_state_id(pos);
@@ -370,8 +374,13 @@ impl ItemBehaviour for EmptyBucketItem {
 
 impl ItemBehaviour for FilledBucketItem {
     fn normal_use(&self, item: &Item, player: &Player) {
+        let (yaw, pitch) = player.rotation();
+        self.normal_use_with_rotation(item, player, yaw, pitch);
+    }
+
+    fn normal_use_with_rotation(&self, item: &Item, player: &Player, yaw: f32, pitch: f32) {
         let world = player.world();
-        let (start_pos, end_pos) = get_start_and_end_pos(player);
+        let (start_pos, end_pos) = get_start_and_end_pos(player, yaw, pitch);
         let checker = |pos: &BlockPos, world_inner: &Arc<World>| {
             let state_id = world_inner.get_block_state_id(pos);
             if Fluid::from_state_id(state_id).is_some() {

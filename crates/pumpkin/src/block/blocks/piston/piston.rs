@@ -419,7 +419,7 @@ fn move_piston(
         world.set_block_state(
             &target_pos,
             state,
-            BlockFlags::NOTIFY_ALL | BlockFlags::MOVED,
+            BlockFlags::NOTIFY_LISTENERS | BlockFlags::MOVED,
         );
 
         if let Some(moved_state) = moved_block_states.get(moved_blocks.len() - 1 - index) {
@@ -449,7 +449,7 @@ fn move_piston(
         world.set_block_state(
             &extended_pos,
             props.to_state_id(&Block::MOVING_PISTON),
-            BlockFlags::NOTIFY_ALL | BlockFlags::MOVED,
+            BlockFlags::NOTIFY_LISTENERS | BlockFlags::MOVED,
         );
         let mut props = PistonHeadLikeProperties::default(&Block::PISTON_HEAD);
         props.facing = dir.to_facing();
@@ -482,7 +482,9 @@ fn move_piston(
             state.id,
             BlockFlags::NOTIFY_LISTENERS,
         );
-        world.update_neighbors(pos, None);
+        world
+            .block_registry
+            .update_neighbors(world, pos, BlockFlags::NOTIFY_LISTENERS);
         world.block_registry.prepare(
             world,
             pos,
@@ -508,15 +510,22 @@ fn move_piston(
                 block_state.id,
                 BlockFlags::NOTIFY_LISTENERS,
             );
-            world.update_neighbors(&broken_block_pos, None);
+            world.update_neighbors_at(
+                &broken_block_pos,
+                Block::from_state_id(block_state.id),
+                None,
+            );
         }
     }
-    for &moved_block_pos in moved_blocks.iter().rev() {
-        world.update_neighbors(&moved_block_pos, None);
+    for (i, &moved_block_pos) in moved_blocks.iter().rev().enumerate() {
+        if let Some(old_state) = moved_block_states.get(moved_blocks.len() - 1 - i) {
+            let old_block = Block::from_state_id(old_state.id);
+            world.update_neighbors_at(&moved_block_pos, old_block, None);
+        }
     }
 
     if extend {
-        world.update_neighbors(&extended_pos, None);
+        world.update_neighbors_at(&extended_pos, &Block::PISTON_HEAD, None);
     }
 
     true
