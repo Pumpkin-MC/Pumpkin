@@ -11,6 +11,7 @@ use pumpkin_data::BlockDirection;
 use pumpkin_data::BlockId;
 use pumpkin_data::BlockState;
 use pumpkin_data::BlockStateId;
+use pumpkin_data::block_properties::GlowLichenLikeProperties;
 use pumpkin_data::block_properties::is_air;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Block::MINECRAFT_SCULK_REPLACEABLE;
@@ -96,6 +97,14 @@ pub const fn is_sculk_behaviour(id: BlockId) -> bool {
 #[must_use]
 pub fn is_sculk_replaceable(id: BlockId) -> bool {
     id.has_tag(MINECRAFT_SCULK_REPLACEABLE)
+}
+
+/// Returns `true` if the state is a waterlogged sculk vein: it holds
+/// water fluid despite not being a water block.
+#[must_use]
+fn is_waterlogged_vein(state: BlockStateId) -> bool {
+    state.to_block_id() == BlockId::SCULK_VEIN
+        && GlowLichenLikeProperties::from_state_id(state).waterlogged
 }
 
 /// Returns `true` if the block id is tagged
@@ -254,7 +263,7 @@ impl SculkLevel for ProtoChunkSculkView<'_> {
 
     fn sculk_is_water(&self, pos: BlockPos) -> bool {
         self.sculk_get(pos)
-            .is_some_and(|s| s.to_block_id() == BlockId::WATER)
+            .is_some_and(|s| s.to_block_id() == BlockId::WATER || is_waterlogged_vein(s))
     }
 
     fn sculk_is_face_sturdy(&self, pos: BlockPos, face: BlockDirection) -> bool {
@@ -312,7 +321,7 @@ pub mod test_utils {
 
         fn sculk_is_water(&self, pos: BlockPos) -> bool {
             self.sculk_get(pos)
-                .is_some_and(|s| s.to_block_id() == BlockId::WATER)
+                .is_some_and(|s| s.to_block_id() == BlockId::WATER || is_waterlogged_vein(s))
         }
 
         fn sculk_is_face_sturdy(&self, pos: BlockPos, face: BlockDirection) -> bool {

@@ -513,6 +513,35 @@ mod tests {
     }
 
     #[test]
+    fn discharged_waterlogged_vein_restores_water_in_proto_view() {
+        // A waterlogged vein with no faces holds water fluid, so discharge
+        // must restore water rather than air.
+        use crate::generation::feature::features::sculk::ProtoChunkSculkView;
+        use crate::generation::get_world_gen;
+        use crate::generation::proto_chunk::ProtoChunk;
+        use pumpkin_data::dimension::Dimension;
+        use pumpkin_util::world_seed::Seed;
+
+        let world_gen = get_world_gen(
+            Seed(1),
+            Dimension::OVERWORLD,
+            false,
+            Vec::new(),
+            String::new(),
+        );
+        let mut chunk = ProtoChunk::new(0, 0, &world_gen);
+        let mut view = ProtoChunkSculkView::new(&mut chunk);
+        let pos = BlockPos::new(0, 60, 0);
+        let waterlogged = VeinRules::with_waterlogged(Block::SCULK_VEIN.default_state.id, true);
+        view.sculk_set(pos, BlockState::from_id(waterlogged));
+        VeinRules::on_discharged(&mut view, pos);
+        assert!(
+            view.sculk_get(pos)
+                .is_some_and(|s| s.to_block_id() == BlockId::WATER)
+        );
+    }
+
+    #[test]
     fn spread_type_same_position() {
         let pos = BlockPos::new(10, 60, 10);
         let (p, f) =
