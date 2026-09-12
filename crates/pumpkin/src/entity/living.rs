@@ -1707,11 +1707,13 @@ impl LivingEntity {
                 return;
             }
             let world = self.entity.world.load();
-            let block = world.get_block(&self.entity.get_pos_with_y_offset(0.2).0);
+            let landing_pos = self.entity.get_pos_with_y_offset(0.2).0;
+            let block = world.get_block(&landing_pos);
             let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
             if let Some(pumpkin_block) = pumpkin_block {
                 pumpkin_block.on_landed_upon(OnLandedUponArgs {
                     world: &world,
+                    position: &landing_pos,
                     fall_distance,
                     entity: caller,
                 });
@@ -1736,6 +1738,17 @@ impl LivingEntity {
         caller: &dyn EntityBase,
         fall_distance: f32,
         damage_per_distance: f32,
+    ) {
+        self.handle_fall_damage_from(caller, fall_distance, damage_per_distance, DamageType::FALL);
+    }
+
+    /// Like [`Self::handle_fall_damage`], but with the damage type to deal (e.g. stalagmites).
+    pub fn handle_fall_damage_from(
+        &self,
+        caller: &dyn EntityBase,
+        fall_distance: f32,
+        damage_per_distance: f32,
+        damage_type: DamageType,
     ) {
         let may_fly = caller.get_player().is_some_and(|player| {
             player
@@ -1763,7 +1776,7 @@ impl LivingEntity {
 
         let damage = (unsafe_fall_distance * damage_per_distance).floor();
         if damage > 0.0 {
-            let check_damage = self.damage(caller, damage, DamageType::FALL); // Fall
+            let check_damage = self.damage(caller, damage, damage_type);
             if check_damage {
                 self.entity
                     .play_sound(Self::get_fall_sound(fall_distance as i32));
