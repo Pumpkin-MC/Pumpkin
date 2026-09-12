@@ -4,12 +4,14 @@ mod visibility_evaluator;
 use crate::data::advancement_data::AdvancementManager;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
+use crate::net::ClientPlatform;
 use indexmap::IndexMap;
 use pumpkin_data::advancement_data::{
     AdvancementNode, AdvancementProgressData, AdvancementRequirement, AdvancementReward, Criteria,
+    FrameType,
 };
 use pumpkin_data::{ADVANCEMENT_TREE, Advancement, translation};
-use pumpkin_protocol::bedrock::server::text::SText;
+use pumpkin_protocol::bedrock::{client::CToastRequest, server::text::SText};
 use pumpkin_protocol::java::client::play::{
     CSelectAdvancementsTab, CSystemChatMessage, CUpdateAdvancements,
 };
@@ -22,7 +24,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs::read;
 use std::path::PathBuf;
 use std::sync::{Arc, Weak};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tracing::{error, warn};
 use uuid::Uuid;
 
@@ -424,6 +426,82 @@ impl PlayerAdvancement {
         player.add_experience_points(reward.experience);
     }
 
+    fn send_completion_feedback(player: Arc<Player>, advancement: &'static Advancement) {
+        let Some(display) = advancement.display else {
+            return;
+        };
+        let announce_to_chat = display.announce_to_chat
+            && player
+                .world()
+                .level_info
+                .load()
+                .game_rules
+                .show_advancement_messages;
+        if !display.show_toast && !announce_to_chat {
+            return;
+        }
+
+        tokio::spawn(async move {
+            if let ClientPlatform::Bedrock(client) = player.client.as_ref()
+                && tokio::time::timeout(Duration::from_secs(30), client.await_initialized())
+                    .await
+                    .is_err()
+            {
+                return;
+            }
+
+            if announce_to_chat {
+                let player_name = player.get_display_name();
+                let je_component = TextComponent::translate(
+                    display.frame_type.get_translation(),
+                    [player_name.clone(), advancement.name()],
+                );
+                let je_packet = CSystemChatMessage::new(&je_component, false);
+                let be_packet = SText::json(
+                    serde_json::json!({
+                        "rawtext": [{
+                            "translate": translation::bedrock::CHAT_TYPE_ACHIEVEMENT,
+                            "with": {
+                                "rawtext": [
+                                    { "text": player_name.0.to_bedrock_string() },
+                                    { "translate": display.title },
+                                ]
+                            }
+                        }]
+                    })
+                    .to_string(),
+                );
+
+                // Advancement triggers can run before the player enters the world player list.
+                player
+                    .client
+                    .enqueue_packet_editioned(&je_packet, &be_packet)
+                    .await;
+                player.world().broadcast_packet_except_editioned(
+                    &[player.gameprofile.id],
+                    &je_packet,
+                    &be_packet,
+                );
+            }
+
+            if display.show_toast
+                && let Some(player) = player.as_bedrock()
+            {
+                let title_key = match display.frame_type {
+                    FrameType::Task => "advancements.toast.task",
+                    FrameType::Challenge => "advancements.toast.challenge",
+                    FrameType::Goal => "advancements.toast.goal",
+                };
+                player
+                    .send_packet(&CToastRequest {
+                        title: TextComponent::translate(title_key, []).get_text(),
+                        content: display.get_title().get_text(),
+                    })
+                    .await;
+            }
+        });
+    }
+
     /// Records a criterion award while the player's advancement state is locked.
     ///
     /// Call [`Self::finish_award`] after releasing the lock so completion events and rewards can
@@ -470,32 +548,7 @@ impl PlayerAdvancement {
             server.plugin_manager.fire_blocking(&server, &mut event);
         }
         Self::grant_reward(player, advancement.reward);
-        if let Some(display) = advancement.display
-            && display.announce_to_chat
-            && player
-                .world()
-                .level_info
-                .load()
-                .game_rules
-                .show_advancement_messages
-        {
-            let player_name = player.get_display_name();
-            let je_component = TextComponent::translate(
-                display.frame_type.get_translation(),
-                [player_name.clone(), advancement.name()],
-            );
-            let je_packet = CSystemChatMessage::new(&je_component, false);
-
-            let be_packet = SText::translation(
-                translation::bedrock::CHAT_TYPE_ACHIEVEMENT.to_string(),
-                vec![
-                    player_name.0.to_bedrock_string(),
-                    display.get_title().0.to_bedrock_string(),
-                ],
-            );
-
-            player.world().broadcast_editioned(&je_packet, &be_packet);
-        }
+        Self::send_completion_feedback(player.clone(), advancement);
     }
 
     /// Revokes a previously awarded advancement, clearing its progress state.
