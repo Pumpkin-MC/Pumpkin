@@ -150,10 +150,10 @@ impl PotionContents {
 
                 // Apply instant effects logic directly as they don't tick
                 if effect_type.id == pumpkin_data::effect::StatusEffect::INSTANT_HEALTH.id {
-                    let amount = (4 * ((amplifier as i32) + 1)) as f32 * instant_scale;
+                    let amount = 4.0 * (1 << amplifier) as f32 * instant_scale;
                     target.heal(amount);
                 } else if effect_type.id == pumpkin_data::effect::StatusEffect::INSTANT_DAMAGE.id {
-                    let amount = (6 * ((amplifier as i32) + 1)) as f32 * instant_scale;
+                    let amount = 6.0 * (1 << amplifier) as f32 * instant_scale;
 
                     let _ = target.damage(
                         target.get_entity(),
