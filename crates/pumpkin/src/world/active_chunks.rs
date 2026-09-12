@@ -49,18 +49,24 @@ impl ActiveChunkTracker {
         active_chunks: &mut FxHashSet<Vector2<i32>>,
         newly_active: &mut Vec<Vector2<i32>>,
     ) {
-        for dx in -area.simulation_distance..=area.simulation_distance {
-            for dz in -area.simulation_distance..=area.simulation_distance {
-                self.add_chunk(area.center.add_raw(dx, dz), active_chunks, newly_active);
-            }
+        let offsets = pumpkin_data::chunk_view_lut::get_chebyshev_square(
+            area.simulation_distance.max(0) as u8,
+        );
+        for &(dx, dz) in offsets {
+            self.add_chunk(
+                area.center.add_raw(dx as i32, dz as i32),
+                active_chunks,
+                newly_active,
+            );
         }
     }
 
     fn remove_area(&mut self, area: ActivePlayerArea, active_chunks: &mut FxHashSet<Vector2<i32>>) {
-        for dx in -area.simulation_distance..=area.simulation_distance {
-            for dz in -area.simulation_distance..=area.simulation_distance {
-                self.remove_chunk(area.center.add_raw(dx, dz), active_chunks);
-            }
+        let offsets = pumpkin_data::chunk_view_lut::get_chebyshev_square(
+            area.simulation_distance.max(0) as u8,
+        );
+        for &(dx, dz) in offsets {
+            self.remove_chunk(area.center.add_raw(dx as i32, dz as i32), active_chunks);
         }
     }
 
@@ -75,24 +81,26 @@ impl ActiveChunkTracker {
         match previous {
             None => self.add_area(area, active_chunks, newly_active),
             Some(previous) if previous != area => {
-                for dx in -previous.simulation_distance..=previous.simulation_distance {
-                    for dz in -previous.simulation_distance..=previous.simulation_distance {
-                        let pos = previous.center.add_raw(dx, dz);
-                        if (pos.x - area.center.x).abs() > area.simulation_distance
-                            || (pos.y - area.center.y).abs() > area.simulation_distance
-                        {
-                            self.remove_chunk(pos, active_chunks);
-                        }
+                let prev_offsets = pumpkin_data::chunk_view_lut::get_chebyshev_square(
+                    previous.simulation_distance.max(0) as u8,
+                );
+                for &(dx, dz) in prev_offsets {
+                    let pos = previous.center.add_raw(dx as i32, dz as i32);
+                    if (pos.x - area.center.x).abs() > area.simulation_distance
+                        || (pos.y - area.center.y).abs() > area.simulation_distance
+                    {
+                        self.remove_chunk(pos, active_chunks);
                     }
                 }
-                for dx in -area.simulation_distance..=area.simulation_distance {
-                    for dz in -area.simulation_distance..=area.simulation_distance {
-                        let pos = area.center.add_raw(dx, dz);
-                        if (pos.x - previous.center.x).abs() > previous.simulation_distance
-                            || (pos.y - previous.center.y).abs() > previous.simulation_distance
-                        {
-                            self.add_chunk(pos, active_chunks, newly_active);
-                        }
+                let curr_offsets = pumpkin_data::chunk_view_lut::get_chebyshev_square(
+                    area.simulation_distance.max(0) as u8,
+                );
+                for &(dx, dz) in curr_offsets {
+                    let pos = area.center.add_raw(dx as i32, dz as i32);
+                    if (pos.x - previous.center.x).abs() > previous.simulation_distance
+                        || (pos.y - previous.center.y).abs() > previous.simulation_distance
+                    {
+                        self.add_chunk(pos, active_chunks, newly_active);
                     }
                 }
             }

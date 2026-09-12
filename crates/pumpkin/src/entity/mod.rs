@@ -4,7 +4,6 @@ use crate::{
     server::Server,
     world::{
         World,
-        chunker::is_within_view_distance,
         portal::{NetherPortal, PortalProcessor, PortalType, SourcePortalInfo},
     },
 };
@@ -2625,7 +2624,9 @@ impl Entity {
             && self.age.load(Ordering::Relaxed) % Self::FREEZE_DAMAGE_INTERVAL == 0
         {
             let world = self.world.load_full();
-            if let Some(entity) = world.get_entity_by_id(self.entity_id) {
+            if world.level_info.load().game_rules.freeze_damage
+                && let Some(entity) = world.get_entity_by_id(self.entity_id)
+            {
                 entity.damage(entity.as_ref(), 1.0, DamageType::FREEZE);
             }
         }
@@ -3048,10 +3049,10 @@ impl Entity {
         } else {
             let chunk_pos = self.chunk_pos.load();
             for player in players.iter() {
-                let center = player.get_entity().chunk_pos.load();
-                let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
-
-                if is_within_view_distance(chunk_pos, center, view_distance)
+                if player
+                    .watched_section
+                    .load()
+                    .is_within_distance(chunk_pos.x, chunk_pos.y)
                     && let ClientPlatform::Bedrock(client) = player.client.as_ref()
                 {
                     bedrock_recipients.push(client);
@@ -3097,10 +3098,10 @@ impl Entity {
         } else {
             let chunk_pos = self.chunk_pos.load();
             for player in players.iter() {
-                let center = player.get_entity().chunk_pos.load();
-                let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
-
-                if is_within_view_distance(chunk_pos, center, view_distance)
+                if player
+                    .watched_section
+                    .load()
+                    .is_within_distance(chunk_pos.x, chunk_pos.y)
                     && let ClientPlatform::Java(_) = player.client.as_ref()
                 {
                     java_recipients.push(player);
