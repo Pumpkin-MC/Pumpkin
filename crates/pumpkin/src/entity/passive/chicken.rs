@@ -80,6 +80,19 @@ impl ChickenEntity {
 
         mob_arc
     }
+
+    fn set_variant_and_sync(&self, variant: u8) {
+        let entity = self.get_entity();
+        self.variant.store(variant, Ordering::Relaxed);
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::chicken::VARIANT,
+            VarInt(self.variant.load(Ordering::Relaxed) as i32),
+        );
+    }
+
+    fn get_variant(&self) -> u8 {
+        self.variant.load(Ordering::Relaxed)
+    }
 }
 
 impl AgeableMob for ChickenEntity {
@@ -109,7 +122,7 @@ impl Mob for ChickenEntity {
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_int("EggLayTime", self.egg_lay_time.load(Ordering::Relaxed));
-        let variant_str = match self.variant.load(Ordering::Relaxed) {
+        let variant_str = match self.get_variant() {
             0 => "minecraft:cold",
             2 => "minecraft:warm",
             _ => "minecraft:temperate",
@@ -121,15 +134,13 @@ impl Mob for ChickenEntity {
         self.egg_lay_time
             .store(nbt.get_int("EggLayTime").unwrap_or(6000), Ordering::Relaxed);
         if let Some(variant_str) = nbt.get_string("variant") {
-            let variant = match variant_str
-                .strip_prefix("minecraft:")
-                .unwrap_or(variant_str)
-            {
+            let variant = match variant_str.trim_start_matches("minecraft:") {
                 "cold" => 0,
                 "warm" => 2,
                 _ => 1,
             };
-            self.variant.store(variant, Ordering::Relaxed);
+
+            self.set_variant_and_sync(variant);
         }
     }
 
@@ -138,12 +149,12 @@ impl Mob for ChickenEntity {
     }
 
     fn mob_set_variant_name(&self, name: &str) {
-        let variant = match name.strip_prefix("minecraft:").unwrap_or(name) {
+        let variant = match name.trim_start_matches("minecraft:") {
             "cold" => 0,
             "warm" => 2,
             _ => 1,
         };
-        self.variant.store(variant, Ordering::Relaxed);
+        self.set_variant_and_sync(variant);
     }
 
     fn mob_init_data_tracker(&self) {
