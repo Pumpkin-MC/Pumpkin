@@ -3599,10 +3599,8 @@ impl World {
             .iter()
             .filter(|c| c.gameprofile.id != id)
         {
-            let entity = &existing_player.get_entity();
-            let pos = entity.pos.load();
             let gameprofile = &existing_player.gameprofile;
-            let (bedrock_player_list, bedrock_add_player) = existing_player.bedrock_spawn_packets();
+            let bedrock_player_list = existing_player.bedrock_player_list();
 
             let actions = [
                 PlayerAction::AddPlayer {
@@ -3637,24 +3635,6 @@ impl World {
                         &java_player,
                     ),
                     &bedrock_player_list,
-                )
-                .await;
-
-            player
-                .client
-                .enqueue_packet_editioned(
-                    &CSpawnEntity::new(
-                        existing_player.entity_id().into(),
-                        gameprofile.id,
-                        i32::from(EntityType::PLAYER.id).into(),
-                        pos,
-                        entity.pitch.load(),
-                        entity.yaw.load(),
-                        entity.head_yaw.load(),
-                        0.into(),
-                        entity.velocity.load(),
-                    ),
-                    &bedrock_add_player,
                 )
                 .await;
 
