@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use std::path::PathBuf;
 use std::{fs, num::NonZero, path::Path};
-use tracing::{debug, error, warn};
+use tracing::debug;
 
 /// Fun and experimental configuration options.
 pub mod fun;
@@ -269,8 +269,10 @@ pub trait LoadConfiguration {
     /// Creates the directory if it doesn't exist, reads the TOML file,
     /// merges it with defaults, writes missing fields, and validates the result.
     #[must_use]
-    // NOTE: Logger may not be ready.
-    #[expect(clippy::print_stdout)]
+    // NOTE: The logger is not initialized yet when this runs, so tracing
+    // messages would be silently dropped; use println!/eprintln! for
+    // anything the user must see.
+    #[expect(clippy::print_stdout, clippy::print_stderr)]
     fn load(config_dir: &Path) -> Self
     where
         Self: Sized + Default + Serialize + DeserializeOwned,
@@ -285,8 +287,8 @@ pub trait LoadConfiguration {
             let file_content = match fs::read_to_string(&path) {
                 Ok(content) => content,
                 Err(err) => {
-                    error!(
-                        "Couldn't read configuration file at {}: {err}",
+                    eprintln!(
+                        "Couldn't read configuration file at {}: {err}. Using the default configuration.",
                         path.display()
                     );
                     return Self::default();
@@ -296,8 +298,8 @@ pub trait LoadConfiguration {
             let parsed_toml_value: toml::Value = match toml::from_str(&file_content) {
                 Ok(val) => val,
                 Err(err) => {
-                    error!(
-                        "Couldn't parse TOML at {}. Reason: {err}. Using default config.",
+                    eprintln!(
+                        "Couldn't parse TOML at {}. Reason: {err}. Using the default configuration.",
                         path.display()
                     );
                     return Self::default();
@@ -317,7 +319,7 @@ pub trait LoadConfiguration {
                 match toml::to_string(&merged_config) {
                     Ok(toml_str) => {
                         if let Err(err) = fs::write(&path, toml_str) {
-                            warn!(
+                            eprintln!(
                                 "Couldn't write merged config to {}. Reason: {}",
                                 path.display(),
                                 err
@@ -325,7 +327,7 @@ pub trait LoadConfiguration {
                         }
                     }
                     Err(err) => {
-                        warn!(
+                        eprintln!(
                             "Couldn't serialize merged config for {}. Reason: {}",
                             path.display(),
                             err
@@ -336,20 +338,30 @@ pub trait LoadConfiguration {
 
             merged_config
         } else {
+            for legacy in ["config.toml", "configuration.toml"] {
+                let legacy_path = config_dir.join(legacy);
+                if legacy_path.exists() {
+                    eprintln!(
+                        "Found a legacy configuration file at {}. This version reads {}. Rename it to keep using its values.",
+                        legacy_path.display(),
+                        path.display()
+                    );
+                }
+            }
             let content = Self::default();
             match toml::to_string(&content) {
                 Ok(toml_str) => {
                     if let Err(err) = fs::write(&path, toml_str) {
-                        warn!(
-                            "Couldn't write default config to {:?}. Reason: {}",
+                        eprintln!(
+                            "Couldn't write default config to {}. Reason: {}",
                             path.display(),
                             err
                         );
                     }
                 }
                 Err(err) => {
-                    warn!(
-                        "Couldn't serialize default config for {:?}. Reason: {}",
+                    eprintln!(
+                        "Couldn't serialize default config for {}. Reason: {}",
                         path.display(),
                         err
                     );
@@ -367,6 +379,7 @@ pub trait LoadConfiguration {
     ///
     /// Returns the merged configuration and a flag indicating if any values were filled.
     #[must_use]
+    #[expect(clippy::print_stderr)]
     fn merge_with_default_toml(parsed_toml: toml::Value) -> (Self, bool)
     where
         Self: Sized + Default + Serialize + DeserializeOwned,
@@ -379,7 +392,12 @@ pub trait LoadConfiguration {
 
         let (merged_value, changed) = Self::merge_toml_values(default_toml_value, parsed_toml);
 
-        let config = merged_value.try_into().unwrap_or_else(|_| Self::default());
+        let config = merged_value.try_into().unwrap_or_else(|err| {
+            eprintln!(
+                "Couldn't deserialize the configuration: {err}. Falling back to the default configuration."
+            );
+            Self::default()
+        });
 
         (config, changed)
     }
