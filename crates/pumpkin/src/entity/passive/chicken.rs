@@ -134,7 +134,10 @@ impl Mob for ChickenEntity {
         self.egg_lay_time
             .store(nbt.get_int("EggLayTime").unwrap_or(6000), Ordering::Relaxed);
         if let Some(variant_str) = nbt.get_string("variant") {
-            let variant = match variant_str.trim_start_matches("minecraft:") {
+            let variant = match variant_str
+                .strip_prefix("minecraft:")
+                .unwrap_or(variant_str)
+            {
                 "cold" => 0,
                 "warm" => 2,
                 _ => 1,
@@ -149,7 +152,7 @@ impl Mob for ChickenEntity {
     }
 
     fn mob_set_variant_name(&self, name: &str) {
-        let variant = match name.trim_start_matches("minecraft:") {
+        let variant = match name.strip_prefix("minecraft:").unwrap_or(name) {
             "cold" => 0,
             "warm" => 2,
             _ => 1,
