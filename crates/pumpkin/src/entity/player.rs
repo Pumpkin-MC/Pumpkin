@@ -1098,11 +1098,13 @@ impl Player {
     }
 
     pub(crate) fn try_restore_vehicle(self: &Arc<Self>, vehicle: &Arc<dyn EntityBase>) {
-        let Some(expected_uuid) = self.root_vehicle_uuid.swap(None) else {
-            return;
-        };
-        if vehicle.get_entity().entity_uuid != expected_uuid {
-            self.root_vehicle_uuid.store(Some(expected_uuid));
+        // Claim the UUID atomically, otherwise blank it
+        // between a non-matching swap and restore.
+        if self
+            .root_vehicle_uuid
+            .compare_exchange(Some(vehicle.get_entity().entity_uuid), None)
+            .is_err()
+        {
             return;
         }
 
