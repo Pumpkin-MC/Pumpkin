@@ -116,7 +116,7 @@ pub fn can_spread_from(level: &dyn SculkLevel, pos: BlockPos) -> bool {
     }
     // Only air or an actual water block holding a source qualifies;
     // a waterlogged non-water block does not.
-    if !level.sculk_is_air(pos) && !(block_id == BlockId::WATER && level.sculk_is_water_source(pos))
+    if !(level.sculk_is_air(pos) || block_id == BlockId::WATER && level.sculk_is_water_source(pos))
     {
         return false;
     }
