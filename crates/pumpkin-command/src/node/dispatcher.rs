@@ -240,6 +240,13 @@ impl<S: CommandSource> CommandDispatcher<S> {
         input.split_whitespace().next().unwrap_or("")
     }
 
+    fn unknown_command_error(reader: &StringReader<'_>) -> CommandSyntaxError {
+        DISPATCHER_UNKNOWN_COMMAND.create(
+            reader,
+            TextComponent::text(Self::command_name(reader.string()).to_owned()),
+        )
+    }
+
     /// Registers a command which can then be dispatched.
     /// Returns the local ID of the node attached to the tree.
     ///
@@ -358,7 +365,7 @@ impl<S: CommandSource> CommandDispatcher<S> {
         // programmatic callers such as `/execute run <command>`, which reach the
         // dispatcher here without going through `handle_command`.
         if self.is_disabled(Self::command_name(input)) {
-            return Err(DISPATCHER_UNKNOWN_COMMAND.create(&reader));
+            return Err(Self::unknown_command_error(&reader));
         }
 
         self.execute_reader(&mut reader, source)
@@ -383,7 +390,7 @@ impl<S: CommandSource> CommandDispatcher<S> {
             return if let Some(err) = parsed.errors.values().next() {
                 Err(err.clone())
             } else if parsed.context.range.is_empty() {
-                Err(DISPATCHER_UNKNOWN_COMMAND.create(&parsed.reader))
+                Err(Self::unknown_command_error(&parsed.reader))
             } else {
                 Err(DISPATCHER_UNKNOWN_ARGUMENT.create(&parsed.reader))
             };
@@ -396,7 +403,7 @@ impl<S: CommandSource> CommandDispatcher<S> {
             None => {
                 self.consumer
                     .on_command_completion(&original_context, ReturnValue::Failure);
-                Err(DISPATCHER_UNKNOWN_COMMAND.create(&parsed.reader))
+                Err(Self::unknown_command_error(&parsed.reader))
             }
             Some(flat_context) => {
                 flat_context.execute_all(&original_context.source, self.consumer.as_ref())
@@ -537,7 +544,7 @@ impl<S: CommandSource> CommandDispatcher<S> {
         // before either dispatcher gets a chance to run it.
         if self.is_disabled(Self::command_name(input)) {
             let reader = StringReader::new(input);
-            Self::send_error_to_source(source, DISPATCHER_UNKNOWN_COMMAND.create(&reader), input);
+            Self::send_error_to_source(source, Self::unknown_command_error(&reader), input);
             return;
         }
 
@@ -985,6 +992,36 @@ mod test {
         let source = DummySource::dummy();
         let result = dispatcher.execute_input("unknown", &source);
         assert!(result.is_err_and(|error| error.error_type == &DISPATCHER_UNKNOWN_COMMAND));
+    }
+
+    #[test]
+    fn unknown_command_message_includes_command_name() {
+        use pumpkin_util::translation::Locale;
+
+        for (input, registered, disabled) in [
+            ("x", false, false),
+            ("x extra arguments", false, false),
+            ("x", true, false),
+            ("x extra arguments", true, true),
+        ] {
+            let mut dispatcher = CommandDispatcher::new();
+            if registered {
+                dispatcher.register(CommandArgumentBuilder::new("x", "test command").build());
+            }
+            if disabled {
+                dispatcher.disable_command("x");
+            }
+            let error = dispatcher
+                .execute_input(input, &DummySource::dummy())
+                .expect_err("unknown or unavailable command");
+            let expected = "Unknown command: x. Please check that the command exists and that you have permission to use it.";
+            assert_eq!(error.message.clone().to_pretty_console(), expected);
+            assert_eq!(error.message.0.to_bedrock_legacy(Locale::EnUs), expected);
+            let java = serde_json::to_value(&error.message).expect("Java text component");
+            assert_eq!(java["translate"], "command.unknown.command");
+            assert_eq!(java["with"][0]["text"], "x");
+            assert_eq!(error.context.expect("error context").input, input);
+        }
     }
 
     #[test]
