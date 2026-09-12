@@ -248,6 +248,12 @@ impl Context {
         self.reload_commands_for_everyone();
     }
 
+    /// Removes every permission node this plugin registered, so it is free again
+    pub(crate) fn unregister_permissions(&self) {
+        self.permission_manager
+            .unregister_namespace(&self.metadata.name);
+    }
+
     /// Reloads (resends) all commands for all currently online players.
     pub fn reload_commands_for_everyone(&self) {
         for world in self.server.worlds.load().iter() {
