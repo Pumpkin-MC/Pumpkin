@@ -143,7 +143,6 @@ impl EntityBase for EyeOfEnder {
         }
 
         entity.set_pos(new_pos);
-        entity.send_pos_rot();
 
         // Tick lifetime and handle expiry.
         let life = self.life.fetch_add(1, Ordering::Relaxed) + 1;

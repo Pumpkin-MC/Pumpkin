@@ -79,8 +79,6 @@ impl Drop for ItemMergeReservation<'_> {
     }
 }
 
-const ITEM_UPDATE_INTERVAL: u32 = 20;
-
 impl ItemEntity {
     pub fn new(entity: Entity, item_stack: ItemStack) -> Self {
         entity.velocity.store(Vector3::new(
@@ -505,29 +503,17 @@ impl ItemEntity {
         true
     }
 
-    fn sync_motion_if_dirty(&self, caller: &dyn EntityBase, original_velo: Vector3<f64>) {
+    /// Vanilla `ItemEntity.tick` `needsSync`: fluid contact or velocity change.
+    fn mark_needs_sync(&self, caller: &dyn EntityBase, original_velo: Vector3<f64>) {
         let entity = &self.entity;
 
         entity.update_fluid_state(caller);
 
-        let velocity_dirty = entity.velocity_dirty.swap(false, Ordering::SeqCst)
-            || entity.touching_water.load(Ordering::SeqCst)
+        if entity.touching_water.load(Ordering::SeqCst)
             || entity.touching_lava.load(Ordering::SeqCst)
-            || entity.velocity.load().sub(&original_velo).length_squared() > 0.1;
-        let moved = entity.pos.load() != entity.last_sent_pos.load();
-        let position_dirty = moved
-            && self
-                .item_age
-                .load(Ordering::Relaxed)
-                .is_multiple_of(ITEM_UPDATE_INTERVAL);
-
-        if position_dirty || velocity_dirty {
-            entity.send_pos_rot();
-        } else if moved {
-            entity.send_bedrock_pos();
-        }
-        if velocity_dirty {
-            entity.send_velocity();
+            || entity.velocity.load().sub(&original_velo).length_squared() > 0.01
+        {
+            entity.velocity_dirty.store(true, Ordering::SeqCst);
         }
     }
 }
@@ -555,7 +541,7 @@ impl EntityBase for ItemEntity {
         }
 
         if self.process_age_and_merge() {
-            self.sync_motion_if_dirty(caller, original_velo);
+            self.mark_needs_sync(caller, original_velo);
         }
     }
 
@@ -686,6 +672,10 @@ impl EntityBase for ItemEntity {
         0.04
     }
 
+    fn bedrock_y_offset(&self) -> f64 {
+        0.125
+    }
+
     fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
         let item = self
             .item_stack
@@ -745,7 +735,7 @@ impl EntityBase for ItemEntity {
                 target_actor_id: VarLong(runtime_id as i64),
                 target_runtime_id: VarULong(runtime_id),
                 item: ItemStackWrapper::from(&*item_stack),
-                position: entity.pos.load().to_f32_lossy(),
+                position: self.bedrock_pos().to_f32_lossy(),
                 velocity: entity.velocity.load().to_f32_lossy(),
                 entity_data: entity.bedrock_metadata(),
                 is_from_fishing: false,
