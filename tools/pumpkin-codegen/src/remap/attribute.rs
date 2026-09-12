@@ -5,6 +5,8 @@ use crate::remap::{MappingNode, ParsedMappings, Remapper};
 use crate::remap_nodes;
 use crate::version::JavaMinecraftVersion;
 
+const UNMAPPED: u32 = u32::MAX;
+
 /// Generates the `TokenStream` for per-version attribute ID remap tables and the
 /// `remap_attribute_id_for_version` function.
 pub fn build() -> TokenStream {
@@ -14,7 +16,13 @@ pub fn build() -> TokenStream {
             (Some(first), Some(second)) => Some(
                 first
                     .iter()
-                    .map(|&id| second.get(id as usize).copied().unwrap_or(id))
+                    .map(|&id| {
+                        if id == UNMAPPED {
+                            UNMAPPED
+                        } else {
+                            second.get(id as usize).copied().unwrap_or(UNMAPPED)
+                        }
+                    })
                     .collect(),
             ),
             (None, Some(second)) => Some(second.clone()),
@@ -22,8 +30,13 @@ pub fn build() -> TokenStream {
             (None, None) => None,
         },
         serializer: |&file| {
-            ParsedMappings::parse_mapping_file(file, "attributes")
-                .map(|mappings| mappings.to_u32(file))
+            ParsedMappings::parse_mapping_file(file, "attributes").map(|mappings| {
+                mappings
+                    .forward
+                    .iter()
+                    .map(|&id| u32::try_from(id).unwrap_or(UNMAPPED))
+                    .collect()
+            })
         },
     };
 
@@ -53,7 +66,7 @@ pub fn build() -> TokenStream {
             #(#versions)|* => #ident
                 .get(attribute_id as usize)
                 .copied()
-                .unwrap_or(attribute_id),
+                .filter(|id| *id != u32::MAX),
         });
     }
 
@@ -66,10 +79,10 @@ pub fn build() -> TokenStream {
         pub fn remap_attribute_id_for_version(
             attribute_id: u32,
             version: JavaMinecraftVersion,
-        ) -> u32 {
+        ) -> Option<u32> {
             match version {
                 #match_arms
-                _ => attribute_id,
+                _ => Some(attribute_id),
             }
         }
     }
