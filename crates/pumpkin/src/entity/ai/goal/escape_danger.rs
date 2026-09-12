@@ -2,42 +2,78 @@ use std::sync::atomic::Ordering::Relaxed;
 
 use super::{Controls, Goal};
 use crate::entity::{ai::pathfinder::NavigatorGoal, mob::Mob};
+use pumpkin_data::damage::DamageType;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
 const RANGE: i32 = 5;
-const RECENT_DAMAGE_TICKS: i32 = 100;
 const TARGET_ATTEMPTS: usize = 10;
 
 pub struct EscapeDangerGoal {
     speed: f64,
     goal_control: Controls,
     target: Option<Vector3<f64>>,
+    /// Only damage types in this tag cause panic (vanilla `PanicGoal#shouldPanic`).
+    panic_tag: &'static tag::Tag,
 }
 
 impl EscapeDangerGoal {
     #[must_use]
     pub fn new(speed: f64) -> Box<Self> {
-        Box::new(Self {
+        Box::new(Self::with_panic_tag(
+            speed,
+            &tag::DamageType::MINECRAFT_PANIC_CAUSES,
+        ))
+    }
+
+    /// Creates a panic goal that only reacts to environmental damage
+    /// (vanilla `TamableAnimalPanicGoal`, used by tamed animals like wolves and cats).
+    #[must_use]
+    pub fn with_environmental_panic(speed: f64) -> Box<Self> {
+        Box::new(Self::with_panic_tag(
+            speed,
+            &tag::DamageType::MINECRAFT_PANIC_ENVIRONMENTAL_CAUSES,
+        ))
+    }
+
+    #[must_use]
+    const fn with_panic_tag(speed: f64, panic_tag: &'static tag::Tag) -> Self {
+        Self {
             speed,
             goal_control: Controls::MOVE,
             target: None,
-        })
+            panic_tag,
+        }
     }
 
-    fn is_in_danger(mob: &dyn Mob) -> bool {
+    fn is_in_danger(&self, mob: &dyn Mob) -> bool {
         let living = &mob.get_mob_entity().living_entity;
 
-        if living.entity.fire_ticks.load(Relaxed) > 0 {
-            return true;
-        }
+        // Vanilla `PanicGoal#shouldPanic`: only the last damage source's type decides
+        // whether the mob panics, so being punched does not scare tamed animals.
+        let last_damage_type_id = living.last_damage_type_id.load(Relaxed);
+        let Some(damage_type) = u8::try_from(last_damage_type_id)
+            .ok()
+            .and_then(DamageType::from_id)
+        else {
+            return false;
+        };
 
-        let last_attacked = living.last_attacked_time.load(Relaxed);
-        if last_attacked == 0 {
+        // Vanilla `LivingEntity#getLastDamageSource`: the marker expires after 40 ticks,
+        // so stale damage cannot re-trigger panic episodes.
+        let last_damage_time = living.last_damage_time.load(Relaxed);
+        if living
+            .entity
+            .age
+            .load(Relaxed)
+            .saturating_sub(last_damage_time)
+            > 40
+        {
             return false;
         }
-        let age = living.entity.age.load(Relaxed);
-        age - last_attacked < RECENT_DAMAGE_TICKS
+
+        damage_type.has_tag(self.panic_tag)
     }
 
     fn find_escape_target(mob: &dyn Mob) -> Option<Vector3<f64>> {
@@ -59,7 +95,7 @@ impl EscapeDangerGoal {
 
 impl Goal for EscapeDangerGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
-        if !Self::is_in_danger(mob) {
+        if !self.is_in_danger(mob) {
             return false;
         }
         self.target = Self::find_escape_target(mob);
