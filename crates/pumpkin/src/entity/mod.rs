@@ -4,7 +4,6 @@ use crate::{
     server::Server,
     world::{
         World,
-        chunker::is_within_view_distance,
         portal::{NetherPortal, PortalProcessor, PortalType, SourcePortalInfo},
     },
 };
@@ -3051,7 +3050,7 @@ impl Entity {
                 let center = player.get_entity().chunk_pos.load();
                 let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
 
-                if is_within_view_distance(chunk_pos, center, view_distance)
+                if crate::world::chunker::is_within_view_distance(chunk_pos, center, view_distance)
                     && let ClientPlatform::Bedrock(client) = player.client.as_ref()
                 {
                     bedrock_recipients.push(client);
@@ -3100,7 +3099,7 @@ impl Entity {
                 let center = player.get_entity().chunk_pos.load();
                 let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
 
-                if is_within_view_distance(chunk_pos, center, view_distance)
+                if crate::world::chunker::is_within_view_distance(chunk_pos, center, view_distance)
                     && let ClientPlatform::Java(_) = player.client.as_ref()
                 {
                     java_recipients.push(player);
@@ -3161,7 +3160,7 @@ impl Entity {
                 let center = player.get_entity().chunk_pos.load();
                 let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
 
-                if is_within_view_distance(chunk_pos, center, view_distance)
+                if crate::world::chunker::is_within_view_distance(chunk_pos, center, view_distance)
                     && let ClientPlatform::Java(_) = player.client.as_ref()
                 {
                     java_recipients.push(player);
