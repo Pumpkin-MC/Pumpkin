@@ -55,7 +55,7 @@ use pumpkin_protocol::bedrock::client::CMovePlayer;
 use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_protocol::java::client::play::{
-    CBlockUpdate, CCommandSuggestions, CEntityPositionSync, CHeadRot, CPingResponse,
+    CBlockUpdate, CCommandSuggestions, CEntityPositionSync, CHeadRot, CMoveVehicle, CPingResponse,
     CPlayerInfoUpdate, CPlayerPosition, CSetCamera, CSetSelectedSlot, CUpdateEntityPos,
     CUpdateEntityPosRot, CUpdateEntityRot, InitChat, PlayerAction, PlayerInfoFlags,
 };
