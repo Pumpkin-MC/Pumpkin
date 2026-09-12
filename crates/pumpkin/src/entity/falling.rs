@@ -1,7 +1,10 @@
 use pumpkin_data::Block;
+use pumpkin_data::BlockState;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
@@ -69,7 +72,29 @@ impl EntityBase for FallingEntity {
             {
                 state_id = concrete.default_state.id;
             }
-            world.set_block_state(&landing_pos, state_id, BlockFlags::NOTIFY_ALL);
+            // Like vanilla, only land where the current block can be replaced and the falling
+            // block can survive; otherwise drop it as an item instead of replacing e.g. a torch
+            // or a slab.
+            let landed_block = Block::from_state_id(state_id);
+            let can_land = world.get_block_state(&landing_pos).replaceable()
+                && world.block_registry.can_place_at(
+                    None,
+                    Some(&**world),
+                    &**world,
+                    None,
+                    landed_block,
+                    BlockState::from_id(state_id),
+                    &landing_pos,
+                    None,
+                    None,
+                );
+            if can_land {
+                world.set_block_state(&landing_pos, state_id, BlockFlags::NOTIFY_ALL);
+            } else if world.level_info.load().game_rules.entity_drops
+                && let Some(item) = Item::from_registry_key(landed_block.name)
+            {
+                world.drop_stack(&landing_pos, ItemStack::new(1, item));
+            }
             self.entity.remove();
         }
 
