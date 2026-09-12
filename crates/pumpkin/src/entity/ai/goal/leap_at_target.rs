@@ -57,7 +57,7 @@ impl Goal for LeapAtTargetGoal {
         true
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let entity = &mob.get_mob_entity().living_entity.entity;
         !entity.on_ground.load(Ordering::Relaxed)
     }

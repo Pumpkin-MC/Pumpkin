@@ -42,7 +42,7 @@ impl Goal for OcelotAttackGoal {
         true
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let Some(target) = &self.target else {
             return false;
         };

@@ -10,7 +10,6 @@ use crate::command::context::command_context::CommandContext;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
-use crate::entity::EntityBase;
 use crate::world::scoreboard::{CollisionRule, NameTagVisibility, Team};
 use pumpkin_data::translation;
 use pumpkin_util::PermissionLvl;
@@ -84,13 +83,6 @@ const SEE_FRIENDLY_INVISIBLES_ALREADY_DISABLED_ERROR: CommandErrorType<0> = Comm
     translation::java::COMMANDS_TEAM_OPTION_SEEFRIENDLYINVISIBLES_ALREADYDISABLED,
     translation::java::COMMANDS_TEAM_OPTION_SEEFRIENDLYINVISIBLES_ALREADYDISABLED,
 );
-
-fn get_entity_scoreboard_name(entity: &dyn EntityBase) -> String {
-    entity.get_player().map_or_else(
-        || entity.get_entity().entity_uuid.to_string(),
-        |player| player.gameprofile.name.clone(),
-    )
-}
 
 struct TeamAddExecutor {
     has_display_name: bool,
@@ -247,7 +239,7 @@ impl CommandExecutor for TeamJoinExecutor {
             }
             targets
                 .into_iter()
-                .map(|e| get_entity_scoreboard_name(&*e))
+                .map(|e| e.get_scoreboard_name())
                 .collect::<Vec<_>>()
         } else {
             let sender_name = context.source.name.clone();
@@ -314,7 +306,7 @@ impl CommandExecutor for TeamLeaveExecutor {
             }
             targets
                 .into_iter()
-                .map(|e| get_entity_scoreboard_name(&*e))
+                .map(|e| e.get_scoreboard_name())
                 .collect::<Vec<_>>()
         } else {
             let sender_name = context.source.name.clone();

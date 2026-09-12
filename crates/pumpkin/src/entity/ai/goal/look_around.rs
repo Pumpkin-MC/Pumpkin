@@ -27,7 +27,7 @@ impl Goal for RandomLookAroundGoal {
         mob.get_random().random::<f32>() < 0.02
     }
 
-    fn should_continue(&self, _mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
         self.look_time >= 0
     }
 

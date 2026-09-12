@@ -162,7 +162,7 @@ impl Goal for RangedCrossbowAttackGoal {
         Self::is_holding_crossbow(mob)
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let target = mob.get_mob_entity().get_target().clone();
         let Some(target) = target else {
             return false;
@@ -202,7 +202,7 @@ impl Goal for RangedCrossbowAttackGoal {
         let target_pos = target.get_entity().pos.load();
         let distance_sq = mob_pos.squared_distance_to_vec(&target_pos);
 
-        let has_line_of_sight = true; // In future: raycast check
+        let has_line_of_sight = mob.has_line_of_sight(target.get_entity());
         if has_line_of_sight {
             self.see_time += 1;
         } else {

@@ -247,7 +247,7 @@ impl Goal for GhastShootFireballGoal {
         target.is_some_and(|t| t.get_entity().is_alive())
     }
 
-    fn should_continue(&self, _mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
         let Some(ghast) = self.ghast.upgrade() else {
             return false;
         };
@@ -400,7 +400,7 @@ impl Goal for RandomFloatAroundGoal {
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(new_target);
     }
 
-    fn should_continue(&self, _mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
         let Some(ghast) = self.ghast.upgrade() else {
             return false;
         };

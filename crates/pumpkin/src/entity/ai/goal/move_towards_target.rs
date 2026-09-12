@@ -1,13 +1,12 @@
 use std::sync::Arc;
 
 use super::{Controls, Goal};
+use crate::entity::ai::util::default_random_pos;
 use crate::entity::{EntityBase, ai::pathfinder::NavigatorGoal, mob::Mob};
-use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
-use rand::RngExt;
+use pumpkin_util::math::vector3::Vector3;
 
-const HORIZONTAL_RANGE: f64 = 16.0;
+const HORIZONTAL_RANGE: i32 = 16;
 const VERTICAL_RANGE: i32 = 7;
-const TARGET_ATTEMPTS: usize = 10;
 
 /// Mirrors vanilla Minecraft's `MoveTowardsTargetGoal`.
 ///
@@ -30,64 +29,6 @@ impl MoveTowardsTargetGoal {
             target: None,
             wanted_pos: None,
         }
-    }
-
-    /// Mirrors vanilla's `DefaultRandomPos.getPosTowards(mob, 16, 7, target.position(), Math.PI / 2)`.
-    fn find_pos_towards(mob: &dyn Mob, target_pos: &Vector3<f64>) -> Option<Vector3<f64>> {
-        let entity = &mob.get_mob_entity().living_entity.entity;
-        let mob_pos = entity.pos.load();
-        let world = entity.world.load();
-
-        let dir_x = target_pos.x - mob_pos.x;
-        let dir_z = target_pos.z - mob_pos.z;
-
-        let mut rng = mob.get_random();
-        let (dir_x, dir_z) = if dir_x == 0.0 && dir_z == 0.0 {
-            (rng.random_range(-1.0..1.0), rng.random_range(-1.0..1.0))
-        } else {
-            (dir_x, dir_z)
-        };
-        let base_angle = dir_z.atan2(dir_x) - std::f64::consts::FRAC_PI_2;
-
-        for _ in 0..TARGET_ATTEMPTS {
-            let angle =
-                base_angle + (2.0 * rng.random_range(0.0..1.0) - 1.0) * std::f64::consts::FRAC_PI_2;
-            let t = rng.random_range(0.0..1.0f64).sqrt();
-            let dist = t * HORIZONTAL_RANGE * std::f64::consts::SQRT_2;
-            let dx = -dist * angle.sin();
-            let dz = dist * angle.cos();
-
-            if dx.abs() > HORIZONTAL_RANGE || dz.abs() > HORIZONTAL_RANGE {
-                continue;
-            }
-
-            let dy = rng.random_range(-VERTICAL_RANGE..=VERTICAL_RANGE);
-
-            let candidate = BlockPos::new(
-                (mob_pos.x + dx) as i32,
-                (mob_pos.y + dy as f64) as i32,
-                (mob_pos.z + dz) as i32,
-            );
-
-            let block_at = world.get_block_state(&candidate);
-            let block_below = world.get_block_state(&BlockPos::new(
-                candidate.0.x,
-                candidate.0.y - 1,
-                candidate.0.z,
-            ));
-
-            if block_at.is_solid() || !block_below.is_solid() {
-                continue;
-            }
-
-            return Some(Vector3::new(
-                candidate.0.x as f64 + 0.5,
-                candidate.0.y as f64,
-                candidate.0.z as f64 + 0.5,
-            ));
-        }
-
-        None
     }
 }
 
@@ -114,7 +55,13 @@ impl Goal for MoveTowardsTargetGoal {
             return false;
         }
 
-        let pos = Self::find_pos_towards(mob, &target_pos);
+        let pos = default_random_pos::get_pos_towards(
+            mob,
+            HORIZONTAL_RANGE,
+            VERTICAL_RANGE,
+            target_pos,
+            std::f64::consts::FRAC_PI_2,
+        );
         let Some(pos) = pos else {
             self.target = None;
             return false;
@@ -125,7 +72,7 @@ impl Goal for MoveTowardsTargetGoal {
         true
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let Some(target) = &self.target else {
             return false;
         };

@@ -28,7 +28,7 @@ impl MeleeAttackGoal {
     pub fn new(speed: f64, pause_when_mob_idle: bool) -> Self {
         Self {
             goal_control: Controls::MOVE | Controls::LOOK,
-            speed: speed.max(0.23), // Ensure minimum visible speed
+            speed,
             pause_when_mob_idle,
             target_location: Vector3::new(0.0, 0.0, 0.0),
             update_countdown_ticks: 0,
@@ -66,7 +66,7 @@ impl Goal for MeleeAttackGoal {
         true //TODO: modify that because if a path to the target not exists then call mob.is_in_attack_range(target)
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let target = mob.get_mob_entity().get_target().clone();
 
         let Some(target) = target else {
@@ -80,8 +80,9 @@ impl Goal for MeleeAttackGoal {
             let is_idle = mob
                 .get_mob_entity()
                 .navigator
-                .try_lock()
-                .is_ok_and(|navigator| navigator.is_idle());
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_idle();
             return !is_idle;
         }
 
@@ -97,7 +98,7 @@ impl Goal for MeleeAttackGoal {
     }
 
     fn start(&mut self, mob: &dyn Mob) {
-        // TODO: add missing fields like mob attacking to true and correct Navigation methods
+        mob.get_mob_entity().set_attacking(true);
 
         let target = mob.get_mob_entity().get_target().clone();
         if let Some(target) = target {
@@ -131,6 +132,8 @@ impl Goal for MeleeAttackGoal {
             mob.set_mob_target(None);
         }
 
+        mob.get_mob_entity().set_attacking(false);
+
         // Vanilla: this.mob.getNavigation().stop()
         mob.get_mob_entity()
             .navigator
@@ -155,10 +158,13 @@ impl Goal for MeleeAttackGoal {
         self.update_countdown_ticks = (self.update_countdown_ticks - 1).max(0);
 
         let current_target_pos = target.get_entity().pos.load();
-        let should_update_nav = self.update_countdown_ticks <= 0
+        let has_line_of_sight =
+            self.pause_when_mob_idle || mob.has_line_of_sight(target.get_entity());
+        let should_update_nav = has_line_of_sight
+            && self.update_countdown_ticks <= 0
             && (self.last_target_position.is_none_or(|last_pos| {
                 current_target_pos.squared_distance_to_vec(&last_pos) >= 1.0
-            }) || mob.get_random().random_range(0..20) == 0);
+            }) || mob.get_random().random::<f32>() < 0.05);
 
         if should_update_nav {
             let mob_pos = mob.get_entity().pos.load();
@@ -180,12 +186,16 @@ impl Goal for MeleeAttackGoal {
             } else if dist_sq > 256.0 {
                 self.update_countdown_ticks += 5;
             }
+            // TODO: add 15 more ticks when the path request fails.
+            self.update_countdown_ticks = self.get_tick_count(self.update_countdown_ticks);
         }
 
         self.cooldown = (self.cooldown - 1).max(0);
 
-        // TODO: Add visibility check (canSee) - requires world raycast
-        if self.cooldown <= 0 && mob.get_mob_entity().is_in_attack_range(target.as_ref()) {
+        if self.cooldown <= 0
+            && mob.get_mob_entity().is_in_attack_range(target.as_ref())
+            && mob.has_line_of_sight(target.get_entity())
+        {
             self.cooldown = self.get_max_cooldown();
             mob.get_mob_entity().living_entity.swing_hand();
             mob.get_mob_entity()

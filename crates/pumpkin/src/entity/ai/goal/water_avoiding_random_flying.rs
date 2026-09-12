@@ -1,7 +1,7 @@
 use super::{Controls, Goal, to_goal_ticks};
 use crate::entity::ai::pathfinder::NavigatorGoal;
+use crate::entity::ai::util::{air_and_water_random_pos, hover_random_pos};
 use crate::entity::mob::Mob;
-use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use rand::RngExt;
 
@@ -23,49 +23,56 @@ impl WaterAvoidingRandomFlyingGoal {
         }
     }
 
-    fn find_air_target(mob: &dyn Mob) -> Option<Vector3<f64>> {
-        let mob_pos = mob.get_entity().pos.load();
-        let world = mob.get_entity().world.load();
-        let mut rng = mob.get_random();
+    /// Prefers a spot to hover over the ground, and falls back to open air or water.
+    fn get_position(mob: &dyn Mob) -> Option<Vector3<f64>> {
+        let wander_direction = mob.get_looking_vector();
 
-        for _ in 0..10 {
-            let dx = rng.random_range(-8.0..=8.0);
-            let dy = rng.random_range(-4.0..=7.0);
-            let dz = rng.random_range(-8.0..=8.0);
-
-            let check_pos = BlockPos::new(
-                (mob_pos.x + dx) as i32,
-                (mob_pos.y + dy) as i32,
-                (mob_pos.z + dz) as i32,
-            );
-
-            let block = world.get_block_state(&check_pos);
-            if !block.is_solid() && !block.is_liquid() {
-                return Some(Vector3::new(mob_pos.x + dx, mob_pos.y + dy, mob_pos.z + dz));
-            }
-        }
-
-        None
+        hover_random_pos::get_pos(
+            mob,
+            8,
+            7,
+            wander_direction.x,
+            wander_direction.z,
+            std::f64::consts::FRAC_PI_2,
+            3,
+            1,
+        )
+        .or_else(|| {
+            air_and_water_random_pos::get_pos(
+                mob,
+                8,
+                4,
+                -2,
+                wander_direction.x,
+                wander_direction.z,
+                std::f64::consts::FRAC_PI_2,
+            )
+        })
     }
 }
 
 impl Goal for WaterAvoidingRandomFlyingGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        if mob.get_entity().has_passengers() {
+            return false;
+        }
+
         if mob.get_random().random_range(0..self.chance) != 0 {
             return false;
         }
 
-        self.target = Self::find_air_target(mob);
+        self.target = Self::get_position(mob);
         self.target.is_some()
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let is_idle = mob
             .get_mob_entity()
             .navigator
-            .try_lock()
-            .is_ok_and(|nav| nav.is_idle());
-        !is_idle
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_idle();
+        !is_idle && !mob.get_entity().has_passengers()
     }
 
     fn start(&mut self, mob: &dyn Mob) {

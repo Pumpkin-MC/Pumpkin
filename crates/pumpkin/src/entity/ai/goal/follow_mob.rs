@@ -52,7 +52,7 @@ impl Goal for FollowMobGoal {
         false
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let Some(following) = &self.following_mob else {
             return false;
         };

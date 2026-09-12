@@ -49,15 +49,14 @@ impl FollowParentGoal {
                 continue;
             }
             let dist_sq = pos.squared_distance_to_vec(&c_pos);
-            if dist_sq < MIN_DISTANCE_SQ {
-                continue;
-            }
-            if closest.as_ref().is_none_or(|(d, _)| dist_sq < *d) {
+            if closest.as_ref().is_none_or(|(d, _)| dist_sq <= *d) {
                 closest = Some((dist_sq, candidate.clone()));
             }
         }
 
-        closest.map(|(_, e)| e)
+        // The minimum distance applies to the closest parent only: a nearby parent means "do not
+        // follow", not "follow a farther one".
+        closest.and_then(|(dist_sq, parent)| (dist_sq >= MIN_DISTANCE_SQ).then_some(parent))
     }
 }
 
@@ -71,7 +70,7 @@ impl Goal for FollowParentGoal {
         self.parent.is_some()
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let age = mob.get_mob_entity().living_entity.entity.age.load(Relaxed);
         if age >= 0 {
             return false;

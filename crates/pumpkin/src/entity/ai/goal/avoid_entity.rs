@@ -1,13 +1,14 @@
 use std::sync::Arc;
 
 use super::{Controls, Goal};
+use crate::entity::ai::util::default_random_pos;
+use crate::entity::predicate::EntityPredicate;
 use crate::entity::{EntityBase, ai::pathfinder::NavigatorGoal, mob::Mob};
 use pumpkin_data::entity::EntityType;
-use pumpkin_util::math::{position::BlockPos, vector3::Vector3};
-use rand::RngExt;
+use pumpkin_util::math::vector3::Vector3;
 
 const FAST_DISTANCE_SQ: f64 = 49.0;
-const HORIZONTAL_RANGE: f64 = 16.0;
+const HORIZONTAL_RANGE: i32 = 16;
 const VERTICAL_RANGE: i32 = 7;
 
 pub struct AvoidEntityGoal {
@@ -46,105 +47,45 @@ impl AvoidEntityGoal {
 
         if self.flee_type == &EntityType::PLAYER {
             world
-                .get_closest_player(pos, self.flee_distance)
+                .get_nearest_player(pos, self.flee_distance, |player| {
+                    EntityPredicate::ExceptCreativeOrSpectator.test(player.get_entity())
+                })
                 .map(|p| p as Arc<dyn EntityBase>)
         } else {
-            world.get_closest_entity(pos, self.flee_distance, Some(&[self.flee_type]))
+            world.get_nearest_entity(pos, self.flee_distance, Some(&[self.flee_type]), |entity| {
+                EntityPredicate::ExceptCreativeOrSpectator.test(entity.get_entity())
+            })
         }
-    }
-
-    /// Generates a random walkable position within a cone pointing away from the threat.
-    /// Mirrors vanilla's `NoPenaltyTargeting.findFrom()`.
-    fn find_flee_position(mob: &dyn Mob, threat_pos: &Vector3<f64>) -> Option<Vector3<f64>> {
-        let entity = &mob.get_mob_entity().living_entity.entity;
-        let mob_pos = entity.pos.load();
-        let world = entity.world.load();
-
-        let candidates = {
-            let mut rng = mob.get_random();
-            let dir_x = mob_pos.x - threat_pos.x;
-            let dir_z = mob_pos.z - threat_pos.z;
-            let (dir_x, dir_z) = if dir_x == 0.0 && dir_z == 0.0 {
-                (rng.random_range(-1.0..1.0), rng.random_range(-1.0..1.0))
-            } else {
-                (dir_x, dir_z)
-            };
-            let base_angle = dir_z.atan2(dir_x) - std::f64::consts::FRAC_PI_2;
-
-            let mut candidates = Vec::with_capacity(10);
-            for _ in 0..10 {
-                let angle = base_angle
-                    + (2.0 * rng.random_range(0.0..1.0) - 1.0) * std::f64::consts::FRAC_PI_2;
-                let t = rng.random_range(0.0..1.0f64).sqrt();
-                let dist = t * HORIZONTAL_RANGE * std::f64::consts::SQRT_2;
-                let dx = -dist * angle.sin();
-                let dz = dist * angle.cos();
-                let dy = rng.random_range(-VERTICAL_RANGE..=VERTICAL_RANGE);
-                candidates.push((dx, dy, dz));
-            }
-            candidates
-        };
-
-        let threat_to_mob_sq = threat_pos.squared_distance_to_vec(&mob_pos);
-
-        for (dx, dy, dz) in candidates {
-            if dx.abs() > HORIZONTAL_RANGE || dz.abs() > HORIZONTAL_RANGE {
-                continue;
-            }
-
-            let candidate = BlockPos::new(
-                (mob_pos.x + dx) as i32,
-                (mob_pos.y + dy as f64) as i32,
-                (mob_pos.z + dz) as i32,
-            );
-
-            let block_at = world.get_block_state(&candidate);
-            let block_below = world.get_block_state(&BlockPos::new(
-                candidate.0.x,
-                candidate.0.y - 1,
-                candidate.0.z,
-            ));
-
-            if block_at.is_solid() || !block_below.is_solid() {
-                continue;
-            }
-
-            let flee_vec = Vector3::new(
-                candidate.0.x as f64 + 0.5,
-                candidate.0.y as f64,
-                candidate.0.z as f64 + 0.5,
-            );
-
-            if threat_pos.squared_distance_to_vec(&flee_vec) < threat_to_mob_sq {
-                continue;
-            }
-
-            return Some(flee_vec);
-        }
-
-        None
     }
 }
 
 impl Goal for AvoidEntityGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
-        let threat = self.find_threat(mob);
-        let Some(target) = threat else {
+        let Some(target) = self.find_threat(mob) else {
             return false;
         };
 
         let threat_pos = target.get_entity().pos.load();
-        let flee_pos = Self::find_flee_position(mob, &threat_pos);
-        let Some(pos) = flee_pos else {
+        let Some(flee_pos) =
+            default_random_pos::get_pos_away(mob, HORIZONTAL_RANGE, VERTICAL_RANGE, threat_pos)
+        else {
             return false;
         };
 
+        // Give up when the escape route does not gain any distance.
+        let mob_pos = mob.get_entity().pos.load();
+        if threat_pos.squared_distance_to_vec(&flee_pos)
+            < threat_pos.squared_distance_to_vec(&mob_pos)
+        {
+            return false;
+        }
+
         self.target = Some(target);
-        self.flee_pos = Some(pos);
+        self.flee_pos = Some(flee_pos);
         true
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let navigator = mob
             .get_mob_entity()
             .navigator
@@ -182,10 +123,6 @@ impl Goal for AvoidEntityGoal {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             navigator.set_speed(speed);
         }
-    }
-
-    fn should_run_every_tick(&self) -> bool {
-        true
     }
 
     fn stop(&mut self, _mob: &dyn Mob) {

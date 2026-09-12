@@ -158,7 +158,7 @@ impl Goal for HoldGroundAttackGoal {
         target.is_some()
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let target = mob.get_mob_entity().get_target().clone();
         target.is_some()
     }
@@ -294,7 +294,7 @@ impl Goal for RaiderCelebrationGoal {
         target.is_none() && raider.is_celebrating()
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let Some(raider) = mob.as_raider() else {
             return false;
         };

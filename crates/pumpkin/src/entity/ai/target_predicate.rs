@@ -1,5 +1,6 @@
 use pumpkin_util::Difficulty;
 
+use crate::entity::EntityBase;
 use crate::entity::living::LivingEntity;
 use crate::world::World;
 use std::sync::Arc;
@@ -85,34 +86,51 @@ impl TargetPredicate {
     pub fn test(
         &self,
         world: &World,
-        tester: Option<&LivingEntity>,
-        target: &LivingEntity,
+        tester: Option<&dyn EntityBase>,
+        target: &dyn EntityBase,
     ) -> bool {
-        if tester.is_some_and(|t| std::ptr::eq(t, target)) {
+        let Some(target_living) = target.get_living_entity() else {
+            return false;
+        };
+
+        if tester.is_some_and(|t| t.get_entity().entity_id == target.get_entity().entity_id) {
             return false;
         }
 
-        if !target.is_part_of_game() {
+        if !target_living.is_part_of_game() {
             return false;
         }
+
+        if let Some(predicate) = &self.predicate
+            && !predicate(target_living, world)
+        {
+            return false;
+        }
+
+        let Some(tester) = tester else {
+            // Without a tester only the plain "can be seen as enemy" rule applies.
+            return !(self.attackable
+                && (!target_living.can_take_damage()
+                    || world.level_info.load().difficulty == Difficulty::Peaceful));
+        };
+        let Some(tester_living) = tester.get_living_entity() else {
+            return false;
+        };
 
         if self.attackable
-            && (!target.can_take_damage()
-                || world.level_info.load().difficulty == Difficulty::Peaceful)
+            && (!tester_living.can_attack(target_living) || tester.is_allied_to(target))
         {
             return false;
         }
 
-        if let Some(tester_ent) = tester
-            && self.base_max_distance > 0.0
-        {
+        if self.base_max_distance > 0.0 {
             // TODO: use distance_scaling_factor from target
             let max_dist = self.base_max_distance.max(MIN_DISTANCE);
-            let dist_sq = tester_ent
-                .entity
+            let dist_sq = tester
+                .get_entity()
                 .pos
                 .load()
-                .squared_distance_to_vec(&target.entity.pos.load());
+                .squared_distance_to_vec(&target.get_entity().pos.load());
 
             if dist_sq > max_dist * max_dist {
                 return false;
@@ -120,17 +138,8 @@ impl TargetPredicate {
         }
 
         if self.respects_visibility
-            && let Some(tester_ent) = tester
-            && tester_ent
-                .entity
-                .world
-                .load_full()
-                .raycast(
-                    tester_ent.entity.get_eye_pos(),
-                    target.entity.get_eye_pos(),
-                    |block_pos, world| world.get_block_state(block_pos).is_solid(),
-                )
-                .is_some()
+            && let Some(mob) = tester.get_mob()
+            && !mob.has_line_of_sight(target.get_entity())
         {
             return false;
         }

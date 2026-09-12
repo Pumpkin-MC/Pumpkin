@@ -61,7 +61,15 @@ impl HappyGhastEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(TemptGoal::new(1.0, HAPPY_GHAST_FOOD)));
+            goal_selector.add_goal(
+                1,
+                Box::new(TemptGoal::with_stop_distance(
+                    1.0,
+                    HAPPY_GHAST_FOOD,
+                    false,
+                    7.0,
+                )),
+            );
             goal_selector.add_goal(2, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
                 3,

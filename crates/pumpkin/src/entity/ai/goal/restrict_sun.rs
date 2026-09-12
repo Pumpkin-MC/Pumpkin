@@ -29,7 +29,7 @@ impl Goal for RestrictSunGoal {
         time < 12000
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let has_helmet = mob
             .get_mob_entity()
             .living_entity

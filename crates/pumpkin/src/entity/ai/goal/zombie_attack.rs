@@ -23,7 +23,7 @@ impl Goal for ZombieAttackGoal {
         self.melee_attack_goal.can_start(mob)
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         self.melee_attack_goal.should_continue(mob)
     }
 
