@@ -498,4 +498,59 @@ mod tests {
         assert!(!first.is_chunk_ready(&position));
         assert!(second.is_chunk_ready(&position));
     }
+
+    #[test]
+    fn stale_bedrock_delivery_cannot_clear_a_newer_batchs_marker() {
+        // Player's Bedrock chunk-send task used to check
+        // chunk_send_epoch, then separately lock chunk_sender to call
+        // mark_delivered.
+        let position = Vector2::new(5, -1);
+        let sender = std::sync::Mutex::new(ChunkSender::new());
+        let epoch = std::sync::atomic::AtomicU32::new(0);
+
+        {
+            let mut sender = sender.lock().unwrap();
+            sender.enqueue_chunk(position);
+            let batch = PreparedBatch {
+                chunks: vec![PreparedChunk {
+                    position,
+                    chunk: ChunkData::empty_sync(position.x, position.y),
+                }],
+                epoch_snapshot: 0,
+                target_version: JavaMinecraftVersion::V_1_20_2,
+            };
+            sender.commit_bedrock_batch(&batch, 0)
+        };
+        let stale_epoch_snapshot = 0;
+
+        // bump the epoch, then reset and re-send for the new
+        // world, reusing the same relative chunk position.
+        epoch.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        {
+            let mut sender = sender.lock().unwrap();
+            sender.reset();
+            sender.enqueue_chunk(position);
+            let batch = PreparedBatch {
+                chunks: vec![PreparedChunk {
+                    position,
+                    chunk: ChunkData::empty_sync(position.x, position.y),
+                }],
+                epoch_snapshot: 1,
+                target_version: JavaMinecraftVersion::V_1_20_2,
+            };
+            sender.commit_bedrock_batch(&batch, 1)
+        };
+        assert!(!sender.lock().unwrap().is_chunk_ready(&position));
+
+        // Fixed ordering: lock first, then check the epoch under the same lock, before mark_delivered.
+        {
+            let mut sender = sender.lock().unwrap();
+            if epoch.load(std::sync::atomic::Ordering::Relaxed) == stale_epoch_snapshot {
+                sender.mark_delivered(&[position]);
+            }
+        }
+
+        // The newer batch's marker must survive: the chunk is still not ready.
+        assert!(!sender.lock().unwrap().is_chunk_ready(&position));
+    }
 }
