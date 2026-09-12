@@ -476,8 +476,13 @@ impl BedrockClient {
     }
 
     pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
+        self.try_enqueue_packet_data_inner(packet_data);
+    }
+
+    /// Returns whether the outgoing queue accepted the payload and its byte reservation.
+    fn try_enqueue_packet_data_inner(&self, packet_data: Bytes) -> bool {
         if self.is_closed() {
-            return;
+            return false;
         }
 
         let packet_len = packet_data.len();
@@ -493,7 +498,7 @@ impl BedrockClient {
                 );
                 self.close_token.cancel();
             }
-            return;
+            return false;
         }
 
         if let Err(err) = self
@@ -505,7 +510,9 @@ impl BedrockClient {
             if !self.is_closed() {
                 error!("Failed to add packet to the outgoing packet queue for client: {err}");
             }
+            return false;
         }
+        true
     }
 
     pub fn write_raw_packet<P: BClientPacket>(
@@ -864,29 +871,43 @@ impl BedrockClient {
     }
 
     pub fn handle_client_cache_blob_status(&self, packet: SClientCacheBlobStatus) {
-        if packet.miss_hashes.is_empty() {
+        let mut cache = self
+            .blob_cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for hash in packet.hit_hashes {
+            cache.remove(&hash);
+        }
+        let mut missing_blobs = Vec::with_capacity(packet.miss_hashes.len());
+        let mut unknown_hash_count = 0;
+        for hash in &packet.miss_hashes {
+            if let Some(payload) = cache.get(hash) {
+                missing_blobs.push(MissingBlobData {
+                    blob_id: *hash,
+                    blob_data: payload.clone(),
+                });
+            } else {
+                unknown_hash_count += 1;
+            }
+        }
+        if unknown_hash_count > 0 {
+            warn!("Client requested {unknown_hash_count} blob hashes not found in server cache");
+        }
+        if missing_blobs.is_empty() {
             return;
         }
-        let missing_blobs = {
-            let cache = self
-                .blob_cache
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let mut missing_blobs = Vec::with_capacity(packet.miss_hashes.len());
-            for hash in packet.miss_hashes {
-                if let Some(payload) = cache.get(&hash) {
-                    missing_blobs.push(MissingBlobData {
-                        blob_id: hash,
-                        blob_data: payload.clone(),
-                    });
-                } else {
-                    warn!("Client requested missing blob {hash:#x} not found in server cache");
-                }
+        let data = match self.serialize_packet(&CClientCacheMissResponse { missing_blobs }) {
+            Ok(data) => data,
+            Err(error) => {
+                error!("Failed to serialize Bedrock cache miss response: {error}");
+                return;
             }
-            missing_blobs
         };
-        if !missing_blobs.is_empty() {
-            self.try_enqueue_client_packet(&CClientCacheMissResponse { missing_blobs });
+        // Retire misses only once the outgoing queue owns their payloads.
+        if self.try_enqueue_packet_data_inner(data) {
+            for hash in packet.miss_hashes {
+                cache.remove(&hash);
+            }
         }
     }
 
