@@ -12,6 +12,7 @@ use pumpkin_data::potion::Potion;
 use pumpkin_data::potion_brewing::BREWING_RECIPES;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
+use pumpkin_inventory::brewing::brewing_screen_handler::{is_fuel, is_ingredient, is_potion_item};
 use pumpkin_inventory::{Inventory, sync_read_items_from_nbt, sync_write_items_to_nbt};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::recipe::DynamicRecipe;
@@ -264,22 +265,8 @@ impl BrewingStandBlockEntity {
             }
         }
 
-        // Check if we can immediately start the next brew
-        if let Ok(items) = self.items.read() {
-            let ingredient = items[3].clone();
-            drop(items);
-            if self.fuel.load(Ordering::Relaxed) > 0 && self.is_brewable(&ingredient, world) {
-                self.fuel.fetch_sub(1, Ordering::Relaxed);
-                self.brew_time.store(400, Ordering::Relaxed);
-                *self
-                    .ingredient_item
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner) =
-                    Some(ingredient.get_item());
-            } else {
-                self.brew_time.store(0, Ordering::Relaxed);
-            }
-        }
+        // Like vanilla, the next brew is started by `tick` so it goes through `BrewingStartEvent`.
+        self.brew_time.store(0, Ordering::Relaxed);
 
         // Play sound at the center of the block
         let pos = Vector3::new(
@@ -418,19 +405,18 @@ impl pumpkin_inventory::Inventory for BrewingStandBlockEntity {
         }
 
         match slot {
-            // Slots 0-2 - potion bottles
-            0..=2 => stack
-                .get_data_component::<pumpkin_data::data_component_impl::PotionContentsImpl>()
-                .is_some(),
-            // Slot 3 - ingredient (must be tagged as brewable)
-            3 => {
-                // Check if item is a valid brewing ingredient
-                if stack.get_item().has_tag(&tag::Item::MINECRAFT_BREWING_FUEL) {
-                    return false; // Fuel should not go in ingredient slot
-                }
-                // Allow any item that's not fuel (ingredient validation happens during brewing)
-                true
+            // Slots 0-2 - potion bottles, one per slot
+            0..=2 => {
+                is_potion_item(stack.get_item())
+                    && self
+                        .items
+                        .read()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)[slot]
+                        .is_empty()
             }
+            // Slot 3 - ingredient. Fuel stays out because hoppers don't use vanilla's
+            // per-side slots yet and would otherwise fill the ingredient slot with it.
+            3 => !is_fuel(stack.get_item()) && is_ingredient(stack.get_item()),
             // Slot 4 - fuel
             4 => stack.get_item().has_tag(&tag::Item::MINECRAFT_BREWING_FUEL),
             _ => false,
