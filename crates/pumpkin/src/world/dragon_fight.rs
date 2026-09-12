@@ -245,19 +245,18 @@ impl DragonFight {
         };
 
         match existing {
-            Some((uuid, _entity)) if !active_portal_exists => {
+            Some((uuid, entity)) => {
                 info!("Found that there's a dragon still alive ({:?})", uuid);
                 self.dragon_uuid = Some(uuid);
                 self.dragon_killed = false;
-            }
-            Some((uuid, entity)) => {
-                info!(
-                    "Found that there's a dragon still alive ({:?}), but we have an active portal. Removing it.",
-                    uuid
-                );
-                entity.get_entity().remove();
-                self.dragon_uuid = None;
-                self.dragon_killed = true;
+                // A dragon without any portal is a pre-1.9 world removed so a
+                // fresh one can spawn. An active portal means a finished fight, and the
+                // dragon then belongs to a later respawn.
+                if !active_portal_exists {
+                    info!("But we didn't have a portal, let's remove it.");
+                    entity.get_entity().remove();
+                    self.dragon_uuid = None;
+                }
             }
             None => {
                 self.dragon_killed = true;
@@ -1022,6 +1021,12 @@ impl DragonFight {
     // ── Exit portal ───────────────────────────────────────────────────────────
 
     pub fn spawn_exit_portal(&mut self, world: &Arc<World>, active: bool) {
+        // Vanilla restores the location from saved data. Without that, look the podium
+        // up first.
+        if self.exit_portal_location.is_none() {
+            self.find_exit_portal(world);
+        }
+
         if self.exit_portal_location.is_none() {
             let mut portal_y = 65;
             for y in (50..=100).rev() {
