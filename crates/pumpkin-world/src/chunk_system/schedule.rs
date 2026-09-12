@@ -618,48 +618,41 @@ impl GenerationSchedule {
                         let stage = StagedChunkEnum::from(i);
                         let dependency = stage.get_direct_dependencies();
                         let radius = stage.get_direct_radius();
-                        for dx in -radius..=radius {
-                            for dz in -radius..=radius {
-                                let new_pos = pos.add_raw(dx, dz);
-                                let req_stage = dependency[dx.abs().max(dz.abs()) as usize];
-                                self.unload_chunks.remove(&new_pos);
-                                if new_pos == pos {
-                                    let newly_created = Self::ensure_dependency_chain(
-                                        &mut self.graph,
-                                        &mut self.queue,
-                                        &self.last_level,
-                                        &self.last_high_priority,
-                                        task,
-                                        new_pos,
-                                        &mut holder,
-                                        req_stage,
-                                    );
-                                    for (stage_i, &created) in newly_created.iter().enumerate() {
-                                        if created && stage_i > 1 {
-                                            let stage = StagedChunkEnum::from(stage_i as u8);
-                                            let dependency = stage.get_direct_dependencies();
-                                            let radius = stage.get_direct_radius();
-                                            let cur_task = holder.tasks[stage_i];
-                                            for ndx in -radius..=radius {
-                                                for ndz in -radius..=radius {
-                                                    if ndx == 0 && ndz == 0 {
-                                                        continue;
-                                                    }
-                                                    let neighbor_pos = new_pos.add_raw(ndx, ndz);
-                                                    let neighbor_req = dependency
-                                                        [ndx.abs().max(ndz.abs()) as usize];
-                                                    worklist.push_back((
-                                                        neighbor_pos,
-                                                        neighbor_req,
-                                                        cur_task,
-                                                    ));
-                                                }
-                                            }
-                                        }
+                        self.unload_chunks.remove(&pos);
+                        let req_stage = dependency[0];
+                        let newly_created = Self::ensure_dependency_chain(
+                            &mut self.graph,
+                            &mut self.queue,
+                            &self.last_level,
+                            &self.last_high_priority,
+                            task,
+                            pos,
+                            &mut holder,
+                            req_stage,
+                        );
+                        for (stage_i, &created) in newly_created.iter().enumerate() {
+                            if created && stage_i > 1 {
+                                let stage = StagedChunkEnum::from(stage_i as u8);
+                                let dependency = stage.get_direct_dependencies();
+                                let radius = stage.get_direct_radius();
+                                let cur_task = holder.tasks[stage_i];
+                                for r in 1..=(radius as u8) {
+                                    let neighbor_req = dependency[r as usize];
+                                    for &(ndx, ndz) in
+                                        pumpkin_data::chunk_view_lut::get_chebyshev_ring(r)
+                                    {
+                                        let neighbor_pos = pos.add_raw(ndx as i32, ndz as i32);
+                                        worklist.push_back((neighbor_pos, neighbor_req, cur_task));
                                     }
-                                    continue;
                                 }
+                            }
+                        }
 
+                        for r in 1..=(radius as u8) {
+                            let req_stage = dependency[r as usize];
+                            for &(dx, dz) in pumpkin_data::chunk_view_lut::get_chebyshev_ring(r) {
+                                let new_pos = pos.add_raw(dx as i32, dz as i32);
+                                self.unload_chunks.remove(&new_pos);
                                 worklist.push_back((new_pos, req_stage, task));
                             }
                         }
@@ -693,13 +686,10 @@ impl GenerationSchedule {
                     let dependency = stage.get_direct_dependencies();
                     let radius = stage.get_direct_radius();
                     let cur_task = holder.tasks[stage_i];
-                    for dx in -radius..=radius {
-                        for dz in -radius..=radius {
-                            if dx == 0 && dz == 0 {
-                                continue;
-                            }
-                            let neighbor_pos = pos.add_raw(dx, dz);
-                            let neighbor_req = dependency[dx.abs().max(dz.abs()) as usize];
+                    for r in 1..=(radius as u8) {
+                        let neighbor_req = dependency[r as usize];
+                        for &(dx, dz) in pumpkin_data::chunk_view_lut::get_chebyshev_ring(r) {
+                            let neighbor_pos = pos.add_raw(dx as i32, dz as i32);
                             worklist.push_back((neighbor_pos, neighbor_req, cur_task));
                         }
                     }
@@ -738,13 +728,11 @@ impl GenerationSchedule {
                     continue;
                 }
                 let dependencies = stage.get_direct_dependencies();
-                for dx in -radius..=radius {
-                    for dz in -radius..=radius {
-                        if dx == 0 && dz == 0 {
-                            continue;
-                        }
-                        let neighbor = pos.add_raw(dx, dz);
-                        worklist.push((neighbor, dependencies[dx.abs().max(dz.abs()) as usize]));
+                for r in 1..=(radius as u8) {
+                    let req = dependencies[r as usize];
+                    for &(dx, dz) in pumpkin_data::chunk_view_lut::get_chebyshev_ring(r) {
+                        let neighbor = pos.add_raw(dx as i32, dz as i32);
+                        worklist.push((neighbor, req));
                     }
                 }
             }

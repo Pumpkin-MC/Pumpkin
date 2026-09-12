@@ -26,7 +26,7 @@ use crate::entity::player::Player;
 use crate::net::ClientPlatform;
 use crate::net::java::JavaClient;
 use crate::world::World;
-use crate::world::chunker::{get_view_distance, is_within_view_distance};
+use crate::world::chunker::get_view_distance;
 
 pub struct TrackedEntity {
     pub entity: Arc<dyn EntityBase>,
@@ -115,8 +115,10 @@ impl TrackedEntity {
         let range_sq = visible_range_blocks * visible_range_blocks;
 
         let entity_chunk = self.entity.get_entity().chunk_pos.load();
-        let player_chunk = player_entity.chunk_pos.load();
-        let in_view = is_within_view_distance(entity_chunk, player_chunk, player_vd);
+        let in_view = player
+            .watched_section
+            .load()
+            .is_within_distance(entity_chunk.x, entity_chunk.y);
 
         // Vanilla `isChunkTracked`: never spawn before the chunk packet.
         let is_visible = dist_sq <= range_sq
