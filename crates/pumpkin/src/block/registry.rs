@@ -220,6 +220,7 @@ use crate::block::blocks::jukebox::JukeboxBlock;
 use crate::block::blocks::ladder::LadderBlock;
 use crate::block::blocks::lanterns::LanternBlock;
 use crate::block::blocks::lectern::LecternBlock;
+use crate::block::blocks::netherrack::NetherrackBlock;
 use crate::block::blocks::respawn_anchor::RespawnAnchorBlock;
 use crate::block::blocks::rooted_dirt::RootedDirtBlock;
 use crate::block::blocks::shulker_box::ShulkerBoxBlock;
@@ -407,6 +408,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(RootedDirtBlock);
     manager.register(NyliumBlock);
     manager.register(BubbleColumnBlock);
+    manager.register(NetherrackBlock);
 
     manager.register(FallingBlock);
 
@@ -487,8 +489,11 @@ impl BlockActionResult {
     }
 }
 
+/// Marks a block with no registered behaviour. Never handed out as a real index.
+const NO_BEHAVIOUR: u16 = u16::MAX;
+
 pub struct BlockRegistry {
-    block_indices: [u8; pumpkin_data::BlockId::COUNT as usize],
+    block_indices: [u16; pumpkin_data::BlockId::COUNT as usize],
     behaviours: Vec<Arc<dyn BlockBehaviour>>,
     fluids: FxHashMap<u16, Arc<dyn FluidBehaviour>>,
 }
@@ -496,7 +501,7 @@ pub struct BlockRegistry {
 impl Default for BlockRegistry {
     fn default() -> Self {
         Self {
-            block_indices: [0xFF; pumpkin_data::BlockId::COUNT as usize],
+            block_indices: [NO_BEHAVIOUR; pumpkin_data::BlockId::COUNT as usize],
             behaviours: Vec::new(),
             fluids: FxHashMap::default(),
         }
@@ -768,6 +773,12 @@ impl BlockRegistry {
         let _replaced_id =
             world.set_block_state(&final_block_pos, new_state, BlockFlags::NOTIFY_ALL);
 
+        world.play_bedrock_level_sound(
+            "place",
+            &final_block_pos.to_centered_f64(),
+            i32::from(BlockState::to_be_network_id(new_state)),
+        );
+
         self.player_placed(
             &world,
             placed_block,
@@ -788,8 +799,10 @@ impl BlockRegistry {
     #[allow(clippy::expect_used)]
     pub fn register<T: BlockBehaviour + BlockMetadata + 'static>(&mut self, block: T) {
         let ids = T::ids();
-        let idx = u8::try_from(self.behaviours.len())
-            .expect("Too many block behaviours for u8 index table");
+        let idx = u16::try_from(self.behaviours.len())
+            .ok()
+            .filter(|idx| *idx != NO_BEHAVIOUR)
+            .expect("Too many block behaviours for the index table");
         self.behaviours.push(Arc::new(block));
         for i in ids {
             self.block_indices[i.as_u16() as usize] = idx;
@@ -1327,7 +1340,7 @@ impl BlockRegistry {
     #[must_use]
     pub fn get_pumpkin_block(&self, block: BlockId) -> Option<&Arc<dyn BlockBehaviour>> {
         let idx = self.block_indices[block.as_u16() as usize];
-        if idx == 0xFF {
+        if idx == NO_BEHAVIOUR {
             None
         } else {
             self.behaviours.get(idx as usize)

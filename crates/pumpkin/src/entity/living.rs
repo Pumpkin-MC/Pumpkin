@@ -45,6 +45,7 @@ use pumpkin_data::data_component_impl::{
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityStatus, EntityType};
 use pumpkin_data::fluid::Fluid;
+use pumpkin_data::game_rules::{GameRule, GameRuleValue};
 use pumpkin_data::item_stack::{DamageResult, ItemStack};
 use pumpkin_data::sound::SoundCategory;
 use pumpkin_data::{Block, Enchantment};
@@ -171,6 +172,51 @@ impl EffectParticle {
                 | effect.effect_type.color as u32) as i32,
         }
     }
+}
+
+fn is_allowed_by_team_rules(
+    own_team: Option<&crate::world::scoreboard::Team>,
+    their_team: Option<&crate::world::scoreboard::Team>,
+) -> bool {
+    use crate::world::scoreboard::CollisionRule;
+
+    let own_rule = own_team.map_or(CollisionRule::Always, |team| team.collision_rule);
+    let their_rule = their_team.map_or(CollisionRule::Always, |team| team.collision_rule);
+
+    if own_rule == CollisionRule::Never || their_rule == CollisionRule::Never {
+        return false;
+    }
+
+    let same_team = own_team
+        .zip(their_team)
+        .is_some_and(|(own, their)| own.name == their.name);
+
+    if (own_rule == CollisionRule::PushOwnTeam || their_rule == CollisionRule::PushOwnTeam)
+        && same_team
+    {
+        return false;
+    }
+
+    (own_rule != CollisionRule::PushOtherTeams && their_rule != CollisionRule::PushOtherTeams)
+        || same_team
+}
+
+/// Resolves an entity's scoreboard team. Players are
+/// tracked by name; all other entities are tracked by their UUID string.
+fn get_entity_team(entity: &dyn EntityBase) -> Option<crate::world::scoreboard::Team> {
+    if let Some(player) = entity.get_player() {
+        return player.get_team();
+    }
+
+    let entity_ref = entity.get_entity();
+    entity_ref
+        .world
+        .load()
+        .scoreboard
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get_entity_team(&entity_ref.entity_uuid.to_string())
+        .cloned()
 }
 
 impl LivingEntity {
@@ -802,6 +848,8 @@ impl LivingEntity {
         if effect.effect_type == &StatusEffect::INSTANT_HEALTH {
             let heal_amount = 4.0 * (1 << effect.amplifier) as f32;
             self.heal(heal_amount);
+            // Like vanilla, instant effects are never sent or stored as active effects.
+            return;
         } else if effect.effect_type == &StatusEffect::INSTANT_DAMAGE {
             let damage_amount = 6.0 * (1 << effect.amplifier) as f32;
             let dyn_self = self
@@ -812,65 +860,63 @@ impl LivingEntity {
             if let Some(dyn_self) = dyn_self {
                 let _ = dyn_self.damage(&*dyn_self, damage_amount, DamageType::MAGIC);
             }
-        } else {
-            // Apply non-instant effects
+            return;
+        }
 
-            // Effects that modify attributes (ex. speed) should also update the
-            // entity's attribute instances (server-side) and then notify clients.
-            if !effect.effect_type.attribute_modifiers.is_empty() {
-                // Apply each attribute modifier into the local AttributeInstance
-                for m in effect.effect_type.attribute_modifiers {
-                    let id = m.id.to_string();
-                    let op = match m.operation {
-                        Operation::AddValue => ModifierOperation::Add,
-                        Operation::AddMultipliedBase => ModifierOperation::MultiplyBase,
-                        Operation::AddMultipliedTotal => ModifierOperation::MultiplyTotal,
-                    };
-                    let scaled_amount = m.base_value * (f64::from(effect.amplifier) + 1.);
-                    let mod_inst = Modifier {
-                        id,
-                        amount: scaled_amount,
-                        operation: op,
-                    };
+        // Apply non-instant effects
 
-                    self.update_attribute(m.attribute, |inst| {
-                        inst.add_or_replace_modifier(mod_inst.clone());
-                    });
-                }
+        // Effects that modify attributes (ex. speed) should also update the
+        // entity's attribute instances (server-side) and then notify clients.
+        if !effect.effect_type.attribute_modifiers.is_empty() {
+            // Apply each attribute modifier into the local AttributeInstance
+            for m in effect.effect_type.attribute_modifiers {
+                let id = m.id.to_string();
+                let op = match m.operation {
+                    Operation::AddValue => ModifierOperation::Add,
+                    Operation::AddMultipliedBase => ModifierOperation::MultiplyBase,
+                    Operation::AddMultipliedTotal => ModifierOperation::MultiplyTotal,
+                };
+                let scaled_amount = m.base_value * (f64::from(effect.amplifier) + 1.);
+                let mod_inst = Modifier {
+                    id,
+                    amount: scaled_amount,
+                    operation: op,
+                };
 
-                // Recompute packet modifiers from active effects for each affected attribute
-                let mut touched_attrs: Vec<pumpkin_data::attributes::Attributes> = Vec::new();
-                for m in effect.effect_type.attribute_modifiers {
-                    if !touched_attrs.iter().any(|a| a.id == m.attribute.id) {
-                        touched_attrs.push(m.attribute.clone());
-                    }
-                }
+                self.update_attribute(m.attribute, |inst| {
+                    inst.add_or_replace_modifier(mod_inst.clone());
+                });
+            }
 
-                if !touched_attrs.is_empty() {
-                    crate::entity::attributes::send_attribute_updates_for_living(
-                        self,
-                        touched_attrs,
-                    );
+            // Recompute packet modifiers from active effects for each affected attribute
+            let mut touched_attrs: Vec<pumpkin_data::attributes::Attributes> = Vec::new();
+            for m in effect.effect_type.attribute_modifiers {
+                if !touched_attrs.iter().any(|a| a.id == m.attribute.id) {
+                    touched_attrs.push(m.attribute.clone());
                 }
             }
 
-            // Apply absorption effect (+4 absorption per level)
-            if effect.effect_type == &StatusEffect::ABSORPTION {
-                let added = 4.0 * (effect.amplifier as f32 + 1.0);
-                let max_abs = self.get_attribute_value(&Attributes::MAX_ABSORPTION) as f32;
-                let new_abs = (self.absorption.load() + added).min(max_abs);
-                self.set_absorption(new_abs);
+            if !touched_attrs.is_empty() {
+                crate::entity::attributes::send_attribute_updates_for_living(self, touched_attrs);
             }
+        }
 
-            // Apply invisible effect
-            if effect.effect_type == &StatusEffect::INVISIBILITY {
-                self.entity.set_invisible(true);
-            }
+        // Apply absorption effect (+4 absorption per level)
+        if effect.effect_type == &StatusEffect::ABSORPTION {
+            let added = 4.0 * (effect.amplifier as f32 + 1.0);
+            let max_abs = self.get_attribute_value(&Attributes::MAX_ABSORPTION) as f32;
+            let new_abs = (self.absorption.load() + added).min(max_abs);
+            self.set_absorption(new_abs);
+        }
 
-            // Apply glowing effect
-            if effect.effect_type == &StatusEffect::GLOWING {
-                self.entity.set_glowing(true);
-            }
+        // Apply invisible effect
+        if effect.effect_type == &StatusEffect::INVISIBILITY {
+            self.entity.set_invisible(true);
+        }
+
+        // Apply glowing effect
+        if effect.effect_type == &StatusEffect::GLOWING {
+            self.entity.set_glowing(true);
         }
 
         // Broadcast effect to nearby players
@@ -1236,6 +1282,80 @@ impl LivingEntity {
         if suffocating {
             caller.damage(caller, 1.0, DamageType::IN_WALL);
         }
+
+        self.push_entities(caller);
+    }
+
+    fn push_entities(&self, dyn_self: &dyn EntityBase) {
+        let world = self.entity.world.load();
+        let entity_bb = self.entity.bounding_box.load();
+        let own_team = get_entity_team(dyn_self);
+
+        let pushable: Vec<Arc<dyn EntityBase>> = world
+            .get_all_at_box(&entity_bb)
+            .into_iter()
+            .filter(|entity| {
+                let entity_ref = entity.get_entity();
+                entity_ref.entity_id != self.entity.entity_id
+                    && !entity.is_spectator()
+                    && entity.is_pushable()
+                    && is_allowed_by_team_rules(
+                        own_team.as_ref(),
+                        get_entity_team(&**entity).as_ref(),
+                    )
+            })
+            .collect();
+
+        if pushable.is_empty() {
+            return;
+        }
+
+        // Entity cramming check
+        let max_cramming = match world.get_game_rule(&GameRule::MaxEntityCramming) {
+            GameRuleValue::Int(value) => value,
+            GameRuleValue::Bool(_) => 0,
+        };
+        if max_cramming > 0
+            && pushable.len() as i64 > max_cramming - 1
+            && rand::random::<u32>().is_multiple_of(4)
+        {
+            let count = pushable
+                .iter()
+                .filter(|entity| !entity.is_passenger())
+                .count();
+            if count as i64 > max_cramming - 1 {
+                dyn_self.damage(dyn_self, 6.0, DamageType::CRAMMING);
+            }
+        }
+
+        for entity in pushable {
+            entity.push(dyn_self);
+        }
+    }
+
+    /// Decays player velocity like vanilla `travelInAir` friction.
+    fn apply_travel_friction(&self) {
+        let mut velo = self.entity.velocity.load();
+        if velo.x == 0.0 && velo.z == 0.0 {
+            return;
+        }
+
+        let friction = if self.entity.on_ground.load(Relaxed) {
+            f64::from(
+                self.entity
+                    .get_block_with_y_offset(0.500_001)
+                    .1
+                    .slipperiness,
+            ) * 0.91
+        } else {
+            0.91
+        };
+
+        velo.x *= friction;
+
+        velo.z *= friction;
+
+        self.entity.velocity.store(velo);
     }
 
     fn travel_in_air(&self, caller: &dyn EntityBase) {
@@ -1625,6 +1745,20 @@ impl LivingEntity {
                 .allow_flying
         });
         if may_fly || self.is_immune_to_fall_damage() {
+            return;
+        }
+
+        // Vanilla parity: the fall_damage gamerule only affects players.
+        if caller.get_player().is_some()
+            && !self
+                .entity
+                .world
+                .load()
+                .level_info
+                .load()
+                .game_rules
+                .fall_damage
+        {
             return;
         }
 
@@ -2839,7 +2973,6 @@ impl LivingEntity {
                 let resistance = self.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE);
                 self.entity
                     .apply_knockback(knockback_after_resistance(0.4, resistance), dx, dz);
-                self.entity.send_velocity();
             }
         }
 
@@ -3000,11 +3133,24 @@ impl EntityBase for LivingEntity {
             // Vanilla-like order: freeze logic runs after movement/collisions.
             self.entity.tick_frozen(caller);
         } else if is_alive {
+            // Client-authoritative players skip `travel`, so decay pushed velocity like
+            // vanilla to prevent it accumulating and launching the player.
+            self.apply_travel_friction();
+
             let suffocating = self.entity.tick_block_collisions(caller);
             if suffocating {
                 caller.damage(caller, 1.0, DamageType::IN_WALL);
             }
+
+            // Players push other entities like any living entity.
+            self.push_entities(caller);
+
             self.entity.tick_frozen(caller);
+        }
+
+        // Coalesce velocity sends to once per tick.
+        if self.entity.velocity_dirty.swap(false, Ordering::SeqCst) {
+            self.entity.send_velocity();
         }
 
         // TODO
@@ -3091,6 +3237,11 @@ impl EntityBase for LivingEntity {
                     player
                         .hunger_manager
                         .eat(player, food.nutrition as u8, food.saturation);
+                    self.entity.world.load().play_bedrock_level_sound(
+                        "burp",
+                        &self.entity.pos.load(),
+                        -1,
+                    );
                 }
 
                 self.apply_consumable_effects(caller, item);

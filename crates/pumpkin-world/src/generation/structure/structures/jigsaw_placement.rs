@@ -619,7 +619,7 @@ impl JigsawPlacement {
         box_.move_pos(0, y_offset, 0);
         let piece_pos = adjusted_position.add(0, y_offset, 0);
 
-        let max_y = context.min_y + 384 - 1;
+        let max_y = context.min_y + context.height as i32 - 1;
         if is_start_too_close_to_world_height_limits(context.min_y, max_y, dimension_padding, &box_)
         {
             tracing::debug!(

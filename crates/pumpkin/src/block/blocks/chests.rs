@@ -7,6 +7,7 @@ use pumpkin_data::block_properties::{ChestLikeProperties, ChestType, HorizontalF
 use pumpkin_data::entity::EntityPose;
 use pumpkin_data::loot_table::get_loot_table;
 use pumpkin_data::{Block, BlockDirection, translation};
+use pumpkin_inventory::Inventory;
 use pumpkin_inventory::double::DoubleInventory;
 use pumpkin_inventory::generic_container_screen_handler::{create_generic_9x3, create_generic_9x6};
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
@@ -17,14 +18,13 @@ use pumpkin_macros::{pumpkin_block, pumpkin_block_from_tag};
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::inventory::Inventory;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Mutex;
 
 use crate::block::{
     BlockBehaviour, BrokenArgs, EmitsRedstonePowerArgs, GetComparatorOutputArgs,
     GetRedstonePowerArgs, GetScreenHandlerFactoryArgs, NormalUseArgs, OnPlaceArgs,
-    OnSyncedBlockEventArgs, PathComputationType, PlacedArgs, PlayerPlacedArgs, RandomTickArgs,
+    OnSyncedBlockEventArgs, PathComputationType, PlacedArgs, RandomTickArgs,
     registry::BlockActionResult,
 };
 use crate::entity::EntityBase;
@@ -120,19 +120,7 @@ fn placed_chest_impl<E: BlockEntity + 'static>(
     }
 }
 
-fn player_placed_chest_impl(args: &PlayerPlacedArgs<'_>) {
-    let position = pumpkin_util::math::vector3::Vector3::new(
-        args.position.0.x as f64 + 0.5,
-        args.position.0.y as f64 + 0.5,
-        args.position.0.z as f64 + 0.5,
-    );
-    args.world.play_bedrock_level_sound(
-        "place",
-        &position,
-        i32::from(pumpkin_data::BlockState::to_be_network_id(args.state_id)),
-    );
-}
-
+/// Computes the comparator output for a chest, combining both halves for double chests.
 fn get_chest_comparator_output(args: &GetComparatorOutputArgs<'_>) -> Option<u8> {
     let state = args.world.get_block_state_id(args.position);
     let first_chest = args.world.get_block_entity(args.position);
@@ -166,6 +154,10 @@ fn get_chest_comparator_output(args: &GetComparatorOutputArgs<'_>) -> Option<u8>
     }
 }
 
+/// Returns a screen handler factory for opening a chest or double chest inventory.
+///
+/// Unpacks deferred loot tables on first open (for non-spectator players) and combines
+/// connected inventories for double chests if neither chest half is obstructed.
 fn get_chest_screen_handler_factory(
     args: GetScreenHandlerFactoryArgs<'_>,
 ) -> Option<Box<dyn ScreenHandlerFactory>> {
@@ -174,25 +166,29 @@ fn get_chest_screen_handler_factory(
 
     let player_is_spectator = args.player.gamemode.load() == GameMode::Spectator;
 
-    // Unpack deferred loot table on first open (non-spectator only).
-    if !player_is_spectator
-        && let Some(ref entity) = first_chest
-        && let Some((loot_key, seed)) = entity.take_loot_table()
-        && let Some(table) = get_loot_table(&loot_key)
-        && let Some(inv) = entity.clone().get_inventory()
-    {
-        fill_chest_inventory(&inv, table, seed);
-        inv.mark_dirty();
-    }
-
-    let first_inventory = first_chest.and_then(BlockEntity::get_inventory)?;
-
     let chest_props = ChestLikeProperties::from_state_id(state);
     let connected_towards = match chest_props.r#type {
         ChestType::Single => None,
         ChestType::Left => Some(chest_props.facing.rotate_clockwise()),
         ChestType::Right => Some(chest_props.facing.rotate_counter_clockwise()),
     };
+
+    let unpack = |entity: &Arc<dyn BlockEntity>| {
+        if let Some((loot_key, seed)) = entity.take_loot_table()
+            && let Some(table) = get_loot_table(&loot_key)
+            && let Some(inv) = entity.clone().get_inventory()
+        {
+            fill_chest_inventory(&inv, table, seed);
+            inv.mark_dirty();
+        }
+    };
+
+    // Unpack deferred loot table on first open (non-spectator only).
+    if !player_is_spectator && let Some(ref entity) = first_chest {
+        unpack(entity);
+    }
+
+    let first_inventory = first_chest.and_then(BlockEntity::get_inventory)?;
 
     if is_chest_blocked(args.world, args.position) {
         return None;
@@ -203,6 +199,16 @@ fn get_chest_screen_handler_factory(
         if is_chest_blocked(args.world, &neighbor_pos) {
             return None;
         }
+    }
+
+    // Both halves of a double chest are unpacked at once, like vanilla's CompoundContainer.
+    if !player_is_spectator
+        && let Some(direction) = connected_towards
+        && let Some(second) = args
+            .world
+            .get_block_entity(&args.position.offset(direction.to_offset()))
+    {
+        unpack(&second);
     }
 
     let inventory = if let Some(direction) = connected_towards
@@ -292,10 +298,6 @@ impl BlockBehaviour for ChestBlock {
         placed_chest_impl(&args, ChestBlockEntity::new);
     }
 
-    fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
-        player_placed_chest_impl(&args);
-    }
-
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         normal_use_chest_impl(&args)
     }
@@ -371,10 +373,6 @@ impl BlockBehaviour for CopperChestBlock {
         placed_chest_impl(&args, ChestBlockEntity::new);
     }
 
-    fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
-        player_placed_chest_impl(&args);
-    }
-
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         normal_use_chest_impl(&args)
     }
@@ -439,10 +437,6 @@ impl BlockBehaviour for TrappedChestBlock {
     fn placed(&self, args: PlacedArgs<'_>) {
         use crate::block::entities::trapped_chest::TrappedChestBlockEntity;
         placed_chest_impl(&args, TrappedChestBlockEntity::new);
-    }
-
-    fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
-        player_placed_chest_impl(&args);
     }
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {

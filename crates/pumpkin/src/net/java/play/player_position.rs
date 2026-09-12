@@ -52,6 +52,9 @@ impl JavaClient {
         if !player.has_client_loaded() {
             return;
         }
+        // A movement packet was received this tick — tracked for SClientTickEnd zeroing.
+        self.received_movement_this_tick
+            .store(true, Ordering::Relaxed);
         if player.get_entity().has_vehicle() {
             return;
         }
@@ -190,6 +193,9 @@ impl JavaClient {
         if !player.has_client_loaded() {
             return;
         }
+        // A movement packet was received this tick — tracked for SClientTickEnd zeroing.
+        self.received_movement_this_tick
+            .store(true, Ordering::Relaxed);
         if player.get_entity().has_vehicle() {
             return;
         }

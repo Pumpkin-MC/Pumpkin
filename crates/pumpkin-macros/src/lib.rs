@@ -3,11 +3,10 @@
 use heck::ToShoutySnakeCase;
 use proc_macro::TokenStream;
 use proc_macro_error2::{abort, abort_call_site};
-use pumpkin_data::tag::{RegistryKey, get_tag_ids};
-use pumpkin_data::{Block, BlockId};
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, quote_spanned};
+use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
-use syn::{self, Attribute, DeriveInput, LitStr, Type, parse_quote};
+use syn::{self, Attribute, DeriveInput, Token, Type, parse_quote};
 use syn::{Block as SynBlock, Expr, Field, Fields, ItemStruct, Stmt, parse_macro_input};
 
 /// Derives the `Payload` trait for an event struct, enabling it to be used in the plugin system.
@@ -314,25 +313,51 @@ pub fn java_packet(args: TokenStream, item: TokenStream) -> TokenStream {
     .into()
 }
 
-/// Marks a struct as representing a specific block by its name.
+fn block_expr_to_id(expr: &Expr) -> proc_macro2::TokenStream {
+    match expr {
+        Expr::Lit(syn::ExprLit {
+            lit: syn::Lit::Str(lit_str),
+            ..
+        }) => {
+            let val = lit_str.value();
+            let name = val.strip_prefix("minecraft:").unwrap_or(&val);
+            let const_ident = format_ident!("{}", name.to_shouty_snake_case());
+            quote_spanned! { lit_str.span() => pumpkin_data::BlockId::#const_ident }
+        }
+        Expr::Path(syn::ExprPath { path, .. }) => {
+            if path.segments.len() == 1 {
+                let ident = &path.segments[0].ident;
+                quote_spanned! { expr.span() => pumpkin_data::BlockId::#ident }
+            } else if path.segments.len() == 2
+                && (path.segments[0].ident == "Block" || path.segments[0].ident == "BlockId")
+            {
+                let ident = &path.segments[1].ident;
+                quote_spanned! { expr.span() => pumpkin_data::BlockId::#ident }
+            } else {
+                quote_spanned! { expr.span() => pumpkin_data::BlockId::from(#expr) }
+            }
+        }
+        _ => {
+            quote_spanned! { expr.span() => pumpkin_data::BlockId::from(#expr) }
+        }
+    }
+}
+
+/// Marks a struct as representing a specific block (or blocks) by name, expression, or constant.
 ///
 /// # Arguments
-/// - `args` – The `TokenStream` representing the block name literal.
+/// - `args` – One or more block names (e.g. `"stone"`, `"minecraft:stone"`), constants (e.g. `Block::STONE`, `BlockId::STONE`, `STONE`), or expressions.
 /// - `item` – The input `TokenStream` representing the struct to implement `BlockMetadata` for.
 #[proc_macro_attribute]
 pub fn pumpkin_block(args: TokenStream, item: TokenStream) -> TokenStream {
     let input_item = item.clone();
 
-    let arg_lit = parse_macro_input!(args as LitStr);
-    let arg_value = arg_lit.value();
+    let args = parse_macro_input!(args with Punctuated<Expr, Token![,]>::parse_terminated);
+    if args.is_empty() {
+        abort_call_site!("expected at least one block argument");
+    }
 
-    let block_name = arg_value.strip_prefix("minecraft:").unwrap_or(&arg_value);
-    let Some(block) = Block::from_name(block_name) else {
-        return syn::Error::new(arg_lit.span(), "Invalid block name")
-            .to_compile_error()
-            .into();
-    };
-    let const_ident = format_ident!("{}", block.name.to_shouty_snake_case());
+    let id_tokens: Vec<_> = args.iter().map(block_expr_to_id).collect();
 
     let ast = parse_macro_input!(item as DeriveInput);
     let name = &ast.ident;
@@ -341,7 +366,7 @@ pub fn pumpkin_block(args: TokenStream, item: TokenStream) -> TokenStream {
     let generated = quote! {
         impl #impl_generics crate::block::BlockMetadata for #name #ty_generics #where_clause {
             fn ids() -> Box<[pumpkin_data::BlockId]> {
-                [pumpkin_data::BlockId::#const_ident].into()
+                Box::new([ #(#id_tokens),* ])
             }
         }
     };
@@ -355,37 +380,27 @@ pub fn pumpkin_block(args: TokenStream, item: TokenStream) -> TokenStream {
 /// Marks a struct as representing a set of blocks from a given tag.
 ///
 /// # Arguments
-/// - `args` – The `TokenStream` representing the block tag literal.
+/// - `args` – The `TokenStream` representing the block tag literal or expression.
 /// - `item` – The input `TokenStream` representing the struct to implement `BlockMetadata` for.
 #[proc_macro_attribute]
 pub fn pumpkin_block_from_tag(args: TokenStream, item: TokenStream) -> TokenStream {
     let original_item = item.clone();
 
-    let arg_lit = parse_macro_input!(args as LitStr);
+    let arg_expr = parse_macro_input!(args as Expr);
     let ast = parse_macro_input!(item as DeriveInput);
 
     let name = &ast.ident;
     let (impl_generics, ty_generics, where_clause) = ast.generics.split_for_impl();
 
-    let full_tag = arg_lit.value();
-
-    let Some(values) = get_tag_ids(RegistryKey::Block, &full_tag) else {
-        return syn::Error::new(arg_lit.span(), format!("Failed to get tag IDs: {full_tag}"))
-            .to_compile_error()
-            .into();
-    };
-    let const_values: Vec<_> = values
-        .iter()
-        .map(|v| {
-            let block = BlockId::new_or_air(*v).to_block();
-            format_ident!("{}", block.name.to_shouty_snake_case())
-        })
-        .collect();
-
     let expanded = quote! {
         impl #impl_generics crate::block::BlockMetadata for #name #ty_generics #where_clause {
             fn ids() -> Box<[pumpkin_data::BlockId]> {
-                Box::new([ #(pumpkin_data::BlockId::#const_values),* ])
+                pumpkin_data::tag::get_tag_ids(pumpkin_data::tag::RegistryKey::Block, #arg_expr)
+                    .unwrap_or_else(|| panic!("Failed to get tag IDs for: {}", #arg_expr))
+                    .iter()
+                    .copied()
+                    .map(pumpkin_data::BlockId::new_or_air)
+                    .collect()
             }
         }
     };
@@ -804,33 +819,6 @@ impl syn::parse::Parse for TranslateCrossInput {
 
 fn eval_translation_key_expr(expr: &syn::Expr) -> Option<(&'static str, proc_macro2::Span)> {
     match expr {
-        syn::Expr::Path(expr_path) => {
-            let segments: Vec<String> = expr_path
-                .path
-                .segments
-                .iter()
-                .map(|s| s.ident.to_string())
-                .collect();
-            let seg_refs: Vec<&str> = segments.iter().map(String::as_str).collect();
-
-            let (is_java, const_ident) = match seg_refs.as_slice() {
-                ["translation", "java", ident]
-                | ["pumpkin_data" | "crate", "translation", "java", ident] => (true, *ident),
-                ["translation", "bedrock", ident]
-                | ["pumpkin_data" | "crate", "translation", "bedrock", ident] => (false, *ident),
-                _ => return None,
-            };
-
-            let key = if is_java {
-                pumpkin_data::translation::java::get(const_ident)
-                    .and_then(pumpkin_data::translation::java::get_value)
-            } else {
-                pumpkin_data::translation::bedrock::get(const_ident)
-                    .and_then(pumpkin_data::translation::bedrock::get_value)
-            };
-
-            key.map(|k| (k, expr.span()))
-        }
         syn::Expr::Lit(syn::ExprLit {
             lit: syn::Lit::Str(lit_str),
             ..

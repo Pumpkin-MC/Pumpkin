@@ -7,13 +7,13 @@ use crate::block::entities::{
 use pumpkin_data::{
     BlockStateId, block_properties::FurnaceLikeProperties, screen::WindowType, translation,
 };
+use pumpkin_inventory::Inventory;
 use pumpkin_inventory::{
     furnace_like::furnace_like_screen_handler::FurnaceLikeScreenHandler,
     player::player_inventory::PlayerInventory,
     screen_handler::{InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler},
 };
 use pumpkin_macros::pumpkin_block;
-use pumpkin_world::inventory::Inventory;
 
 use crate::{
     block::{

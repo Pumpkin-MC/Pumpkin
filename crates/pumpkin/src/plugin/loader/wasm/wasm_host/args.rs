@@ -4,9 +4,19 @@ use pumpkin_util::text::TextComponent;
 
 use crate::{
     command::{
-        argument_types::entity_anchor::EntityAnchor, context::command_context::CommandContext,
+        argument_types::{
+            argument_type::JavaClientArgumentType, coordinates::Coordinates,
+            entity_anchor::EntityAnchor,
+        },
+        context::command_context::CommandContext,
+        node::attached::AttachedNode,
     },
     entity::player::Player,
+};
+use pumpkin_util::math::{
+    position::BlockPos,
+    vector2::Vector2,
+    vector3::{Axis, Vector3},
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -88,6 +98,12 @@ pub fn build_consumed_args_from_context(context: &CommandContext) -> HashMap<Str
             map.insert(name.clone(), OwnedArg::TextComponent(t.clone()));
         } else if let Some(&anchor) = res.downcast_ref::<EntityAnchor>() {
             map.insert(name.clone(), OwnedArg::EntityAnchor(anchor));
+        } else if let Some(&coords) = res.downcast_ref::<Coordinates>() {
+            // `block_pos`, `column_pos`, `vec2`, `vec3` and `rotation` all parse
+            // to `Coordinates` and the original type cannot be detected here
+            if let Some(arg) = coordinates_to_owned_arg(context, name, coords) {
+                map.insert(name.clone(), arg);
+            }
         } else if let Some(selector) =
             res.downcast_ref::<crate::command::argument_types::entity_selector::EntitySelector>()
         {
@@ -99,6 +115,58 @@ pub fn build_consumed_args_from_context(context: &CommandContext) -> HashMap<Str
         }
     }
     map
+}
+
+/// The Java client-side parser declared for argument `name`
+fn declared_parser(context: &CommandContext, name: &str) -> Option<JavaClientArgumentType> {
+    context
+        .nodes
+        .iter()
+        .find_map(|parsed| match &context.tree[parsed.node] {
+            AttachedNode::Argument(argument) if argument.meta.name == name => {
+                Some(argument.meta.argument_type.client_side_parser())
+            }
+            _ => None,
+        })
+}
+
+/// Converts a parsed `Coordinates` into the `OwnedArg` shape matching the
+/// argument type it was declared as
+fn coordinates_to_owned_arg(
+    context: &CommandContext,
+    name: &str,
+    coords: Coordinates,
+) -> Option<OwnedArg> {
+    let source = context.source.as_ref();
+    match declared_parser(context, name)? {
+        JavaClientArgumentType::BlockPos => {
+            let resolved: Vector3<f64> = coords.resolve(source);
+            Some(OwnedArg::BlockPos(BlockPos::floored_v(resolved)))
+        }
+        JavaClientArgumentType::ColumnPos => {
+            let resolved: Vector3<f64> = coords.resolve(source);
+            let pos = BlockPos::floored_v(resolved);
+            Some(OwnedArg::Pos2D(Vector2::new(
+                f64::from(pos.0.x),
+                f64::from(pos.0.z),
+            )))
+        }
+        JavaClientArgumentType::Vec3 => Some(OwnedArg::Pos3D(coords.resolve(source))),
+        JavaClientArgumentType::Vec2 => {
+            let resolved: Vector3<f64> = coords.resolve(source);
+            Some(OwnedArg::Pos2D(Vector2::new(resolved.x, resolved.z)))
+        }
+        JavaClientArgumentType::Rotation => {
+            let rotation = coords.rotation(source);
+            Some(OwnedArg::Rotation(
+                rotation.x,
+                coords.is_relative(Axis::X),
+                rotation.y,
+                coords.is_relative(Axis::Y),
+            ))
+        }
+        _ => None,
+    }
 }
 
 pub struct ConsumedArgsResource {
