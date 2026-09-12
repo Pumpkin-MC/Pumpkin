@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use pumpkin_data::{
     Block, BlockDirection, BlockStateId,
-    block_properties::{BlockProperties, ChorusFlowerLikeProperties},
+    block_properties::ChorusFlowerLikeProperties,
     tag::{self, Taggable},
     world::WorldEvent,
 };
@@ -63,7 +63,7 @@ impl BlockBehaviour for ChorusFlowerBlock {
         let max_y = args.world.dimension.min_y + args.world.dimension.height - 1;
         if args.world.get_block(&above).default_state.is_air() && above.0.y <= max_y {
             let state_id = args.world.get_block_state_id(args.position);
-            let state_props = ChorusFlowerLikeProperties::from_state_id(state_id, args.block);
+            let state_props = ChorusFlowerLikeProperties::from_state_id(state_id);
             let current_age = state_props.age;
             if current_age < DEAD_AGE {
                 let mut grow_upwards = false;

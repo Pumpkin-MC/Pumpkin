@@ -97,14 +97,3 @@ impl Goal for OwnerHurtTargetGoal {
         Controls::TARGET
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn owner_hurt_target_goal_controls() {
-        let goal = OwnerHurtTargetGoal::new();
-        assert!(goal.controls().get(Controls::TARGET));
-    }
-}

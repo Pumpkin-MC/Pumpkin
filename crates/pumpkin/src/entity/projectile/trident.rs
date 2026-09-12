@@ -78,6 +78,11 @@ impl TridentEntity {
         }
     }
 
+    /// Applies projectile-spawned enchantment effects matching vanilla `Projectile::applyOnProjectileSpawned`.
+    pub fn apply_on_projectile_spawned(&self, pickup_item_stack: &ItemStack) {
+        super::apply_on_projectile_spawned(self.get_entity(), pickup_item_stack, None, None);
+    }
+
     pub fn set_velocity_from_rotation(
         &self,
         pitch: f32,
@@ -152,6 +157,10 @@ impl TridentEntity {
 }
 
 impl EntityBase for TridentEntity {
+    fn get_owner_id(&self) -> Option<i32> {
+        self.owner_id
+    }
+
     fn tick(&self, caller: &dyn EntityBase, _server: &Server) {
         let entity = self.get_entity();
         let world = entity.world.load();
@@ -304,6 +313,14 @@ impl EntityBase for TridentEntity {
                     .write()
                     .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(pos);
 
+                let block = world.get_block(&pos);
+                let state = world.get_block_state(&pos);
+                if let Some(server) = world.server.upgrade() {
+                    world
+                        .block_registry
+                        .on_projectile_hit(block, &world, self, &pos, state, &hit_pos, &server);
+                }
+
                 // Stop the trident
                 entity.velocity.store(Vector3::new(0.0, 0.0, 0.0));
                 entity.set_pos(hit_pos);
@@ -357,7 +374,8 @@ impl EntityBase for TridentEntity {
                     1.0,
                     0.0,
                 );
-                world.broadcast_packet_all(&sound_packet);
+                let chunk_pos = entity.chunk_pos.load();
+                world.broadcast_to_chunk(chunk_pos, &sound_packet);
 
                 // Standard bounce/fall-back behavior
                 entity.velocity.store(Vector3::new(0.0, -0.1, 0.0));
@@ -388,6 +406,11 @@ impl EntityBase for TridentEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone();
         if player.is_creative() || player.inventory.insert_stack_anywhere(&mut stack) {
+            player.increment_stat(
+                pumpkin_data::statistic::StatisticCategory::PickedUp,
+                stack.item.id as i32,
+                1,
+            );
             player.living_entity.pickup(&self.entity, 1);
             self.get_entity().remove();
         }

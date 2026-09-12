@@ -1,13 +1,17 @@
 use std::sync::Arc;
-
-use pumpkin_data::{Block, BlockDirection, BlockStateId, entity::EntityType, world::WorldEvent};
+use pumpkin_data::{
+    Block, BlockDirection, BlockState, BlockStateId, entity::EntityType, world::WorldEvent,
+};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 
 use crate::block::entities::skull::SkullBlockEntity;
 use crate::{
-    block::{BlockBehaviour, OnPlaceArgs, PlacedArgs, blocks::skull_block::SkullBlock},
+    block::{
+        BlockBehaviour, OnPlaceArgs, PathComputationType, PlacedArgs,
+        blocks::skull_block::SkullBlock,
+    },
     entity::{Entity, boss::wither::WitherEntity},
     world::World,
 };
@@ -91,5 +95,9 @@ impl BlockBehaviour for WitherSkeletonSkullBlock {
         if let Some(pattern) = find_wither_pattern(args.world, args.position) {
             spawn_wither(args.world, &pattern);
         }
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }

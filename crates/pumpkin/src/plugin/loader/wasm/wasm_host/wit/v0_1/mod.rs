@@ -1,11 +1,12 @@
 use crate::plugin::{
     PluginMetadata,
     loader::wasm::wasm_host::{
-        PluginInitError, PluginInstance, WasmPlugin, state::PluginHostState,
+        PluginInitError, PluginInstance, concurrent_store::LegacySyncReentry,
+        state::PluginHostState,
     },
 };
-use tokio::sync::Mutex;
-use wasmtime::component::{HasSelf, InstancePre, Linker, bindgen};
+use pumpkin_host_bindings::PluginPre;
+use wasmtime::component::{HasSelf, InstancePre, Linker};
 use wasmtime::{Engine, Store};
 
 pub mod advancement;
@@ -66,12 +67,7 @@ pub mod uuid;
 #[allow(clippy::unused_async_trait_impl)]
 pub mod world;
 
-bindgen!({
-    path: "../pumpkin-plugin-wit/v0.1",
-    world: "plugin",
-    imports: { default: async | trappable },
-    exports: { default: async | trappable},
-});
+pub use pumpkin_host_bindings::{Plugin, pumpkin};
 
 impl pumpkin::plugin::java_packets::Host for PluginHostState {}
 impl pumpkin::plugin::bedrock_packets::Host for PluginHostState {}
@@ -102,23 +98,33 @@ pub fn prepare_plugin(
 pub async fn init_plugin(
     engine: &Engine,
     plugin_pre: PluginPre<PluginHostState>,
-) -> Result<(WasmPlugin, PluginMetadata), PluginInitError> {
+    legacy_sync_reentry: &LegacySyncReentry,
+) -> Result<(PluginInstance, Store<PluginHostState>, PluginMetadata), PluginInitError> {
     let mut store = Store::new(engine, PluginHostState::new());
     store.limiter(|state| &mut state.limits);
-    let plugin = plugin_pre
-        .instantiate_async(&mut store)
+    let plugin = legacy_sync_reentry
+        .scope_bootstrap(plugin_pre.instantiate_async(&mut store))
         .await
         .map_err(PluginInitError::InstantiationFailed)?;
 
-    plugin
-        .call_init_plugin(&mut store)
+    store
+        .run_concurrent(async |accessor| {
+            legacy_sync_reentry
+                .scope_bootstrap(plugin.call_init_plugin(accessor))
+                .await
+        })
         .await
+        .map_err(PluginInitError::CallInitPluginFailed)?
         .map_err(PluginInitError::CallInitPluginFailed)?;
 
-    let metadata = plugin
-        .pumpkin_plugin_metadata()
-        .call_get_metadata(&mut store)
+    let metadata = store
+        .run_concurrent(async |accessor| {
+            legacy_sync_reentry
+                .scope_bootstrap(plugin.pumpkin_plugin_metadata().call_get_metadata(accessor))
+                .await
+        })
         .await
+        .map_err(PluginInitError::CallGetMetadataFailed)?
         .map_err(PluginInitError::CallGetMetadataFailed)?;
 
     let metadata = PluginMetadata {
@@ -135,11 +141,5 @@ pub async fn init_plugin(
         .permissions
         .clone_from(&metadata.permissions);
 
-    Ok((
-        WasmPlugin {
-            plugin_instance: PluginInstance::V0_1(plugin),
-            store: Mutex::new(store),
-        },
-        metadata,
-    ))
+    Ok((PluginInstance::V0_1(plugin), store, metadata))
 }

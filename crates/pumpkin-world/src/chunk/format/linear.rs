@@ -2,10 +2,11 @@ use rustc_hash::FxHashMap;
 use std::io::{ErrorKind, Read};
 use std::marker::PhantomData;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::chunk::format::anvil::{AnvilChunkFile, SingleChunkDataSerializer};
-use crate::chunk::io::{ChunkSerializer, LoadedData};
+use crate::chunk::io::{ChunkSerializer, LoadedData, run_blocking};
 use crate::chunk::{ChunkReadingError, ChunkWritingError};
 use bytes::{Buf, BufMut, Bytes};
 use pumpkin_util::math::vector2::Vector2;
@@ -371,16 +372,6 @@ impl<S: SingleChunkDataSerializer> LinearV2File<S> {
         let cx = bucket_col * stride + local_col;
         cz * 32 + cx
     }
-
-    fn build_bitmap(&self) -> ChunkBitmap {
-        let mut bitmap = ChunkBitmap::new();
-        for (i, chunk) in self.chunks_data.iter().enumerate() {
-            if chunk.is_some() {
-                bitmap.set(i, true);
-            }
-        }
-        bitmap
-    }
 }
 
 impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for LinearV2File<S> {
@@ -399,55 +390,60 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for LinearV2File<S>
 
     async fn write(&self, path: &PathBuf) -> Result<(), std::io::Error> {
         let temp_path = path.with_extension("tmp");
-        let file = tokio::fs::File::create(&temp_path).await?;
-        let mut writer = BufWriter::new(file);
-
         let grid_size = self.grid_size;
-        let bucket_count = Self::bucket_count(grid_size);
         let chunks_data = self.chunks_data.clone();
         let timestamps = self.timestamps;
+        let region_x = self.region_x;
+        let region_z = self.region_z;
+        let (header, compressed_buckets) = Box::pin(run_blocking(move || {
+            let bucket_count = Self::bucket_count(grid_size);
+            let mut compressed_buckets: Vec<Box<[u8]>> = Vec::with_capacity(bucket_count);
+            let mut bucket_entries: Vec<BucketSizeEntry> = Vec::with_capacity(bucket_count);
 
-        let mut compressed_buckets: Vec<Box<[u8]>> = Vec::with_capacity(bucket_count);
-        let mut bucket_entries: Vec<BucketSizeEntry> = Vec::with_capacity(bucket_count);
+            for bucket_idx in 0..bucket_count {
+                let raw = Self::serialise_bucket(&chunks_data, &timestamps, bucket_idx, grid_size);
+                let compressed =
+                    compress_to_vec(raw.as_slice(), CompressionLevel::Fastest).into_boxed_slice();
+                bucket_entries.push(BucketSizeEntry {
+                    size: compressed.len() as u32,
+                    compression_level: 1,
+                    xxhash: xxh64(&compressed, 0),
+                });
+                compressed_buckets.push(compressed);
+            }
 
-        for bucket_idx in 0..bucket_count {
-            let raw = Self::serialise_bucket(&chunks_data, &timestamps, bucket_idx, grid_size);
-            let compressed =
-                compress_to_vec(raw.as_slice(), CompressionLevel::Fastest).into_boxed_slice();
-            let hash = xxh64(&compressed, 0);
-            bucket_entries.push(BucketSizeEntry {
-                size: compressed.len() as u32,
-                compression_level: 1,
-                xxhash: hash,
-            });
-            compressed_buckets.push(compressed);
+            let superblock = LinearV2Superblock {
+                newest_timestamp: timestamps.iter().copied().max().unwrap_or(0),
+                grid_size,
+                region_x,
+                region_z,
+            };
+            let mut bitmap = ChunkBitmap::new();
+            for (index, chunk) in chunks_data.iter().enumerate() {
+                if chunk.is_some() {
+                    bitmap.set(index, true);
+                }
+            }
+            let features = NbtFeatures::empty();
+
+            let mut header = Vec::new();
+            header.extend_from_slice(&superblock.to_bytes());
+            header.extend_from_slice(&bitmap.0);
+            header.extend_from_slice(&features.to_bytes());
+            for entry in bucket_entries {
+                header.extend_from_slice(&entry.to_bytes());
+            }
+            (header, compressed_buckets)
+        }))
+        .await
+        .map_err(|_| std::io::Error::other("linear serialization task failed"))?;
+
+        let file = tokio::fs::File::create(&temp_path).await?;
+        let mut writer = BufWriter::new(file);
+        writer.write_all(&header).await?;
+        for compressed in compressed_buckets {
+            writer.write_all(&compressed).await?;
         }
-
-        let newest_timestamp = self.timestamps.iter().copied().max().unwrap_or(0);
-
-        let superblock = LinearV2Superblock {
-            newest_timestamp,
-            grid_size,
-            region_x: self.region_x,
-            region_z: self.region_z,
-        };
-
-        let bitmap = self.build_bitmap();
-
-        let features = NbtFeatures::empty();
-
-        writer.write_all(&superblock.to_bytes()).await?;
-        writer.write_all(&bitmap.0).await?;
-        writer.write_all(&features.to_bytes()).await?;
-
-        for entry in &bucket_entries {
-            writer.write_all(&entry.to_bytes()).await?;
-        }
-
-        for compressed in &compressed_buckets {
-            writer.write_all(compressed).await?;
-        }
-
         writer.write_all(&SIGNATURE).await?;
         writer.flush().await?;
 
@@ -566,13 +562,19 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for LinearV2File<S>
 
     async fn update_chunk(
         &mut self,
-        chunk: &Self::Data,
+        chunk: Arc<Self::Data>,
         _chunk_config: &Self::ChunkConfig,
     ) -> Result<(), ChunkWritingError> {
         let index = Self::get_chunk_index(chunk.position().0, chunk.position().1);
-        let chunk_raw: Bytes = chunk
-            .to_bytes()
-            .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))?;
+        let chunk_raw = run_blocking(move || {
+            chunk
+                .to_bytes()
+                .map_err(|err| ChunkWritingError::ChunkSerializingError(err.to_string()))
+        })
+        .await
+        .map_err(|_| {
+            ChunkWritingError::IoError(std::io::Error::other("chunk serialization task failed"))
+        })??;
 
         self.timestamps[index] = SystemTime::now()
             .duration_since(UNIX_EPOCH)

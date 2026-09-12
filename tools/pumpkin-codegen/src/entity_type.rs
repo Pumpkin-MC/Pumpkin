@@ -7,8 +7,6 @@ use quote::{ToTokens, format_ident, quote};
 use serde::Deserialize;
 use syn::LitInt;
 
-use crate::loot::LootTableStruct;
-
 /// Raw deserialization shape for a single entity type entry from `entities.json`.
 #[derive(Deserialize)]
 pub struct EntityType {
@@ -24,8 +22,6 @@ pub struct EntityType {
     pub mob: Option<bool>,
     /// Maximum number of this entity type allowed per chunk, if capped.
     pub limit_per_chunk: Option<i32>,
-    /// Loot table dropped by this entity on death, if any.
-    pub loot_table: Option<LootTableStruct>,
     /// Whether this entity can be summoned by the `/summon` command.
     pub summonable: bool,
     /// Whether this entity is immune to fire damage.
@@ -182,14 +178,6 @@ impl ToTokens for NamedEntityType<'_> {
         let dimension0 = entity.dimension[0];
         let dimension1 = entity.dimension[1];
         let spawn_dimensions_scale = entity.spawn_dimensions_scale;
-
-        let loot_table = if let Some(table) = &entity.loot_table {
-            let table_tokens = table.to_token_stream();
-            quote! { Some(#table_tokens) }
-        } else {
-            quote! { None }
-        };
-
         let experience_reward = entity.experience_reward.unwrap_or(0);
         let client_tracking_range = entity.client_tracking_range;
         let update_interval = entity.update_interval;
@@ -212,7 +200,6 @@ impl ToTokens for NamedEntityType<'_> {
                 client_tracking_range: #client_tracking_range,
                 update_interval: #update_interval,
                 track_deltas: #track_deltas,
-                loot_table: #loot_table,
                 dimension: [#dimension0, #dimension1], // Correctly construct the array
                 eye_height: #eye_height,
                 spawn_dimensions_scale: #spawn_dimensions_scale,
@@ -264,7 +251,6 @@ pub fn build() -> TokenStream {
         use crate::tag::RegistryKey;
         use crate::attributes::Attributes;
         use crate::sound::Sound;
-        use pumpkin_util::loot_table::*;
         use pumpkin_util::HeightMap;
         use pumpkin_util::math::boundingbox::BoundingBox;
         use pumpkin_util::math::vector3::Vector3;
@@ -287,7 +273,6 @@ pub fn build() -> TokenStream {
             pub client_tracking_range: u32,
             pub update_interval: u32,
             pub track_deltas: bool,
-            pub loot_table: Option<LootTable>,
             pub dimension: [f32; 2],
             pub eye_height: f32,
             pub spawn_dimensions_scale: f32,

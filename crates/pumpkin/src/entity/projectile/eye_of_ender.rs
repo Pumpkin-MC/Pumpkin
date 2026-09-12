@@ -173,17 +173,14 @@ impl EntityBase for EyeOfEnder {
     }
 
     fn init_data_tracker(&self) {
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::eye_of_ender::ITEM_STACK,
-                &ItemStackSerializer::from(
-                    self.item_stack
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .clone(),
-                ),
-            )],
-            None,
+        self.entity.set_synced_data(
+            pumpkin_data::tracked_data::eye_of_ender::ITEM_STACK,
+            ItemStackSerializer::from(
+                self.item_stack
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone(),
+            ),
         );
     }
 

@@ -2,7 +2,7 @@ use core::f32;
 
 use pumpkin_data::{
     Block, BlockState,
-    block_properties::{Axis, EnumVariants},
+    block_properties::{Axis, PaleOakWoodLikeProperties},
 };
 use pumpkin_util::{
     math::{position::BlockPos, vector3::Vector3},
@@ -102,14 +102,15 @@ impl FancyTrunkPlacer {
             }
         }
 
-        Self::make_or_check_branch(
+        let (_, new_logs) = Self::make_or_check_branch(
             chunk,
             start_pos.0,
             start_pos.up_height(k).0,
             trunk_block,
             true,
         );
-        Self::make_branches(chunk, j, start_pos.0, trunk_block, &list);
+        logs.extend_from_slice(&new_logs);
+        Self::make_branches(chunk, j, start_pos.0, trunk_block, &list, &mut logs);
 
         let mut list_2: Vec<TreeNode> = Vec::new();
         for branch_position in list {
@@ -157,24 +158,10 @@ impl FancyTrunkPlacer {
 
                 if TreeFeature::can_replace(block.to_state(), block.to_block_id()) {
                     let block = Block::from_state_id(trunk_provider.id);
-                    let Some(properties) = block.properties(trunk_provider.id) else {
-                        continue;
-                    };
-                    let original_props = &properties.to_props();
-                    let axis = axis.to_value();
-                    // Set the right Axis
-                    let props: Vec<(&'static str, &'static str)> = original_props
-                        .iter()
-                        .map(|(key, value)| {
-                            if *key == "axis" {
-                                (*key, axis)
-                            } else {
-                                (*key, *value)
-                            }
-                        })
-                        .collect();
-                    let state = block.from_properties(&props).to_state_id(block);
-                    chunk.set_block_state(&block_pos_2.0, BlockState::from_id(state));
+                    let mut props = PaleOakWoodLikeProperties::from_state_id(trunk_provider.id);
+                    props.axis = axis;
+                    let state = props.to_state_id(block).to_state();
+                    chunk.set_block_state(&block_pos_2.0, state);
                     logs.push(block_pos_2);
                     continue;
                 }
@@ -194,6 +181,7 @@ impl FancyTrunkPlacer {
         start_pos: Vector3<i32>,
         trunk_provider: &BlockState,
         branch_positions: &[BranchPosition],
+        logs: &mut Vec<BlockPos>,
     ) {
         for branch_position in branch_positions {
             let i = branch_position.get_end_y();
@@ -203,13 +191,14 @@ impl FancyTrunkPlacer {
             {
                 continue;
             }
-            Self::make_or_check_branch(
+            let (_, new_logs) = Self::make_or_check_branch(
                 chunk,
                 block_pos.0,
                 branch_position.node.center.0,
                 trunk_provider,
                 true,
             );
+            logs.extend_from_slice(&new_logs);
         }
     }
 

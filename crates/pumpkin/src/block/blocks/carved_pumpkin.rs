@@ -1,10 +1,8 @@
 use std::sync::Arc;
 
 use pumpkin_data::{
-    Block, BlockDirection, BlockId, BlockStateId,
-    block_properties::{BlockProperties, WallTorchLikeProperties},
-    entity::EntityType,
-    world::WorldEvent,
+    Block, BlockDirection, BlockId, BlockStateId, block_properties::WallTorchLikeProperties,
+    entity::EntityType, world::WorldEvent,
 };
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;

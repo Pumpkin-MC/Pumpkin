@@ -83,6 +83,8 @@ impl StructureGenerator for NetherFortressGenerator {
             collector.add_piece(piece);
         }
 
+        collector.move_inside_heights(&mut random, 48, 70);
+
         Some(StructurePosition {
             start_pos: BlockPos::new(
                 section_coords::section_to_block(context.chunk_x),

@@ -1,5 +1,4 @@
-use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_world::inventory::Inventory;
+use pumpkin_inventory::Inventory;
 
 use std::{
     array::from_fn,

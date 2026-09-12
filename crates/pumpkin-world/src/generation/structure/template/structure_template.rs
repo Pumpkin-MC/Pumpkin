@@ -269,49 +269,12 @@ impl PaletteEntry {
             return self.clone();
         }
 
-        let properties: Vec<(String, String)> = self
-            .properties
-            .iter()
-            .map(|(key, value)| {
-                let transformed_key = match key.as_str() {
-                    "north" | "south" | "east" | "west" => rotation
-                        .rotate_facing(mirror.mirror_facing(key))
-                        .to_string(),
-                    _ => key.clone(),
-                };
-
-                let transformed_value = match key.as_str() {
-                    "facing" => {
-                        let mirrored = mirror.mirror_facing(value);
-                        rotation.rotate_facing(mirrored).to_string()
-                    }
-                    "orientation" => {
-                        let mut parts = value.split('_');
-                        if let (Some(front), Some(top)) = (parts.next(), parts.next()) {
-                            let mirrored_front = mirror.mirror_facing(front);
-                            let rotated_front = rotation.rotate_facing(mirrored_front);
-                            let mirrored_top = mirror.mirror_facing(top);
-                            let rotated_top = rotation.rotate_facing(mirrored_top);
-                            format!("{rotated_front}_{rotated_top}")
-                        } else {
-                            value.clone()
-                        }
-                    }
-                    "axis" => rotation.rotate_axis(value).to_string(),
-                    "rotation" => value.parse::<i32>().map_or_else(
-                        |_| value.clone(),
-                        |rot_value| {
-                            let mirrored = mirror.mirror_block_rotation(rot_value);
-                            let rotated = rotation.rotate_block_rotation(mirrored);
-                            rotated.to_string()
-                        },
-                    ),
-                    _ => value.clone(),
-                };
-
-                (transformed_key, transformed_value)
-            })
-            .collect();
+        let properties = pumpkin_data::transform_block_properties(
+            &self.name,
+            &self.properties,
+            rotation,
+            mirror,
+        );
 
         Self {
             name: self.name.clone(),
