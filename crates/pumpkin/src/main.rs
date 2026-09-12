@@ -67,11 +67,12 @@ async fn main() {
 
     let exec_dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
 
-    let config = PumpkinConfig::load(&exec_dir);
+    let mut config = PumpkinConfig::load(&exec_dir);
 
     let vanilla_data = VanillaData::load();
 
     pumpkin::init_logger(&config.advanced);
+    config.apply_env_overrides();
 
     info!(
         "{}",
