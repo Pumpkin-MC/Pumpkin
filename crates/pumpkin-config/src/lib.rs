@@ -141,6 +141,35 @@ impl LoadConfiguration for PumpkinConfig {
     }
 }
 
+/// Environment variable that overrides `networking.java.address` at startup.
+///
+/// Hosting panels such as Pterodactyl assign a port per server; this lets them pass
+/// the bind address on every start without having to rewrite `pumpkin.toml`.
+pub const JAVA_ADDRESS_ENV: &str = "PUMPKIN_JAVA_ADDRESS";
+
+impl PumpkinConfig {
+    /// Applies overrides from environment variables on top of the loaded configuration.
+    ///
+    /// Overrides only affect the running server and are never written back to `pumpkin.toml`.
+    pub fn apply_env_overrides(&mut self) {
+        let Ok(value) = std::env::var(JAVA_ADDRESS_ENV) else {
+            return;
+        };
+        let value = value.trim();
+        if value.is_empty() {
+            return;
+        }
+        let address: std::net::SocketAddr = match value.parse() {
+            Ok(address) => address,
+            Err(err) => {
+                warn!("Ignoring {JAVA_ADDRESS_ENV}={value:?}: {err}");
+                return;
+            }
+        };
+        self.advanced.networking.java.address = address;
+    }
+}
+
 /// Advanced configuration for optional and feature-specific server settings.
 ///
 /// Allows enabling/disabling features, customizing behaviour, and

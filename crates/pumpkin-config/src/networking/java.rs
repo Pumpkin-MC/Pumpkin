@@ -10,6 +10,8 @@ pub struct JavaConfig {
     /// Whether Java Edition Clients are Accepted.
     pub enabled: bool,
     /// The address and port to which the Java Edition server will bind.
+    ///
+    /// Can be overridden at startup with the `PUMPKIN_JAVA_ADDRESS` environment variable.
     pub address: SocketAddr,
     /// Whether packet encryption is enabled. Required when online mode is enabled.
     pub encryption: bool,
