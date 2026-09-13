@@ -3548,7 +3548,9 @@ impl World {
             &java_player,
         );
 
-        self.broadcast_editioned(&player_info_update, &bedrock_player_list);
+        for world in server.worlds.load().iter() {
+            world.broadcast_editioned(&player_info_update, &bedrock_player_list);
+        }
 
         // If the player has a custom tab_list_name, send an update for it
         if let Some(tab_list_name) = player.get_tab_list_name() {
@@ -3557,7 +3559,7 @@ impl World {
                 uuid: gameprofile.id,
                 actions: &actions,
             }];
-            self.broadcast_packet_all(&CPlayerInfoUpdate::new(
+            server.broadcast_packet_all(&CPlayerInfoUpdate::new(
                 PlayerInfoFlags::UPDATE_DISPLAY_NAME.bits(),
                 &java_player,
             ));
@@ -3566,7 +3568,7 @@ impl World {
         // Here, we send all the infos of players who already joined.
         let mut players_tab_list_names = Vec::new();
         {
-            let players = self.players.load();
+            let players = server.get_all_players();
             let mut data_to_process = Vec::new();
             for p in players
                 .iter()
@@ -4087,13 +4089,7 @@ impl World {
         self.send_to_tracking_players_editioned(from.get_entity(), &je_packet, &be_mob_equipment);
     }
 
-    pub fn send_world_info(
-        &self,
-        player: &Arc<Player>,
-        position: Vector3<f64>,
-        yaw: f32,
-        pitch: f32,
-    ) {
+    pub fn send_world_info(&self, player: &Arc<Player>) {
         if let ClientPlatform::Java(client) = player.client.as_ref() {
             self.worldborder
                 .lock()
@@ -4108,24 +4104,6 @@ impl World {
         {
             player.try_send_client_packet(&CGameEvent::new(GameEvent::StartWaitingChunks, 0.0));
         }
-
-        let entity = &player.get_entity();
-
-        self.broadcast_packet_except(
-            &[player.gameprofile.id],
-            // TODO: add velo
-            &CSpawnEntity::new(
-                entity.entity_id.into(),
-                player.gameprofile.id,
-                i32::from(EntityType::PLAYER.id).into(),
-                position,
-                pitch,
-                yaw,
-                yaw,
-                0.into(),
-                Vector3::new(0.0, 0.0, 0.0),
-            ),
-        );
 
         player.send_client_information();
 
@@ -4586,7 +4564,7 @@ impl World {
         // TODO: difficulty, exp bar, status effect
 
         // Load chunks and send world info FIRST (before teleport packet)
-        target_world.send_world_info(player, position, yaw, pitch);
+        target_world.send_world_info(player);
 
         // Ensure at least the center chunk is sent synchronously before teleport.
         if let crate::net::ClientPlatform::Java(java_client) = player.client.as_ref() {
@@ -4597,6 +4575,11 @@ impl World {
                 .await;
             java_client.send_chunks(&[chunk]).await;
         }
+
+        target_world
+            .entity_tracker
+            .add_entity(&(player.clone() as Arc<dyn EntityBase>), &target_world);
+        target_world.pair_new_player_with_tracked_entities(player);
 
         // Send teleport packet after at least the center chunk was delivered
         player.request_teleport(position, yaw, pitch);
@@ -5087,7 +5070,7 @@ impl World {
     /// It performs the following actions:
     ///
     /// 1. Removes the player from the `current_players` map using their UUID.
-    /// 2. Broadcasts a `CRemovePlayerInfo` packet to all connected players to inform them about the player leaving.
+    /// 2. On disconnect, broadcasts a `CRemovePlayerInfo` packet to players in all worlds.
     /// 3. Removes the player's entity from the world using its entity ID.
     /// 4. Optionally sends a disconnect message to all other players notifying them about the player leaving.
     ///
@@ -5141,7 +5124,15 @@ impl World {
                 }],
             };
 
-            self.broadcast_editioned(&CRemovePlayerInfo::new(&[uuid]), &bedrock_remove_player);
+            // Dimension changes keep the connection and its player-list entry.
+            if fire_event && let Some(server) = self.server.upgrade() {
+                for world in server.worlds.load().iter() {
+                    world.broadcast_editioned(
+                        &CRemovePlayerInfo::new(&[uuid]),
+                        &bedrock_remove_player,
+                    );
+                }
+            }
 
             self.broadcast_editioned(
                 &CRemoveEntities::new(&[entity_id.into()]),
