@@ -109,14 +109,93 @@ impl CarvingContext<'_> {
     }
 }
 
+pub trait CarverOutput {
+    fn carve(&mut self, x: usize, y: i32, z: usize);
+    fn min_y(&self) -> i32;
+    fn max_y(&self) -> i32;
+}
+
+#[must_use]
+pub fn can_reach(
+    chunk_pos: &Vector2<i32>,
+    x: f64,
+    z: f64,
+    current_step: i32,
+    total_steps: i32,
+    thickness: f32,
+) -> bool {
+    let x_mid = (chunk_pos.x << 4) as f64 + 8.0;
+    let z_mid = (chunk_pos.y << 4) as f64 + 8.0;
+    let xd = x - x_mid;
+    let zd = z - z_mid;
+    let remaining = (total_steps - current_step) as f64;
+    let rr = (thickness + 2.0 + 16.0) as f64;
+    (xd * xd + zd * zd) - (remaining * remaining) <= rr * rr
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn carve_ellipsoid<O, S>(
+    chunk_pos: &Vector2<i32>,
+    x: f64,
+    y: f64,
+    z: f64,
+    horizontal_radius: f64,
+    vertical_radius: f64,
+    output: &mut O,
+    skip_checker: S,
+) where
+    O: CarverOutput + ?Sized,
+    S: Fn(f64, f64, f64, i32) -> bool,
+{
+    let center_x = (chunk_pos.x << 4) as f64 + 8.0;
+    let center_z = (chunk_pos.y << 4) as f64 + 8.0;
+    let max_delta = 16.0 + horizontal_radius * 2.0;
+
+    if (x - center_x).abs() > max_delta || (z - center_z).abs() > max_delta {
+        return;
+    }
+
+    let chunk_min_x = chunk_pos.x << 4;
+    let chunk_min_z = chunk_pos.y << 4;
+
+    let min_x_index = (((x - horizontal_radius).floor() as i32 - chunk_min_x) - 1).max(0) as usize;
+    let max_x_index = ((x + horizontal_radius).floor() as i32 - chunk_min_x).clamp(0, 15) as usize;
+    let min_y = ((y - vertical_radius).floor() as i32 - 1).max(output.min_y());
+    let max_y = ((y + vertical_radius).floor() as i32 + 1).min(output.max_y());
+    let min_z_index = (((z - horizontal_radius).floor() as i32 - chunk_min_z) - 1).max(0) as usize;
+    let max_z_index = ((z + horizontal_radius).floor() as i32 - chunk_min_z).clamp(0, 15) as usize;
+
+    for x_index in min_x_index..=max_x_index {
+        let world_x = chunk_min_x + x_index as i32;
+        let xd = (world_x as f64 + 0.5 - x) / horizontal_radius;
+
+        for z_index in min_z_index..=max_z_index {
+            let world_z = chunk_min_z + z_index as i32;
+            let zd = (world_z as f64 + 0.5 - z) / horizontal_radius;
+
+            if xd * xd + zd * zd < 1.0 {
+                for world_y in (min_y + 1..=max_y).rev() {
+                    let yd = (world_y as f64 - 0.5 - y) / vertical_radius;
+                    if !skip_checker(xd, yd, zd, world_y) {
+                        output.carve(x_index, world_y, z_index);
+                    }
+                }
+            }
+        }
+    }
+}
+
 pub trait Carver {
+    #[allow(clippy::too_many_arguments)]
     fn carve(
         &self,
         config: &CarverConfig,
-        run: &mut CarveRun,
+        output: &mut dyn CarverOutput,
         random: &mut RandomGenerator,
         chunk_pos: &Vector2<i32>,
         carver_chunk_pos: &Vector2<i32>,
+        min_gen_y: i8,
+        gen_depth: u16,
         legacy_random_source: bool,
     );
 }
@@ -133,47 +212,12 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
     let mut multi_noise_sampler = MultiNoiseSampler::generate(&generator.base_router.multi_noise);
 
     let generation_shape = &generator.settings.shape;
-    let surface_config = SurfaceHeightSamplerBuilderOptions::new(
-        generation_shape.min_y as i32,
-        generation_shape.max_y() as i32,
-        generation_shape.vertical_cell_block_count() as usize,
-    );
-    let surface_height_sampler = SurfaceHeightEstimateSampler::generate(
-        &generator.base_router.surface_estimator,
-        &surface_config,
-    );
-    let carver_aquifer = generator.settings.aquifers_enabled.then(|| {
-        CarverAquiferSampler::new(
-            chunk_x,
-            chunk_z,
-            &generator.base_router,
-            &generator.random_config,
-            generator.settings,
-        )
-    });
-
-    let mut context = CarvingContext {
-        min_y: generator.dimension.min_y as i8,
-        height: generator.dimension.logical_height as u16,
-        random_config: &generator.random_config,
-        surface_noise: &generator.terrain_cache.surface_noise,
-        secondary_noise: &generator.terrain_cache.secondary_noise,
-        terrain_builder: &generator.terrain_cache.terrain_builder,
-        sea_level: generator.settings.sea_level,
-        default_block: generator.settings.default_block,
-        default_fluid: generator.settings.default_fluid,
-        surface_rule: generator.surface_rule,
-        surface_height_sampler,
-        carver_aquifer,
-    };
-
-    let center_biome = chunk.get_biome(0, 0, 0);
-
-    let mut run = CarveRun {
-        ctx: &mut context,
-        chunk,
-        ids: CarverBlockIds::new(),
-    };
+    let min_gen_y = generation_shape.min_y;
+    let gen_depth = generation_shape.height;
+    let protected_blocks_on_top = 7;
+    let min_y = min_gen_y as i32 + 1;
+    let max_y = (min_gen_y as i32 + gen_depth as i32 - 1) - protected_blocks_on_top;
+    let mut mask = mask::CarvingMask::new(min_y, max_y);
 
     let cave_carver = cave::CaveCarver;
     let canyon_carver = canyon::CanyonCarver;
@@ -185,7 +229,7 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
             let carver_chunk_pos = Vector2::new(carver_x, carver_z);
 
             let carver_biome = if dx == 0 && dz == 0 {
-                center_biome
+                chunk.get_biome(0, 0, 0)
             } else {
                 supplier.biome(
                     biome_coords::from_block(section_coords::section_to_block(carver_x)),
@@ -209,20 +253,24 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
                         CarverAdditionalConfig::Cave(_) => {
                             cave_carver.carve(
                                 config,
-                                &mut run,
+                                &mut mask,
                                 &mut carver_random,
                                 &chunk_pos,
                                 &carver_chunk_pos,
+                                min_gen_y,
+                                gen_depth,
                                 generator.settings.legacy_random_source,
                             );
                         }
                         CarverAdditionalConfig::Canyon(_) => {
                             canyon_carver.carve(
                                 config,
-                                &mut run,
+                                &mut mask,
                                 &mut carver_random,
                                 &chunk_pos,
                                 &carver_chunk_pos,
+                                min_gen_y,
+                                gen_depth,
                                 generator.settings.legacy_random_source,
                             );
                         }
@@ -231,6 +279,88 @@ pub fn carve(chunk: &mut ProtoChunk, generator: &VanillaGenerator) {
             }
         }
     }
+
+    if !mask.is_empty() {
+        let surface_config = SurfaceHeightSamplerBuilderOptions::new(
+            generation_shape.min_y as i32,
+            generation_shape.max_y() as i32,
+            generation_shape.vertical_cell_block_count() as usize,
+        );
+        let surface_height_sampler = SurfaceHeightEstimateSampler::generate(
+            &generator.base_router.surface_estimator,
+            &surface_config,
+        );
+        let carver_aquifer = generator.settings.aquifers_enabled.then(|| {
+            CarverAquiferSampler::new(
+                chunk_x,
+                chunk_z,
+                &generator.base_router,
+                &generator.random_config,
+                generator.settings,
+            )
+        });
+
+        let mut context = CarvingContext {
+            min_y: generator.dimension.min_y as i8,
+            height: generator.dimension.logical_height as u16,
+            random_config: &generator.random_config,
+            surface_noise: &generator.terrain_cache.surface_noise,
+            secondary_noise: &generator.terrain_cache.secondary_noise,
+            terrain_builder: &generator.terrain_cache.terrain_builder,
+            sea_level: generator.settings.sea_level,
+            default_block: generator.settings.default_block,
+            default_fluid: generator.settings.default_fluid,
+            surface_rule: generator.surface_rule,
+            surface_height_sampler,
+            carver_aquifer,
+        };
+
+        let mut run = CarveRun {
+            ctx: &mut context,
+            chunk,
+            ids: CarverBlockIds::new(),
+        };
+
+        apply_carving_mask(&mut run, &mask);
+    }
+}
+
+fn apply_carving_mask(run: &mut CarveRun, mask: &mask::CarvingMask) {
+    let chunk_x = run.chunk.x;
+    let chunk_z = run.chunk.z;
+    let overworld = run.ctx.carver_aquifer.is_some();
+    let bedrock_id = pumpkin_data::Block::BEDROCK.default_state.id;
+    let grass_block_id = pumpkin_data::Block::GRASS_BLOCK.default_state.id;
+    let mycelium_id = pumpkin_data::Block::MYCELIUM.default_state.id;
+
+    mask.visit(|x, z, bottom_y, top_y| {
+        let mut has_grass = false;
+        let world_x = (chunk_x << 4) + x as i32;
+        let world_z = (chunk_z << 4) + z as i32;
+        for world_y in (bottom_y..=top_y).rev() {
+            let current_state_id = run
+                .chunk
+                .get_block_state(&Vector3::new(world_x, world_y, world_z));
+            if current_state_id == bedrock_id {
+                continue;
+            }
+            if current_state_id == grass_block_id || current_state_id == mycelium_id {
+                has_grass = true;
+            }
+            if let Some((state, should_schedule_fluid_update)) =
+                overworld_carve_state(run, world_x, world_y, world_z)
+            {
+                place_carved_block(
+                    run,
+                    Vector3::new(world_x, world_y, world_z),
+                    state,
+                    should_schedule_fluid_update,
+                    has_grass,
+                    overworld,
+                );
+            }
+        }
+    });
 }
 
 fn should_carve(config: &CarverConfig, random: &mut RandomGenerator) -> bool {
@@ -572,5 +702,29 @@ mod tests {
         assert!(std::ptr::eq(Biome::NETHER_WASTES.carvers[0], &NETHER_CAVE));
 
         assert!(Biome::THE_END.carvers.is_empty());
+    }
+
+    #[test]
+    fn apply_carving_mask_skips_bedrock() {
+        with_carve_run(Dimension::OVERWORLD, |run| {
+            let bedrock = Block::BEDROCK.default_state;
+            let stone = Block::STONE.default_state;
+            run.chunk.set_block_state(5, 10, 5, bedrock);
+            run.chunk.set_block_state(5, 11, 5, stone);
+
+            let mut mask = mask::CarvingMask::new(-64, 320);
+            mask.set(5, 10, 5);
+            mask.set(5, 11, 5);
+
+            apply_carving_mask(run, &mask);
+
+            // Bedrock must not be carved
+            assert_eq!(
+                run.chunk.get_block_state(&Vector3::new(5, 10, 5)),
+                bedrock.id
+            );
+            // Stone must be carved
+            assert_ne!(run.chunk.get_block_state(&Vector3::new(5, 11, 5)), stone.id);
+        });
     }
 }

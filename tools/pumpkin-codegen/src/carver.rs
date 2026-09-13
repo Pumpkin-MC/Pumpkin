@@ -77,7 +77,7 @@ pub fn build() -> TokenStream {
                 let vertical_radius_center_factor = shape["vertical_radius_center_factor"]
                     .as_f64()
                     .unwrap_or(0.0) as f32;
-                let y_scale = shape["y_scale"].as_f64().unwrap_or(0.0) as f32;
+                let y_scale = value_to_float_provider(&shape["y_scale"]);
 
                 quote! {
                     CarverAdditionalConfig::Canyon(CanyonCarverConfig {
@@ -180,7 +180,7 @@ pub fn build() -> TokenStream {
             pub horizontal_radius_factor: FloatProvider,
             pub vertical_radius_default_factor: f32,
             pub vertical_radius_center_factor: f32,
-            pub y_scale: f32,
+            pub y_scale: FloatProvider,
         }
 
         #[derive(Clone, Debug)]
