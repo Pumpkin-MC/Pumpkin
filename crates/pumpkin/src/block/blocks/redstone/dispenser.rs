@@ -13,6 +13,7 @@ use crate::block::{
     BlockBehaviour, GetComparatorOutputArgs, GetScreenHandlerFactoryArgs, NormalUseArgs,
     OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
 };
+use crate::entity::ageable::AgeableMob;
 use crate::entity::decoration::armor_stand::ArmorStandEntity;
 use crate::entity::item::ItemEntity;
 use crate::entity::passive::sheep::SheepEntity;
@@ -987,7 +988,7 @@ impl DispenserBlock {
             let Some(sheep) = entity.cast_any().downcast_ref::<SheepEntity>() else {
                 continue;
             };
-            if sheep.is_sheared() || !entity.get_entity().is_alive() {
+            if sheep.is_sheared() || sheep.is_baby() || !entity.get_entity().is_alive() {
                 continue;
             }
 

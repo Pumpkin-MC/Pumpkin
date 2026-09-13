@@ -378,7 +378,7 @@ impl Goal for RandomFloatAroundGoal {
         wanted.is_none_or(|target| {
             let pos = ghast.mob_entity.living_entity.entity.pos.load();
             let dist_sq = pos.squared_distance_to_vec(&target);
-            !(1.0..=3600.0).contains(&dist_sq)
+            !dist_sq.is_nan() && !(1.0..=3600.0).contains(&dist_sq)
         })
     }
 
