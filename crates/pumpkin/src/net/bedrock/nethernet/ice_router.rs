@@ -212,6 +212,7 @@ pub(super) fn proxy_offer(sdp: &str, proxy: SocketAddr) -> (String, Vec<SocketAd
 
 pub(super) fn proxy_answer(
     sdp: &str,
+    public_ip: Option<IpAddr>,
     public_port: u16,
 ) -> Result<(String, String, SocketAddr), String> {
     let ufrag = sdp
@@ -234,6 +235,9 @@ pub(super) fn proxy_answer(
     let internal = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), candidate.port());
     let answer = rewrite_sdp_candidates(sdp, |fields| {
         if is_component_one_udp(fields) {
+            if let Some(public_ip) = public_ip {
+                fields[4] = public_ip.to_string();
+            }
             fields[5] = public_port.to_string();
         }
     });
@@ -300,8 +304,9 @@ mod tests {
 
         let answer =
             "v=0\r\na=ice-ufrag:server\r\na=candidate:2 1 udp 456 192.168.1.8 51000 typ host\r\n";
-        let (answer, ufrag, internal) = proxy_answer(answer, 19132).unwrap();
-        assert!(answer.contains("192.168.1.8 19132 typ host"));
+        let (answer, ufrag, internal) =
+            proxy_answer(answer, Some("203.0.113.7".parse().unwrap()), 19132).unwrap();
+        assert!(answer.contains("203.0.113.7 19132 typ host"));
         assert_eq!(ufrag, "server");
         assert_eq!(internal, "127.0.0.1:51000".parse::<SocketAddr>().unwrap());
     }

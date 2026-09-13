@@ -7,6 +7,7 @@ use pumpkin_data::{BlockState, BlockStateId};
 use pumpkin_gametest::{
     BlockBasedTest, GameTestError, GameTestManager, GameTestReporter, GameTestResult,
     GameTestRotation, GameTestRunner, GameTestSession, GameTestStructureTemplate, GameTestWorld,
+    TestType,
 };
 pub use pumpkin_gametest::{GameTestBatchReport, GameTestRetryOptions};
 use pumpkin_nbt::NbtCompound;
@@ -148,6 +149,13 @@ async fn prepare_test_run(
         .ok_or_else(|| {
             GameTestError::World(format!("Unknown test instance '{}'", request.test_id))
         })?;
+
+    if test_instance.instance_type != TestType::BlockBased {
+        return Err(GameTestError::World(format!(
+            "Test instance '{}' has unsupported type '{:?}' (only block-based tests can be executed currently)",
+            request.test_id, test_instance.instance_type
+        )));
+    }
 
     let structure = server
         .datapack_manager

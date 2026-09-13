@@ -15,6 +15,7 @@ pub struct Biome {
     pub registry_id: &'static str,
     pub be_network_id: u8,
     pub weather: Weather,
+    pub carvers: &'static [&'static crate::carver::CarverConfig],
     pub features: &'static [&'static [crate::placed_feature::PlacedFeature]],
     pub creature_spawn_probability: f32,
     pub spawners: SpawnGroups,
@@ -151,6 +152,11 @@ impl Biome {
                 crate::placed_feature::PlacedFeature::PatchFireflyBushNearWater,
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
+        ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
         ],
         creature_spawn_probability: 0.03f32,
         spawners: SpawnGroups {
@@ -310,6 +316,11 @@ impl Biome {
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -448,6 +459,7 @@ impl Biome {
                 crate::placed_feature::PlacedFeature::OreDebrisSmall,
             ],
         ],
+        carvers: &[&crate::carver::NETHER_CAVE],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -541,6 +553,11 @@ impl Biome {
                 crate::placed_feature::PlacedFeature::PatchFireflyBushNearWater,
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
+        ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
         ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
@@ -677,6 +694,11 @@ impl Biome {
                 crate::placed_feature::PlacedFeature::PatchFireflyBushNearWater,
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
+        ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
         ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
@@ -825,6 +847,11 @@ impl Biome {
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -972,6 +999,11 @@ impl Biome {
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -1098,6 +1130,7 @@ impl Biome {
                 crate::placed_feature::PlacedFeature::CrimsonForestVegetation,
             ],
         ],
+        carvers: &[&crate::carver::NETHER_CAVE],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -1199,6 +1232,11 @@ impl Biome {
                 crate::placed_feature::PlacedFeature::PatchFireflyBushNearWater,
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
+        ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
         ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
@@ -1352,6 +1390,11 @@ impl Biome {
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -1504,6 +1547,11 @@ impl Biome {
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[],
@@ -1587,6 +1635,11 @@ impl Biome {
                 crate::placed_feature::PlacedFeature::PatchFireflyBushNearWater,
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
+        ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
         ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
@@ -1742,6 +1795,11 @@ impl Biome {
                 crate::placed_feature::PlacedFeature::KelpWarm,
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
+        ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
         ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
@@ -1911,6 +1969,11 @@ impl Biome {
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -2068,6 +2131,11 @@ impl Biome {
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -2223,6 +2291,11 @@ impl Biome {
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -2296,6 +2369,7 @@ impl Biome {
         be_network_id: 9u8,
         weather: Weather::new(false, 0.5f32, TemperatureModifier::None, 0.5f32),
         features: &[],
+        carvers: &[],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[Spawner {
@@ -2330,6 +2404,7 @@ impl Biome {
             &[],
             &[crate::placed_feature::PlacedFeature::ChorusPlant],
         ],
+        carvers: &[],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[Spawner {
@@ -2353,6 +2428,7 @@ impl Biome {
         be_network_id: 9u8,
         weather: Weather::new(false, 0.5f32, TemperatureModifier::None, 0.5f32),
         features: &[],
+        carvers: &[],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[Spawner {
@@ -2438,6 +2514,11 @@ impl Biome {
                 crate::placed_feature::PlacedFeature::PatchFireflyBushNearWater,
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
+        ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
         ],
         creature_spawn_probability: 0.03f32,
         spawners: SpawnGroups {
@@ -2595,6 +2676,11 @@ impl Biome {
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -2751,6 +2837,11 @@ impl Biome {
                 crate::placed_feature::PlacedFeature::PatchFireflyBushNearWater,
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
+        ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
         ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
@@ -2911,6 +3002,11 @@ impl Biome {
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -3056,6 +3152,11 @@ impl Biome {
             &[crate::placed_feature::PlacedFeature::GlowLichen],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -3189,6 +3290,11 @@ impl Biome {
                 crate::placed_feature::PlacedFeature::PatchFireflyBushNearWater,
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
+        ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
         ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
@@ -3327,6 +3433,11 @@ impl Biome {
                 crate::placed_feature::PlacedFeature::PatchPumpkin,
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
+        ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
         ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
@@ -3476,6 +3587,11 @@ impl Biome {
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.07f32,
         spawners: SpawnGroups {
             monster: &[
@@ -3613,6 +3729,11 @@ impl Biome {
             &[crate::placed_feature::PlacedFeature::GlowLichen],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -3748,6 +3869,11 @@ impl Biome {
                 crate::placed_feature::PlacedFeature::PatchMelon,
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
+        ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
         ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
@@ -3921,6 +4047,11 @@ impl Biome {
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -4088,6 +4219,11 @@ impl Biome {
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -4223,6 +4359,11 @@ impl Biome {
                 crate::placed_feature::PlacedFeature::PatchFireflyBushNearWater,
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
+        ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
         ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
@@ -4369,6 +4510,11 @@ impl Biome {
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -4511,6 +4657,11 @@ impl Biome {
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[],
@@ -4573,6 +4724,7 @@ impl Biome {
                 crate::placed_feature::PlacedFeature::RedMushroomNormal,
             ],
         ],
+        carvers: &[&crate::carver::NETHER_CAVE],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -4684,6 +4836,11 @@ impl Biome {
                 crate::placed_feature::PlacedFeature::KelpCold,
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
+        ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
         ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
@@ -4842,6 +4999,11 @@ impl Biome {
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -4999,6 +5161,11 @@ impl Biome {
                 crate::placed_feature::PlacedFeature::PatchBerryCommon,
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
+        ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
         ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
@@ -5173,6 +5340,11 @@ impl Biome {
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -5338,6 +5510,11 @@ impl Biome {
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -5468,6 +5645,11 @@ impl Biome {
                 crate::placed_feature::PlacedFeature::PatchFireflyBushNearWater,
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
+        ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
         ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
@@ -5636,6 +5818,11 @@ impl Biome {
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -5778,6 +5965,11 @@ impl Biome {
                 crate::placed_feature::PlacedFeature::PatchFireflyBushNearWater,
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
+        ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
         ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
@@ -5950,6 +6142,11 @@ impl Biome {
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -6069,6 +6266,7 @@ impl Biome {
         be_network_id: 9u8,
         weather: Weather::new(false, 0.5f32, TemperatureModifier::None, 0.5f32),
         features: &[&[crate::placed_feature::PlacedFeature::EndIslandDecorated]],
+        carvers: &[],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[Spawner {
@@ -6151,6 +6349,11 @@ impl Biome {
                 crate::placed_feature::PlacedFeature::PatchFireflyBushNearWater,
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
+        ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
         ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
@@ -6280,6 +6483,11 @@ impl Biome {
                 crate::placed_feature::PlacedFeature::PatchFireflyBushNearWater,
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
+        ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
         ],
         creature_spawn_probability: 0.07f32,
         spawners: SpawnGroups {
@@ -6426,6 +6634,11 @@ impl Biome {
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -6568,6 +6781,11 @@ impl Biome {
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -6699,6 +6917,7 @@ impl Biome {
             &[],
             &[crate::placed_feature::PlacedFeature::SpringLava],
         ],
+        carvers: &[&crate::carver::NETHER_CAVE],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -6800,6 +7019,11 @@ impl Biome {
                 crate::placed_feature::PlacedFeature::PatchMelonSparse,
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
+        ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
         ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
@@ -6952,6 +7176,11 @@ impl Biome {
             &[crate::placed_feature::PlacedFeature::GlowLichen],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -7080,6 +7309,11 @@ impl Biome {
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -7206,6 +7440,11 @@ impl Biome {
                 crate::placed_feature::PlacedFeature::PatchTallGrass2,
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
+        ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
         ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
@@ -7338,6 +7577,11 @@ impl Biome {
                 crate::placed_feature::PlacedFeature::PatchFireflyBushNearWater,
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
+        ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
         ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
@@ -7510,6 +7754,11 @@ impl Biome {
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -7677,6 +7926,11 @@ impl Biome {
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -7793,6 +8047,7 @@ impl Biome {
             &[],
             &[crate::placed_feature::PlacedFeature::EndPlatform],
         ],
+        carvers: &[],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[Spawner {
@@ -7828,6 +8083,7 @@ impl Biome {
             &[],
             &[crate::placed_feature::PlacedFeature::VoidStartPlatform],
         ],
+        carvers: &[],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[],
@@ -7910,6 +8166,11 @@ impl Biome {
                 crate::placed_feature::PlacedFeature::SeaPickle,
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
+        ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
         ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
@@ -8044,6 +8305,7 @@ impl Biome {
                 crate::placed_feature::PlacedFeature::TwistingVines,
             ],
         ],
+        carvers: &[&crate::carver::NETHER_CAVE],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[Spawner {
@@ -8133,6 +8395,11 @@ impl Biome {
                 crate::placed_feature::PlacedFeature::PatchFireflyBushNearWater,
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
+        ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
         ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
@@ -8291,6 +8558,11 @@ impl Biome {
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -8448,6 +8720,11 @@ impl Biome {
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
         ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
+        ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
             monster: &[
@@ -8602,6 +8879,11 @@ impl Biome {
                 crate::placed_feature::PlacedFeature::PatchFireflyBushNearWater,
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
+        ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
         ],
         creature_spawn_probability: 0.1f32,
         spawners: SpawnGroups {
@@ -8775,6 +9057,11 @@ impl Biome {
                 crate::placed_feature::PlacedFeature::PatchFireflyBushNearWater,
             ],
             &[crate::placed_feature::PlacedFeature::FreezeTopLayer],
+        ],
+        carvers: &[
+            &crate::carver::CAVE,
+            &crate::carver::CAVE_EXTRA_UNDERGROUND,
+            &crate::carver::CANYON,
         ],
         creature_spawn_probability: 0.04f32,
         spawners: SpawnGroups {

@@ -9,7 +9,7 @@ impl JavaClient {
         command: &SChatCommand<'_>,
     ) {
         player.update_last_action_time();
-        if player.check_chat_spam(server) {
+        if player.check_chat_spam(server, crate::entity::player::SpamType::Command) {
             return;
         }
         let command_str = command.command.strip_prefix('/').unwrap_or(command.command);

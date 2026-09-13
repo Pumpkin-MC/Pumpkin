@@ -2,7 +2,6 @@ use std::io::{Cursor, Write};
 
 use pumpkin_data::{
     block_state_remap::remap_block_state_for_version,
-    item_id_remap::remap_item_id_for_version,
     meta_data_type::MetaDataType,
     packet::clientbound::play::SET_ENTITY_DATA,
     tracked_data::{TrackedData, TrackedId},
@@ -163,27 +162,7 @@ impl<T> Metadata<T> {
         }
 
         if self.r#type == MetaDataType::ITEM_STACK {
-            let mut serialized_value = Vec::new();
-            self.value.write_metadata(&mut serialized_value, version)?;
-
-            let mut cursor = Cursor::new(serialized_value);
-            let item_count = VarInt::decode(&mut cursor).map_err(|e| {
-                WritingError::Message(format!("Failed to decodeitem stack count: {e}"))
-            })?;
-
-            if item_count.0 <= 0 {
-                writer.write_var_int(&item_count)?;
-            } else {
-                let item_id = VarInt::decode(&mut cursor)
-                    .map_err(|e| WritingError::Message(format!("Failed to decode item id: {e}")))?;
-                let remapped_id = u16::try_from(item_id.0)
-                    .map_or(0, |id| remap_item_id_for_version(id, *version));
-                writer.write_var_int(&item_count)?;
-                writer.write_var_int(&VarInt(i32::from(remapped_id)))?;
-                let remainder_start = cursor.position() as usize;
-                let inner = cursor.into_inner();
-                writer.write_slice(&inner[remainder_start..])?;
-            }
+            self.value.write_metadata(&mut writer, version)?;
             return Ok(());
         }
 
@@ -200,6 +179,33 @@ impl<T> Metadata<T> {
             let remainder_start = cursor.position() as usize;
             let inner = cursor.into_inner();
             writer.write_slice(&inner[remainder_start..])?;
+            return Ok(());
+        }
+
+        if self.r#type == MetaDataType::PARTICLES {
+            let mut serialized_value = Vec::new();
+            self.value.write_metadata(&mut serialized_value, version)?;
+
+            let mut cursor = Cursor::new(serialized_value);
+            let count = VarInt::decode(&mut cursor).map_err(|e| {
+                WritingError::Message(format!("Failed to decode effect particle count: {e}"))
+            })?;
+            writer.write_var_int(&count)?;
+            for _ in 0..count.0 {
+                let particle_id = VarInt::decode(&mut cursor).map_err(|e| {
+                    WritingError::Message(format!("Failed to decode effect particle id: {e}"))
+                })?;
+                writer.write_var_int(&particle_id_for_version(particle_id, *version))?;
+                let remainder_start = cursor.position() as usize;
+                let inner = cursor.get_ref();
+                if remainder_start + 4 > inner.len() {
+                    return Err(WritingError::Message(
+                        "Truncated effect particle color".into(),
+                    ));
+                }
+                writer.write_slice(&inner[remainder_start..remainder_start + 4])?;
+                cursor.set_position((remainder_start + 4) as u64);
+            }
             return Ok(());
         }
 
@@ -525,6 +531,7 @@ mod tests {
 
     use super::{Metadata, MetadataSerializer};
 
+    #[derive(Clone, Copy)]
     struct ParticleMetadata {
         particle_id: VarInt,
         data: [u8; 4],
@@ -543,15 +550,17 @@ mod tests {
 
     fn encoded_particle(version: JavaMinecraftVersion) -> (VarInt, Vec<u8>) {
         let particle_data = [0x12, 0x34, 0x56, 0x78];
-        let metadata = Metadata::new(
-            pumpkin_data::tracked_data::area_effect_cloud::DATA_PARTICLE,
-            ParticleMetadata {
-                particle_id: VarInt(Particle::ExplosionEmitter as i32),
-                data: particle_data,
-            },
-        );
+        let particle = ParticleMetadata {
+            particle_id: VarInt(Particle::ExplosionEmitter as i32),
+            data: particle_data,
+        };
         let mut bytes = Vec::new();
-        metadata.write(&mut bytes, &version).unwrap();
+        Metadata::new(
+            pumpkin_data::tracked_data::area_effect_cloud::DATA_PARTICLE,
+            particle,
+        )
+        .write(&mut bytes, &version)
+        .unwrap();
 
         assert_eq!(
             bytes[0],
@@ -580,6 +589,99 @@ mod tests {
 
         assert_eq!(particle_id, VarInt(29));
         assert_eq!(data, [0x12, 0x34, 0x56, 0x78]);
+    }
+
+    fn encoded_item_stack_id(version: JavaMinecraftVersion) -> i32 {
+        use crate::codec::item_stack_seralizer::ItemStackSerializer;
+        use pumpkin_data::{
+            item::Item, item_id_remap::remap_item_id_for_version, item_stack::ItemStack,
+        };
+
+        let stack = ItemStackSerializer::from(ItemStack::new(1, &Item::WHEAT_SEEDS));
+        let mut bytes = Vec::new();
+        Metadata::new(pumpkin_data::tracked_data::item::DATA_ITEM, stack)
+            .write(&mut bytes, &version)
+            .unwrap();
+
+        assert_eq!(
+            bytes[0],
+            pumpkin_data::tracked_data::item::DATA_ITEM.get(&version)
+        );
+        assert_eq!(bytes[1], MetaDataType::ITEM_STACK.id(version) as u8);
+
+        let mut cursor = Cursor::new(&bytes[2..]);
+        let count = VarInt::decode(&mut cursor).unwrap();
+        assert_eq!(count, VarInt(1));
+        let item_id = VarInt::decode(&mut cursor).unwrap();
+
+        let expected = i32::from(remap_item_id_for_version(Item::WHEAT_SEEDS.id, version));
+        assert_eq!(item_id, VarInt(expected));
+        item_id.0
+    }
+
+    #[test]
+    fn item_stack_metadata_does_not_double_remap_for_1_21() {
+        use pumpkin_data::{item::Item, item_id_remap::remap_item_id_for_version};
+
+        let version = JavaMinecraftVersion::V_1_21;
+        let once = remap_item_id_for_version(Item::WHEAT_SEEDS.id, version);
+        let twice = remap_item_id_for_version(once, version);
+        assert_ne!(
+            once, twice,
+            "wheat seeds must change IDs so this catches double remapping"
+        );
+        assert_eq!(encoded_item_stack_id(version), i32::from(once));
+    }
+
+    #[test]
+    fn item_stack_metadata_keeps_latest_id_for_26_2() {
+        encoded_item_stack_id(JavaMinecraftVersion::V_26_2);
+    }
+
+    #[test]
+    fn existing_items_keep_identity_through_1_21_6_remap() {
+        use pumpkin_data::{item::Item, item_id_remap::remap_item_id_for_version};
+
+        let version = JavaMinecraftVersion::V_1_21_6;
+        for item in [
+            &Item::AIR,
+            &Item::STONE,
+            &Item::DIAMOND_SWORD,
+            &Item::WHEAT_SEEDS,
+            &Item::TRIDENT,
+        ] {
+            let remapped = remap_item_id_for_version(item.id, version);
+            let round_trip =
+                pumpkin_data::item_id_remap::remap_item_id_from_version(remapped, version);
+            assert_eq!(
+                round_trip, item.id,
+                "{} id {} remapped to {remapped} and back to {round_trip}",
+                item.registry_key, item.id
+            );
+        }
+    }
+
+    #[test]
+    fn spears_do_not_leak_latest_ids_to_1_21_6() {
+        use pumpkin_data::{item::Item, item_id_remap::remap_item_id_for_version};
+
+        let version = JavaMinecraftVersion::V_1_21_6;
+        for item in [
+            &Item::WOODEN_SPEAR,
+            &Item::STONE_SPEAR,
+            &Item::COPPER_SPEAR,
+            &Item::IRON_SPEAR,
+            &Item::GOLDEN_SPEAR,
+            &Item::DIAMOND_SPEAR,
+            &Item::NETHERITE_SPEAR,
+        ] {
+            let remapped = remap_item_id_for_version(item.id, version);
+            assert_ne!(
+                remapped, item.id,
+                "{} leaked latest id {} to 1.21.6 (client would show whatever item has that id)",
+                item.registry_key, item.id
+            );
+        }
     }
 
     #[test]

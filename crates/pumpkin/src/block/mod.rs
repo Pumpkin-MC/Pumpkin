@@ -24,7 +24,6 @@ use crate::server::Server;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::block_rotation::{Mirror, Rotation};
 use pumpkin_data::data_component_impl::EquipmentSlot;
-use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_inventory::screen_handler::ScreenHandlerFactory;
 use pumpkin_protocol::java::server::play::SUseItemOn;
@@ -461,11 +460,7 @@ pub fn drop_loot(
     let key = format!("minecraft:blocks/{}", block.name);
     if let Some(loot_table) = pumpkin_data::loot_table::get_loot_table(&key) {
         let seed: i64 = rand::random();
-        let mut items = crate::world::loot::generate_loot_with_context(loot_table, seed, params);
-        if block.has_tag(&tag::Block::MINECRAFT_LEAVES) {
-            // TODO: Re-enable apple and stick drops for leaves once table bonus/drop chances are properly implemented
-            items.retain(|stack| stack.item != &Item::APPLE && stack.item != &Item::STICK);
-        }
+        let items = crate::world::loot::generate_loot_with_context(loot_table, seed, params);
         if !items.is_empty() {
             let mut event = crate::plugin::block::block_drop_item::BlockDropItemEvent {
                 block_pos: *pos,
