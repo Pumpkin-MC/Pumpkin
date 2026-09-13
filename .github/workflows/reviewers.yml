@@ -1,0 +1,87 @@
+name: Request reviewers
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  request-reviewers:
+    name: Request reviewers
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request reviewers based on changed files
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const rules = [
+              { pattern: 'crates/pumpkin-protocol/', reviewers: ['Snowiiii', 'xRookieFight'] },
+              { pattern: 'crates/pumpkin/src/net/', reviewers: ['Snowiiii', 'xRookieFight'] },
+
+              { pattern: 'assets/bedrock/', reviewers: ['ZlordHUN', 'xRookieFight'] },
+              { pattern: 'crates/pumpkin-protocol/src/bedrock/', reviewers: ['ZlordHUN', 'xRookieFight', 'QuantumSegfault'] },
+              { pattern: 'crates/pumpkin/src/net/bedrock/', reviewers: ['ZlordHUN', 'xRookieFight', 'QuantumSegfault'] },
+
+              { pattern: 'crates/pumpkin/src/command/', reviewers: ['aure31'] },
+
+              { pattern: 'crates/pumpkin-plugin-api/', reviewers: ['vyPal', 'yunuservices'] },
+              { pattern: 'crates/pumpkin-plugin-wit/', reviewers: ['vyPal', 'yunuservices', 'QuantumSegfault'] },
+              { pattern: 'crates/pumpkin-api-macros/', reviewers: ['vyPal', 'yunuservices'] },
+              { pattern: 'crates/pumpkin/src/plugin/', reviewers: ['vyPal', 'yunuservices', 'QuantumSegfault'] },
+
+              { pattern: '*.md', reviewers: ['Q2297045667'] },
+              { pattern: 'docs/', reviewers: ['Q2297045667'] },
+
+              { pattern: 'crates/pumpkin/src/entity/mob/', reviewers: ['Snowiiii', 'RoosterBooster007'] },
+              { pattern: 'crates/pumpkin/src/entity/projectile/', reviewers: ['Snowiiii', 'RoosterBooster007'] },
+
+              { pattern: 'crates/pumpkin/src/block/', reviewers: ['Snowiiii', 'RoosterBooster007'] },
+              { pattern: 'crates/pumpkin/src/item/', reviewers: ['Snowiiii', 'RoosterBooster007'] },
+
+              { pattern: 'crates/pumpkin-world/src/generation/feature/', reviewers: ['Snowiiii', 'RoosterBooster007', 'MegalithOfficial'] },
+              { pattern: 'crates/pumpkin-world/src/generation/noise/', reviewers: ['Snowiiii', 'RoosterBooster007', 'MegalithOfficial'] },
+            ];
+
+            const matches = (path, pattern) => {
+              if (pattern === '*') return true;
+              if (pattern.endsWith('/')) return path.startsWith(pattern);
+              if (pattern.startsWith('*.')) return path.endsWith(pattern.slice(1));
+              return path === pattern;
+            };
+
+            const files = await github.paginate(
+              github.rest.pulls.listFiles,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+                per_page: 100,
+              },
+            );
+
+            const reviewers = new Set();
+            for (const file of files) {
+              const matchingRule = [...rules].reverse().find((rule) => matches(file.filename, rule.pattern));
+              matchingRule?.reviewers.forEach((reviewer) => reviewers.add(reviewer));
+            }
+
+            if (reviewers.size === 0) {
+              core.info('No reviewers matched the changed files.');
+              return;
+            }
+
+            await github.rest.pulls.requestReviewers({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              reviewers: [...reviewers],
+            });
+
+            core.info(`Requested reviewers: ${[...reviewers].join(', ')}`);
