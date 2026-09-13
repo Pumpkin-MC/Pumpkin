@@ -84,6 +84,7 @@ pub mod area_effect_cloud;
 pub mod attributes;
 pub mod boss;
 pub mod breath;
+pub mod custom_sound;
 pub mod decoration;
 pub mod effect;
 pub mod experience_orb;

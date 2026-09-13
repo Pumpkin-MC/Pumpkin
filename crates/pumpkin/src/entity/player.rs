@@ -388,6 +388,12 @@ pub enum PlayerWeather {
     Downfall,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SpamType {
+    Chat,
+    Command,
+}
+
 pub struct Player {
     /// The underlying living entity object that represents the player.
     pub living_entity: LivingEntity,
@@ -2259,7 +2265,7 @@ impl Player {
         position: &Vector3<f64>,
         volume: f32,
         pitch: f32,
-        seed: f64,
+        seed: i64,
     ) {
         let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
         self.try_send_client_packet(&packet);
@@ -2272,7 +2278,7 @@ impl Player {
         position: &Vector3<f64>,
         volume: f32,
         pitch: f32,
-        seed: f64,
+        seed: i64,
     ) {
         let packet = CSoundEffect::new(IdOr::Value(sound), category, position, volume, pitch, seed);
         self.try_send_client_packet(&packet);
@@ -2307,7 +2313,7 @@ impl Player {
             position,
             volume,
             pitch,
-            rand::random::<f64>(),
+            rand::random::<i64>(),
         );
     }
 
@@ -4006,11 +4012,7 @@ impl Player {
     }
 
     /// Checks whether sending a chat message or command constitutes spam.
-    ///
-    /// Increments the player's spam counter by `message_cost`. If the counter
-    /// exceeds `spam_threshold`, the player is kicked with the vanilla
-    /// `disconnect.spam` message and this method returns `true`.
-    pub fn check_chat_spam(&self, server: &Server) -> bool {
+    pub fn check_chat_spam(&self, server: &Server, spam_type: SpamType) -> bool {
         let anti_spam = &server.advanced_config.chat.anti_spam;
         if !anti_spam.enabled {
             return false;
@@ -4020,15 +4022,20 @@ impl Player {
             return false;
         }
 
+        let threshold = match spam_type {
+            SpamType::Chat => anti_spam.chat_threshold_ticks(),
+            SpamType::Command => anti_spam.command_threshold_ticks(),
+        };
+
         let new_count = self
             .chat_spam_tick_count
             .fetch_add(anti_spam.message_cost, Ordering::SeqCst)
             + anti_spam.message_cost;
 
-        if new_count > anti_spam.spam_threshold {
+        if new_count > threshold {
             warn!(
                 "Player {} kicked for spamming (spam score: {}/{})",
-                self.gameprofile.name, new_count, anti_spam.spam_threshold
+                self.gameprofile.name, new_count, threshold
             );
             self.kick(
                 DisconnectReason::Kicked,
