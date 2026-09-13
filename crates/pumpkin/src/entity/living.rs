@@ -866,10 +866,10 @@ impl LivingEntity {
                 .find(|a| a.0.id == attribute.id)
                 .map_or_else(
                     || {
-                        tracing::warn!(
-                            "Entity type {:?} has no base value for attribute {:?}; falling back to default {}",
-                            self.entity.entity_type,
-                            attribute.id,
+                        tracing::debug!(
+                            "Entity type {} has no base value for attribute {}; falling back to default {}",
+                            self.entity.entity_type.resource_name,
+                            attribute.name,
                             attribute.default_value,
                         );
                         attribute.default_value
