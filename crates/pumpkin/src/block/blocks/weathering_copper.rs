@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use pumpkin_data::block_properties::{
     ChestLikeProperties, ChestType, CopperBulbLikeProperties, CopperGolemStatueLikeProperties,
-    DoubleBlockHalf, IronChainLikeProperties, LanternLikeProperties, MangroveRootsLikeProperties,
-    OakDoorLikeProperties, OakFenceLikeProperties, OakStairsLikeProperties,
-    OakTrapdoorLikeProperties, ResinBrickSlabLikeProperties,
+    DoubleBlockHalf, EnumVariants, IronChainLikeProperties, LanternLikeProperties,
+    MangroveRootsLikeProperties, OakDoorLikeProperties, OakFenceLikeProperties,
+    OakStairsLikeProperties, OakTrapdoorLikeProperties, ResinBrickSlabLikeProperties,
 };
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockId, BlockState, BlockStateId, Mirror, Rotation};
@@ -19,8 +19,8 @@ use crate::block::blocks::trapdoor::TrapDoorBlock;
 use crate::block::registry::BlockActionResult;
 use crate::block::{
     BlockBehaviour, BlockMetadata, BrokenArgs, CanPlaceAtArgs, CanUpdateAtArgs,
-    GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs, OnPlaceArgs,
-    OnStateReplacedArgs, PathComputationType, PlacedArgs, RandomTickArgs,
+    GetComparatorOutputArgs, GetStateForNeighborUpdateArgs, NormalUseArgs, OnNeighborUpdateArgs,
+    OnPlaceArgs, OnStateReplacedArgs, PathComputationType, PlacedArgs, RandomTickArgs,
 };
 use crate::world::World;
 
@@ -643,6 +643,26 @@ impl BlockBehaviour for WeatheringCopperBlock {
     fn random_tick(&self, args: RandomTickArgs<'_>) {
         change_over_time(args.world, args.position, args.block);
     }
+
+    /// Only statues carry a pose, every other copper block here reads nothing.
+    fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
+        if !is_copper_golem_statue(args.block.id) {
+            return None;
+        }
+        let props = CopperGolemStatueLikeProperties::from_state_id(args.state.id);
+        // Vanilla reads the pose ordinal, one-based.
+        Some(props.copper_golem_pose.to_index() as u8 + 1)
+    }
+}
+
+const fn is_copper_golem_statue(id: BlockId) -> bool {
+    matches!(
+        id,
+        BlockId::COPPER_GOLEM_STATUE
+            | BlockId::EXPOSED_COPPER_GOLEM_STATUE
+            | BlockId::WEATHERED_COPPER_GOLEM_STATUE
+            | BlockId::OXIDIZED_COPPER_GOLEM_STATUE
+    )
 }
 
 /// Weathering copper stair blocks.
