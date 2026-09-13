@@ -72,8 +72,11 @@ jobs:
               matchingRule?.reviewers.forEach((reviewer) => reviewers.add(reviewer));
             }
 
+            const author = context.payload.pull_request.user.login;
+            reviewers.delete(author);
+
             if (reviewers.size === 0) {
-              core.info('No reviewers matched the changed files.');
+              core.info('No eligible reviewers matched the changed files.');
               return;
             }
 
