@@ -17,7 +17,10 @@ pub struct ActiveTargetGoal {
     track_target_goal: TrackTargetGoal,
     target: Option<Arc<dyn EntityBase>>,
     reciprocal_chance: i32,
-    target_type: &'static EntityType,
+    /// `None` targets the closest entity of any type passing the predicate,
+    /// matching vanilla's class-agnostic `NearestAttackableTargetGoal`;
+    /// `Some` restricts the search to a single type.
+    target_type: Option<&'static EntityType>,
     target_predicate: TargetPredicate,
 }
 
@@ -47,7 +50,7 @@ impl ActiveTargetGoal {
             track_target_goal,
             target: None,
             reciprocal_chance: to_goal_ticks(reciprocal_chance),
-            target_type,
+            target_type: Some(target_type),
             target_predicate,
         }
     }
@@ -68,7 +71,33 @@ impl ActiveTargetGoal {
             track_target_goal,
             target: None,
             reciprocal_chance: to_goal_ticks(DEFAULT_RECIPROCAL_CHANCE),
-            target_type,
+            target_type: Some(target_type),
+            target_predicate,
+        })
+    }
+
+    /// Targets the closest entity of any type passing `predicate`, like vanilla's
+    /// class-agnostic `NearestAttackableTargetGoal` (e.g. iron golems targeting
+    /// every `Enemy` but creepers). Candidates are all tested, so an invalid
+    /// entity nearest to the mob cannot block a valid one farther away.
+    pub fn predicated(
+        mob: &MobEntity,
+        reciprocal_chance: i32,
+        check_visibility: bool,
+        predicate: impl Fn(&LivingEntity, &World) -> bool + Send + Sync + 'static,
+    ) -> Box<Self> {
+        let track_target_goal = TrackTargetGoal::new(check_visibility, false);
+        let mut target_predicate = TargetPredicate::create_attackable();
+        target_predicate.base_max_distance = mob
+            .living_entity
+            .get_attribute_value(&Attributes::FOLLOW_RANGE);
+        target_predicate.set_predicate(predicate);
+
+        Box::new(Self {
+            track_target_goal,
+            target: None,
+            reciprocal_chance: to_goal_ticks(reciprocal_chance),
+            target_type: None,
             target_predicate,
         })
     }
@@ -91,7 +120,7 @@ impl ActiveTargetGoal {
         let mut search_pos = mob.living_entity.entity.pos.load();
         search_pos.y += mob.living_entity.entity.entity_dimension.load().eye_height as f64;
 
-        if self.target_type == &EntityType::PLAYER {
+        if self.target_type == Some(&EntityType::PLAYER) {
             let potential_player = world
                 .get_closest_player(search_pos, follow_range)
                 .map(|p: Arc<Player>| p as Arc<dyn EntityBase>);
@@ -105,9 +134,9 @@ impl ActiveTargetGoal {
                 self.target = Some(potential_entity);
                 return;
             }
-        } else {
+        } else if let Some(target_type) = self.target_type {
             let potential_entity =
-                world.get_closest_entity(search_pos, follow_range, Some(&[self.target_type]));
+                world.get_closest_entity(search_pos, follow_range, Some(&[target_type]));
 
             if let Some(potential_entity) = potential_entity
                 && let Some(living) = potential_entity.get_living_entity()
@@ -118,6 +147,31 @@ impl ActiveTargetGoal {
                 self.target = Some(potential_entity);
                 return;
             }
+        } else {
+            // Class-agnostic search: test every candidate and keep the closest
+            // passing one, like vanilla's `getNearestEntity` with conditions.
+            let entities = world.get_nearby_entities(search_pos, follow_range);
+            let mut best: Option<(f64, Arc<dyn EntityBase>)> = None;
+            for entity in entities.into_values() {
+                let Some(living) = entity.get_living_entity() else {
+                    continue;
+                };
+                if !self
+                    .target_predicate
+                    .test(&world, Some(&mob.living_entity), living)
+                {
+                    continue;
+                }
+                let dist_sq = search_pos.squared_distance_to_vec(&living.entity.pos.load());
+                if best
+                    .as_ref()
+                    .is_none_or(|(best_dist, _)| dist_sq < *best_dist)
+                {
+                    best = Some((dist_sq, entity));
+                }
+            }
+            self.target = best.map(|(_, entity)| entity);
+            return;
         }
         self.target = None;
     }

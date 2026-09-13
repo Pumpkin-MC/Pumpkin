@@ -3,7 +3,7 @@ use std::sync::{
     atomic::{AtomicBool, AtomicI32, Ordering},
 };
 
-use pumpkin_data::entity::{EntityStatus, EntityType};
+use pumpkin_data::entity::{EntityStatus, EntityType, MobCategory};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
@@ -70,13 +70,18 @@ impl IronGolemEntity {
             goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
 
             target_selector.add_goal(2, Box::new(RevengeGoal::new(true)));
+            // Vanilla gates the player-facing goal on the NeutralMob anger system
+            // (isAngryAt + line of sight), which is not implemented yet, so players
+            // are not targeted at all. The monster goal matches vanilla's
+            // `NearestAttackableTargetGoal<Mob>`: every Enemy but creepers, no
+            // visibility requirement, 1/5-tick sampling.
             target_selector.add_goal(
                 3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::PLAYER, false),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::ZOMBIE, true),
+                ActiveTargetGoal::predicated(&mob_arc.mob_entity, 5, false, |living, _world| {
+                    let entity_type = living.entity.entity_type;
+                    entity_type.category == &MobCategory::MONSTER
+                        && entity_type != &EntityType::CREEPER
+                }),
             );
         };
 
