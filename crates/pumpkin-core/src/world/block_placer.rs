@@ -59,7 +59,12 @@ impl BlockPlacer for WorldBlockPlacer<'_> {
 
     fn set_block_state(&mut self, pos: &Vector3<i32>, state: &BlockState) {
         let block_pos = BlockPos::new(pos.x, pos.y, pos.z);
-        Level::set_block_state(&self.world.level, &block_pos, state.id);
+        let replaced = Level::set_block_state(&self.world.level, &block_pos, state.id);
+        if replaced.to_block() != state.id.to_block()
+            && replaced.to_state().block_entity_type != u16::MAX
+        {
+            self.world.remove_block_entity(&block_pos);
+        }
         self.changed_positions.push((block_pos, state.id));
     }
 
