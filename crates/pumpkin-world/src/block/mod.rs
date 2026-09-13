@@ -1,6 +1,3 @@
-pub mod entities;
-pub mod viewer;
-
 use std::collections::HashMap;
 
 use pumpkin_data::{Block, BlockState, BlockStateId};

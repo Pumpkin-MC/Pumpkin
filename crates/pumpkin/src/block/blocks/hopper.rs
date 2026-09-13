@@ -15,6 +15,7 @@ use crate::world::World;
 use crate::block::entities::hopper::HopperBlockEntity;
 use pumpkin_data::block_properties::FacingHopper;
 use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId, translation};
+use pumpkin_inventory::Inventory;
 use pumpkin_inventory::generic_container_screen_handler::create_hopper;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
@@ -23,7 +24,6 @@ use pumpkin_inventory::screen_handler::{
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::inventory::Inventory;
 use pumpkin_world::world::BlockFlags;
 
 struct HopperBlockScreenFactory(Arc<dyn Inventory>);
@@ -107,6 +107,11 @@ impl BlockBehaviour for HopperBlock {
     }
 
     fn on_neighbor_update(&self, args: OnNeighborUpdateArgs<'_>) {
+        // Same guard as `RedstoneGateBlock::on_neighbor_update` (abstract_redstone_gate.rs):
+        // the block at this position may have already changed since dispatch.
+        if args.world.get_block(args.position) != args.block {
+            return;
+        }
         check_powered_state(
             args.world,
             args.position,

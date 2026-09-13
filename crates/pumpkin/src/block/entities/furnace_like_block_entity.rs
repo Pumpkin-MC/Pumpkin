@@ -1,8 +1,8 @@
 use pumpkin_data::{item_stack::ItemStack, recipes::CookingRecipe};
 
 use crate::block::entities::{BlockEntity, PropertyDelegate};
-pub use pumpkin_world::block::entities::ExperienceContainer;
-use pumpkin_world::inventory::{Clearable, Inventory};
+pub use pumpkin_inventory::ExperienceContainer;
+use pumpkin_inventory::{Clearable, Inventory};
 
 /// Trait for extracting smelting experience from cooking block entities.
 pub trait CookingBlockEntityBase:
@@ -239,7 +239,7 @@ macro_rules! impl_property_delegate_for_cooking {
 #[macro_export]
 macro_rules! impl_clearable_for_cooking {
     ($struct_name:ty) => {
-        impl pumpkin_world::inventory::Clearable for $struct_name {
+        impl pumpkin_inventory::Clearable for $struct_name {
             fn clear(&self) {
                 let mut items = self
                     .items
@@ -269,7 +269,7 @@ macro_rules! impl_experience_container_for_cooking {
 #[macro_export]
 macro_rules! impl_inventory_for_cooking {
     ($struct_name:ty) => {
-        impl pumpkin_world::inventory::Inventory for $struct_name {
+        impl pumpkin_inventory::Inventory for $struct_name {
             fn size(&self) -> usize {
                 Self::INVENTORY_SIZE
             }
@@ -567,7 +567,7 @@ macro_rules! impl_block_entity_for_cooking {
                     lit_time_remaining,
                     recipes_used: std::sync::Mutex::new(recipes_used_map),
                 };
-                pumpkin_world::inventory::sync_read_items_from_nbt(nbt, furnace.items.get_mut().unwrap_or_else(std::sync::PoisonError::into_inner));
+                pumpkin_inventory::sync_read_items_from_nbt(nbt, furnace.items.get_mut().unwrap_or_else(std::sync::PoisonError::into_inner));
 
                 furnace
             }
@@ -604,7 +604,7 @@ macro_rules! impl_block_entity_for_cooking {
 
             fn get_inventory(
                 self: Arc<Self>,
-            ) -> Option<Arc<dyn pumpkin_world::inventory::Inventory>> {
+            ) -> Option<Arc<dyn pumpkin_inventory::Inventory>> {
                 Some(self)
             }
 
@@ -636,7 +636,7 @@ macro_rules! impl_block_entity_for_cooking {
                 }
 
                 if let Ok(guard) = self.items.try_read() {
-                    pumpkin_world::inventory::sync_write_items_to_nbt(&*guard, &mut nbt);
+                    pumpkin_inventory::sync_write_items_to_nbt(&*guard, &mut nbt);
                 }
                 Some(nbt)
             }

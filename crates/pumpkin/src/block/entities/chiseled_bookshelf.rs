@@ -18,7 +18,7 @@ use crate::{
     block::entities::BlockEntity,
     world::{BlockFlags, World},
 };
-use pumpkin_world::inventory::{Clearable, Inventory, sync_write_items_to_nbt};
+use pumpkin_inventory::{Clearable, Inventory, sync_write_items_to_nbt};
 
 pub struct ChiseledBookshelfBlockEntity {
     pub position: BlockPos,
@@ -48,7 +48,7 @@ impl BlockEntity for ChiseledBookshelfBlockEntity {
             last_interacted_slot: AtomicI8::new(-1),
             dirty: AtomicBool::new(false),
         };
-        pumpkin_world::inventory::sync_read_items_from_nbt(
+        pumpkin_inventory::sync_read_items_from_nbt(
             nbt,
             bookshelf
                 .items

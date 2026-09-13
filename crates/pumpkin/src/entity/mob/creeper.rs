@@ -228,7 +228,6 @@ impl Mob for CreeperEntity {
         entity.set_synced_data(pumpkin_data::tracked_data::creeper::IS_IGNITED, true);
 
         if player.gamemode.load() != pumpkin_util::GameMode::Creative {
-            // TODO: Handle DamageResult::Broken to broadcast item break and update player slot.
             let _ = item_stack.damage_item(1);
         }
 

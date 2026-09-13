@@ -12,7 +12,7 @@ use std::{
 };
 
 use crate::block::entities::BlockEntity;
-use pumpkin_world::inventory::{Clearable, Inventory};
+use pumpkin_inventory::{Clearable, Inventory};
 
 pub struct LecternBlockEntity {
     pub position: BlockPos,

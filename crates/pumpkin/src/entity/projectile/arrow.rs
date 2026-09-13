@@ -870,7 +870,7 @@ impl EntityBase for ArrowEntity {
                     &hit_pos,
                     1.0,
                     sound_pitch,
-                    0.0,
+                    0,
                 );
                 let chunk_pos = entity.chunk_pos.load();
                 world.broadcast_to_chunk(chunk_pos, &sound_packet);
@@ -949,9 +949,10 @@ impl EntityBase for ArrowEntity {
                         &hit_pos,
                         1.0,
                         sound_pitch,
-                        0.0,
+                        0,
                     );
-                    world.broadcast_packet_all(&sound_packet);
+                    let chunk_pos = entity.chunk_pos.load();
+                    world.broadcast_to_chunk(chunk_pos, &sound_packet);
 
                     if Self::should_apply_post_hurt_effects(damage_succeeded) {
                         let item_stack = self

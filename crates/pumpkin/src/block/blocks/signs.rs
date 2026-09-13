@@ -10,6 +10,7 @@ use pumpkin_data::BlockId;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::EnumVariants;
+use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::Taggable;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_macros::pumpkin_block_from_tag;
@@ -18,6 +19,7 @@ use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
+use pumpkin_world::tick::TickPriority;
 use uuid::Uuid;
 
 use crate::block::BlockBehaviour;
@@ -54,12 +56,25 @@ struct SignPlacement {
     facing: Option<String>,
     rotation: Option<u8>,
     attached: bool,
+    waterlogged: bool,
 }
 
 impl SignBlock {
     /// Checks if a block can provide support for a sign.
-    fn is_valid_support(world: &World, pos: &BlockPos, direction: BlockDirection) -> bool {
+    fn is_valid_support(
+        world: &World,
+        pos: &BlockPos,
+        direction: BlockDirection,
+        is_hanging: bool,
+    ) -> bool {
         let (block, state) = world.get_block_and_state(pos);
+
+        // Plain signs test the legacy-solid flag, mirroring `isSolid` in
+        // `StandingSignBlock::canSurvive` / `WallSignBlock::canSurvive`.
+        if !is_hanging {
+            return state.is_solid();
+        }
+
         let is_permissive = block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_LEAVES)
             || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SIGNS);
 
@@ -71,7 +86,7 @@ impl SignBlock {
     }
 
     /// Detects available support points around a position.
-    fn detect_support(world: &World, position: &BlockPos) -> SupportInfo {
+    fn detect_support(world: &World, position: &BlockPos, is_hanging: bool) -> SupportInfo {
         let (block_above, state_above) = world.get_block_and_state(&position.up());
         let above_is_valid = state_above.is_side_solid(BlockDirection::Down)
             || block_above.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SIGNS)
@@ -80,7 +95,12 @@ impl SignBlock {
         let mut side_direction = None;
         for direction in BlockDirection::horizontal() {
             let pos = position.offset(direction.to_offset());
-            if Self::is_valid_support(world, &pos, direction.opposite().to_block_direction()) {
+            if Self::is_valid_support(
+                world,
+                &pos,
+                direction.opposite().to_block_direction(),
+                is_hanging,
+            ) {
                 side_direction = Some(direction);
                 break;
             }
@@ -169,6 +189,7 @@ impl SignBlock {
             facing,
             rotation,
             attached,
+            waterlogged: args.replacing.water_source(),
         })
     }
 
@@ -291,13 +312,22 @@ impl SignBlock {
             prop.1 = if placement.attached { "true" } else { "false" };
         }
 
+        if let Some(prop) = props.iter_mut().find(|(k, _)| *k == "waterlogged") {
+            prop.1 = if placement.waterlogged {
+                "true"
+            } else {
+                "false"
+            };
+        }
+
         block.from_properties(&props).to_state_id(block)
     }
 }
 
 impl BlockBehaviour for SignBlock {
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let support = Self::detect_support(args.world, args.position);
+        let is_hanging = args.block.name.contains("hanging");
+        let support = Self::detect_support(args.world, args.position, is_hanging);
 
         let Some(placement) = Self::determine_placement(&args, &support) else {
             return BlockStateId::AIR; // Invalid placement
@@ -366,13 +396,21 @@ impl BlockBehaviour for SignBlock {
             || block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_SIGNS);
 
         match clicked_face {
-            BlockDirection::Up => {
-                !is_hanging && (state.is_center_solid(BlockDirection::Up) || is_permissive)
-            }
+            // Standing signs need a legacy-solid block below,
+            // mirroring `isSolid` in `StandingSignBlock::canSurvive`.
+            BlockDirection::Up => !is_hanging && state.is_solid(),
             BlockDirection::Down => {
                 is_hanging && (state.is_side_solid(BlockDirection::Down) || is_permissive)
             }
-            _ => state.is_side_solid(clicked_face.opposite()) || is_permissive,
+            _ => {
+                if is_hanging {
+                    state.is_side_solid(clicked_face.opposite()) || is_permissive
+                } else {
+                    // Wall signs need a legacy-solid block behind them,
+                    // mirroring `isSolid` in `WallSignBlock::canSurvive`.
+                    state.is_solid()
+                }
+            }
         }
     }
 
@@ -417,16 +455,36 @@ impl BlockBehaviour for SignBlock {
                 BlockDirection::Up => {
                     support_state.is_center_solid(BlockDirection::Down) || is_leaf || is_sign
                 }
-                BlockDirection::Down => {
-                    support_state.is_center_solid(BlockDirection::Up) || is_leaf || is_sign
+                // Standing signs survive on a legacy-solid block,
+                // mirroring `isSolid` in `StandingSignBlock::canSurvive`.
+                BlockDirection::Down => support_state.is_solid(),
+                _ => {
+                    if is_hanging {
+                        support_state.is_side_solid(dir.opposite()) || is_leaf || is_sign
+                    } else {
+                        // Wall signs survive on a legacy-solid block,
+                        // mirroring `isSolid` in `WallSignBlock::canSurvive`.
+                        support_state.is_solid()
+                    }
                 }
-                _ => support_state.is_side_solid(dir.opposite()) || is_leaf || is_sign,
             };
 
             if !is_valid {
                 return BlockStateId::AIR;
             }
         }
+
+        // A surviving waterlogged sign keeps the water around it flowing,
+        // mirroring the `scheduleTick` in `SignBlock::updateShape`.
+        if args.state_id.is_waterlogged() {
+            args.world.schedule_fluid_tick(
+                &Fluid::WATER,
+                *args.position,
+                Fluid::WATER.flow_speed as u8,
+                TickPriority::Normal,
+            );
+        }
+
         args.state_id
     }
 
@@ -737,4 +795,42 @@ fn is_facing_front_text(
 
 fn get_yaw_from_rotation_16(rotation: u8) -> f32 {
     f32::from(rotation) * 22.5
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn placement(block: &Block, waterlogged: bool) -> SignPlacement {
+        SignPlacement {
+            block_id: block.id,
+            facing: None,
+            rotation: None,
+            attached: false,
+            waterlogged,
+        }
+    }
+
+    /// `apply_placement_properties` matches property names as strings, so a
+    /// renamed or missing `waterlogged` would silently stop waterlogging signs.
+    #[test]
+    fn placement_carries_waterlogging_into_the_state() {
+        for block in [
+            &Block::OAK_SIGN,
+            &Block::OAK_WALL_SIGN,
+            &Block::OAK_HANGING_SIGN,
+            &Block::OAK_WALL_HANGING_SIGN,
+        ] {
+            for waterlogged in [false, true] {
+                let state_id =
+                    SignBlock::apply_placement_properties(block, &placement(block, waterlogged));
+                assert_eq!(
+                    state_id.is_waterlogged(),
+                    waterlogged,
+                    "{} placed with waterlogged={waterlogged}",
+                    block.name
+                );
+            }
+        }
+    }
 }

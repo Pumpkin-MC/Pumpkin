@@ -11,6 +11,7 @@ use pumpkin_util::text::TextComponent;
 use tracing::info;
 
 use crate::command::CommandSender;
+use crate::command::CommandSource;
 use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
 use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
 use crate::command::argument_types::core::bool::BoolArgumentType;
@@ -59,7 +60,7 @@ impl GameTestReporter for CommandTestReporter {
 /// matching the behavior of the old command implementation.
 struct TestInstanceArgumentType;
 
-impl ArgumentType for TestInstanceArgumentType {
+impl ArgumentType<CommandSource> for TestInstanceArgumentType {
     type Item = String;
 
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {

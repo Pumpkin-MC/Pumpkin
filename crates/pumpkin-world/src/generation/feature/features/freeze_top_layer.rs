@@ -1,7 +1,8 @@
 use crate::generation::proto_chunk::GenerationCache;
 use crate::lighting::engine::{BlockLightProvider, LightProvider};
-use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::{Block, BlockState};
+use pumpkin_data::block_properties::{BlockProperties, GrassBlockLikeProperties};
+use pumpkin_data::tag;
+use pumpkin_data::{Block, BlockId, BlockState};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::random::RandomGenerator;
 
@@ -29,15 +30,15 @@ impl FreezeTopLayerFeature {
 
                 let top_vec = BlockPos::new(x, y, z).0;
                 let below_vec = BlockPos::new(x, below_y, z).0;
+                let below = GenerationCache::get_block_state(chunk, &below_vec);
+                let below_block = below.to_block_id();
 
                 let biome = chunk.get_biome_for_terrain_gen(x, y, z);
 
                 // Freeze check
-                if biome.weather.base_temperature() <= 0.15
-                    && GenerationCache::get_block_state(chunk, &below_vec).to_block_id()
-                        == Block::WATER
-                {
+                if biome.weather.base_temperature() <= 0.15 && below_block == BlockId::WATER {
                     chunk.set_block_state(&below_vec, Block::ICE.default_state);
+                    continue;
                 }
 
                 // Snow check
@@ -48,36 +49,24 @@ impl FreezeTopLayerFeature {
 
                 if top_temp < 0.15 {
                     let top_raw = GenerationCache::get_block_state(chunk, &top_vec);
-                    // Re-read below (may have been replaced by ice in the freeze step above)
-                    let below = GenerationCache::get_block_state(chunk, &below_vec);
-                    let below_block = below.to_block();
-
                     // topPos must be air; belowPos must not be air (something to stand on)
                     // with a full top face (unless overridden), in darkness (vanilla
                     // only forms snow where block light is below 10).
                     if top_raw.to_state().is_air()
                         && !below.to_state().is_air()
-                        && !below_block.has_tag(&tag::Block::MINECRAFT_CANNOT_SUPPORT_SNOW_LAYER)
-                        && (below_block.has_tag(&tag::Block::MINECRAFT_SUPPORT_OVERRIDE_SNOW_LAYER)
+                        && !below_block.has_tag(tag::Block::MINECRAFT_CANNOT_SUPPORT_SNOW_LAYER)
+                        && (below_block.has_tag(tag::Block::MINECRAFT_SUPPORT_OVERRIDE_SNOW_LAYER)
                             || is_top_face_full(below.to_state()))
                         && block_light_at(chunk, x, y, z) < 10
                     {
                         chunk.set_block_state(&top_vec, Block::SNOW.default_state);
 
                         // Update the `snowy` block-state property on the block below if it has one
-                        if let Some(props) = below_block.properties(below) {
-                            let prop_list = props.to_props();
-                            if prop_list.iter().any(|(k, _)| *k == "snowy") {
-                                let new_props: Vec<(&str, &str)> = prop_list
-                                    .iter()
-                                    .map(|(k, v)| (*k, if *k == "snowy" { "true" } else { *v }))
-                                    .collect();
-                                let new_props_obj =
-                                    below_block.from_properties(new_props.as_slice());
-                                let new_state_id = new_props_obj.to_state_id(below_block);
-                                chunk
-                                    .set_block_state(&below_vec, BlockState::from_id(new_state_id));
-                            }
+                        if GrassBlockLikeProperties::handles_block_id(below_block) {
+                            let block = below_block.to_block();
+                            let mut props = GrassBlockLikeProperties::from_state_id(below);
+                            props.snowy = true;
+                            chunk.set_block_state(&below_vec, props.to_state_id(block).to_state());
                         }
                     }
                 }
@@ -90,15 +79,40 @@ impl FreezeTopLayerFeature {
 
 // Duplicated from `LayeredSnowBlock::can_place_at` in the `pumpkin` crate:
 // `pumpkin-world` cannot depend on `pumpkin`, so the face-full check lives
-// here too. `Block.isFaceFull` equivalent: the collision shape must fully
-// cover the top face.
+// here too. `Block.isFaceFull` equivalent: the union of the collision shapes
+// must fully cover the top face (per-shape checks miss multipart blocks
+// whose boxes only cover it together).
 fn is_top_face_full(state: &BlockState) -> bool {
-    state.get_block_collision_shapes().any(|shape| {
-        shape.max.y >= 1.0
-            && shape.min.x <= 0.0
-            && shape.max.x >= 1.0
-            && shape.min.z <= 0.0
-            && shape.max.z >= 1.0
+    let mut boxes = Vec::new();
+    let mut xs = vec![0.0, 1.0];
+    let mut zs = vec![0.0, 1.0];
+    for shape in state.get_block_collision_shapes() {
+        if shape.max.y < 1.0 {
+            continue;
+        }
+        let (x0, x1) = (shape.min.x.max(0.0), shape.max.x.min(1.0));
+        let (z0, z1) = (shape.min.z.max(0.0), shape.max.z.min(1.0));
+        if x0 < x1 && z0 < z1 {
+            xs.push(x0);
+            xs.push(x1);
+            zs.push(z0);
+            zs.push(z1);
+            boxes.push((x0, x1, z0, z1));
+        }
+    }
+    if boxes.is_empty() {
+        return false;
+    }
+    xs.sort_by(f64::total_cmp);
+    zs.sort_by(f64::total_cmp);
+    xs.dedup();
+    zs.dedup();
+    xs.windows(2).all(|xw| {
+        zs.windows(2).all(|zw| {
+            boxes
+                .iter()
+                .any(|&(x0, x1, z0, z1)| x0 <= xw[0] && xw[1] <= x1 && z0 <= zw[0] && zw[1] <= z1)
+        })
     })
 }
 

@@ -1,263 +1,78 @@
-pub mod attached;
-pub mod detached;
-pub mod dispatcher;
-pub mod tree;
-
-use crate::command::argument_types::argument_type::AnyArgumentType;
 use crate::command::context::command_context::CommandContext;
 use crate::command::context::command_source::CommandSource;
-use crate::command::errors::command_syntax_error::CommandSyntaxError;
-use crate::command::node::attached::NodeId;
-use crate::command::node::detached::GlobalNodeId;
-use crate::command::suggestion::provider::SuggestionProvider;
-use std::borrow::Cow;
-use std::sync::Arc;
 
-/// Represents a [`CommandExecutor`]'s result.
-///
-/// If the command **ran successfully**, an [`Ok`] is returned containing an [`i32`].
-/// This represents the 'output value' of the command, which is *homologous* to the
-/// `int` that command executors in vanilla return **upon success**.
-///
-/// **You should choose the successful result as `1` if**:
-/// - you don't know what value to use for a success for your
-///   own commands, or
-/// - you don't understand what this value means, or
-/// - you just simply don't care about this value at all
-///
-/// If the command **fails**, an [`Err`] is returned, containing the [`CommandSyntaxError`]
-/// that led to this result.
-pub type CommandExecutorResult = Result<i32, CommandSyntaxError>;
+pub use pumpkin_command::node::*;
+
+pub mod attached {
+    pub use pumpkin_command::node::attached::*;
+    pub type AttachedNode =
+        pumpkin_command::node::attached::AttachedNode<crate::command::CommandSource>;
+    pub type RootAttachedNode =
+        pumpkin_command::node::attached::RootAttachedNode<crate::command::CommandSource>;
+    pub type LiteralAttachedNode =
+        pumpkin_command::node::attached::LiteralAttachedNode<crate::command::CommandSource>;
+    pub type CommandAttachedNode =
+        pumpkin_command::node::attached::CommandAttachedNode<crate::command::CommandSource>;
+    pub type ArgumentAttachedNode =
+        pumpkin_command::node::attached::ArgumentAttachedNode<crate::command::CommandSource>;
+}
+
+pub mod detached {
+    pub use pumpkin_command::node::detached::*;
+    pub type DetachedNode =
+        pumpkin_command::node::detached::DetachedNode<crate::command::CommandSource>;
+    pub type LiteralDetachedNode =
+        pumpkin_command::node::detached::LiteralDetachedNode<crate::command::CommandSource>;
+    pub type CommandDetachedNode =
+        pumpkin_command::node::detached::CommandDetachedNode<crate::command::CommandSource>;
+    pub type ArgumentDetachedNode =
+        pumpkin_command::node::detached::ArgumentDetachedNode<crate::command::CommandSource>;
+}
+
+pub mod tree {
+    pub use pumpkin_command::node::tree::*;
+    pub type Tree = pumpkin_command::node::tree::Tree<crate::command::CommandSource>;
+}
+
+pub mod dispatcher {
+    pub use pumpkin_command::dispatcher::*;
+    pub type CommandDispatcher =
+        pumpkin_command::dispatcher::CommandDispatcher<crate::command::CommandSource>;
+}
+
+pub type Command = pumpkin_command::node::Command<CommandSource>;
+pub type Requirement = pumpkin_command::node::Requirement<CommandSource>;
+pub type Requirements = pumpkin_command::node::Requirements<CommandSource>;
+pub type RedirectModifier = pumpkin_command::node::RedirectModifier<CommandSource>;
+pub type RedirectModifierResult = pumpkin_command::node::RedirectModifierResult<CommandSource>;
+pub type RedirectModifierExecutor = pumpkin_command::node::RedirectModifierExecutor<CommandSource>;
 
 /// A struct implementing this trait is able to run with a given context.
 pub trait CommandExecutor: Sync + Send {
     /// Executes this executor for a command.
-    fn execute(&self, context: &CommandContext) -> CommandExecutorResult;
+    fn execute(&self, context: &CommandContext) -> pumpkin_command::node::CommandExecutorResult;
 }
 
-impl<F> CommandExecutor for F
-where
-    F: Fn(&CommandContext) -> CommandExecutorResult + Send + Sync,
+pub struct CommandExecutorAdapter<T>(pub T);
+
+impl<T: CommandExecutor> pumpkin_command::node::CommandExecutor<CommandSource>
+    for CommandExecutorAdapter<T>
 {
-    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
-        self(context)
+    fn execute(
+        &self,
+        context: &pumpkin_command::context::command_context::CommandContext<'_, CommandSource>,
+    ) -> pumpkin_command::node::CommandExecutorResult {
+        self.0.execute(context)
     }
 }
 
-/// A function that takes a context and returns a command result.
-pub type Command = Arc<dyn CommandExecutor>;
+pub struct ArcCommandExecutorAdapter(pub std::sync::Arc<dyn CommandExecutor>);
 
-/// Represents the result of [`Arc<CommandSource>`]s from a [`CommandContext`].
-pub type RedirectModifierResult = Result<Vec<Arc<CommandSource>>, CommandSyntaxError>;
-
-/// A function that performs the required modification.
-pub type RedirectModifierExecutor = dyn Fn(&CommandContext) -> RedirectModifierResult + Send + Sync;
-
-/// A function that returns a new collection of sources from a given context.
-#[derive(Clone)]
-pub enum RedirectModifier {
-    /// Always returns only the source from the given context.
-    KeepSource,
-
-    /// Returns multiple [`CommandSource`]s from one context via
-    /// custom behavior.
-    Custom(Arc<RedirectModifierExecutor>),
-}
-
-impl RedirectModifier {
-    /// Tries to provide a [`Vec`] of [`Arc<CommandSource>`] from a
-    /// given [`CommandContext`].
-    pub fn sources(&self, command_context: &CommandContext) -> RedirectModifierResult {
-        match self {
-            Self::KeepSource => Ok(vec![command_context.source.clone()]),
-            Self::Custom(function) => function(command_context),
-        }
-    }
-}
-
-/// Represents the result of a node requirement.
-pub type RequirementResult = bool;
-
-/// A predicate that returns if the provided source satisfies it.
-#[derive(Clone)]
-pub struct Requirement(pub Arc<dyn Fn(&CommandSource) -> RequirementResult + Send + Sync>);
-
-impl Requirement {
-    /// Evaluates the given condition, returning whether the
-    /// given [`CommandSource`] satisfies this requirement.
-    #[must_use]
-    pub fn evaluate(&self, command_source: &CommandSource) -> RequirementResult {
-        self.0(command_source)
-    }
-}
-
-impl<F> From<F> for Requirement
-where
-    F: Fn(&CommandSource) -> RequirementResult + Send + Sync + 'static,
-{
-    fn from(value: F) -> Self {
-        Self(Arc::new(value))
-    }
-}
-
-// Permissions
-impl From<String> for Requirement {
-    fn from(value: String) -> Self {
-        Self(Arc::new({
-            let permission = Arc::new(value);
-
-            move |source| source.has_permission(&permission)
-        }))
-    }
-}
-
-impl From<&'static str> for Requirement {
-    fn from(value: &'static str) -> Self {
-        Self(Arc::new(move |source| source.has_permission(value)))
-    }
-}
-
-/// A structure that returns if the source is qualified enough to run the command.
-#[derive(Clone)]
-pub struct Requirements(pub Vec<Requirement>);
-
-impl Requirements {
-    /// Creates a new `Requirements` with no requirements in it.
-    /// If used, this will always return `true` when evaluated.
-    #[must_use]
-    pub const fn new() -> Self {
-        Self(Vec::new())
-    }
-
-    /// Evaluates the given condition, returning whether the
-    /// given [`CommandSource`] satisfies all contained requirements.
-    #[must_use]
-    pub fn evaluate(&self, command_source: &CommandSource) -> RequirementResult {
-        for predicate in &self.0 {
-            if !predicate.evaluate(command_source) {
-                return false;
-            }
-        }
-        true
-    }
-}
-
-impl Default for Requirements {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Stores common owned data for a node.
-#[derive(Clone)]
-pub struct OwnedNodeData {
-    pub global_id: GlobalNodeId,
-    pub requirements: Requirements,
-    pub modifier: RedirectModifier,
-    pub forks: bool,
-    pub command: Option<Command>,
-}
-
-/// Represents the extra metadata of a node storing a literal.
-#[derive(Clone)]
-pub struct LiteralNodeMetadata {
-    pub literal: Cow<'static, str>,
-    pub literal_lowercase: String,
-}
-
-impl LiteralNodeMetadata {
-    pub fn new(literal: impl Into<Cow<'static, str>>) -> Self {
-        let literal = literal.into();
-        Self {
-            literal: literal.clone(),
-            literal_lowercase: literal.to_lowercase(),
-        }
-    }
-}
-
-/// A special type of [`LiteralNodeMetadata`], containing
-/// a description for the command as well.
-#[derive(Clone)]
-pub struct CommandNodeMetadata {
-    pub literal: Cow<'static, str>,
-    pub literal_lowercase: String,
-    pub description: Cow<'static, str>,
-    pub source: Option<String>,
-}
-
-impl CommandNodeMetadata {
-    pub fn new(
-        literal: impl Into<Cow<'static, str>>,
-        description: impl Into<Cow<'static, str>>,
-    ) -> Self {
-        let literal = literal.into();
-        Self {
-            literal: literal.clone(),
-            literal_lowercase: literal.to_lowercase(),
-            description: description.into(),
-            source: None,
-        }
-    }
-}
-
-/// Represents the extra metadata of an argument of any type.
-#[derive(Clone)]
-pub struct ArgumentNodeMetadata {
-    pub name: Cow<'static, str>,
-    pub argument_type: Arc<dyn AnyArgumentType>,
-    pub suggestion_provider: Option<Arc<dyn SuggestionProvider>>,
-}
-
-impl ArgumentNodeMetadata {
-    pub fn new(
-        name: impl Into<Cow<'static, str>>,
-        argument_type: Arc<dyn AnyArgumentType>,
-        suggestion_provider: Option<Arc<dyn SuggestionProvider>>,
-    ) -> Self {
-        Self {
-            name: name.into(),
-            argument_type,
-            suggestion_provider,
-        }
-    }
-}
-
-/// Represents the extra metadata for nodes of different types. Can be of the root, a literal, command or an argument.
-pub enum NodeMetadata {
-    /// Metadata of the root node.
-    Root,
-
-    /// Metadata of a literal node that doesn't start a command.
-    Literal(LiteralNodeMetadata),
-
-    /// Metadata of a literal node that starts a command.
-    Command(CommandNodeMetadata),
-
-    /// Metadata of an argument node.
-    Argument(ArgumentNodeMetadata),
-}
-
-/// Stores where this redirection would lead to.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
-pub enum Redirection {
-    /// Leads to the root of the tree.
-    Root,
-
-    /// Leads to a node in the tree from its tree-local ID.
-    Local(NodeId),
-
-    /// Leads to a node in the tree from its global ID.
-    Global(GlobalNodeId),
-}
-
-impl<T: Into<NodeId>> From<T> for Redirection {
-    fn from(value: T) -> Self {
-        Self::Local(value.into())
-    }
-}
-
-impl From<GlobalNodeId> for Redirection {
-    fn from(value: GlobalNodeId) -> Self {
-        Self::Global(value)
+impl pumpkin_command::node::CommandExecutor<CommandSource> for ArcCommandExecutorAdapter {
+    fn execute(
+        &self,
+        context: &pumpkin_command::context::command_context::CommandContext<'_, CommandSource>,
+    ) -> pumpkin_command::node::CommandExecutorResult {
+        self.0.execute(context)
     }
 }
