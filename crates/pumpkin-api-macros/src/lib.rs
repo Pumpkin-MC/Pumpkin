@@ -120,7 +120,7 @@ pub fn with_runtime(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut input = parse_macro_input!(item as ItemImpl);
 
     let mode: Ident = parse_macro_input!(attr as Ident);
-    let use_global = match mode.to_string().as_str() {
+    let uses_global_runtime = match mode.to_string().as_str() {
         "global" => true,
         "local" => false,
         other => abort!(mode, format!("expected `global` or `local`, got `{other}`")),
@@ -130,7 +130,7 @@ pub fn with_runtime(attr: TokenStream, item: TokenStream) -> TokenStream {
         if let ImplItem::Fn(method) = item {
             let original_body = &method.block;
 
-            method.block = if use_global {
+            method.block = if uses_global_runtime {
                 parse_quote!({
                     crate::GLOBAL_RUNTIME.block_on(async move {
                         #original_body
