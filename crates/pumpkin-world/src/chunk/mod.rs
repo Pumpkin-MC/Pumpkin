@@ -783,7 +783,7 @@ impl ChunkData {
             ChunkHeightmapType::MotionBlocking,
             ChunkHeightmapType::MotionBlockingNoLeaves,
         ] {
-            heightmap.update(hm_type, x, z, y, block_state, min_y, |y_at| {
+            heightmap.update(hm_type, x, y, z, block_state, min_y, |y_at| {
                 let id = self
                     .section
                     .get_block_absolute_y(relative_x, y_at, relative_z)
@@ -1056,5 +1056,35 @@ mod tests {
         chunk.remove_custom_data("my_plugin", "test_key");
         assert!(!chunk.has_custom_data("my_plugin", "test_key"));
         assert!(chunk.has_custom_data("my_plugin", "number_key"));
+    }
+
+    #[test]
+    fn set_block_absolute_y_updates_heightmaps() {
+        use super::{ChunkData, ChunkHeightmapType};
+
+        let chunk = ChunkData::empty(0, 0);
+        let min_y = chunk.section.min_y;
+        let surface = |x: i32, z: i32| {
+            chunk
+                .heightmap
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get(ChunkHeightmapType::WorldSurface, x, z, min_y)
+        };
+
+        chunk.set_block_absolute_y(5, 62, 9, Block::SAND.default_state.id);
+        assert_eq!(surface(5, 9), 62);
+
+        // Build a column upwards, like a player stacking a beacon pyramid.
+        for y in 63..=67 {
+            chunk.set_block_absolute_y(5, y, 9, Block::IRON_BLOCK.default_state.id);
+        }
+        assert_eq!(surface(5, 9), 67);
+        // The transposed column must stay untouched.
+        assert_eq!(surface(9, 5), min_y - 1);
+
+        // Removing the top block falls back to the next non-air block below.
+        chunk.set_block_absolute_y(5, 67, 9, Block::AIR.default_state.id);
+        assert_eq!(surface(5, 9), 66);
     }
 }
