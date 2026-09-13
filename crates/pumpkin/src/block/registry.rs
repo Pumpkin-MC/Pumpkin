@@ -514,6 +514,11 @@ pub enum BlockPlacingError {
     BlockOutOfWorld,
 }
 
+fn can_replace_with_other_block(block: &Block, state: &BlockState) -> bool {
+    // Sculk veins allow replacement by another block despite their state flag.
+    block == &Block::SCULK_VEIN || state.replaceable()
+}
+
 impl BlockRegistry {
     pub fn bone_meal(
         &self,
@@ -655,7 +660,7 @@ impl BlockRegistry {
                 player,
             )
             .then_some(BlockIsReplacing::Itself(clicked_block_state.id))
-        } else if clicked_block_state.replaceable() {
+        } else if can_replace_with_other_block(clicked_block, clicked_block_state) {
             if clicked_block == &Block::WATER {
                 use pumpkin_data::block_properties::WaterLikeProperties;
                 let water_props = WaterLikeProperties::from_state_id(clicked_block_state.id);
@@ -686,7 +691,7 @@ impl BlockRegistry {
                     )
                     .then_some(BlockIsReplacing::Itself(previous_block_state.id))
                 } else {
-                    previous_block_state.replaceable().then(|| {
+                    can_replace_with_other_block(previous_block, previous_block_state).then(|| {
                         if previous_block == &Block::WATER {
                             use pumpkin_data::block_properties::WaterLikeProperties;
                             let water_props =
@@ -1482,5 +1487,42 @@ impl BlockRegistry {
             },
             |pumpkin_block| pumpkin_block.is_pathfindable(state, computation_type),
         )
+    }
+}
+
+#[cfg(test)]
+mod replacement_tests {
+    use super::can_replace_with_other_block;
+    use pumpkin_data::{Block, BlockState, block_properties::GlowLichenLikeProperties};
+
+    #[test]
+    fn sculk_vein_can_be_replaced_when_dry_or_waterlogged() {
+        let block = &Block::SCULK_VEIN;
+        for waterlogged in [false, true] {
+            let mut properties = GlowLichenLikeProperties::default(block);
+            properties.down = true;
+            properties.waterlogged = waterlogged;
+            let state = BlockState::from_id(properties.to_state_id(block));
+            assert!(!state.replaceable());
+            assert!(can_replace_with_other_block(block, state));
+        }
+    }
+
+    #[test]
+    fn other_blocks_keep_their_replacement_flags() {
+        for (block, expected) in [
+            (&Block::AIR, true),
+            (&Block::WATER, true),
+            (&Block::SHORT_GRASS, true),
+            (&Block::GLOW_LICHEN, true),
+            (&Block::RESIN_CLUMP, true),
+            (&Block::STONE, false),
+            (&Block::OAK_SLAB, false),
+        ] {
+            assert_eq!(
+                can_replace_with_other_block(block, block.default_state),
+                expected
+            );
+        }
     }
 }
