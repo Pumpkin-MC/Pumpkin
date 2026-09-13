@@ -10,14 +10,14 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
+  issues: write
 
 jobs:
   request-reviewers:
     name: Request reviewers
     runs-on: ubuntu-latest
     steps:
-      - name: Request reviewers based on changed files
+      - name: Notify reviewers based on changed files
         uses: actions/github-script@v8
         with:
           script: |
@@ -76,15 +76,42 @@ jobs:
             reviewers.delete(author);
 
             if (reviewers.size === 0) {
-              core.info('No eligible reviewers matched the changed files.');
+              core.info('No reviewers matched the changed files.');
               return;
             }
 
-            await github.rest.pulls.requestReviewers({
+            const mentionList = [...reviewers].sort().map((reviewer) => `@${reviewer}`);
+            const marker = '<!-- pumpkin-reviewers -->';
+            const body = [
+              marker,
+              'Review requested from:',
+              '',
+              mentionList.join(' '),
+            ].join('\n');
+
+            const comments = await github.paginate(
+              github.rest.issues.listComments,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                per_page: 100,
+              },
+            );
+            const previousComment = comments
+              .filter((comment) => comment.body?.includes(marker))
+              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+
+            if (previousComment?.body === body) {
+              core.info('Reviewer notification is already up to date.');
+              return;
+            }
+
+            await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              pull_number: context.issue.number,
-              reviewers: [...reviewers],
+              issue_number: context.issue.number,
+              body,
             });
 
-            core.info(`Requested reviewers: ${[...reviewers].join(', ')}`);
+            core.info(`Notified reviewers: ${mentionList.join(', ')}`);
