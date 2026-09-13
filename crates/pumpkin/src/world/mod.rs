@@ -4576,9 +4576,11 @@ impl World {
             java_client.send_chunks(&[chunk]).await;
         }
 
-        target_world
-            .entity_tracker
-            .add_entity(&(player.clone() as Arc<dyn EntityBase>), &target_world);
+        if target_world.uuid != self.uuid {
+            target_world
+                .entity_tracker
+                .add_entity(&(player.clone() as Arc<dyn EntityBase>), &target_world);
+        }
         target_world.pair_new_player_with_tracked_entities(player);
 
         // Send teleport packet after at least the center chunk was delivered
