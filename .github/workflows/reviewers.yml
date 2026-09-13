@@ -11,6 +11,7 @@ on:
 permissions:
   contents: read
   issues: write
+  pull-requests: write
 
 jobs:
   request-reviewers:
@@ -107,11 +108,21 @@ jobs:
               return;
             }
 
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body,
-            });
+            try {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            } catch (error) {
+              if (error.status === 403) {
+                core.setFailed(
+                  'GitHub Actions cannot comment on this pull request. Enable "Read and write permissions" for GITHUB_TOKEN in Settings > Actions > General.',
+                );
+                return;
+              }
+              throw error;
+            }
 
             core.info(`Notified reviewers: ${mentionList.join(', ')}`);
