@@ -1,6 +1,10 @@
 use crate::generation::structure::placement::GlobalStructureCache;
 use std::sync::Arc;
 
+#[cfg(test)]
+#[path = "village_path_tests.rs"]
+mod village_path_tests;
+
 use pumpkin_data::block_properties::is_air;
 use pumpkin_data::chunk::DoublePerlinNoiseParameters;
 use pumpkin_data::fluid::{Fluid, FluidState};
@@ -1579,6 +1583,39 @@ impl BlockAccessor for ProtoChunk {
 }
 
 impl BlockPlacer for ProtoChunk {
+    fn column_height(
+        &self,
+        heightmap: crate::generation::structure::template::processor::HeightmapType,
+        x: i32,
+        z: i32,
+    ) -> i32 {
+        use crate::generation::structure::template::processor::HeightmapType;
+
+        let bottom = i32::from(self.bottom_y());
+        let ceiling = self.get_top_y(&heightmap.into(), x, z);
+        // Earlier pieces can clear blocks without lowering the cached height.
+        (bottom..ceiling)
+            .rev()
+            .find(|&y| {
+                let id = self.get_block_state(&Vector3::new(x, y, z));
+                let state = BlockState::from_id(id);
+                match heightmap {
+                    HeightmapType::WorldSurfaceWg | HeightmapType::WorldSurface => !state.is_air(),
+                    HeightmapType::OceanFloorWg | HeightmapType::OceanFloor => {
+                        blocks_movement(state, id.to_block_id())
+                    }
+                    HeightmapType::MotionBlocking => {
+                        blocks_movement(state, id.to_block_id()) || state.is_liquid()
+                    }
+                    HeightmapType::MotionBlockingNoLeaves => {
+                        (blocks_movement(state, id.to_block_id()) || state.is_liquid())
+                            && !id.to_block_id().has_tag(tag::Block::MINECRAFT_LEAVES)
+                    }
+                }
+            })
+            .map_or(bottom, |y| y + 1)
+    }
+
     fn get_block_state(&self, pos: &Vector3<i32>) -> BlockStateId {
         self.get_block_state(pos)
     }

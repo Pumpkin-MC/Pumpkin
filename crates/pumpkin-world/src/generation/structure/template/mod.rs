@@ -30,6 +30,9 @@ pub mod processor;
 mod structure_template;
 mod template_piece;
 
+#[cfg(test)]
+mod placement_tests;
+
 use pumpkin_data::BlockStateId;
 use pumpkin_data::Mirror;
 use pumpkin_data::Rotation;
@@ -57,6 +60,8 @@ pub use template_piece::TemplatePiece;
 /// [`WorldBlockPlacer`] (live `/place template` command).
 pub trait BlockPlacer {
     fn get_block_state(&self, pos: &Vector3<i32>) -> BlockStateId;
+    /// Returns the first Y above the column's highest block matching the heightmap.
+    fn column_height(&self, heightmap: processor::HeightmapType, x: i32, z: i32) -> i32;
     fn set_block_state(&mut self, pos: &Vector3<i32>, state: &BlockState);
     fn add_block_entity(&mut self, nbt: NbtCompound);
 }
@@ -116,6 +121,7 @@ pub fn place_template_with_options(
 
     let mut context_rng = LegacyRand::from_seed(hash_block_pos(world_x, origin.y, world_z) as u64);
     let mut context = processor::ProcessorContext::new(origin, processors, &mut context_rng);
+    let mut processed_blocks = Vec::new();
 
     for block in &template.blocks {
         let palette_entry = &template.palette[block.state as usize];
@@ -170,22 +176,7 @@ pub fn place_template_with_options(
             continue;
         }
 
-        let world_pos = Vector3::new(wx, wy, wz);
-
-        if apply_waterlogging
-            && placer.get_block_state(&world_pos).to_block_id() == pumpkin_data::Block::WATER.id
-            && let Some((_, waterlogged)) = placed_entry
-                .properties
-                .iter_mut()
-                .find(|(name, _)| name == "waterlogged")
-        {
-            *waterlogged = "true".to_string();
-            if let Some(waterlogged_state) =
-                BlockStateResolver::resolve(&placed_entry, rotation, Mirror::default())
-            {
-                state = waterlogged_state;
-            }
-        }
+        let mut world_pos = Vector3::new(wx, wy, wz);
 
         // Apply processors
         let mut should_place = true;
@@ -195,7 +186,8 @@ pub fn place_template_with_options(
         for processor in processors {
             let Some(processed_state) = processor.process_with_context(
                 placer,
-                world_pos,
+                &mut world_pos,
+                block.pos.y,
                 state,
                 &mut block_entity_nbt,
                 &mut context,
@@ -215,7 +207,27 @@ pub fn place_template_with_options(
             continue;
         }
 
-        placer.set_block_state(&Vector3::new(wx, wy, wz), state);
+        if chunk_box.is_some_and(|bbox| !bbox.contains_pos(&world_pos)) {
+            continue;
+        }
+
+        processed_blocks.push((world_pos, state, block_entity_nbt));
+    }
+
+    // All columns must be sampled before this template can change their heights.
+    for (world_pos, mut state, block_entity_nbt) in processed_blocks {
+        let Vector3 {
+            x: wx,
+            y: wy,
+            z: wz,
+        } = world_pos;
+        if apply_waterlogging
+            && placer.get_block_state(&world_pos).to_block_id() == pumpkin_data::Block::WATER.id
+        {
+            state = state.set_waterlogged(true).unwrap_or(state);
+        }
+
+        placer.set_block_state(&world_pos, state);
 
         // Create block entities for interactive blocks (furnaces, chests, etc.)
         let final_block = pumpkin_data::Block::from_id(state.id.to_block_id());
@@ -385,6 +397,10 @@ mod tests {
     struct CollectingPlacer(Vec<BlockStateId>);
 
     impl BlockPlacer for CollectingPlacer {
+        fn column_height(&self, _heightmap: processor::HeightmapType, _x: i32, _z: i32) -> i32 {
+            0
+        }
+
         fn get_block_state(&self, _pos: &Vector3<i32>) -> BlockStateId {
             Block::AIR.default_state.id
         }
