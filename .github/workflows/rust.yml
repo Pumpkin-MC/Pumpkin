@@ -176,7 +176,7 @@ jobs:
           script: cargo ndk-test -t arm64-v8a
 
   build_pull_request:
-    name: Build affected packages (${{ matrix.name }})
+    name: Build affected packages
     needs: [prepare, test]
     if: github.event_name == 'pull_request' && needs.prepare.outputs.has_code == 'true'
     runs-on: ${{ matrix.os }}
