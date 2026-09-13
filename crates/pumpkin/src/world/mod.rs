@@ -6588,8 +6588,8 @@ impl World {
                 removed_pending
             })
             .unwrap_or(false);
+        self.custom_block_entity_data.remove(block_pos);
         if removed_live || removed_pending {
-            self.custom_block_entity_data.remove(block_pos);
             // Drop the chunk's map once its last block entity is gone.
             self.block_entities
                 .remove_if(&chunk_pos, |_, entities| entities.is_empty());
