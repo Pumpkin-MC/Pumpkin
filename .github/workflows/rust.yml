@@ -249,7 +249,7 @@ jobs:
           cargo ndk -t arm64-v8a build --locked
 
   build_release:
-    name: Build project in release (${{ matrix.name }})
+    name: Build project in release
     needs: [prepare, clippy_release, test, test_android]
     if: needs.prepare.outputs.run_full == 'true' && github.event_name != 'pull_request'
     runs-on: ${{ matrix.os }}
