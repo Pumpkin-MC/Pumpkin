@@ -36,10 +36,13 @@ impl ItemBehaviour for HoneyCombItem {
         _cursor_pos: Vector3<f32>,
         block: &Block,
         _server: &Server,
-    ) {
+    ) -> BlockActionResult {
         let world = player.world();
         if try_wax_block(&world, location, block) {
             item.decrement_unless_creative(player.gamemode.load(), 1);
+            BlockActionResult::Success
+        } else {
+            BlockActionResult::Pass
         }
     }
 

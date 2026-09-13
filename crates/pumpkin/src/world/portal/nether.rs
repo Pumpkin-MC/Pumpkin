@@ -5,13 +5,15 @@ use pumpkin_data::{
     tag,
     tag::Taggable,
 };
-use pumpkin_util::math::{boundingbox::EntityDimensions, position::BlockPos, vector3::Vector3};
+use pumpkin_util::math::{
+    boundingbox::EntityDimensions, position::BlockPos, vector2::Vector2, vector3::Vector3,
+};
 use pumpkin_world::{chunk::ChunkHeightmapType, world::BlockFlags};
 use std::sync::Arc;
 
 use crate::world::World;
 
-const SEARCH_RADIUS_NETHER: i32 = 128;
+const SEARCH_RADIUS_NETHER: i32 = 16;
 const SEARCH_RADIUS_OVERWORLD: i32 = 128;
 
 #[derive(Debug, Clone)]
@@ -501,21 +503,11 @@ impl NetherPortal {
         );
         let min_y = world.min_y;
         let max_y = min_y + world.dimension.height - 1;
-        let worldborder = world
-            .worldborder
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         let search_radius = if world.dimension.has_ceiling {
             SEARCH_RADIUS_NETHER
         } else {
             SEARCH_RADIUS_OVERWORLD
-        };
-
-        let search_max_y = if world.dimension.has_ceiling {
-            (min_y + world.dimension.logical_height - 1).min(max_y)
-        } else {
-            max_y
         };
 
         let portal_positions = {
@@ -526,10 +518,44 @@ impl NetherPortal {
             poi_storage.get_in_square(target_pos, search_radius, Some(poi::POI_TYPE_NETHER_PORTAL))
         };
 
+        let mut candidate_chunks: Vec<Vector2<i32>> = Vec::new();
+        for pos in &portal_positions {
+            let chunk = Vector2::new(pos.0.x >> 4, pos.0.z >> 4);
+            if !candidate_chunks.contains(&chunk) {
+                candidate_chunks.push(chunk);
+            }
+        }
+        if !candidate_chunks.is_empty()
+            && let Ok(handle) = tokio::runtime::Handle::try_current()
+        {
+            tokio::task::block_in_place(|| {
+                handle.block_on(async {
+                    for chunk in &candidate_chunks {
+                        for dx in -1..=1 {
+                            for dz in -1..=1 {
+                                world
+                                    .level
+                                    .get_or_fetch_chunk(
+                                        Vector2::new(chunk.x + dx, chunk.y + dz),
+                                        |_| (),
+                                    )
+                                    .await;
+                            }
+                        }
+                    }
+                });
+            });
+        }
+
+        let worldborder = world
+            .worldborder
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
         let mut best: Option<(PortalSearchResult, f64, i32)> = None;
 
         for pos in portal_positions {
-            if pos.0.y < min_y || pos.0.y > search_max_y {
+            if pos.0.y < min_y || pos.0.y > max_y {
                 continue;
             }
 

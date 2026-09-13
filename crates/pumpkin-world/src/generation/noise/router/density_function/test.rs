@@ -841,7 +841,7 @@ fn normal_surface_noisified() {
 // }
 
 #[test]
-fn test_round_function_parity() {
+fn round_function_parity() {
     use super::math::round_to_integer;
     use pumpkin_data::noise_router::RoundingOperation;
 
@@ -871,7 +871,7 @@ fn test_round_function_parity() {
 }
 
 #[test]
-fn test_gradient_function_parity() {
+fn gradient_function_parity() {
     use super::StaticIndependentChunkNoiseFunctionComponentImpl;
     use super::misc::Gradient;
     use pumpkin_data::noise_router::{Axis, GradientData, Tiling};

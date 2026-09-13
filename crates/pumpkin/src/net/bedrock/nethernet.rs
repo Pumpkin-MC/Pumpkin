@@ -1,5 +1,6 @@
 use std::{
     fs::OpenOptions,
+    future::Future,
     io::{ErrorKind, Write},
     net::{IpAddr, SocketAddr},
     path::Path as FsPath,
@@ -16,7 +17,7 @@ use axum::{
     body::Bytes,
     extract::{ConnectInfo, DefaultBodyLimit, Path, State},
     http::{
-        HeaderMap, HeaderValue, StatusCode,
+        HeaderMap, HeaderValue, StatusCode, Uri,
         header::{CONTENT_TYPE, HOST},
     },
     response::{IntoResponse, Response},
@@ -68,8 +69,30 @@ const MAX_FRAGMENT_SIZE: usize = 10_000;
 #[allow(dead_code)]
 const MAX_INBOUND_MESSAGE_SIZE: usize = 262_144;
 const MAX_SDP_SIZE: usize = 1 << 20;
+const RELIABLE_FLUSH_POLL_INTERVAL: Duration = Duration::from_millis(5);
 
 type IncomingSession = (Arc<NetherNetSession>, SocketAddr);
+
+async fn wait_for_reliable_delivery<F, Fut>(
+    timeout: Duration,
+    mut outstanding_bytes: F,
+) -> Result<(), String>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<usize, String>>,
+{
+    tokio::time::timeout(timeout, async {
+        loop {
+            match outstanding_bytes().await {
+                Ok(0) => return Ok(()),
+                Ok(_) => tokio::time::sleep(RELIABLE_FLUSH_POLL_INTERVAL).await,
+                Err(error) => return Err(error),
+            }
+        }
+    })
+    .await
+    .map_err(|_| "timed out waiting for reliable messages to be acknowledged".to_string())?
+}
 
 /// Accepts Bedrock `NetherNet` connections negotiated through Mojang's HTTP endpoint.
 pub struct NetherNetListener {
@@ -204,6 +227,7 @@ async fn join(
     State(state): State<EndpointState>,
     ConnectInfo(address): ConnectInfo<SocketAddr>,
     Path(network_id): Path<String>,
+    uri: Uri,
     headers: HeaderMap,
     offer: Bytes,
 ) -> Response {
@@ -217,11 +241,18 @@ async fn join(
         return (StatusCode::BAD_REQUEST, "SDP offer must be UTF-8").into_response();
     };
 
-    let advertised_ip = headers
-        .get(HOST)
-        .and_then(|host| host.to_str().ok())
+    let host = headers.get(HOST).and_then(|host| host.to_str().ok());
+    let uri_authority = uri.authority().map(axum::http::uri::Authority::as_str);
+    let advertised_ip = host
+        .or(uri_authority)
         .and_then(|host| host.parse::<axum::http::uri::Authority>().ok())
         .and_then(|authority| authority.host().parse().ok());
+    trace!(
+        ?host,
+        ?uri_authority,
+        ?advertised_ip,
+        "Resolved NetherNet advertised address"
+    );
     match Box::pin(negotiate_direct(&state, address, &offer, advertised_ip)).await {
         Ok((answer, _session)) => {
             trace!(%address, %network_id, length = answer.len(), "Returning NetherNet SDP answer");
@@ -266,6 +297,7 @@ async fn negotiate_inner(
 ) -> Result<(String, Arc<NetherNetSession>), String> {
     let signaling = if candidates.is_some() { "LAN" } else { "HTTP" };
     let direct_ip = candidates.is_none();
+    let advertised_ip = state.external_ip.or(advertised_ip);
     trace!(%address, signaling, "Starting NetherNet negotiation");
     let (offer, client_public_key) = {
         let offer = offer.to_string();
@@ -346,8 +378,11 @@ async fn negotiate_inner(
         .ok_or_else(|| "WebRTC did not produce a local description".to_string())?;
     let answer = remove_component_two_candidates(&answer.sdp);
     let answer = if direct_ip {
-        let (answer, ufrag, internal) =
-            proxy_answer(&answer, state.ice_router.public_addr().port())?;
+        let (answer, ufrag, internal) = proxy_answer(
+            &answer,
+            advertised_ip,
+            state.ice_router.public_addr().port(),
+        )?;
         session.set_ice_route(
             state
                 .ice_router
@@ -393,7 +428,7 @@ async fn build_peer(
         SocketAddr::new(state.ice_local_addr.ip(), 0)
     };
     let mut setting_engine = SettingEngine::default();
-    if direct_ip && let Some(external_ip) = state.external_ip.or(advertised_ip) {
+    if direct_ip && let Some(external_ip) = advertised_ip {
         setting_engine.set_nat_1to1_ips(vec![external_ip.to_string()], RTCIceCandidateType::Host);
     }
     Ok(Arc::new(
@@ -744,6 +779,31 @@ impl NetherNetSession {
         Ok(())
     }
 
+    /// Waits for every reliable message handed to SCTP to be acknowledged by the peer.
+    ///
+    /// [`DataChannel::send`] only queues data, so closing the peer immediately afterwards can
+    /// discard the final message before it reaches the client. This is intended for terminal
+    /// protocol messages where delivery matters more than keeping the connection alive.
+    pub(super) async fn flush_reliable(&self, timeout: Duration) -> Result<(), String> {
+        let channel = self
+            .reliable
+            .read()
+            .await
+            .clone()
+            .ok_or_else(|| "reliable channel is not open".to_string())?;
+
+        wait_for_reliable_delivery(timeout, || {
+            let channel = channel.clone();
+            async move {
+                channel
+                    .outstanding_bytes()
+                    .await
+                    .map_err(|error| error.to_string())
+            }
+        })
+        .await
+    }
+
     pub const fn client_public_key(&self) -> Option<&PublicKey> {
         self.client_public_key.as_ref()
     }
@@ -1013,6 +1073,7 @@ fn unix_time() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::AtomicUsize;
 
     #[test]
     fn fragments_round_trip() {
@@ -1038,6 +1099,32 @@ mod tests {
         assert!(fragments.push(2, b"one").unwrap().is_none());
         assert!(fragments.push(0, b"three").is_err());
         assert_eq!(fragments.push(0, b"complete").unwrap().unwrap(), "complete");
+    }
+
+    #[tokio::test]
+    async fn reliable_delivery_waits_until_no_bytes_are_outstanding() {
+        let polls = Arc::new(AtomicUsize::new(0));
+        let result = wait_for_reliable_delivery(Duration::from_secs(1), || {
+            let polls = polls.clone();
+            async move {
+                let poll = polls.fetch_add(1, Ordering::Relaxed);
+                Ok(usize::from(poll == 0))
+            }
+        })
+        .await;
+
+        assert!(result.is_ok());
+        assert_eq!(polls.load(Ordering::Relaxed), 2);
+    }
+
+    #[tokio::test]
+    async fn reliable_delivery_wait_is_bounded() {
+        let result = wait_for_reliable_delivery(Duration::from_millis(1), || async { Ok(1) }).await;
+
+        assert_eq!(
+            result.unwrap_err(),
+            "timed out waiting for reliable messages to be acknowledged"
+        );
     }
 
     #[test]

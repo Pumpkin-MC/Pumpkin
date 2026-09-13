@@ -8,8 +8,10 @@ impl JavaClient {
         let version = self.version.load();
 
         if version.supports_configuration_state() {
-            self.send_packet(&CFeatureFlags::new(&["minecraft:vanilla".to_string()]))
-                .await;
+            if version < JavaMinecraftVersion::V_1_20_5 {
+                let features = server.get_enabled_features();
+                self.send_packet(&CFeatureFlags::new(&features)).await;
+            }
 
             let test_instance_entries =
                 server.datapack_manager.get_test_instance_registry_entries();

@@ -626,6 +626,28 @@ impl PistonBehavior {
     }
 }
 
+#[derive(Deserialize, Copy, Clone)]
+#[serde(rename_all = "snake_case")]
+enum SpawnFloorPredicate {
+    Never,
+    Always,
+    OcelotOrParrot,
+    PolarBear,
+    FireImmune,
+}
+
+impl ToTokens for SpawnFloorPredicate {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        tokens.extend(match self {
+            Self::Never => quote! { SpawnFloorPredicate::Never },
+            Self::Always => quote! { SpawnFloorPredicate::Always },
+            Self::OcelotOrParrot => quote! { SpawnFloorPredicate::OcelotOrParrot },
+            Self::PolarBear => quote! { SpawnFloorPredicate::PolarBear },
+            Self::FireImmune => quote! { SpawnFloorPredicate::FireImmune },
+        });
+    }
+}
+
 impl BlockState {
     /// Bit flag indicating this state is an air block.
     const IS_AIR: u16 = 1 << 0;
@@ -940,6 +962,10 @@ pub fn build() -> TokenStream {
     let blocks_assets: BlockAssets =
         serde_json::from_str(&fs::read_to_string("../../assets/blocks.json").unwrap())
             .expect("Failed to parse blocks.json");
+    let mut spawn_floor_predicates: BTreeMap<String, SpawnFloorPredicate> = serde_json::from_str(
+        &fs::read_to_string("../../assets/spawn_floor_predicates.json").unwrap(),
+    )
+    .expect("Failed to parse spawn_floor_predicates.json");
 
     let shape_offset_arms = blocks_assets
         .blocks
@@ -982,6 +1008,7 @@ pub fn build() -> TokenStream {
     let mut block_from_name_entries = Vec::new();
     let mut block_from_item_id_arms = Vec::new();
     let mut block_state_to_bedrock = Vec::new();
+    let mut spawn_floor_predicate_arms = Vec::new();
 
     let mut raw_id_from_state_id_array = Vec::new();
     let mut type_from_raw_id_array = Vec::new();
@@ -1055,6 +1082,12 @@ pub fn build() -> TokenStream {
         let name_str = &block.name;
         let item_id = block.item_id;
         let block_id = block.id;
+
+        if let Some(predicate) = spawn_floor_predicates.remove(&block.name) {
+            spawn_floor_predicate_arms.push(quote! {
+                BlockId::#const_ident => #predicate,
+            });
+        }
 
         // let mut block_with_descriptors = block.clone();
         // block_with_descriptors.property_descriptors = property_descriptors;
@@ -1132,6 +1165,12 @@ pub fn build() -> TokenStream {
             });
         }
     }
+
+    assert!(
+        spawn_floor_predicates.is_empty(),
+        "Unknown blocks in spawn_floor_predicates.json: {:?}",
+        spawn_floor_predicates.keys().collect::<Vec<_>>()
+    );
 
     let mut block_properties_from_state_and_block_id_arms = Vec::new();
     let mut block_properties_from_props_and_name_arms = Vec::new();
@@ -1238,7 +1277,7 @@ pub fn build() -> TokenStream {
 
         use crate::{
             BlockState, BlockStateId, Block, BlockId,
-            blocks::{Flammable, ShapeOffset, ShapeOffsetType},
+            blocks::{Flammable, ShapeOffset, ShapeOffsetType, SpawnFloorPredicate},
         };
         use crate::block_state::PistonBehavior;
         use pumpkin_util::math::int_provider::{UniformIntProvider, IntProvider, NormalIntProvider};
@@ -1380,6 +1419,14 @@ pub fn build() -> TokenStream {
 
         impl Block {
             #(#constants_list)*
+
+            #[must_use]
+            pub const fn spawn_floor_predicate(&self) -> SpawnFloorPredicate {
+                match self.id {
+                    #(#spawn_floor_predicate_arms)*
+                    _ => SpawnFloorPredicate::Default,
+                }
+            }
 
             pub(crate) const fn shape_offset(&self) -> Option<ShapeOffset> {
                 match self.id {
