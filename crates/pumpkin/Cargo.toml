@@ -33,6 +33,7 @@ pumpkin-protocol = { workspace = true, features = ["default"] }
 pumpkin-macros.workspace = true
 pumpkin-plugin-runtime.workspace = true
 pumpkin-gametest = { path = "../pumpkin-gametest" }
+pumpkin-host-bindings.workspace = true
 
 dashmap.workspace = true
 crossbeam.workspace = true

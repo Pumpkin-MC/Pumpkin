@@ -109,7 +109,7 @@ villager = ["item", "sound"]
 slot_ranges = []
 
 noise_parameter = []
-biome = []
+biome = ["carver"]
 chunk_status = []
 entity_pose = []
 entity_status = []

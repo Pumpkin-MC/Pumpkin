@@ -24,6 +24,20 @@ pub enum MaterialRule {
 }
 impl MaterialRule {
     #[must_use]
+    pub fn from_name(name: &str) -> Option<&'static Self> {
+        let name = name.strip_prefix("minecraft:").unwrap_or(name);
+        match name {
+            "overworld" | "amplified" | "large_biomes" => Some(&OVERWORLD),
+            "nether" => Some(&NETHER),
+            "end" => Some(&END),
+            "bedrock_floor" => Some(&BEDROCK_FLOOR),
+            "bedrock_roof" => Some(&BEDROCK_ROOF),
+            "overworld_caves" => Some(&OVERWORLD_CAVES),
+            "overworld_floating_islands" => Some(&OVERWORLD_FLOATING_ISLANDS),
+            _ => None,
+        }
+    }
+    #[must_use]
     pub fn from_dimension(dimension: &Dimension) -> &'static Self {
         if dimension == &Dimension::OVERWORLD {
             &OVERWORLD
