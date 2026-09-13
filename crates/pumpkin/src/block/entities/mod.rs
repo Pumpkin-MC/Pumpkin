@@ -139,6 +139,13 @@ pub trait BlockEntity: Any + Send + Sync {
         // Override in implementations that have a dirty flag
     }
 
+    /// Same idea as [`Self::is_dirty`]/[`Self::clear_dirty`], tracked separately.
+    fn is_comparator_dirty(&self) -> bool {
+        false
+    }
+
+    fn clear_comparator_dirty(&self) {}
+
     fn as_any(&self) -> &dyn Any;
     fn to_property_delegate(self: Arc<Self>) -> Option<Arc<dyn PropertyDelegate>> {
         None

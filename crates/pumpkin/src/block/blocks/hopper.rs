@@ -121,15 +121,7 @@ impl BlockBehaviour for HopperBlock {
     }
 
     fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
-        if let Some(block_entity) = args.world.get_block_entity(args.position)
-            && let Some(inventory) = block_entity.get_inventory()
-        {
-            Some(crate::block::calculate_comparator_output(
-                inventory.as_ref(),
-            ))
-        } else {
-            None
-        }
+        crate::block::container_comparator_output(&args)
     }
 
     fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {

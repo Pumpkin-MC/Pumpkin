@@ -1619,6 +1619,10 @@ impl World {
                 be.tick(self);
             }
         });
+        // Drained after all ticks, so changes (hopper -> chest) land in the same tick.
+        let guard = be_handle.enter();
+        self.flush_comparator_updates(&block_entities);
+        drop(guard);
         let block_entity_elapsed = t_be.elapsed();
 
         self.level
@@ -6340,6 +6344,22 @@ impl World {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    /// Sends output-signal updates for block entities changed this tick, in list order.
+    fn flush_comparator_updates(self: &Arc<Self>, block_entities: &[Arc<dyn BlockEntity>]) {
+        for be in block_entities {
+            // Vanilla `BlockEntity.setChanged` -> `Level.updateNeighbourForOutputSignal`.
+            if !be.is_comparator_dirty() {
+                continue;
+            }
+            be.clear_comparator_dirty();
+            let pos = be.get_position();
+            // The list is a snapshot, so the chunk may be gone by now.
+            if let Some(state_id) = self.get_block_state_id_if_loaded(&pos) {
+                self.update_neighbour_for_output_signal(&pos, state_id.to_block());
             }
         }
     }
