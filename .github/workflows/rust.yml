@@ -132,7 +132,7 @@ jobs:
       - name: Test affected packages
         run: >-
           python .github/scripts/ci_packages.py run --
-          cargo nextest run --verbose
+          cargo nextest run --verbose --no-tests=pass
       - name: Test affected package documentation
         run: >-
           python .github/scripts/ci_packages.py run --
