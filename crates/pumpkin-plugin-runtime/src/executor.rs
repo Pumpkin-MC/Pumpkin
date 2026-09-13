@@ -846,6 +846,12 @@ where
         self.handle.driver_join()
     }
 
+    fn claim_terminal(&self) -> bool {
+        self.terminal_admitted
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+    }
+
     /// Stops admission and drains accepted work without running a final Store
     /// operation.
     ///
@@ -853,13 +859,12 @@ where
     /// to its higher-level lifecycle. Dropping an executor without either
     /// calling this method or completing [`Self::shutdown`] remains an error.
     pub fn discard(&self) {
-        if self.terminal_admitted.load(Ordering::Acquire)
-            || !self.handle.shared.accepting.swap(false, Ordering::AcqRel)
-        {
+        if !self.claim_terminal() {
             return;
         }
 
-        self.terminal_admitted.store(true, Ordering::Release);
+        self.handle.shared.accepting.store(false, Ordering::Release);
+
         let _ = self.control.send(ControlMessage::Discarded);
     }
 }
@@ -903,8 +908,16 @@ where
             self.handle
                 .terminal_error("Wasm plugin store driver is not running")
         })?;
+
+        if !self.claim_terminal() {
+            drop(permit);
+            return Err(wasmtime::Error::msg(
+                "Already shutting down wasm plugin store",
+            ));
+        }
+
         self.handle.shared.accepting.store(false, Ordering::Release);
-        self.terminal_admitted.store(true, Ordering::Release);
+
         permit.send(StoreMessage::Shutdown {
             job: Box::new(ShutdownStoreCall {
                 call,
