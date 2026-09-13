@@ -767,6 +767,10 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn crate::entity::custom_sound::CustomSound> {
+        None
+    }
+
     fn as_animal(&self) -> Option<&dyn crate::entity::passive::animal::Animal> {
         None
     }
