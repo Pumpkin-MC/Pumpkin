@@ -248,7 +248,7 @@ impl PendingConnection {
         packet: &RawPacket,
     ) -> Result<Option<PacketHandlerResult>, ReadingError> {
         match self.connection_state.load() {
-            ConnectionState::HandShake => self.handle_handshake_packet(packet).await,
+            ConnectionState::HandShake => self.handle_handshake_packet(server, packet).await,
             ConnectionState::Status => self.handle_status_packet(server, packet).await,
             ConnectionState::Login | ConnectionState::Transfer => {
                 self.handle_login_packet(server, packet).await
@@ -260,16 +260,20 @@ impl PendingConnection {
 
     async fn handle_handshake_packet(
         &mut self,
+        server: &Arc<Server>,
         packet: &RawPacket,
     ) -> Result<Option<PacketHandlerResult>, ReadingError> {
         debug!("Handling handshake group");
         let mut payload = &packet.payload[..];
         match packet.id {
             0 => {
-                self.handle_handshake(pumpkin_protocol::java::server::handshake::SHandShake::read(
-                    &mut payload,
-                    &self.version.load(),
-                )?)
+                self.handle_handshake(
+                    server,
+                    pumpkin_protocol::java::server::handshake::SHandShake::read(
+                        &mut payload,
+                        &self.version.load(),
+                    )?,
+                )
                 .await;
                 Ok(None)
             }
