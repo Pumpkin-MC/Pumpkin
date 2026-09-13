@@ -553,6 +553,29 @@ impl World {
         )
     }
 
+    #[must_use]
+    pub fn is_in_spawn_protection(&self, player: &Player, position: &BlockPos) -> bool {
+        if player.permission_lvl.load() == pumpkin_util::permission::PermissionLvl::Four {
+            return false;
+        }
+
+        let Some(server) = self.server.upgrade() else {
+            return false;
+        };
+
+        let radius = server.basic_config.spawn_protection;
+        if radius == 0 {
+            return false;
+        }
+
+        let radius = i32::try_from(radius).unwrap_or(i32::MAX);
+        let spawn = self.get_spawn_location().0;
+        let dx = (spawn.0.x - position.0.x).abs();
+        let dz = (spawn.0.z - position.0.z).abs();
+
+        dx <= radius && dz <= radius
+    }
+
     pub async fn shutdown(&self) {
         for entity in self.entities.load().iter() {
             self.save_entity(entity).await;
@@ -1249,7 +1272,7 @@ impl World {
         category: SoundCategory,
         position: &Vector3<f64>,
     ) {
-        let seed = rng().random::<f64>();
+        let seed = rng().random::<i64>();
         let packet = CSoundEffect::new(
             data_to_proto_sound(sound),
             category,
@@ -1270,7 +1293,7 @@ impl World {
         category: SoundCategory,
         position: &Vector3<f64>,
     ) {
-        let seed = rng().random::<f64>();
+        let seed = rng().random::<i64>();
         let packet = CSoundEffect::new(
             data_to_proto_sound(sound),
             category,
@@ -1302,7 +1325,7 @@ impl World {
         volume: f32,
         pitch: f32,
     ) {
-        let seed = rand::random::<f64>();
+        let seed = rand::random::<i64>();
         let packet = CSoundEffect::new(
             pumpkin_protocol::IdOr::Value(pumpkin_protocol::SoundEvent {
                 sound_name: sound_name.into(),
@@ -1386,7 +1409,7 @@ impl World {
         volume: f32,
         pitch: f32,
     ) {
-        let seed = rand::rng().random::<f64>();
+        let seed = rand::rng().random::<i64>();
         let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
 
         // Calculate the number of chunks the sound can be heard from based on its volume.
@@ -1413,7 +1436,7 @@ impl World {
         volume: f32,
         pitch: f32,
     ) {
-        let seed = rand::rng().random::<f64>();
+        let seed = rand::rng().random::<i64>();
         let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
 
         let audible_chunks = f64::from(volume.max(1.0)).ceil() as i32;
@@ -1904,6 +1927,7 @@ impl World {
     #[expect(clippy::too_many_lines)]
     pub fn tick_chunks(self: &Arc<Self>, server: &Arc<Server>) {
         const BATCH_SIZE: usize = 32;
+        const INHABITED_TIME_BATCH_SIZE: usize = 1024;
         let random_tick_speed = self.level_info.load().game_rules.random_tick_speed;
 
         let active_chunks = self
@@ -2040,14 +2064,18 @@ impl World {
             });
         }
 
-        // Update chunk inhabited time for active chunks in parallel with Rayon
+        // Batch these cheap lookups and atomic increments to avoid waking Rayon
+        // workers for tiny tasks every tick, while retaining parallelism for large sets.
         let loaded_chunks = self.level.loaded_chunks.clone();
         let active_chunks_vec: Vec<_> = active_chunks.iter().copied().collect();
-        active_chunks_vec.par_iter().for_each(|pos| {
-            if let Some(chunk) = loaded_chunks.get(pos) {
-                chunk.inhabited_time.fetch_add(1, Relaxed);
-            }
-        });
+        active_chunks_vec
+            .par_iter()
+            .with_min_len(INHABITED_TIME_BATCH_SIZE)
+            .for_each(|pos| {
+                if let Some(chunk) = loaded_chunks.get(pos) {
+                    chunk.inhabited_time.fetch_add(1, Relaxed);
+                }
+            });
     }
 
     pub fn check_fluid_collision(&self, bounding_box: BoundingBox) -> bool {
@@ -3197,6 +3225,9 @@ impl World {
         );
 
         self.send_player_equipment(&player);
+        player
+            .living_entity
+            .send_current_equipment_attribute_modifiers();
 
         // Broadcast metadata to Java players so they can correctly interact with the new player
         let skin_parts = player.config.load().skin_parts;
@@ -3768,6 +3799,9 @@ impl World {
         player.send_active_effects();
         player.breath_manager.send_air_supply(player);
         self.send_player_equipment(player);
+        player
+            .living_entity
+            .send_current_equipment_attribute_modifiers();
 
         if let crate::net::ClientPlatform::Java(java_client) = player.client.as_ref()
             && server.advanced_config.recipe.send_recipes
@@ -5223,6 +5257,17 @@ impl World {
         cause: Option<&Arc<Player>>,
         flags: BlockFlags,
     ) -> Option<BlockStateId> {
+        if let Some(player) = cause
+            && self.is_in_spawn_protection(player, position)
+        {
+            player.send_system_message(&TextComponent::translate_cross(
+                pumpkin_data::translation::java::BUILD_SPAWN_PROTECTION,
+                pumpkin_data::translation::java::BUILD_SPAWN_PROTECTION,
+                [TextComponent::text(player.gameprofile.name.clone())],
+            ));
+            return None;
+        }
+
         let (broken_block, broken_block_state) = self.get_block_and_state(position);
         if broken_block_state.is_air() {
             return None;
