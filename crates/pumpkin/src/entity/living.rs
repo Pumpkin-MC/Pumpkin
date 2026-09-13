@@ -25,16 +25,17 @@ use super::experience_orb::ExperienceOrbEntity;
 use super::{Entity, EntityBase, NBTStorageInit};
 use crate::block::OnLandedUponArgs;
 use crate::entity::NBTStorage;
+use crate::entity::ageable::AgeableMob;
 use crate::entity::attributes::AttributeInstance;
 use crate::entity::attributes::Modifier;
 use crate::entity::attributes::ModifierOperation;
 use crate::entity::combat::{CombatRules, CombatTracker, FallLocation, knockback_after_resistance};
 use crate::entity::mob::equipment::DEFAULT_EQUIPMENT_DROP_CHANCE;
-use crate::entity::mob::slime::SlimeEntity;
 use crate::entity::player::statistics::{CustomStatistic, StatisticCategory};
 use crate::server::Server;
 use crate::world::loot::LootContextParameters;
 use crossbeam::atomic::AtomicCell;
+use pumpkin_data::AttributeModifierSlot;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::data_component_impl::Operation;
 use pumpkin_data::data_component_impl::food::{ConsumableImpl, ConsumeEffect};
@@ -136,6 +137,9 @@ pub struct LivingEntity {
 
     /// The attributes of the entity
     pub attributes: RwLock<FxHashMap<u8, AttributeInstance>>,
+    /// Modifier ids applied from the current item in each equipment slot.
+    /// Used to remove them on unequip without the previous stack.
+    equipment_attribute_modifier_ids: std::sync::Mutex<FxHashMap<EquipmentSlot, Vec<(u8, String)>>>,
 }
 
 #[derive(Clone)]
@@ -237,6 +241,24 @@ impl LivingEntity {
         entity_type.hurt_sound.unwrap_or(Sound::EntityGenericHurt)
     }
 
+    fn death_sound_for_entity(entity_type: &'static EntityType) -> Sound {
+        entity_type.death_sound.unwrap_or(Sound::EntityGenericDeath)
+    }
+
+    fn get_pitch(&self) -> f32 {
+        let is_baby = self
+            .get_mob()
+            .and_then(|x| x.as_ageable())
+            .is_some_and(AgeableMob::is_baby);
+
+        let mut rng = rand::rng();
+        if is_baby {
+            (rng.random::<f32>() - rng.random::<f32>()) * 0.2 + 1.5
+        } else {
+            (rng.random::<f32>() - rng.random::<f32>()) * 0.2 + 1.0
+        }
+    }
+
     pub fn new(entity: Entity) -> Self {
         let water_movement_speed_multiplier = if entity.entity_type == &EntityType::POLAR_BEAR {
             0.98
@@ -292,6 +314,7 @@ impl LivingEntity {
             movement_input: AtomicCell::new(Vector3::default()),
             water_movement_speed_multiplier,
             last_block_pos: AtomicCell::new(None),
+            equipment_attribute_modifier_ids: std::sync::Mutex::new(FxHashMap::default()),
         }
     }
 
@@ -367,6 +390,7 @@ impl LivingEntity {
         if equipment.is_empty() {
             return;
         }
+        self.apply_and_send_equipment_attribute_modifiers(equipment);
 
         if equipment
             .iter()
@@ -488,6 +512,106 @@ impl LivingEntity {
         }
         if !changed.is_empty() {
             crate::entity::attributes::send_attribute_updates_for_living(self, changed);
+        }
+    }
+
+    /// Applies item `attribute_modifiers` for the given slots and notifies clients.
+    ///
+    /// The local HUD armor bar is driven by `minecraft:armor` / `minecraft:armor_toughness`
+    /// on `UPDATE_ATTRIBUTES`, not by `SET_EQUIPMENT`.
+    pub fn apply_and_send_equipment_attribute_modifiers(
+        &self,
+        equipment: &[(EquipmentSlot, ItemStack)],
+    ) {
+        let mut touched = Vec::new();
+        for (slot, stack) in equipment {
+            self.apply_equipment_slot_attribute_modifiers(slot, stack, &mut touched);
+        }
+        if !touched.is_empty() {
+            crate::entity::attributes::send_attribute_updates_for_living(self, touched);
+        }
+    }
+
+    /// Re-applies modifiers from every currently equipped stack without notifying clients.
+    pub fn apply_current_equipment_attribute_modifiers(&self) {
+        let equipment = self.snapshot_equipped_stacks();
+        let mut touched = Vec::new();
+        for (slot, stack) in &equipment {
+            self.apply_equipment_slot_attribute_modifiers(slot, stack, &mut touched);
+        }
+    }
+
+    /// Re-applies modifiers from every currently equipped stack and sends updates.
+    pub fn send_current_equipment_attribute_modifiers(&self) {
+        self.apply_and_send_equipment_attribute_modifiers(&self.snapshot_equipped_stacks());
+    }
+
+    fn snapshot_equipped_stacks(&self) -> Vec<(EquipmentSlot, ItemStack)> {
+        let guard = self
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        guard
+            .equipment
+            .iter()
+            .map(|(slot, stack)| (slot.clone(), stack.clone()))
+            .collect()
+    }
+
+    fn apply_equipment_slot_attribute_modifiers(
+        &self,
+        slot: &EquipmentSlot,
+        stack: &ItemStack,
+        touched: &mut Vec<Attributes>,
+    ) {
+        let previous = {
+            let mut map = self
+                .equipment_attribute_modifier_ids
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            map.remove(slot).unwrap_or_default()
+        };
+        for (attr_id, modifier_id) in previous {
+            if let Some(attr) = attributes_by_id(attr_id) {
+                self.update_attribute(attr, |inst| inst.remove_modifier(&modifier_id));
+                push_unique_attribute(touched, attr);
+            }
+        }
+
+        if stack.is_empty() {
+            return;
+        }
+        let Some(modifiers) = stack.get_data_component::<AttributeModifiersImpl>() else {
+            return;
+        };
+
+        let mut applied = Vec::new();
+        for item_mod in modifiers.attribute_modifiers.iter() {
+            if !attribute_modifier_slot_matches(&item_mod.slot, slot) {
+                continue;
+            }
+            let operation = match item_mod.operation {
+                Operation::AddValue => ModifierOperation::Add,
+                Operation::AddMultipliedBase => ModifierOperation::MultiplyBase,
+                Operation::AddMultipliedTotal => ModifierOperation::MultiplyTotal,
+            };
+            self.update_attribute(item_mod.r#type, |inst| {
+                inst.add_or_replace_modifier(Modifier {
+                    id: item_mod.id.to_string(),
+                    amount: item_mod.amount,
+                    operation,
+                });
+            });
+            applied.push((item_mod.r#type.id, item_mod.id.to_string()));
+            push_unique_attribute(touched, item_mod.r#type);
+        }
+
+        if !applied.is_empty() {
+            let mut map = self
+                .equipment_attribute_modifier_ids
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            map.insert(slot.clone(), applied);
         }
     }
 
@@ -848,6 +972,8 @@ impl LivingEntity {
         if effect.effect_type == &StatusEffect::INSTANT_HEALTH {
             let heal_amount = 4.0 * (1 << effect.amplifier) as f32;
             self.heal(heal_amount);
+            // Like vanilla, instant effects are never sent or stored as active effects.
+            return;
         } else if effect.effect_type == &StatusEffect::INSTANT_DAMAGE {
             let damage_amount = 6.0 * (1 << effect.amplifier) as f32;
             let dyn_self = self
@@ -858,65 +984,63 @@ impl LivingEntity {
             if let Some(dyn_self) = dyn_self {
                 let _ = dyn_self.damage(&*dyn_self, damage_amount, DamageType::MAGIC);
             }
-        } else {
-            // Apply non-instant effects
+            return;
+        }
 
-            // Effects that modify attributes (ex. speed) should also update the
-            // entity's attribute instances (server-side) and then notify clients.
-            if !effect.effect_type.attribute_modifiers.is_empty() {
-                // Apply each attribute modifier into the local AttributeInstance
-                for m in effect.effect_type.attribute_modifiers {
-                    let id = m.id.to_string();
-                    let op = match m.operation {
-                        Operation::AddValue => ModifierOperation::Add,
-                        Operation::AddMultipliedBase => ModifierOperation::MultiplyBase,
-                        Operation::AddMultipliedTotal => ModifierOperation::MultiplyTotal,
-                    };
-                    let scaled_amount = m.base_value * (f64::from(effect.amplifier) + 1.);
-                    let mod_inst = Modifier {
-                        id,
-                        amount: scaled_amount,
-                        operation: op,
-                    };
+        // Apply non-instant effects
 
-                    self.update_attribute(m.attribute, |inst| {
-                        inst.add_or_replace_modifier(mod_inst.clone());
-                    });
-                }
+        // Effects that modify attributes (ex. speed) should also update the
+        // entity's attribute instances (server-side) and then notify clients.
+        if !effect.effect_type.attribute_modifiers.is_empty() {
+            // Apply each attribute modifier into the local AttributeInstance
+            for m in effect.effect_type.attribute_modifiers {
+                let id = m.id.to_string();
+                let op = match m.operation {
+                    Operation::AddValue => ModifierOperation::Add,
+                    Operation::AddMultipliedBase => ModifierOperation::MultiplyBase,
+                    Operation::AddMultipliedTotal => ModifierOperation::MultiplyTotal,
+                };
+                let scaled_amount = m.base_value * (f64::from(effect.amplifier) + 1.);
+                let mod_inst = Modifier {
+                    id,
+                    amount: scaled_amount,
+                    operation: op,
+                };
 
-                // Recompute packet modifiers from active effects for each affected attribute
-                let mut touched_attrs: Vec<pumpkin_data::attributes::Attributes> = Vec::new();
-                for m in effect.effect_type.attribute_modifiers {
-                    if !touched_attrs.iter().any(|a| a.id == m.attribute.id) {
-                        touched_attrs.push(m.attribute.clone());
-                    }
-                }
+                self.update_attribute(m.attribute, |inst| {
+                    inst.add_or_replace_modifier(mod_inst.clone());
+                });
+            }
 
-                if !touched_attrs.is_empty() {
-                    crate::entity::attributes::send_attribute_updates_for_living(
-                        self,
-                        touched_attrs,
-                    );
+            // Recompute packet modifiers from active effects for each affected attribute
+            let mut touched_attrs: Vec<pumpkin_data::attributes::Attributes> = Vec::new();
+            for m in effect.effect_type.attribute_modifiers {
+                if !touched_attrs.iter().any(|a| a.id == m.attribute.id) {
+                    touched_attrs.push(m.attribute.clone());
                 }
             }
 
-            // Apply absorption effect (+4 absorption per level)
-            if effect.effect_type == &StatusEffect::ABSORPTION {
-                let added = 4.0 * (effect.amplifier as f32 + 1.0);
-                let max_abs = self.get_attribute_value(&Attributes::MAX_ABSORPTION) as f32;
-                let new_abs = (self.absorption.load() + added).min(max_abs);
-                self.set_absorption(new_abs);
+            if !touched_attrs.is_empty() {
+                crate::entity::attributes::send_attribute_updates_for_living(self, touched_attrs);
             }
+        }
 
-            // Apply invisible effect
-            if effect.effect_type == &StatusEffect::INVISIBILITY {
-                self.entity.set_invisible(true);
-            }
+        // Apply absorption effect (+4 absorption per level)
+        if effect.effect_type == &StatusEffect::ABSORPTION {
+            let added = 4.0 * (effect.amplifier as f32 + 1.0);
+            let max_abs = self.get_attribute_value(&Attributes::MAX_ABSORPTION) as f32;
+            let new_abs = (self.absorption.load() + added).min(max_abs);
+            self.set_absorption(new_abs);
+        }
 
-            // Apply glowing effect
-            if effect.effect_type == &StatusEffect::GLOWING {
-                self.entity.set_glowing(true);
-            }
+        // Apply invisible effect
+        if effect.effect_type == &StatusEffect::INVISIBILITY {
+            self.entity.set_invisible(true);
+        }
+
+        // Apply glowing effect
+        if effect.effect_type == &StatusEffect::GLOWING {
+            self.entity.set_glowing(true);
         }
 
         // Broadcast effect to nearby players
@@ -1748,6 +1872,20 @@ impl LivingEntity {
             return;
         }
 
+        // Vanilla parity: the fall_damage gamerule only affects players.
+        if caller.get_player().is_some()
+            && !self
+                .entity
+                .world
+                .load()
+                .level_info
+                .load()
+                .game_rules
+                .fall_damage
+        {
+            return;
+        }
+
         if fall_distance >= 2.0
             && let Some(player) = caller.get_player()
         {
@@ -1832,6 +1970,7 @@ impl LivingEntity {
     /// flow: stop movement input, attribute the kill, drop loot, broadcast the
     /// `Death` (3) entity event, and hand out XP. Safe to call on every lethal
     /// damage event; only the first call has an effect.
+    #[allow(clippy::too_many_lines)]
     pub fn on_death(
         &self,
         damage_type: DamageType,
@@ -1856,6 +1995,13 @@ impl LivingEntity {
             self.update_death_stats(&*dyn_self, killer);
 
             // Plays the death sound
+            world.play_sound_fine(
+                self.death_sound(&*dyn_self),
+                SoundCategory::Players,
+                &self.entity.pos.load(),
+                1.0,
+                self.get_pitch(),
+            );
             world.send_entity_status(&self.entity, EntityStatus::Death, Some(ActorEventID::Death));
             let looting_level;
             let tool = if let Some(cause_ent) = cause {
@@ -2436,12 +2582,24 @@ impl LivingEntity {
         self.entity.movement.load()
     }
 
-    fn hurt_sound(&self) -> Sound {
-        if self.entity.entity_type == &EntityType::SLIME {
-            SlimeEntity::hurt_sound_for_size(self.entity.data.load(Relaxed))
-        } else {
-            Self::hurt_sound_for_entity(self.entity.entity_type)
+    fn death_sound(&self, entity: &dyn EntityBase) -> Sound {
+        if let Some(sound_source) = entity.get_mob().and_then(|x| x.as_custom_sound())
+            && let Some(audio) = sound_source.death_sound()
+        {
+            return audio;
         }
+
+        Self::death_sound_for_entity(self.entity.entity_type)
+    }
+
+    fn hurt_sound(&self, entity: &dyn EntityBase) -> Sound {
+        if let Some(sound_source) = entity.get_mob().and_then(|x| x.as_custom_sound())
+            && let Some(audio) = sound_source.hurt_sound()
+        {
+            return audio;
+        }
+
+        Self::hurt_sound_for_entity(self.entity.entity_type)
     }
 }
 
@@ -2856,17 +3014,27 @@ impl LivingEntity {
                         EquipmentSlot::OFF_HAND
                     };
 
-                    let mut equipment_guard = self
-                        .entity_equipment
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    if let Some(stack) = equipment_guard.equipment.get_mut(&slot) {
-                        let item_id = stack.item.id;
-                        let durability_damage = (amount / 1.0).floor().max(1.0) as i32;
-                        if stack.damage_item(durability_damage) == DamageResult::Broken {
-                            if let Some(player) = caller.get_player() {
-                                player.increment_stat(StatisticCategory::Broken, item_id as i32, 1);
-                            }
+                    let durability_damage = (amount / 1.0).floor().max(1.0) as i32;
+                    if let Some(player) = caller.get_player() {
+                        let broke = player.damage_item_in_slot(&slot, durability_damage);
+                        let empty = player
+                            .inventory
+                            .get_stack_in_hand(match &slot {
+                                EquipmentSlot::OffHand(_) => Hand::Left,
+                                _ => Hand::Right,
+                            })
+                            .is_empty();
+                        if broke && empty {
+                            self.clear_active_hand();
+                        }
+                    } else {
+                        let mut equipment_guard = self
+                            .entity_equipment
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        if let Some(stack) = equipment_guard.equipment.get_mut(&slot)
+                            && stack.damage_item(durability_damage) == DamageResult::Broken
+                        {
                             world.send_entity_status(
                                 &self.entity,
                                 crate::entity::equipment_break_status(&slot),
@@ -2911,7 +3079,7 @@ impl LivingEntity {
                 (effective_amount - last_damage, false)
             } else {
                 self.hurt_cooldown.store(20, Relaxed);
-                (effective_amount, true)
+                (effective_amount, self.health.load() > effective_amount)
             };
 
         // Finalize state
@@ -2953,10 +3121,12 @@ impl LivingEntity {
         );
 
         if play_sound {
-            world.play_sound(
-                self.hurt_sound(),
+            world.play_sound_fine(
+                self.hurt_sound(caller),
                 SoundCategory::Players,
                 &self.entity.pos.load(),
+                1.0,
+                self.get_pitch(),
             );
 
             if let Some(source) = source {
@@ -3574,6 +3744,46 @@ fn random_teleport_coordinate(center: f64, diameter: f32, random: f64) -> f64 {
     center + (random - 0.5) * f64::from(diameter)
 }
 
+fn attributes_by_id(id: u8) -> Option<&'static Attributes> {
+    Attributes::ALL.iter().find(|attr| attr.id == id)
+}
+
+fn push_unique_attribute(touched: &mut Vec<Attributes>, attr: &Attributes) {
+    if !touched.iter().any(|existing| existing.id == attr.id) {
+        touched.push(attr.clone());
+    }
+}
+
+const fn attribute_modifier_slot_matches(
+    modifier_slot: &AttributeModifierSlot,
+    equipment_slot: &EquipmentSlot,
+) -> bool {
+    match modifier_slot {
+        AttributeModifierSlot::Any => true,
+        AttributeModifierSlot::MainHand => matches!(equipment_slot, EquipmentSlot::MainHand(_)),
+        AttributeModifierSlot::OffHand => matches!(equipment_slot, EquipmentSlot::OffHand(_)),
+        AttributeModifierSlot::Hand => {
+            matches!(
+                equipment_slot,
+                EquipmentSlot::MainHand(_) | EquipmentSlot::OffHand(_)
+            )
+        }
+        AttributeModifierSlot::Feet => matches!(equipment_slot, EquipmentSlot::Feet(_)),
+        AttributeModifierSlot::Legs => matches!(equipment_slot, EquipmentSlot::Legs(_)),
+        AttributeModifierSlot::Chest => matches!(equipment_slot, EquipmentSlot::Chest(_)),
+        AttributeModifierSlot::Head => matches!(equipment_slot, EquipmentSlot::Head(_)),
+        AttributeModifierSlot::Armor => matches!(
+            equipment_slot,
+            EquipmentSlot::Feet(_)
+                | EquipmentSlot::Legs(_)
+                | EquipmentSlot::Chest(_)
+                | EquipmentSlot::Head(_)
+        ),
+        AttributeModifierSlot::Body => matches!(equipment_slot, EquipmentSlot::Body(_)),
+        AttributeModifierSlot::Saddle => matches!(equipment_slot, EquipmentSlot::Saddle(_)),
+    }
+}
+
 /// Mirrors vanilla's strict `random < probability` consume-effect gate.
 const fn consume_effect_probability_applies(probability: f32, random: f32) -> bool {
     random < probability
@@ -3761,7 +3971,7 @@ mod tests {
     #[test]
     fn hurt_sound_for_entity_defaults_to_generic_hurt() {
         assert_eq!(
-            LivingEntity::hurt_sound_for_entity(&EntityType::CREEPER),
+            LivingEntity::hurt_sound_for_entity(&EntityType::ITEM),
             Sound::EntityGenericHurt
         );
     }
