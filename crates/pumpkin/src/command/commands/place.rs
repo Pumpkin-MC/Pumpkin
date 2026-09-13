@@ -200,7 +200,11 @@ impl CommandExecutor for PlaceJigsawExecutor {
                 chunk_z: 0,
                 random,
                 sea_level: settings.sea_level,
-                min_y: world_gen.dimension().min_y,
+                min_y: (settings.shape.min_y as i32).max(world_gen.dimension().min_y),
+                height: settings
+                    .shape
+                    .height
+                    .min(world_gen.dimension().height as u16),
                 height_sampler: None,
                 structure_key: None,
             };
@@ -307,7 +311,11 @@ impl CommandExecutor for PlaceStructureExecutor {
                         chunk_z: block_pos.0.z >> 4,
                         random,
                         sea_level: settings.sea_level,
-                        min_y: world_gen.dimension().min_y,
+                        min_y: (settings.shape.min_y as i32).max(world_gen.dimension().min_y),
+                        height: settings
+                            .shape
+                            .height
+                            .min(world_gen.dimension().height as u16),
                         height_sampler: None,
                         structure_key: Some(key),
                     },
@@ -355,7 +363,11 @@ impl CommandExecutor for PlaceStructureExecutor {
                         chunk_z: block_pos.0.z >> 4,
                         random,
                         sea_level: settings.sea_level,
-                        min_y: world_gen.dimension().min_y,
+                        min_y: (settings.shape.min_y as i32).max(world_gen.dimension().min_y),
+                        height: settings
+                            .shape
+                            .height
+                            .min(world_gen.dimension().height as u16),
                         height_sampler: None,
                         structure_key: Some(key),
                     },

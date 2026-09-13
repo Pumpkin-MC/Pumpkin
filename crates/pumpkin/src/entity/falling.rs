@@ -2,11 +2,13 @@ use pumpkin_data::Block;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::tag::{self, Taggable};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 use std::sync::{Arc, atomic::Ordering};
 
 use crate::{
+    block::blocks::falling::FallingBlock,
     entity::{Entity, EntityBase, living::LivingEntity},
     server::Server,
     world::World,
@@ -56,11 +58,18 @@ impl EntityBase for FallingEntity {
         entity.tick_block_collisions(caller);
         if entity.on_ground.load(Ordering::Relaxed) {
             entity.velocity.store(velo.multiply(0.7, -0.5, 0.7));
-            entity.world.load().set_block_state(
-                &self.entity.block_pos.load(),
-                self.block_state_id,
-                BlockFlags::NOTIFY_ALL,
-            );
+            let world = entity.world.load();
+            let landing_pos = self.entity.block_pos.load();
+            let mut state_id = self.block_state_id;
+            let block = Block::from_state_id(state_id);
+            if block.has_tag(&tag::Block::MINECRAFT_CONCRETE_POWDERS)
+                && FallingBlock::should_solidify(&**world, &landing_pos)
+                && let Some(name) = block.name.strip_suffix("_powder")
+                && let Some(concrete) = Block::from_name(name)
+            {
+                state_id = concrete.default_state.id;
+            }
+            world.set_block_state(&landing_pos, state_id, BlockFlags::NOTIFY_ALL);
             self.entity.remove();
         }
 

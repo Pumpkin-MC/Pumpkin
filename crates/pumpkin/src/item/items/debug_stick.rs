@@ -3,6 +3,7 @@ use std::sync::{LazyLock, Mutex};
 
 use rustc_hash::FxHashMap;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::EntityBase;
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
@@ -179,12 +180,15 @@ impl ItemBehaviour for DebugStickItem {
         _cursor_pos: Vector3<f32>,
         block: &Block,
         _server: &Server,
-    ) {
+    ) -> BlockActionResult {
         if player.can_use_game_master_blocks() {
             let world = player.world();
             let state_id = world.get_block_state_id(&location);
-            Self::handle_interaction(player, &location, block, state_id, true);
+            if Self::handle_interaction(player, &location, block, state_id, true) {
+                return BlockActionResult::Success;
+            }
         }
+        BlockActionResult::Fail
     }
 
     fn as_any(&self) -> &dyn Any {

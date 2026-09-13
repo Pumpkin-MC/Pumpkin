@@ -4,7 +4,6 @@ use crate::{
     server::Server,
     world::{
         World,
-        chunker::is_within_view_distance,
         portal::{NetherPortal, PortalProcessor, PortalType, SourcePortalInfo},
     },
 };
@@ -85,6 +84,7 @@ pub mod area_effect_cloud;
 pub mod attributes;
 pub mod boss;
 pub mod breath;
+pub mod custom_sound;
 pub mod decoration;
 pub mod effect;
 pub mod experience_orb;
@@ -1971,7 +1971,8 @@ impl Entity {
 
         let mut fluid_height: [f64; 2] = [0.0, 0.0];
 
-        let bounding_box = self.bounding_box.load().expand(-0.001, -0.001, -0.001);
+        let entity_box = self.bounding_box.load();
+        let bounding_box = entity_box.expand(-0.001, -0.001, -0.001);
 
         let min = bounding_box.min_block_pos();
 
@@ -1987,10 +1988,11 @@ impl Entity {
                     let (fluid, state) = world.get_fluid_and_fluid_state(&pos);
 
                     if fluid.id != Fluid::EMPTY.id {
-                        let marginal_height =
-                            f64::from(state.height) + f64::from(y) - bounding_box.min.y;
+                        let surface_y =
+                            f64::from(world.get_fluid_height(&pos, fluid, &state)) + f64::from(y);
 
-                        if marginal_height >= 0.0 {
+                        if surface_y >= bounding_box.min.y {
+                            let marginal_height = surface_y - entity_box.min.y;
                             let i = usize::from(
                                 fluid.id == Fluid::FLOWING_LAVA.id || fluid.id == Fluid::LAVA.id,
                             );
@@ -2005,7 +2007,7 @@ impl Entity {
                                 continue;
                             }
 
-                            let mut fluid_velo = world.get_fluid_velocity(pos, fluid, state);
+                            let mut fluid_velo = world.get_fluid_velocity(pos, fluid, &state);
 
                             if fluid_height[i] < 0.4 {
                                 fluid_velo = fluid_velo * fluid_height[i];
@@ -2623,7 +2625,9 @@ impl Entity {
             && self.age.load(Ordering::Relaxed) % Self::FREEZE_DAMAGE_INTERVAL == 0
         {
             let world = self.world.load_full();
-            if let Some(entity) = world.get_entity_by_id(self.entity_id) {
+            if world.level_info.load().game_rules.freeze_damage
+                && let Some(entity) = world.get_entity_by_id(self.entity_id)
+            {
                 entity.damage(entity.as_ref(), 1.0, DamageType::FREEZE);
             }
         }
@@ -2757,11 +2761,14 @@ impl Entity {
     #[must_use]
     pub fn is_submerged_in_water(&self) -> bool {
         let pos = self.pos.load();
-        let eye_height = self.get_eye_height();
-        let eye_pos = BlockPos::floored(pos.x, pos.y + eye_height - 0.111_111_11, pos.z);
+        let eye_y = pos.y + self.get_eye_height();
+        let eye_pos = BlockPos::floored(pos.x, eye_y, pos.z);
         let world = self.world.load();
-        let (fluid, _) = world.get_fluid_and_fluid_state(&eye_pos);
-        fluid.id == Fluid::WATER.id || fluid.id == Fluid::FLOWING_WATER.id
+        let (fluid, state) = world.get_fluid_and_fluid_state(&eye_pos);
+        fluid.matches_type(&Fluid::WATER)
+            && eye_y
+                <= f64::from(eye_pos.0.y)
+                    + f64::from(world.get_fluid_height(&eye_pos, fluid, &state))
     }
 
     #[must_use]
@@ -3043,10 +3050,10 @@ impl Entity {
         } else {
             let chunk_pos = self.chunk_pos.load();
             for player in players.iter() {
-                let center = player.get_entity().chunk_pos.load();
-                let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
-
-                if is_within_view_distance(chunk_pos, center, view_distance)
+                if player
+                    .watched_section
+                    .load()
+                    .is_within_distance(chunk_pos.x, chunk_pos.y)
                     && let ClientPlatform::Bedrock(client) = player.client.as_ref()
                 {
                     bedrock_recipients.push(client);
@@ -3067,6 +3074,67 @@ impl Entity {
             if let Ok(packet_data) = recipient.serialize_packet(&packet) {
                 recipient.try_enqueue_packet(packet_data);
             }
+        }
+    }
+
+    pub fn send_meta_data<T: MetadataSerializer>(
+        &self,
+        meta: &[Metadata<T>],
+        bedrock_meta: Option<&SyncedActorDataList>,
+    ) {
+        let world = self.world.load();
+        let players = world.players.load();
+
+        let mut java_recipients = Vec::new();
+
+        if let Some(tracked) = world.entity_tracker.get_tracked_entity(self.entity_id) {
+            for player in players.iter() {
+                if (tracked.seen_by.contains(&player.gameprofile.id)
+                    || player.entity_id() == self.entity_id)
+                    && let ClientPlatform::Java(_) = player.client.as_ref()
+                {
+                    java_recipients.push(player);
+                }
+            }
+        } else {
+            let chunk_pos = self.chunk_pos.load();
+            for player in players.iter() {
+                if player
+                    .watched_section
+                    .load()
+                    .is_within_distance(chunk_pos.x, chunk_pos.y)
+                    && let ClientPlatform::Java(_) = player.client.as_ref()
+                {
+                    java_recipients.push(player);
+                }
+            }
+        }
+
+        let recipients_by_version =
+            World::collect_java_recipients_by_version(java_recipients.into_iter());
+
+        for (version, recipients) in recipients_by_version {
+            if version < JavaMinecraftVersion::V_1_21 {
+                continue;
+            }
+            let mut buf = Vec::new();
+            for m in meta {
+                let _ = m.write(&mut buf, &version);
+            }
+            if buf.is_empty() {
+                continue;
+            }
+            buf.put_u8(255);
+            let packet = CSetEntityMetadata::new(self.entity_id.into(), buf.into());
+            if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version) {
+                for recipient in recipients {
+                    recipient.try_enqueue_packet(packet_data.clone());
+                }
+            }
+        }
+
+        if let Some(bedrock_meta) = bedrock_meta {
+            self.send_bedrock_actor_data(bedrock_meta);
         }
     }
 
@@ -3092,10 +3160,10 @@ impl Entity {
         } else {
             let chunk_pos = self.chunk_pos.load();
             for player in players.iter() {
-                let center = player.get_entity().chunk_pos.load();
-                let view_distance = crate::world::chunker::get_view_distance(player).get() as i32;
-
-                if is_within_view_distance(chunk_pos, center, view_distance)
+                if player
+                    .watched_section
+                    .load()
+                    .is_within_distance(chunk_pos.x, chunk_pos.y)
                     && let ClientPlatform::Java(_) = player.client.as_ref()
                 {
                     java_recipients.push(player);
@@ -3111,10 +3179,6 @@ impl Entity {
             World::collect_java_recipients_by_version(java_recipients.into_iter());
 
         for (version, recipients) in recipients_by_version {
-            // TODO: Support older versions
-            if version < JavaMinecraftVersion::V_26_2 {
-                continue;
-            }
             if let Some(buf) = self.synched_data.pack_dirty_for_version(&version) {
                 let packet = CSetEntityMetadata::new(self.entity_id.into(), buf);
                 if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version)

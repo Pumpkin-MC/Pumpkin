@@ -489,8 +489,11 @@ impl BlockActionResult {
     }
 }
 
+/// Marks a block with no registered behaviour. Never handed out as a real index.
+const NO_BEHAVIOUR: u16 = u16::MAX;
+
 pub struct BlockRegistry {
-    block_indices: [u8; pumpkin_data::BlockId::COUNT as usize],
+    block_indices: [u16; pumpkin_data::BlockId::COUNT as usize],
     behaviours: Vec<Arc<dyn BlockBehaviour>>,
     fluids: FxHashMap<u16, Arc<dyn FluidBehaviour>>,
 }
@@ -498,7 +501,7 @@ pub struct BlockRegistry {
 impl Default for BlockRegistry {
     fn default() -> Self {
         Self {
-            block_indices: [0xFF; pumpkin_data::BlockId::COUNT as usize],
+            block_indices: [NO_BEHAVIOUR; pumpkin_data::BlockId::COUNT as usize],
             behaviours: Vec::new(),
             fluids: FxHashMap::default(),
         }
@@ -509,6 +512,11 @@ impl Default for BlockRegistry {
 pub enum BlockPlacingError {
     InvalidGamemode,
     BlockOutOfWorld,
+}
+
+fn can_replace_with_other_block(block: &Block, state: &BlockState) -> bool {
+    // Sculk veins allow replacement by another block despite their state flag.
+    block == &Block::SCULK_VEIN || state.replaceable()
 }
 
 impl BlockRegistry {
@@ -652,7 +660,7 @@ impl BlockRegistry {
                 player,
             )
             .then_some(BlockIsReplacing::Itself(clicked_block_state.id))
-        } else if clicked_block_state.replaceable() {
+        } else if can_replace_with_other_block(clicked_block, clicked_block_state) {
             if clicked_block == &Block::WATER {
                 use pumpkin_data::block_properties::WaterLikeProperties;
                 let water_props = WaterLikeProperties::from_state_id(clicked_block_state.id);
@@ -683,7 +691,7 @@ impl BlockRegistry {
                     )
                     .then_some(BlockIsReplacing::Itself(previous_block_state.id))
                 } else {
-                    previous_block_state.replaceable().then(|| {
+                    can_replace_with_other_block(previous_block, previous_block_state).then(|| {
                         if previous_block == &Block::WATER {
                             use pumpkin_data::block_properties::WaterLikeProperties;
                             let water_props =
@@ -702,6 +710,17 @@ impl BlockRegistry {
                     }
                 }
             };
+
+        if world.is_in_spawn_protection(player, &final_block_pos) {
+            player.send_system_message(&pumpkin_util::text::TextComponent::translate_cross(
+                pumpkin_data::translation::java::BUILD_SPAWN_PROTECTION,
+                pumpkin_data::translation::java::BUILD_SPAWN_PROTECTION,
+                [pumpkin_util::text::TextComponent::text(
+                    player.gameprofile.name.clone(),
+                )],
+            ));
+            return Ok(None);
+        }
 
         if !self.can_place_at(
             Some(server),
@@ -796,8 +815,10 @@ impl BlockRegistry {
     #[allow(clippy::expect_used)]
     pub fn register<T: BlockBehaviour + BlockMetadata + 'static>(&mut self, block: T) {
         let ids = T::ids();
-        let idx = u8::try_from(self.behaviours.len())
-            .expect("Too many block behaviours for u8 index table");
+        let idx = u16::try_from(self.behaviours.len())
+            .ok()
+            .filter(|idx| *idx != NO_BEHAVIOUR)
+            .expect("Too many block behaviours for the index table");
         self.behaviours.push(Arc::new(block));
         for i in ids {
             self.block_indices[i.as_u16() as usize] = idx;
@@ -1335,7 +1356,7 @@ impl BlockRegistry {
     #[must_use]
     pub fn get_pumpkin_block(&self, block: BlockId) -> Option<&Arc<dyn BlockBehaviour>> {
         let idx = self.block_indices[block.as_u16() as usize];
-        if idx == 0xFF {
+        if idx == NO_BEHAVIOUR {
             None
         } else {
             self.behaviours.get(idx as usize)
@@ -1477,5 +1498,42 @@ impl BlockRegistry {
             },
             |pumpkin_block| pumpkin_block.is_pathfindable(state, computation_type),
         )
+    }
+}
+
+#[cfg(test)]
+mod replacement_tests {
+    use super::can_replace_with_other_block;
+    use pumpkin_data::{Block, BlockState, block_properties::GlowLichenLikeProperties};
+
+    #[test]
+    fn sculk_vein_can_be_replaced_when_dry_or_waterlogged() {
+        let block = &Block::SCULK_VEIN;
+        for waterlogged in [false, true] {
+            let mut properties = GlowLichenLikeProperties::default(block);
+            properties.down = true;
+            properties.waterlogged = waterlogged;
+            let state = BlockState::from_id(properties.to_state_id(block));
+            assert!(!state.replaceable());
+            assert!(can_replace_with_other_block(block, state));
+        }
+    }
+
+    #[test]
+    fn other_blocks_keep_their_replacement_flags() {
+        for (block, expected) in [
+            (&Block::AIR, true),
+            (&Block::WATER, true),
+            (&Block::SHORT_GRASS, true),
+            (&Block::GLOW_LICHEN, true),
+            (&Block::RESIN_CLUMP, true),
+            (&Block::STONE, false),
+            (&Block::OAK_SLAB, false),
+        ] {
+            assert_eq!(
+                can_replace_with_other_block(block, block.default_state),
+                expected
+            );
+        }
     }
 }
