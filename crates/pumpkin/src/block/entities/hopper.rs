@@ -426,8 +426,9 @@ impl HopperBlockEntity {
                     dst = item.clone();
                     to.set_stack(j, dst);
                     success = true;
-                } else if dst.item_count < dst.get_max_stack_size() && dst.item == item.item {
-                    // TODO check Components equal
+                } else if dst.item_count < dst.get_max_stack_size()
+                    && dst.are_items_and_components_equal(item)
+                {
                     dst.item_count += 1;
                     to.set_stack(j, dst);
                     success = true;

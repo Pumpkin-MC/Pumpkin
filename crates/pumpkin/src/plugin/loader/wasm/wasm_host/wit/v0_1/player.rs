@@ -1634,7 +1634,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
             &pos,
             volume,
             pitch,
-            rand::random::<f64>(),
+            rand::random::<i64>(),
         );
         Ok(())
     }
@@ -1659,7 +1659,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
             &pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
             volume,
             pitch,
-            rand::random::<f64>(),
+            rand::random::<i64>(),
         );
         Ok(())
     }
