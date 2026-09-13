@@ -157,6 +157,8 @@ pub enum ChunkHeightmapType {
     WorldSurface = 0,
     MotionBlocking = 1,
     MotionBlockingNoLeaves = 2,
+    WorldSurfaceWg = 3,
+    OceanFloorWg = 4,
 }
 impl TryFrom<usize> for ChunkHeightmapType {
     type Error = &'static str;
@@ -166,7 +168,9 @@ impl TryFrom<usize> for ChunkHeightmapType {
             0 => Ok(Self::WorldSurface),
             1 => Ok(Self::MotionBlocking),
             2 => Ok(Self::MotionBlockingNoLeaves),
-            _ => Err("Invalid usize value for ChunkHeightmapType. The value should be 0~2."),
+            3 => Ok(Self::WorldSurfaceWg),
+            4 => Ok(Self::OceanFloorWg),
+            _ => Err("Invalid usize value for ChunkHeightmapType. The value should be 0~4."),
         }
     }
 }
@@ -176,7 +180,8 @@ impl ChunkHeightmapType {
     pub fn is_opaque(&self, block_state: &BlockState) -> bool {
         let block = block_state.id.to_block_id();
         match self {
-            Self::WorldSurface => !block_state.is_air(),
+            Self::WorldSurface | Self::WorldSurfaceWg => !block_state.is_air(),
+            Self::OceanFloorWg => blocks_movement(block_state, block),
             Self::MotionBlocking => blocks_movement(block_state, block) || block_state.is_liquid(),
             Self::MotionBlockingNoLeaves => {
                 (blocks_movement(block_state, block) || block_state.is_liquid())
@@ -191,6 +196,8 @@ pub struct ChunkHeightmaps {
     pub world_surface: Option<Box<[i64]>>,
     pub motion_blocking: Option<Box<[i64]>>,
     pub motion_blocking_no_leaves: Option<Box<[i64]>>,
+    pub world_surface_wg: Option<Box<[i64]>>,
+    pub ocean_floor_wg: Option<Box<[i64]>>,
 }
 
 impl ChunkHeightmaps {
@@ -199,6 +206,8 @@ impl ChunkHeightmaps {
             ChunkHeightmapType::WorldSurface => &mut self.world_surface,
             ChunkHeightmapType::MotionBlocking => &mut self.motion_blocking,
             ChunkHeightmapType::MotionBlockingNoLeaves => &mut self.motion_blocking_no_leaves,
+            ChunkHeightmapType::WorldSurfaceWg => &mut self.world_surface_wg,
+            ChunkHeightmapType::OceanFloorWg => &mut self.ocean_floor_wg,
         };
 
         let data = data.get_or_insert_with(|| vec![0; 37].into_boxed_slice());
@@ -228,6 +237,8 @@ impl ChunkHeightmaps {
             ChunkHeightmapType::WorldSurface => &self.world_surface,
             ChunkHeightmapType::MotionBlocking => &self.motion_blocking,
             ChunkHeightmapType::MotionBlockingNoLeaves => &self.motion_blocking_no_leaves,
+            ChunkHeightmapType::WorldSurfaceWg => &self.world_surface_wg,
+            ChunkHeightmapType::OceanFloorWg => &self.ocean_floor_wg,
         };
 
         let Some(data) = data else {
@@ -294,6 +305,8 @@ impl Default for ChunkHeightmaps {
             motion_blocking: None,
             motion_blocking_no_leaves: None,
             world_surface: None,
+            world_surface_wg: None,
+            ocean_floor_wg: None,
         }
     }
 }

@@ -5,6 +5,7 @@ use pumpkin_util::{math::position::BlockPos, random::RandomGenerator, world_seed
 
 use super::processor::{HeightmapType, PosRuleTest, ProcessorRule, RuleTest};
 use super::*;
+use crate::chunk_system::StagedChunkEnum;
 use crate::generation::get_world_gen;
 use crate::generation::structure::piece::StructurePieceType;
 use crate::generation::structure::structures::jigsaw::{
@@ -204,6 +205,111 @@ fn gravity_obeys_heightmap_selection_and_empty_columns() {
 }
 
 #[test]
+fn village_paths_ignore_blocks_above_finished_terrain() {
+    for (obstacle, offset) in [
+        (Block::SHORT_GRASS.default_state, 1),
+        (Block::TALL_GRASS.default_state, 2),
+        (Block::OAK_LEAVES.default_state, 5),
+        (Block::OAK_STAIRS.default_state, 8),
+    ] {
+        let mut terrain = empty_terrain();
+        for x in 1..=2 {
+            terrain
+                .chunk
+                .set_block_state(x, 60 + x, 1, Block::STONE.default_state);
+        }
+        terrain.chunk.stage = StagedChunkEnum::Carvers;
+        for x in 1..=2 {
+            terrain
+                .chunk
+                .set_block_state(x, 60 + x + offset, 1, obstacle);
+        }
+        place(
+            &mut terrain,
+            &template(&[
+                (1, 0, 1, "minecraft:dirt_path"),
+                (2, 0, 1, "minecraft:grass_block"),
+            ]),
+            &[gravity(HeightmapType::WorldSurfaceWg, -1)],
+        );
+        assert_eq!(
+            terrain.writes,
+            [
+                (Vector3::new(1, 61, 1), Block::DIRT_PATH.default_state.id),
+                (Vector3::new(2, 62, 1), Block::GRASS_BLOCK.default_state.id),
+            ]
+        );
+        for x in 1..=2 {
+            assert_eq!(
+                terrain
+                    .chunk
+                    .get_block_state(&Vector3::new(x, 60 + x + offset, 1)),
+                obstacle.id
+            );
+            assert_eq!(
+                terrain.column_height(HeightmapType::WorldSurface, x, 1),
+                61 + x + offset
+            );
+            assert_eq!(
+                terrain.column_height(HeightmapType::WorldSurfaceWg, x, 1),
+                61 + x
+            );
+        }
+    }
+}
+
+#[test]
+fn terrain_heightmaps_freeze_after_carving_and_survive_cleared_columns() {
+    let mut terrain = empty_terrain();
+    terrain.chunk.stage = StagedChunkEnum::Surface;
+    terrain
+        .chunk
+        .set_block_state(1, 60, 1, Block::STONE.default_state);
+    terrain
+        .chunk
+        .set_block_state(1, 64, 1, Block::WATER.default_state);
+    terrain
+        .chunk
+        .set_block_state(1, 70, 1, Block::STONE.default_state);
+    terrain
+        .chunk
+        .set_block_state(1, 70, 1, Block::AIR.default_state);
+    terrain.chunk.stage = StagedChunkEnum::Carvers;
+    terrain
+        .chunk
+        .set_block_state(1, 64, 1, Block::AIR.default_state);
+    terrain
+        .chunk
+        .set_block_state(1, 60, 1, Block::AIR.default_state);
+    terrain
+        .chunk
+        .set_block_state(2, 80, 2, Block::OAK_LEAVES.default_state);
+    assert_eq!(
+        terrain.column_height(HeightmapType::WorldSurfaceWg, 1, 1),
+        65
+    );
+    assert_eq!(terrain.column_height(HeightmapType::OceanFloorWg, 1, 1), 61);
+    assert_eq!(
+        terrain.column_height(HeightmapType::WorldSurface, 1, 1),
+        -64
+    );
+    assert_eq!(terrain.column_height(HeightmapType::OceanFloor, 1, 1), -64);
+    assert_eq!(
+        terrain.column_height(HeightmapType::WorldSurfaceWg, 2, 2),
+        -64
+    );
+    place(
+        &mut terrain,
+        &template(&[(1, 0, 1, "minecraft:dirt_path")]),
+        &[gravity(HeightmapType::WorldSurfaceWg, -1)],
+    );
+    assert_eq!(
+        terrain.writes,
+        [(Vector3::new(1, 64, 1), Block::DIRT_PATH.default_state.id)]
+    );
+}
+
+#[test]
 fn processors_observe_positions_in_order_and_waterlogging_uses_the_final_state() {
     let rule = StructureProcessor::Rule(vec![ProcessorRule {
         position_predicate: PosRuleTest::AlwaysTrue,
@@ -373,6 +479,7 @@ fn village_path_projection_1024_cases() {
                             }
                         }
                     }
+                    chunk.stage = StagedChunkEnum::Carvers;
                     chunk
                 };
                 let mut natural = build_terrain();
@@ -479,6 +586,41 @@ fn village_path_projection_1024_cases() {
                     .collect();
                 assert!(!expected.is_empty(), "case {case}: empty path sample");
                 assert_eq!(actual, expected, "case {case}, pool {}", pool.id);
+                let mut covered = RecordingPlacer {
+                    chunk: build_terrain(),
+                    writes: Vec::new(),
+                };
+                let cover_y = expected.iter().map(|&(_, y, _)| y).max().unwrap() + 8;
+                let cover = if case.is_multiple_of(2) {
+                    Block::OAK_LEAVES
+                } else {
+                    Block::OAK_STAIRS
+                };
+                for x in bounds.min.x..=bounds.max.x {
+                    for z in bounds.min.z..=bounds.max.z {
+                        covered
+                            .chunk
+                            .set_block_state(x, cover_y, z, cover.default_state);
+                    }
+                }
+                place_pool_element_templates(&piece, &mut covered, Some(&bounds), false);
+                assert_eq!(
+                    covered
+                        .writes
+                        .iter()
+                        .map(|(p, _)| (p.x, p.y, p.z))
+                        .collect::<HashSet<_>>(),
+                    expected,
+                    "cover changed path heights in case {case}"
+                );
+                for x in bounds.min.x..=bounds.max.x {
+                    for z in bounds.min.z..=bounds.max.z {
+                        assert_eq!(
+                            covered.chunk.get_block_state(&Vector3::new(x, cover_y, z)),
+                            cover.default_state.id
+                        );
+                    }
+                }
                 piece.place(
                     &mut natural,
                     &BlockRegistry,

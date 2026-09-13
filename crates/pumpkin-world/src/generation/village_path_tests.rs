@@ -89,6 +89,14 @@ fn village_paths_follow_generated_surface() {
         for (dx, dz) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
             let (x, z) = (center_x + dx, center_z + dz);
             let mut chunk = surface_chunk(&world, x, z);
+            let terrain_heights: [i32; 256] = std::array::from_fn(|index| {
+                let column_x = x * 16 + index as i32 / 16;
+                let column_z = z * 16 + index as i32 % 16;
+                (-64..320)
+                    .rev()
+                    .find(|&y| !chunk.is_air(&Vector3::new(column_x, y, column_z)))
+                    .unwrap_or(-65)
+            });
             let bounds = BlockBox::new(x * 16, -64, z * 16, x * 16 + 15, 319, z * 16 + 15);
             let collectors: Vec<_> = chunk
                 .structure_starts
@@ -109,7 +117,7 @@ fn village_paths_follow_generated_surface() {
                         piece.as_any().downcast_ref::<PoolElementStructurePiece>()
                         && path.projection == JigsawProjection::TerrainMatching
                     {
-                        expected_path_blocks(&chunk, path, &bounds)
+                        expected_path_blocks(path, &bounds, &terrain_heights)
                     } else {
                         Vec::new()
                     };
@@ -151,12 +159,10 @@ fn village_paths_follow_generated_surface() {
 }
 
 fn expected_path_blocks(
-    chunk: &ProtoChunk,
     path: &PoolElementStructurePiece,
     bounds: &BlockBox,
+    terrain_heights: &[i32; 256],
 ) -> Vec<(Vector3<i32>, BlockId, i32)> {
-    use crate::generation::structure::template::processor::HeightmapType;
-
     let mut expected = Vec::new();
     path.element.for_each_template(|_, _, _, template| {
         for block in &template.blocks {
@@ -175,15 +181,7 @@ fn expected_path_blocks(
             if !bounds.contains_pos(&pos) {
                 continue;
             }
-            let top = (-64..320)
-                .rev()
-                .find(|&y| !chunk.is_air(&Vector3::new(pos.x, y, pos.z)))
-                .unwrap();
-            assert_eq!(
-                chunk.column_height(HeightmapType::WorldSurfaceWg, pos.x, pos.z),
-                top + 1,
-                "stale surface at {pos:?}"
-            );
+            let top = terrain_heights[((pos.x & 15) * 16 + (pos.z & 15)) as usize];
             expected.push((
                 Vector3::new(pos.x, top + block.pos.y, pos.z),
                 expected_block,

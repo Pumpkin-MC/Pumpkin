@@ -182,6 +182,73 @@ mod test {
         assert!(resumed.has_structure(StructureKeys::Monument));
     }
 
+    #[test]
+    fn terrain_heightmaps_survive_partial_chunk_serialization() {
+        use crate::chunk::{ChunkData, format::anvil::SingleChunkDataSerializer};
+        use pumpkin_config::lighting::LightingEngineConfig;
+        use pumpkin_data::Block;
+        use pumpkin_util::{HeightMap, math::vector2::Vector2};
+
+        let world_gen = get_world_gen(
+            Seed(0),
+            Dimension::OVERWORLD,
+            true,
+            Vec::new(),
+            String::new(),
+        );
+        for stage in [
+            StagedChunkEnum::Surface,
+            StagedChunkEnum::Carvers,
+            StagedChunkEnum::Features,
+        ] {
+            let mut proto = ProtoChunk::new(-23, 38, &world_gen);
+            for x in 0..16 {
+                for z in 0..16 {
+                    proto.set_block_state(x, 50 + x + z * 2, z, Block::STONE.default_state);
+                    proto.set_block_state(x, 54 + x + z * 2, z, Block::WATER.default_state);
+                }
+            }
+            proto.stage = stage;
+            if stage >= StagedChunkEnum::Carvers {
+                proto.set_block_state(1, 100, 2, Block::OAK_STAIRS.default_state);
+            }
+            let mut staged = Chunk::Proto(Box::new(proto));
+            staged.upgrade_to_level_chunk(&Dimension::OVERWORLD, &LightingEngineConfig::Default);
+            let Chunk::Level(data) = staged else {
+                unreachable!()
+            };
+            let bytes = data.to_bytes().unwrap();
+            let data = ChunkData::from_bytes(&bytes, Vector2::new(-23, 38)).unwrap();
+            let mut resumed = ProtoChunk::from_chunk_data(&data, &world_gen);
+            assert_eq!(resumed.stage, stage);
+            for x in 0..16 {
+                for z in 0..16 {
+                    assert_eq!(
+                        resumed.get_top_y(&HeightMap::WorldSurfaceWg, x, z),
+                        55 + x + z * 2
+                    );
+                    assert_eq!(
+                        resumed.get_top_y(&HeightMap::OceanFloorWg, x, z),
+                        51 + x + z * 2
+                    );
+                }
+            }
+            if stage == StagedChunkEnum::Surface {
+                resumed.set_block_state(1, 80, 2, Block::STONE.default_state);
+                resumed.stage = StagedChunkEnum::Carvers;
+            }
+            resumed.set_block_state(1, 110, 2, Block::OAK_LEAVES.default_state);
+            assert_eq!(
+                resumed.get_top_y(&HeightMap::WorldSurfaceWg, 1, 2),
+                if stage == StagedChunkEnum::Surface {
+                    81
+                } else {
+                    60
+                }
+            );
+        }
+    }
+
     // Regression test for transposed heightmaps during Noise-stage chunk resume.
     // Flat terrain cannot expose this bug, so use a sloped chunk.
     #[test]
