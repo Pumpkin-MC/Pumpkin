@@ -15,8 +15,8 @@ use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
-use super::{ProjectileHit, calculate_ray_intersection};
 use super::arrow::ArrowPickup;
+use super::{ProjectileHit, calculate_ray_intersection};
 
 pub struct TridentEntity {
     pub entity: Entity,
