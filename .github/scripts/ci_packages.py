@@ -128,7 +128,15 @@ def changed_paths(base: str, head: str) -> list[Path]:
     if not base or not head:
         raise ValueError("pull request planning requires both base and head SHAs")
     output = run_command(
-        ["git", "diff", "--name-only", "--diff-filter=ACMRD", base, head, "--"],
+        [
+            "git",
+            "diff",
+            "--no-renames",
+            "--name-only",
+            "--diff-filter=ACMRD",
+            f"{base}...{head}",
+            "--",
+        ],
         capture=True,
     )
     return [Path(line) for line in output.splitlines() if line]
