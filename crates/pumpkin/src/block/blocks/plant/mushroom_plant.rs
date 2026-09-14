@@ -98,6 +98,10 @@ impl MushroomPlantBlock {
             for dx in -radius..=radius {
                 for dz in -radius..=radius {
                     let check_pos = pos.add(dx, dy, dz);
+                    // The mushroom itself is only replaced with air after this check.
+                    if check_pos == *pos {
+                        continue;
+                    }
                     if !world.is_loaded(&check_pos) {
                         return false;
                     }
