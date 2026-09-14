@@ -46,7 +46,7 @@ impl Goal for BlazeShootFireballGoal {
         let Some(target_living) = target.get_living_entity() else {
             return false;
         };
-        target.get_entity().is_alive() && blaze.entity.living_entity.can_attack(target_living)
+        target.get_entity().is_alive() && blaze.can_attack(target_living)
     }
 
     fn start(&mut self, _mob: &dyn Mob) {

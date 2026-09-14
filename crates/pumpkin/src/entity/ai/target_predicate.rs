@@ -118,7 +118,10 @@ impl TargetPredicate {
         };
 
         if self.attackable
-            && (!tester_living.can_attack(target_living) || tester.is_allied_to(target))
+            && (!tester.get_mob().map_or_else(
+                || tester_living.can_attack(target_living),
+                |mob| mob.can_attack(target_living),
+            ) || tester.is_allied_to(target))
         {
             return false;
         }

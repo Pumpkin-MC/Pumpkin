@@ -11,6 +11,7 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
@@ -657,6 +658,18 @@ impl MobEntity {
 pub trait Mob: EntityBase + Send + Sync {
     fn get_random(&self) -> rand::rngs::ThreadRng {
         rand::rng()
+    }
+
+    fn can_attack(&self, target: &crate::entity::living::LivingEntity) -> bool {
+        if target.entity.entity_type == &EntityType::GHAST {
+            return false;
+        }
+        if let Some(tamable) = self.as_tamable()
+            && tamable.is_owned_by(&target.entity.entity_uuid)
+        {
+            return false;
+        }
+        self.get_mob_entity().living_entity.can_attack(target)
     }
 
     /// Takes the navigation lock, so callers must not already hold it.

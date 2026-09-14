@@ -123,7 +123,7 @@ impl Goal for TrackTargetGoal {
             return false;
         };
 
-        if !mob_entity.living_entity.can_attack(target) {
+        if !mob.can_attack(target) {
             return false;
         }
 

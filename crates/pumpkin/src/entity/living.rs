@@ -2516,11 +2516,7 @@ impl LivingEntity {
         !self.is_spectator() && self.entity.is_alive()
     }
 
-    /// Every caller here is a mob, so the ghast exclusion lives with the rest of the rule.
     pub fn can_attack(&self, target: &Self) -> bool {
-        if target.entity.entity_type == &EntityType::GHAST {
-            return false;
-        }
         if target.entity.entity_type == &EntityType::PLAYER
             && self.entity.world.load().level_info.load().difficulty == Difficulty::Peaceful
         {
