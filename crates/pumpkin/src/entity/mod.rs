@@ -2365,6 +2365,9 @@ impl Entity {
     pub fn set_rotation(&self, yaw: f32, pitch: f32) {
         // TODO
         self.yaw.store(yaw);
+        // Java players have no separate head-yaw packet from the client- look yaw is also head yaw.
+        // Bedrock `MovePlayer` / `MoveActorDelta` need this field, not only `yaw`.
+        self.head_yaw.store(yaw);
         self.set_pitch(pitch);
     }
 

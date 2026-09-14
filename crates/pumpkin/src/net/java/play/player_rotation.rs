@@ -45,8 +45,10 @@ impl JavaClient {
             ),
             entity.pitch.load(),
             entity.yaw.load(),
-            entity.yaw.load(),
-            CMovePlayer::MODE_ROTATION,
+            entity.head_yaw.load(),
+            // MODE_ROTATION not used for other players -> AvatarEntity always sends
+            // MODE_NORMAL (client already lerps). MODE_ROTATION drops live head yaw on Bedrock.
+            CMovePlayer::MODE_NORMAL,
             rotation.ground,
             VarULong(0),
             0,

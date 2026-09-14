@@ -142,49 +142,50 @@ impl TrackedEntity {
         self.send_bedrock_move(entity, world);
         let tick = self.tick_count.fetch_add(1, Relaxed);
         let needs_sync = entity.velocity_dirty.swap(false, Ordering::SeqCst);
-        if !(tick.is_multiple_of(self.update_interval.max(1))
+        // Head yaw stays live every tick, only position/rotation sync is throttled.
+        if tick.is_multiple_of(self.update_interval.max(1))
             || needs_sync
-            || entity.synched_data.is_dirty())
+            || entity.synched_data.is_dirty()
         {
-            return;
-        }
+            let yaw = pack_degrees(entity.yaw.load());
+            let pitch = pack_degrees(entity.pitch.load());
+            let rot_changed = yaw != entity.last_sent_yaw.load(Relaxed)
+                || pitch != entity.last_sent_pitch.load(Relaxed);
 
-        let yaw = pack_degrees(entity.yaw.load());
-        let pitch = pack_degrees(entity.pitch.load());
-        let rot_changed = yaw != entity.last_sent_yaw.load(Relaxed)
-            || pitch != entity.last_sent_pitch.load(Relaxed);
-
-        if self.entity.is_passenger() {
-            if rot_changed {
-                self.send_move(entity, MoveSync::Rot, yaw, pitch, world);
-                entity.last_sent_yaw.store(yaw, Relaxed);
-                entity.last_sent_pitch.store(pitch, Relaxed);
-            }
-            entity.last_sent_pos.store(entity.pos.load());
-            entity.send_dirty_entity_data();
-            self.was_riding.store(true, Relaxed);
-        } else {
-            let pos = entity.pos.load();
-            let sync = self.pick_move(entity, pos, tick, rot_changed);
-            if needs_sync || self.track_deltas || entity.is_fall_flying() {
-                self.send_motion(entity, world);
-            }
-            if let Some(sync) = sync {
-                self.send_move(entity, sync, yaw, pitch, world);
-            }
-            entity.send_dirty_entity_data();
-            if let Some(sync) = sync {
-                if sync.sends_position() {
-                    entity.last_sent_pos.store(pos);
-                }
-                if sync.sends_rotation() {
+            if self.entity.is_passenger() {
+                if rot_changed {
+                    self.send_move(entity, MoveSync::Rot, yaw, pitch, world);
                     entity.last_sent_yaw.store(yaw, Relaxed);
                     entity.last_sent_pitch.store(pitch, Relaxed);
                 }
+                entity.last_sent_pos.store(entity.pos.load());
+                entity.send_dirty_entity_data();
+                self.was_riding.store(true, Relaxed);
+            } else {
+                let pos = entity.pos.load();
+                let sync = self.pick_move(entity, pos, tick, rot_changed);
+                if needs_sync || self.track_deltas || entity.is_fall_flying() {
+                    self.send_motion(entity, world);
+                }
+                if let Some(sync) = sync {
+                    self.send_move(entity, sync, yaw, pitch, world);
+                }
+                entity.send_dirty_entity_data();
+                if let Some(sync) = sync {
+                    if sync.sends_position() {
+                        entity.last_sent_pos.store(pos);
+                    }
+                    if sync.sends_rotation() {
+                        entity.last_sent_yaw.store(yaw, Relaxed);
+                        entity.last_sent_pitch.store(pitch, Relaxed);
+                    }
+                }
+                self.was_riding.store(false, Relaxed);
             }
-            self.was_riding.store(false, Relaxed);
         }
 
+        // Java `CHeadRot` is per-tick. Bedrock watchers of this entity get head yaw from
+        // `send_bedrock_move` (`MoveActorDelta` HAS_HEAD_YAW), not from this packet.
         let head_yaw = pack_degrees(entity.head_yaw.load());
         if head_yaw != entity.last_sent_head_yaw.load(Relaxed) {
             self.send_to_tracking_players(&CHeadRot::new(VarInt(self.entity_id), head_yaw), world);
