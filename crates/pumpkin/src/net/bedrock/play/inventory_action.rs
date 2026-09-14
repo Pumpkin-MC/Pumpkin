@@ -426,7 +426,7 @@ impl BedrockClient {
                 }
 
                 match event.action {
-                    ActionType::Interact => {
+                    ActionType::Interact | ActionType::InteractAt => {
                         let mut stack = player.inventory().held_item();
                         let item_id = stack.item.id;
                         let before = stack.clone();
@@ -459,7 +459,6 @@ impl BedrockClient {
                         player.inventory().set_held_item(stack);
                     }
                     ActionType::Attack => player.attack(&event.target),
-                    ActionType::InteractAt => unreachable!("Bedrock does not send InteractAt"),
                 }
             }
             TransactionData::ReleaseItem(_data) => {
