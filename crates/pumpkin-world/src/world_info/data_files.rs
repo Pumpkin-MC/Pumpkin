@@ -117,6 +117,26 @@ pub fn minecraft_data_dir(level_folder: &Path) -> PathBuf {
     level_folder.join("data").join("minecraft")
 }
 
+/// Finds overworld data, keeping an existing root copy authoritative over Paper's layout.
+pub(super) fn find_overworld_data_file(level_folder: &Path, name: &str) -> Option<PathBuf> {
+    let root = minecraft_data_dir(level_folder).join(name);
+    // An inspection error is not absence; let the reader report it rather than use stale data.
+    match root.try_exists() {
+        Ok(true) | Err(_) => return Some(root),
+        Ok(false) => {}
+    }
+
+    let overworld = level_folder
+        .join("dimensions")
+        .join("minecraft")
+        .join("overworld");
+    let path = minecraft_data_dir(&overworld).join(name);
+    match path.try_exists() {
+        Ok(true) | Err(_) => Some(path),
+        Ok(false) => None,
+    }
+}
+
 /// Ensures the `<world>/data/minecraft/` directory exists.
 pub fn ensure_minecraft_data_dir(level_folder: &Path) -> Result<PathBuf, WorldInfoError> {
     let dir = minecraft_data_dir(level_folder);
@@ -125,10 +145,9 @@ pub fn ensure_minecraft_data_dir(level_folder: &Path) -> Result<PathBuf, WorldIn
 }
 
 pub fn read_weather(level_folder: &Path) -> WeatherData {
-    let path = minecraft_data_dir(level_folder).join("weather.dat");
-    if !path.exists() {
+    let Some(path) = find_overworld_data_file(level_folder, "weather.dat") else {
         return WeatherData::default();
-    }
+    };
     match File::open(&path) {
         Ok(f) => match read_gzip_compound_tag(f) {
             Ok(compound) => {
@@ -453,10 +472,9 @@ pub fn game_rules_from_nbt(root: &NbtCompound) -> GameRuleRegistry {
 }
 
 pub fn read_game_rules(level_folder: &Path) -> GameRuleRegistry {
-    let path = minecraft_data_dir(level_folder).join("game_rules.dat");
-    if !path.exists() {
+    let Some(path) = find_overworld_data_file(level_folder, "game_rules.dat") else {
         return GameRuleRegistry::default();
-    }
+    };
 
     match File::open(&path) {
         Ok(f) => match read_gzip_compound_tag(f) {
@@ -558,10 +576,9 @@ pub fn write_world_clocks(
 }
 
 pub fn read_wandering_trader(level_folder: &Path) -> WanderingTraderData {
-    let path = minecraft_data_dir(level_folder).join("wandering_trader.dat");
-    if !path.exists() {
+    let Some(path) = find_overworld_data_file(level_folder, "wandering_trader.dat") else {
         return WanderingTraderData::default();
-    }
+    };
     match File::open(&path) {
         Ok(f) => match read_gzip_compound_tag(f) {
             Ok(compound) => {
@@ -635,11 +652,12 @@ pub fn write_scheduled_events_stub(
     level_folder: &Path,
     data_version: i32,
 ) -> Result<(), WorldInfoError> {
-    let dir = ensure_minecraft_data_dir(level_folder)?;
-    let path = dir.join("scheduled_events.dat");
-    if path.exists() {
+    // Until events can be loaded, do not shadow imported events with an empty root file.
+    if find_overworld_data_file(level_folder, "scheduled_events.dat").is_some() {
         return Ok(());
     }
+    let dir = ensure_minecraft_data_dir(level_folder)?;
+    let path = dir.join("scheduled_events.dat");
 
     let mut inner = NbtCompound::new();
     inner.put("events", NbtTag::List(vec![]));
