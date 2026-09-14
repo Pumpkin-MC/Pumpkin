@@ -1,6 +1,5 @@
 use crate::block::registry::BlockActionResult;
 use crate::block::{BlockBehaviour, PathComputationType, RandomTickArgs, UseWithItemArgs};
-use pumpkin_data::dimension::Dimension;
 use pumpkin_data::flower_pot_transformations::get_potted_item;
 use pumpkin_data::{Block, BlockId, BlockState};
 use pumpkin_macros::pumpkin_block_from_tag;
@@ -45,23 +44,24 @@ impl BlockBehaviour for FlowerPotBlock {
     }
 
     fn random_tick(&self, args: RandomTickArgs<'_>) {
-        if (args.world.dimension.eq(&Dimension::OVERWORLD)
-            || args.world.dimension.eq(&Dimension::OVERWORLD_CAVES))
-            && args.block.eq(&Block::POTTED_CLOSED_EYEBLOSSOM)
-            && args.world.get_time_of_day() % 24000 > 14500
-        {
-            args.world.set_block_state(
-                args.position,
-                Block::POTTED_OPEN_EYEBLOSSOM.default_state.id,
-                BlockFlags::NOTIFY_ALL,
-            );
+        let is_open_potted = args.block.eq(&Block::POTTED_OPEN_EYEBLOSSOM);
+        let is_closed_potted = args.block.eq(&Block::POTTED_CLOSED_EYEBLOSSOM);
+        if !is_open_potted && !is_closed_potted {
+            return;
         }
-        if args.block.eq(&Block::POTTED_OPEN_EYEBLOSSOM)
-            && args.world.get_time_of_day() % 24000 <= 14500
-        {
+
+        let is_open = is_open_potted;
+        let should_be_open = args.world.eyeblossom_open(args.position).unwrap_or(is_open);
+
+        if is_open != should_be_open {
+            let next_block = if should_be_open {
+                &Block::POTTED_OPEN_EYEBLOSSOM
+            } else {
+                &Block::POTTED_CLOSED_EYEBLOSSOM
+            };
             args.world.set_block_state(
                 args.position,
-                Block::POTTED_CLOSED_EYEBLOSSOM.default_state.id,
+                next_block.default_state.id,
                 BlockFlags::NOTIFY_ALL,
             );
         }

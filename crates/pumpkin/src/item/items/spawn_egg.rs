@@ -1,3 +1,4 @@
+use crate::block::registry::BlockActionResult;
 use std::sync::Arc;
 
 use crate::block::entities::mob_spawner::MobSpawnerBlockEntity;
@@ -129,19 +130,29 @@ impl ItemBehaviour for SpawnEggItem {
         _cursor_pos: Vector3<f32>,
         _block: &Block,
         _server: &Server,
-    ) {
+    ) -> BlockActionResult {
         if let Some(entity_type) = entity_from_egg(item.item.id) {
             let world = player.world();
 
-            if let Some(block_entity) = player.world().get_block_entity(&location)
-                && let Some(spawner) = block_entity
+            if let Some(block_entity) = player.world().get_block_entity(&location) {
+                if let Some(spawner) = block_entity
                     .as_any()
                     .downcast_ref::<MobSpawnerBlockEntity>()
-            {
-                spawner.set_entity_type(entity_type);
-                world.update_block_entity(&block_entity);
-                item.decrement_unless_creative(player.gamemode.load(), 1);
-                return;
+                {
+                    spawner.set_entity_type(entity_type);
+                    world.update_block_entity(&block_entity);
+                    item.decrement_unless_creative(player.gamemode.load(), 1);
+                    return BlockActionResult::Success;
+                }
+                if let Some(trial_spawner) = block_entity
+                    .as_any()
+                    .downcast_ref::<crate::block::entities::trial_spawner::TrialSpawnerBlockEntity>()
+                {
+                    trial_spawner.set_entity_type(entity_type, &world);
+                    world.update_block_entity(&block_entity);
+                    item.decrement_unless_creative(player.gamemode.load(), 1);
+                    return BlockActionResult::Success;
+                }
             }
 
             let target_state = world.get_block_state(&location);
@@ -169,6 +180,9 @@ impl ItemBehaviour for SpawnEggItem {
 
             world.spawn_entity(mob);
             item.decrement_unless_creative(player.gamemode.load(), 1);
+            BlockActionResult::Success
+        } else {
+            BlockActionResult::Pass
         }
     }
 

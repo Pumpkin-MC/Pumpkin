@@ -1,8 +1,8 @@
 use crate::block::entities::BlockEntity;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_inventory::{Clearable, Inventory, sync_write_items_to_nbt};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::inventory::{Clearable, Inventory, sync_write_items_to_nbt};
 use rand::{RngExt, rng};
 use std::any::Any;
 use std::array::from_fn;
@@ -14,6 +14,7 @@ pub struct DropperBlockEntity {
     pub position: BlockPos,
     pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
     pub dirty: AtomicBool,
+    pub comparator_dirty: AtomicBool,
 }
 
 impl BlockEntity for DropperBlockEntity {
@@ -29,9 +30,10 @@ impl BlockEntity for DropperBlockEntity {
             position,
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
         };
 
-        pumpkin_world::inventory::sync_read_items_from_nbt(
+        pumpkin_inventory::sync_read_items_from_nbt(
             nbt,
             dropper
                 .items
@@ -52,6 +54,14 @@ impl BlockEntity for DropperBlockEntity {
 
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
         Some(self)
+    }
+
+    fn is_comparator_dirty(&self) -> bool {
+        self.comparator_dirty.load(Ordering::Relaxed)
+    }
+
+    fn clear_comparator_dirty(&self) {
+        self.comparator_dirty.store(false, Ordering::Relaxed);
     }
 
     fn is_dirty(&self) -> bool {
@@ -85,6 +95,7 @@ impl DropperBlockEntity {
             position,
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
         }
     }
 
@@ -164,6 +175,7 @@ impl Inventory for DropperBlockEntity {
 
     fn mark_dirty(&self) {
         self.dirty.store(true, Ordering::Relaxed);
+        self.comparator_dirty.store(true, Ordering::Relaxed);
     }
 
     fn as_any(&self) -> &dyn Any {

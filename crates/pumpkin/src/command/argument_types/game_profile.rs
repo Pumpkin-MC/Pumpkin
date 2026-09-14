@@ -228,7 +228,7 @@ impl GameProfileResult {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct GameProfileArgumentType;
 
-impl ArgumentType for GameProfileArgumentType {
+impl ArgumentType<CommandSource> for GameProfileArgumentType {
     type Item = GameProfileResult;
 
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {
@@ -256,7 +256,7 @@ impl GameProfileArgumentType {
     fn parse_with_allow_selectors(
         reader: &mut StringReader,
         allow_selectors: bool,
-    ) -> Result<<Self as ArgumentType>::Item, CommandSyntaxError> {
+    ) -> Result<<Self as ArgumentType<CommandSource>>::Item, CommandSyntaxError> {
         if reader.peek() == Some('@') {
             // We read a selector variable.
             let parser = EntitySelectorParser::new(reader, allow_selectors);

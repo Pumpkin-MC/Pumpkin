@@ -5,8 +5,8 @@ use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::chunk::ChunkHeightmapType;
 use pumpkin_world::chunk::io::Dirtiable;
 use pumpkin_world::world::BlockFlags;
-use std::sync::Arc;
-use wasmtime::component::Resource;
+use std::sync::{Arc, Mutex as StdMutex};
+use wasmtime::component::{Access, HasSelf, Resource};
 
 use crate::block::entities::banner::BannerBlockEntity as InternalBannerBlockEntity;
 use crate::block::entities::barrel::BarrelBlockEntity as InternalBarrelBlockEntity;
@@ -100,6 +100,73 @@ pub(crate) const fn from_wit_game_rule_value(value: WitGameRuleValue) -> GameRul
         WitGameRuleValue::Int(v) => GameRuleValue::Int(v as i64),
         WitGameRuleValue::Bool(v) => GameRuleValue::Bool(v),
     }
+}
+
+fn from_wit_block_flags(flags: WitBlockFlags) -> BlockFlags {
+    let mut internal = BlockFlags::empty();
+    if flags.contains(WitBlockFlags::NOTIFY_NEIGHBORS) {
+        internal |= BlockFlags::NOTIFY_NEIGHBORS;
+    }
+    if flags.contains(WitBlockFlags::NOTIFY_LISTENERS) {
+        internal |= BlockFlags::NOTIFY_LISTENERS;
+    }
+    if flags.contains(WitBlockFlags::FORCE_STATE) {
+        internal |= BlockFlags::FORCE_STATE;
+    }
+    if flags.contains(WitBlockFlags::SKIP_DROPS) {
+        internal |= BlockFlags::SKIP_DROPS;
+    }
+    if flags.contains(WitBlockFlags::MOVED) {
+        internal |= BlockFlags::MOVED;
+    }
+    if flags.contains(WitBlockFlags::SKIP_REDSTONE_WIRE_STATE_REPLACEMENT) {
+        internal |= BlockFlags::SKIP_REDSTONE_WIRE_STATE_REPLACEMENT;
+    }
+    if flags.contains(WitBlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK) {
+        internal |= BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK;
+    }
+    if flags.contains(WitBlockFlags::SKIP_BLOCK_ADDED_CALLBACK) {
+        internal |= BlockFlags::SKIP_BLOCK_ADDED_CALLBACK;
+    }
+    internal
+}
+
+fn world_and_plugin(
+    state: &PluginHostState,
+    world: &Resource<World>,
+) -> wasmtime::Result<(
+    Arc<crate::world::World>,
+    Arc<crate::plugin::loader::wasm::wasm_host::WasmPlugin>,
+)> {
+    let world = state.get_world_res(world)?.provider.clone();
+    let plugin = state
+        .plugin
+        .as_ref()
+        .and_then(std::sync::Weak::upgrade)
+        .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))?;
+    Ok((world, plugin))
+}
+
+async fn set_block_state_with_store(
+    mut host: Access<'_, PluginHostState, HasSelf<PluginHostState>>,
+    world: Resource<World>,
+    pos: WitBlockPos,
+    state: u16,
+    update_flags: WitBlockFlags,
+) -> wasmtime::Result<()> {
+    let Some(state_id) = BlockStateId::new(state) else {
+        return Err(wasmtime::Error::msg("Invalid BlockStateId"));
+    };
+    let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
+    let internal_flags = from_wit_block_flags(update_flags);
+    let (world, plugin) = world_and_plugin(host.get(), &world)?;
+
+    plugin
+        .store
+        .pump_blocking(&mut host, move || {
+            world.set_block_state(&internal_pos, state_id, internal_flags);
+        })
+        .await
 }
 
 pub(crate) const fn to_wasm_block_direction(dir: InternalBlockDirection) -> WitBlockDirection {
@@ -655,99 +722,6 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         Ok(pumpkin_data::BlockId::from_state_id(state.id).as_u16())
     }
 
-    async fn set_block(
-        &mut self,
-        world: Resource<World>,
-        pos: WitBlockPos,
-        block: WitBlock,
-        update_flags: WitBlockFlags,
-    ) -> wasmtime::Result<()> {
-        let block_id = BlockId::new_or_air(block.id);
-        let default_state_id = pumpkin_data::Block::from_id(block_id)
-            .default_state
-            .id
-            .as_u16();
-        self.set_block_state(world, pos, default_state_id, update_flags)
-            .await
-    }
-
-    async fn set_block_by_id(
-        &mut self,
-        world: Resource<World>,
-        pos: WitBlockPos,
-        block_id: u16,
-        update_flags: WitBlockFlags,
-    ) -> wasmtime::Result<()> {
-        let Some(id) = BlockId::new(block_id) else {
-            return Err(wasmtime::Error::msg("Invalid BlockId"));
-        };
-        let default_state_id = pumpkin_data::Block::from_id(id).default_state.id.as_u16();
-        self.set_block_state(world, pos, default_state_id, update_flags)
-            .await
-    }
-
-    async fn set_block_by_name(
-        &mut self,
-        world: Resource<World>,
-        pos: WitBlockPos,
-        name: String,
-        update_flags: WitBlockFlags,
-    ) -> wasmtime::Result<bool> {
-        if let Some(block) = pumpkin_data::Block::from_name(&name) {
-            let default_state_id = block.default_state.id.as_u16();
-            self.set_block_state(world, pos, default_state_id, update_flags)
-                .await?;
-            Ok(true)
-        } else {
-            Ok(false)
-        }
-    }
-
-    async fn set_block_state(
-        &mut self,
-        world: Resource<World>,
-        pos: WitBlockPos,
-        state: u16,
-        update_flags: WitBlockFlags,
-    ) -> wasmtime::Result<()> {
-        let world_ref = self.get_world_res(&world)?;
-        let internal_pos = BlockPos::new(pos.x, pos.y, pos.z);
-
-        let mut internal_flags = BlockFlags::empty();
-        if update_flags.contains(WitBlockFlags::NOTIFY_NEIGHBORS) {
-            internal_flags |= BlockFlags::NOTIFY_NEIGHBORS;
-        }
-        if update_flags.contains(WitBlockFlags::NOTIFY_LISTENERS) {
-            internal_flags |= BlockFlags::NOTIFY_LISTENERS;
-        }
-        if update_flags.contains(WitBlockFlags::FORCE_STATE) {
-            internal_flags |= BlockFlags::FORCE_STATE;
-        }
-        if update_flags.contains(WitBlockFlags::SKIP_DROPS) {
-            internal_flags |= BlockFlags::SKIP_DROPS;
-        }
-        if update_flags.contains(WitBlockFlags::MOVED) {
-            internal_flags |= BlockFlags::MOVED;
-        }
-        if update_flags.contains(WitBlockFlags::SKIP_REDSTONE_WIRE_STATE_REPLACEMENT) {
-            internal_flags |= BlockFlags::SKIP_REDSTONE_WIRE_STATE_REPLACEMENT;
-        }
-        if update_flags.contains(WitBlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK) {
-            internal_flags |= BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK;
-        }
-        if update_flags.contains(WitBlockFlags::SKIP_BLOCK_ADDED_CALLBACK) {
-            internal_flags |= BlockFlags::SKIP_BLOCK_ADDED_CALLBACK;
-        }
-        let Some(state) = BlockStateId::new(state) else {
-            return Err(wasmtime::Error::msg("Invalid BlockStateId"));
-        };
-        world_ref
-            .provider
-            .clone()
-            .set_block_state(&internal_pos, state, internal_flags);
-        Ok(())
-    }
-
     async fn get_time_of_day(&mut self, world: Resource<World>) -> wasmtime::Result<u64> {
         Ok(self.get_world_res(&world)?.provider.get_time_of_day() as u64)
     }
@@ -801,24 +775,8 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         Ok(self.get_world_res(&world)?.provider.is_raining())
     }
 
-    async fn set_raining(&mut self, world: Resource<World>, raining: bool) -> wasmtime::Result<()> {
-        self.get_world_res(&world)?.provider.set_raining(raining);
-        Ok(())
-    }
-
     async fn is_thundering(&mut self, world: Resource<World>) -> wasmtime::Result<bool> {
         Ok(self.get_world_res(&world)?.provider.is_thundering())
-    }
-
-    async fn set_thundering(
-        &mut self,
-        world: Resource<World>,
-        thundering: bool,
-    ) -> wasmtime::Result<()> {
-        self.get_world_res(&world)?
-            .provider
-            .set_thundering(thundering);
-        Ok(())
     }
 
     async fn broadcast_system_message(
@@ -922,30 +880,6 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         Ok(())
     }
 
-    async fn create_explosion(
-        &mut self,
-        world: Resource<World>,
-        pos: pumpkin::plugin::common::Position,
-        power: f32,
-        _create_fire: bool,
-        interaction: pumpkin::plugin::world::ExplosionInteraction,
-    ) -> wasmtime::Result<()> {
-        let world_ref = self.get_world_res(&world)?;
-        let interaction = match interaction {
-            pumpkin::plugin::world::ExplosionInteraction::None => ExplosionInteraction::None,
-            pumpkin::plugin::world::ExplosionInteraction::Block => ExplosionInteraction::Block,
-            pumpkin::plugin::world::ExplosionInteraction::Mob => ExplosionInteraction::Mob,
-            pumpkin::plugin::world::ExplosionInteraction::Tnt => ExplosionInteraction::Tnt,
-            pumpkin::plugin::world::ExplosionInteraction::Trigger => ExplosionInteraction::Trigger,
-        };
-        world_ref.provider.explode(
-            pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
-            power,
-            interaction,
-        );
-        Ok(())
-    }
-
     async fn get_sea_level(&mut self, world: Resource<World>) -> wasmtime::Result<i32> {
         Ok(self.get_world_res(&world)?.provider.sea_level)
     }
@@ -1015,30 +949,6 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         Self::get_wit_biome(biome)
     }
 
-    async fn spawn_entity(
-        &mut self,
-        world: Resource<World>,
-        entity_type: pumpkin::plugin::entity_types::EntityType,
-        pos: pumpkin::plugin::common::Position,
-    ) -> wasmtime::Result<Resource<pumpkin::plugin::world::Entity>> {
-        let world_ref = self.get_world_res(&world)?;
-        let world_provider = world_ref.provider.clone();
-
-        let internal_type = super::entity::from_wit_entity_type(entity_type)?;
-
-        let internal_pos = pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2);
-        let entity = crate::entity::r#type::from_type(
-            internal_type,
-            internal_pos,
-            &world_provider,
-            uuid::Uuid::new_v4(),
-        );
-
-        world_provider.spawn_entity(entity.clone());
-
-        self.add_entity(entity)
-    }
-
     async fn get_entities(
         &mut self,
         world: Resource<World>,
@@ -1057,18 +967,6 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         }
 
         Ok(entities)
-    }
-
-    async fn strike_lightning(
-        &mut self,
-        world: Resource<World>,
-        pos: WitPosition,
-        effect_only: bool,
-    ) -> wasmtime::Result<()> {
-        let world_provider = self.get_world_res(&world)?.provider.clone();
-        let internal_pos = super::events::from_wasm_position(pos);
-        world_provider.strike_lightning(internal_pos, effect_only);
-        Ok(())
     }
 
     async fn ray_trace_blocks(
@@ -1261,12 +1159,6 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
             .to_string())
     }
 
-    async fn save(&mut self, world: Resource<World>) -> wasmtime::Result<Result<(), String>> {
-        let world_res = self.get_world_res(&world)?;
-        world_res.provider.save().await;
-        Ok(Ok(()))
-    }
-
     async fn set_custom_data(
         &mut self,
         world: Resource<World>,
@@ -1343,6 +1235,155 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
             .delete::<WorldResource>(Resource::new_own(rep.rep()))
             .map_err(wasmtime::Error::from)?;
         Ok(())
+    }
+}
+
+impl pumpkin::plugin::world::HostWorldWithStore<PluginHostState> for HasSelf<PluginHostState> {
+    async fn set_raining(
+        mut host: Access<'_, PluginHostState, Self>,
+        world: Resource<World>,
+        raining: bool,
+    ) -> wasmtime::Result<()> {
+        let (world, plugin) = world_and_plugin(host.get(), &world)?;
+        plugin
+            .store
+            .pump_blocking(&mut host, move || world.set_raining(raining))
+            .await
+    }
+
+    async fn set_thundering(
+        mut host: Access<'_, PluginHostState, Self>,
+        world: Resource<World>,
+        thundering: bool,
+    ) -> wasmtime::Result<()> {
+        let (world, plugin) = world_and_plugin(host.get(), &world)?;
+        plugin
+            .store
+            .pump_blocking(&mut host, move || world.set_thundering(thundering))
+            .await
+    }
+
+    async fn create_explosion(
+        mut host: Access<'_, PluginHostState, Self>,
+        world: Resource<World>,
+        pos: pumpkin::plugin::common::Position,
+        power: f32,
+        _create_fire: bool,
+        interaction: pumpkin::plugin::world::ExplosionInteraction,
+    ) -> wasmtime::Result<()> {
+        let (world, plugin) = world_and_plugin(host.get(), &world)?;
+        let interaction = match interaction {
+            pumpkin::plugin::world::ExplosionInteraction::None => ExplosionInteraction::None,
+            pumpkin::plugin::world::ExplosionInteraction::Block => ExplosionInteraction::Block,
+            pumpkin::plugin::world::ExplosionInteraction::Mob => ExplosionInteraction::Mob,
+            pumpkin::plugin::world::ExplosionInteraction::Tnt => ExplosionInteraction::Tnt,
+            pumpkin::plugin::world::ExplosionInteraction::Trigger => ExplosionInteraction::Trigger,
+        };
+        let pos = pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2);
+        plugin
+            .store
+            .pump_blocking(&mut host, move || world.explode(pos, power, interaction))
+            .await
+    }
+
+    async fn spawn_entity(
+        mut host: Access<'_, PluginHostState, Self>,
+        world: Resource<World>,
+        entity_type: pumpkin::plugin::entity_types::EntityType,
+        pos: pumpkin::plugin::common::Position,
+    ) -> wasmtime::Result<Resource<pumpkin::plugin::world::Entity>> {
+        let (world, plugin) = world_and_plugin(host.get(), &world)?;
+
+        let internal_type = super::entity::from_wit_entity_type(entity_type)?;
+        let pos = pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2);
+        let entity =
+            crate::entity::r#type::from_type(internal_type, pos, &world, uuid::Uuid::new_v4());
+        let spawned_entity = Arc::clone(&entity);
+        plugin
+            .store
+            .pump_blocking(&mut host, move || world.spawn_entity(spawned_entity))
+            .await?;
+        host.get().add_entity(entity)
+    }
+
+    async fn strike_lightning(
+        mut host: Access<'_, PluginHostState, Self>,
+        world: Resource<World>,
+        pos: WitPosition,
+        effect_only: bool,
+    ) -> wasmtime::Result<()> {
+        let (world, plugin) = world_and_plugin(host.get(), &world)?;
+        let pos = super::events::from_wasm_position(pos);
+        plugin
+            .store
+            .pump_blocking(&mut host, move || world.strike_lightning(pos, effect_only))
+            .await
+    }
+
+    async fn save(
+        mut host: Access<'_, PluginHostState, Self>,
+        world: Resource<World>,
+    ) -> wasmtime::Result<Result<(), String>> {
+        let (world, plugin) = world_and_plugin(host.get(), &world)?;
+        plugin
+            .store
+            .pump_reentry(&mut host, async move { world.save().await })
+            .await?;
+        Ok(Ok(()))
+    }
+
+    async fn set_block(
+        host: Access<'_, PluginHostState, Self>,
+        world: Resource<World>,
+        pos: WitBlockPos,
+        block: WitBlock,
+        update_flags: WitBlockFlags,
+    ) -> wasmtime::Result<()> {
+        let block_id = BlockId::new_or_air(block.id);
+        let default_state_id = pumpkin_data::Block::from_id(block_id)
+            .default_state
+            .id
+            .as_u16();
+        set_block_state_with_store(host, world, pos, default_state_id, update_flags).await
+    }
+
+    async fn set_block_by_id(
+        host: Access<'_, PluginHostState, Self>,
+        world: Resource<World>,
+        pos: WitBlockPos,
+        block_id: u16,
+        update_flags: WitBlockFlags,
+    ) -> wasmtime::Result<()> {
+        let Some(id) = BlockId::new(block_id) else {
+            return Err(wasmtime::Error::msg("Invalid BlockId"));
+        };
+        let default_state_id = pumpkin_data::Block::from_id(id).default_state.id.as_u16();
+        set_block_state_with_store(host, world, pos, default_state_id, update_flags).await
+    }
+
+    async fn set_block_by_name(
+        host: Access<'_, PluginHostState, Self>,
+        world: Resource<World>,
+        pos: WitBlockPos,
+        name: String,
+        update_flags: WitBlockFlags,
+    ) -> wasmtime::Result<bool> {
+        let Some(block) = pumpkin_data::Block::from_name(&name) else {
+            return Ok(false);
+        };
+        let default_state_id = block.default_state.id.as_u16();
+        set_block_state_with_store(host, world, pos, default_state_id, update_flags).await?;
+        Ok(true)
+    }
+
+    async fn set_block_state(
+        host: Access<'_, PluginHostState, Self>,
+        world: Resource<World>,
+        pos: WitBlockPos,
+        state: u16,
+        update_flags: WitBlockFlags,
+    ) -> wasmtime::Result<()> {
+        set_block_state_with_store(host, world, pos, state, update_flags).await
     }
 }
 
@@ -2003,8 +2044,11 @@ impl pumpkin::plugin::world::HostChunkBuffer for PluginHostState {
             let world_z =
                 pumpkin_world::generation::positions::chunk_pos::start_block_z(res.provider.z)
                     + z as i32;
-            // SAFETY: `proto_chunk` points to a valid proto chunk allocated for world generation and is not aliased across threads.
-            let proto = unsafe { &mut *res.provider.proto_chunk };
+            let mut proto = res
+                .provider
+                .proto_chunk
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             let block_state = pumpkin_data::BlockState::from_id(
                 pumpkin_data::BlockStateId::new(state_id)
                     .unwrap_or(pumpkin_data::BlockStateId::AIR),
@@ -2023,8 +2067,11 @@ impl pumpkin::plugin::world::HostChunkBuffer for PluginHostState {
     ) -> wasmtime::Result<u16> {
         let res = self.get_chunk_buffer_res(&this)?;
         if x < 16 && z < 16 {
-            // SAFETY: `proto_chunk` points to a valid proto chunk allocated for world generation and is not aliased across threads.
-            let proto = unsafe { &*res.provider.proto_chunk };
+            let proto = res
+                .provider
+                .proto_chunk
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             let local_y = y - proto.bottom_y() as i32;
             if local_y >= 0 && local_y < proto.height() as i32 {
                 Ok(proto
@@ -2052,8 +2099,11 @@ impl pumpkin::plugin::world::HostChunkBuffer for PluginHostState {
         let block_state = pumpkin_data::BlockState::from_id(
             pumpkin_data::BlockStateId::new(state_id).unwrap_or(pumpkin_data::BlockStateId::AIR),
         );
-        // SAFETY: `proto_chunk` points to a valid proto chunk allocated for world generation and is not aliased across threads.
-        let proto = unsafe { &mut *res.provider.proto_chunk };
+        let mut proto = res
+            .provider
+            .proto_chunk
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         for x in 0..16 {
             for z in 0..16 {
                 proto.set_block_state(start_x + x, y, start_z + z, block_state);
@@ -2083,8 +2133,11 @@ impl pumpkin::plugin::world::HostChunkBuffer for PluginHostState {
                 pumpkin_data::BlockStateId::new(state_id)
                     .unwrap_or(pumpkin_data::BlockStateId::AIR),
             );
-            // SAFETY: `proto_chunk` points to a valid proto chunk allocated for world generation and is not aliased across threads.
-            let proto = unsafe { &mut *res.provider.proto_chunk };
+            let mut proto = res
+                .provider
+                .proto_chunk
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             for y in min_y..=max_y {
                 proto.set_block_state(world_x, y, world_z, block_state);
             }
@@ -2111,8 +2164,11 @@ impl pumpkin::plugin::world::HostChunkBuffer for PluginHostState {
         let block_state = pumpkin_data::BlockState::from_id(
             pumpkin_data::BlockStateId::new(state_id).unwrap_or(pumpkin_data::BlockStateId::AIR),
         );
-        // SAFETY: `proto_chunk` points to a valid proto chunk allocated for world generation and is not aliased across threads.
-        let proto = unsafe { &mut *res.provider.proto_chunk };
+        let mut proto = res
+            .provider
+            .proto_chunk
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let max_x = max_x.min(15);
         let max_z = max_z.min(15);
         for x in min_x..=max_x {
@@ -2136,8 +2192,11 @@ impl pumpkin::plugin::world::HostChunkBuffer for PluginHostState {
         let res = self.get_chunk_buffer_res(&this)?;
         if x < 16 && z < 16 {
             let biome_id = biome as u8;
-            // SAFETY: `proto_chunk` points to a valid proto chunk allocated for world generation and is not aliased across threads.
-            let proto = unsafe { &mut *res.provider.proto_chunk };
+            let mut proto = res
+                .provider
+                .proto_chunk
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             let biome_x = x as i32 / 4;
             let biome_z = z as i32 / 4;
             let biome_y = (y - proto.bottom_y() as i32) / 4;
@@ -2158,8 +2217,11 @@ impl pumpkin::plugin::world::HostChunkBuffer for PluginHostState {
     ) -> wasmtime::Result<()> {
         let res = self.get_chunk_buffer_res(&this)?;
         let biome_id = biome as u8;
-        // SAFETY: `proto_chunk` points to a valid proto chunk allocated for world generation and is not aliased across threads.
-        let proto = unsafe { &mut *res.provider.proto_chunk };
+        let mut proto = res
+            .provider
+            .proto_chunk
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         proto.flat_biome_map.fill(biome_id);
         Ok(())
     }
@@ -2177,6 +2239,22 @@ impl pumpkin::plugin::world::HostChunkBuffer for PluginHostState {
     }
 }
 
+struct ProtoChunkRestore<'a> {
+    target: &'a mut pumpkin_world::ProtoChunk,
+    source: Arc<StdMutex<pumpkin_world::ProtoChunk>>,
+}
+
+impl Drop for ProtoChunkRestore<'_> {
+    fn drop(&mut self) {
+        let mut source = self
+            .source
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        std::mem::swap(self.target, &mut source);
+    }
+}
+
+#[derive(Clone)]
 pub struct WasmChunkGenerator {
     pub generator_id: u32,
     pub plugin: Arc<crate::plugin::loader::wasm::wasm_host::WasmPlugin>,
@@ -2191,39 +2269,58 @@ impl WasmChunkGenerator {
         phase: pumpkin::plugin::world::GenerationPhase,
         proto_chunk: &mut pumpkin_world::ProtoChunk,
     ) {
+        let x = proto_chunk.x;
+        let z = proto_chunk.z;
+        let min_y = proto_chunk.bottom_y() as i32;
+        let height = proto_chunk.height() as u32;
+        let placeholder_generator =
+            pumpkin_world::generation::generator::WorldGenerator::Custom(Arc::new(self.clone()));
+        let placeholder = pumpkin_world::ProtoChunk::new(x, z, &placeholder_generator);
+        let owned_proto_chunk = std::mem::replace(proto_chunk, placeholder);
+        let shared_proto_chunk = Arc::new(StdMutex::new(owned_proto_chunk));
+        let _restore = ProtoChunkRestore {
+            target: proto_chunk,
+            source: Arc::clone(&shared_proto_chunk),
+        };
         let chunk_buffer = crate::plugin::loader::wasm::wasm_host::state::ChunkBuffer {
-            x: proto_chunk.x,
-            z: proto_chunk.z,
-            min_y: proto_chunk.bottom_y() as i32,
-            height: proto_chunk.height() as u32,
-            proto_chunk,
+            x,
+            z,
+            min_y,
+            height,
+            proto_chunk: Arc::clone(&shared_proto_chunk),
         };
 
+        let function = match self.plugin.plugin_instance.as_ref() {
+            crate::plugin::loader::wasm::wasm_host::PluginInstance::V0_1(plugin) => {
+                plugin.func_handle_generate_phase()
+            }
+        };
+        let generator_id = self.generator_id;
         let run = async {
-            let mut store = self.plugin.store.lock().await;
-            let Ok(buffer_res) = store.data_mut().add_chunk_buffer(chunk_buffer) else {
-                return;
-            };
-            let buffer_rep = buffer_res.rep();
-
-            match self.plugin.plugin_instance {
-                crate::plugin::loader::wasm::wasm_host::PluginInstance::V0_1(ref plugin) => {
-                    let _ = plugin
-                        .call_handle_generate_phase(
-                            &mut *store,
-                            self.generator_id,
-                            phase,
-                            buffer_res,
-                        )
-                        .await;
-
-                    let _ = store
-                        .data_mut()
-                        .resource_table
-                        .delete::<crate::plugin::loader::wasm::wasm_host::state::ChunkBufferResource>(
-                            wasmtime::component::Resource::new_own(buffer_rep),
-                        );
-                }
+            let result = self
+                .plugin
+                .store
+                .call_guest(move |mut guest| {
+                    Box::pin(async move {
+                        let (buffer_resource, buffer_rep) = guest.with(|mut store| {
+                            let resource = store.data_mut().add_chunk_buffer(chunk_buffer)?;
+                            let rep = resource.rep();
+                            Ok::<_, wasmtime::Error>((resource, rep))
+                        })?;
+                        let result = guest
+                            .call(function, (generator_id, phase, buffer_resource))
+                            .await;
+                        guest.with(|mut store| {
+                            let _ = store.data_mut().resource_table.delete::<
+                                crate::plugin::loader::wasm::wasm_host::state::ChunkBufferResource,
+                            >(wasmtime::component::Resource::new_own(buffer_rep));
+                        });
+                        result
+                    })
+                })
+                .await;
+            if let Err(error) = result {
+                panic!("Wasm chunk generation phase failed for generator {generator_id}: {error}");
             }
         };
 

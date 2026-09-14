@@ -55,10 +55,6 @@ impl PlantBlockBase for NetherWartBlock {
 }
 
 impl CropBlockBase for NetherWartBlock {
-    fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
-        <Self as PlantBlockBase>::can_plant_on_top(self, block_accessor, pos)
-    }
-
     fn max_age(&self) -> i32 {
         3
     }

@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use wasmtime::component::Resource;
+use wasmtime::component::{Access, HasSelf, Resource};
 
 use pumpkin_util::math::vector3::Vector3;
 
@@ -37,6 +37,16 @@ pub fn entity_from_resource(
         .get::<EntityResource>(&Resource::new_own(entity.rep()))
         .map_err(|_| wasmtime::Error::msg("invalid entity resource handle"))
         .map(|resource| resource.provider.clone())
+}
+
+fn active_plugin(
+    state: &PluginHostState,
+) -> wasmtime::Result<Arc<crate::plugin::loader::wasm::wasm_host::WasmPlugin>> {
+    state
+        .plugin
+        .as_ref()
+        .and_then(std::sync::Weak::upgrade)
+        .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))
 }
 
 const fn map_entity_pose(pose: InternalEntityPose) -> EntityPose {
@@ -149,29 +159,6 @@ impl HostEntity for PluginHostState {
             .load(std::sync::atomic::Ordering::Relaxed))
     }
 
-    async fn teleport(
-        &mut self,
-        entity: Resource<Entity>,
-        pos: Position,
-        world_ref: Resource<World>,
-    ) -> wasmtime::Result<()> {
-        let entity_base = entity_from_resource(self, &entity)?;
-        let world = self
-            .resource_table
-            .get::<crate::plugin::loader::wasm::wasm_host::state::WorldResource>(
-                &Resource::new_own(world_ref.rep()),
-            )
-            .map_err(|_| wasmtime::Error::msg("invalid world resource handle"))?;
-        let world = world.provider.clone();
-        entity_base.teleport(
-            pumpkin_util::math::vector3::Vector3::new(pos.0, pos.1, pos.2),
-            None,
-            None,
-            world,
-        );
-        Ok(())
-    }
-
     async fn set_velocity(
         &mut self,
         entity: Resource<Entity>,
@@ -218,16 +205,6 @@ impl HostEntity for PluginHostState {
             .get_entity()
             .swimming
             .load(std::sync::atomic::Ordering::Relaxed))
-    }
-
-    async fn set_swimming(
-        &mut self,
-        entity: Resource<Entity>,
-        swimming: bool,
-    ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
-        entity.get_entity().set_swimming(swimming);
-        Ok(())
     }
 
     async fn set_invisible(
@@ -497,35 +474,6 @@ impl HostEntity for PluginHostState {
         }
     }
 
-    async fn set_vehicle(
-        &mut self,
-        entity: Resource<Entity>,
-        vehicle: Option<Resource<Entity>>,
-    ) -> wasmtime::Result<()> {
-        let entity_base = entity_from_resource(self, &entity)?;
-
-        // Remove from current vehicle if any
-        let current_vehicle = entity_base
-            .get_entity()
-            .vehicle
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
-        if let Some(v) = current_vehicle {
-            v.get_entity()
-                .remove_passenger(entity_base.get_entity().entity_id);
-        }
-
-        if let Some(vehicle_res) = vehicle {
-            let vehicle_base = entity_from_resource(self, &vehicle_res)?;
-            vehicle_base
-                .get_entity()
-                .add_passenger(vehicle_base.clone(), entity_base);
-        }
-
-        Ok(())
-    }
-
     async fn get_passengers(
         &mut self,
         entity: Resource<Entity>,
@@ -544,48 +492,6 @@ impl HostEntity for PluginHostState {
             );
         }
         Ok(result)
-    }
-
-    async fn add_passenger(
-        &mut self,
-        entity: Resource<Entity>,
-        passenger: Resource<Entity>,
-    ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
-        let passenger = entity_from_resource(self, &passenger)?;
-        entity
-            .get_entity()
-            .add_passenger(Arc::clone(&entity), passenger);
-        Ok(())
-    }
-
-    async fn remove_passenger(
-        &mut self,
-        entity: Resource<Entity>,
-        passenger: Resource<Entity>,
-    ) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
-        let passenger = entity_from_resource(self, &passenger)?;
-        entity
-            .get_entity()
-            .remove_passenger(passenger.get_entity().entity_id);
-        Ok(())
-    }
-
-    async fn eject_passengers(&mut self, entity: Resource<Entity>) -> wasmtime::Result<()> {
-        let entity = entity_from_resource(self, &entity)?;
-        let ids: Vec<i32> = entity
-            .get_entity()
-            .passengers
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .iter()
-            .map(|p| p.get_entity().entity_id)
-            .collect();
-        for id in ids {
-            entity.get_entity().remove_passenger(id);
-        }
-        Ok(())
     }
 
     async fn get_bounding_box(
@@ -908,6 +814,164 @@ impl HostEntity for PluginHostState {
             .resource_table
             .delete::<EntityResource>(Resource::new_own(rep.rep()));
         Ok(())
+    }
+}
+
+impl
+    crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::world::HostEntityWithStore<
+        PluginHostState,
+    > for HasSelf<PluginHostState>
+{
+    async fn teleport(
+        mut host: Access<'_, PluginHostState, Self>,
+        entity: Resource<Entity>,
+        pos: Position,
+        world_ref: Resource<World>,
+    ) -> wasmtime::Result<()> {
+        let (entity, world, plugin) = {
+            let state = host.get();
+            let entity = entity_from_resource(state, &entity)?;
+            let world = state
+                .resource_table
+                .get::<crate::plugin::loader::wasm::wasm_host::state::WorldResource>(
+                    &Resource::new_own(world_ref.rep()),
+                )
+                .map_err(|_| wasmtime::Error::msg("invalid world resource handle"))?
+                .provider
+                .clone();
+            (entity, world, active_plugin(state)?)
+        };
+        let pos = Vector3::new(pos.0, pos.1, pos.2);
+        plugin
+            .store
+            .pump_blocking(&mut host, move || entity.teleport(pos, None, None, world))
+            .await
+    }
+
+    async fn set_swimming(
+        mut host: Access<'_, PluginHostState, Self>,
+        entity: Resource<Entity>,
+        swimming: bool,
+    ) -> wasmtime::Result<()> {
+        let (entity, plugin) = {
+            let state = host.get();
+            (entity_from_resource(state, &entity)?, active_plugin(state)?)
+        };
+        plugin
+            .store
+            .pump_blocking(&mut host, move || {
+                entity.get_entity().set_swimming(swimming);
+            })
+            .await
+    }
+
+    async fn set_vehicle(
+        mut host: Access<'_, PluginHostState, Self>,
+        entity: Resource<Entity>,
+        vehicle: Option<Resource<Entity>>,
+    ) -> wasmtime::Result<()> {
+        let (entity, vehicle, plugin) = {
+            let state = host.get();
+            let entity = entity_from_resource(state, &entity)?;
+            let vehicle = vehicle
+                .as_ref()
+                .map(|vehicle| entity_from_resource(state, vehicle))
+                .transpose()?;
+            (entity, vehicle, active_plugin(state)?)
+        };
+        plugin
+            .store
+            .pump_blocking(&mut host, move || {
+                let current_vehicle = entity
+                    .get_entity()
+                    .vehicle
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone();
+                if let Some(current_vehicle) = current_vehicle {
+                    current_vehicle
+                        .get_entity()
+                        .remove_passenger(entity.get_entity().entity_id);
+                }
+                if let Some(vehicle) = vehicle {
+                    vehicle
+                        .get_entity()
+                        .add_passenger(Arc::clone(&vehicle), entity);
+                }
+            })
+            .await
+    }
+
+    async fn add_passenger(
+        mut host: Access<'_, PluginHostState, Self>,
+        entity: Resource<Entity>,
+        passenger: Resource<Entity>,
+    ) -> wasmtime::Result<()> {
+        let (entity, passenger, plugin) = {
+            let state = host.get();
+            (
+                entity_from_resource(state, &entity)?,
+                entity_from_resource(state, &passenger)?,
+                active_plugin(state)?,
+            )
+        };
+        plugin
+            .store
+            .pump_blocking(&mut host, move || {
+                entity
+                    .get_entity()
+                    .add_passenger(Arc::clone(&entity), passenger);
+            })
+            .await
+    }
+
+    async fn remove_passenger(
+        mut host: Access<'_, PluginHostState, Self>,
+        entity: Resource<Entity>,
+        passenger: Resource<Entity>,
+    ) -> wasmtime::Result<()> {
+        let (entity, passenger_id, plugin) = {
+            let state = host.get();
+            let entity = entity_from_resource(state, &entity)?;
+            let passenger = entity_from_resource(state, &passenger)?;
+            (
+                entity,
+                passenger.get_entity().entity_id,
+                active_plugin(state)?,
+            )
+        };
+        plugin
+            .store
+            .pump_blocking(&mut host, move || {
+                entity.get_entity().remove_passenger(passenger_id);
+            })
+            .await
+    }
+
+    async fn eject_passengers(
+        mut host: Access<'_, PluginHostState, Self>,
+        entity: Resource<Entity>,
+    ) -> wasmtime::Result<()> {
+        let (entity, plugin) = {
+            let state = host.get();
+            (entity_from_resource(state, &entity)?, active_plugin(state)?)
+        };
+        plugin
+            .store
+            .pump_blocking(&mut host, move || {
+                let passenger_ids: Vec<i32> = entity
+                    .get_entity()
+                    .passengers
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .iter()
+                    .map(|passenger| passenger.get_entity().entity_id)
+                    .collect();
+                for passenger_id in passenger_ids {
+                    entity.get_entity().remove_passenger(passenger_id);
+                }
+            })
+            .await
     }
 }
 
