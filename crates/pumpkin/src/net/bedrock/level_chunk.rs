@@ -76,24 +76,27 @@ impl CLevelChunk<'_> {
         VarInt(chunk.z).write(&mut writer)?;
 
         VarInt(dimension).write(&mut writer)?;
-        let sub_chunk_count = chunk.section.count as u32;
-        VarUInt(sub_chunk_count).write(&mut writer)?;
-        // Optional sub-chunk request limit. Pumpkin sends complete chunks.
-        false.write(&mut writer)?;
-        cache_enabled.write(&mut writer)?;
-
-        let mut blobs = Vec::new();
-
         let block_sections = chunk
             .section
             .block_sections
             .read()
             .map_err(|_| Error::other("block_sections read lock poisoned"))?;
+        // all-air sub-chunks above the highest non-air one are not sent.
+        let sub_chunk_count = block_sections
+            .iter()
+            .rposition(|section| !section.has_only_air())
+            .map_or(0, |index| index + 1);
+        VarUInt(sub_chunk_count as u32).write(&mut writer)?;
+        // Optional sub-chunk request limit. Pumpkin sends complete chunks otherwise.
+        false.write(&mut writer)?;
+        cache_enabled.write(&mut writer)?;
+
+        let mut blobs = Vec::new();
         let min_y_section = (chunk.section.min_y >> 4) as i8;
 
-        let mut subchunk_bytes_list = Vec::with_capacity(block_sections.len());
+        let mut subchunk_bytes_list = Vec::with_capacity(sub_chunk_count);
 
-        for (i, block_palette) in block_sections.iter().enumerate() {
+        for (i, block_palette) in block_sections.iter().take(sub_chunk_count).enumerate() {
             let mut subchunk_buf = Vec::new();
             // Version 9: [version:byte][num_storages:byte][sub_chunk_index:byte]
             let y = (i as i8) + min_y_section;
@@ -262,7 +265,7 @@ mod tests {
         for _ in 0..3 {
             read_var_uint(&encoded, &mut offset);
         }
-        assert_eq!(read_var_uint(&encoded, &mut offset), 24);
+        assert_eq!(read_var_uint(&encoded, &mut offset), 0); // All air -> no sub-chunks.
         assert_eq!(encoded[offset], 0); // No sub-chunk request limit.
         assert_eq!(encoded[offset + 1], 0); // Cache disabled.
         offset += 2;
@@ -272,13 +275,6 @@ mod tests {
         assert_eq!(raw.len(), raw_len);
 
         let mut raw_offset = 0;
-        for y in -4i8..20 {
-            assert_eq!(&raw[raw_offset..raw_offset + 3], &[9, 1, y as u8]);
-            raw_offset += 3;
-            assert_eq!(raw[raw_offset], 1); // Single-value block palette.
-            raw_offset += 1;
-            read_var_uint(raw, &mut raw_offset);
-        }
         for _ in 0..24 {
             assert_eq!(raw[raw_offset], 1); // No version/storage/Y prefix.
             raw_offset += 1;
@@ -286,6 +282,22 @@ mod tests {
         }
         assert_eq!(raw[raw_offset], 0); // Border block count.
         assert_eq!(raw_offset + 1, raw.len());
+    }
+
+    #[test]
+    fn trailing_air_sub_chunks_are_not_sent() {
+        let chunk = empty_chunk();
+        chunk
+            .section
+            .set_block_absolute_y(0, 0, 0, Block::STONE.default_state.id);
+
+        let (encoded, _) = CLevelChunk::encode_chunk(&chunk, 0, false, &[]).unwrap();
+        let mut offset = 0;
+        for _ in 0..3 {
+            read_var_uint(&encoded, &mut offset);
+        }
+        // y = 0 is sub-chunk index 4 above min_y -64.
+        assert_eq!(read_var_uint(&encoded, &mut offset), 5);
     }
 
     #[test]

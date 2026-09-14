@@ -756,10 +756,6 @@ impl EnderDragonEntity {
                 pos.z + (cc1 * 1.5 + cc * dd) * cc_tilt,
             ));
         }
-
-        for part in &self.parts {
-            part.entity.send_pos_rot();
-        }
     }
 
     pub fn ai_step(&self) {
@@ -832,7 +828,6 @@ impl EnderDragonEntity {
             }
         }
 
-        self.mob_entity.living_entity.entity.send_pos_rot();
         self.tick_parts();
     }
 
