@@ -135,6 +135,14 @@ impl TargetPredicate {
             return false;
         }
 
+        // Mirrors vanilla `TargetingConditions.test`, which runs the custom
+        // selector last, after the generic attackability/range/visibility checks.
+        if let Some(predicate) = &self.predicate
+            && !predicate(target, world)
+        {
+            return false;
+        }
+
         true
     }
 }
