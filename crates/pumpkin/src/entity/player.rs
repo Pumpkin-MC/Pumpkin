@@ -3577,6 +3577,25 @@ impl Player {
         sb.get_entity_team(&self.gameprofile.name).cloned()
     }
 
+    pub fn get_team_name(&self) -> Option<String> {
+        let guard = self
+            .custom_scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(CustomScoreboard::Java(sb)) = guard.as_ref()
+            && let Some(team) = sb.get_entity_team(&self.gameprofile.name)
+        {
+            return Some(team.name.clone());
+        }
+        let world = self.world();
+        let sb = world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        sb.get_entity_team(&self.gameprofile.name)
+            .map(|team| team.name.clone())
+    }
+
     pub fn set_compass_target(&self, pos: pumpkin_util::math::position::BlockPos) {
         use pumpkin_protocol::java::client::play::CPlayerSpawnPosition;
         self.compass_target.store(Some(pos));

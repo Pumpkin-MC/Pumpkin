@@ -266,16 +266,32 @@ pub trait EntityBase: Send + Sync + std::any::Any {
             .scoreboard
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if scoreboard.get_teams().is_empty() {
+            return None;
+        }
         scoreboard
             .get_entity_team(&self.get_scoreboard_name())
             .cloned()
     }
 
-    fn is_allied_to_team(&self, other: Option<&crate::world::scoreboard::Team>) -> bool {
-        match (self.get_team(), other) {
-            (Some(team), Some(other)) => team.name == other.name,
-            _ => false,
+    /// The team name alone, which is all the ally checks need. Worth having because
+    /// they run once per candidate of every target search, and a `Team` is expensive
+    /// to clone.
+    fn get_team_name(&self) -> Option<String> {
+        if let Some(player) = self.get_player() {
+            return player.get_team_name();
         }
+        let world = self.get_entity().world.load();
+        let scoreboard = world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if scoreboard.get_teams().is_empty() {
+            return None;
+        }
+        scoreboard
+            .get_entity_team(&self.get_scoreboard_name())
+            .map(|team| team.name.clone())
     }
 
     fn considers_entity_as_ally(&self, other: &dyn EntityBase) -> bool {
@@ -284,7 +300,10 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         {
             return considered;
         }
-        self.is_allied_to_team(other.get_team().as_ref())
+        let Some(team) = self.get_team_name() else {
+            return false;
+        };
+        other.get_team_name().is_some_and(|other| other == team)
     }
 
     fn tick_in_void(&self, _dyn_self: &dyn EntityBase) {
