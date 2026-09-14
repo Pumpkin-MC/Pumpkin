@@ -23,7 +23,7 @@ impl JavaClient {
             wrap_degrees(rotation.yaw) % 360.0,
             wrap_degrees(rotation.pitch),
         );
-        // Send the new position to all other players.
+        // Send the new position to tracking players only.
         let entity_id = entity.entity_id;
         // TODO: use `pumpkin_util::math::pack_degrees`.
         let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0);
@@ -40,9 +40,9 @@ impl JavaClient {
         let be_packet =
             bedrock_move_player_packet(entity, pos, CMovePlayer::MODE_NORMAL, rotation.ground);
 
-        world.broadcast_packet_except_editioned(&[player.gameprofile.id], &je_packet, &be_packet);
+        world.send_to_tracking_players_editioned(entity, &je_packet, &be_packet);
 
         let je_packet = CHeadRot::new(entity_id.into(), yaw as u8);
-        world.broadcast_packet_except(&[player.gameprofile.id], &je_packet);
+        world.send_to_tracking_players(entity, &je_packet);
     }
 }

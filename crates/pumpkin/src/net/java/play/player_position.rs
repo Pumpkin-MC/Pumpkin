@@ -26,9 +26,9 @@ impl JavaClient {
         if delta.length_squared() < 64.0 {
             return false;
         }
-        // Sync position with all other players.
-        world.broadcast_packet_except_editioned(
-            &[player.gameprofile.id],
+        // Sync position with tracking players only.
+        world.send_to_tracking_players_editioned(
+            entity,
             &CEntityPositionSync::new(
                 entity_id.into(),
                 pos,
@@ -39,10 +39,9 @@ impl JavaClient {
             ),
             &bedrock_move_player_packet(entity, pos, CMovePlayer::MODE_TELEPORT, on_ground),
         );
-        // Bedrock ignores head yaw on teleport ->
-        // follow-up with normal move re-asserts.
-        world.broadcast_packet_bedrock_except(
-            &[player.gameprofile.id],
+        // Bedrock ignores head yaw on teleport -> follow-up normal move re-asserts.
+        world.send_to_tracking_players_bedrock(
+            entity,
             &bedrock_move_player_packet(entity, pos, CMovePlayer::MODE_NORMAL, on_ground),
         );
         true
@@ -129,9 +128,9 @@ impl JavaClient {
 
                 // TODO: Warn when player moves to quickly
                 if !Self::sync_position(player, world, entity, pos, last_pos, packet.collision & FLAG_ON_GROUND != 0) {
-                    // Send the new position to all other players.
-                    world.broadcast_packet_except_editioned(
-                        &[player.gameprofile.id],
+                    // Send the new position to tracking players only.
+                    world.send_to_tracking_players_editioned(
+                        entity,
                         &CUpdateEntityPos::new(
                             player.entity_id().into(),
                             Vector3::new(
@@ -285,9 +284,9 @@ impl JavaClient {
                     last_pos,
                     (packet.collision & FLAG_ON_GROUND) != 0,
                 ) {
-                    // Send the new position to all other players.
-                    world.broadcast_packet_except_editioned(
-                        &[player.gameprofile.id],
+                    // Send the new position to tracking players only.
+                    world.send_to_tracking_players_editioned(
+                        entity,
                         &CUpdateEntityPosRot::new(
                             entity_id.into(),
                             Vector3::new(
@@ -308,12 +307,7 @@ impl JavaClient {
                     );
                 }
 
-                world
-                    .broadcast_packet_except(
-                        &[player.gameprofile.id],
-                        &CHeadRot::new(entity_id.into(), yaw as u8),
-                    )
-                   ;
+                world.send_to_tracking_players(entity, &CHeadRot::new(entity_id.into(), yaw as u8));
                 // Only process fall damage if player is alive
                 if !player.abilities.lock().unwrap_or_else(std::sync::PoisonError::into_inner).flying
                     && player.living_entity.health.load() > 0.0

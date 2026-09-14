@@ -1247,27 +1247,6 @@ impl World {
         Self::broadcast_java_grouped(packet, recipients_by_version);
     }
 
-    /// Broadcasts a packet to all connected Bedrock players within the world, excluding the specified players.
-    pub fn broadcast_packet_bedrock_except<B: BClientPacket>(
-        &self,
-        except: &[uuid::Uuid],
-        be_packet: &B,
-    ) {
-        let players = self.players.load();
-        let mut bedrock_recipients = Vec::new();
-
-        for p in players.iter() {
-            if except.contains(&p.gameprofile.id) {
-                continue;
-            }
-            if let ClientPlatform::Bedrock(be_client) = p.client.as_ref() {
-                bedrock_recipients.push(be_client);
-            }
-        }
-
-        Self::broadcast_bedrock_grouped(be_packet, bedrock_recipients.into_iter());
-    }
-
     pub fn spawn_particle(
         &self,
         position: Vector3<f64>,
