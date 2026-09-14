@@ -14,10 +14,9 @@ impl JavaClient {
     fn sync_position(
         player: &Arc<Player>,
         world: &World,
+        entity: &Entity,
         pos: Vector3<f64>,
         last_pos: Vector3<f64>,
-        yaw: f32,
-        pitch: f32,
         on_ground: bool,
     ) -> bool {
         let delta = Vector3::new(pos.x - last_pos.x, pos.y - last_pos.y, pos.z - last_pos.z);
@@ -28,16 +27,23 @@ impl JavaClient {
             return false;
         }
         // Sync position with all other players.
-        world.broadcast_packet_except(
+        world.broadcast_packet_except_editioned(
             &[player.gameprofile.id],
             &CEntityPositionSync::new(
                 entity_id.into(),
                 pos,
                 Vector3::new(0.0, 0.0, 0.0),
-                yaw,
-                pitch,
+                entity.yaw.load(),
+                entity.pitch.load(),
                 on_ground,
             ),
+            &bedrock_move_player_packet(entity, pos, CMovePlayer::MODE_TELEPORT, on_ground),
+        );
+        // Bedrock ignores head yaw on teleport ->
+        // follow-up with normal move re-asserts.
+        world.broadcast_packet_bedrock_except(
+            &[player.gameprofile.id],
+            &bedrock_move_player_packet(entity, pos, CMovePlayer::MODE_NORMAL, on_ground),
         );
         true
     }
@@ -122,7 +128,7 @@ impl JavaClient {
                 let world = &player.world();
 
                 // TODO: Warn when player moves to quickly
-                if !Self::sync_position(player, world, pos, last_pos, entity.yaw.load(), entity.pitch.load(), packet.collision & FLAG_ON_GROUND != 0) {
+                if !Self::sync_position(player, world, entity, pos, last_pos, packet.collision & FLAG_ON_GROUND != 0) {
                     // Send the new position to all other players.
                     world.broadcast_packet_except_editioned(
                         &[player.gameprofile.id],
@@ -271,9 +277,14 @@ impl JavaClient {
                 let world = entity.world.load_full();
 
                 // TODO: Warn when player moves to quickly
-                if !Self::
-                    sync_position(player, &world, pos, last_pos, yaw, pitch, (packet.collision & FLAG_ON_GROUND) != 0)
-                {
+                if !Self::sync_position(
+                    player,
+                    &world,
+                    entity,
+                    pos,
+                    last_pos,
+                    (packet.collision & FLAG_ON_GROUND) != 0,
+                ) {
                     // Send the new position to all other players.
                     world.broadcast_packet_except_editioned(
                         &[player.gameprofile.id],
