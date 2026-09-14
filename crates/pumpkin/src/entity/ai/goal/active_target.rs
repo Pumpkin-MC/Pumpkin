@@ -150,9 +150,23 @@ impl ActiveTargetGoal {
         } else {
             // Class-agnostic search: test every candidate and keep the closest
             // passing one, like vanilla's `getNearestEntity` with conditions.
-            let entities = world.get_nearby_entities(search_pos, follow_range);
+            // Players are registered in `World::players`, not `World::entities`,
+            // so they have to be scanned separately.
+            let entities = world
+                .get_nearby_entities(search_pos, follow_range)
+                .into_values()
+                .map(|entity| (entity.get_entity().pos.load(), entity));
+            let players = world
+                .get_nearby_players(search_pos, follow_range)
+                .into_iter()
+                .map(|player: Arc<Player>| {
+                    (
+                        player.get_entity().pos.load(),
+                        player as Arc<dyn EntityBase>,
+                    )
+                });
             let mut best: Option<(f64, Arc<dyn EntityBase>)> = None;
-            for entity in entities.into_values() {
+            for (entity_pos, entity) in entities.chain(players) {
                 let Some(living) = entity.get_living_entity() else {
                     continue;
                 };
@@ -162,7 +176,7 @@ impl ActiveTargetGoal {
                 {
                     continue;
                 }
-                let dist_sq = search_pos.squared_distance_to_vec(&living.entity.pos.load());
+                let dist_sq = search_pos.squared_distance_to_vec(&entity_pos);
                 if best
                     .as_ref()
                     .is_none_or(|(best_dist, _)| dist_sq < *best_dist)
