@@ -272,6 +272,7 @@ impl JavaClient {
 
                 let entity_id = entity.entity_id;
 
+                // TODO: use `pumpkin_util::math::pack_degrees`.
                 let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0);
                 let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0);
                 // let head_yaw = (entity.head_yaw * 256.0 / 360.0).floor();

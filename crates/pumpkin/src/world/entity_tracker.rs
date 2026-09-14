@@ -27,9 +27,9 @@ use pumpkin_protocol::java::client::play::{
 };
 use pumpkin_protocol::{BClientPacket, ClientPacket};
 use pumpkin_util::GameMode;
-use pumpkin_util::math::get_section_cord;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
+use pumpkin_util::math::{get_section_cord, pack_degrees};
 use pumpkin_util::version::JavaMinecraftVersion;
 use rustc_hash::FxHashSet;
 use uuid::Uuid;
@@ -44,11 +44,6 @@ use crate::world::chunker::get_view_distance;
 /// Vanilla `VecDeltaCodec.encode`: Java `Math.round` on the 1/4096
 fn encode_pos(value: f64) -> i64 {
     (value * 4096.0 + 0.5).floor() as i64
-}
-
-/// Vanilla `Mth.packDegrees`.
-fn pack_degrees(degrees: f32) -> u8 {
-    (degrees * 256.0 / 360.0).floor() as i32 as u8
 }
 
 /// Vanilla `ServerEntity.sendChanges` packet choice.
@@ -490,6 +485,7 @@ impl TrackedEntity {
                 }
 
                 let head_yaw = target_entity.head_yaw.load();
+                // TODO: use `pumpkin_util::math::pack_degrees`.
                 let head_rot_packet = CHeadRot::new(
                     target_id.into(),
                     (head_yaw * 256.0 / 360.0).rem_euclid(256.0) as u8,
@@ -502,6 +498,7 @@ impl TrackedEntity {
             && let ClientPlatform::Java(client) = player.client.as_ref()
         {
             let head_yaw = self.entity.get_entity().head_yaw.load();
+            // TODO: use `pumpkin_util::math::pack_degrees`.
             let head_rot_packet = CHeadRot::new(
                 self.entity_id.into(),
                 (head_yaw * 256.0 / 360.0).rem_euclid(256.0) as u8,

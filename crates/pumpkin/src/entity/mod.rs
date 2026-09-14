@@ -48,7 +48,7 @@ use pumpkin_protocol::{
 use pumpkin_util::math::vector3::Axis;
 use pumpkin_util::math::{
     boundingbox::{BoundingBox, EntityDimensions},
-    get_section_cord,
+    get_section_cord, pack_degrees,
     position::BlockPos,
     vector2::Vector2,
     vector3::Vector3,
@@ -775,6 +775,15 @@ impl RemovalReason {
 
 // IMPORTANT: have that 1 and not 0 because fetch_add returns previous value and 0 would be invalid
 static CURRENT_ID: AtomicI32 = AtomicI32::new(1);
+
+/// Position, motion and packed rotation for spawn packets.
+struct SpawnState {
+    pos: Vector3<f64>,
+    velocity: Vector3<f64>,
+    pitch: u8,
+    yaw: u8,
+    head_yaw: u8,
+}
 
 /// Represents a non-living Entity (e.g. Item, Egg, Snowball...)
 pub struct Entity {
@@ -2369,42 +2378,44 @@ impl Entity {
     }
 
     /// Vanilla `ClientboundAddEntityPacket(entity, serverEntity)`: tracker, not live.
-    fn spawn_pos_vel(&self) -> (Vector3<f64>, Vector3<f64>) {
+    /// Players live: tracker skips `send_changes` for them.
+    fn spawn_state(&self) -> SpawnState {
         if self.entity_type == &EntityType::PLAYER {
-            (self.pos.load(), self.velocity.load())
+            SpawnState {
+                pos: self.pos.load(),
+                velocity: self.velocity.load(),
+                pitch: pack_degrees(self.pitch.load()),
+                yaw: pack_degrees(self.yaw.load()),
+                head_yaw: pack_degrees(self.head_yaw.load()),
+            }
         } else {
-            (self.last_sent_pos.load(), self.last_sent_velocity.load())
+            SpawnState {
+                pos: self.last_sent_pos.load(),
+                velocity: self.last_sent_velocity.load(),
+                pitch: self.last_sent_pitch.load(Relaxed),
+                yaw: self.last_sent_yaw.load(Relaxed),
+                head_yaw: self.last_sent_head_yaw.load(Relaxed),
+            }
         }
     }
 
     pub fn create_spawn_packet(&self) -> CSpawnEntity {
-        let (entity_loc, entity_vel) = self.spawn_pos_vel();
-        CSpawnEntity::new(
+        let spawn = self.spawn_state();
+        CSpawnEntity::new_packed(
             VarInt(self.entity_id),
             self.entity_uuid,
             VarInt(i32::from(self.entity_type.id)),
-            entity_loc,
-            self.pitch.load(),
-            self.yaw.load(),
-            self.head_yaw.load(), // todo: head_yaw and yaw are swapped, find out why
+            spawn.pos,
+            spawn.pitch,
+            spawn.yaw,
+            spawn.head_yaw, // todo: head_yaw and yaw are swapped, find out why
             self.data.load(Relaxed).into(),
-            entity_vel,
+            spawn.velocity,
         )
     }
 
     pub fn create_spawn_living_packet(&self, metadata: Option<Box<[u8]>>) -> CSpawnLivingEntity {
-        let (entity_loc, entity_vel) = self.spawn_pos_vel();
-        CSpawnLivingEntity::new(
-            VarInt(self.entity_id),
-            self.entity_uuid,
-            VarInt(i32::from(self.entity_type.id)),
-            entity_loc,
-            self.pitch.load(),
-            self.yaw.load(),
-            self.head_yaw.load(),
-            entity_vel,
-            metadata,
-        )
+        CSpawnLivingEntity::from_spawn_entity(&self.create_spawn_packet(), metadata)
     }
     pub fn width(&self) -> f32 {
         self.entity_dimension.load().width
@@ -3051,6 +3062,7 @@ impl Entity {
         }
         // Update cache so we don't send rubberbanding deltas
         self.last_sent_pos.store(position);
+        // TODO: use `pumpkin_util::math::pack_degrees`.
         if let Some(yaw) = yaw {
             self.last_sent_yaw
                 .store((yaw * 256.0 / 360.0).rem_euclid(256.0) as u8, Relaxed);
@@ -3921,6 +3933,7 @@ impl Entity {
             let yaw = rotation[0].extract_float().unwrap_or(0.0);
             let pitch = rotation[1].extract_float().unwrap_or(0.0);
             self.set_rotation(yaw, pitch);
+            // TODO: use `pumpkin_util::math::pack_degrees`.
             let yaw_byte = (yaw * 256.0 / 360.0).rem_euclid(256.0) as u8;
             let pitch_byte = (pitch * 256.0 / 360.0).rem_euclid(256.0) as u8;
             self.last_sent_yaw.store(yaw_byte, Relaxed);
