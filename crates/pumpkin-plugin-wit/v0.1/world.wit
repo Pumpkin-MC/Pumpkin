@@ -1,0 +1,1050 @@
+interface %world {
+    use common.{position, entity-pose, block-pos, nbt-tree};
+    use block-entity.{block-entity, command-block-entity, block-entity-type};
+    use text.{text-component};
+    use scoreboard.{scoreboard};
+    use particles.{particle};
+    use sounds.{sound, sound-category};
+    use entity-types.{entity-type};
+    use biomes.{biome};
+    use attributes.{attribute, modifier-operation, attribute-modifier};
+    use item-stack.{item-stack};
+    use damage-types.{damage-type};
+    use game-rules.{game-rule, game-rule-value};
+
+    use uuid.{uuid};
+
+    /// Equipment slots available on living entities (mobs, armor stands, players).
+    enum equipment-slot {
+        main-hand,
+        off-hand,
+        feet,
+        legs,
+        chest,
+        head,
+        body,
+        saddle,
+    }
+
+    /// Defines how a block reacts when pushed by a piston.
+    enum piston-behavior {
+        /// Normal behavior; the block can be pushed and pulled.
+        normal,
+        /// The block is destroyed when pushed.
+        destroy,
+        /// The block cannot be pushed or pulled.
+        block,
+        /// The block is ignored by pistons.
+        ignore,
+        /// The block can only be pushed, not pulled.
+        push-only
+    }
+
+    /// Predefined AI goals that can be added to mob entities.
+    variant builtin-ai-goal {
+        swim,
+        wander-around(f32),
+        melee-attack(f32),
+        look-at-player(f32),
+        look-around,
+        escape-danger(f32),
+        avoid-entity(f32),
+        blaze-attack,
+        creeper-ignite,
+        eat-grass,
+        zombie-attack(f32),
+    }
+
+    /// Node and terrain classification types evaluated during mob pathfinding.
+    enum path-node-type {
+        blocked,
+        open,
+        walkable,
+        walkable-door,
+        trapdoor,
+        powder-snow,
+        danger-powder-snow,
+        fence,
+        lava,
+        water,
+        water-border,
+        rail,
+        unpassable-rail,
+        danger-fire,
+        damage-fire,
+        danger-other,
+        damage-other,
+        door-open,
+        door-wood-closed,
+        door-iron-closed,
+        breach,
+        leaves,
+        sticky-honey,
+        cocoa,
+        damage-cautious,
+        danger-trapdoor,
+    }
+
+    /// Minecraft 16 dye colors.
+    enum dye-color {
+        white,
+        orange,
+        magenta,
+        light-blue,
+        yellow,
+        lime,
+        pink,
+        gray,
+        light-gray,
+        cyan,
+        purple,
+        blue,
+        brown,
+        green,
+        red,
+        black,
+    }
+
+    /// Villager profession identifiers.
+    enum villager-profession {
+        none,
+        armorer,
+        butcher,
+        cartographer,
+        cleric,
+        farmer,
+        fisherman,
+        fletcher,
+        leatherworker,
+        librarian,
+        mason,
+        nitwit,
+        shepherd,
+        toolsmith,
+        weaponsmith,
+    }
+
+    /// Specialized data for sheep entities.
+    record sheep-data {
+        color: dye-color,
+        is-sheared: bool,
+    }
+
+    /// Specialized data for wolf entities.
+    record wolf-data {
+        is-tamed: bool,
+        owner: option<uuid>,
+        is-sitting: bool,
+        collar-color: dye-color,
+        is-angry: bool,
+        is-begging: bool,
+    }
+
+    /// Specialized data for cat entities.
+    record cat-data {
+        is-tamed: bool,
+        owner: option<uuid>,
+        is-sitting: bool,
+        collar-color: dye-color,
+    }
+
+    /// Specialized data for villager entities.
+    record villager-data {
+        profession: villager-profession,
+        level: u8,
+        experience: u32,
+    }
+
+    /// Specialized data for creeper entities.
+    record creeper-data {
+        is-powered: bool,
+        fuse: s32,
+        is-ignited: bool,
+        explosion-radius: u8,
+    }
+
+    /// Specialized data for slime and magma cube entities.
+    record slime-data {
+        size: s32,
+    }
+
+    /// Specialized data for enderman entities.
+    record enderman-data {
+        carried-block-state: option<u16>,
+        is-screaming: bool,
+        is-staring: bool,
+    }
+
+    /// Specialized data for iron golem entities.
+    record iron-golem-data {
+        is-player-created: bool,
+    }
+
+    /// Specialized data for fox entities.
+    record fox-data {
+        is-sitting: bool,
+        is-sleeping: bool,
+        is-crouching: bool,
+    }
+
+    /// Specialized data for ageable animal mobs.
+    record ageable-data {
+        is-baby: bool,
+        age: s32,
+        in-love-ticks: s32,
+    }
+
+    /// Specialized data for zombie entities.
+    record zombie-data {
+        is-baby: bool,
+        can-break-doors: bool,
+    }
+
+    /// Specialized data for shulker entities.
+    record shulker-data {
+        attached-face: block-direction,
+        peek-amount: u8,
+        color: option<dye-color>,
+    }
+
+    /// Tagged variant holding specialized data for specific mob types.
+    variant mob-data {
+        sheep(sheep-data),
+        wolf(wolf-data),
+        cat(cat-data),
+        villager(villager-data),
+        creeper(creeper-data),
+        slime(slime-data),
+        enderman(enderman-data),
+        iron-golem(iron-golem-data),
+        fox(fox-data),
+        ageable(ageable-data),
+        zombie(zombie-data),
+        shulker(shulker-data),
+        generic,
+    }
+
+    /// Defines how an explosion interacts with blocks in the world.
+    enum explosion-interaction {
+        /// No interaction with blocks.
+        none,
+        /// Blocks are destroyed and may drop loot.
+        block,
+        /// Interaction typical for mob-caused explosions.
+        mob,
+        /// Interaction typical for TNT explosions.
+        tnt,
+        /// Triggers specific block behaviors.
+        trigger,
+    }
+
+    /// Flags used to control block updates and notifications.
+    flags block-flags {
+        /// Notifies neighbor blocks of the change.
+        notify-neighbors,
+        /// Notifies client listeners of the change.
+        notify-listeners,
+        /// Forces the block state even if it's the same.
+        force-state,
+        /// Skips dropping items when the block is removed.
+        skip-drops,
+        /// Indicates the block was moved (e.g., by a piston).
+        moved,
+        /// Skips state replacement for redstone wires.
+        skip-redstone-wire-state-replacement,
+        /// Skips the callback when a block entity is replaced.
+        skip-block-entity-replaced-callback,
+        /// Skips the callback when a block is added.
+        skip-block-added-callback,
+    }
+
+    /// Flammability properties of a block.
+    record flammable {
+        spread-chance: u8,
+        burn-chance: u8,
+    }
+
+    /// Detailed information about a block's state.
+    record block-state {
+        /// The internal numerical ID of the block state.
+        id: u16,
+        /// The numerical ID of the parent block type.
+        block-id: u16,
+        /// The namespaced identifier of the parent block type.
+        block-name: string,
+        /// The light level emitted by this block (0-15).
+        luminance: u8,
+        /// How much light this block blocks.
+        opacity: u8,
+        /// The hardness of the block, determining mining speed.
+        hardness: f32,
+        /// Whether this block is considered air.
+        is-air: bool,
+        /// Whether this block is a liquid.
+        is-liquid: bool,
+        /// Whether this block is a solid.
+        is-solid: bool,
+        /// Whether this block occupies a full cube.
+        is-full-cube: bool,
+        /// How this block behaves when pushed by a piston.
+        piston-behavior: piston-behavior,
+        /// Whether this block receives random ticks.
+        has-random-ticks: bool,
+
+        /// Whether this block can catch fire.
+        burnable: bool,
+        /// Whether a specific tool is required to mine this block and get drops.
+        tool-required: bool,
+        /// Whether this block has transparency on its sides.
+        sided-transparency: bool,
+        /// Whether this block can be replaced by another block (e.g., grass).
+        replaceable: bool,
+        /// Whether this block is considered a solid block for redstone purposes.
+        is-solid-block: bool,
+        /// The numerical ID of the block entity type, if any.
+        block-entity-type: u16,
+        /// The instrument used for note blocks when placed on top of this block.
+        instrument: noteblock-instrument,
+        /// The collision shapes of this block.
+        collision-shapes: list<bounding-box>,
+        /// The outline shapes of this block.
+        outline-shapes: list<bounding-box>,
+
+        /// Whether the bottom side of the block is solid.
+        down-side-solid: bool,
+        /// Whether the top side of the block is solid.
+        up-side-solid: bool,
+        /// Whether the north side of the block is solid.
+        north-side-solid: bool,
+        /// Whether the south side of the block is solid.
+        south-side-solid: bool,
+        /// Whether the west side of the block is solid.
+        west-side-solid: bool,
+        /// Whether the east side of the block is solid.
+        east-side-solid: bool,
+        /// Whether the center of the bottom side is solid.
+        down-center-solid: bool,
+        /// Whether the center of the top side is solid.
+        up-center-solid: bool,
+        /// The color of this block when displayed on a map.
+        map-color: u8,
+        /// The block state's property key-value pairs (e.g. facing=north).
+        properties: list<tuple<string, string>>,
+    }
+
+    /// Musical instruments used by note blocks.
+    enum noteblock-instrument {
+        harp,
+        basedrum,
+        snare,
+        hat,
+        bass,
+        flute,
+        bell,
+        guitar,
+        chime,
+        xylophone,
+        iron-xylophone,
+        cow-bell,
+        didgeridoo,
+        bit,
+        banjo,
+        pling,
+        trumpet,
+        trumpet-exposed,
+        trumpet-oxidized,
+        trumpet-weathered,
+        zombie,
+        skeleton,
+        creeper,
+        dragon,
+        wither-skeleton,
+        piglin,
+        custom-head,
+    }
+
+    /// Static definition of a Minecraft block type.
+    record block {
+        /// The internal numerical ID of the block type.
+        id: u16,
+        /// The unique namespaced ID (e.g., "minecraft:stone").
+        name: string,
+        /// How hard the block is to break (-1.0 for unbreakable blocks).
+        hardness: f32,
+        /// Resistance to explosions.
+        blast-resistance: f32,
+        /// The color of this block when displayed on a map.
+        map-color: u8,
+        /// The friction coefficient (0.6 default, 0.98 for ice).
+        slipperiness: f32,
+        /// How much this block affects entity walk speed.
+        velocity-multiplier: f32,
+        /// How much this block affects entity jump height.
+        jump-velocity-multiplier: f32,
+        /// The item ID associated with this block in inventory/drops.
+        item-id: u16,
+        /// The default block state ID when placed without extra properties.
+        default-state-id: u16,
+        /// All valid state IDs belonging to this block type.
+        state-ids: list<u16>,
+        /// Whether this block is solid by default.
+        is-solid: bool,
+        /// Whether this block is considered air.
+        is-air: bool,
+        /// Whether this block is flammable.
+        is-flammable: bool,
+        /// Flammability details if flammable.
+        flammable: option<flammable>,
+    }
+
+    /// A simple wrapper for a block state ID.
+    record block-state-id {
+        id: u16,
+    }
+
+    resource entity {
+        get-id: func() -> u32;
+        get-uuid: func() -> uuid;
+        get-type: func() -> entity-type;
+
+        get-position: func() -> position;
+        get-world: func() -> %world;
+
+        get-yaw: func() -> f32;
+        get-pitch: func() -> f32;
+        get-head-yaw: func() -> f32;
+
+        teleport: func(pos: position, world-ref: %world);
+        set-velocity: func(velocity: position);
+        get-velocity: func() -> position;
+
+        get-pose: func() -> entity-pose;
+        get-name: func() -> text-component;
+        set-custom-name: func(name: text-component);
+        get-custom-name: func() -> option<text-component>;
+        set-custom-name-visible: func(visible: bool);
+        is-custom-name-visible: func() -> bool;
+
+        is-invulnerable: func() -> bool;
+        set-invulnerable: func(invulnerable: bool);
+
+        get-fire-ticks: func() -> s32;
+        set-fire-ticks: func(ticks: s32);
+
+        get-fall-distance: func() -> f32;
+        set-fall-distance: func(distance: f32);
+
+        get-ticks-lived: func() -> s32;
+        set-ticks-lived: func(ticks: s32);
+
+        is-sneaking: func() -> bool;
+        set-sneaking: func(sneaking: bool);
+        is-sprinting: func() -> bool;
+        set-sprinting: func(sprinting: bool);
+        is-swimming: func() -> bool;
+        set-swimming: func(swimming: bool);
+        is-invisible: func() -> bool;
+        set-invisible: func(invisible: bool);
+        is-glowing: func() -> bool;
+        set-glowing: func(glowing: bool);
+        is-fall-flying: func() -> bool;
+        set-fall-flying: func(fall-flying: bool);
+
+        is-silent: func() -> bool;
+        set-silent: func(silent: bool);
+        has-gravity: func() -> bool;
+        set-has-gravity: func(gravity: bool);
+
+        get-width: func() -> f32;
+        get-height: func() -> f32;
+
+        set-rotation: func(yaw: f32, pitch: f32);
+
+        is-on-ground: func() -> bool;
+        is-on-fire: func() -> bool;
+        set-on-fire: func(on-fire: bool);
+        has-visual-fire: func() -> bool;
+        set-visual-fire: func(visual-fire: bool);
+
+        get-portal-cooldown: func() -> u32;
+        set-portal-cooldown: func(cooldown: u32);
+
+        get-remaining-air: func() -> s32;
+        set-remaining-air: func(air: s32);
+        get-max-air: func() -> s32;
+
+        get-eye-height: func() -> f32;
+        get-eye-position: func() -> position;
+
+        get-nearby-entities: func(x: f64, y: f64, z: f64) -> list<entity>;
+
+        get-vehicle: func() -> option<entity>;
+        set-vehicle: func(vehicle: option<entity>);
+        get-passengers: func() -> list<entity>;
+        add-passenger: func(passenger: entity);
+        remove-passenger: func(passenger: entity);
+        eject-passengers: func();
+
+        get-bounding-box: func() -> bounding-box;
+
+        is-in-water: func() -> bool;
+        is-in-lava: func() -> bool;
+
+        remove: func();
+
+        /// Performs a raycast from the entity's eye position in its looking direction.
+        raycast: func(max-distance: f64, fluid-handling: bool) -> option<raycast-result>;
+
+        /// Performs a ray-trace from the entity's eye position in its looking direction to find the targeted block.
+        ray-trace-block: func(max-distance: f64, include-fluids: bool) -> option<ray-trace-block-result>;
+
+        /// Performs a ray-trace from the entity's eye position in its looking direction to find the targeted entity.
+        ray-trace-entity: func(max-distance: f64) -> option<ray-trace-entity-result>;
+
+        /// Returns the entity currently targeted in the looking direction within the specified distance.
+        get-target-entity: func(max-distance: f64) -> option<entity>;
+
+        /// Sets a namespaced custom data value on this entity.
+        set-custom-data: func(namespace: string, key: string, value: nbt-tree);
+        /// Returns a namespaced custom data value from this entity, if set.
+        get-custom-data: func(namespace: string, key: string) -> option<nbt-tree>;
+        /// Removes a namespaced custom data value from this entity.
+        remove-custom-data: func(namespace: string, key: string);
+        /// Returns whether this entity has a namespaced custom data value.
+        has-custom-data: func(namespace: string, key: string) -> bool;
+
+        /// Returns this entity as a living-entity if it has health and attributes, or none otherwise.
+        as-living: func() -> option<living-entity>;
+
+        /// Returns this entity as a mob if it is an AI-driven mob entity, or none otherwise.
+        as-mob: func() -> option<mob>;
+
+        /// Returns whether this entity is a living entity.
+        is-living: func() -> bool;
+
+        /// Returns whether this entity is an AI-driven mob.
+        is-mob: func() -> bool;
+    }
+
+    /// Represents a living entity with health, combat stats, attributes, and equipment (mobs, players, armor stands).
+    resource living-entity {
+        /// Converts back to the base entity handle.
+        as-entity: func() -> entity;
+
+        /// Returns this living entity as a mob if it has AI/navigation, or none otherwise.
+        as-mob: func() -> option<mob>;
+
+        /// Returns whether this living entity is an AI-driven mob.
+        is-mob: func() -> bool;
+
+        // Health & Combat
+        get-health: func() -> f32;
+        set-health: func(health: f32);
+        get-max-health: func() -> f32;
+        set-max-health: func(max-health: f32);
+        damage: func(amount: f32, damage-type: damage-type);
+        is-dead: func() -> bool;
+
+        get-absorption: func() -> f32;
+        set-absorption: func(amount: f32);
+
+        // Attributes
+        get-attribute-value: func(attr: attribute) -> f64;
+        get-attribute-base: func(attr: attribute) -> f64;
+        set-attribute-base: func(attr: attribute, value: f64);
+        add-attribute-modifier: func(attr: attribute, modifier: attribute-modifier);
+        remove-attribute-modifier: func(attr: attribute, id: string);
+        get-attribute-modifiers: func(attr: attribute) -> list<attribute-modifier>;
+        reset-attribute: func(attr: attribute);
+        reset-all-attributes: func();
+
+        // Equipment
+        get-equipment: func(slot: equipment-slot) -> option<item-stack>;
+        set-equipment: func(slot: equipment-slot, stack: option<item-stack>);
+        clear-equipment: func();
+
+        get-age: func() -> s32;
+        set-age: func(age: s32);
+        send-system-message: func(message: text-component);
+    }
+
+    /// Represents an AI-driven mob entity with goals, targeting, and pathfinding navigation (e.g. zombies, villagers).
+    resource mob {
+        /// Converts back to the base entity handle.
+        as-entity: func() -> entity;
+
+        /// Converts to the living-entity handle.
+        as-living: func() -> living-entity;
+
+        // Goals & Targeting
+        add-ai-goal: func(priority: u8, goal: builtin-ai-goal);
+        add-custom-ai-goal: func(priority: u8, goal-id: u32);
+        clear-ai-goals: func();
+        set-ai-disabled: func(disabled: bool);
+        is-ai-disabled: func() -> bool;
+        set-target: func(target: option<entity>);
+        get-target: func() -> option<entity>;
+
+        // Pathfinding & Navigation
+        navigate-to-pos: func(pos: position, speed: f64) -> bool;
+        navigate-to-entity: func(target: entity, speed: f64) -> bool;
+        stop-navigation: func();
+        is-navigating: func() -> bool;
+        has-reached-destination: func() -> bool;
+        set-navigation-speed: func(speed: f64);
+        can-reach: func(pos: position, max-distance: f32) -> bool;
+        set-pathfinding-malus: func(node-type: path-node-type, malus: f32);
+        get-pathfinding-malus: func(node-type: path-node-type) -> f32;
+        look-at: func(pos: position);
+        look-at-entity: func(target: entity);
+
+        /// Returns the specialized mob-specific data for this mob.
+        get-mob-data: func() -> mob-data;
+
+        /// Sets the specialized mob-specific data for this mob.
+        /// Returns false if the provided data variant is incompatible with this mob.
+        set-mob-data: func(data: mob-data) -> bool;
+
+        /// Sets the number of freeze ticks on this entity (0 to 140).
+        set-freeze-ticks: func(ticks: s32);
+        /// Returns the number of freeze ticks currently on this entity.
+        get-freeze-ticks: func() -> s32;
+    }
+
+    /// Result of a raycast operation.
+    record raycast-result {
+        /// The block position that was hit.
+        pos: block-pos,
+        /// The face of the block that was hit.
+        face: block-direction,
+    }
+
+    /// Detailed result of a block ray-trace operation.
+    record ray-trace-block-result {
+        /// The block position that was hit.
+        pos: block-pos,
+        /// The face of the block that was hit.
+        face: block-direction,
+        /// The exact hit coordinates in world space.
+        hit-pos: position,
+    }
+
+    /// Result of an entity ray-trace operation.
+    record ray-trace-entity-result {
+        /// The entity that was hit.
+        entity: entity,
+        /// The exact hit coordinates in world space.
+        hit-pos: position,
+        /// The distance from the ray start to the hit position.
+        distance: f64,
+    }
+
+    resource chunk {
+        /// Gets the chunk's X coordinate.
+        get-x: func() -> s32;
+
+        /// Gets the chunk's Z coordinate.
+        get-z: func() -> s32;
+
+        /// Gets the block state ID at the specified position relative to the chunk.
+        /// X and Z must be in the range [0, 15].
+        get-block-state-id: func(pos: block-pos) -> u16;
+
+        /// Gets detailed block state information at the specified position relative to the chunk.
+        /// X and Z must be in the range [0, 15].
+        get-block-state: func(pos: block-pos) -> block-state;
+
+        /// Sets the block state at the specified position relative to the chunk.
+        /// X and Z must be in the range [0, 15].
+        set-block-state: func(pos: block-pos, state: u16);
+
+        /// Gets the block at the specified position relative to the chunk.
+        /// X and Z must be in the range [0, 15].
+        get-block: func(pos: block-pos) -> block;
+
+        /// Sets the block at the specified position relative to the chunk using its default state.
+        /// X and Z must be in the range [0, 15].
+        set-block: func(pos: block-pos, block: block);
+
+        /// Sets the block by block ID at the specified position relative to the chunk using its default state.
+        /// X and Z must be in the range [0, 15].
+        set-block-by-id: func(pos: block-pos, block-id: u16);
+
+        /// Gets the biome at the specified position relative to the chunk.
+        /// X and Z must be in the range [0, 15].
+        get-biome: func(pos: block-pos) -> biome;
+
+        /// Gets the block entity at the specified position relative to the chunk, if any.
+        /// X and Z must be in the range [0, 15].
+        get-block-entity: func(pos: block-pos) -> option<block-entity-type>;
+
+        /// Gets the highest non-air block Y coordinate at the specified X and Z relative to the chunk.
+        /// X and Z must be in the range [0, 15].
+        get-top-block-y: func(x: s32, z: s32) -> s32;
+
+        /// Gets the sky light level at the specified position relative to the chunk.
+        /// X and Z must be in the range [0, 15].
+        get-sky-light: func(pos: block-pos) -> u8;
+
+        /// Gets the block light level at the specified position relative to the chunk.
+        /// X and Z must be in the range [0, 15].
+        get-block-light: func(pos: block-pos) -> u8;
+
+        /// Sets a namespaced custom data value on this chunk.
+        set-custom-data: func(namespace: string, key: string, value: nbt-tree);
+        /// Returns a namespaced custom data value from this chunk, if set.
+        get-custom-data: func(namespace: string, key: string) -> option<nbt-tree>;
+        /// Removes a namespaced custom data value from this chunk.
+        remove-custom-data: func(namespace: string, key: string);
+        /// Returns whether this chunk has a namespaced custom data value.
+        has-custom-data: func(namespace: string, key: string) -> bool;
+    }
+
+    /// Represents the boundaries of a world.
+    resource world-border {
+        /// Gets the center X coordinate of the border.
+        get-center-x: func() -> f64;
+        /// Gets the center Z coordinate of the border.
+        get-center-z: func() -> f64;
+        /// Gets the center position of the border.
+        get-center: func() -> position;
+        /// Sets the center coordinates of the border.
+        set-center: func(x: f64, z: f64);
+
+        /// Gets the current diameter of the border.
+        get-diameter: func() -> f64;
+        /// Gets the current diameter of the border (alias for get-diameter).
+        get-size: func() -> f64;
+        /// Sets the diameter of the border, optionally with a speed (in ticks) for lerping.
+        set-diameter: func(diameter: f64, speed: option<u64>);
+        /// Sets the size of the border instantly.
+        set-size: func(size: f64);
+        /// Sets the size of the border with a transition duration in seconds.
+        set-size-transition: func(new-size: f64, time-seconds: u64);
+
+        /// Gets the target diameter when lerping/transitioning.
+        get-target-diameter: func() -> f64;
+        /// Gets the target transition duration/speed in ticks.
+        get-target-speed: func() -> s64;
+
+        /// Gets the distance from the border where warning effects start (in blocks).
+        get-warning-distance: func() -> s32;
+        /// Sets the warning distance (in blocks).
+        set-warning-distance: func(distance: s32);
+
+        /// Gets the time before a player hitting the border is warned (in seconds).
+        get-warning-delay: func() -> s32;
+        /// Sets the warning delay (in seconds).
+        set-warning-delay: func(delay: s32);
+        /// Gets the warning time (alias for get-warning-delay).
+        get-warning-time: func() -> s32;
+        /// Sets the warning time (alias for set-warning-delay).
+        set-warning-time: func(time: s32);
+
+        /// Gets the safe damage buffer distance outside the border (in blocks).
+        get-damage-buffer: func() -> f64;
+        /// Sets the safe damage buffer distance outside the border (in blocks).
+        set-damage-buffer: func(buffer: f64);
+
+        /// Gets the damage amount inflicted per block per second when outside the buffer.
+        get-damage-amount: func() -> f64;
+        /// Sets the damage amount inflicted per block per second when outside the buffer.
+        set-damage-amount: func(damage: f64);
+
+        /// Returns whether the specified coordinates are within the border.
+        contains: func(x: f64, z: f64) -> bool;
+        /// Returns whether the specified position is within the border.
+        contains-pos: func(pos: position) -> bool;
+
+        /// Resets the world border to vanilla default settings.
+        reset: func();
+    }
+
+    /// Represents an axis-aligned bounding box.
+    record bounding-box {
+        min: position,
+        max: position,
+    }
+
+    /// Represents the configured shared spawn location for a world.
+    record world-spawn-location {
+        /// The block position of the shared world spawn.
+        pos: block-pos,
+        /// The yaw players should face when spawning here.
+        yaw: f32,
+        /// The pitch players should use when spawning here.
+        pitch: f32,
+    }
+
+    /// Represents a cardinal direction or block face.
+    enum block-direction {
+        down,
+        up,
+        north,
+        south,
+        west,
+        east,
+    }
+
+    /// Represents a Minecraft world (dimension).
+    resource %world {
+        /// Returns the unique identifier of this world.
+        get-id: func() -> string;
+
+        /// Gets the world border associated with this world (alias for get-world-border).
+        get-border: func() -> world-border;
+
+        /// Gets the world border associated with this world.
+        get-world-border: func() -> world-border;
+
+        /// Gets the chunk at the specified chunk coordinates.
+        get-chunk: func(x: s32, z: s32) -> option<chunk>;
+
+        /// Gets the block state ID at the specified position.
+        get-block-state-id: func(pos: block-pos) -> u16;
+
+        /// Gets detailed block state information at the specified position.
+        get-block-state: func(pos: block-pos) -> block-state;
+
+        /// Sets the block state at the specified position.
+        set-block-state: func(pos: block-pos, state: u16, update-flags: block-flags);
+
+        /// Gets the block type at the specified position.
+        get-block: func(pos: block-pos) -> block;
+
+        /// Gets the numerical block ID at the specified position.
+        get-block-id: func(pos: block-pos) -> u16;
+
+        /// Sets the block at the specified position using its default state.
+        set-block: func(pos: block-pos, block: block, update-flags: block-flags);
+
+        /// Sets the block at the specified position by numerical block ID using its default state.
+        set-block-by-id: func(pos: block-pos, block-id: u16, update-flags: block-flags);
+
+        /// Sets the block at the specified position by namespaced name using its default state.
+        /// Returns true if the block was recognized and set.
+        set-block-by-name: func(pos: block-pos, name: string, update-flags: block-flags) -> bool;
+
+        /// Returns the current time of day in ticks.
+        get-time-of-day: func() -> u64;
+
+        /// Sets the current time of day in ticks.
+        set-time-of-day: func(time: u64);
+
+        /// Returns the total age of the world in ticks.
+        get-world-age: func() -> u64;
+
+        /// Returns the dimension type (e.g., \"minecraft:overworld\").
+        get-dimension: func() -> string;
+
+        /// Returns the configured shared spawn location for this world.
+        get-spawn-location: func() -> world-spawn-location;
+
+        /// Gets the highest non-air block Y coordinate at the specified X and Z.
+        get-top-block-y: func(x: s32, z: s32) -> s32;
+
+        /// Gets the highest motion-blocking block Y coordinate.
+        get-motion-blocking-height: func(x: s32, z: s32) -> s32;
+
+        /// Returns whether it is currently raining or snowing.
+        is-raining: func() -> bool;
+
+        /// Sets whether it should be raining or snowing.
+        set-raining: func(raining: bool);
+
+        /// Returns whether there is currently a thunderstorm.
+        is-thundering: func() -> bool;
+
+        /// Sets whether there should be a thunderstorm.
+        set-thundering: func(thundering: bool);
+
+        /// Broadcasts a system message to all players in this world.
+        broadcast-system-message: func(message: text-component, overlay: bool);
+
+        /// Returns the scoreboard associated with this world.
+        get-scoreboard: func() -> scoreboard;
+
+        /// Plays a sound at the specified position for all players in the world.
+        play-sound: func(sound: sound, category: sound-category, pos: position, volume: f32, pitch: f32);
+
+        /// Plays a custom resource pack sound identifier at the specified position for all players in the world.
+        play-custom-sound: func(sound-name: string, category: sound-category, pos: position, volume: f32, pitch: f32);
+
+        /// Spawns particles at the specified position.
+        spawn-particle: func(particle: particle, pos: position, offset: position, max-speed: f32, count: s32);
+
+        /// Creates an explosion at the specified position.
+        create-explosion: func(pos: position, power: f32, create-fire: bool, interaction: explosion-interaction);
+
+        /// Returns the sea level of this world.
+        get-sea-level: func() -> s32;
+
+        /// Returns the minimum Y coordinate (bottom of the world).
+        get-min-y: func() -> s32;
+
+        /// Returns the sky light level at the specified position.
+        get-sky-light: func(pos: block-pos) -> u8;
+
+        /// Sets the sky light level at the specified position.
+        set-sky-light: func(pos: block-pos, level: u8);
+
+        /// Returns the block light level at the specified position.
+        get-block-light: func(pos: block-pos) -> u8;
+
+        /// Sets the block light level at the specified position.
+        set-block-light: func(pos: block-pos, level: u8);
+
+        /// Returns the biome at the specified position.
+        get-biome: func(pos: block-pos) -> biome;
+
+        /// Spawns an entity of the specified type at the given position.
+        spawn-entity: func(entity-type: entity-type, pos: position) -> entity;
+
+        /// Returns a list of all entities in this world.
+        get-entities: func() -> list<entity>;
+
+        /// Spawns a lightning bolt at the specified position.
+        strike-lightning: func(pos: position, effect-only: bool);
+
+        /// Performs a raycast from start position to end position to hit blocks.
+        ray-trace-blocks: func(start: position, end: position) -> option<position>;
+
+        /// Performs a raycast from start position to end position to hit blocks, with optional fluid handling.
+        ray-trace-block: func(start: position, end: position, include-fluids: bool) -> option<ray-trace-block-result>;
+
+        /// Performs a raycast from start position to end position to find the closest entity hit.
+        ray-trace-entity: func(start: position, end: position) -> option<ray-trace-entity-result>;
+
+        /// Performs a raycast from start position to end position to find all entities hit along the ray.
+        ray-trace-entities: func(start: position, end: position) -> list<ray-trace-entity-result>;
+
+        /// Returns the block entity at the specified position, if any.
+        get-block-entity: func(pos: block-pos) -> option<block-entity-type>;
+
+        /// Returns the raw NBT bytes of the block entity at the given position, if any.
+        get-block-entity-nbt: func(pos: block-pos) -> option<list<u8>>;
+
+        /// Restores a block entity from raw NBT bytes at the given position.
+        /// The NBT must contain a valid "id" field (e.g. "minecraft:chest").
+        set-block-entity-nbt: func(pos: block-pos, nbt-data: list<u8>) -> result<_, string>;
+
+        /// Returns the name of this world (e.g. "world", "world_nether", "arena_1").
+        get-name: func() -> string;
+
+        /// Saves all chunk data, block entities, and entities for this world to disk.
+        save: func() -> result<_, string>;
+
+        /// Sets a custom chunk generator for this world using a registered generator ID.
+        set-chunk-generator: func(generator-id: u32);
+
+        /// Sets a namespaced custom data value on this world.
+        set-custom-data: func(namespace: string, key: string, value: nbt-tree);
+        /// Returns a namespaced custom data value from this world, if set.
+        get-custom-data: func(namespace: string, key: string) -> option<nbt-tree>;
+        /// Removes a namespaced custom data value from this world.
+        remove-custom-data: func(namespace: string, key: string);
+        /// Returns whether this world has a namespaced custom data value.
+        has-custom-data: func(namespace: string, key: string) -> bool;
+
+        /// Gets the value of a game rule in this world.
+        get-game-rule: func(rule: game-rule) -> game-rule-value;
+        /// Sets the value of a game rule in this world.
+        set-game-rule: func(rule: game-rule, value: game-rule-value);
+    }
+
+    /// Generation phase for custom chunk generation.
+    enum generation-phase {
+        biomes,
+        noise,
+        surface,
+        features,
+    }
+
+    /// Mutable chunk buffer representing a 16x16 column during custom world generation.
+    resource chunk-buffer {
+        /// Returns the chunk X coordinate.
+        get-x: func() -> s32;
+        /// Returns the chunk Z coordinate.
+        get-z: func() -> s32;
+        /// Returns the minimum Y coordinate for this world.
+        get-min-y: func() -> s32;
+        /// Returns the height of the chunk in blocks.
+        get-height: func() -> u32;
+
+        /// Sets the block state ID at local coordinates (0..16, y, 0..16).
+        set-block-state-id: func(x: u8, y: s32, z: u8, state-id: u16);
+        /// Gets the block state ID at local coordinates (0..16, y, 0..16).
+        get-block-state-id: func(x: u8, y: s32, z: u8) -> u16;
+
+        /// Fills an entire horizontal 16x16 layer at the given Y level with a block state ID.
+        fill-layer: func(y: s32, state-id: u16);
+        /// Fills a vertical column from min-y to max-y at local (x, z) with a block state ID.
+        fill-range: func(x: u8, min-y: s32, max-y: s32, z: u8, state-id: u16);
+        /// Fills a 3D cuboid with a block state ID.
+        fill-cuboid: func(min-x: u8, min-y: s32, min-z: u8, max-x: u8, max-y: s32, max-z: u8, state-id: u16);
+
+        /// Sets the biome at local coordinates (0..16, y, 0..16).
+        set-biome: func(x: u8, y: s32, z: u8, biome: biome);
+        /// Fills the entire chunk with the given biome.
+        fill-biome: func(biome: biome);
+    }
+
+    /// Resolves a block name and optional properties to a block state ID.
+    /// Returns none if the block name is unknown.
+    resolve-block-state: func(name: string, properties: list<tuple<string, string>>) -> option<u16>;
+
+    /// A block's registry name and its property key-value pairs for a state ID.
+    record block-state-info {
+        name: string,
+        properties: list<tuple<string, string>>,
+    }
+
+    /// Resolves a block state ID back to its block name and properties.
+    /// Returns none if the state ID is unknown.
+    block-state-to-info: func(state-id: u16) -> option<block-state-info>;
+
+    /// Gets a block type by its numerical block ID.
+    get-block-by-id: func(id: u16) -> option<block>;
+
+    /// Gets a block type by its namespaced name (e.g., "minecraft:stone" or "stone").
+    get-block-by-name: func(name: string) -> option<block>;
+
+    /// Gets all registered blocks.
+    get-all-blocks: func() -> list<block>;
+
+    /// Gets the names of all registered blocks.
+    get-all-block-names: func() -> list<string>;
+
+    /// Gets the total number of registered block types.
+    get-block-count: func() -> u32;
+
+    /// Gets the total number of registered block states.
+    get-block-state-count: func() -> u32;
+
+    /// Gets all valid block states for a block type.
+    get-states-for-block: func(block: block) -> list<block-state>;
+
+    /// Gets all valid block states for a numerical block ID.
+    get-states-for-block-id: func(block-id: u16) -> list<block-state>;
+
+    /// Gets all valid state IDs for a numerical block ID.
+    get-state-ids-for-block-id: func(block-id: u16) -> list<u16>;
+
+    /// Gets property key-value pairs for a numerical block state ID.
+    get-block-properties: func(state-id: u16) -> list<tuple<string, string>>;
+
+    /// Gets the block type associated with a block state ID.
+    get-block-from-state-id: func(state-id: u16) -> option<block>;
+
+    /// Gets the block type associated with a block state.
+    get-block-from-state: func(state: block-state) -> block;
+
+    /// Gets the default block state for a block type.
+    get-default-state-from-block: func(block: block) -> block-state;
+
+    /// Gets the default block state for a numerical block ID.
+    get-default-state-from-block-id: func(block-id: u16) -> option<block-state>;
+
+    /// Gets the detailed block state for a numerical block state ID.
+    get-block-state-by-id: func(state-id: u16) -> option<block-state>;
+}
