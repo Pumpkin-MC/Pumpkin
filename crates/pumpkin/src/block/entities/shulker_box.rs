@@ -102,6 +102,10 @@ impl BlockEntity for ShulkerBoxBlockEntity {
         self.mark_dirty();
     }
 
+    fn drops_for_creative_player(&self) -> bool {
+        !self.is_empty()
+    }
+
     fn is_comparator_dirty(&self) -> bool {
         self.comparator_dirty.load(Ordering::Relaxed)
     }
