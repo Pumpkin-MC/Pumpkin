@@ -361,15 +361,10 @@ impl BedrockClient {
                                 && (held.get_data_component::<ConsumableImpl>().is_some()
                                     || held.get_data_component::<BlocksAttacksImpl>().is_some())
                             {
-                                if held.get_data_component::<FoodImpl>().is_none_or(|food| {
-                                    player
-                                        .abilities
-                                        .lock()
-                                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                                        .invulnerable
-                                        || food.can_always_eat
-                                        || player.hunger_manager.level.load() < 20
-                                }) {
+                                if held
+                                    .get_data_component::<FoodImpl>()
+                                    .is_none_or(|food| player.can_eat(food.can_always_eat))
+                                {
                                     player.living_entity.set_active_hand(
                                         Hand::Right,
                                         held.clone(),

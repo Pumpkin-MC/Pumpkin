@@ -283,7 +283,7 @@ use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::click::ClickEvent;
 use pumpkin_util::text::hover::HoverEvent;
-use pumpkin_util::{GameMode, Hand};
+use pumpkin_util::{Difficulty, GameMode, Hand};
 use pumpkin_world::biome;
 use pumpkin_world::cylindrical_chunk_iterator::Cylindrical;
 
@@ -2751,6 +2751,28 @@ impl Player {
         self.living_entity.tick(self, server);
 
         self.breath_manager.tick(self);
+
+        let level_info = self.world().level_info.load();
+        if level_info.difficulty == Difficulty::Peaceful
+            && level_info.game_rules.natural_health_regeneration
+        {
+            let tick_count = self.tick_counter.load(Ordering::Relaxed);
+            if tick_count % 20 == 0 {
+                if self.can_food_heal() {
+                    self.heal(1.0);
+                }
+
+                let saturation = self.hunger_manager.saturation.load();
+                if saturation < 20.0 {
+                    self.hunger_manager.set_saturation(saturation + 1.0);
+                }
+            }
+
+            if tick_count % 10 == 0 && self.hunger_manager.level.load() < 20 {
+                self.hunger_manager.add_hunger(1);
+            }
+        }
+
         self.hunger_manager.tick(self);
 
         // Vanilla updates pose in PlayerEntity#tick after super.tick().
@@ -2859,16 +2881,24 @@ impl Player {
     }
 
     pub fn progress_motion(&self, delta_pos: Vector3<f64>) {
-        // TODO: Swimming, gliding...
-        if self.living_entity.entity.on_ground.load(Ordering::Relaxed) {
-            let delta = (delta_pos.horizontal_length() * 100.0).round() as f32;
-            if delta > 0.0 {
-                if self.living_entity.entity.is_sprinting() {
-                    self.add_exhaustion(0.1 * delta * 0.01);
-                } else {
-                    self.add_exhaustion(0.0 * delta * 0.01);
-                }
-            }
+        // TODO: gliding...
+        let entity = &self.living_entity.entity;
+        let (rate, distance) = if self.is_swimming() || entity.is_submerged_in_water() {
+            (0.01, delta_pos.length())
+        } else if entity.is_in_water() {
+            (0.01, delta_pos.horizontal_length())
+        } else if self.living_entity.climbing.load(Ordering::Relaxed) {
+            return;
+        } else if entity.on_ground.load(Ordering::Relaxed) {
+            let rate = if entity.is_sprinting() { 0.1 } else { 0.0 };
+            (rate, delta_pos.horizontal_length())
+        } else {
+            return;
+        };
+
+        let delta = (distance * 100.0).round() as f32;
+        if delta > 0.0 {
+            self.add_exhaustion(rate * delta * 0.01);
         }
     }
 
@@ -3577,6 +3607,25 @@ impl Player {
         sb.get_entity_team(&self.gameprofile.name).cloned()
     }
 
+    pub fn get_team_name(&self) -> Option<String> {
+        let guard = self
+            .custom_scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(CustomScoreboard::Java(sb)) = guard.as_ref()
+            && let Some(team) = sb.get_entity_team(&self.gameprofile.name)
+        {
+            return Some(team.name.clone());
+        }
+        let world = self.world();
+        let sb = world
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        sb.get_entity_team(&self.gameprofile.name)
+            .map(|team| team.name.clone())
+    }
+
     pub fn set_compass_target(&self, pos: pumpkin_util::math::position::BlockPos) {
         use pumpkin_protocol::java::client::play::CPlayerSpawnPosition;
         self.compass_target.store(Some(pos));
@@ -4049,6 +4098,16 @@ impl Player {
         }
 
         false
+    }
+
+    #[must_use]
+    pub fn can_eat(&self, can_always_eat: bool) -> bool {
+        self.abilities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .invulnerable
+            || can_always_eat
+            || self.hunger_manager.level.load() < 20
     }
 
     pub fn can_food_heal(&self) -> bool {
@@ -4950,11 +5009,27 @@ impl Player {
 
             self.last_sent_xp.store(level, Ordering::Relaxed);
 
-            self.try_send_client_packet(&CSetExperience::new(
-                progress.clamp(0.0, 1.0),
-                level.into(),
-                points.into(),
-            ));
+            let attribute = |name: &str, current_value, max_value| BedrockAttribute {
+                min_value: 0.0,
+                max_value,
+                current_value,
+                default_min_value: 0.0,
+                default_max_value: max_value,
+                default_value: 0.0,
+                name: name.to_string(),
+                modifiers: Vec::new(),
+            };
+            self.try_enqueue_packet_editioned(
+                &CSetExperience::new(progress.clamp(0.0, 1.0), level.into(), points.into()),
+                &CBedrockAttributes {
+                    target_runtime_id: VarULong(self.entity_id() as u64),
+                    attribute_list: vec![
+                        attribute("minecraft:player.experience", progress.clamp(0.0, 1.0), 1.0),
+                        attribute("minecraft:player.level", level.max(0) as f32, 24_791.0),
+                    ],
+                    tick: VarULong(0),
+                },
+            );
         }
     }
 
