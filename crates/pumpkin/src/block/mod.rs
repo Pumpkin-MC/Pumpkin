@@ -477,7 +477,9 @@ pub fn drop_loot(
             if !event.cancelled {
                 let block_entity = world.get_block_entity(pos);
                 for mut stack in event.items {
-                    if let Some(block_entity) = &block_entity && Block::from_item_id(stack.item.id) == Some(block) {
+                    if let Some(block_entity) = &block_entity
+                        && Block::from_item_id(stack.item.id) == Some(block)
+                    {
                         block_entity.collect_item_components(&mut stack);
                     }
                     world.drop_stack(pos, stack);

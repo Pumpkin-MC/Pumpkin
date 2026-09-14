@@ -73,9 +73,13 @@ impl BlockEntity for ShulkerBoxBlockEntity {
     }
 
     fn collect_item_components(&self, stack: &mut ItemStack) {
-        let items = self.items.read()
+        let items = self
+            .items
+            .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let contents: Vec<(u8, ItemStack)> = items.iter().enumerate()
+        let contents: Vec<(u8, ItemStack)> = items
+            .iter()
+            .enumerate()
             .filter(|(_, item)| !item.is_empty())
             .map(|(slot, item)| (slot as u8, item.clone()))
             .collect();
@@ -90,7 +94,9 @@ impl BlockEntity for ShulkerBoxBlockEntity {
             return;
         };
 
-        let mut items = self.items.write()
+        let mut items = self
+            .items
+            .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         for (slot, item) in &container.items {

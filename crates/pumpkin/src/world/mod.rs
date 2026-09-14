@@ -5562,7 +5562,9 @@ impl World {
         let mut flags = flags;
         if flags.contains(BlockFlags::SKIP_DROPS)
             && cause.is_some_and(|p| p.gamemode.load() == pumpkin_util::GameMode::Creative)
-            && self.get_block_entity(position).is_some_and(|entity| entity.drops_for_creative_player())
+            && self
+                .get_block_entity(position)
+                .is_some_and(|entity| entity.drops_for_creative_player())
         {
             flags.remove(BlockFlags::SKIP_DROPS);
         }
