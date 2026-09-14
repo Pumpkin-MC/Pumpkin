@@ -1,0 +1,10 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:bamboo",
+    "minecraft:bamboo_sapling",
+    "minecraft:gravel",
+    "#minecraft:sand",
+    "#minecraft:dirt_like"
+  ]
+}

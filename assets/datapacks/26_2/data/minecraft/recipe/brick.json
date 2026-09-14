@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:smelting",
+  "experience": 0.3,
+  "ingredient": "minecraft:clay_ball",
+  "result": {
+    "id": "minecraft:brick"
+  }
+}

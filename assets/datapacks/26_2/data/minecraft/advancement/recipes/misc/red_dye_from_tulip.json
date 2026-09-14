@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_red_flower": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:red_tulip"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:red_dye_from_tulip"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_red_flower"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:red_dye_from_tulip"
+    ]
+  }
+}

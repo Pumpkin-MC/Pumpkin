@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_LOCK_DIFFICULTY;
+use pumpkin_data::packet::serverbound::play::LOCK_DIFFICULTY;
 use pumpkin_macros::java_packet;
 
 use crate::{
@@ -7,7 +7,7 @@ use crate::{
 };
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_LOCK_DIFFICULTY)]
+#[java_packet(LOCK_DIFFICULTY)]
 pub struct SLockDifficulty {
     pub locked: bool,
 }
@@ -17,5 +17,17 @@ impl<'a> ServerPacket<'a> for SLockDifficulty {
         Ok(Self {
             locked: bytebuf.get_bool()?,
         })
+    }
+}
+
+impl crate::ClientPacket for SLockDifficulty {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_bool(self.locked)?;
+        Ok(())
     }
 }

@@ -1,0 +1,12 @@
+{
+  "item_model_index": 0.3,
+  "override_armor_materials": {
+    "minecraft:netherite": "netherite_darker"
+  },
+  "description": {
+    "translate": "trim_material.minecraft.netherite",
+    "color": "#625859"
+  },
+  "asset_name": "netherite",
+  "ingredient": "minecraft:netherite_ingot"
+}

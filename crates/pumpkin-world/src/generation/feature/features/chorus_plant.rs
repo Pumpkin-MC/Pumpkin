@@ -1,8 +1,7 @@
 use pumpkin_data::{
     Block, BlockDirection,
     block_properties::{
-        BlockProperties, BrownMushroomBlockLikeProperties, ChorusFlowerLikeProperties,
-        HorizontalFacing,
+        BrownMushroomBlockLikeProperties, ChorusFlowerLikeProperties, HorizontalFacing,
     },
     tag,
 };
@@ -138,7 +137,7 @@ fn grow_tree_recursive<T: GenerationCache>(
 
         for _ in 0..stems {
             // Pick a random horizontal direction
-            let dir = BlockDirection::horizontal()[random.next_bounded_i32(4) as usize];
+            let dir = BlockDirection::random_horizontal(random);
             let target = top.offset(dir.to_offset());
             let target_below = target.down();
 

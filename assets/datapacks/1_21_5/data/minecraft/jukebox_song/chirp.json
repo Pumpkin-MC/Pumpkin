@@ -1,0 +1,8 @@
+{
+  "sound_event": "minecraft:music_disc.chirp",
+  "description": {
+    "translate": "jukebox_song.minecraft.chirp"
+  },
+  "length_in_seconds": 185.0,
+  "comparator_output": 4
+}

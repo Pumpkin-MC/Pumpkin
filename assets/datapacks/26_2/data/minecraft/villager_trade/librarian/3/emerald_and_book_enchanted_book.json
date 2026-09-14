@@ -1,0 +1,38 @@
+{
+  "additional_wants": {
+    "id": "minecraft:book"
+  },
+  "double_trade_price_enchantments": "#minecraft:double_trade_price",
+  "given_item_modifiers": [
+    {
+      "function": "minecraft:enchant_randomly",
+      "include_additional_cost_component": true,
+      "only_compatible": false,
+      "options": "#minecraft:tradeable"
+    },
+    {
+      "function": "minecraft:filtered",
+      "item_filter": {
+        "items": "minecraft:enchanted_book",
+        "predicates": {
+          "minecraft:stored_enchantments": [
+            {}
+          ]
+        }
+      },
+      "on_fail": {
+        "function": "minecraft:discard"
+      }
+    }
+  ],
+  "gives": {
+    "id": "minecraft:enchanted_book"
+  },
+  "max_uses": 12.0,
+  "reputation_discount": 0.2,
+  "wants": {
+    "count": 0.0,
+    "id": "minecraft:emerald"
+  },
+  "xp": 10.0
+}

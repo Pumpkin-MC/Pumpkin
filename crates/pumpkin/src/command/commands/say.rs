@@ -1,57 +1,46 @@
 use pumpkin_data::world::SAY_COMMAND;
 use pumpkin_util::text::TextComponent;
 
-use crate::command::{
-    CommandError, CommandExecutor, CommandResult, CommandSender,
-    args::{Arg, ConsumedArgs, message::MsgArgConsumer},
-    tree::{CommandTree, builder::argument},
-};
-use CommandError::InvalidConsumption;
+use crate::command::argument_builder::{ArgumentBuilder, argument, command};
+use crate::command::argument_types::core::string::StringArgumentType;
+use crate::command::context::command_context::CommandContext;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
+use pumpkin_util::PermissionLvl;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 
-const NAMES: [&str; 1] = ["say"];
+const NAME: &str = "say";
 
 const DESCRIPTION: &str = "Broadcast a message to all Players.";
-
+const PERMISSION: &str = "minecraft:command.say";
 const ARG_MESSAGE: &str = "message";
 
 struct Executor;
 
 impl CommandExecutor for Executor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let Some(Arg::Msg(msg)) = args.get(ARG_MESSAGE) else {
-                return Err(InvalidConsumption(Some(ARG_MESSAGE.into())));
-            };
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let msg = context.get_argument::<String>(ARG_MESSAGE)?;
 
-            let Some(server_arc) = sender
-                .world_or_first(server)
-                .and_then(|w| w.server.upgrade())
-            else {
-                return Err(CommandError::CommandFailed(TextComponent::text(
-                    "Failed to get server instance",
-                )));
-            };
+        context.server().broadcast_message(
+            &TextComponent::text(msg.clone()),
+            &context.source.display_name,
+            SAY_COMMAND,
+            None,
+        );
 
-            server_arc
-                .broadcast_message(
-                    &TextComponent::text(msg.clone()),
-                    &TextComponent::text(format!("{sender}")),
-                    SAY_COMMAND,
-                    None,
-                )
-                .await;
-
-            Ok(1)
-        })
+        Ok(1)
     }
 }
 
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION)
-        .then(argument(ARG_MESSAGE, MsgArgConsumer).execute(Executor))
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Two),
+    ));
+    dispatcher.register(
+        command(NAME, DESCRIPTION)
+            .requires(PERMISSION)
+            .then(argument(ARG_MESSAGE, StringArgumentType::GreedyPhrase).executes(Executor)),
+    );
 }

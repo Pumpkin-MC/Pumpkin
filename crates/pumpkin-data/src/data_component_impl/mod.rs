@@ -221,6 +221,25 @@ impl IDSetContent for Block {
     }
 }
 
+impl IDSetContent for crate::item::Item {
+    fn registry_id(&self) -> u16 {
+        self.id
+    }
+
+    fn from_id(id: u16) -> Option<&'static Self> {
+        crate::item::Item::from_id(id)
+    }
+
+    fn from_str(name: &str) -> Option<&'static Self> {
+        let name = name.strip_prefix("minecraft:").unwrap_or(name);
+        crate::item::Item::from_registry_key(name)
+    }
+
+    fn to_string(&self) -> String {
+        self.registry_key.to_string()
+    }
+}
+
 #[derive(Clone, Hash, PartialEq, Debug)]
 pub enum IDSet<T: IDSetContent + 'static> {
     Tag(Cow<'static, str>),
@@ -523,23 +542,42 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         DataComponent::CustomData => Some(CustomDataImpl::read_data(data)?.to_dyn()),
         DataComponent::Enchantments => Some(EnchantmentsImpl::read_data(data)?.to_dyn()),
         DataComponent::Damage => Some(DamageImpl::read_data(data)?.to_dyn()),
+        DataComponent::MaxDamage => Some(MaxDamageImpl::read_data(data)?.to_dyn()),
         DataComponent::Unbreakable => Some(UnbreakableImpl::read_data(data)?.to_dyn()),
+        DataComponent::Food => Some(FoodImpl::read_data(data)?.to_dyn()),
+        DataComponent::Tool => Some(ToolImpl::read_data(data)?.to_dyn()),
+        DataComponent::Enchantable => Some(EnchantableImpl::read_data(data)?.to_dyn()),
         DataComponent::DamageResistant => Some(DamageResistantImpl::read_data(data)?.to_dyn()),
         DataComponent::PotionContents => Some(PotionContentsImpl::read_data(data)?.to_dyn()),
         DataComponent::PotionDurationScale => {
             Some(PotionDurationScaleImpl::read_data(data)?.to_dyn())
         }
+        DataComponent::SuspiciousStewEffects => {
+            Some(SuspiciousStewEffectsImpl::read_data(data)?.to_dyn())
+        }
         DataComponent::Fireworks => Some(FireworksImpl::read_data(data)?.to_dyn()),
         DataComponent::FireworkExplosion => Some(FireworkExplosionImpl::read_data(data)?.to_dyn()),
         DataComponent::CustomName => Some(CustomNameImpl::read_data(data)?.to_dyn()),
+        DataComponent::Lore => Some(LoreImpl::read_data(data)?.to_dyn()),
+        DataComponent::ItemName => Some(ItemNameImpl::read_data(data)?.to_dyn()),
         DataComponent::ItemModel => Some(ItemModelImpl::read_data(data)?.to_dyn()),
         DataComponent::Consumable => Some(ConsumableImpl::read_data(data)?.to_dyn()),
         DataComponent::Equippable => Some(EquippableImpl::read_data(data)?.to_dyn()),
+        DataComponent::AttackRange => Some(AttackRangeImpl::read_data(data)?.to_dyn()),
+        DataComponent::KineticWeapon => Some(KineticWeaponImpl::read_data(data)?.to_dyn()),
+        DataComponent::PiercingWeapon => Some(PiercingWeaponImpl::read_data(data)?.to_dyn()),
+        DataComponent::MinimumAttackCharge => {
+            Some(MinimumAttackChargeImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::DamageType => Some(DamageTypeImpl::read_data(data)?.to_dyn()),
         DataComponent::StoredEnchantments => {
             Some(StoredEnchantmentsImpl::read_data(data)?.to_dyn())
         }
         DataComponent::UseCooldown => Some(UseCooldownImpl::read_data(data)?.to_dyn()),
+        DataComponent::RepairCost => Some(RepairCostImpl::read_data(data)?.to_dyn()),
+        DataComponent::Repairable => Some(RepairableImpl::read_data(data)?.to_dyn()),
         DataComponent::MapId => Some(MapIdImpl::read_data(data)?.to_dyn()),
+        DataComponent::MapPostProcessing => Some(MapPostProcessingImpl::read_data(data)?.to_dyn()),
         DataComponent::ChargedProjectiles => {
             Some(ChargedProjectilesImpl::read_data(data)?.to_dyn())
         }
@@ -611,7 +649,44 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         DataComponent::Trim => Some(TrimImpl::read_data(data)?.to_dyn()),
         DataComponent::CanPlaceOn => Some(CanPlaceOnImpl::read_data(data)?.to_dyn()),
         DataComponent::CanBreak => Some(CanBreakImpl::read_data(data)?.to_dyn()),
-        _ => None,
+        DataComponent::SwingAnimation => Some(SwingAnimationImpl::read_data(data)?.to_dyn()),
+        DataComponent::Rarity => Some(RarityImpl::read_data(data)?.to_dyn()),
+        DataComponent::BannerPatterns => Some(BannerPatternsImpl::read_data(data)?.to_dyn()),
+        DataComponent::UseEffects => Some(UseEffectsImpl::read_data(data)?.to_dyn()),
+        DataComponent::UseRemainder => Some(UseRemainderImpl::read_data(data)?.to_dyn()),
+        DataComponent::Weapon => Some(WeaponImpl::read_data(data)?.to_dyn()),
+        DataComponent::TooltipDisplay => Some(TooltipDisplayImpl::read_data(data)?.to_dyn()),
+        DataComponent::CreativeSlotLock => Some(CreativeSlotLockImpl::read_data(data)?.to_dyn()),
+        DataComponent::EnchantmentGlintOverride => {
+            Some(EnchantmentGlintOverrideImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::DeathProtection => Some(DeathProtectionImpl::read_data(data)?.to_dyn()),
+        DataComponent::BlocksAttacks => Some(BlocksAttacksImpl::read_data(data)?.to_dyn()),
+        DataComponent::AdditionalTradeCost => {
+            Some(AdditionalTradeCostImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::Dye => Some(DyeImpl::read_data(data)?.to_dyn()),
+        DataComponent::MapColor => Some(MapColorImpl::read_data(data)?.to_dyn()),
+        DataComponent::MapDecorations => Some(MapDecorationsImpl::read_data(data)?.to_dyn()),
+        DataComponent::DebugStickState => Some(DebugStickStateImpl::read_data(data)?.to_dyn()),
+        DataComponent::EntityData => Some(EntityDataImpl::read_data(data)?.to_dyn()),
+        DataComponent::BucketEntityData => Some(BucketEntityDataImpl::read_data(data)?.to_dyn()),
+        DataComponent::Instrument => Some(InstrumentImpl::read_data(data)?.to_dyn()),
+        DataComponent::ProvidesTrimMaterial => {
+            Some(ProvidesTrimMaterialImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::JukeboxPlayable => Some(JukeboxPlayableImpl::read_data(data)?.to_dyn()),
+        DataComponent::ProvidesBannerPatterns => {
+            Some(ProvidesBannerPatternsImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::Recipes => Some(RecipesImpl::read_data(data)?.to_dyn()),
+        DataComponent::PotDecorations => Some(PotDecorationsImpl::read_data(data)?.to_dyn()),
+        DataComponent::Bees => Some(BeesImpl::read_data(data)?.to_dyn()),
+        DataComponent::SulfurCubeContent => Some(SulfurCubeContentImpl::read_data(data)?.to_dyn()),
+        DataComponent::BreakSound => Some(BreakSoundImpl::read_data(data)?.to_dyn()),
+        DataComponent::AttributeModifiers => {
+            Some(AttributeModifiersImpl::read_data(data)?.to_dyn())
+        }
     }
 }
 
@@ -640,6 +715,60 @@ mod tests {
     ) {
         let restored = read(&value.write_data()).expect("read_data returned None");
         assert!(value.equal(&restored));
+    }
+
+    #[test]
+    fn max_damage_round_trip() {
+        assert_round_trip(MaxDamageImpl { max_damage: 1561 }, MaxDamageImpl::read_data);
+    }
+
+    #[test]
+    fn enchantable_round_trip() {
+        assert_round_trip(EnchantableImpl { value: 14 }, EnchantableImpl::read_data);
+    }
+
+    #[test]
+    fn food_round_trip() {
+        assert_round_trip(
+            FoodImpl {
+                nutrition: 4,
+                saturation: 2.4,
+                can_always_eat: true,
+            },
+            FoodImpl::read_data,
+        );
+    }
+
+    #[test]
+    fn block_entity_data_round_trip() {
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("id", "minecraft:chest".to_string());
+        nbt.put_int("x", 12);
+        assert_round_trip(BlockEntityDataImpl { nbt }, BlockEntityDataImpl::read_data);
+    }
+
+    #[test]
+    fn tool_round_trip() {
+        assert_round_trip(
+            ToolImpl {
+                rules: Cow::Owned(vec![
+                    ToolRule {
+                        blocks: IDSet::Tag(Cow::Borrowed("mineable/pickaxe")),
+                        speed: Some(6.0),
+                        correct_for_drops: Some(true),
+                    },
+                    ToolRule {
+                        blocks: IDSet::Tag(Cow::Borrowed("incorrect_for_wooden_tool")),
+                        speed: None,
+                        correct_for_drops: Some(false),
+                    },
+                ]),
+                default_mining_speed: 1.0,
+                damage_per_block: 2,
+                can_destroy_blocks_in_creative: false,
+            },
+            ToolImpl::read_data,
+        );
     }
 
     #[test]
@@ -781,5 +910,17 @@ mod tests {
         assert_eq!(enc2.enchantment.len(), 1);
         assert!(enc2.enchantment[0].0 == &crate::Enchantment::SHARPNESS);
         assert_eq!(enc2.enchantment[0].1, 2);
+    }
+
+    #[test]
+    fn swing_animation_round_trip() {
+        assert_round_trip(
+            SwingAnimationImpl {
+                animation_type: SwingAnimationType::Stab,
+                duration: 19,
+            },
+            SwingAnimationImpl::read_data,
+        );
+        assert_round_trip(SwingAnimationImpl::DEFAULT, SwingAnimationImpl::read_data);
     }
 }

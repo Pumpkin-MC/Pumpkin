@@ -1,0 +1,11 @@
+{
+  "gives": {
+    "id": "minecraft:slime_ball"
+  },
+  "max_uses": 5.0,
+  "reputation_discount": 0.05,
+  "wants": {
+    "count": 4.0,
+    "id": "minecraft:emerald"
+  }
+}

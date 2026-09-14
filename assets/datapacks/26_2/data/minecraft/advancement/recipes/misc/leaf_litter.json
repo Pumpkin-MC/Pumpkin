@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_leaves": {
+      "conditions": {
+        "items": [
+          {
+            "items": "#minecraft:leaves"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:leaf_litter"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_leaves"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:leaf_litter"
+    ]
+  }
+}

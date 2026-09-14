@@ -32,7 +32,20 @@ impl RandomFeature {
             if random.next_f32() >= feature.chance {
                 continue;
             }
-            return feature.feature.get().generate(
+            if let Some(f) = feature.feature.get() {
+                return f.generate(
+                    chunk,
+                    block_registry,
+                    min_y,
+                    height,
+                    feature_name,
+                    random,
+                    pos,
+                );
+            }
+        }
+        self.default.get().is_some_and(|default_feature| {
+            default_feature.generate(
                 chunk,
                 block_registry,
                 min_y,
@@ -40,16 +53,7 @@ impl RandomFeature {
                 feature_name,
                 random,
                 pos,
-            );
-        }
-        self.default.get().generate(
-            chunk,
-            block_registry,
-            min_y,
-            height,
-            feature_name,
-            random,
-            pos,
-        )
+            )
+        })
     }
 }

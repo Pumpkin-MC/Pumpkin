@@ -1,0 +1,8 @@
+{
+  "values": [
+    "minecraft:grass_block",
+    "minecraft:air",
+    "#minecraft:leaves",
+    "#minecraft:logs"
+  ]
+}

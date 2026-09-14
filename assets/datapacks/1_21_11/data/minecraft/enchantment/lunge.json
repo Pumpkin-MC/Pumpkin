@@ -1,0 +1,104 @@
+{
+  "description": {
+    "translate": "enchantment.minecraft.lunge"
+  },
+  "supported_items": "#minecraft:enchantable/lunge",
+  "weight": 5,
+  "max_level": 3,
+  "min_cost": {
+    "base": 5,
+    "per_level_above_first": 8
+  },
+  "max_cost": {
+    "base": 25,
+    "per_level_above_first": 8
+  },
+  "anvil_cost": 2,
+  "slots": [
+    "hand"
+  ],
+  "effects": {
+    "minecraft:post_piercing_attack": [
+      {
+        "effect": {
+          "effects": [
+            {
+              "amount": 1.0,
+              "type": "minecraft:change_item_damage"
+            },
+            {
+              "amount": {
+                "base": 4.0,
+                "per_level_above_first": 4.0,
+                "type": "minecraft:linear"
+              },
+              "type": "minecraft:apply_exhaustion"
+            },
+            {
+              "direction": [
+                0.0,
+                0.0,
+                1.0
+              ],
+              "coordinate_scale": [
+                1.0,
+                0.0,
+                1.0
+              ],
+              "magnitude": {
+                "base": 0.458,
+                "per_level_above_first": 0.458,
+                "type": "minecraft:linear"
+              },
+              "type": "minecraft:apply_impulse"
+            },
+            {
+              "sound": [
+                "minecraft:item.spear.lunge_1",
+                "minecraft:item.spear.lunge_2",
+                "minecraft:item.spear.lunge_3"
+              ],
+              "volume": 1.0,
+              "pitch": 1.0,
+              "type": "minecraft:play_sound"
+            }
+          ],
+          "type": "minecraft:all_of"
+        },
+        "requirements": {
+          "terms": [
+            {
+              "term": {
+                "predicate": {
+                  "vehicle": {}
+                },
+                "entity": "this",
+                "condition": "minecraft:entity_properties"
+              },
+              "condition": "minecraft:inverted"
+            },
+            {
+              "predicate": {
+                "flags": {
+                  "is_fall_flying": false
+                }
+              },
+              "entity": "this",
+              "condition": "minecraft:entity_properties"
+            },
+            {
+              "predicate": {
+                "flags": {
+                  "is_in_water": false
+                }
+              },
+              "entity": "this",
+              "condition": "minecraft:entity_properties"
+            }
+          ],
+          "condition": "minecraft:all_of"
+        }
+      }
+    ]
+  }
+}

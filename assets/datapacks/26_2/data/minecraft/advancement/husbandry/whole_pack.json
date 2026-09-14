@@ -1,0 +1,194 @@
+{
+  "parent": "minecraft:husbandry/tame_an_animal",
+  "criteria": {
+    "minecraft:ashen": {
+      "conditions": {
+        "entity": [
+          {
+            "condition": "minecraft:entity_properties",
+            "entity": "this",
+            "predicate": {
+              "minecraft:components": {
+                "minecraft:wolf/variant": "minecraft:ashen"
+              }
+            }
+          }
+        ]
+      },
+      "trigger": "minecraft:tame_animal"
+    },
+    "minecraft:black": {
+      "conditions": {
+        "entity": [
+          {
+            "condition": "minecraft:entity_properties",
+            "entity": "this",
+            "predicate": {
+              "minecraft:components": {
+                "minecraft:wolf/variant": "minecraft:black"
+              }
+            }
+          }
+        ]
+      },
+      "trigger": "minecraft:tame_animal"
+    },
+    "minecraft:chestnut": {
+      "conditions": {
+        "entity": [
+          {
+            "condition": "minecraft:entity_properties",
+            "entity": "this",
+            "predicate": {
+              "minecraft:components": {
+                "minecraft:wolf/variant": "minecraft:chestnut"
+              }
+            }
+          }
+        ]
+      },
+      "trigger": "minecraft:tame_animal"
+    },
+    "minecraft:pale": {
+      "conditions": {
+        "entity": [
+          {
+            "condition": "minecraft:entity_properties",
+            "entity": "this",
+            "predicate": {
+              "minecraft:components": {
+                "minecraft:wolf/variant": "minecraft:pale"
+              }
+            }
+          }
+        ]
+      },
+      "trigger": "minecraft:tame_animal"
+    },
+    "minecraft:rusty": {
+      "conditions": {
+        "entity": [
+          {
+            "condition": "minecraft:entity_properties",
+            "entity": "this",
+            "predicate": {
+              "minecraft:components": {
+                "minecraft:wolf/variant": "minecraft:rusty"
+              }
+            }
+          }
+        ]
+      },
+      "trigger": "minecraft:tame_animal"
+    },
+    "minecraft:snowy": {
+      "conditions": {
+        "entity": [
+          {
+            "condition": "minecraft:entity_properties",
+            "entity": "this",
+            "predicate": {
+              "minecraft:components": {
+                "minecraft:wolf/variant": "minecraft:snowy"
+              }
+            }
+          }
+        ]
+      },
+      "trigger": "minecraft:tame_animal"
+    },
+    "minecraft:spotted": {
+      "conditions": {
+        "entity": [
+          {
+            "condition": "minecraft:entity_properties",
+            "entity": "this",
+            "predicate": {
+              "minecraft:components": {
+                "minecraft:wolf/variant": "minecraft:spotted"
+              }
+            }
+          }
+        ]
+      },
+      "trigger": "minecraft:tame_animal"
+    },
+    "minecraft:striped": {
+      "conditions": {
+        "entity": [
+          {
+            "condition": "minecraft:entity_properties",
+            "entity": "this",
+            "predicate": {
+              "minecraft:components": {
+                "minecraft:wolf/variant": "minecraft:striped"
+              }
+            }
+          }
+        ]
+      },
+      "trigger": "minecraft:tame_animal"
+    },
+    "minecraft:woods": {
+      "conditions": {
+        "entity": [
+          {
+            "condition": "minecraft:entity_properties",
+            "entity": "this",
+            "predicate": {
+              "minecraft:components": {
+                "minecraft:wolf/variant": "minecraft:woods"
+              }
+            }
+          }
+        ]
+      },
+      "trigger": "minecraft:tame_animal"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.husbandry.whole_pack.description"
+    },
+    "frame": "challenge",
+    "icon": {
+      "id": "minecraft:bone"
+    },
+    "title": {
+      "translate": "advancements.husbandry.whole_pack.title"
+    }
+  },
+  "requirements": [
+    [
+      "minecraft:ashen"
+    ],
+    [
+      "minecraft:black"
+    ],
+    [
+      "minecraft:chestnut"
+    ],
+    [
+      "minecraft:pale"
+    ],
+    [
+      "minecraft:rusty"
+    ],
+    [
+      "minecraft:snowy"
+    ],
+    [
+      "minecraft:spotted"
+    ],
+    [
+      "minecraft:striped"
+    ],
+    [
+      "minecraft:woods"
+    ]
+  ],
+  "rewards": {
+    "experience": 50
+  },
+  "sends_telemetry_event": true
+}

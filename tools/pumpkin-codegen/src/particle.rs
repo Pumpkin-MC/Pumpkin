@@ -34,6 +34,18 @@ pub fn build() -> TokenStream {
             }
         })
         .collect::<TokenStream>();
+    let type_from_id = &particle
+        .iter()
+        .enumerate()
+        .map(|(idx, particle)| {
+            let idx = idx as u16;
+            let name = format_ident!("{}", particle.to_pascal_case());
+
+            quote! {
+                #idx => Some(Self::#name),
+            }
+        })
+        .collect::<TokenStream>();
     quote! {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         pub enum Particle {
@@ -57,6 +69,21 @@ pub fn build() -> TokenStream {
                 match self {
                     #type_to_name
                 }
+            }
+
+            #[doc = r" Try to parse a `Particle` from an ID."]
+            #[must_use]
+            #[allow(clippy::too_many_lines)]
+            pub const fn from_id(id: u16) -> Option<Self> {
+                match id {
+                    #type_from_id
+                    _ => None,
+                }
+            }
+
+            #[must_use]
+            pub const fn to_id(&self) -> u16 {
+                *self as u16
             }
         }
     }

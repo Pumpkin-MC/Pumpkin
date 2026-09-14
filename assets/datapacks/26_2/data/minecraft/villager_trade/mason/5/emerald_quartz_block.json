@@ -1,0 +1,11 @@
+{
+  "gives": {
+    "id": "minecraft:quartz_block"
+  },
+  "max_uses": 12.0,
+  "reputation_discount": 0.05,
+  "wants": {
+    "id": "minecraft:emerald"
+  },
+  "xp": 30.0
+}

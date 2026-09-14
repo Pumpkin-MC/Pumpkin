@@ -1,0 +1,37 @@
+{
+  "precipitation": "none",
+  "effects": {
+    "music": {
+      "replace_current_music": 0,
+      "max_delay": 24000,
+      "sound": "minecraft:music.nether.soul_sand_valley",
+      "min_delay": 12000
+    },
+    "sky_color": 7254527,
+    "ambient_sound": "minecraft:ambient.soul_sand_valley.loop",
+    "additions_sound": {
+      "sound": "minecraft:ambient.soul_sand_valley.additions",
+      "tick_chance": 0.0111
+    },
+    "particle": {
+      "probability": 0.0062500000931322575,
+      "options": {
+        "type": "minecraft:ash"
+      }
+    },
+    "water_fog_color": 329011,
+    "fog_color": 1787717,
+    "water_color": 4159204,
+    "mood_sound": {
+      "tick_delay": 6000,
+      "offset": 2.0,
+      "sound": "minecraft:ambient.soul_sand_valley.mood",
+      "block_search_extent": 8
+    }
+  },
+  "depth": 0.10000000149011612,
+  "temperature": 2.0,
+  "scale": 0.20000000298023224,
+  "downfall": 0.0,
+  "category": "nether"
+}

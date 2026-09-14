@@ -1,0 +1,33 @@
+{
+  "values": [
+    "minecraft:explosion",
+    "minecraft:player_explosion",
+    "minecraft:bad_respawn_point",
+    "minecraft:in_fire",
+    "minecraft:lightning_bolt",
+    "minecraft:on_fire",
+    "minecraft:lava",
+    "minecraft:hot_floor",
+    "minecraft:in_wall",
+    "minecraft:cramming",
+    "minecraft:drown",
+    "minecraft:starve",
+    "minecraft:cactus",
+    "minecraft:fall",
+    "minecraft:ender_pearl",
+    "minecraft:fly_into_wall",
+    "minecraft:out_of_world",
+    "minecraft:generic",
+    "minecraft:magic",
+    "minecraft:wither",
+    "minecraft:dragon_breath",
+    "minecraft:dry_out",
+    "minecraft:sweet_berry_bush",
+    "minecraft:freeze",
+    "minecraft:stalagmite",
+    "minecraft:outside_border",
+    "minecraft:generic_kill",
+    "minecraft:campfire",
+    "minecraft:spear"
+  ]
+}

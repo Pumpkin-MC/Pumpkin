@@ -1,5 +1,5 @@
 use crate::entity::{
-    Entity, NBTStorage,
+    Entity,
     mob::{Mob, MobEntity, skeleton::SkeletonEntityBase},
 };
 use std::sync::Arc;
@@ -15,8 +15,6 @@ impl BoggedSkeletonEntity {
         Arc::new(bogged)
     }
 }
-
-impl NBTStorage for BoggedSkeletonEntity {}
 
 impl Mob for BoggedSkeletonEntity {
     fn get_mob_entity(&self) -> &MobEntity {

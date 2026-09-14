@@ -27,7 +27,7 @@ impl Pool {
         let mut index = random.next_bounded_i32(total_weight);
 
         if total_weight < 64 {
-            return Some(FlattenedContent::get(index, distribution, total_weight));
+            return Some(FlattenedContent::get(index, distribution));
         }
 
         // WrappedContent
@@ -60,11 +60,10 @@ impl FlattenedContent {
     /// # Arguments
     /// * `index` – The target index to select.
     /// * `entries` – The weighted entries to flatten.
-    /// * `total_weight` – The total weight of all entries.
     ///
     /// # Returns
     /// The element corresponding to the given index.
-    pub fn get<E>(index: i32, entries: &[Weighted<E>], _total_weight: i32) -> &E {
+    pub fn get<E>(index: i32, entries: &[Weighted<E>]) -> &E {
         let mut cur_index = 0;
 
         for entry in entries {

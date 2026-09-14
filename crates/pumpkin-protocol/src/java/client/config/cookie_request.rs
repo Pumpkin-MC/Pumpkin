@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::CONFIG_COOKIE_REQUEST;
+use pumpkin_data::packet::clientbound::config::COOKIE_REQUEST;
 use pumpkin_macros::java_packet;
 use pumpkin_util::resource_location::ResourceLocation;
 
@@ -6,7 +6,7 @@ use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(CONFIG_COOKIE_REQUEST)]
+#[java_packet(COOKIE_REQUEST)]
 /// Requests a cookie that was previously stored.
 pub struct CCookieRequest<'a> {
     pub key: &'a ResourceLocation,

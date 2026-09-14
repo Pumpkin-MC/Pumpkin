@@ -1,6 +1,7 @@
 pub mod chunk_density_function;
 pub mod chunk_noise_router;
 pub mod density_function;
+pub mod density_volume;
 pub mod find_top_surface;
 pub mod multi_noise_sampler;
 #[cfg(test)]

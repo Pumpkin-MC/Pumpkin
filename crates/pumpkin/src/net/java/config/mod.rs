@@ -1,4 +1,4 @@
-use std::{num::NonZeroU8, sync::Arc, sync::atomic::Ordering};
+use std::{num::NonZero, sync::Arc, sync::atomic::Ordering};
 
 use crate::{
     entity::player::ChatMode,
@@ -9,14 +9,14 @@ use crate::{
     server::Server,
 };
 use core::str;
-use pumpkin_data::{registry::Registry, translation};
+use pumpkin_data::registry::Registry;
 use pumpkin_protocol::{
-    ConnectionState, KnownPack,
+    ConnectionState,
     java::{
         client::config::{CFeatureFlags, CFinishConfig, CKnownPacks, CRegistryData, CUpdateTags},
         server::config::{
             ResourcePackResponseResult, SClientInformationConfig, SConfigCookieResponse,
-            SConfigResourcePack, SKeepAlive, SKnownPacks, SPluginMessage,
+            SConfigResourcePack, SKeepAlive, SPluginMessage,
         },
     },
 };

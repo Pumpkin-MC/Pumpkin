@@ -1,0 +1,8 @@
+{
+  "template_item": "minecraft:spire_armor_trim_smithing_template",
+  "description": {
+    "translate": "trim_pattern.minecraft.spire"
+  },
+  "asset_id": "minecraft:spire",
+  "decal": 0
+}

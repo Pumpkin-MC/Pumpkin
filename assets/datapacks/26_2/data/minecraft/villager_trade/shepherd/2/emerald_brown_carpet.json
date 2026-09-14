@@ -1,0 +1,12 @@
+{
+  "gives": {
+    "count": 4,
+    "id": "minecraft:brown_carpet"
+  },
+  "max_uses": 16.0,
+  "reputation_discount": 0.05,
+  "wants": {
+    "id": "minecraft:emerald"
+  },
+  "xp": 5.0
+}

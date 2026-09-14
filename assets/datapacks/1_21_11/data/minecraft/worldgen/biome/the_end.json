@@ -1,0 +1,8 @@
+{
+  "has_precipitation": false,
+  "temperature": 0.5,
+  "downfall": 0.5,
+  "effects": {
+    "water_color": "#3f76e4"
+  }
+}

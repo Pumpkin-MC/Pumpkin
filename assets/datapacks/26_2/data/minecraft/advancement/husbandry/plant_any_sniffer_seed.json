@@ -1,0 +1,46 @@
+{
+  "parent": "minecraft:husbandry/feed_snifflet",
+  "criteria": {
+    "pitcher_pod": {
+      "conditions": {
+        "location": [
+          {
+            "block": "minecraft:pitcher_crop",
+            "condition": "minecraft:block_state_property"
+          }
+        ]
+      },
+      "trigger": "minecraft:placed_block"
+    },
+    "torchflower": {
+      "conditions": {
+        "location": [
+          {
+            "block": "minecraft:torchflower_crop",
+            "condition": "minecraft:block_state_property"
+          }
+        ]
+      },
+      "trigger": "minecraft:placed_block"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.husbandry.plant_any_sniffer_seed.description"
+    },
+    "hidden": true,
+    "icon": {
+      "id": "minecraft:pitcher_pod"
+    },
+    "title": {
+      "translate": "advancements.husbandry.plant_any_sniffer_seed.title"
+    }
+  },
+  "requirements": [
+    [
+      "torchflower",
+      "pitcher_pod"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

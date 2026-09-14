@@ -1,0 +1,5 @@
+{
+  "model": "warm",
+  "asset_id": "minecraft:entity/cow/cow_warm",
+  "baby_asset_id": "minecraft:entity/cow/cow_warm_baby"
+}

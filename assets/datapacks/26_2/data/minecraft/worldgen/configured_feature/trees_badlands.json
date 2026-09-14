@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:random_selector",
+  "config": {
+    "default": "minecraft:oak_leaf_litter",
+    "features": [
+      {
+        "chance": 0.0125,
+        "feature": "minecraft:fallen_oak_tree"
+      }
+    ]
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_resin_bricks": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:resin_bricks"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:resin_brick_wall_from_resin_bricks_stonecutting"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_resin_bricks"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:resin_brick_wall_from_resin_bricks_stonecutting"
+    ]
+  }
+}

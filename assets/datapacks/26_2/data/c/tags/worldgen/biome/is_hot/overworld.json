@@ -1,0 +1,17 @@
+{
+  "values": [
+    "jungle",
+    "bamboo_jungle",
+    "sparse_jungle",
+    "desert",
+    "badlands",
+    "wooded_badlands",
+    "eroded_badlands",
+    "savanna",
+    "savanna_plateau",
+    "windswept_savanna",
+    "stony_peaks",
+    "mushroom_fields",
+    "warm_ocean"
+  ]
+}

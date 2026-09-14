@@ -1,0 +1,42 @@
+{
+  "description": {
+    "translate": "enchantment.minecraft.sweeping_edge"
+  },
+  "min_cost": {
+    "base": 5,
+    "per_level_above_first": 9
+  },
+  "max_cost": {
+    "base": 20,
+    "per_level_above_first": 9
+  },
+  "anvil_cost": 4,
+  "slots": [
+    "mainhand"
+  ],
+  "supported_items": "#minecraft:enchantable/sword",
+  "weight": 2,
+  "max_level": 3,
+  "effects": {
+    "minecraft:attributes": [
+      {
+        "id": "minecraft:enchantment.sweeping_edge",
+        "attribute": "minecraft:player.sweeping_damage_ratio",
+        "amount": {
+          "numerator": {
+            "base": 1.0,
+            "per_level_above_first": 1.0,
+            "type": "minecraft:linear"
+          },
+          "denominator": {
+            "base": 2.0,
+            "per_level_above_first": 1.0,
+            "type": "minecraft:linear"
+          },
+          "type": "minecraft:fraction"
+        },
+        "operation": "add_value"
+      }
+    ]
+  }
+}

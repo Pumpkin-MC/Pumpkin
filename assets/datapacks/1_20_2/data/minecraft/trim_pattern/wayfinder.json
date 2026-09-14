@@ -1,0 +1,8 @@
+{
+  "template_item": "minecraft:wayfinder_armor_trim_smithing_template",
+  "description": {
+    "translate": "trim_pattern.minecraft.wayfinder"
+  },
+  "asset_id": "minecraft:wayfinder",
+  "decal": 0
+}

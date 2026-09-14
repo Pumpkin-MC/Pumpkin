@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_TAB_LIST;
+use pumpkin_data::packet::clientbound::play::TAB_LIST;
 use pumpkin_macros::java_packet;
 use pumpkin_util::text::TextComponent;
 
@@ -7,7 +7,7 @@ use crate::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
 
 /// Updates the header and footer of the player list (Tab List).
-#[java_packet(PLAY_TAB_LIST)]
+#[java_packet(TAB_LIST)]
 pub struct CTabList<'a> {
     /// The text to be displayed at the top of the player list.
     pub header: &'a TextComponent,
@@ -26,10 +26,10 @@ impl ClientPacket for CTabList<'_> {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
-        write.write_slice(&self.header.encode())?;
-        write.write_slice(&self.footer.encode())?;
+        write.write_component(self.header, version)?;
+        write.write_component(self.footer, version)?;
         Ok(())
     }
 }

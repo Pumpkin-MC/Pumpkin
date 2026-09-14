@@ -1,0 +1,20 @@
+{
+  "category": "river",
+  "temperature": 0.0,
+  "downfall": 0.5,
+  "depth": -0.5,
+  "effects": {
+    "water_fog_color": 329011,
+    "water_color": 3750089,
+    "fog_color": 12638463,
+    "mood_sound": {
+      "offset": 2.0,
+      "sound": "minecraft:ambient.cave",
+      "block_search_extent": 8,
+      "tick_delay": 6000
+    },
+    "sky_color": 8364543
+  },
+  "precipitation": "snow",
+  "scale": 0.0
+}

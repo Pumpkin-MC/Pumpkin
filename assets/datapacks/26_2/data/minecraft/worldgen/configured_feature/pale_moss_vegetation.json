@@ -1,0 +1,38 @@
+{
+  "type": "minecraft:simple_block",
+  "config": {
+    "to_place": {
+      "type": "minecraft:weighted_state_provider",
+      "entries": [
+        {
+          "data": {
+            "Name": "minecraft:pale_moss_carpet",
+            "Properties": {
+              "bottom": "true",
+              "east": "none",
+              "north": "none",
+              "south": "none",
+              "west": "none"
+            }
+          },
+          "weight": 25
+        },
+        {
+          "data": {
+            "Name": "minecraft:short_grass"
+          },
+          "weight": 25
+        },
+        {
+          "data": {
+            "Name": "minecraft:tall_grass",
+            "Properties": {
+              "half": "lower"
+            }
+          },
+          "weight": 10
+        }
+      ]
+    }
+  }
+}

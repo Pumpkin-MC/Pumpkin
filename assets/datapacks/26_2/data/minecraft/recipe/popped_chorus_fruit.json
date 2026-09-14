@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:smelting",
+  "experience": 0.1,
+  "ingredient": "minecraft:chorus_fruit",
+  "result": {
+    "id": "minecraft:popped_chorus_fruit"
+  }
+}

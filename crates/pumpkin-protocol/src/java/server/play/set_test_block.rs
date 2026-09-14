@@ -1,4 +1,4 @@
-use pumpkin_data::packet::serverbound::PLAY_SET_TEST_BLOCK;
+use pumpkin_data::packet::serverbound::play::SET_TEST_BLOCK;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::position::BlockPos;
 
@@ -9,7 +9,7 @@ use crate::{
 use pumpkin_util::version::JavaMinecraftVersion;
 use std::io::Read;
 
-#[java_packet(PLAY_SET_TEST_BLOCK)]
+#[java_packet(SET_TEST_BLOCK)]
 pub struct SSetTestBlock<'a> {
     pub position: BlockPos,
     pub mode: TestBlockMode,
@@ -19,13 +19,27 @@ pub struct SSetTestBlock<'a> {
 impl<'a> ServerPacket<'a> for SSetTestBlock<'a> {
     fn read(
         mut bytebuf: &mut &'a [u8],
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<Self, ReadingError> {
         Ok(Self {
-            position: BlockPos::from_i64(bytebuf.get_i64_be()?),
+            position: bytebuf.get_block_pos(version)?,
             mode: TestBlockMode::read(&mut bytebuf)?,
             message: bytebuf.get_str_borrowed()?,
         })
+    }
+}
+
+impl crate::ClientPacket for SSetTestBlock<'_> {
+    fn write_packet_data(
+        &self,
+        mut write: impl std::io::Write,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), crate::ser::WritingError> {
+        use crate::ser::NetworkWriteExt;
+        write.write_block_pos(&self.position, version)?;
+        self.mode.write(&mut write)?;
+        write.write_string(self.message)?;
+        Ok(())
     }
 }
 
@@ -46,5 +60,18 @@ impl TestBlockMode {
             3 => Ok(Self::Accept),
             _ => Err(ReadingError::Message("Invalid TestBlockMode".to_string())),
         }
+    }
+
+    fn write(
+        self,
+        write: &mut impl crate::ser::NetworkWriteExt,
+    ) -> Result<(), crate::ser::WritingError> {
+        let val = match self {
+            Self::Start => 0,
+            Self::Log => 1,
+            Self::Fail => 2,
+            Self::Accept => 3,
+        };
+        write.write_var_int(&crate::VarInt(val))
     }
 }

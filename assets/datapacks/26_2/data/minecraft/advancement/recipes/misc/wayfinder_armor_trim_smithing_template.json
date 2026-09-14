@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:wayfinder_armor_trim_smithing_template"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    },
+    "has_wayfinder_armor_trim_smithing_template": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:wayfinder_armor_trim_smithing_template"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_wayfinder_armor_trim_smithing_template"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:wayfinder_armor_trim_smithing_template"
+    ]
+  }
+}

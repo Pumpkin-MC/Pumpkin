@@ -1,0 +1,27 @@
+{
+  "values": [
+    "mace",
+    "trident",
+    "wooden_sword",
+    "stone_sword",
+    "copper_sword",
+    "golden_sword",
+    "iron_sword",
+    "diamond_sword",
+    "netherite_sword",
+    "wooden_axe",
+    "stone_axe",
+    "copper_axe",
+    "golden_axe",
+    "iron_axe",
+    "diamond_axe",
+    "netherite_axe",
+    "wooden_spear",
+    "stone_spear",
+    "copper_spear",
+    "iron_spear",
+    "golden_spear",
+    "diamond_spear",
+    "netherite_spear"
+  ]
+}

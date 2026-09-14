@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:block_pile",
+  "config": {
+    "state_provider": {
+      "type": "minecraft:rotated_block_provider",
+      "state": {
+        "Name": "minecraft:hay_block",
+        "Properties": {
+          "axis": "y"
+        }
+      }
+    }
+  }
+}

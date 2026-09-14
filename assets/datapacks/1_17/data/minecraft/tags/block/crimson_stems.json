@@ -1,0 +1,9 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:crimson_stem",
+    "minecraft:stripped_crimson_stem",
+    "minecraft:crimson_hyphae",
+    "minecraft:stripped_crimson_hyphae"
+  ]
+}

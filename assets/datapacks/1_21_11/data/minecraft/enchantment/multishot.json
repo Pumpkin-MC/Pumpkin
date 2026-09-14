@@ -1,0 +1,47 @@
+{
+  "description": {
+    "translate": "enchantment.minecraft.multishot"
+  },
+  "supported_items": "#minecraft:enchantable/crossbow",
+  "weight": 2,
+  "max_level": 1,
+  "min_cost": {
+    "base": 20,
+    "per_level_above_first": 0
+  },
+  "max_cost": {
+    "base": 50,
+    "per_level_above_first": 0
+  },
+  "anvil_cost": 4,
+  "slots": [
+    "mainhand"
+  ],
+  "exclusive_set": "#minecraft:exclusive_set/crossbow",
+  "effects": {
+    "minecraft:projectile_count": [
+      {
+        "effect": {
+          "value": {
+            "base": 2.0,
+            "per_level_above_first": 2.0,
+            "type": "minecraft:linear"
+          },
+          "type": "minecraft:add"
+        }
+      }
+    ],
+    "minecraft:projectile_spread": [
+      {
+        "effect": {
+          "value": {
+            "base": 10.0,
+            "per_level_above_first": 10.0,
+            "type": "minecraft:linear"
+          },
+          "type": "minecraft:add"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "effects": {
+    "music": {
+      "replace_current_music": 0,
+      "max_delay": 24000,
+      "sound": "minecraft:music.nether.nether_wastes",
+      "min_delay": 12000
+    },
+    "sky_color": 7254527,
+    "ambient_sound": "minecraft:ambient.nether_wastes.loop",
+    "additions_sound": {
+      "sound": "minecraft:ambient.nether_wastes.additions",
+      "tick_chance": 0.0111
+    },
+    "water_fog_color": 329011,
+    "fog_color": 3344392,
+    "water_color": 4159204,
+    "mood_sound": {
+      "tick_delay": 6000,
+      "offset": 2.0,
+      "sound": "minecraft:ambient.nether_wastes.mood",
+      "block_search_extent": 8
+    }
+  },
+  "has_precipitation": 0,
+  "temperature": 2.0,
+  "downfall": 0.0
+}

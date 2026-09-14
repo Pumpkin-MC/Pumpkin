@@ -1,0 +1,8 @@
+{
+  "sound_event": "minecraft:music_disc.tears",
+  "description": {
+    "translate": "jukebox_song.minecraft.tears"
+  },
+  "length_in_seconds": 175.0,
+  "comparator_output": 10
+}

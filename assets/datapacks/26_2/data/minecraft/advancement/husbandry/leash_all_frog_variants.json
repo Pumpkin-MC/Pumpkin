@@ -1,0 +1,88 @@
+{
+  "parent": "minecraft:husbandry/tadpole_in_a_bucket",
+  "criteria": {
+    "minecraft:cold": {
+      "conditions": {
+        "entity": [
+          {
+            "condition": "minecraft:entity_properties",
+            "entity": "this",
+            "predicate": {
+              "minecraft:components": {
+                "minecraft:frog/variant": "minecraft:cold"
+              },
+              "minecraft:entity_type": "minecraft:frog"
+            }
+          }
+        ],
+        "item": {
+          "items": "minecraft:lead"
+        }
+      },
+      "trigger": "minecraft:player_interacted_with_entity"
+    },
+    "minecraft:temperate": {
+      "conditions": {
+        "entity": [
+          {
+            "condition": "minecraft:entity_properties",
+            "entity": "this",
+            "predicate": {
+              "minecraft:components": {
+                "minecraft:frog/variant": "minecraft:temperate"
+              },
+              "minecraft:entity_type": "minecraft:frog"
+            }
+          }
+        ],
+        "item": {
+          "items": "minecraft:lead"
+        }
+      },
+      "trigger": "minecraft:player_interacted_with_entity"
+    },
+    "minecraft:warm": {
+      "conditions": {
+        "entity": [
+          {
+            "condition": "minecraft:entity_properties",
+            "entity": "this",
+            "predicate": {
+              "minecraft:components": {
+                "minecraft:frog/variant": "minecraft:warm"
+              },
+              "minecraft:entity_type": "minecraft:frog"
+            }
+          }
+        ],
+        "item": {
+          "items": "minecraft:lead"
+        }
+      },
+      "trigger": "minecraft:player_interacted_with_entity"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.husbandry.leash_all_frog_variants.description"
+    },
+    "icon": {
+      "id": "minecraft:lead"
+    },
+    "title": {
+      "translate": "advancements.husbandry.leash_all_frog_variants.title"
+    }
+  },
+  "requirements": [
+    [
+      "minecraft:cold"
+    ],
+    [
+      "minecraft:temperate"
+    ],
+    [
+      "minecraft:warm"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

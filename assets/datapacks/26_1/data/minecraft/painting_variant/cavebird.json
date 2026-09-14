@@ -1,0 +1,13 @@
+{
+  "width": 3,
+  "height": 3,
+  "asset_id": "minecraft:cavebird",
+  "title": {
+    "translate": "painting.minecraft.cavebird.title",
+    "color": "yellow"
+  },
+  "author": {
+    "translate": "painting.minecraft.cavebird.author",
+    "color": "gray"
+  }
+}

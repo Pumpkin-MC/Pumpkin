@@ -1,7 +1,7 @@
 use crate::ClientPacket;
 use crate::VarInt;
 use crate::ser::NetworkWriteExt;
-use pumpkin_data::packet::clientbound::PLAY_ANIMATE;
+use pumpkin_data::packet::clientbound::play::ANIMATE;
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -9,7 +9,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 ///
 /// This is primarily used for player-driven animations like swinging an arm
 /// or showing damage, but it can apply to other entities as well.
-#[java_packet(PLAY_ANIMATE)]
+#[java_packet(ANIMATE)]
 pub struct CEntityAnimation {
     /// The Entity ID of the entity performing the animation.
     pub entity_id: VarInt,

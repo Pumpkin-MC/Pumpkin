@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_mangrove_roots": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:mangrove_roots"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:muddy_mangrove_roots"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_mangrove_roots"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:muddy_mangrove_roots"
+    ]
+  }
+}

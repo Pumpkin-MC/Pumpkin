@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_COOLDOWN;
+use pumpkin_data::packet::clientbound::play::COOLDOWN;
 
 use crate::codec::var_int::VarInt;
 use pumpkin_macros::java_packet;
@@ -7,7 +7,7 @@ use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_COOLDOWN)]
+#[java_packet(COOLDOWN)]
 pub struct CItemCooldown {
     pub group: String,
     pub cooldown: VarInt,

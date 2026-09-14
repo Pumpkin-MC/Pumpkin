@@ -1,20 +1,20 @@
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
 use pumpkin_data::damage::DamageType;
+use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::sound::Sound;
 
 use crate::{
-    entity::{Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture},
+    entity::{Entity, EntityBase},
     server::Server,
 };
 
 pub struct EvokerFangsEntity {
     pub entity: Entity,
-    pub warmup_ticks: AtomicU32,
-    pub life_ticks: AtomicU32,
+    pub warmup_delay_ticks: AtomicI32,
+    pub life_ticks: AtomicI32,
     pub owner_id: Option<i32>,
-    pub has_bitten: AtomicBool,
+    pub sent_spike_event: AtomicBool,
 }
 
 impl EvokerFangsEntity {
@@ -23,78 +23,74 @@ impl EvokerFangsEntity {
         entity.set_rotation(yaw, 0.0);
         Self {
             entity,
-            warmup_ticks: AtomicU32::new(warmup_ticks),
-            life_ticks: AtomicU32::new(0),
+            warmup_delay_ticks: AtomicI32::new(warmup_ticks as i32),
+            life_ticks: AtomicI32::new(22),
             owner_id,
-            has_bitten: AtomicBool::new(false),
+            sent_spike_event: AtomicBool::new(false),
         }
     }
 }
 
-impl NBTStorage for EvokerFangsEntity {
-    fn write_nbt<'a>(
-        &'a self,
-        nbt: &'a mut pumpkin_nbt::compound::NbtCompound,
-    ) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            nbt.put_int("Warmup", self.warmup_ticks.load(Ordering::Relaxed) as i32);
-        })
-    }
-
-    fn read_nbt_non_mut<'a>(
-        &'a self,
-        nbt: &'a pumpkin_nbt::compound::NbtCompound,
-    ) -> NbtFuture<'a, ()> {
-        Box::pin(async move {
-            if let Some(warmup) = nbt.get_int("Warmup") {
-                self.warmup_ticks.store(warmup as u32, Ordering::Relaxed);
-            }
-        })
-    }
-}
-
 impl EntityBase for EvokerFangsEntity {
-    fn tick<'a>(
-        &'a self,
-        _caller: &'a Arc<dyn EntityBase>,
-        _server: &'a Server,
-    ) -> EntityBaseFuture<'a, ()> {
-        Box::pin(async move {
-            let entity = &self.entity;
-            let world = entity.world.load();
+    fn write_custom_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
+        nbt.put_int("Warmup", self.warmup_delay_ticks.load(Ordering::Relaxed));
+    }
 
-            let warmup = self.warmup_ticks.load(Ordering::Relaxed);
-            let life = self.life_ticks.fetch_add(1, Ordering::Relaxed) + 1;
+    fn read_custom_nbt(&self, nbt: &pumpkin_nbt::compound::NbtCompound) {
+        if let Some(warmup) = nbt.get_int("Warmup") {
+            self.warmup_delay_ticks.store(warmup, Ordering::Relaxed);
+        }
+    }
 
-            if life >= warmup {
-                if !self.has_bitten.swap(true, Ordering::SeqCst) {
-                    entity.play_sound(Sound::EntityEvokerFangsAttack);
+    fn tick(&self, _caller: &dyn EntityBase, _server: &Server) {
+        let entity = &self.entity;
+        let world = entity.world.load();
 
-                    let bb = entity.bounding_box.load().expand(0.2, 0.2, 0.2);
-                    let candidates = world.get_entities_at_box(&bb);
+        let warmup = self.warmup_delay_ticks.fetch_sub(1, Ordering::Relaxed) - 1;
+        if warmup < 0 {
+            if warmup == -8 {
+                let bb = entity.bounding_box.load().expand(0.2, 0.0, 0.2);
+                let candidates = world.get_entities_at_box(&bb);
 
-                    for cand in candidates {
-                        let cand_ent = cand.get_entity();
-                        if Some(cand_ent.entity_id) == self.owner_id {
-                            continue;
-                        }
+                let owner = self.owner_id.and_then(|id| world.get_entity_by_id(id));
 
-                        if cand_ent.entity_id != entity.entity_id {
-                            let cand_clone = cand.clone();
-                            tokio::spawn(async move {
-                                let _ = cand_clone
-                                    .damage(cand_clone.as_ref(), 6.0, DamageType::MAGIC)
-                                    .await;
-                            });
-                        }
+                for cand in candidates {
+                    let cand_ent = cand.get_entity();
+                    if Some(cand_ent.entity_id) == self.owner_id {
+                        continue;
+                    }
+
+                    if cand_ent.entity_id != entity.entity_id && cand.get_living_entity().is_some()
+                    {
+                        let damage_type = if owner.is_some() {
+                            DamageType::INDIRECT_MAGIC
+                        } else {
+                            DamageType::MAGIC
+                        };
+                        let _ = cand.damage_with_context(
+                            cand.as_ref(),
+                            6.0,
+                            damage_type,
+                            Some(entity.pos.load()),
+                            Some(entity),
+                            owner.as_deref(),
+                        );
                     }
                 }
+            }
 
-                if life > warmup + 20 {
-                    entity.remove().await;
+            if !self.sent_spike_event.swap(true, Ordering::SeqCst) {
+                world.send_entity_status(entity, EntityStatus::StartAttacking, None);
+                if !entity.silent.load(Ordering::Relaxed) {
+                    entity.play_sound(Sound::EntityEvokerFangsAttack);
                 }
             }
-        })
+
+            let life = self.life_ticks.fetch_sub(1, Ordering::Relaxed) - 1;
+            if life < 0 {
+                entity.remove();
+            }
+        }
     }
 
     fn get_entity(&self) -> &Entity {
@@ -103,10 +99,6 @@ impl EntityBase for EvokerFangsEntity {
 
     fn get_living_entity(&self) -> Option<&crate::entity::living::LivingEntity> {
         None
-    }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
     }
 
     fn cast_any(&self) -> &dyn std::any::Any {

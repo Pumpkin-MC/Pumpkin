@@ -1,0 +1,79 @@
+{
+  "description": {
+    "translate": "enchantment.minecraft.bane_of_arthropods"
+  },
+  "min_cost": {
+    "base": 5,
+    "per_level_above_first": 8
+  },
+  "max_cost": {
+    "base": 25,
+    "per_level_above_first": 8
+  },
+  "anvil_cost": 2,
+  "slots": [
+    "mainhand"
+  ],
+  "supported_items": "#minecraft:enchantable/weapon",
+  "primary_items": "#minecraft:enchantable/sword",
+  "weight": 5,
+  "max_level": 5,
+  "exclusive_set": "#minecraft:exclusive_set/damage",
+  "effects": {
+    "minecraft:damage": [
+      {
+        "effect": {
+          "value": {
+            "base": 2.5,
+            "per_level_above_first": 2.5,
+            "type": "minecraft:linear"
+          },
+          "type": "minecraft:add"
+        },
+        "requirements": {
+          "predicate": {
+            "type": "#minecraft:sensitive_to_bane_of_arthropods"
+          },
+          "entity": "this",
+          "condition": "minecraft:entity_properties"
+        }
+      }
+    ],
+    "minecraft:post_attack": [
+      {
+        "enchanted": "attacker",
+        "affected": "victim",
+        "effect": {
+          "max_duration": {
+            "base": 1.5,
+            "per_level_above_first": 0.5,
+            "type": "minecraft:linear"
+          },
+          "min_amplifier": 3.0,
+          "max_amplifier": 3.0,
+          "to_apply": "minecraft:slowness",
+          "min_duration": 1.5,
+          "type": "minecraft:apply_mob_effect"
+        },
+        "requirements": {
+          "terms": [
+            {
+              "predicate": {
+                "type": "#minecraft:sensitive_to_bane_of_arthropods"
+              },
+              "entity": "this",
+              "condition": "minecraft:entity_properties"
+            },
+            {
+              "predicate": {
+                "is_direct": true
+              },
+              "condition": "minecraft:damage_source_properties"
+            }
+          ],
+          "condition": "minecraft:all_of"
+        }
+      }
+    ]
+  }
+}

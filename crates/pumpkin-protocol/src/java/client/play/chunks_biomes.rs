@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_CHUNKS_BIOMES;
+use pumpkin_data::packet::clientbound::play::CHUNKS_BIOMES;
 use pumpkin_macros::java_packet;
 
 use crate::{ClientPacket, codec::var_int::VarInt, ser::NetworkWriteExt};
@@ -10,7 +10,7 @@ pub struct ChunkBiomeEntry<'a> {
     pub data: &'a [u8],
 }
 
-#[java_packet(PLAY_CHUNKS_BIOMES)]
+#[java_packet(CHUNKS_BIOMES)]
 pub struct CChunksBiomes<'a> {
     pub chunks: &'a [ChunkBiomeEntry<'a>],
 }

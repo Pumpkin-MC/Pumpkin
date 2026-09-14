@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_copper_trapdoor": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:copper_trapdoor"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:waxed_copper_trapdoor_from_honeycomb"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_copper_trapdoor"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:waxed_copper_trapdoor_from_honeycomb"
+    ]
+  }
+}

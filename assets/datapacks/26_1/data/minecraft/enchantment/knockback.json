@@ -1,0 +1,34 @@
+{
+  "description": {
+    "translate": "enchantment.minecraft.knockback"
+  },
+  "supported_items": "#minecraft:enchantable/melee_weapon",
+  "weight": 5,
+  "max_level": 2,
+  "min_cost": {
+    "base": 5,
+    "per_level_above_first": 20
+  },
+  "max_cost": {
+    "base": 55,
+    "per_level_above_first": 20
+  },
+  "anvil_cost": 2,
+  "slots": [
+    "mainhand"
+  ],
+  "effects": {
+    "minecraft:knockback": [
+      {
+        "effect": {
+          "value": {
+            "base": 1.0,
+            "per_level_above_first": 1.0,
+            "type": "minecraft:linear"
+          },
+          "type": "minecraft:add"
+        }
+      }
+    ]
+  }
+}

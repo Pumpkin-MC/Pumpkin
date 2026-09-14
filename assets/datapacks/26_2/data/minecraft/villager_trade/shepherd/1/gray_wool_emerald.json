@@ -1,0 +1,12 @@
+{
+  "gives": {
+    "id": "minecraft:emerald"
+  },
+  "max_uses": 16.0,
+  "reputation_discount": 0.05,
+  "wants": {
+    "count": 18.0,
+    "id": "minecraft:gray_wool"
+  },
+  "xp": 2.0
+}

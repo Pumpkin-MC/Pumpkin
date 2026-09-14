@@ -1,0 +1,104 @@
+{
+  "parent": "minecraft:husbandry/safely_harvest_honey",
+  "criteria": {
+    "wax_on": {
+      "conditions": {
+        "location": [
+          {
+            "condition": "minecraft:location_check",
+            "predicate": {
+              "block": {
+                "blocks": [
+                  "minecraft:copper_block",
+                  "minecraft:exposed_copper",
+                  "minecraft:weathered_copper",
+                  "minecraft:oxidized_copper",
+                  "minecraft:cut_copper",
+                  "minecraft:exposed_cut_copper",
+                  "minecraft:weathered_cut_copper",
+                  "minecraft:oxidized_cut_copper",
+                  "minecraft:cut_copper_slab",
+                  "minecraft:exposed_cut_copper_slab",
+                  "minecraft:weathered_cut_copper_slab",
+                  "minecraft:oxidized_cut_copper_slab",
+                  "minecraft:cut_copper_stairs",
+                  "minecraft:exposed_cut_copper_stairs",
+                  "minecraft:weathered_cut_copper_stairs",
+                  "minecraft:oxidized_cut_copper_stairs",
+                  "minecraft:chiseled_copper",
+                  "minecraft:exposed_chiseled_copper",
+                  "minecraft:weathered_chiseled_copper",
+                  "minecraft:oxidized_chiseled_copper",
+                  "minecraft:copper_door",
+                  "minecraft:exposed_copper_door",
+                  "minecraft:weathered_copper_door",
+                  "minecraft:oxidized_copper_door",
+                  "minecraft:copper_trapdoor",
+                  "minecraft:exposed_copper_trapdoor",
+                  "minecraft:weathered_copper_trapdoor",
+                  "minecraft:oxidized_copper_trapdoor",
+                  "minecraft:copper_bars",
+                  "minecraft:exposed_copper_bars",
+                  "minecraft:weathered_copper_bars",
+                  "minecraft:oxidized_copper_bars",
+                  "minecraft:copper_grate",
+                  "minecraft:exposed_copper_grate",
+                  "minecraft:weathered_copper_grate",
+                  "minecraft:oxidized_copper_grate",
+                  "minecraft:copper_bulb",
+                  "minecraft:exposed_copper_bulb",
+                  "minecraft:weathered_copper_bulb",
+                  "minecraft:oxidized_copper_bulb",
+                  "minecraft:copper_chest",
+                  "minecraft:exposed_copper_chest",
+                  "minecraft:weathered_copper_chest",
+                  "minecraft:oxidized_copper_chest",
+                  "minecraft:copper_golem_statue",
+                  "minecraft:exposed_copper_golem_statue",
+                  "minecraft:weathered_copper_golem_statue",
+                  "minecraft:oxidized_copper_golem_statue",
+                  "minecraft:lightning_rod",
+                  "minecraft:exposed_lightning_rod",
+                  "minecraft:weathered_lightning_rod",
+                  "minecraft:oxidized_lightning_rod",
+                  "minecraft:copper_lantern",
+                  "minecraft:exposed_copper_lantern",
+                  "minecraft:weathered_copper_lantern",
+                  "minecraft:oxidized_copper_lantern",
+                  "minecraft:copper_chain",
+                  "minecraft:exposed_copper_chain",
+                  "minecraft:weathered_copper_chain",
+                  "minecraft:oxidized_copper_chain"
+                ]
+              }
+            }
+          },
+          {
+            "condition": "minecraft:match_tool",
+            "predicate": {
+              "items": "minecraft:honeycomb"
+            }
+          }
+        ]
+      },
+      "trigger": "minecraft:item_used_on_block"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.husbandry.wax_on.description"
+    },
+    "icon": {
+      "id": "minecraft:honeycomb"
+    },
+    "title": {
+      "translate": "advancements.husbandry.wax_on.title"
+    }
+  },
+  "requirements": [
+    [
+      "wax_on"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

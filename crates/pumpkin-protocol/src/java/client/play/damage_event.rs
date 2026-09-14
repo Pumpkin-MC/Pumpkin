@@ -1,7 +1,7 @@
 use crate::ClientPacket;
 use crate::VarInt;
 use crate::ser::NetworkWriteExt;
-use pumpkin_data::packet::clientbound::PLAY_DAMAGE_EVENT;
+use pumpkin_data::packet::clientbound::play::DAMAGE_EVENT;
 use pumpkin_macros::java_packet;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::version::JavaMinecraftVersion;
@@ -12,7 +12,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 /// directional knockback visuals, and sound effects. It provides the client
 /// with specific details about the damage source to ensure the visual feedback
 /// matches the cause.
-#[java_packet(PLAY_DAMAGE_EVENT)]
+#[java_packet(DAMAGE_EVENT)]
 pub struct CDamageEvent {
     /// The Entity ID of the entity taking damage.
     pub entity_id: VarInt,

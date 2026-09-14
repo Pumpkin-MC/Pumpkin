@@ -1,0 +1,10 @@
+{
+  "gives": {
+    "id": "minecraft:packed_ice"
+  },
+  "max_uses": 6.0,
+  "reputation_discount": 0.05,
+  "wants": {
+    "id": "minecraft:emerald"
+  }
+}

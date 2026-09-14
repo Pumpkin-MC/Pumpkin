@@ -1,0 +1,29 @@
+{
+  "values": [
+    "taiga",
+    "old_growth_pine_taiga",
+    "old_growth_spruce_taiga",
+    "windswept_hills",
+    "windswept_gravelly_hills",
+    "windswept_forest",
+    "snowy_plains",
+    "ice_spikes",
+    "grove",
+    "snowy_slopes",
+    "jagged_peaks",
+    "frozen_peaks",
+    "stony_shore",
+    "snowy_beach",
+    "snowy_taiga",
+    "frozen_river",
+    "cold_ocean",
+    "frozen_ocean",
+    "deep_cold_ocean",
+    "deep_frozen_ocean",
+    "the_end",
+    "small_end_islands",
+    "end_midlands",
+    "end_highlands",
+    "end_barrens"
+  ]
+}

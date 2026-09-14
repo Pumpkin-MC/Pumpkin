@@ -1,11 +1,11 @@
-use pumpkin_data::packet::clientbound::PLAY_RESET_SCORE;
+use pumpkin_data::packet::clientbound::play::RESET_SCORE;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
 use crate::ser::NetworkWriteExt;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_RESET_SCORE)]
+#[java_packet(RESET_SCORE)]
 pub struct CResetScore {
     pub entity_name: String,
     pub objective_name: Option<String>,

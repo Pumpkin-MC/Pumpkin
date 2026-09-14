@@ -3,12 +3,12 @@ use std::io::Write;
 use crate::codec::var_int::VarInt;
 use crate::ser::NetworkWriteExt;
 use crate::{ClientPacket, WritingError};
-use pumpkin_data::{packet::clientbound::PLAY_STOP_SOUND, sound::SoundCategory};
+use pumpkin_data::{packet::clientbound::play::STOP_SOUND, sound::SoundCategory};
 use pumpkin_macros::java_packet;
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_STOP_SOUND)]
+#[java_packet(STOP_SOUND)]
 pub struct CStopSound {
     pub sound_id: Option<ResourceLocation>,
     pub category: Option<SoundCategory>,

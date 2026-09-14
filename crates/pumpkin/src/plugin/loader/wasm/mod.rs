@@ -1,6 +1,9 @@
 use std::{any::Any, path::Path, sync::Arc};
 
-use wasm_host::{PluginRuntime, WasmPlugin};
+use wasm_host::{
+    PluginRuntime, WasmPlugin,
+    concurrent_store::{LegacySyncReentry, TokioSpawner},
+};
 
 use crate::plugin::{
     Context, Plugin, PluginFuture,
@@ -46,14 +49,29 @@ impl Plugin for WasmPlugin {
     }
 }
 
-pub struct WasmPluginLoader;
+pub struct WasmPluginLoader {
+    verify_signatures: bool,
+    legacy_sync_reentry: LegacySyncReentry,
+}
+
+impl WasmPluginLoader {
+    #[must_use]
+    pub fn new(verify_signatures: bool) -> Self {
+        Self {
+            verify_signatures,
+            legacy_sync_reentry: LegacySyncReentry::new(),
+        }
+    }
+}
+
 impl PluginLoader for WasmPluginLoader {
     fn load<'a>(&'a self, path: &'a Path) -> PluginLoadFuture<'a> {
         Box::pin(async {
             let path = path.to_owned();
 
-            let runtime = PluginRuntime::new(&path)?;
-            let (plugin, metadata) = runtime.init_plugin(&path).await?;
+            let spawner = Arc::new(TokioSpawner::new(tokio::runtime::Handle::current()));
+            let runtime = PluginRuntime::new(&path, self.legacy_sync_reentry.clone(), spawner)?;
+            let (plugin, metadata) = runtime.init_plugin(&path, self.verify_signatures).await?;
 
             Ok((
                 plugin as Arc<dyn Plugin>,

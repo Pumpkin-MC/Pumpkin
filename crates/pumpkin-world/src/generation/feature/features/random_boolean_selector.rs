@@ -29,7 +29,10 @@ impl RandomBooleanFeature {
         } else {
             &self.feature_false
         };
-        feature.get().generate(
+        let Some(feature) = feature.get() else {
+            return false;
+        };
+        feature.generate(
             chunk,
             block_registry,
             min_y,

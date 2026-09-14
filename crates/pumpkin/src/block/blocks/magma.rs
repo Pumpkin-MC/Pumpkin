@@ -5,14 +5,14 @@ use pumpkin_data::{
 };
 use pumpkin_macros::pumpkin_block;
 
-use crate::block::{BlockBehaviour, BlockFuture, OnEntityStepArgs};
+use crate::block::{BlockBehaviour, OnEntityStepArgs};
 
 #[pumpkin_block("minecraft:magma_block")]
 pub struct MagmaBlock;
 
 impl BlockBehaviour for MagmaBlock {
-    fn on_entity_step<'a>(&'a self, args: OnEntityStepArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
+    fn on_entity_step(&self, args: OnEntityStepArgs<'_>) {
+        {
             // Only living entities take damage
             let Some(living_entity) = args.entity.get_living_entity() else {
                 return;
@@ -31,7 +31,10 @@ impl BlockBehaviour for MagmaBlock {
             }
 
             let has_frost_walker = {
-                let equipment = living_entity.entity_equipment.lock().await;
+                let equipment = living_entity
+                    .entity_equipment
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 equipment
                     .equipment
                     .get(&EquipmentSlot::FEET)
@@ -45,16 +48,13 @@ impl BlockBehaviour for MagmaBlock {
 
             if living_entity
                 .get_effect(&StatusEffect::FIRE_RESISTANCE)
-                .await
                 .is_some()
             {
                 return;
             }
 
             // Apply damage
-            args.entity
-                .damage(args.entity, 1.0, DamageType::HOT_FLOOR)
-                .await;
-        })
+            args.entity.damage(args.entity, 1.0, DamageType::HOT_FLOOR);
+        }
     }
 }

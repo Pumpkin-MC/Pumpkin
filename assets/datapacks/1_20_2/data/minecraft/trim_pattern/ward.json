@@ -1,0 +1,8 @@
+{
+  "template_item": "minecraft:ward_armor_trim_smithing_template",
+  "description": {
+    "translate": "trim_pattern.minecraft.ward"
+  },
+  "asset_id": "minecraft:ward",
+  "decal": 0
+}

@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_rose_bush": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:rose_bush"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:red_dye_from_rose_bush"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_rose_bush"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:red_dye_from_rose_bush"
+    ]
+  }
+}

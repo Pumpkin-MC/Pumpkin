@@ -1,0 +1,18 @@
+{
+  "replace": false,
+  "values": [
+    "#minecraft:armorer_poi",
+    "#minecraft:butcher_poi",
+    "#minecraft:cartographer_poi",
+    "#minecraft:cleric_poi",
+    "#minecraft:farmer_poi",
+    "#minecraft:fisherman_poi",
+    "#minecraft:fletcher_poi",
+    "#minecraft:leatherworker_poi",
+    "#minecraft:librarian_poi",
+    "#minecraft:mason_poi",
+    "#minecraft:shepherd_poi",
+    "#minecraft:toolsmith_poi",
+    "#minecraft:weaponsmith_poi"
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_smithing_trim_template": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:eye_armor_trim_smithing_template"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:eye_armor_trim_smithing_template_smithing_trim"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_smithing_trim_template"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:eye_armor_trim_smithing_template_smithing_trim"
+    ]
+  }
+}

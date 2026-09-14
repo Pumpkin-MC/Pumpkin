@@ -1,0 +1,31 @@
+{
+  "values": [
+    "#minecraft:leaves",
+    "#minecraft:small_flowers",
+    "minecraft:pale_moss_carpet",
+    "minecraft:short_grass",
+    "minecraft:fern",
+    "minecraft:dead_bush",
+    "minecraft:vine",
+    "minecraft:glow_lichen",
+    "minecraft:sunflower",
+    "minecraft:lilac",
+    "minecraft:rose_bush",
+    "minecraft:peony",
+    "minecraft:tall_grass",
+    "minecraft:large_fern",
+    "minecraft:hanging_roots",
+    "minecraft:pitcher_plant",
+    "minecraft:water",
+    "minecraft:seagrass",
+    "minecraft:tall_seagrass",
+    "minecraft:bush",
+    "minecraft:firefly_bush",
+    "minecraft:warped_roots",
+    "minecraft:nether_sprouts",
+    "minecraft:crimson_roots",
+    "minecraft:leaf_litter",
+    "minecraft:short_dry_grass",
+    "minecraft:tall_dry_grass"
+  ]
+}

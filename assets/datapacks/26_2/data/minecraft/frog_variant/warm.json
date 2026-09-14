@@ -1,0 +1,12 @@
+{
+  "asset_id": "minecraft:entity/frog/frog_warm",
+  "spawn_conditions": [
+    {
+      "condition": {
+        "type": "minecraft:biome",
+        "biomes": "#minecraft:spawns_warm_variant_frogs"
+      },
+      "priority": 1
+    }
+  ]
+}

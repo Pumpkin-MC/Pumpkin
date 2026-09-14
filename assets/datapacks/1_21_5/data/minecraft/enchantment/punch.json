@@ -1,0 +1,41 @@
+{
+  "description": {
+    "translate": "enchantment.minecraft.punch"
+  },
+  "min_cost": {
+    "base": 12,
+    "per_level_above_first": 20
+  },
+  "max_cost": {
+    "base": 37,
+    "per_level_above_first": 20
+  },
+  "anvil_cost": 4,
+  "slots": [
+    "mainhand"
+  ],
+  "supported_items": "#minecraft:enchantable/bow",
+  "weight": 2,
+  "max_level": 2,
+  "effects": {
+    "minecraft:knockback": [
+      {
+        "effect": {
+          "value": {
+            "base": 1.0,
+            "per_level_above_first": 1.0,
+            "type": "minecraft:linear"
+          },
+          "type": "minecraft:add"
+        },
+        "requirements": {
+          "predicate": {
+            "type": "#minecraft:arrows"
+          },
+          "entity": "direct_attacker",
+          "condition": "minecraft:entity_properties"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "description": {
+    "translate": "enchantment.minecraft.power"
+  },
+  "min_cost": {
+    "base": 1,
+    "per_level_above_first": 10
+  },
+  "max_cost": {
+    "base": 16,
+    "per_level_above_first": 10
+  },
+  "anvil_cost": 1,
+  "slots": [
+    "mainhand"
+  ],
+  "supported_items": "#minecraft:enchantable/bow",
+  "weight": 10,
+  "max_level": 5,
+  "effects": {
+    "minecraft:damage": [
+      {
+        "effect": {
+          "value": {
+            "base": 0.5,
+            "per_level_above_first": 0.5,
+            "type": "minecraft:linear"
+          },
+          "type": "minecraft:add"
+        },
+        "requirements": {
+          "predicate": {
+            "type": "#minecraft:arrows"
+          },
+          "entity": "direct_attacker",
+          "condition": "minecraft:entity_properties"
+        }
+      }
+    ]
+  }
+}

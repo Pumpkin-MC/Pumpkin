@@ -1,0 +1,14 @@
+{
+  "adult_sounds": {
+    "ambient_sound": "minecraft:entity.chicken_picky.ambient",
+    "hurt_sound": "minecraft:entity.chicken_picky.hurt",
+    "death_sound": "minecraft:entity.chicken_picky.death",
+    "step_sound": "minecraft:entity.chicken.step"
+  },
+  "baby_sounds": {
+    "ambient_sound": "minecraft:entity.baby_chicken.ambient",
+    "hurt_sound": "minecraft:entity.baby_chicken.hurt",
+    "death_sound": "minecraft:entity.baby_chicken.death",
+    "step_sound": "minecraft:entity.baby_chicken.step"
+  }
+}

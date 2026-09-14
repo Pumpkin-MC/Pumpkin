@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_leather_boots": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:leather_boots"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:leather_boots_dyed"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_leather_boots"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:leather_boots_dyed"
+    ]
+  }
+}

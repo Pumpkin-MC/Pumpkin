@@ -283,7 +283,8 @@ pub fn remap_entity_id_for_version(
     version: pumpkin_util::version::JavaMinecraftVersion,
 ) -> u16 {
     match version {
-        pumpkin_util::version::JavaMinecraftVersion::V_1_7_6 => ENTITY_ID_REMAP_V_26_2_TO_V_1_7_6
+        pumpkin_util::version::JavaMinecraftVersion::V_1_7_2
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_7_6 => ENTITY_ID_REMAP_V_26_2_TO_V_1_7_6
             .get(usize::from(entity_id))
             .copied()
             .unwrap_or(0),
@@ -291,7 +292,10 @@ pub fn remap_entity_id_for_version(
             .get(usize::from(entity_id))
             .copied()
             .unwrap_or(0),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_9 => ENTITY_ID_REMAP_V_26_2_TO_V_1_9
+        pumpkin_util::version::JavaMinecraftVersion::V_1_9
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_9_1
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_9_2
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_9_3 => ENTITY_ID_REMAP_V_26_2_TO_V_1_9
             .get(usize::from(entity_id))
             .copied()
             .unwrap_or(0),
@@ -299,15 +303,19 @@ pub fn remap_entity_id_for_version(
             .get(usize::from(entity_id))
             .copied()
             .unwrap_or(0),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_11 => ENTITY_ID_REMAP_V_26_2_TO_V_1_11
+        pumpkin_util::version::JavaMinecraftVersion::V_1_11
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_11_1 => ENTITY_ID_REMAP_V_26_2_TO_V_1_11
             .get(usize::from(entity_id))
             .copied()
             .unwrap_or(0),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_12 => ENTITY_ID_REMAP_V_26_2_TO_V_1_12
+        pumpkin_util::version::JavaMinecraftVersion::V_1_12
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_12_1
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_12_2 => ENTITY_ID_REMAP_V_26_2_TO_V_1_12
             .get(usize::from(entity_id))
             .copied()
             .unwrap_or(0),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_13 => ENTITY_ID_REMAP_V_26_2_TO_V_1_13
+        pumpkin_util::version::JavaMinecraftVersion::V_1_13
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_13_1 => ENTITY_ID_REMAP_V_26_2_TO_V_1_13
             .get(usize::from(entity_id))
             .copied()
             .unwrap_or(0),
@@ -315,31 +323,45 @@ pub fn remap_entity_id_for_version(
             .get(usize::from(entity_id))
             .copied()
             .unwrap_or(0),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_14 => ENTITY_ID_REMAP_V_26_2_TO_V_1_14
+        pumpkin_util::version::JavaMinecraftVersion::V_1_14
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_14_1
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_14_2
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_14_3
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_14_4 => ENTITY_ID_REMAP_V_26_2_TO_V_1_14
             .get(usize::from(entity_id))
             .copied()
             .unwrap_or(0),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_15 => ENTITY_ID_REMAP_V_26_2_TO_V_1_15
+        pumpkin_util::version::JavaMinecraftVersion::V_1_15
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_15_1
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_15_2 => ENTITY_ID_REMAP_V_26_2_TO_V_1_15
             .get(usize::from(entity_id))
             .copied()
             .unwrap_or(0),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_16 => ENTITY_ID_REMAP_V_26_2_TO_V_1_16
+        pumpkin_util::version::JavaMinecraftVersion::V_1_16
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_16_1 => ENTITY_ID_REMAP_V_26_2_TO_V_1_16
             .get(usize::from(entity_id))
             .copied()
             .unwrap_or(0),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_16_2 => ENTITY_ID_REMAP_V_26_2_TO_V_1_16_2
+        pumpkin_util::version::JavaMinecraftVersion::V_1_16_2
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_16_3
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_16_4 => {
+            ENTITY_ID_REMAP_V_26_2_TO_V_1_16_2
+                .get(usize::from(entity_id))
+                .copied()
+                .unwrap_or(0)
+        }
+        pumpkin_util::version::JavaMinecraftVersion::V_1_17
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_17_1 => ENTITY_ID_REMAP_V_26_2_TO_V_1_17
             .get(usize::from(entity_id))
             .copied()
             .unwrap_or(0),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_17 => ENTITY_ID_REMAP_V_26_2_TO_V_1_17
+        pumpkin_util::version::JavaMinecraftVersion::V_1_18
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_18_2 => ENTITY_ID_REMAP_V_26_2_TO_V_1_18
             .get(usize::from(entity_id))
             .copied()
             .unwrap_or(0),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_18 => ENTITY_ID_REMAP_V_26_2_TO_V_1_18
-            .get(usize::from(entity_id))
-            .copied()
-            .unwrap_or(0),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_19 => ENTITY_ID_REMAP_V_26_2_TO_V_1_19
+        pumpkin_util::version::JavaMinecraftVersion::V_1_19
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_19_1 => ENTITY_ID_REMAP_V_26_2_TO_V_1_19
             .get(usize::from(entity_id))
             .copied()
             .unwrap_or(0),
@@ -406,5 +428,42 @@ pub fn remap_entity_id_for_version(
             .copied()
             .unwrap_or(0),
         _ => entity_id,
+    }
+}
+#[must_use]
+pub fn remap_object_type_for_version(
+    entity_id: u16,
+    _version: pumpkin_util::version::JavaMinecraftVersion,
+) -> u8 {
+    match entity_id {
+        10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 => 1,
+        74 => 2,
+        3 => 3,
+        82 | 24 | 25 | 26 | 27 | 28 | 29 => 10,
+        140 => 50,
+        44 => 51,
+        4 => 60,
+        122 => 61,
+        42 => 62,
+        54 => 63,
+        121 => 64,
+        46 => 65,
+        153 => 66,
+        117 => 67,
+        78 => 68,
+        52 => 70,
+        75 | 58 => 71,
+        50 => 72,
+        104 => 73,
+        49 => 75,
+        55 => 76,
+        77 => 77,
+        2 => 78,
+        48 => 79,
+        56 => 90,
+        124 => 91,
+        40 => 93,
+        143 => 94,
+        _ => entity_id as u8,
     }
 }

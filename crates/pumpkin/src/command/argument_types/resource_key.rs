@@ -1,3 +1,4 @@
+use crate::command::CommandSource;
 use crate::command::argument_types::FromStringReader;
 use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
 use crate::command::context::command_context::CommandContext;
@@ -7,13 +8,12 @@ use crate::command::string_reader::StringReader;
 use crate::command::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 use pumpkin_data::{Advancement, translation};
 use pumpkin_util::identifier::Identifier;
-use pumpkin_util::resource_key::ResourceKey;
+use pumpkin_util::resource::ResourceKey;
 use pumpkin_util::text::TextComponent;
-use std::pin::Pin;
 use std::string::ToString;
 
-pub static ADVANCEMENT_REGISTRY: Identifier = Identifier::vanilla_static("advancement");
-pub static BIOME_REGISTRY: Identifier = Identifier::vanilla_static("worldgen/biome");
+pub static ADVANCEMENT_REGISTRY: &Identifier = &Identifier::vanilla_static("advancement");
+pub static BIOME_REGISTRY: &Identifier = &Identifier::vanilla_static("worldgen/biome");
 
 pub const ERROR_INVALID_ADVANCEMENT: CommandErrorType<1> = CommandErrorType::new(
     translation::java::ADVANCEMENT_ADVANCEMENTNOTFOUND,
@@ -23,6 +23,11 @@ pub const ERROR_INVALID_ADVANCEMENT: CommandErrorType<1> = CommandErrorType::new
 pub const ERROR_INVALID_BIOME: CommandErrorType<1> =
     CommandErrorType::new("commands.fillbiome.invalid", "commands.fillbiome.invalid");
 
+pub const ERROR_NOT_SUMMONABLE_ENTITY: CommandErrorType<1> = CommandErrorType::new(
+    translation::java::ENTITY_NOT_SUMMONABLE,
+    translation::java::ENTITY_NOT_SUMMONABLE,
+);
+
 /// Represents an argument type used to get a resource key from an identifier.
 ///
 /// if you want an [`Advancement`] put the [`ADVANCEMENT_REGISTRY`]
@@ -31,14 +36,14 @@ pub const ERROR_INVALID_BIOME: CommandErrorType<1> =
 /// TODO Recipe
 ///
 /// if you juste want the [`ResourceKey`] use the [`ResourceKeyArgument::get_registry_key`] function
-pub struct ResourceKeyArgument(pub Identifier);
+pub struct ResourceKeyArgument(pub &'static Identifier);
 
 pub static ERROR_INVALID: CommandErrorType<0> = CommandErrorType::new(
     translation::java::ARGUMENT_ID_INVALID,
     translation::java::ARGUMENT_ID_INVALID,
 );
 
-impl ArgumentType for ResourceKeyArgument {
+impl ArgumentType<CommandSource> for ResourceKeyArgument {
     type Item = ResourceKey;
 
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {
@@ -50,23 +55,19 @@ impl ArgumentType for ResourceKeyArgument {
         &self,
         context: &CommandContext,
         suggestions_builder: SuggestionsBuilder,
-    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send>> {
+    ) -> Suggestions {
         if self.0 == ADVANCEMENT_REGISTRY {
             let advancements = context.server().advancement_manager.get_advancements();
-            Box::pin(async move {
-                suggestions_builder
-                    .filter_and_suggest_iter(advancements.iter().map(ToString::to_string))
-                    .build()
-            })
+            suggestions_builder
+                .filter_and_suggest_iter(advancements.iter().map(ToString::to_string))
+                .build()
         } else if self.0 == BIOME_REGISTRY {
-            Box::pin(async move {
-                let biomes = pumpkin_data::biome::Biome::ALL
-                    .iter()
-                    .map(|biome| format!("minecraft:{}", biome.registry_id));
-                suggestions_builder.filter_and_suggest_iter(biomes).build()
-            })
+            let biomes = pumpkin_data::biome::Biome::ALL
+                .iter()
+                .map(|biome| format!("minecraft:{}", biome.registry_id));
+            suggestions_builder.filter_and_suggest_iter(biomes).build()
         } else {
-            Box::pin(async move { Suggestions::empty() })
+            Suggestions::empty()
         }
     }
 
@@ -95,7 +96,7 @@ impl ResourceKeyArgument {
         let resource_key: &ResourceKey = Self::get_registry_key(
             context,
             name,
-            &ADVANCEMENT_REGISTRY,
+            ADVANCEMENT_REGISTRY,
             &ERROR_INVALID_ADVANCEMENT,
         )?;
         Advancement::from_name(resource_key.identifier.path()).ok_or_else(|| {
@@ -111,7 +112,7 @@ impl ResourceKeyArgument {
         name: &str,
     ) -> Result<&'static pumpkin_data::biome::Biome, CommandSyntaxError> {
         let resource_key: &ResourceKey =
-            Self::get_registry_key(context, name, &BIOME_REGISTRY, &ERROR_INVALID_BIOME)?;
+            Self::get_registry_key(context, name, BIOME_REGISTRY, &ERROR_INVALID_BIOME)?;
         let path = resource_key.identifier.path();
         pumpkin_data::biome::Biome::from_name(path).ok_or_else(|| {
             ERROR_INVALID_BIOME

@@ -1,0 +1,8 @@
+{
+  "template_item": "minecraft:tide_armor_trim_smithing_template",
+  "description": {
+    "translate": "trim_pattern.minecraft.tide"
+  },
+  "asset_id": "minecraft:tide",
+  "decal": 0
+}

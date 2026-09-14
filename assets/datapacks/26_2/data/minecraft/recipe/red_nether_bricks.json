@@ -1,0 +1,15 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "key": {
+    "N": "minecraft:nether_brick",
+    "W": "minecraft:nether_wart"
+  },
+  "pattern": [
+    "NW",
+    "WN"
+  ],
+  "result": {
+    "id": "minecraft:red_nether_bricks"
+  }
+}

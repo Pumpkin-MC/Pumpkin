@@ -17,24 +17,29 @@ struct JukeboxSongData {
 
 /// Generates the `TokenStream` for the `JukeboxSong` enum and its length, comparator, and name methods.
 pub fn build() -> TokenStream {
-    let songs: BTreeMap<String, u32> = serde_json::from_str(
-        &fs::read_to_string("../../assets/jukebox_song.json").expect("Missing jukebox_song.json"),
-    )
-    .expect("Failed to parse jukebox_song.json");
+    let dir = std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/jukebox_song");
+    let mut song_data: BTreeMap<String, JukeboxSongData> = BTreeMap::new();
+    let mut entries: Vec<_> = fs::read_dir(dir)
+        .expect("Missing jukebox_song directory")
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
+        .collect();
+    entries.sort_by_key(|e| e.path());
 
-    let registries: BTreeMap<String, Value> = serde_json::from_str(
-        &fs::read_to_string("../../assets/registry/1_21_11_synced_registries.json")
-            .expect("Missing synced_registries.json"),
-    )
-    .expect("Failed to parse synced_registries.json");
+    for entry in entries {
+        let path = entry.path();
+        let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
+        let content = fs::read_to_string(&path).expect("Failed to read jukebox_song file");
+        let data: JukeboxSongData =
+            serde_json::from_str(&content).expect("Failed to parse jukebox_song JSON");
+        song_data.insert(stem, data);
+    }
 
-    let song_data: BTreeMap<String, JukeboxSongData> = serde_json::from_value(
-        registries
-            .get("jukebox_song")
-            .expect("Missing jukebox_song in synced registries")
-            .clone(),
-    )
-    .expect("Failed to parse jukebox_song data");
+    let songs: BTreeMap<String, u32> = song_data
+        .keys()
+        .enumerate()
+        .map(|(i, k)| (k.clone(), i as u32))
+        .collect();
 
     let make_variant_ident = |name: &str| {
         let pascal = name.to_pascal_case();

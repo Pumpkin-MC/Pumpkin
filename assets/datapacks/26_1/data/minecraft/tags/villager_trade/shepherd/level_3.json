@@ -1,0 +1,25 @@
+{
+  "values": [
+    "minecraft:shepherd/3/yellow_dye_emerald",
+    "minecraft:shepherd/3/light_gray_dye_emerald",
+    "minecraft:shepherd/3/orange_dye_emerald",
+    "minecraft:shepherd/3/red_dye_emerald",
+    "minecraft:shepherd/3/pink_dye_emerald",
+    "minecraft:shepherd/3/emerald_white_bed",
+    "minecraft:shepherd/3/emerald_orange_bed",
+    "minecraft:shepherd/3/emerald_magenta_bed",
+    "minecraft:shepherd/3/emerald_blue_bed",
+    "minecraft:shepherd/3/emerald_light_blue_bed",
+    "minecraft:shepherd/3/emerald_yellow_bed",
+    "minecraft:shepherd/3/emerald_lime_bed",
+    "minecraft:shepherd/3/emerald_pink_bed",
+    "minecraft:shepherd/3/emerald_gray_bed",
+    "minecraft:shepherd/3/emerald_light_gray_bed",
+    "minecraft:shepherd/3/emerald_cyan_bed",
+    "minecraft:shepherd/3/emerald_purple_bed",
+    "minecraft:shepherd/3/emerald_brown_bed",
+    "minecraft:shepherd/3/emerald_green_bed",
+    "minecraft:shepherd/3/emerald_red_bed",
+    "minecraft:shepherd/3/emerald_black_bed"
+  ]
+}

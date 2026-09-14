@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_deepslate_copper_ore": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:deepslate_copper_ore"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:copper_ingot_from_blasting_deepslate_copper_ore"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_deepslate_copper_ore"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:copper_ingot_from_blasting_deepslate_copper_ore"
+    ]
+  }
+}

@@ -1,7 +1,7 @@
 use pumpkin_data::BlockStateId;
 use pumpkin_data::block_properties::{BlockProperties, HorizontalFacing};
 
-use crate::block::{BlockBehaviour, BlockFuture, CanUpdateAtArgs};
+use crate::block::{BlockBehaviour, CanUpdateAtArgs};
 use crate::block::{BlockIsReplacing, OnPlaceArgs};
 use crate::entity::EntityBase;
 
@@ -79,27 +79,25 @@ pub trait Segmented: BlockBehaviour {
         self.can_add_segment(&current_props)
     }
 
-    fn on_place<'a>(&'a self, args: OnPlaceArgs<'a>) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            if let BlockIsReplacing::Itself(existing_state_id) = args.replacing {
-                let mut props = Self::Properties::from_state_id(existing_state_id, args.block);
+    fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
+        if let BlockIsReplacing::Itself(existing_state_id) = args.replacing {
+            let mut props = Self::Properties::from_state_id(existing_state_id, args.block);
 
-                if self.can_add_segment(&props) {
-                    let current_amount = props.get_segment_amount();
-                    let next_amount = self.get_next_segment_amount(current_amount);
-                    props.set_segment_amount(next_amount);
-                    props.to_state_id(args.block)
-                } else {
-                    existing_state_id
-                }
-            } else {
-                // Set first segment orientation based on player direction
-                let player_facing = args.player.get_entity().get_horizontal_facing();
-                let mut props = Self::Properties::default(args.block);
-                props.set_segment_amount(1);
-                props.set_facing(self.get_facing_for_segment(player_facing, 1));
+            if self.can_add_segment(&props) {
+                let current_amount = props.get_segment_amount();
+                let next_amount = self.get_next_segment_amount(current_amount);
+                props.set_segment_amount(next_amount);
                 props.to_state_id(args.block)
+            } else {
+                existing_state_id
             }
-        })
+        } else {
+            // Set first segment orientation based on player direction
+            let player_facing = args.player.get_entity().get_horizontal_facing();
+            let mut props = Self::Properties::default(args.block);
+            props.set_segment_amount(1);
+            props.set_facing(self.get_facing_for_segment(player_facing, 1));
+            props.to_state_id(args.block)
+        }
     }
 }

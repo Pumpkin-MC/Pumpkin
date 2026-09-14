@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, num::NonZeroU8, sync::Arc};
+use std::{net::SocketAddr, num::NonZero, sync::Arc};
 
 use bytes::Bytes;
 use crossbeam::atomic::AtomicCell;
@@ -33,13 +33,26 @@ use tracing::{debug, error, warn};
 
 use crate::{
     entity::player::ChatMode,
-    net::{EncryptionError, GameProfile, PacketHandlerResult, PlayerConfig, can_not_join},
+    net::{
+        EncryptionError, GameProfile, PacketHandlerResult, PacketRateLimiter, PlayerConfig,
+        can_not_join,
+    },
     server::Server,
 };
 
 use super::JavaClient;
 
 const BRAND_CHANNEL_PREFIX: &str = "minecraft:brand";
+
+/// How long a connection may stay silent before login finishes.
+///
+/// Once a player is in game, [`JavaClient::progress_player_packets`] keeps the
+/// connection honest with keep-alives. Nothing plays that role beforehand, and
+/// accepted sockets have no TCP keep-alive either, so a peer that stops talking
+/// without closing would otherwise hold its descriptor for the lifetime of the
+/// server. The timer covers silence rather than the whole handshake: it is reset
+/// on every packet, so a slow but progressing login is never cut off.
+const HANDSHAKE_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
 pub struct PendingConnection {
     pub id: u64,
@@ -53,11 +66,19 @@ pub struct PendingConnection {
     pub gameprofile: Option<GameProfile>,
     pub config: Option<PlayerConfig>,
     pub brand: Option<String>,
+    pub packet_limiter: PacketRateLimiter,
+    pub verify_token: Option<[u8; 4]>,
+    pub vine_challenge: Option<[u8; 16]>,
 }
 
 impl PendingConnection {
     #[must_use]
-    pub fn new(tcp_stream: TcpStream, address: SocketAddr, id: u64) -> Self {
+    pub fn new(
+        tcp_stream: TcpStream,
+        address: SocketAddr,
+        id: u64,
+        packet_limiter: PacketRateLimiter,
+    ) -> Self {
         let (read, write) = tcp_stream.into_split();
         Self {
             id,
@@ -71,6 +92,9 @@ impl PendingConnection {
             gameprofile: None,
             config: None,
             brand: None,
+            packet_limiter,
+            verify_token: None,
+            vine_challenge: None,
         }
     }
 
@@ -116,6 +140,14 @@ impl PendingConnection {
         let packet_result = tokio::select! {
             () = close_token.cancelled() => {
                 debug!("Canceling pending connection packet processing");
+                return None;
+            },
+            () = tokio::time::sleep(HANDSHAKE_IDLE_TIMEOUT) => {
+                debug!(
+                    "Client {} sent nothing for {}s before finishing login, dropping it",
+                    self.id,
+                    HANDSHAKE_IDLE_TIMEOUT.as_secs()
+                );
                 return None;
             },
             res = self.network_reader.get_raw_packet() => res,
@@ -172,6 +204,25 @@ impl PendingConnection {
 
     pub async fn handle_login_sequence(&mut self, server: &Arc<Server>) -> PacketHandlerResult {
         while let Some(packet) = self.get_packet().await {
+            if !self.packet_limiter.check_packet() {
+                warn!(
+                    "Pending client {} exceeded packet rate limit (rate: {}/s)",
+                    self.id,
+                    self.packet_limiter.max_rate()
+                );
+                self.kick(TextComponent::text(
+                    server
+                        .advanced_config
+                        .networking
+                        .java
+                        .packet_limiter
+                        .kick_message
+                        .clone(),
+                ))
+                .await;
+                return PacketHandlerResult::Stop;
+            }
+
             match self.handle_packet(server, &packet).await {
                 Ok(result) => {
                     if let Some(result) = result {
@@ -197,7 +248,7 @@ impl PendingConnection {
         packet: &RawPacket,
     ) -> Result<Option<PacketHandlerResult>, ReadingError> {
         match self.connection_state.load() {
-            ConnectionState::HandShake => self.handle_handshake_packet(packet).await,
+            ConnectionState::HandShake => self.handle_handshake_packet(server, packet).await,
             ConnectionState::Status => self.handle_status_packet(server, packet).await,
             ConnectionState::Login | ConnectionState::Transfer => {
                 self.handle_login_packet(server, packet).await
@@ -209,16 +260,20 @@ impl PendingConnection {
 
     async fn handle_handshake_packet(
         &mut self,
+        server: &Arc<Server>,
         packet: &RawPacket,
     ) -> Result<Option<PacketHandlerResult>, ReadingError> {
         debug!("Handling handshake group");
         let mut payload = &packet.payload[..];
         match packet.id {
             0 => {
-                self.handle_handshake(pumpkin_protocol::java::server::handshake::SHandShake::read(
-                    &mut payload,
-                    &self.version.load(),
-                )?)
+                self.handle_handshake(
+                    server,
+                    pumpkin_protocol::java::server::handshake::SHandShake::read(
+                        &mut payload,
+                        &self.version.load(),
+                    )?,
+                )
                 .await;
                 Ok(None)
             }
@@ -264,7 +319,7 @@ impl PendingConnection {
 
     async fn handle_login_packet(
         &mut self,
-        server: &Server,
+        server: &Arc<Server>,
         packet: &RawPacket,
     ) -> Result<Option<PacketHandlerResult>, ReadingError> {
         debug!("Handling login group");
@@ -273,41 +328,41 @@ impl PendingConnection {
 
         match packet.id {
             id if id == pumpkin_protocol::java::server::login::SLoginStart::to_id(version) => {
-                self.handle_login_start(
-                    server,
-                    pumpkin_protocol::java::server::login::SLoginStart::read(
-                        &mut payload,
-                        &version,
-                    )?,
-                )
-                .await;
-                Ok(None)
+                Ok(self
+                    .handle_login_start(
+                        server,
+                        pumpkin_protocol::java::server::login::SLoginStart::read(
+                            &mut payload,
+                            &version,
+                        )?,
+                    )
+                    .await)
             }
             id if id
                 == pumpkin_protocol::java::server::login::SEncryptionResponse::to_id(version) =>
             {
-                self.handle_encryption_response(
-                    server,
-                    pumpkin_protocol::java::server::login::SEncryptionResponse::read(
-                        &mut payload,
-                        &version,
-                    )?,
-                )
-                .await;
-                Ok(None)
+                Ok(self
+                    .handle_encryption_response(
+                        server,
+                        pumpkin_protocol::java::server::login::SEncryptionResponse::read(
+                            &mut payload,
+                            &version,
+                        )?,
+                    )
+                    .await)
             }
             id if id
                 == pumpkin_protocol::java::server::login::SLoginPluginResponse::to_id(version) =>
             {
-                self.handle_plugin_response(
-                    server,
-                    pumpkin_protocol::java::server::login::SLoginPluginResponse::read(
-                        &mut payload,
-                        &version,
-                    )?,
-                )
-                .await;
-                Ok(None)
+                Ok(self
+                    .handle_plugin_response(
+                        server,
+                        pumpkin_protocol::java::server::login::SLoginPluginResponse::read(
+                            &mut payload,
+                            &version,
+                        )?,
+                    )
+                    .await)
             }
             id if id
                 == pumpkin_protocol::java::server::login::SLoginCookieResponse::to_id(version) =>
@@ -323,8 +378,7 @@ impl PendingConnection {
             id if id
                 == pumpkin_protocol::java::server::login::SLoginAcknowledged::to_id(version) =>
             {
-                self.handle_login_acknowledged(server).await;
-                Ok(None)
+                Ok(self.handle_login_acknowledged(server).await)
             }
             _ => Err(ReadingError::Message(format!(
                 "Failed to handle packet id {} in Login State",
@@ -370,8 +424,7 @@ impl PendingConnection {
                 }
             }
             id if id == SKnownPacks::to_id(version) => {
-                self.handle_known_packs(SKnownPacks::read(&mut payload, &version)?, server)
-                    .await;
+                self.handle_known_packs(server).await;
                 Ok(None)
             }
             id if id == SConfigResourcePack::to_id(version) => {
@@ -423,8 +476,8 @@ impl PendingConnection {
         ) {
             self.config = Some(PlayerConfig {
                 locale: client_information.locale.to_string(),
-                view_distance: NonZeroU8::new(client_information.view_distance as u8)
-                    .unwrap_or(NonZeroU8::MIN),
+                view_distance: NonZero::new(client_information.view_distance as u8)
+                    .unwrap_or(NonZero::<u8>::MIN),
                 chat_mode,
                 chat_colors: client_information.chat_colors,
                 skin_parts: client_information.skin_parts,
@@ -460,19 +513,33 @@ impl PendingConnection {
             match packet.response_result() {
                 ResourcePackResponseResult::Downloaded
                 | ResourcePackResponseResult::DownloadSuccess
-                | ResourcePackResponseResult::Accepted
                 | ResourcePackResponseResult::Discarded
-                | ResourcePackResponseResult::Unknown(_) => {}
+                | ResourcePackResponseResult::Unknown(_) => {
+                    if self.version.load() >= JavaMinecraftVersion::V_1_20_5 {
+                        self.send_known_packs(server).await;
+                    } else {
+                        self.handle_known_packs(server).await;
+                    }
+                }
+                ResourcePackResponseResult::Accepted => {}
                 ResourcePackResponseResult::Declined => {
                     if resource_config.force {
                         self.kick(TextComponent::text("Required resource pack was declined"))
                             .await;
+                    } else if self.version.load() >= JavaMinecraftVersion::V_1_20_5 {
+                        self.send_known_packs(server).await;
+                    } else {
+                        self.handle_known_packs(server).await;
                     }
                 }
                 ResourcePackResponseResult::DownloadFail => {
                     if resource_config.force {
                         self.kick(TextComponent::text("Failed to download resource pack"))
                             .await;
+                    } else if self.version.load() >= JavaMinecraftVersion::V_1_20_5 {
+                        self.send_known_packs(server).await;
+                    } else {
+                        self.handle_known_packs(server).await;
                     }
                 }
                 ResourcePackResponseResult::InvalidUrl => {

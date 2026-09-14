@@ -1,10 +1,10 @@
-use pumpkin_data::packet::clientbound::PLAY_SET_CAMERA;
+use pumpkin_data::packet::clientbound::play::SET_CAMERA;
 use pumpkin_macros::java_packet;
 
 use crate::{ClientPacket, codec::var_int::VarInt, ser::NetworkWriteExt};
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_SET_CAMERA)]
+#[java_packet(SET_CAMERA)]
 pub struct CSetCamera {
     pub camera_id: VarInt,
 }

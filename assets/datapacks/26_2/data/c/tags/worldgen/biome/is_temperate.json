@@ -1,0 +1,19 @@
+{
+  "values": [
+    "plains",
+    "sunflower_plains",
+    "forest",
+    "flower_forest",
+    "birch_forest",
+    "old_growth_birch_forest",
+    "dark_forest",
+    "pale_garden",
+    "cherry_grove",
+    "meadow",
+    "swamp",
+    "mangrove_swamp",
+    "beach",
+    "ocean",
+    "deep_ocean"
+  ]
+}

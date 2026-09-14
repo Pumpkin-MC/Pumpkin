@@ -200,8 +200,9 @@ pub fn build() -> TokenStream {
         static_values.extend(quote! {
             pub static #ident: &[u16] = &[#(#mapping_tokens),*];
         });
+        let versions = crate::remap::version_patterns(*ver);
         match_arms.extend(quote! {
-            #ver => #ident
+            #(#versions)|* => #ident
                 .get(usize::from(state_id))
                 .copied()
                 .unwrap_or(0),

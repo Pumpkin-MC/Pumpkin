@@ -1,0 +1,24 @@
+{
+  "precipitation": "snow",
+  "effects": {
+    "music": {
+      "replace_current_music": 0,
+      "max_delay": 24000,
+      "sound": "minecraft:music.overworld.grove",
+      "min_delay": 12000
+    },
+    "sky_color": 8495359,
+    "water_fog_color": 329011,
+    "fog_color": 12638463,
+    "water_color": 4159204,
+    "mood_sound": {
+      "tick_delay": 6000,
+      "offset": 2.0,
+      "sound": "minecraft:ambient.cave",
+      "block_search_extent": 8
+    }
+  },
+  "temperature": -0.20000000298023224,
+  "downfall": 0.800000011920929,
+  "category": "forest"
+}

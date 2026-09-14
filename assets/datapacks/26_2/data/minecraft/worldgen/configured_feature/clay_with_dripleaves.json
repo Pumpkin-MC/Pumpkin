@@ -1,0 +1,27 @@
+{
+  "type": "minecraft:vegetation_patch",
+  "config": {
+    "depth": 3,
+    "extra_bottom_block_chance": 0.8,
+    "extra_edge_column_chance": 0.7,
+    "ground_state": {
+      "type": "minecraft:simple_state_provider",
+      "state": {
+        "Name": "minecraft:clay"
+      }
+    },
+    "replaceable": "#minecraft:lush_ground_replaceable",
+    "surface": "floor",
+    "vegetation_chance": 0.05,
+    "vegetation_feature": {
+      "feature": "minecraft:dripleaf",
+      "placement": []
+    },
+    "vertical_range": 2,
+    "xz_radius": {
+      "type": "minecraft:uniform",
+      "max_inclusive": 7,
+      "min_inclusive": 4
+    }
+  }
+}

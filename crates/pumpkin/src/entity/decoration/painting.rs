@@ -1,9 +1,7 @@
 use core::f32;
 use std::sync::atomic::Ordering;
 
-use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture, NBTStorage, NbtFuture, living::LivingEntity,
-};
+use crate::entity::{Entity, EntityBase, living::LivingEntity};
 use pumpkin_data::damage::DamageType;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::vector3::Vector3;
@@ -18,24 +16,16 @@ impl PaintingEntity {
     }
 }
 
-impl NBTStorage for PaintingEntity {
-    fn write_nbt<'a>(&'a self, nbt: &'a mut NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async {
-            self.entity.write_nbt(nbt).await;
-            nbt.put_byte("facing", self.entity.data.load(Ordering::Relaxed) as i8);
-        })
-    }
-
-    fn read_nbt_non_mut<'a>(&'a self, nbt: &'a NbtCompound) -> NbtFuture<'a, ()> {
-        Box::pin(async {
-            self.entity.read_nbt_non_mut(nbt).await;
-            let facing = nbt.get_byte("facing").unwrap_or(3);
-            self.entity.data.store(facing as i32, Ordering::Relaxed);
-        })
-    }
-}
-
 impl EntityBase for PaintingEntity {
+    fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_byte("facing", self.entity.data.load(Ordering::Relaxed) as i8);
+    }
+
+    fn read_custom_nbt(&self, nbt: &NbtCompound) {
+        let facing = nbt.get_byte("facing").unwrap_or(3);
+        self.entity.data.store(facing as i32, Ordering::Relaxed);
+    }
+
     fn get_entity(&self) -> &Entity {
         &self.entity
     }
@@ -44,24 +34,18 @@ impl EntityBase for PaintingEntity {
         None
     }
 
-    fn damage_with_context<'a>(
-        &'a self,
-        _caller: &'a dyn EntityBase,
+    fn damage_with_context(
+        &self,
+        _caller: &dyn EntityBase,
         _amount: f32,
         _damage_type: DamageType,
         _position: Option<Vector3<f64>>,
-        _source: Option<&'a dyn EntityBase>,
-        _cause: Option<&'a dyn EntityBase>,
-    ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async {
-            // TODO
-            self.entity.remove().await;
-            true
-        })
-    }
-
-    fn as_nbt_storage(&self) -> &dyn NBTStorage {
-        self
+        _source: Option<&dyn EntityBase>,
+        _cause: Option<&dyn EntityBase>,
+    ) -> bool {
+        // TODO
+        self.entity.remove();
+        true
     }
 
     fn cast_any(&self) -> &dyn std::any::Any {

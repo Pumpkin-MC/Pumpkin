@@ -101,6 +101,27 @@ impl MoveControlTrait for MoveControl {
 
         // Navigator owns movement input while this controller waits.
     }
+
+    fn set_wanted_position(&mut self, x: f64, y: f64, z: f64, speed_modifier: f64) {
+        self.wanted_x = x;
+        self.wanted_y = y;
+        self.wanted_z = z;
+        self.speed_modifier = speed_modifier;
+        if self.operation != Operation::Jumping {
+            self.operation = Operation::MoveTo;
+        }
+    }
+
+    fn strafe(&mut self, forwards: f32, right: f32) {
+        self.operation = Operation::Strafe;
+        self.strafe_forwards = forwards;
+        self.strafe_right = right;
+        self.speed_modifier = 0.25;
+    }
+
+    fn has_wanted(&self) -> bool {
+        self.operation == Operation::MoveTo
+    }
 }
 
 impl MoveControl {

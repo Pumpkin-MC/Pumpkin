@@ -10,7 +10,7 @@ use crate::generation::structure::template::{
 use pumpkin_util::math::block_box::BlockBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_util::random::RandomImpl;
+use pumpkin_util::random::{RandomDeriverImpl, RandomImpl};
 use serde::Deserialize;
 use std::sync::Arc;
 
@@ -20,25 +20,24 @@ pub enum JigsawProjection {
     TerrainMatching,
 }
 
-#[derive(Clone)]
 pub struct TemplatePool {
     pub id: String,
     pub fallback: String,
-    pub elements: Vec<PoolElement>,
+    pub elements: Vec<Arc<PoolElement>>,
 }
 
-#[derive(Clone)]
 pub struct PoolElement {
     pub weight: u32,
     pub projection: JigsawProjection,
     pub kind: PoolElementKind,
 }
 
-#[derive(Clone)]
 pub enum PoolElementKind {
     Empty,
     Single {
         template: String,
+        /// Resolved template, loaded once when the pool element is created.
+        resolved_template: Option<Arc<StructureTemplate>>,
         processors: ProcessorListRef,
         legacy: bool,
     },
@@ -131,9 +130,11 @@ impl RawPoolElement {
                 ProcessorListRef::Empty
             }
         };
+        let resolved_template = crate::generation::structure::template::get_template(&location);
         (
             PoolElementKind::Single {
                 template: location,
+                resolved_template,
                 processors,
                 legacy,
             },
@@ -187,9 +188,9 @@ impl PoolElement {
     pub fn first_template(&self) -> Option<Arc<StructureTemplate>> {
         fn find(kind: &PoolElementKind) -> Option<Arc<StructureTemplate>> {
             match kind {
-                PoolElementKind::Single { template, .. } => {
-                    crate::generation::structure::template::get_template(template)
-                }
+                PoolElementKind::Single {
+                    resolved_template, ..
+                } => resolved_template.clone(),
                 PoolElementKind::List(elements) => elements.iter().find_map(find),
                 PoolElementKind::Empty | PoolElementKind::Feature(_) => None,
             }
@@ -209,13 +210,17 @@ impl PoolElement {
             match kind {
                 PoolElementKind::Single {
                     template,
+                    resolved_template,
                     processors,
                     legacy,
                 } => {
-                    if let Some(structure_template) =
-                        crate::generation::structure::template::get_template(template)
-                    {
-                        consumer(template, processors, *legacy, structure_template);
+                    if let Some(structure_template) = resolved_template {
+                        consumer(
+                            template,
+                            processors,
+                            *legacy,
+                            Arc::clone(structure_template),
+                        );
                     }
                 }
                 PoolElementKind::List(elements) => {
@@ -229,7 +234,123 @@ impl PoolElement {
 
         visit(&self.kind, &mut consumer);
     }
+}
 
+impl PoolElementKind {
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        matches!(self, Self::Empty)
+    }
+
+    #[must_use]
+    pub fn get_ground_level_delta(&self) -> i32 {
+        match self {
+            Self::Single { .. } => 1,
+            Self::List(elements) => elements.first().map_or(1, Self::get_ground_level_delta),
+            Self::Feature(_) | Self::Empty => 0,
+        }
+    }
+
+    #[must_use]
+    pub fn get_y_size(&self) -> Option<i32> {
+        match self {
+            Self::Single {
+                resolved_template, ..
+            } => resolved_template.as_ref().map(|t| t.size.y),
+            Self::List(elements) => elements.iter().filter_map(Self::get_y_size).max(),
+            Self::Feature(_) => Some(1),
+            Self::Empty => None,
+        }
+    }
+
+    #[must_use]
+    pub fn get_bounding_box(&self, offset: BlockPos, rotation: pumpkin_data::Rotation) -> BlockBox {
+        match self {
+            Self::Single {
+                resolved_template, ..
+            } => resolved_template.as_ref().map_or_else(
+                || {
+                    BlockBox::new(
+                        offset.0.x, offset.0.y, offset.0.z, offset.0.x, offset.0.y, offset.0.z,
+                    )
+                },
+                |t| super::jigsaw_placement::rotated_box(offset, t.size, rotation),
+            ),
+            Self::List(elements) => {
+                let mut bbox: Option<BlockBox> = None;
+                for element in elements {
+                    if element.is_empty() {
+                        continue;
+                    }
+                    let b = element.get_bounding_box(offset, rotation);
+                    if let Some(existing) = &mut bbox {
+                        existing.encompass(&b);
+                    } else {
+                        bbox = Some(b);
+                    }
+                }
+                bbox.unwrap_or_else(|| {
+                    BlockBox::new(
+                        offset.0.x, offset.0.y, offset.0.z, offset.0.x, offset.0.y, offset.0.z,
+                    )
+                })
+            }
+            Self::Feature(_) | Self::Empty => BlockBox::new(
+                offset.0.x, offset.0.y, offset.0.z, offset.0.x, offset.0.y, offset.0.z,
+            ),
+        }
+    }
+
+    #[must_use]
+    pub fn get_shuffled_jigsaw_blocks(
+        &self,
+        offset: BlockPos,
+        rotation: pumpkin_data::Rotation,
+        random: &mut pumpkin_util::random::RandomGenerator,
+    ) -> Vec<JigsawBlock> {
+        match self {
+            Self::Single {
+                resolved_template, ..
+            } => {
+                let Some(template) = resolved_template else {
+                    return Vec::new();
+                };
+                let mut jigsaws = template.jigsaw_blocks().to_vec();
+                for i in (1..jigsaws.len()).rev() {
+                    let j = random.next_bounded_i32(i as i32 + 1) as usize;
+                    jigsaws.swap(i, j);
+                }
+                jigsaws.sort_by_key(|j| std::cmp::Reverse(j.selection_priority));
+                for jigsaw in &mut jigsaws {
+                    let rotated_pos = super::jigsaw_placement::rotate_pos(jigsaw.pos.0, rotation);
+                    jigsaw.pos = offset.add(rotated_pos.x, rotated_pos.y, rotated_pos.z);
+                    jigsaw.facing =
+                        super::jigsaw_placement::rotate_direction(jigsaw.facing, rotation);
+                    jigsaw.up = super::jigsaw_placement::rotate_direction(jigsaw.up, rotation);
+                }
+                jigsaws
+            }
+            Self::List(elements) => elements.first().map_or_else(Vec::new, |e| {
+                e.get_shuffled_jigsaw_blocks(offset, rotation, random)
+            }),
+            Self::Feature(_) => vec![JigsawBlock {
+                pos: offset,
+                name: "minecraft:bottom".to_string(),
+                target: "minecraft:empty".to_string(),
+                pool: "minecraft:empty".to_string(),
+                final_state: "minecraft:air".to_string(),
+                joint: JigsawJointType::Rollable,
+                facing: pumpkin_util::BlockDirection::Down,
+                up: pumpkin_util::BlockDirection::South,
+                selection_priority: 0,
+                placement_priority: 0,
+            }],
+            Self::Empty => Vec::new(),
+        }
+    }
+}
+
+impl PoolElement {
     #[must_use]
     pub const fn feature(&self) -> Option<pumpkin_data::placed_feature::PlacedFeature> {
         match self.kind {
@@ -237,35 +358,69 @@ impl PoolElement {
             _ => None,
         }
     }
+
+    #[must_use]
+    pub fn get_ground_level_delta(&self) -> i32 {
+        self.kind.get_ground_level_delta()
+    }
+
+    #[must_use]
+    pub fn get_y_size(&self) -> Option<i32> {
+        self.kind.get_y_size()
+    }
+
+    #[must_use]
+    pub fn get_bounding_box(&self, offset: BlockPos, rotation: pumpkin_data::Rotation) -> BlockBox {
+        self.kind.get_bounding_box(offset, rotation)
+    }
+
+    #[must_use]
+    pub fn get_shuffled_jigsaw_blocks(
+        &self,
+        offset: BlockPos,
+        rotation: pumpkin_data::Rotation,
+        random: &mut pumpkin_util::random::RandomGenerator,
+    ) -> Vec<JigsawBlock> {
+        self.kind
+            .get_shuffled_jigsaw_blocks(offset, rotation, random)
+    }
 }
 
 impl TemplatePool {
+    #[must_use]
+    pub fn get_max_size(&self) -> i32 {
+        self.elements
+            .iter()
+            .filter_map(|element| element.get_y_size())
+            .max()
+            .unwrap_or(0)
+    }
     pub fn get_random_element(
         &self,
         random: &mut pumpkin_util::random::RandomGenerator,
-    ) -> &PoolElement {
+    ) -> Arc<PoolElement> {
         let total_weight: u32 = self.elements.iter().map(|e| e.weight).sum();
         if total_weight == 0 {
-            return &self.elements[0];
+            return Arc::clone(&self.elements[0]);
         }
         let mut r = random.next_bounded_i32(total_weight as i32) as u32;
         for element in &self.elements {
             if r < element.weight {
-                return element;
+                return Arc::clone(element);
             }
             r -= element.weight;
         }
-        &self.elements[0]
+        Arc::clone(&self.elements[0])
     }
 
     /// Discovers a pool from the filesystem/embedded assets.
     #[must_use]
-    pub fn discover(id: &str) -> Option<Self> {
-        static CACHE: std::sync::LazyLock<dashmap::DashMap<String, TemplatePool>> =
+    pub fn discover(id: &str) -> Option<Arc<Self>> {
+        static CACHE: std::sync::LazyLock<dashmap::DashMap<String, Arc<TemplatePool>>> =
             std::sync::LazyLock::new(dashmap::DashMap::new);
 
         if let Some(pool) = CACHE.get(id) {
-            return Some(pool.clone());
+            return Some(Arc::clone(&pool));
         }
 
         let pool = if id == "minecraft:empty" || id == "empty" {
@@ -288,14 +443,13 @@ impl TemplatePool {
                 .elements
                 .into_iter()
                 .filter_map(|weighted| {
-                    weighted
-                        .element
-                        .into_element()
-                        .map(|(kind, projection)| PoolElement {
+                    weighted.element.into_element().map(|(kind, projection)| {
+                        Arc::new(PoolElement {
                             weight: weighted.weight,
                             projection,
                             kind,
                         })
+                    })
                 })
                 .collect();
             Self {
@@ -316,19 +470,24 @@ impl TemplatePool {
                 fallback: "minecraft:empty".to_string(),
                 elements: elements
                     .iter()
-                    .map(|e| PoolElement {
-                        weight: 1,
-                        projection,
-                        kind: PoolElementKind::Single {
-                            template: (*e).to_string(),
-                            processors: ProcessorListRef::Empty,
-                            legacy: false,
-                        },
+                    .map(|e| {
+                        Arc::new(PoolElement {
+                            weight: 1,
+                            projection,
+                            kind: PoolElementKind::Single {
+                                template: (*e).to_string(),
+                                resolved_template:
+                                    crate::generation::structure::template::get_template(e),
+                                processors: ProcessorListRef::Empty,
+                                legacy: false,
+                            },
+                        })
                     })
                     .collect(),
             }
         };
-        CACHE.insert(id.to_owned(), pool.clone());
+        let pool = Arc::new(pool);
+        CACHE.insert(id.to_owned(), Arc::clone(&pool));
         Some(pool)
     }
 
@@ -336,11 +495,11 @@ impl TemplatePool {
     pub fn get_shuffled_elements(
         &self,
         random: &mut pumpkin_util::random::RandomGenerator,
-    ) -> Vec<PoolElement> {
+    ) -> Vec<Arc<PoolElement>> {
         let mut elements = self
             .elements
             .iter()
-            .flat_map(|element| std::iter::repeat_n(element.clone(), element.weight as usize))
+            .flat_map(|element| std::iter::repeat_n(Arc::clone(element), element.weight as usize))
             .collect::<Vec<_>>();
         for index in (1..elements.len()).rev() {
             let other = random.next_bounded_i32(index as i32 + 1) as usize;
@@ -357,6 +516,14 @@ pub enum JigsawJointType {
 }
 
 impl JigsawJointType {
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Rollable => "rollable",
+            Self::Aligned => "aligned",
+        }
+    }
+
     #[allow(clippy::should_implement_trait)]
     #[must_use]
     pub fn from_str(s: &str) -> Self {
@@ -460,7 +627,7 @@ pub struct JigsawJunction {
 
 pub struct PoolElementStructurePiece {
     pub piece: crate::generation::structure::structures::StructurePiece,
-    pub element: PoolElement,
+    pub element: Arc<PoolElement>,
     pub pos: BlockPos,
     pub rotation: BlockRotation,
     pub mirror: BlockMirror,
@@ -552,6 +719,7 @@ pub fn place_pool_element_templates(
     piece: &PoolElementStructurePiece,
     placer: &mut impl BlockPlacer,
     chunk_box: Option<&BlockBox>,
+    keep_jigsaws: bool,
 ) {
     let origin = Vector3::new(piece.pos.0.x, piece.pos.0.y, piece.pos.0.z);
 
@@ -573,7 +741,7 @@ pub fn place_pool_element_templates(
                 }
                 ProcessorListRef::Empty => Arc::from([]),
             };
-            crate::generation::structure::template::place_template(
+            crate::generation::structure::template::place_template_with_options(
                 placer,
                 &template,
                 placement_origin,
@@ -583,6 +751,7 @@ pub fn place_pool_element_templates(
                 piece.liquid_settings == LiquidSettings::ApplyWaterlog,
                 processors.as_ref(),
                 chunk_box,
+                keep_jigsaws,
             );
         });
 }
@@ -598,6 +767,7 @@ pub struct JigsawGenerator {
     pub size: i32,
     pub start_jigsaw_name: Option<String>,
     pub use_expansion_hack: bool,
+    pub pool_aliases: &'static [pumpkin_data::structures::PoolAliasBinding],
 }
 
 impl JigsawGenerator {
@@ -608,6 +778,18 @@ impl JigsawGenerator {
             size,
             start_jigsaw_name: None,
             use_expansion_hack: false,
+            pool_aliases: &[],
+        }
+    }
+
+    #[must_use]
+    pub fn new_with_pool(start_pool: &str, size: i32) -> Self {
+        Self {
+            start_pool: start_pool.to_string(),
+            size,
+            start_jigsaw_name: None,
+            use_expansion_hack: false,
+            pool_aliases: &[],
         }
     }
 
@@ -620,6 +802,15 @@ impl JigsawGenerator {
     #[must_use]
     pub const fn with_expansion_hack(mut self, use_hack: bool) -> Self {
         self.use_expansion_hack = use_hack;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_pool_aliases(
+        mut self,
+        aliases: &'static [pumpkin_data::structures::PoolAliasBinding],
+    ) -> Self {
+        self.pool_aliases = aliases;
         self
     }
 }
@@ -635,7 +826,9 @@ impl StructureGenerator for JigsawGenerator {
             .map(|key| pumpkin_data::structures::Structure::get(&key));
 
         let start_y = if let Some(s) = structure {
-            s.start_height.unwrap_or(context.sea_level as i16) as i32
+            s.start_height.map_or(context.sea_level, |hp| {
+                hp.get(&mut context.random, context.min_y as i8, context.height)
+            })
         } else {
             context.sea_level
         };
@@ -670,18 +863,50 @@ impl StructureGenerator for JigsawGenerator {
                     bottom: dp,
                 });
 
+        let use_expansion_hack = self.use_expansion_hack
+            || structure
+                .and_then(|s| s.use_expansion_hack)
+                .unwrap_or(false);
+
+        let start_jigsaw = self
+            .start_jigsaw_name
+            .as_deref()
+            .or_else(|| structure.and_then(|s| s.start_jigsaw_name));
+
+        let pool_aliases = if !self.pool_aliases.is_empty() {
+            self.pool_aliases
+        } else if let Some(s) = structure {
+            s.pool_aliases
+        } else {
+            &[]
+        };
+
+        let mut alias_random =
+            pumpkin_util::random::legacy_rand::LegacyRand::from_seed(context.seed as u64)
+                .next_splitter()
+                .split_pos(start_pos.0.x, start_pos.0.y, start_pos.0.z);
+        let pool_alias_lookup = PoolAliasLookup::from_bindings(pool_aliases, &mut alias_random);
+
+        let start_pool = if self.start_pool.is_empty() {
+            structure
+                .and_then(|s| s.start_pool)
+                .unwrap_or(&self.start_pool)
+        } else {
+            &self.start_pool
+        };
+
         JigsawPlacement::add_pieces(
             &mut context,
-            &self.start_pool,
-            self.start_jigsaw_name.as_deref(),
+            start_pool,
+            start_jigsaw,
             self.size,
             start_pos,
-            self.use_expansion_hack,
+            use_expansion_hack,
             project_start_to_heightmap,
             &MaxDistance::new(max_distance),
-            &dimension_padding,
+            dimension_padding,
             liquid_settings,
-            &PoolAliasLookup::default(),
+            &pool_alias_lookup,
         )
     }
 }
@@ -726,7 +951,7 @@ mod tests {
     #[test]
     fn ancient_city_start_templates_and_anchor_exist() {
         let pool = TemplatePool::discover("minecraft:ancient_city/city_center").unwrap();
-        for element in pool.elements {
+        for element in &pool.elements {
             let template = element.first_template().expect("missing start template");
             assert!(
                 template.blocks.iter().any(|block| {
@@ -771,7 +996,8 @@ mod tests {
             "minecraft:ancient_city/city_center/walls",
             "minecraft:ancient_city/walls/no_corners",
         ] {
-            for element in TemplatePool::discover(id).unwrap().elements {
+            let pool = TemplatePool::discover(id).unwrap();
+            for element in &pool.elements {
                 check(&element.kind);
             }
         }
@@ -788,6 +1014,7 @@ mod tests {
             random: super::super::create_chunk_random(0, 0, 0),
             sea_level: 63,
             min_y: -64,
+            height: 384,
             height_sampler: None,
             structure_key: Some(pumpkin_data::structures::StructureKeys::AncientCity),
         };
@@ -888,9 +1115,7 @@ mod tests {
             unreachable!()
         };
         let mut height_sampler =
-            crate::generation::structure::height_sampler::NoiseHeightSampler::new(
-                world_gen, 1200, -1312,
-            );
+            crate::generation::structure::height_sampler::NoiseHeightSampler::new(world_gen);
         let generator = JigsawGenerator::new("minecraft:pillager_outpost/base_plates", 7)
             .with_expansion_hack(true);
 
@@ -901,6 +1126,7 @@ mod tests {
             random: super::super::create_chunk_random(SEED, 75, -82),
             sea_level: 63,
             min_y: -64,
+            height: 384,
             height_sampler: Some(&mut height_sampler),
             structure_key: Some(pumpkin_data::structures::StructureKeys::PillagerOutpost),
         };

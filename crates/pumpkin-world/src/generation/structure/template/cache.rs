@@ -9,9 +9,25 @@ use dashmap::DashMap;
 
 use super::{StructureTemplate, structure_template::TemplateError};
 
+/// Vanilla's implicit namespace.
+const DEFAULT_NAMESPACE: &str = "minecraft";
+
+/// Canonicalizes a resource id to fully-qualified `namespace:path` form.
+///
+/// A bare `foo` becomes `minecraft:foo`, matching vanilla resolution.
+fn canonicalize(name: &str) -> String {
+    if name.contains(':') {
+        name.to_owned()
+    } else {
+        format!("{DEFAULT_NAMESPACE}:{name}")
+    }
+}
+
 /// A cache for loaded structure templates.
 ///
 /// Templates are loaded lazily on first access and stored for reuse.
+/// Keys are fully-qualified resource ids, so `foo` and `minecraft:foo`
+/// share a single entry.
 /// The cache is thread-safe and can be accessed from multiple threads.
 pub struct TemplateCache {
     cache: DashMap<String, Arc<StructureTemplate>>,
@@ -34,25 +50,14 @@ impl TemplateCache {
 
     /// Gets a template by `name`, loading it from embedded resources if not cached.
     ///
+    /// `name` may be bare (`foo`) or namespaced (`minecraft:foo`, `pumpkin:foo`).
+    ///
     /// Returns the loaded template wrapped in an `Arc`, or `None` if the template
     /// doesn't exist or failed to load.
     pub fn get(&self, name: &str) -> Option<Arc<StructureTemplate>> {
-        let name = name.strip_prefix("minecraft:").unwrap_or(name);
-
-        // Check cache first
-        if let Some(template) = self.cache.get(name) {
-            return Some(Arc::clone(&template));
-        }
-
-        // Try to load the template
-        let bytes = Self::load_template_bytes(name)?;
-
-        match StructureTemplate::from_nbt_bytes(bytes) {
-            Ok(template) => {
-                let arc = Arc::new(template);
-                self.cache.insert(name.to_owned(), Arc::clone(&arc));
-                Some(arc)
-            }
+        match self.get_or_error(name) {
+            Ok(template) => Some(template),
+            Err(TemplateError::MissingField("template file not found")) => None,
             Err(e) => {
                 tracing::error!("Failed to load template '{}': {}", name, e);
                 None
@@ -66,20 +71,20 @@ impl TemplateCache {
     ///
     /// Returns an error if the template doesn't exist or fails to parse.
     pub fn get_or_error(&self, name: &str) -> Result<Arc<StructureTemplate>, TemplateError> {
-        let name = name.strip_prefix("minecraft:").unwrap_or(name);
+        let key = canonicalize(name);
 
         // Check cache first
-        if let Some(template) = self.cache.get(name) {
+        if let Some(template) = self.cache.get(&key) {
             return Ok(Arc::clone(&template));
         }
 
         // Try to load the template
-        let bytes = Self::load_template_bytes(name)
+        let bytes = Self::load_template_bytes(&key)
             .ok_or(TemplateError::MissingField("template file not found"))?;
 
         let template = StructureTemplate::from_nbt_bytes(bytes)?;
         let arc = Arc::new(template);
-        self.cache.insert(name.to_owned(), Arc::clone(&arc));
+        self.cache.insert(key, Arc::clone(&arc));
         Ok(arc)
     }
 
@@ -87,7 +92,7 @@ impl TemplateCache {
     ///
     /// This can be useful during server startup to avoid loading delays
     /// during gameplay.
-    pub fn preload(&self, names: &[&'static str]) {
+    pub fn preload(&self, names: &[&str]) {
         for name in names {
             if let Err(e) = self.get_or_error(name) {
                 tracing::warn!("Failed to preload template '{}': {}", name, e);
@@ -113,9 +118,6 @@ impl TemplateCache {
     }
 
     /// Loads raw template bytes from embedded resources.
-    ///
-    /// This function maps template names to their embedded byte data.
-    /// Add new templates here as they are added to the assets.
     fn load_template_bytes(path: &str) -> Option<&'static [u8]> {
         get_template_bytes(path)
     }
@@ -144,9 +146,30 @@ pub fn get_template(name: &str) -> Option<Arc<StructureTemplate>> {
     global_cache().get(name)
 }
 
+/// Returns the raw JSON for a template pool, or `None` if not found.
+#[must_use]
+pub fn template_pool_json(pool_id: &str) -> Option<&'static str> {
+    get_template_pool_json(&canonicalize(pool_id))
+}
+
+/// Returns the raw JSON for a processor list, or `None` if not found.
+#[must_use]
+pub fn processor_list_json(id: &str) -> Option<&'static str> {
+    get_processor_list_json(&canonicalize(id))
+}
+
+/// Returns the element template ids for a pool, or `None` if not found.
+///
+/// Element ids are fully qualified and can be passed directly to [`get_template`].
+#[must_use]
+pub fn pool_elements(pool_id: &str) -> Option<&'static [&'static str]> {
+    get_pool_elements(&canonicalize(pool_id))
+}
+
 /// Returns a list of all available template names that can be loaded.
 ///
 /// These are derived from the embedded structure files at compile time.
+/// Names are fully qualified (e.g. `minecraft:village/plains/houses/...`).
 /// Useful for tab-completion in commands.
 #[must_use]
 #[allow(clippy::used_underscore_items)]
@@ -165,4 +188,16 @@ pub const fn all_structure_names() -> &'static [&'static str] {
 #[allow(clippy::used_underscore_items)]
 pub const fn all_pool_names() -> &'static [&'static str] {
     _generated_all_pool_names()
+}
+
+/// Returns raw NBT bytes for an embedded structure template.
+#[must_use]
+pub fn template_bytes(name: &str) -> Option<&'static [u8]> {
+    get_template_bytes(&canonicalize(name))
+}
+
+#[must_use]
+#[allow(clippy::used_underscore_items)]
+pub const fn all_embedded_datapack_names() -> &'static [&'static str] {
+    _generated_all_embedded_datapack_names()
 }

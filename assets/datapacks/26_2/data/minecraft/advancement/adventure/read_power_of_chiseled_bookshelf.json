@@ -1,0 +1,183 @@
+{
+  "parent": "minecraft:adventure/root",
+  "criteria": {
+    "chiseled_bookshelf": {
+      "conditions": {
+        "location": [
+          {
+            "block": "minecraft:chiseled_bookshelf",
+            "condition": "minecraft:block_state_property"
+          },
+          {
+            "condition": "minecraft:any_of",
+            "terms": [
+              {
+                "condition": "minecraft:location_check",
+                "offsetZ": 1,
+                "predicate": {
+                  "block": {
+                    "blocks": "minecraft:comparator",
+                    "state": {
+                      "facing": "north"
+                    }
+                  }
+                }
+              },
+              {
+                "condition": "minecraft:location_check",
+                "offsetZ": -1,
+                "predicate": {
+                  "block": {
+                    "blocks": "minecraft:comparator",
+                    "state": {
+                      "facing": "south"
+                    }
+                  }
+                }
+              },
+              {
+                "condition": "minecraft:location_check",
+                "offsetX": 1,
+                "predicate": {
+                  "block": {
+                    "blocks": "minecraft:comparator",
+                    "state": {
+                      "facing": "west"
+                    }
+                  }
+                }
+              },
+              {
+                "condition": "minecraft:location_check",
+                "offsetX": -1,
+                "predicate": {
+                  "block": {
+                    "blocks": "minecraft:comparator",
+                    "state": {
+                      "facing": "east"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "trigger": "minecraft:placed_block"
+    },
+    "comparator": {
+      "conditions": {
+        "location": [
+          {
+            "condition": "minecraft:any_of",
+            "terms": [
+              {
+                "condition": "minecraft:all_of",
+                "terms": [
+                  {
+                    "block": "minecraft:comparator",
+                    "condition": "minecraft:block_state_property",
+                    "properties": {
+                      "facing": "north"
+                    }
+                  },
+                  {
+                    "condition": "minecraft:location_check",
+                    "offsetZ": -1,
+                    "predicate": {
+                      "block": {
+                        "blocks": "minecraft:chiseled_bookshelf"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "condition": "minecraft:all_of",
+                "terms": [
+                  {
+                    "block": "minecraft:comparator",
+                    "condition": "minecraft:block_state_property",
+                    "properties": {
+                      "facing": "south"
+                    }
+                  },
+                  {
+                    "condition": "minecraft:location_check",
+                    "offsetZ": 1,
+                    "predicate": {
+                      "block": {
+                        "blocks": "minecraft:chiseled_bookshelf"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "condition": "minecraft:all_of",
+                "terms": [
+                  {
+                    "block": "minecraft:comparator",
+                    "condition": "minecraft:block_state_property",
+                    "properties": {
+                      "facing": "west"
+                    }
+                  },
+                  {
+                    "condition": "minecraft:location_check",
+                    "offsetX": -1,
+                    "predicate": {
+                      "block": {
+                        "blocks": "minecraft:chiseled_bookshelf"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "condition": "minecraft:all_of",
+                "terms": [
+                  {
+                    "block": "minecraft:comparator",
+                    "condition": "minecraft:block_state_property",
+                    "properties": {
+                      "facing": "east"
+                    }
+                  },
+                  {
+                    "condition": "minecraft:location_check",
+                    "offsetX": 1,
+                    "predicate": {
+                      "block": {
+                        "blocks": "minecraft:chiseled_bookshelf"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "trigger": "minecraft:placed_block"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.adventure.read_power_from_chiseled_bookshelf.description"
+    },
+    "icon": {
+      "id": "minecraft:chiseled_bookshelf"
+    },
+    "title": {
+      "translate": "advancements.adventure.read_power_from_chiseled_bookshelf.title"
+    }
+  },
+  "requirements": [
+    [
+      "chiseled_bookshelf",
+      "comparator"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

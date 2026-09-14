@@ -1,0 +1,41 @@
+{
+  "parent": "minecraft:adventure/ol_betsy",
+  "criteria": {
+    "kill_pillager": {
+      "conditions": {
+        "fired_from_weapon": {
+          "items": "minecraft:crossbow"
+        },
+        "victims": [
+          [
+            {
+              "condition": "minecraft:entity_properties",
+              "entity": "this",
+              "predicate": {
+                "minecraft:entity_type": "minecraft:pillager"
+              }
+            }
+          ]
+        ]
+      },
+      "trigger": "minecraft:killed_by_arrow"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.adventure.whos_the_pillager_now.description"
+    },
+    "icon": {
+      "id": "minecraft:crossbow"
+    },
+    "title": {
+      "translate": "advancements.adventure.whos_the_pillager_now.title"
+    }
+  },
+  "requirements": [
+    [
+      "kill_pillager"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

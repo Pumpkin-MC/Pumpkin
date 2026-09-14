@@ -1,0 +1,47 @@
+{
+  "parent": "minecraft:husbandry/tame_an_animal",
+  "criteria": {
+    "repair_wolf_armor": {
+      "conditions": {
+        "entity": [
+          {
+            "condition": "minecraft:entity_properties",
+            "entity": "this",
+            "predicate": {
+              "minecraft:entity_type": "minecraft:wolf",
+              "minecraft:equipment": {
+                "body": {
+                  "components": {
+                    "minecraft:damage": 0
+                  },
+                  "items": "minecraft:wolf_armor"
+                }
+              }
+            }
+          }
+        ],
+        "item": {
+          "items": "minecraft:armadillo_scute"
+        }
+      },
+      "trigger": "minecraft:player_interacted_with_entity"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.husbandry.repair_wolf_armor.description"
+    },
+    "icon": {
+      "id": "minecraft:wolf_armor"
+    },
+    "title": {
+      "translate": "advancements.husbandry.repair_wolf_armor.title"
+    }
+  },
+  "requirements": [
+    [
+      "repair_wolf_armor"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

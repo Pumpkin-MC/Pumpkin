@@ -1,0 +1,9 @@
+{
+  "item_model_index": 0.4,
+  "description": {
+    "translate": "trim_material.minecraft.redstone",
+    "color": "#971607"
+  },
+  "asset_name": "redstone",
+  "ingredient": "minecraft:redstone"
+}

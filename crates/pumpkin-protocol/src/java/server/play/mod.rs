@@ -1,6 +1,7 @@
 mod attack;
 mod bundle_item_selected;
 mod change_game_mode;
+mod chat_ack;
 mod chat_command;
 mod chat_message;
 mod chunk_batch;
@@ -53,6 +54,7 @@ mod use_item_on;
 pub use attack::*;
 pub use bundle_item_selected::*;
 pub use change_game_mode::*;
+pub use chat_ack::*;
 pub use chat_command::*;
 pub use chat_message::*;
 pub use chunk_batch::*;
@@ -146,3 +148,9 @@ pub use set_structure_block::*;
 
 mod spectate_entity;
 pub use spectate_entity::*;
+
+mod change_difficulty;
+pub use change_difficulty::*;
+
+mod chat_command_signed;
+pub use chat_command_signed::*;

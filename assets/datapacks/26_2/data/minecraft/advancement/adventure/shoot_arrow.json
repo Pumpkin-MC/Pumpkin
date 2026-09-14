@@ -1,0 +1,40 @@
+{
+  "parent": "minecraft:adventure/kill_a_mob",
+  "criteria": {
+    "shot_arrow": {
+      "conditions": {
+        "damage": {
+          "type": {
+            "direct_entity": {
+              "minecraft:entity_type": "#minecraft:arrows"
+            },
+            "tags": [
+              {
+                "expected": true,
+                "id": "minecraft:is_projectile"
+              }
+            ]
+          }
+        }
+      },
+      "trigger": "minecraft:player_hurt_entity"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.adventure.shoot_arrow.description"
+    },
+    "icon": {
+      "id": "minecraft:bow"
+    },
+    "title": {
+      "translate": "advancements.adventure.shoot_arrow.title"
+    }
+  },
+  "requirements": [
+    [
+      "shot_arrow"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

@@ -12,51 +12,126 @@ const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_2;
 /// Generates the `TokenStream` for the `Registry` and `StaticRegistry` structs, version-keyed
 /// static registry data, and the `Registry::get_synced` method.
 pub(crate) fn build() -> TokenStream {
-    let assets = [
-        (
-            JavaMinecraftVersion::V_1_20_5,
-            "1_21_synced_registries.json",
-        ),
-        (JavaMinecraftVersion::V_1_21, "1_21_synced_registries.json"),
-        (
-            JavaMinecraftVersion::V_1_21_2,
-            "1_21_2_synced_registries.json",
-        ),
-        (
-            JavaMinecraftVersion::V_1_21_4,
-            "1_21_4_synced_registries.json",
-        ),
-        (
-            JavaMinecraftVersion::V_1_21_5,
-            "1_21_5_synced_registries.json",
-        ),
-        (
-            JavaMinecraftVersion::V_1_21_6,
-            "1_21_6_synced_registries.json",
-        ),
-        (
-            JavaMinecraftVersion::V_1_21_7,
-            "1_21_7_synced_registries.json",
-        ),
-        (
-            JavaMinecraftVersion::V_1_21_9,
-            "1_21_9_synced_registries.json",
-        ),
-        (
-            JavaMinecraftVersion::V_1_21_11,
-            "1_21_11_synced_registries.json",
-        ),
-        (JavaMinecraftVersion::V_26_1, "26_1_synced_registries.json"),
-        (JavaMinecraftVersion::V_26_2, "26_2_synced_registries.json"),
+    let versions = [
+        ("1_16", "V_1_16"),
+        ("1_16_2", "V_1_16_2"),
+        ("1_17", "V_1_17"),
+        ("1_18", "V_1_18"),
+        ("1_19", "V_1_19"),
+        ("1_20", "V_1_20"),
+        ("1_20_2", "V_1_20_2"),
+        ("1_21", "V_1_21"),
+        ("1_21_2", "V_1_21_2"),
+        ("1_21_4", "V_1_21_4"),
+        ("1_21_5", "V_1_21_5"),
+        ("1_21_6", "V_1_21_6"),
+        ("1_21_7", "V_1_21_7"),
+        ("1_21_9", "V_1_21_9"),
+        ("1_21_11", "V_1_21_11"),
+        ("26_1", "V_26_1"),
+        ("26_2", "V_26_2"),
     ];
 
-    let process_version = |path: &str| -> TokenStream {
-        let json_str = fs::read_to_string(path).unwrap_or_else(|_| panic!("Failed to read {path}"));
-        let mut data: IndexMap<String, IndexMap<String, Value>> =
-            serde_json::from_str(&json_str).expect("Failed to parse JSON");
+    let version_mapping = [
+        (JavaMinecraftVersion::V_1_16, "V_1_16"),
+        (JavaMinecraftVersion::V_1_16_1, "V_1_16"),
+        (JavaMinecraftVersion::V_1_16_2, "V_1_16_2"),
+        (JavaMinecraftVersion::V_1_16_3, "V_1_16_2"),
+        (JavaMinecraftVersion::V_1_16_4, "V_1_16_2"),
+        (JavaMinecraftVersion::V_1_17, "V_1_17"),
+        (JavaMinecraftVersion::V_1_17_1, "V_1_17"),
+        (JavaMinecraftVersion::V_1_18, "V_1_18"),
+        (JavaMinecraftVersion::V_1_18_2, "V_1_18"),
+        (JavaMinecraftVersion::V_1_19, "V_1_19"),
+        (JavaMinecraftVersion::V_1_19_1, "V_1_19"),
+        (JavaMinecraftVersion::V_1_19_3, "V_1_19"),
+        (JavaMinecraftVersion::V_1_19_4, "V_1_20"),
+        (JavaMinecraftVersion::V_1_20, "V_1_20"),
+        (JavaMinecraftVersion::V_1_20_2, "V_1_20_2"),
+        (JavaMinecraftVersion::V_1_20_3, "V_1_20_2"),
+        (JavaMinecraftVersion::V_1_20_5, "V_1_21"),
+        (JavaMinecraftVersion::V_1_21, "V_1_21"),
+        (JavaMinecraftVersion::V_1_21_2, "V_1_21_2"),
+        (JavaMinecraftVersion::V_1_21_4, "V_1_21_4"),
+        (JavaMinecraftVersion::V_1_21_5, "V_1_21_5"),
+        (JavaMinecraftVersion::V_1_21_6, "V_1_21_6"),
+        (JavaMinecraftVersion::V_1_21_7, "V_1_21_7"),
+        (JavaMinecraftVersion::V_1_21_9, "V_1_21_9"),
+        (JavaMinecraftVersion::V_1_21_11, "V_1_21_11"),
+        (JavaMinecraftVersion::V_26_1, "V_26_1"),
+        (JavaMinecraftVersion::V_26_2, "V_26_2"),
+    ];
+
+    const SYNCED_REGISTRIES: &[&str] = &[
+        "worldgen/biome",
+        "chat_type",
+        "trim_pattern",
+        "trim_material",
+        "wolf_variant",
+        "wolf_sound_variant",
+        "pig_variant",
+        "pig_sound_variant",
+        "frog_variant",
+        "cat_variant",
+        "cat_sound_variant",
+        "cow_variant",
+        "cow_sound_variant",
+        "chicken_variant",
+        "chicken_sound_variant",
+        "zombie_nautilus_variant",
+        "painting_variant",
+        "dimension_type",
+        "damage_type",
+        "jukebox_song",
+        "banner_pattern",
+        "instrument",
+        "enchantment",
+        "timeline",
+        "dialog",
+        "world_clock",
+        "test_environment",
+        "test_instance",
+        "sulfur_cube_archetype",
+    ];
+
+    let process_version = |ver_folder: &str| -> TokenStream {
+        let base_path = std::path::Path::new("../../assets/datapacks")
+            .join(ver_folder)
+            .join("data/minecraft");
+
+        let mut data: IndexMap<String, IndexMap<String, Value>> = IndexMap::new();
+
+        for &reg_name in SYNCED_REGISTRIES {
+            let reg_dir = base_path.join(reg_name);
+            if !reg_dir.is_dir() {
+                continue;
+            }
+            let mut entries = IndexMap::new();
+            let mut paths: Vec<_> = fs::read_dir(&reg_dir)
+                .into_iter()
+                .flatten()
+                .filter_map(Result::ok)
+                .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
+                .collect();
+            paths.sort_by_key(|e| e.path());
+
+            for entry in paths {
+                let path = entry.path();
+                let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
+                if let Ok(content) = fs::read_to_string(&path)
+                    && let Ok(val) = serde_json::from_str::<Value>(&content)
+                {
+                    entries.insert(stem, val);
+                }
+            }
+
+            if !entries.is_empty() {
+                data.insert(reg_name.to_string(), entries);
+            }
+        }
 
         // Inject "raw" chat type for vanilla parity
-        if let Some(chat) = data.get_mut("minecraft:chat_type") {
+        if let Some(chat) = data.get_mut("chat_type") {
             chat.insert("raw".to_string(), serde_json::json!({
                 "chat": { "translation_key": "%s", "parameters": ["content"] },
                 "narration": { "translation_key": "%s says %s", "parameters": ["sender", "content"] }
@@ -134,30 +209,24 @@ pub(crate) fn build() -> TokenStream {
     };
 
     let mut static_values = TokenStream::new();
-    let mut match_arms = TokenStream::new();
-    let mut latest_registry = None;
-
-    for (ver, file) in assets {
-        let path = format!("../../assets/registry/{file}");
-
-        let registries = process_version(&path);
-
-        let ident = format_ident!("REGISTRY_{ver:?}");
+    for (ver_folder, ident_str) in versions {
+        let registries = process_version(ver_folder);
+        let ident = format_ident!("REGISTRY_{ident_str}");
 
         static_values.extend(quote! {
             pub static #ident: &[StaticRegistry] = #registries;
         });
+    }
 
+    let mut match_arms = TokenStream::new();
+    for (ver, ident_str) in version_mapping {
+        let ident = format_ident!("REGISTRY_{ident_str}");
         match_arms.extend(quote! {
             #ver => #ident,
         });
-
-        if ver == LATEST_VERSION {
-            latest_registry = Some(ident);
-        }
     }
 
-    let latest_registry = latest_registry.unwrap();
+    let latest_registry = format_ident!("REGISTRY_V_26_2");
 
     quote! {
         use pumpkin_util::resource_location::ResourceLocation;

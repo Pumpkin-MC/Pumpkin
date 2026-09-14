@@ -75,6 +75,34 @@ impl TryFrom<i8> for GameMode {
     }
 }
 
+impl TryFrom<i32> for GameMode {
+    type Error = ();
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::Survival),
+            1 => Ok(Self::Creative),
+            2 => Ok(Self::Adventure),
+            3 => Ok(Self::Spectator),
+            _ => Err(()),
+        }
+    }
+}
+
+impl TryFrom<u8> for GameMode {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::Survival),
+            1 => Ok(Self::Creative),
+            2 => Ok(Self::Adventure),
+            3 => Ok(Self::Spectator),
+            _ => Err(()),
+        }
+    }
+}
+
 impl FromStr for GameMode {
     type Err = ParseGameModeError;
 

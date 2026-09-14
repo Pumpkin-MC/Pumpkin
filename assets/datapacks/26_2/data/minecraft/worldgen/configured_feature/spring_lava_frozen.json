@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:spring_feature",
+  "config": {
+    "state": {
+      "Name": "minecraft:lava",
+      "Properties": {
+        "falling": "true"
+      }
+    },
+    "valid_blocks": [
+      "minecraft:snow_block",
+      "minecraft:powder_snow",
+      "minecraft:packed_ice"
+    ]
+  }
+}

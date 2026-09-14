@@ -1,0 +1,6 @@
+{
+  "wild_texture": "minecraft:entity/wolf/wolf",
+  "tame_texture": "minecraft:entity/wolf/wolf_tame",
+  "angry_texture": "minecraft:entity/wolf/wolf_angry",
+  "biomes": "minecraft:taiga"
+}

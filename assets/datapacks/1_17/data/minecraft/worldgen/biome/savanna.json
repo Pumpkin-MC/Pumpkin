@@ -1,0 +1,20 @@
+{
+  "precipitation": "none",
+  "effects": {
+    "sky_color": 7711487,
+    "water_fog_color": 329011,
+    "fog_color": 12638463,
+    "water_color": 4159204,
+    "mood_sound": {
+      "tick_delay": 6000,
+      "offset": 2.0,
+      "sound": "minecraft:ambient.cave",
+      "block_search_extent": 8
+    }
+  },
+  "depth": 0.125,
+  "temperature": 1.2000000476837158,
+  "scale": 0.05000000074505806,
+  "downfall": 0.0,
+  "category": "savanna"
+}

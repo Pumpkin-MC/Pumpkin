@@ -1,0 +1,17 @@
+{
+  "values": [
+    "minecraft:turtle",
+    "minecraft:guardian",
+    "minecraft:elder_guardian",
+    "minecraft:cod",
+    "minecraft:pufferfish",
+    "minecraft:salmon",
+    "minecraft:tropical_fish",
+    "minecraft:dolphin",
+    "minecraft:squid",
+    "minecraft:glow_squid",
+    "minecraft:tadpole",
+    "minecraft:nautilus",
+    "minecraft:zombie_nautilus"
+  ]
+}

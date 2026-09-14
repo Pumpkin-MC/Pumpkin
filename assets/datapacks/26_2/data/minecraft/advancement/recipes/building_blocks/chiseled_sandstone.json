@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_sandstone_slab": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:sandstone_slab"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:chiseled_sandstone"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_sandstone_slab"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:chiseled_sandstone"
+    ]
+  }
+}

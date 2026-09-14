@@ -1,0 +1,254 @@
+{
+  "description": {
+    "translate": "enchantment.minecraft.soul_speed"
+  },
+  "min_cost": {
+    "base": 10,
+    "per_level_above_first": 10
+  },
+  "max_cost": {
+    "base": 25,
+    "per_level_above_first": 10
+  },
+  "anvil_cost": 8,
+  "slots": [
+    "feet"
+  ],
+  "supported_items": "#minecraft:enchantable/foot_armor",
+  "weight": 1,
+  "max_level": 3,
+  "effects": {
+    "minecraft:location_changed": [
+      {
+        "effect": {
+          "effects": [
+            {
+              "id": "minecraft:enchantment.soul_speed",
+              "attribute": "minecraft:movement_speed",
+              "amount": {
+                "base": 0.0405,
+                "per_level_above_first": 0.0105,
+                "type": "minecraft:linear"
+              },
+              "operation": "add_value",
+              "type": "minecraft:attribute"
+            },
+            {
+              "id": "minecraft:enchantment.soul_speed",
+              "attribute": "minecraft:movement_efficiency",
+              "amount": 1.0,
+              "operation": "add_value",
+              "type": "minecraft:attribute"
+            }
+          ],
+          "type": "minecraft:all_of"
+        },
+        "requirements": {
+          "terms": [
+            {
+              "term": {
+                "predicate": {
+                  "vehicle": {}
+                },
+                "entity": "this",
+                "condition": "minecraft:entity_properties"
+              },
+              "condition": "minecraft:inverted"
+            },
+            {
+              "terms": [
+                {
+                  "terms": [
+                    {
+                      "active": true,
+                      "condition": "minecraft:enchantment_active_check"
+                    },
+                    {
+                      "predicate": {
+                        "flags": {
+                          "is_flying": false
+                        }
+                      },
+                      "entity": "this",
+                      "condition": "minecraft:entity_properties"
+                    },
+                    {
+                      "terms": [
+                        {
+                          "predicate": {
+                            "movement_affected_by": {
+                              "block": {
+                                "blocks": "#minecraft:soul_speed_blocks"
+                              }
+                            }
+                          },
+                          "entity": "this",
+                          "condition": "minecraft:entity_properties"
+                        },
+                        {
+                          "predicate": {
+                            "flags": {
+                              "is_on_ground": false
+                            }
+                          },
+                          "entity": "this",
+                          "condition": "minecraft:entity_properties"
+                        }
+                      ],
+                      "condition": "minecraft:any_of"
+                    }
+                  ],
+                  "condition": "minecraft:all_of"
+                },
+                {
+                  "terms": [
+                    {
+                      "active": false,
+                      "condition": "minecraft:enchantment_active_check"
+                    },
+                    {
+                      "predicate": {
+                        "movement_affected_by": {
+                          "block": {
+                            "blocks": "#minecraft:soul_speed_blocks"
+                          }
+                        },
+                        "flags": {
+                          "is_flying": false
+                        }
+                      },
+                      "entity": "this",
+                      "condition": "minecraft:entity_properties"
+                    }
+                  ],
+                  "condition": "minecraft:all_of"
+                }
+              ],
+              "condition": "minecraft:any_of"
+            }
+          ],
+          "condition": "minecraft:all_of"
+        }
+      },
+      {
+        "effect": {
+          "amount": 1.0,
+          "type": "minecraft:change_item_damage"
+        },
+        "requirements": {
+          "terms": [
+            {
+              "chance": {
+                "amount": 0.04,
+                "type": "minecraft:enchantment_level"
+              },
+              "condition": "minecraft:random_chance"
+            },
+            {
+              "predicate": {
+                "movement_affected_by": {
+                  "block": {
+                    "blocks": "#minecraft:soul_speed_blocks"
+                  }
+                },
+                "flags": {
+                  "is_on_ground": true
+                }
+              },
+              "entity": "this",
+              "condition": "minecraft:entity_properties"
+            }
+          ],
+          "condition": "minecraft:all_of"
+        }
+      }
+    ],
+    "minecraft:tick": [
+      {
+        "effect": {
+          "horizontal_velocity": {
+            "movement_scale": -0.2
+          },
+          "vertical_velocity": {
+            "base": 0.1
+          },
+          "speed": 1.0,
+          "particle": {
+            "type": "minecraft:soul"
+          },
+          "horizontal_position": {
+            "type": "in_bounding_box"
+          },
+          "vertical_position": {
+            "type": "entity_position",
+            "offset": 0.1
+          },
+          "type": "minecraft:spawn_particles"
+        },
+        "requirements": {
+          "predicate": {
+            "periodic_tick": 5,
+            "movement_affected_by": {
+              "block": {
+                "blocks": "#minecraft:soul_speed_blocks"
+              }
+            },
+            "flags": {
+              "is_flying": false,
+              "is_on_ground": true
+            },
+            "movement": {
+              "horizontal_speed": {
+                "min": 9.999999747378752e-06
+              }
+            }
+          },
+          "entity": "this",
+          "condition": "minecraft:entity_properties"
+        }
+      },
+      {
+        "effect": {
+          "sound": "minecraft:particle.soul_escape",
+          "volume": 0.6,
+          "pitch": {
+            "min_inclusive": 0.6,
+            "max_exclusive": 1.0,
+            "type": "minecraft:uniform"
+          },
+          "type": "minecraft:play_sound"
+        },
+        "requirements": {
+          "terms": [
+            {
+              "chance": 0.35,
+              "condition": "minecraft:random_chance"
+            },
+            {
+              "predicate": {
+                "periodic_tick": 5,
+                "movement_affected_by": {
+                  "block": {
+                    "blocks": "#minecraft:soul_speed_blocks"
+                  }
+                },
+                "flags": {
+                  "is_flying": false,
+                  "is_on_ground": true
+                },
+                "movement": {
+                  "horizontal_speed": {
+                    "min": 9.999999747378752e-06
+                  }
+                }
+              },
+              "entity": "this",
+              "condition": "minecraft:entity_properties"
+            }
+          ],
+          "condition": "minecraft:all_of"
+        }
+      }
+    ]
+  }
+}

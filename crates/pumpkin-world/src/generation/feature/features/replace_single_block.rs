@@ -1,22 +1,29 @@
-use pumpkin_data::Block;
 use pumpkin_util::{math::position::BlockPos, random::RandomGenerator};
 
+use crate::generation::feature::features::ore::OreTarget;
 use crate::generation::proto_chunk::GenerationCache;
 
-pub struct ReplaceSingleBlockFeature;
+pub struct ReplaceSingleBlockFeature {
+    pub targets: Vec<OreTarget>,
+}
 
 impl ReplaceSingleBlockFeature {
-    #[allow(clippy::unused_self)]
     pub fn generate<T: GenerationCache>(
         &self,
         chunk: &mut T,
         _min_y: i8,
         _height: u16,
         _feature: pumpkin_data::placed_feature::PlacedFeature,
-        _random: &mut RandomGenerator,
+        random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        chunk.set_block_state(&pos.0, Block::SAND.default_state);
+        let block_state = GenerationCache::get_block_state(chunk, &pos.0);
+        for target in &self.targets {
+            if target.target.test(block_state, random) {
+                chunk.set_block_state(&pos.0, target.state);
+                break;
+            }
+        }
         true
     }
 }

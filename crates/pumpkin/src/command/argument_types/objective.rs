@@ -1,17 +1,17 @@
 use crate::command::{
+    CommandSource,
     argument_types::argument_type::{ArgumentType, JavaClientArgumentType},
     context::command_context::CommandContext,
     errors::command_syntax_error::CommandSyntaxError,
     string_reader::StringReader,
     suggestion::suggestions::{Suggestions, SuggestionsBuilder},
 };
-use std::pin::Pin;
 
 /// Represents an argument type parsing a scoreboard objective name.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct ObjectiveArgumentType;
 
-impl ArgumentType for ObjectiveArgumentType {
+impl ArgumentType<CommandSource> for ObjectiveArgumentType {
     type Item = String;
 
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {
@@ -23,18 +23,20 @@ impl ArgumentType for ObjectiveArgumentType {
         JavaClientArgumentType::Objective
     }
 
-    fn list_suggestions<'a>(
-        &'a self,
-        context: &'a CommandContext,
+    fn list_suggestions(
+        &self,
+        context: &CommandContext,
         mut builder: SuggestionsBuilder,
-    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send + 'a>> {
-        Box::pin(async move {
-            let scoreboard = context.world().scoreboard.lock().await;
-            for objective_name in scoreboard.get_objectives().keys() {
-                builder = builder.filter_and_suggest_one(objective_name.as_str());
-            }
-            builder.build()
-        })
+    ) -> Suggestions {
+        let scoreboard = context
+            .world()
+            .scoreboard
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for objective_name in scoreboard.get_objectives().keys() {
+            builder = builder.filter_and_suggest_one(objective_name.as_str());
+        }
+        builder.build()
     }
 
     fn examples(&self) -> Vec<String> {

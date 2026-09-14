@@ -1,5 +1,5 @@
 use std::io::{Error, ErrorKind, Read, Write};
-use std::num::NonZeroI32;
+use std::num::NonZero;
 
 use pumpkin_data::item::{BedrockItem, JavaToBedrockItemMapping};
 use pumpkin_data::item_stack::ItemStack;
@@ -155,7 +155,7 @@ pub struct ItemStackWrapper {
     pub place_on_blocks: Vec<String>,
     pub destroy_blocks: Vec<String>,
     pub shield_blocking_tick: i64,
-    pub net_id: Option<NonZeroI32>,
+    pub net_id: Option<NonZero<i32>>,
 }
 
 impl PacketWrite for ItemStackWrapper {
@@ -192,7 +192,7 @@ impl PacketRead for ItemStackWrapper {
         let has_net_id = bool::read(buf)?;
         let net_id = if has_net_id {
             let stack_id = VarInt::read(buf)?;
-            NonZeroI32::new(stack_id.0)
+            NonZero::new(stack_id.0)
         } else {
             None
         };
@@ -256,7 +256,7 @@ pub struct NetworkItemStackDescriptor {
     pub aux_value: VarUInt,
     pub block_runtime_id: VarUInt,
     pub extra_data: Vec<u8>,
-    pub net_id: Option<NonZeroI32>,
+    pub net_id: Option<NonZero<i32>>,
 }
 
 impl PacketWrite for NetworkItemStackDescriptor {
@@ -290,7 +290,7 @@ impl PacketRead for NetworkItemStackDescriptor {
         let has_net_id = bool::read(buf)?;
         let net_id = if has_net_id {
             let stack_id = VarInt::read(buf)?;
-            NonZeroI32::new(stack_id.0)
+            NonZero::new(stack_id.0)
         } else {
             None
         };

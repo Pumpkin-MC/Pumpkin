@@ -1,0 +1,23 @@
+{
+  "description": {
+    "translate": "enchantment.minecraft.vanishing_curse"
+  },
+  "supported_items": "#minecraft:enchantable/vanishing",
+  "weight": 1,
+  "max_level": 1,
+  "min_cost": {
+    "base": 25,
+    "per_level_above_first": 0
+  },
+  "max_cost": {
+    "base": 50,
+    "per_level_above_first": 0
+  },
+  "anvil_cost": 8,
+  "slots": [
+    "any"
+  ],
+  "effects": {
+    "minecraft:prevent_equipment_drop": {}
+  }
+}

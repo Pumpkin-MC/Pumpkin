@@ -206,6 +206,86 @@ impl HostBlockEntity for PluginHostState {
         Ok(())
     }
 
+    async fn set_custom_data(
+        &mut self,
+        res: Resource<BlockEntity>,
+        namespace: String,
+        key: String,
+        value: super::common::WitNbtTree,
+    ) -> wasmtime::Result<()> {
+        let entity = block_entity_from_resource(self, &res)?;
+        let pos = entity.get_position();
+        let tag = super::common::from_wit_nbt_tree(&value).map_err(wasmtime::Error::msg)?;
+        if let Some(server) = &self.server {
+            for world in server.worlds.load().iter() {
+                if world
+                    .block_entities
+                    .get(&pos.chunk_position())
+                    .is_some_and(|m| m.contains_key(&pos))
+                {
+                    world.set_block_entity_custom_data(&pos, &namespace, &key, tag);
+                    return Ok(());
+                }
+            }
+            if let Some(world) = server.worlds.load().first() {
+                world.set_block_entity_custom_data(&pos, &namespace, &key, tag);
+            }
+        }
+        Ok(())
+    }
+
+    async fn get_custom_data(
+        &mut self,
+        res: Resource<BlockEntity>,
+        namespace: String,
+        key: String,
+    ) -> wasmtime::Result<Option<super::common::WitNbtTree>> {
+        let entity = block_entity_from_resource(self, &res)?;
+        let pos = entity.get_position();
+        if let Some(server) = &self.server {
+            for world in server.worlds.load().iter() {
+                if let Some(tag) = world.get_block_entity_custom_data(&pos, &namespace, &key) {
+                    return Ok(Some(super::common::to_wit_nbt_tree(tag)));
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    async fn remove_custom_data(
+        &mut self,
+        res: Resource<BlockEntity>,
+        namespace: String,
+        key: String,
+    ) -> wasmtime::Result<()> {
+        let entity = block_entity_from_resource(self, &res)?;
+        let pos = entity.get_position();
+        if let Some(server) = &self.server {
+            for world in server.worlds.load().iter() {
+                world.remove_block_entity_custom_data(&pos, &namespace, &key);
+            }
+        }
+        Ok(())
+    }
+
+    async fn has_custom_data(
+        &mut self,
+        res: Resource<BlockEntity>,
+        namespace: String,
+        key: String,
+    ) -> wasmtime::Result<bool> {
+        let entity = block_entity_from_resource(self, &res)?;
+        let pos = entity.get_position();
+        if let Some(server) = &self.server {
+            for world in server.worlds.load().iter() {
+                if world.has_block_entity_custom_data(&pos, &namespace, &key) {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
+    }
+
     async fn drop(&mut self, rep: Resource<BlockEntity>) -> wasmtime::Result<()> {
         let _ = self
             .resource_table
@@ -239,6 +319,24 @@ impl HostContainerBlockEntity for PluginHostState {
         self.add_block_entity(provider)
     }
 
+    async fn get_inventory(
+        &mut self,
+        res: Resource<ContainerBlockEntity>,
+    ) -> wasmtime::Result<
+        Resource<
+            crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::inventory::Inventory,
+        >,
+    >{
+        let container = self
+            .resource_table
+            .get::<ContainerBlockEntityResource>(&Resource::new_own(res.rep()))
+            .map_err(|_| wasmtime::Error::msg("invalid container block entity resource handle"))?;
+        let inventory = container.provider.inventory.clone();
+        self.add_inventory(
+            crate::plugin::loader::wasm::wasm_host::state::InventoryProvider::Generic(inventory),
+        )
+    }
+
     async fn get_size(&mut self, res: Resource<ContainerBlockEntity>) -> wasmtime::Result<u32> {
         let container = self
             .resource_table
@@ -253,7 +351,7 @@ impl HostContainerBlockEntity for PluginHostState {
             .get::<ContainerBlockEntityResource>(&Resource::new_own(res.rep()))
             .map_err(|_| wasmtime::Error::msg("invalid container block entity resource handle"))?;
         let inventory = container.provider.inventory.clone();
-        Ok(inventory.is_empty().await)
+        Ok(inventory.is_empty())
     }
 
     async fn get_stack(
@@ -266,7 +364,7 @@ impl HostContainerBlockEntity for PluginHostState {
             .get::<ContainerBlockEntityResource>(&Resource::new_own(res.rep()))
             .map_err(|_| wasmtime::Error::msg("invalid container block entity resource handle"))?;
         let inventory = container.provider.inventory.clone();
-        let stack = inventory.get_stack(slot as usize).await;
+        let stack = inventory.get_stack(slot as usize);
         if stack.is_empty() {
             Ok(None)
         } else {
@@ -296,7 +394,7 @@ impl HostContainerBlockEntity for PluginHostState {
             None => pumpkin_data::item_stack::ItemStack::EMPTY.clone(),
         };
 
-        inventory.set_stack(slot as usize, stack).await;
+        inventory.set_stack(slot as usize, stack);
         Ok(())
     }
 
@@ -310,7 +408,7 @@ impl HostContainerBlockEntity for PluginHostState {
             .get::<ContainerBlockEntityResource>(&Resource::new_own(res.rep()))
             .map_err(|_| wasmtime::Error::msg("invalid container block entity resource handle"))?;
         let inventory = container.provider.inventory.clone();
-        let removed = inventory.remove_stack(slot as usize).await;
+        let removed = inventory.remove_stack(slot as usize);
         if removed.is_empty() {
             Ok(None)
         } else {
@@ -326,7 +424,7 @@ impl HostContainerBlockEntity for PluginHostState {
             .get::<ContainerBlockEntityResource>(&Resource::new_own(res.rep()))
             .map_err(|_| wasmtime::Error::msg("invalid container block entity resource handle"))?;
         let inventory = container.provider.inventory.clone();
-        inventory.clear().await;
+        inventory.clear();
         Ok(())
     }
 
@@ -353,11 +451,19 @@ impl HostCommandBlockEntity for PluginHostState {
 
     async fn last_output(&mut self, res: Resource<CommandBlockEntity>) -> wasmtime::Result<String> {
         let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        if let Some(cmd) = entity.as_any().downcast_ref::<InternalCommandBlockEntity>() {
-            Ok(cmd.last_output.lock().await.clone())
-        } else {
-            Err(wasmtime::Error::msg("Not a command block entity"))
-        }
+        entity
+            .as_any()
+            .downcast_ref::<InternalCommandBlockEntity>()
+            .map_or_else(
+                || Err(wasmtime::Error::msg("Not a command block entity")),
+                |cmd| {
+                    Ok(cmd
+                        .last_output
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .clone())
+                },
+            )
     }
 
     async fn track_output(&mut self, res: Resource<CommandBlockEntity>) -> wasmtime::Result<bool> {
@@ -384,11 +490,19 @@ impl HostCommandBlockEntity for PluginHostState {
 
     async fn command(&mut self, res: Resource<CommandBlockEntity>) -> wasmtime::Result<String> {
         let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
-        if let Some(cmd) = entity.as_any().downcast_ref::<InternalCommandBlockEntity>() {
-            Ok(cmd.command.lock().await.clone())
-        } else {
-            Err(wasmtime::Error::msg("Not a command block entity"))
-        }
+        entity
+            .as_any()
+            .downcast_ref::<InternalCommandBlockEntity>()
+            .map_or_else(
+                || Err(wasmtime::Error::msg("Not a command block entity")),
+                |cmd| {
+                    Ok(cmd
+                        .command
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .clone())
+                },
+            )
     }
 
     async fn auto(&mut self, res: Resource<CommandBlockEntity>) -> wasmtime::Result<bool> {
@@ -1692,7 +1806,7 @@ impl HostEndGatewayBlockEntity for PluginHostState {
         Ok(entity
             .as_any()
             .downcast_ref::<InternalEndGatewayBlockEntity>()
-            .is_some_and(|b| b.exact_teleport.try_lock().ok().is_some_and(|g| *g)))
+            .is_some_and(|b| b.exact_teleport.try_lock().is_ok_and(|g| *g)))
     }
 
     async fn drop(&mut self, rep: Resource<EndGatewayBlockEntity>) -> wasmtime::Result<()> {

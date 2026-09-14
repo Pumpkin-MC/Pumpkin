@@ -1,0 +1,22 @@
+{
+  "category": "mesa",
+  "temperature": 2.0,
+  "downfall": 0.0,
+  "depth": 0.44999998807907104,
+  "effects": {
+    "water_fog_color": 329011,
+    "water_color": 4159204,
+    "grass_color": 9470285,
+    "foliage_color": 10387789,
+    "fog_color": 12638463,
+    "mood_sound": {
+      "offset": 2.0,
+      "sound": "minecraft:ambient.cave",
+      "block_search_extent": 8,
+      "tick_delay": 6000
+    },
+    "sky_color": 7254527
+  },
+  "precipitation": "none",
+  "scale": 0.30000001192092896
+}

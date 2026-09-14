@@ -1,0 +1,76 @@
+{
+  "parent": "minecraft:adventure/root",
+  "criteria": {
+    "desert_pyramid": {
+      "conditions": {
+        "loot_table": "minecraft:archaeology/desert_pyramid"
+      },
+      "trigger": "minecraft:player_generates_container_loot"
+    },
+    "desert_well": {
+      "conditions": {
+        "loot_table": "minecraft:archaeology/desert_well"
+      },
+      "trigger": "minecraft:player_generates_container_loot"
+    },
+    "has_sherd": {
+      "conditions": {
+        "items": [
+          {
+            "items": "#minecraft:decorated_pot_sherds"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "ocean_ruin_cold": {
+      "conditions": {
+        "loot_table": "minecraft:archaeology/ocean_ruin_cold"
+      },
+      "trigger": "minecraft:player_generates_container_loot"
+    },
+    "ocean_ruin_warm": {
+      "conditions": {
+        "loot_table": "minecraft:archaeology/ocean_ruin_warm"
+      },
+      "trigger": "minecraft:player_generates_container_loot"
+    },
+    "trail_ruins_common": {
+      "conditions": {
+        "loot_table": "minecraft:archaeology/trail_ruins_common"
+      },
+      "trigger": "minecraft:player_generates_container_loot"
+    },
+    "trail_ruins_rare": {
+      "conditions": {
+        "loot_table": "minecraft:archaeology/trail_ruins_rare"
+      },
+      "trigger": "minecraft:player_generates_container_loot"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.adventure.salvage_sherd.description"
+    },
+    "icon": {
+      "id": "minecraft:brush"
+    },
+    "title": {
+      "translate": "advancements.adventure.salvage_sherd.title"
+    }
+  },
+  "requirements": [
+    [
+      "desert_pyramid",
+      "desert_well",
+      "ocean_ruin_cold",
+      "ocean_ruin_warm",
+      "trail_ruins_rare",
+      "trail_ruins_common"
+    ],
+    [
+      "has_sherd"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

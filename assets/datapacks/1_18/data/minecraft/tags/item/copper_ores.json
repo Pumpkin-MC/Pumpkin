@@ -1,0 +1,7 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:copper_ore",
+    "minecraft:deepslate_copper_ore"
+  ]
+}

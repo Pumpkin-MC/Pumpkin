@@ -5,9 +5,10 @@ use pumpkin_util::{
 
 use crate::{
     codec::var_int::VarInt,
-    ser::{NetworkWriteExt, WritingError},
+    ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError},
 };
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PlayerSpawnData {
     /// The Dimension for the current dimension's properties (lighting, sky color).
     pub dimension: Dimension,
@@ -20,10 +21,11 @@ pub struct PlayerSpawnData {
     pub debug: bool,
     /// If true, the world is a flat world (affects the horizon rendering).
     pub is_flat: bool,
-    /// The location where the player last died (used for the recovery compass).
+    /// The location where the player last died (Added in 1.19, used for the recovery compass).
     pub death_dimension_name: Option<(ResourceLocation, BlockPos)>,
+    /// Added in 1.20.
     pub portal_cooldown: VarInt,
-    /// The height of the ocean level (usually 63).
+    /// The height of the ocean level, usually 63 (Added in 1.21.2).
     pub sealevel: VarInt,
 }
 
@@ -59,7 +61,7 @@ impl PlayerSpawnData {
         mut write: impl std::io::Write,
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        if version >= &JavaMinecraftVersion::V_1_21_2 {
+        if version >= &JavaMinecraftVersion::V_1_20_5 {
             write.write_var_int(&VarInt(self.dimension.id as i32))?;
         } else if version >= &JavaMinecraftVersion::V_1_16 {
             write.write_string(self.dimension.minecraft_name)?;
@@ -77,7 +79,7 @@ impl PlayerSpawnData {
         if version >= &JavaMinecraftVersion::V_1_19 {
             write.write_option(&self.death_dimension_name, |write, (dim, pos)| {
                 write.write_string(dim)?;
-                write.write_block_pos(pos)?;
+                write.write_block_pos(pos, version)?;
                 Ok(())
             })?;
         }
@@ -88,5 +90,79 @@ impl PlayerSpawnData {
             write.write_var_int(&self.sealevel)?;
         }
         Ok(())
+    }
+
+    pub fn read(read: &mut &[u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let dimension = if version >= &JavaMinecraftVersion::V_1_20_5 {
+            let id = read.get_var_int()?.0 as u8;
+            match id {
+                1 => Dimension::OVERWORLD_CAVES,
+                2 => Dimension::THE_END,
+                3 => Dimension::THE_NETHER,
+                _ => Dimension::OVERWORLD,
+            }
+        } else if version >= &JavaMinecraftVersion::V_1_16 {
+            let dim_name = read.get_str()?;
+            Dimension::from_name(&dim_name)
+                .cloned()
+                .unwrap_or(Dimension::OVERWORLD)
+        } else if version >= &JavaMinecraftVersion::V_1_9 {
+            let legacy_id = read.get_i32_be()?;
+            match legacy_id {
+                -1 => Dimension::THE_NETHER,
+                1 => Dimension::THE_END,
+                _ => Dimension::OVERWORLD,
+            }
+        } else {
+            let legacy_id = read.get_i8()?;
+            match legacy_id {
+                -1 => Dimension::THE_NETHER,
+                1 => Dimension::THE_END,
+                _ => Dimension::OVERWORLD,
+            }
+        };
+
+        let _world_name = read.get_str()?;
+        let hashed_seed = read.get_i64_be()?;
+        let game_mode = read.get_u8()?;
+        let previous_gamemode = read.get_i8()?;
+        let debug = read.get_bool()?;
+        let is_flat = read.get_bool()?;
+
+        let death_dimension_name = if version >= &JavaMinecraftVersion::V_1_19 {
+            if read.get_bool()? {
+                let dim = read.get_str()?.into();
+                let pos = read.get_block_pos(version)?;
+                Some((dim, pos))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let portal_cooldown = if version >= &JavaMinecraftVersion::V_1_20 {
+            read.get_var_int()?
+        } else {
+            VarInt(0)
+        };
+
+        let sealevel = if version >= &JavaMinecraftVersion::V_1_21_2 {
+            read.get_var_int()?
+        } else {
+            VarInt(63)
+        };
+
+        Ok(Self {
+            dimension,
+            hashed_seed,
+            game_mode,
+            previous_gamemode,
+            debug,
+            is_flat,
+            death_dimension_name,
+            portal_cooldown,
+            sealevel,
+        })
     }
 }

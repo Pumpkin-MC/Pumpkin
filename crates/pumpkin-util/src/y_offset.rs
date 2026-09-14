@@ -9,7 +9,7 @@ use serde::Deserialize;
 ///
 /// The enum is deserialized in an untagged form, meaning the variant
 /// is selected based on the provided field.
-#[derive(Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
 #[serde(untagged)]
 pub enum YOffset {
     /// Absolute world Y coordinate.
@@ -47,21 +47,21 @@ impl YOffset {
 }
 
 /// Absolute vertical position in world coordinates.
-#[derive(Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
 pub struct Absolute {
     /// The fixed world Y level.
     pub absolute: i16,
 }
 
 /// Offset measured upward from the world's minimum Y level.
-#[derive(Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
 pub struct AboveBottom {
     /// Number of blocks above the minimum Y.
     pub above_bottom: i8,
 }
 
 /// Offset measured downward from the world's top boundary.
-#[derive(Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
 pub struct BelowTop {
     /// Number of blocks below the maximum Y.
     pub below_top: i8,

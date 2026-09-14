@@ -132,10 +132,14 @@ impl LevelChannel {
             && !level.should_save.load(SeqCst)
             && !level.shut_down_chunk_system.load(SeqCst)
         {
-            lock = self
+            let (new_lock, timeout_res) = self
                 .notify
-                .wait(lock)
+                .wait_timeout(lock, std::time::Duration::from_secs(1))
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+            lock = new_lock;
+            if timeout_res.timed_out() {
+                break;
+            }
         }
         let mut ret = (None, None);
         swap(&mut ret, &mut *lock);

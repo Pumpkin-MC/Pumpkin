@@ -53,8 +53,9 @@ use crate::plugin::{
         state::PluginHostState,
         wit::v0_1::{
             events::{
-                ToFromWasmEvent, consume_player, consume_world, from_wasm_block_name,
-                from_wasm_block_position, to_wasm_block_name, to_wasm_block_position,
+                ToFromWasmEvent, cleanup_event, consume_player, consume_world,
+                from_wasm_block_name, from_wasm_block_position, to_wasm_block_name,
+                to_wasm_block_position,
             },
             pumpkin::plugin::event::{
                 BellResonateEventData, BellRingEventData, BlockBreakEventData, BlockBrushEventData,
@@ -572,7 +573,8 @@ impl ToFromWasmEvent for BellResonateEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::BellResonateEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -604,7 +606,8 @@ impl ToFromWasmEvent for BellRingEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::BellRingEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -638,7 +641,8 @@ impl ToFromWasmEvent for BlockBrushEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::BlockBrushEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -672,7 +676,8 @@ impl ToFromWasmEvent for BlockCookEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::BlockCookEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -732,7 +737,8 @@ impl ToFromWasmEvent for BlockDispenseArmorEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::BlockDispenseArmorEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -770,7 +776,8 @@ impl ToFromWasmEvent for BlockDispenseLootEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::BlockDispenseLootEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -814,7 +821,8 @@ impl ToFromWasmEvent for BlockDropItemEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::BlockDropItemEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -840,7 +848,8 @@ impl ToFromWasmEvent for BlockExpEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::BlockExpEvent(data) = event {
             self.exp = data.exp;
         }
@@ -882,7 +891,8 @@ impl ToFromWasmEvent for BlockFertilizeEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::BlockFertilizeEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -919,7 +929,8 @@ impl ToFromWasmEvent for BlockMultiPlaceEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::BlockMultiPlaceEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -952,7 +963,8 @@ impl ToFromWasmEvent for BlockReceiveGameEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::BlockReceiveGameEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -985,7 +997,8 @@ impl ToFromWasmEvent for BlockShearEntityEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::BlockShearEntityEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -1015,7 +1028,8 @@ impl ToFromWasmEvent for BlockSpreadEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::BlockSpreadEvent(data) = event {
             self.new_state_id = BlockStateId::new_or_air(data.new_state_id);
             self.cancelled = data.cancelled;
@@ -1049,7 +1063,8 @@ impl ToFromWasmEvent for BrewingStartEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::BrewingStartEvent(data) = event {
             self.brewing_time = data.brewing_time;
             self.cancelled = data.cancelled;
@@ -1087,7 +1102,8 @@ impl ToFromWasmEvent for CampfireStartEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::CampfireStartEvent(data) = event {
             self.cooking_time = data.cooking_time;
             self.cancelled = data.cancelled;
@@ -1118,7 +1134,8 @@ impl ToFromWasmEvent for CauldronLevelChangeEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::CauldronLevelChangeEvent(data) = event {
             self.new_level = data.new_level;
             self.cancelled = data.cancelled;
@@ -1151,7 +1168,8 @@ impl ToFromWasmEvent for CrafterCraftEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::CrafterCraftEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -1179,7 +1197,8 @@ impl ToFromWasmEvent for EntityBlockFormEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::EntityBlockFormEvent(data) = event {
             self.new_state_id = BlockStateId::new_or_air(data.new_state_id);
             self.cancelled = data.cancelled;
@@ -1209,7 +1228,8 @@ impl ToFromWasmEvent for FluidLevelChangeEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::FluidLevelChangeEvent(data) = event {
             self.new_state_id = BlockStateId::new_or_air(data.new_state_id);
             self.cancelled = data.cancelled;
@@ -1263,7 +1283,8 @@ impl ToFromWasmEvent for LeavesDecayEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::LeavesDecayEvent(data) = event {
             self.cancelled = data.cancelled;
         }
@@ -1294,7 +1315,8 @@ impl ToFromWasmEvent for MoistureChangeEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::MoistureChangeEvent(data) = event {
             self.new_moisture = data.new_moisture;
             self.cancelled = data.cancelled;
@@ -1327,7 +1349,8 @@ impl ToFromWasmEvent for SculkBloomEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::SculkBloomEvent(data) = event {
             self.charge = data.charge;
             self.cancelled = data.cancelled;
@@ -1363,7 +1386,8 @@ impl ToFromWasmEvent for VaultDisplayItemEvent {
         })
     }
 
-    fn apply_wasm_event(&mut self, event: Event, _state: &mut PluginHostState) {
+    fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
+        cleanup_event(&event, state);
         if let Event::VaultDisplayItemEvent(data) = event {
             self.cancelled = data.cancelled;
         }

@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:waxed_weathered_copper_chain_from_honeycomb"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    },
+    "has_weathered_copper_chain": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:weathered_copper_chain"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_weathered_copper_chain"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:waxed_weathered_copper_chain_from_honeycomb"
+    ]
+  }
+}

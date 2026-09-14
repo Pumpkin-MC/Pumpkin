@@ -1,0 +1,49 @@
+{
+  "additional_wants": {
+    "count": 2.0,
+    "id": "minecraft:diamond"
+  },
+  "given_item_modifiers": [
+    {
+      "enchantments": {
+        "minecraft:binding_curse": 1.0
+      },
+      "function": "minecraft:set_enchantments"
+    },
+    {
+      "function": "minecraft:filtered",
+      "item_filter": {
+        "items": "minecraft:diamond_helmet",
+        "predicates": {
+          "minecraft:enchantments": [
+            {
+              "levels": 1
+            }
+          ]
+        }
+      },
+      "on_fail": {
+        "function": "minecraft:discard"
+      }
+    }
+  ],
+  "gives": {
+    "id": "minecraft:diamond_helmet"
+  },
+  "max_uses": 3.0,
+  "merchant_predicate": {
+    "condition": "minecraft:entity_properties",
+    "entity": "this",
+    "predicate": {
+      "minecraft:predicates": {
+        "minecraft:villager/variant": "minecraft:savanna"
+      }
+    }
+  },
+  "reputation_discount": 0.05,
+  "wants": {
+    "count": 6.0,
+    "id": "minecraft:emerald"
+  },
+  "xp": 30.0
+}

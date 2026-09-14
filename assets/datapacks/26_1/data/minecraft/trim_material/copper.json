@@ -1,0 +1,10 @@
+{
+  "asset_name": "copper",
+  "override_armor_assets": {
+    "minecraft:copper": "copper_darker"
+  },
+  "description": {
+    "translate": "trim_material.minecraft.copper",
+    "color": "#B4684D"
+  }
+}

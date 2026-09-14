@@ -1,0 +1,65 @@
+{
+  "type": "minecraft:disk",
+  "config": {
+    "half_height": 2,
+    "radius": {
+      "type": "minecraft:uniform",
+      "max_inclusive": 6,
+      "min_inclusive": 2
+    },
+    "state_provider": {
+      "type": "minecraft:rule_based_state_provider",
+      "fallback": {
+        "type": "minecraft:simple_state_provider",
+        "state": {
+          "Name": "minecraft:dirt"
+        }
+      },
+      "rules": [
+        {
+          "if_true": {
+            "type": "minecraft:not",
+            "predicate": {
+              "type": "minecraft:any_of",
+              "predicates": [
+                {
+                  "type": "minecraft:solid",
+                  "offset": [
+                    0,
+                    1,
+                    0
+                  ]
+                },
+                {
+                  "type": "minecraft:matching_fluids",
+                  "fluids": "minecraft:water",
+                  "offset": [
+                    0,
+                    1,
+                    0
+                  ]
+                }
+              ]
+            }
+          },
+          "then": {
+            "type": "minecraft:simple_state_provider",
+            "state": {
+              "Name": "minecraft:grass_block",
+              "Properties": {
+                "snowy": "false"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "target": {
+      "type": "minecraft:matching_blocks",
+      "blocks": [
+        "minecraft:dirt",
+        "minecraft:mud"
+      ]
+    }
+  }
+}

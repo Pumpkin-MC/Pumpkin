@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:smelting",
+  "category": "blocks",
+  "experience": 0.1,
+  "ingredient": "minecraft:green_terracotta",
+  "result": {
+    "id": "minecraft:green_glazed_terracotta"
+  }
+}

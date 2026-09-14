@@ -1,0 +1,8 @@
+{
+  "asset_id": "minecraft:vex",
+  "template_item": "minecraft:vex_armor_trim_smithing_template",
+  "description": {
+    "translate": "trim_pattern.minecraft.vex"
+  },
+  "decal": false
+}

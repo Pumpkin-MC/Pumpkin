@@ -19,6 +19,9 @@ pub struct PlayerChatEvent {
 
     /// The recipients of the message. If empty, the message is broadcasted to all players.
     pub recipients: Vec<Arc<Player>>,
+
+    /// The optional 256-byte cryptographic signature of the message.
+    pub signature: Option<Vec<u8>>,
 }
 
 impl PlayerChatEvent {
@@ -28,14 +31,21 @@ impl PlayerChatEvent {
     /// - `player`: A reference to the player sending the message.
     /// - `message`: The message being sent.
     /// - `recipients`: The recipients of the message. If empty, the message is broadcasted to all players.
+    /// - `signature`: The optional cryptographic signature of the message.
     ///
     /// # Returns
     /// A new instance of `PlayerChatEvent`.
-    pub const fn new(player: Arc<Player>, message: String, recipients: Vec<Arc<Player>>) -> Self {
+    pub const fn new(
+        player: Arc<Player>,
+        message: String,
+        recipients: Vec<Arc<Player>>,
+        signature: Option<Vec<u8>>,
+    ) -> Self {
         Self {
             player,
             message,
             recipients,
+            signature,
             cancelled: false,
         }
     }

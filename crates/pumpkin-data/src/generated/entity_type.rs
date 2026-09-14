@@ -5,7 +5,8 @@ use crate::sound::Sound;
 use crate::tag::RegistryKey;
 use crate::tag::Taggable;
 use pumpkin_util::HeightMap;
-use pumpkin_util::loot_table::*;
+use pumpkin_util::math::boundingbox::BoundingBox;
+use pumpkin_util::math::vector3::Vector3;
 use std::hash::Hash;
 #[derive(Debug, Clone)]
 pub struct EntityType {
@@ -13,6 +14,7 @@ pub struct EntityType {
     pub attributes: &'static [(Attributes, f64)],
     pub experience_reward: u32,
     pub hurt_sound: Option<Sound>,
+    pub death_sound: Option<Sound>,
     pub attackable: Option<bool>,
     pub mob: bool,
     pub saveable: bool,
@@ -21,9 +23,12 @@ pub struct EntityType {
     pub fire_immune: bool,
     pub category: &'static MobCategory,
     pub can_spawn_far_from_player: bool,
-    pub loot_table: Option<LootTable>,
+    pub client_tracking_range: u32,
+    pub update_interval: u32,
+    pub track_deltas: bool,
     pub dimension: [f32; 2],
     pub eye_height: f32,
+    pub spawn_dimensions_scale: f32,
     pub spawn_restriction: SpawnRestriction,
     pub resource_name: &'static str,
 }
@@ -152,6 +157,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -160,9 +166,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -174,6 +183,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -182,9 +192,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -225,7 +238,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 0u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityAllayHurt),
+        death_sound: Some(Sound::EntityAllayDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -234,13 +248,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/allay"),
-            pools: None,
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 2u32,
+        track_deltas: true,
         dimension: [0.35f32, 0.6f32],
         eye_height: 0.36f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -252,6 +265,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -260,9 +274,12 @@ impl EntityType {
         fire_immune: true,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 2147483647u32,
+        track_deltas: true,
         dimension: [6f32, 0.5f32],
         eye_height: 0.425f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -301,8 +318,9 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 2u32,
-        hurt_sound: None,
+        experience_reward: 1u32,
+        hurt_sound: Some(Sound::EntityArmadilloHurt),
+        death_sound: Some(Sound::EntityArmadilloDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -311,13 +329,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/armadillo"),
-            pools: None,
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.7f32, 0.65f32],
         eye_height: 0.26f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -355,7 +372,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 0u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityArmorStandHit),
+        death_sound: Some(Sound::EntityArmorStandBreak),
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -364,13 +382,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/armor_stand"),
-            pools: None,
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.5f32, 1.975f32],
         eye_height: 1.7775f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -382,6 +399,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(false),
         mob: false,
         saveable: true,
@@ -390,9 +408,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 4u32,
+        update_interval: 20u32,
+        track_deltas: true,
         dimension: [0.5f32, 0.5f32],
         eye_height: 0.13f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -433,7 +454,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 3u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityAxolotlHurt),
+        death_sound: Some(Sound::EntityAxolotlDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -442,13 +464,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::AXOLOTLS,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/axolotl"),
-            pools: None,
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.75f32, 0.42f32],
         eye_height: 0.2751f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::InWater,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -460,6 +481,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -468,9 +490,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -482,6 +507,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -490,9 +516,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -531,7 +560,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 0u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityBatHurt),
+        death_sound: Some(Sound::EntityBatDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -540,13 +570,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::AMBIENT,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/bat"),
-            pools: None,
-        }),
+        client_tracking_range: 5u32,
+        update_interval: 3u32,
+        track_deltas: false,
         dimension: [0.5f32, 0.9f32],
         eye_height: 0.45f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -588,7 +617,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 1u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityBeeHurt),
+        death_sound: Some(Sound::EntityBeeDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -597,13 +627,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/bee"),
-            pools: None,
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.55f32, 0.5f32],
         eye_height: 0.3f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -615,6 +644,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -623,9 +653,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -637,6 +670,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -645,9 +679,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -687,7 +724,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 10u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityBlazeHurt),
+        death_sound: Some(Sound::EntityBlazeDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -696,49 +734,12 @@ impl EntityType {
         fire_immune: true,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/blaze"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:blaze_rod",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: Some(&[
-                        LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 1f32,
-                                },
-                                add: false,
-                            },
-                            conditions: None,
-                        },
-                        LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease {
-                                enchantment: "minecraft:looting",
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 1f32,
-                                },
-                                limit: None,
-                            },
-                            conditions: None,
-                        },
-                    ]),
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: Some(&[LootCondition::KilledByPlayer]),
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.6f32, 1.8f32],
         eye_height: 1.53f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -750,6 +751,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -758,9 +760,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 1u32,
+        track_deltas: true,
         dimension: [0f32, 0f32],
         eye_height: 0f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -801,6 +806,7 @@ impl EntityType {
         ],
         experience_reward: 5u32,
         hurt_sound: Some(Sound::EntityBoggedHurt),
+        death_sound: Some(Sound::EntityBoggedDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -809,131 +815,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/bogged"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:arrow",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 2f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:bone",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 2f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:tipped_arrow",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: Some(1f32),
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::SetPotion {
-                                    id: "minecraft:poison",
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: Some(&[LootCondition::KilledByPlayer]),
-                    functions: None,
-                },
-            ]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.6f32, 1.99f32],
         eye_height: 1.74f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -973,7 +860,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 10u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityBreezeHurt),
+        death_sound: Some(Sound::EntityBreezeDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -982,49 +870,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/breeze"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:breeze_rod",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: Some(&[
-                        LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 1f32,
-                                    max: 2f32,
-                                },
-                                add: false,
-                            },
-                            conditions: None,
-                        },
-                        LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease {
-                                enchantment: "minecraft:looting",
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 1f32,
-                                    max: 2f32,
-                                },
-                                limit: None,
-                            },
-                            conditions: None,
-                        },
-                    ]),
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: Some(&[LootCondition::KilledByPlayer]),
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.6f32, 1.77f32],
         eye_height: 1.3452f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1036,6 +887,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -1044,9 +896,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 4u32,
+        update_interval: 10u32,
+        track_deltas: true,
         dimension: [0.3125f32, 0.3125f32],
         eye_height: 0f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1086,7 +941,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 3u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityCamelHurt),
+        death_sound: Some(Sound::EntityCamelDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -1095,13 +951,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/camel"),
-            pools: None,
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.7f32, 2.375f32],
         eye_height: 2.275f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1140,8 +995,9 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 1u32,
-        hurt_sound: None,
+        experience_reward: 3u32,
+        hurt_sound: Some(Sound::EntityCamelHuskHurt),
+        death_sound: Some(Sound::EntityCamelHuskDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -1150,49 +1006,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/camel_husk"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:rotten_flesh",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: Some(&[
-                        LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 2f32,
-                                    max: 3f32,
-                                },
-                                add: false,
-                            },
-                            conditions: None,
-                        },
-                        LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease {
-                                enchantment: "minecraft:looting",
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 1f32,
-                                },
-                                limit: None,
-                            },
-                            conditions: None,
-                        },
-                    ]),
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.7f32, 2.375f32],
         eye_height: 2.275f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1232,8 +1051,9 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 3u32,
-        hurt_sound: None,
+        experience_reward: 2u32,
+        hurt_sound: Some(Sound::EntityCatHurt),
+        death_sound: Some(Sound::EntityCatDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -1242,36 +1062,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/cat"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:string",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: Some(&[LootFunction {
-                        content: LootFunctionTypes::SetCount {
-                            count: LootFunctionNumberProvider::Uniform {
-                                min: 0f32,
-                                max: 2f32,
-                            },
-                            add: false,
-                        },
-                        conditions: None,
-                    }]),
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.6f32, 0.7f32],
         eye_height: 0.35f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1311,7 +1107,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 5u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntitySpiderHurt),
+        death_sound: Some(Sound::EntitySpiderDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -1320,88 +1117,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/cave_spider"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:string",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 2f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:spider_eye",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: -1f32,
-                                        max: 1f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: Some(&[LootCondition::KilledByPlayer]),
-                    functions: None,
-                },
-            ]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.7f32, 0.5f32],
         eye_height: 0.45f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1413,6 +1134,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -1421,9 +1143,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1435,6 +1160,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -1443,9 +1169,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1457,6 +1186,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -1465,9 +1195,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.98f32, 0.7f32],
         eye_height: 0.595f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1506,8 +1239,9 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 1u32,
-        hurt_sound: None,
+        experience_reward: 3u32,
+        hurt_sound: Some(Sound::EntityChickenHurt),
+        death_sound: Some(Sound::EntityChickenDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -1516,95 +1250,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/chicken"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:feather",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 2f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:chicken",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::FurnaceSmelt,
-                                conditions: Some(&[LootCondition::AnyOf(&[
-                                    LootCondition::EntityProperties {
-                                        entity: "this",
-                                        expected_type: None,
-                                        is_on_fire: Some(true),
-                                        mainhand_enchantment_tag: None,
-                                    },
-                                    LootCondition::EntityProperties {
-                                        entity: "direct_attacker",
-                                        expected_type: None,
-                                        is_on_fire: None,
-                                        mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
-                                    },
-                                ])]),
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-            ]),
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.4f32, 0.7f32],
         eye_height: 0.644f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1643,7 +1294,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 2u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityCodHurt),
+        death_sound: Some(Sound::EntityCodDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -1652,60 +1304,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::WATER_AMBIENT,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/cod"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:cod",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[LootFunction {
-                            content: LootFunctionTypes::FurnaceSmelt,
-                            conditions: Some(&[LootCondition::AnyOf(&[
-                                LootCondition::EntityProperties {
-                                    entity: "this",
-                                    expected_type: None,
-                                    is_on_fire: Some(true),
-                                    mainhand_enchantment_tag: None,
-                                },
-                                LootCondition::EntityProperties {
-                                    entity: "direct_attacker",
-                                    expected_type: None,
-                                    is_on_fire: None,
-                                    mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
-                                },
-                            ])]),
-                        }]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:bone_meal",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: None,
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: Some(&[LootCondition::RandomChance { chance: 0.05f32 }]),
-                    functions: None,
-                },
-            ]),
-        }),
+        client_tracking_range: 4u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.5f32, 0.3f32],
         eye_height: 0.195f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::InWater,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1717,6 +1321,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -1725,9 +1330,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.98f32, 0.7f32],
         eye_height: 0.595f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1767,6 +1375,7 @@ impl EntityType {
         ],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -1775,49 +1384,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/copper_golem"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:copper_ingot",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: Some(&[
-                        LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 1f32,
-                                    max: 3f32,
-                                },
-                                add: false,
-                            },
-                            conditions: None,
-                        },
-                        LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease {
-                                enchantment: "minecraft:looting",
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 1f32,
-                                },
-                                limit: None,
-                            },
-                            conditions: None,
-                        },
-                    ]),
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.49f32, 0.98f32],
         eye_height: 0.8125f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -1856,8 +1428,9 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 2u32,
-        hurt_sound: None,
+        experience_reward: 3u32,
+        hurt_sound: Some(Sound::EntityCowHurt),
+        death_sound: Some(Sound::EntityCowDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -1866,105 +1439,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/cow"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:leather",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 2f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:beef",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 1f32,
-                                        max: 3f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::FurnaceSmelt,
-                                conditions: Some(&[LootCondition::AnyOf(&[
-                                    LootCondition::EntityProperties {
-                                        entity: "this",
-                                        expected_type: None,
-                                        is_on_fire: Some(true),
-                                        mainhand_enchantment_tag: None,
-                                    },
-                                    LootCondition::EntityProperties {
-                                        entity: "direct_attacker",
-                                        expected_type: None,
-                                        is_on_fire: None,
-                                        mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
-                                    },
-                                ])]),
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-            ]),
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.9f32, 1.4f32],
         eye_height: 1.3f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2004,7 +1484,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 0u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityHostileHurt),
+        death_sound: Some(Sound::EntityCreakingDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -2013,13 +1494,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/creaking"),
-            pools: None,
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.9f32, 2.7f32],
         eye_height: 2.3f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2059,7 +1539,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 5u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityCreeperHurt),
+        death_sound: Some(Sound::EntityCreeperDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -2068,72 +1549,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/creeper"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:gunpowder",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 2f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Tag(TagEntry {
-                            name: "minecraft:creeper_drop_music_discs",
-                            expand: true,
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: None,
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: Some(&[LootCondition::EntityProperties {
-                        entity: "attacker",
-                        expected_type: Some("#minecraft:skeletons"),
-                        is_on_fire: None,
-                        mainhand_enchantment_tag: None,
-                    }]),
-                    functions: None,
-                },
-            ]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.6f32, 1.7f32],
         eye_height: 1.445f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2145,6 +1566,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -2153,9 +1575,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2167,6 +1592,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -2175,9 +1601,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2216,8 +1645,9 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 1u32,
-        hurt_sound: None,
+        experience_reward: 3u32,
+        hurt_sound: Some(Sound::EntityDolphinHurt),
+        death_sound: Some(Sound::EntityDolphinDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -2226,66 +1656,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::WATER_CREATURE,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/dolphin"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:cod",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: Some(&[
-                        LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 1f32,
-                                },
-                                add: false,
-                            },
-                            conditions: None,
-                        },
-                        LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease {
-                                enchantment: "minecraft:looting",
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 1f32,
-                                },
-                                limit: None,
-                            },
-                            conditions: None,
-                        },
-                        LootFunction {
-                            content: LootFunctionTypes::FurnaceSmelt,
-                            conditions: Some(&[LootCondition::AnyOf(&[
-                                LootCondition::EntityProperties {
-                                    entity: "this",
-                                    expected_type: None,
-                                    is_on_fire: Some(true),
-                                    mainhand_enchantment_tag: None,
-                                },
-                                LootCondition::EntityProperties {
-                                    entity: "direct_attacker",
-                                    expected_type: None,
-                                    is_on_fire: None,
-                                    mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
-                                },
-                            ])]),
-                        },
-                    ]),
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 5u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.9f32, 0.6f32],
         eye_height: 0.3f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::InWater,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2324,8 +1700,9 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 3u32,
-        hurt_sound: None,
+        experience_reward: 1u32,
+        hurt_sound: Some(Sound::EntityDonkeyHurt),
+        death_sound: Some(Sound::EntityDonkeyDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -2334,49 +1711,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/donkey"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:leather",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: Some(&[
-                        LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 2f32,
-                                },
-                                add: false,
-                            },
-                            conditions: None,
-                        },
-                        LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease {
-                                enchantment: "minecraft:looting",
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 1f32,
-                                },
-                                limit: None,
-                            },
-                            conditions: None,
-                        },
-                    ]),
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.3964844f32, 1.5f32],
         eye_height: 1.425f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2388,6 +1728,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -2396,9 +1737,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 4u32,
+        update_interval: 10u32,
+        track_deltas: true,
         dimension: [1f32, 1f32],
         eye_height: 0.85f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2440,6 +1784,7 @@ impl EntityType {
         ],
         experience_reward: 5u32,
         hurt_sound: Some(Sound::EntityDrownedHurt),
+        death_sound: Some(Sound::EntityDrownedDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -2448,72 +1793,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/drowned"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:rotten_flesh",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 2f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:copper_ingot",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: None,
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: Some(&[
-                        LootCondition::KilledByPlayer,
-                        LootCondition::RandomChanceWithEnchantedBonus {
-                            enchantment: "minecraft:looting",
-                            chances: None,
-                        },
-                    ]),
-                    functions: None,
-                },
-            ]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.6f32, 1.95f32],
         eye_height: 1.74f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::InWater,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2525,6 +1810,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -2533,9 +1819,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 4u32,
+        update_interval: 10u32,
+        track_deltas: true,
         dimension: [0.25f32, 0.25f32],
         eye_height: 0.2125f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2575,7 +1864,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 10u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityElderGuardianHurtLand),
+        death_sound: Some(Sound::EntityElderGuardianDeathLand),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -2584,201 +1874,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/elder_guardian"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:prismarine_shard",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 2f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[
-                        LootPoolEntry {
-                            content: LootPoolEntryTypes::Item(ItemEntry {
-                                name: "minecraft:cod",
-                            }),
-                            weight: 3i32,
-                            quality: 0i32,
-                            conditions: None,
-                            functions: Some(&[
-                                LootFunction {
-                                    content: LootFunctionTypes::EnchantedCountIncrease {
-                                        enchantment: "minecraft:looting",
-                                        count: LootFunctionNumberProvider::Uniform {
-                                            min: 0f32,
-                                            max: 1f32,
-                                        },
-                                        limit: None,
-                                    },
-                                    conditions: None,
-                                },
-                                LootFunction {
-                                    content: LootFunctionTypes::FurnaceSmelt,
-                                    conditions: Some(&[LootCondition::AnyOf(&[
-                                        LootCondition::EntityProperties {
-                                            entity: "this",
-                                            expected_type: None,
-                                            is_on_fire: Some(true),
-                                            mainhand_enchantment_tag: None,
-                                        },
-                                        LootCondition::EntityProperties {
-                                            entity: "direct_attacker",
-                                            expected_type: None,
-                                            is_on_fire: None,
-                                            mainhand_enchantment_tag: Some(
-                                                "#minecraft:smelts_loot",
-                                            ),
-                                        },
-                                    ])]),
-                                },
-                            ]),
-                        },
-                        LootPoolEntry {
-                            content: LootPoolEntryTypes::Item(ItemEntry {
-                                name: "minecraft:prismarine_crystals",
-                            }),
-                            weight: 2i32,
-                            quality: 0i32,
-                            conditions: None,
-                            functions: Some(&[LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            }]),
-                        },
-                        LootPoolEntry {
-                            content: LootPoolEntryTypes::Empty,
-                            weight: 1i32,
-                            quality: 0i32,
-                            conditions: None,
-                            functions: None,
-                        },
-                    ],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:wet_sponge",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: None,
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: Some(&[LootCondition::KilledByPlayer]),
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::LootTable(LootTableEntry {
-                            value: "minecraft:gameplay/fishing/fish",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[LootFunction {
-                            content: LootFunctionTypes::FurnaceSmelt,
-                            conditions: Some(&[LootCondition::AnyOf(&[
-                                LootCondition::EntityProperties {
-                                    entity: "this",
-                                    expected_type: None,
-                                    is_on_fire: Some(true),
-                                    mainhand_enchantment_tag: None,
-                                },
-                                LootCondition::EntityProperties {
-                                    entity: "direct_attacker",
-                                    expected_type: None,
-                                    is_on_fire: None,
-                                    mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
-                                },
-                            ])]),
-                        }]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: Some(&[
-                        LootCondition::KilledByPlayer,
-                        LootCondition::RandomChanceWithEnchantedBonus {
-                            enchantment: "minecraft:looting",
-                            chances: None,
-                        },
-                    ]),
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[
-                        LootPoolEntry {
-                            content: LootPoolEntryTypes::Empty,
-                            weight: 4i32,
-                            quality: 0i32,
-                            conditions: None,
-                            functions: None,
-                        },
-                        LootPoolEntry {
-                            content: LootPoolEntryTypes::Item(ItemEntry {
-                                name: "minecraft:tide_armor_trim_smithing_template",
-                            }),
-                            weight: 1i32,
-                            quality: 0i32,
-                            conditions: None,
-                            functions: None,
-                        },
-                    ],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-            ]),
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.9975f32, 1.9975f32],
         eye_height: 0.99875f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::InWater,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2790,6 +1891,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -2798,9 +1900,12 @@ impl EntityType {
         fire_immune: true,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 16u32,
+        update_interval: 2147483647u32,
+        track_deltas: false,
         dimension: [2f32, 2f32],
         eye_height: 1.7f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2839,7 +1944,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 0u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityEnderDragonHurt),
+        death_sound: Some(Sound::EntityGenericDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -2848,13 +1954,12 @@ impl EntityType {
         fire_immune: true,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/ender_dragon"),
-            pools: None,
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [16f32, 8f32],
         eye_height: 6.8f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2866,6 +1971,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -2874,9 +1980,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 4u32,
+        update_interval: 10u32,
+        track_deltas: true,
         dimension: [0.25f32, 0.25f32],
         eye_height: 0.2125f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -2917,6 +2026,7 @@ impl EntityType {
         ],
         experience_reward: 5u32,
         hurt_sound: Some(Sound::EntityEndermanHurt),
+        death_sound: Some(Sound::EntityEndermanDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -2925,49 +2035,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/enderman"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:ender_pearl",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: Some(&[
-                        LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 1f32,
-                                },
-                                add: false,
-                            },
-                            conditions: None,
-                        },
-                        LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease {
-                                enchantment: "minecraft:looting",
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 1f32,
-                                },
-                                limit: None,
-                            },
-                            conditions: None,
-                        },
-                    ]),
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.6f32, 2.9f32],
         eye_height: 2.55f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3007,7 +2080,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 3u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityEndermiteHurt),
+        death_sound: Some(Sound::EntityEndermiteDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -3016,13 +2090,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/endermite"),
-            pools: None,
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.4f32, 0.3f32],
         eye_height: 0.13f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3062,7 +2135,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 10u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityEvokerHurt),
+        death_sound: Some(Sound::EntityEvokerDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -3071,66 +2145,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/evoker"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:totem_of_undying",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: None,
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:emerald",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: Some(&[LootCondition::KilledByPlayer]),
-                    functions: None,
-                },
-            ]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.6f32, 1.95f32],
         eye_height: 1.6575f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3142,6 +2162,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -3150,9 +2171,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 6u32,
+        update_interval: 2u32,
+        track_deltas: false,
         dimension: [0.5f32, 0.8f32],
         eye_height: 0.68f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3164,6 +2188,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -3172,9 +2197,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 4u32,
+        update_interval: 10u32,
+        track_deltas: true,
         dimension: [0.25f32, 0.25f32],
         eye_height: 0.2125f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3186,6 +2214,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(false),
         mob: false,
         saveable: true,
@@ -3194,9 +2223,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 6u32,
+        update_interval: 20u32,
+        track_deltas: true,
         dimension: [0.5f32, 0.5f32],
         eye_height: 0.425f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3208,6 +2240,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(false),
         mob: false,
         saveable: true,
@@ -3216,9 +2249,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 4u32,
+        update_interval: 4u32,
+        track_deltas: true,
         dimension: [0.25f32, 0.25f32],
         eye_height: 0.2125f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3230,6 +2266,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(false),
         mob: false,
         saveable: true,
@@ -3238,9 +2275,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 20u32,
+        track_deltas: true,
         dimension: [0.98f32, 0.98f32],
         eye_height: 0.83300006f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3252,6 +2292,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -3260,9 +2301,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 4u32,
+        update_interval: 10u32,
+        track_deltas: true,
         dimension: [1f32, 1f32],
         eye_height: 0.85f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3274,6 +2318,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(false),
         mob: false,
         saveable: true,
@@ -3282,9 +2327,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 4u32,
+        update_interval: 10u32,
+        track_deltas: true,
         dimension: [0.25f32, 0.25f32],
         eye_height: 0.2125f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3296,6 +2344,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: false,
@@ -3304,9 +2353,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 4u32,
+        update_interval: 5u32,
+        track_deltas: true,
         dimension: [0.25f32, 0.25f32],
         eye_height: 0.2125f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3346,8 +2398,9 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 3u32,
-        hurt_sound: None,
+        experience_reward: 1u32,
+        hurt_sound: Some(Sound::EntityFoxHurt),
+        death_sound: Some(Sound::EntityFoxDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -3356,13 +2409,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/fox"),
-            pools: None,
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.6f32, 0.7f32],
         eye_height: 0.4f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3402,8 +2454,9 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 2u32,
-        hurt_sound: None,
+        experience_reward: 3u32,
+        hurt_sound: Some(Sound::EntityFrogHurt),
+        death_sound: Some(Sound::EntityFrogDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -3412,13 +2465,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/frog"),
-            pools: None,
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.5f32, 0.5f32],
         eye_height: 0.425f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3430,6 +2482,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -3438,9 +2491,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.98f32, 0.7f32],
         eye_height: 0.595f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3480,7 +2536,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 5u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityGhastHurt),
+        death_sound: Some(Sound::EntityGhastDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -3489,115 +2546,12 @@ impl EntityType {
         fire_immune: true,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/ghast"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:ghast_tear",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:gunpowder",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 2f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:music_disc_tears",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: None,
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: Some(&[
-                        LootCondition::DamageSourceProperties {
-                            expected_source_type: None,
-                            expected_direct_type: Some("minecraft:fireball"),
-                        },
-                        LootCondition::KilledByPlayer,
-                    ]),
-                    functions: Some(&[LootFunction {
-                        content: LootFunctionTypes::SetCount {
-                            count: LootFunctionNumberProvider::Constant { value: 1f32 },
-                            add: false,
-                        },
-                        conditions: None,
-                    }]),
-                },
-            ]),
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [4f32, 4f32],
         eye_height: 2.6f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3637,7 +2591,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 5u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityHostileHurt),
+        death_sound: Some(Sound::EntityHostileDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -3646,13 +2601,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/giant"),
-            pools: None,
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [3.6f32, 12f32],
         eye_height: 10.44f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3664,6 +2618,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -3672,9 +2627,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 2147483647u32,
+        track_deltas: false,
         dimension: [0.5f32, 0.5f32],
         eye_height: 0f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3712,8 +2670,9 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 3u32,
-        hurt_sound: None,
+        experience_reward: 2u32,
+        hurt_sound: Some(Sound::EntityGlowSquidHurt),
+        death_sound: Some(Sound::EntityGlowSquidDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -3722,49 +2681,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::UNDERGROUND_WATER_CREATURE,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/glow_squid"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:glow_ink_sac",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: Some(&[
-                        LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 1f32,
-                                    max: 3f32,
-                                },
-                                add: false,
-                            },
-                            conditions: None,
-                        },
-                        LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease {
-                                enchantment: "minecraft:looting",
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 1f32,
-                                },
-                                limit: None,
-                            },
-                            conditions: None,
-                        },
-                    ]),
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.8f32, 0.8f32],
         eye_height: 0.4f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::InWater,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3804,8 +2726,9 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 3u32,
-        hurt_sound: None,
+        experience_reward: 2u32,
+        hurt_sound: Some(Sound::EntityGoatHurt),
+        death_sound: Some(Sound::EntityGoatDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -3814,13 +2737,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/goat"),
-            pools: None,
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.9f32, 1.3f32],
         eye_height: 1.105f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -3860,7 +2782,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 10u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityGuardianHurtLand),
+        death_sound: Some(Sound::EntityGuardianDeathLand),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -3869,162 +2792,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/guardian"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:prismarine_shard",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 2f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[
-                        LootPoolEntry {
-                            content: LootPoolEntryTypes::Item(ItemEntry {
-                                name: "minecraft:cod",
-                            }),
-                            weight: 2i32,
-                            quality: 0i32,
-                            conditions: None,
-                            functions: Some(&[
-                                LootFunction {
-                                    content: LootFunctionTypes::EnchantedCountIncrease {
-                                        enchantment: "minecraft:looting",
-                                        count: LootFunctionNumberProvider::Uniform {
-                                            min: 0f32,
-                                            max: 1f32,
-                                        },
-                                        limit: None,
-                                    },
-                                    conditions: None,
-                                },
-                                LootFunction {
-                                    content: LootFunctionTypes::FurnaceSmelt,
-                                    conditions: Some(&[LootCondition::AnyOf(&[
-                                        LootCondition::EntityProperties {
-                                            entity: "this",
-                                            expected_type: None,
-                                            is_on_fire: Some(true),
-                                            mainhand_enchantment_tag: None,
-                                        },
-                                        LootCondition::EntityProperties {
-                                            entity: "direct_attacker",
-                                            expected_type: None,
-                                            is_on_fire: None,
-                                            mainhand_enchantment_tag: Some(
-                                                "#minecraft:smelts_loot",
-                                            ),
-                                        },
-                                    ])]),
-                                },
-                            ]),
-                        },
-                        LootPoolEntry {
-                            content: LootPoolEntryTypes::Item(ItemEntry {
-                                name: "minecraft:prismarine_crystals",
-                            }),
-                            weight: 2i32,
-                            quality: 0i32,
-                            conditions: None,
-                            functions: Some(&[LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            }]),
-                        },
-                        LootPoolEntry {
-                            content: LootPoolEntryTypes::Empty,
-                            weight: 1i32,
-                            quality: 0i32,
-                            conditions: None,
-                            functions: None,
-                        },
-                    ],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::LootTable(LootTableEntry {
-                            value: "minecraft:gameplay/fishing/fish",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[LootFunction {
-                            content: LootFunctionTypes::FurnaceSmelt,
-                            conditions: Some(&[LootCondition::AnyOf(&[
-                                LootCondition::EntityProperties {
-                                    entity: "this",
-                                    expected_type: None,
-                                    is_on_fire: Some(true),
-                                    mainhand_enchantment_tag: None,
-                                },
-                                LootCondition::EntityProperties {
-                                    entity: "direct_attacker",
-                                    expected_type: None,
-                                    is_on_fire: None,
-                                    mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
-                                },
-                            ])]),
-                        }]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: Some(&[
-                        LootCondition::KilledByPlayer,
-                        LootCondition::RandomChanceWithEnchantedBonus {
-                            enchantment: "minecraft:looting",
-                            chances: None,
-                        },
-                    ]),
-                    functions: None,
-                },
-            ]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.85f32, 0.85f32],
         eye_height: 0.425f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::InWater,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4064,8 +2837,9 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 3u32,
-        hurt_sound: None,
+        experience_reward: 1u32,
+        hurt_sound: Some(Sound::EntityHappyGhastHurt),
+        death_sound: Some(Sound::EntityHappyGhastDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -4074,13 +2848,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/happy_ghast"),
-            pools: None,
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [4f32, 4f32],
         eye_height: 2.6f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4120,7 +2893,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 5u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityHoglinHurt),
+        death_sound: Some(Sound::EntityHoglinDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -4129,105 +2903,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/hoglin"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:porkchop",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 2f32,
-                                        max: 4f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::FurnaceSmelt,
-                                conditions: Some(&[LootCondition::AnyOf(&[
-                                    LootCondition::EntityProperties {
-                                        entity: "this",
-                                        expected_type: None,
-                                        is_on_fire: Some(true),
-                                        mainhand_enchantment_tag: None,
-                                    },
-                                    LootCondition::EntityProperties {
-                                        entity: "direct_attacker",
-                                        expected_type: None,
-                                        is_on_fire: None,
-                                        mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
-                                    },
-                                ])]),
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:leather",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-            ]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.3964844f32, 1.4f32],
         eye_height: 1.19f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4239,6 +2920,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -4247,9 +2929,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.98f32, 0.7f32],
         eye_height: 0.595f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4289,7 +2974,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 1u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityHorseHurt),
+        death_sound: Some(Sound::EntityHorseDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -4298,49 +2984,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/horse"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:leather",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: Some(&[
-                        LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 2f32,
-                                },
-                                add: false,
-                            },
-                            conditions: None,
-                        },
-                        LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease {
-                                enchantment: "minecraft:looting",
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 1f32,
-                                },
-                                limit: None,
-                            },
-                            conditions: None,
-                        },
-                    ]),
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.3964844f32, 1.6f32],
         eye_height: 1.52f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4382,6 +3031,7 @@ impl EntityType {
         ],
         experience_reward: 5u32,
         hurt_sound: Some(Sound::EntityHuskHurt),
+        death_sound: Some(Sound::EntityHuskDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -4390,150 +3040,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/husk"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:rotten_flesh",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 2f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:rabbit_foot",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: Some(&[LootCondition::EntityProperties {
-                            entity: "this",
-                            expected_type: None,
-                            is_on_fire: None,
-                            mainhand_enchantment_tag: None,
-                        }]),
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[
-                        LootPoolEntry {
-                            content: LootPoolEntryTypes::Item(ItemEntry {
-                                name: "minecraft:iron_ingot",
-                            }),
-                            weight: 1i32,
-                            quality: 0i32,
-                            conditions: None,
-                            functions: None,
-                        },
-                        LootPoolEntry {
-                            content: LootPoolEntryTypes::Item(ItemEntry {
-                                name: "minecraft:carrot",
-                            }),
-                            weight: 1i32,
-                            quality: 0i32,
-                            conditions: None,
-                            functions: None,
-                        },
-                        LootPoolEntry {
-                            content: LootPoolEntryTypes::Item(ItemEntry {
-                                name: "minecraft:potato",
-                            }),
-                            weight: 1i32,
-                            quality: 0i32,
-                            conditions: None,
-                            functions: Some(&[LootFunction {
-                                content: LootFunctionTypes::FurnaceSmelt,
-                                conditions: Some(&[LootCondition::AnyOf(&[
-                                    LootCondition::EntityProperties {
-                                        entity: "this",
-                                        expected_type: None,
-                                        is_on_fire: Some(true),
-                                        mainhand_enchantment_tag: None,
-                                    },
-                                    LootCondition::EntityProperties {
-                                        entity: "direct_attacker",
-                                        expected_type: None,
-                                        is_on_fire: None,
-                                        mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
-                                    },
-                                ])]),
-                            }]),
-                        },
-                    ],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: Some(&[
-                        LootCondition::KilledByPlayer,
-                        LootCondition::RandomChanceWithEnchantedBonus {
-                            enchantment: "minecraft:looting",
-                            chances: None,
-                        },
-                    ]),
-                    functions: None,
-                },
-            ]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.6f32, 1.95f32],
         eye_height: 1.74f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4573,7 +3085,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 5u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityIllusionerHurt),
+        death_sound: Some(Sound::EntityIllusionerDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -4582,13 +3095,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/illusioner"),
-            pools: None,
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.6f32, 1.95f32],
         eye_height: 1.6575f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4600,6 +3112,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -4608,9 +3121,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0f32, 0f32],
         eye_height: 0f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4650,7 +3166,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 0u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityIronGolemHurt),
+        death_sound: Some(Sound::EntityIronGolemDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -4659,62 +3176,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/iron_golem"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:poppy",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 2f32,
-                                },
-                                add: false,
-                            },
-                            conditions: None,
-                        }]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:iron_ingot",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 3f32,
-                                    max: 5f32,
-                                },
-                                add: false,
-                            },
-                            conditions: None,
-                        }]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-            ]),
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.4f32, 2.7f32],
         eye_height: 2.295f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4726,6 +3193,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(false),
         mob: false,
         saveable: true,
@@ -4734,9 +3202,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 6u32,
+        update_interval: 20u32,
+        track_deltas: true,
         dimension: [0.25f32, 0.25f32],
         eye_height: 0.2125f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4748,6 +3219,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -4756,9 +3228,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 1u32,
+        track_deltas: true,
         dimension: [0f32, 0f32],
         eye_height: 0f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4770,6 +3245,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -4778,9 +3254,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 2147483647u32,
+        track_deltas: false,
         dimension: [0.5f32, 0.5f32],
         eye_height: 0f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4792,6 +3271,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -4800,9 +3280,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4814,6 +3297,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -4822,9 +3306,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4836,6 +3323,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: false,
@@ -4844,9 +3332,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 2147483647u32,
+        track_deltas: false,
         dimension: [0.375f32, 0.5f32],
         eye_height: 0.0625f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4858,6 +3349,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: false,
@@ -4866,9 +3358,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 16u32,
+        update_interval: 2147483647u32,
+        track_deltas: true,
         dimension: [0f32, 0f32],
         eye_height: 0f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4880,6 +3375,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -4888,9 +3384,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 4u32,
+        update_interval: 10u32,
+        track_deltas: true,
         dimension: [0.25f32, 0.25f32],
         eye_height: 0.2125f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4930,7 +3429,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 2u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityLlamaHurt),
+        death_sound: Some(Sound::EntityLlamaDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -4939,49 +3439,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/llama"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:leather",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: Some(&[
-                        LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 2f32,
-                                },
-                                add: false,
-                            },
-                            conditions: None,
-                        },
-                        LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease {
-                                enchantment: "minecraft:looting",
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 1f32,
-                                },
-                                limit: None,
-                            },
-                            conditions: None,
-                        },
-                    ]),
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.9f32, 1.87f32],
         eye_height: 1.7765f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -4993,6 +3456,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -5001,9 +3465,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 4u32,
+        update_interval: 10u32,
+        track_deltas: false,
         dimension: [0.25f32, 0.25f32],
         eye_height: 0.2125f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5043,7 +3510,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 0u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityMagmaCubeHurtSmall),
+        death_sound: Some(Sound::EntityMagmaCubeDeathSmall),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -5052,116 +3520,12 @@ impl EntityType {
         fire_immune: true,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/magma_cube"),
-            pools: Some(&[LootPool {
-                entries: &[
-                    LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:magma_cream",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: Some(&[
-                            LootCondition::Inverted(&LootCondition::DamageSourceProperties {
-                                expected_source_type: Some("minecraft:frog"),
-                                expected_direct_type: None,
-                            }),
-                            LootCondition::EntityProperties {
-                                entity: "this",
-                                expected_type: None,
-                                is_on_fire: None,
-                                mainhand_enchantment_tag: None,
-                            },
-                        ]),
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: -2f32,
-                                        max: 1f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    },
-                    LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:pearlescent_froglight",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: Some(&[LootCondition::DamageSourceProperties {
-                            expected_source_type: Some("minecraft:frog"),
-                            expected_direct_type: None,
-                        }]),
-                        functions: Some(&[LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Constant { value: 1f32 },
-                                add: false,
-                            },
-                            conditions: None,
-                        }]),
-                    },
-                    LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:verdant_froglight",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: Some(&[LootCondition::DamageSourceProperties {
-                            expected_source_type: Some("minecraft:frog"),
-                            expected_direct_type: None,
-                        }]),
-                        functions: Some(&[LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Constant { value: 1f32 },
-                                add: false,
-                            },
-                            conditions: None,
-                        }]),
-                    },
-                    LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:ochre_froglight",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: Some(&[LootCondition::DamageSourceProperties {
-                            expected_source_type: Some("minecraft:frog"),
-                            expected_direct_type: None,
-                        }]),
-                        functions: Some(&[LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Constant { value: 1f32 },
-                                add: false,
-                            },
-                            conditions: None,
-                        }]),
-                    },
-                ],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.52f32, 0.52f32],
         eye_height: 0.325f32,
+        spawn_dimensions_scale: 4f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5173,6 +3537,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -5181,9 +3546,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5195,6 +3563,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -5203,9 +3572,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5243,7 +3615,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 0u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityGenericHurt),
+        death_sound: Some(Sound::EntityGenericDeath),
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -5252,13 +3625,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/mannequin"),
-            pools: None,
-        }),
+        client_tracking_range: 32u32,
+        update_interval: 2u32,
+        track_deltas: true,
         dimension: [0.6f32, 1.8f32],
         eye_height: 1.62f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5270,6 +3642,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -5278,9 +3651,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 0u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0f32, 0f32],
         eye_height: 0f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5292,6 +3668,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -5300,9 +3677,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.98f32, 0.7f32],
         eye_height: 0.595f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5341,8 +3721,9 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 2u32,
-        hurt_sound: None,
+        experience_reward: 3u32,
+        hurt_sound: Some(Sound::EntityCowHurt),
+        death_sound: Some(Sound::EntityCowDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -5351,105 +3732,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/mooshroom"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:leather",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 2f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:beef",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 1f32,
-                                        max: 3f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::FurnaceSmelt,
-                                conditions: Some(&[LootCondition::AnyOf(&[
-                                    LootCondition::EntityProperties {
-                                        entity: "this",
-                                        expected_type: None,
-                                        is_on_fire: Some(true),
-                                        mainhand_enchantment_tag: None,
-                                    },
-                                    LootCondition::EntityProperties {
-                                        entity: "direct_attacker",
-                                        expected_type: None,
-                                        is_on_fire: None,
-                                        mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
-                                    },
-                                ])]),
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-            ]),
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.9f32, 1.4f32],
         eye_height: 1.3f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5488,8 +3776,9 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 2u32,
-        hurt_sound: None,
+        experience_reward: 3u32,
+        hurt_sound: Some(Sound::EntityMuleHurt),
+        death_sound: Some(Sound::EntityMuleDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -5498,49 +3787,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/mule"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:leather",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: Some(&[
-                        LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 2f32,
-                                },
-                                add: false,
-                            },
-                            conditions: None,
-                        },
-                        LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease {
-                                enchantment: "minecraft:looting",
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 1f32,
-                                },
-                                limit: None,
-                            },
-                            conditions: None,
-                        },
-                    ]),
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.3964844f32, 1.6f32],
         eye_height: 1.52f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5580,8 +3832,9 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 1u32,
-        hurt_sound: None,
+        experience_reward: 3u32,
+        hurt_sound: Some(Sound::EntityNautilusHurtLand),
+        death_sound: Some(Sound::EntityNautilusDeathLand),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -5590,33 +3843,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::WATER_CREATURE,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/nautilus"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:nautilus_shell",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: None,
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: Some(&[
-                    LootCondition::KilledByPlayer,
-                    LootCondition::RandomChanceWithEnchantedBonus {
-                        enchantment: "minecraft:looting",
-                        chances: None,
-                    },
-                ]),
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.875f32, 0.95f32],
         eye_height: 0.2751f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::InWater,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5628,6 +3860,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -5636,9 +3869,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5650,6 +3886,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -5658,9 +3895,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5700,8 +3940,9 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 2u32,
-        hurt_sound: None,
+        experience_reward: 1u32,
+        hurt_sound: Some(Sound::EntityOcelotHurt),
+        death_sound: Some(Sound::EntityOcelotDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -5710,13 +3951,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/ocelot"),
-            pools: None,
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.6f32, 0.7f32],
         eye_height: 0.595f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlocking,
@@ -5728,6 +3968,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -5736,9 +3977,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.25f32, 0.25f32],
         eye_height: 0.2125f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5750,6 +3994,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -5758,9 +4003,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 2147483647u32,
+        track_deltas: false,
         dimension: [0.5f32, 0.5f32],
         eye_height: 0.425f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5772,6 +4020,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -5780,9 +4029,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5794,6 +4046,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -5802,9 +4055,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5844,8 +4100,9 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 3u32,
-        hurt_sound: None,
+        experience_reward: 2u32,
+        hurt_sound: Some(Sound::EntityPandaHurt),
+        death_sound: Some(Sound::EntityPandaDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -5854,33 +4111,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/panda"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:bamboo",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: Some(&[LootFunction {
-                        content: LootFunctionTypes::SetCount {
-                            count: LootFunctionNumberProvider::Constant { value: 1f32 },
-                            add: false,
-                        },
-                        conditions: None,
-                    }]),
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.3f32, 1.25f32],
         eye_height: 1.0625f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -5921,6 +4157,7 @@ impl EntityType {
         ],
         experience_reward: 5u32,
         hurt_sound: Some(Sound::EntityParchedHurt),
+        death_sound: Some(Sound::EntityParchedDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -5929,131 +4166,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/parched"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:arrow",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 2f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:bone",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 2f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:tipped_arrow",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: Some(1f32),
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::SetPotion {
-                                    id: "minecraft:weakness",
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: Some(&[LootCondition::KilledByPlayer]),
-                    functions: None,
-                },
-            ]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.6f32, 1.99f32],
         eye_height: 1.74f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -6095,7 +4213,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 3u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityParrotHurt),
+        death_sound: Some(Sound::EntityParrotDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -6104,49 +4223,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/parrot"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:feather",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: Some(&[
-                        LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 1f32,
-                                    max: 2f32,
-                                },
-                                add: false,
-                            },
-                            conditions: None,
-                        },
-                        LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease {
-                                enchantment: "minecraft:looting",
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 1f32,
-                                },
-                                limit: None,
-                            },
-                            conditions: None,
-                        },
-                    ]),
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.5f32, 0.9f32],
         eye_height: 0.54f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlocking,
@@ -6186,7 +4268,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 5u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityPhantomHurt),
+        death_sound: Some(Sound::EntityPhantomDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -6195,49 +4278,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/phantom"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:phantom_membrane",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: Some(&[
-                        LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 1f32,
-                                },
-                                add: false,
-                            },
-                            conditions: None,
-                        },
-                        LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease {
-                                enchantment: "minecraft:looting",
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 1f32,
-                                },
-                                limit: None,
-                            },
-                            conditions: None,
-                        },
-                    ]),
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: Some(&[LootCondition::KilledByPlayer]),
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.9f32, 0.5f32],
         eye_height: 0.175f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -6277,7 +4323,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 2u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityPigHurt),
+        death_sound: Some(Sound::EntityPigDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -6286,66 +4333,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/pig"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:porkchop",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: Some(&[
-                        LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 1f32,
-                                    max: 3f32,
-                                },
-                                add: false,
-                            },
-                            conditions: None,
-                        },
-                        LootFunction {
-                            content: LootFunctionTypes::FurnaceSmelt,
-                            conditions: Some(&[LootCondition::AnyOf(&[
-                                LootCondition::EntityProperties {
-                                    entity: "this",
-                                    expected_type: None,
-                                    is_on_fire: Some(true),
-                                    mainhand_enchantment_tag: None,
-                                },
-                                LootCondition::EntityProperties {
-                                    entity: "direct_attacker",
-                                    expected_type: None,
-                                    is_on_fire: None,
-                                    mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
-                                },
-                            ])]),
-                        },
-                        LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease {
-                                enchantment: "minecraft:looting",
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 1f32,
-                                },
-                                limit: None,
-                            },
-                            conditions: None,
-                        },
-                    ]),
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.9f32, 0.9f32],
         eye_height: 0.765f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -6385,7 +4378,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 5u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityPiglinHurt),
+        death_sound: Some(Sound::EntityPiglinDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -6394,13 +4388,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/piglin"),
-            pools: None,
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.6f32, 1.95f32],
         eye_height: 1.79f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -6440,7 +4433,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 20u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityPiglinBruteHurt),
+        death_sound: Some(Sound::EntityPiglinBruteDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -6449,13 +4443,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/piglin_brute"),
-            pools: None,
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.6f32, 1.95f32],
         eye_height: 1.79f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -6495,7 +4488,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 5u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityPillagerHurt),
+        death_sound: Some(Sound::EntityPillagerDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -6504,44 +4498,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/pillager"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:ominous_bottle",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: Some(&[
-                        LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Constant { value: 1f32 },
-                                add: false,
-                            },
-                            conditions: None,
-                        },
-                        LootFunction {
-                            content: LootFunctionTypes::SetOminousBottleAmplifier,
-                            conditions: None,
-                        },
-                    ]),
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: Some(&[LootCondition::EntityProperties {
-                    entity: "this",
-                    expected_type: None,
-                    is_on_fire: None,
-                    mainhand_enchantment_tag: None,
-                }]),
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.6f32, 1.95f32],
         eye_height: 1.6575f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -6550,9 +4512,47 @@ impl EntityType {
     };
     pub const PLAYER: EntityType = EntityType {
         id: 156,
-        attributes: &[],
+        attributes: &[
+            (Attributes::AIR_DRAG_MODIFIER, 1f64),
+            (Attributes::ARMOR, 0f64),
+            (Attributes::ARMOR_TOUGHNESS, 0f64),
+            (Attributes::ATTACK_DAMAGE, 1f64),
+            (Attributes::ATTACK_KNOCKBACK, 0f64),
+            (Attributes::ATTACK_SPEED, 4f64),
+            (Attributes::BELOW_NAME_DISTANCE, 10f64),
+            (Attributes::BLOCK_BREAK_SPEED, 1f64),
+            (Attributes::BLOCK_INTERACTION_RANGE, 4.5f64),
+            (Attributes::BOUNCINESS, 0f64),
+            (Attributes::BURNING_TIME, 1f64),
+            (Attributes::CAMERA_DISTANCE, 4f64),
+            (Attributes::EXPLOSION_KNOCKBACK_RESISTANCE, 0f64),
+            (Attributes::ENTITY_INTERACTION_RANGE, 3f64),
+            (Attributes::FALL_DAMAGE_MULTIPLIER, 1f64),
+            (Attributes::FRICTION_MODIFIER, 1f64),
+            (Attributes::GRAVITY, 0.08f64),
+            (Attributes::JUMP_STRENGTH, 0.41999998688697815f64),
+            (Attributes::KNOCKBACK_RESISTANCE, 0f64),
+            (Attributes::LUCK, 0f64),
+            (Attributes::MAX_ABSORPTION, 0f64),
+            (Attributes::MAX_HEALTH, 20f64),
+            (Attributes::MINING_EFFICIENCY, 0f64),
+            (Attributes::MOVEMENT_EFFICIENCY, 0f64),
+            (Attributes::MOVEMENT_SPEED, 0.10000000149011612f64),
+            (Attributes::NAME_TAG_DISTANCE, 64f64),
+            (Attributes::OXYGEN_BONUS, 0f64),
+            (Attributes::SAFE_FALL_DISTANCE, 3f64),
+            (Attributes::SCALE, 1f64),
+            (Attributes::SNEAKING_SPEED, 0.3f64),
+            (Attributes::STEP_HEIGHT, 0.6f64),
+            (Attributes::SUBMERGED_MINING_SPEED, 0.2f64),
+            (Attributes::SWEEPING_DAMAGE_RATIO, 0f64),
+            (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
+            (Attributes::WAYPOINT_TRANSMIT_RANGE, 60000000f64),
+            (Attributes::WAYPOINT_RECEIVE_RANGE, 60000000f64),
+        ],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: None,
         mob: false,
         saveable: false,
@@ -6561,13 +4561,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/player"),
-            pools: None,
-        }),
+        client_tracking_range: 32u32,
+        update_interval: 2u32,
+        track_deltas: false,
         dimension: [0.6f32, 1.8f32],
         eye_height: 1.62f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -6607,8 +4606,9 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 1u32,
-        hurt_sound: None,
+        experience_reward: 2u32,
+        hurt_sound: Some(Sound::EntityPolarBearHurt),
+        death_sound: Some(Sound::EntityPolarBearDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -6617,116 +4617,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/polar_bear"),
-            pools: Some(&[LootPool {
-                entries: &[
-                    LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:cod",
-                        }),
-                        weight: 3i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::FurnaceSmelt,
-                                conditions: Some(&[LootCondition::AnyOf(&[
-                                    LootCondition::EntityProperties {
-                                        entity: "this",
-                                        expected_type: None,
-                                        is_on_fire: Some(true),
-                                        mainhand_enchantment_tag: None,
-                                    },
-                                    LootCondition::EntityProperties {
-                                        entity: "direct_attacker",
-                                        expected_type: None,
-                                        is_on_fire: None,
-                                        mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
-                                    },
-                                ])]),
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 2f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    },
-                    LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:salmon",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::FurnaceSmelt,
-                                conditions: Some(&[LootCondition::AnyOf(&[
-                                    LootCondition::EntityProperties {
-                                        entity: "this",
-                                        expected_type: None,
-                                        is_on_fire: Some(true),
-                                        mainhand_enchantment_tag: None,
-                                    },
-                                    LootCondition::EntityProperties {
-                                        entity: "direct_attacker",
-                                        expected_type: None,
-                                        is_on_fire: None,
-                                        mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
-                                    },
-                                ])]),
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 2f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    },
-                ],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.4f32, 1.4f32],
         eye_height: 1.19f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -6765,7 +4661,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 1u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityPufferFishHurt),
+        death_sound: Some(Sound::EntityPufferFishDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -6774,50 +4671,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::WATER_AMBIENT,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/pufferfish"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:pufferfish",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Constant { value: 1f32 },
-                                add: false,
-                            },
-                            conditions: None,
-                        }]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:bone_meal",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: None,
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: Some(&[LootCondition::RandomChance { chance: 0.05f32 }]),
-                    functions: None,
-                },
-            ]),
-        }),
+        client_tracking_range: 4u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.7f32, 0.7f32],
         eye_height: 0.455f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::InWater,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -6857,8 +4716,9 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 2u32,
-        hurt_sound: None,
+        experience_reward: 1u32,
+        hurt_sound: Some(Sound::EntityRabbitHurt),
+        death_sound: Some(Sound::EntityRabbitDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -6867,123 +4727,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/rabbit"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:rabbit_hide",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:rabbit",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Constant { value: 1f32 },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::FurnaceSmelt,
-                                conditions: Some(&[LootCondition::AnyOf(&[
-                                    LootCondition::EntityProperties {
-                                        entity: "this",
-                                        expected_type: None,
-                                        is_on_fire: Some(true),
-                                        mainhand_enchantment_tag: None,
-                                    },
-                                    LootCondition::EntityProperties {
-                                        entity: "direct_attacker",
-                                        expected_type: None,
-                                        is_on_fire: None,
-                                        mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
-                                    },
-                                ])]),
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:rabbit_foot",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: None,
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: Some(&[
-                        LootCondition::KilledByPlayer,
-                        LootCondition::RandomChanceWithEnchantedBonus {
-                            enchantment: "minecraft:looting",
-                            chances: None,
-                        },
-                    ]),
-                    functions: None,
-                },
-            ]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.49f32, 0.6f32],
         eye_height: 0.59f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -7023,7 +4772,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 20u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityRavagerHurt),
+        death_sound: Some(Sound::EntityRavagerDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -7032,33 +4782,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/ravager"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:saddle",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: Some(&[LootFunction {
-                        content: LootFunctionTypes::SetCount {
-                            count: LootFunctionNumberProvider::Constant { value: 1f32 },
-                            add: false,
-                        },
-                        conditions: None,
-                    }]),
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.95f32, 2.2f32],
         eye_height: 1.8700001f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -7097,7 +4826,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 2u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntitySalmonHurt),
+        death_sound: Some(Sound::EntitySalmonDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -7106,60 +4836,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::WATER_AMBIENT,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/salmon"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:salmon",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[LootFunction {
-                            content: LootFunctionTypes::FurnaceSmelt,
-                            conditions: Some(&[LootCondition::AnyOf(&[
-                                LootCondition::EntityProperties {
-                                    entity: "this",
-                                    expected_type: None,
-                                    is_on_fire: Some(true),
-                                    mainhand_enchantment_tag: None,
-                                },
-                                LootCondition::EntityProperties {
-                                    entity: "direct_attacker",
-                                    expected_type: None,
-                                    is_on_fire: None,
-                                    mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
-                                },
-                            ])]),
-                        }]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:bone_meal",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: None,
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: Some(&[LootCondition::RandomChance { chance: 0.05f32 }]),
-                    functions: None,
-                },
-            ]),
-        }),
+        client_tracking_range: 4u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.7f32, 0.4f32],
         eye_height: 0.26f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::InWater,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -7198,8 +4880,9 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 2u32,
-        hurt_sound: None,
+        experience_reward: 1u32,
+        hurt_sound: Some(Sound::EntitySheepHurt),
+        death_sound: Some(Sound::EntitySheepDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -7208,308 +4891,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/sheep"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:mutton",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 1f32,
-                                        max: 2f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::FurnaceSmelt,
-                                conditions: Some(&[LootCondition::AnyOf(&[
-                                    LootCondition::EntityProperties {
-                                        entity: "this",
-                                        expected_type: None,
-                                        is_on_fire: Some(true),
-                                        mainhand_enchantment_tag: None,
-                                    },
-                                    LootCondition::EntityProperties {
-                                        entity: "direct_attacker",
-                                        expected_type: None,
-                                        is_on_fire: None,
-                                        mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
-                                    },
-                                ])]),
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Alternatives(AlternativeEntry {
-                            children: &[
-                                LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
-                                        value: "minecraft:entities/sheep/white",
-                                    }),
-                                    weight: 1i32,
-                                    quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties {
-                                        entity: "this",
-                                        expected_type: None,
-                                        is_on_fire: None,
-                                        mainhand_enchantment_tag: None,
-                                    }]),
-                                    functions: None,
-                                },
-                                LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
-                                        value: "minecraft:entities/sheep/orange",
-                                    }),
-                                    weight: 1i32,
-                                    quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties {
-                                        entity: "this",
-                                        expected_type: None,
-                                        is_on_fire: None,
-                                        mainhand_enchantment_tag: None,
-                                    }]),
-                                    functions: None,
-                                },
-                                LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
-                                        value: "minecraft:entities/sheep/magenta",
-                                    }),
-                                    weight: 1i32,
-                                    quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties {
-                                        entity: "this",
-                                        expected_type: None,
-                                        is_on_fire: None,
-                                        mainhand_enchantment_tag: None,
-                                    }]),
-                                    functions: None,
-                                },
-                                LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
-                                        value: "minecraft:entities/sheep/light_blue",
-                                    }),
-                                    weight: 1i32,
-                                    quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties {
-                                        entity: "this",
-                                        expected_type: None,
-                                        is_on_fire: None,
-                                        mainhand_enchantment_tag: None,
-                                    }]),
-                                    functions: None,
-                                },
-                                LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
-                                        value: "minecraft:entities/sheep/yellow",
-                                    }),
-                                    weight: 1i32,
-                                    quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties {
-                                        entity: "this",
-                                        expected_type: None,
-                                        is_on_fire: None,
-                                        mainhand_enchantment_tag: None,
-                                    }]),
-                                    functions: None,
-                                },
-                                LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
-                                        value: "minecraft:entities/sheep/lime",
-                                    }),
-                                    weight: 1i32,
-                                    quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties {
-                                        entity: "this",
-                                        expected_type: None,
-                                        is_on_fire: None,
-                                        mainhand_enchantment_tag: None,
-                                    }]),
-                                    functions: None,
-                                },
-                                LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
-                                        value: "minecraft:entities/sheep/pink",
-                                    }),
-                                    weight: 1i32,
-                                    quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties {
-                                        entity: "this",
-                                        expected_type: None,
-                                        is_on_fire: None,
-                                        mainhand_enchantment_tag: None,
-                                    }]),
-                                    functions: None,
-                                },
-                                LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
-                                        value: "minecraft:entities/sheep/gray",
-                                    }),
-                                    weight: 1i32,
-                                    quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties {
-                                        entity: "this",
-                                        expected_type: None,
-                                        is_on_fire: None,
-                                        mainhand_enchantment_tag: None,
-                                    }]),
-                                    functions: None,
-                                },
-                                LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
-                                        value: "minecraft:entities/sheep/light_gray",
-                                    }),
-                                    weight: 1i32,
-                                    quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties {
-                                        entity: "this",
-                                        expected_type: None,
-                                        is_on_fire: None,
-                                        mainhand_enchantment_tag: None,
-                                    }]),
-                                    functions: None,
-                                },
-                                LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
-                                        value: "minecraft:entities/sheep/cyan",
-                                    }),
-                                    weight: 1i32,
-                                    quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties {
-                                        entity: "this",
-                                        expected_type: None,
-                                        is_on_fire: None,
-                                        mainhand_enchantment_tag: None,
-                                    }]),
-                                    functions: None,
-                                },
-                                LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
-                                        value: "minecraft:entities/sheep/purple",
-                                    }),
-                                    weight: 1i32,
-                                    quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties {
-                                        entity: "this",
-                                        expected_type: None,
-                                        is_on_fire: None,
-                                        mainhand_enchantment_tag: None,
-                                    }]),
-                                    functions: None,
-                                },
-                                LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
-                                        value: "minecraft:entities/sheep/blue",
-                                    }),
-                                    weight: 1i32,
-                                    quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties {
-                                        entity: "this",
-                                        expected_type: None,
-                                        is_on_fire: None,
-                                        mainhand_enchantment_tag: None,
-                                    }]),
-                                    functions: None,
-                                },
-                                LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
-                                        value: "minecraft:entities/sheep/brown",
-                                    }),
-                                    weight: 1i32,
-                                    quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties {
-                                        entity: "this",
-                                        expected_type: None,
-                                        is_on_fire: None,
-                                        mainhand_enchantment_tag: None,
-                                    }]),
-                                    functions: None,
-                                },
-                                LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
-                                        value: "minecraft:entities/sheep/green",
-                                    }),
-                                    weight: 1i32,
-                                    quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties {
-                                        entity: "this",
-                                        expected_type: None,
-                                        is_on_fire: None,
-                                        mainhand_enchantment_tag: None,
-                                    }]),
-                                    functions: None,
-                                },
-                                LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
-                                        value: "minecraft:entities/sheep/red",
-                                    }),
-                                    weight: 1i32,
-                                    quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties {
-                                        entity: "this",
-                                        expected_type: None,
-                                        is_on_fire: None,
-                                        mainhand_enchantment_tag: None,
-                                    }]),
-                                    functions: None,
-                                },
-                                LootPoolEntry {
-                                    content: LootPoolEntryTypes::LootTable(LootTableEntry {
-                                        value: "minecraft:entities/sheep/black",
-                                    }),
-                                    weight: 1i32,
-                                    quality: 0i32,
-                                    conditions: Some(&[LootCondition::EntityProperties {
-                                        entity: "this",
-                                        expected_type: None,
-                                        is_on_fire: None,
-                                        mainhand_enchantment_tag: None,
-                                    }]),
-                                    functions: None,
-                                },
-                            ],
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: None,
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-            ]),
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.9f32, 1.3f32],
         eye_height: 1.235f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -7548,7 +4935,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 5u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityShulkerHurtClosed),
+        death_sound: Some(Sound::EntityShulkerDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -7557,30 +4945,12 @@ impl EntityType {
         fire_immune: true,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/shulker"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:shulker_shell",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: None,
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: Some(&[LootCondition::RandomChanceWithEnchantedBonus {
-                    enchantment: "minecraft:looting",
-                    chances: None,
-                }]),
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1f32, 1f32],
         eye_height: 0.5f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -7592,6 +4962,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -7600,9 +4971,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.3125f32, 0.3125f32],
         eye_height: 0.265625f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -7642,7 +5016,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 5u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntitySilverfishHurt),
+        death_sound: Some(Sound::EntitySilverfishDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -7651,13 +5026,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/silverfish"),
-            pools: None,
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.4f32, 0.3f32],
         eye_height: 0.13f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -7698,6 +5072,7 @@ impl EntityType {
         ],
         experience_reward: 5u32,
         hurt_sound: Some(Sound::EntitySkeletonHurt),
+        death_sound: Some(Sound::EntitySkeletonDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -7706,88 +5081,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/skeleton"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:arrow",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 2f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:bone",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 2f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-            ]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.6f32, 1.99f32],
         eye_height: 1.74f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -7826,8 +5125,9 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 2u32,
-        hurt_sound: None,
+        experience_reward: 3u32,
+        hurt_sound: Some(Sound::EntitySkeletonHorseHurt),
+        death_sound: Some(Sound::EntitySkeletonHorseDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -7836,49 +5136,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/skeleton_horse"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:bone",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: Some(&[
-                        LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 2f32,
-                                },
-                                add: false,
-                            },
-                            conditions: None,
-                        },
-                        LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease {
-                                enchantment: "minecraft:looting",
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 1f32,
-                                },
-                                limit: None,
-                            },
-                            conditions: None,
-                        },
-                    ]),
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.3964844f32, 1.6f32],
         eye_height: 1.52f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -7919,6 +5182,7 @@ impl EntityType {
         ],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -7927,79 +5191,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/slime"),
-            pools: Some(&[LootPool {
-                entries: &[
-                    LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:slime_ball",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: Some(&[LootCondition::Inverted(
-                            &LootCondition::DamageSourceProperties {
-                                expected_source_type: Some("minecraft:frog"),
-                                expected_direct_type: None,
-                            },
-                        )]),
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 2f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    },
-                    LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:slime_ball",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: Some(&[LootCondition::DamageSourceProperties {
-                            expected_source_type: Some("minecraft:frog"),
-                            expected_direct_type: None,
-                        }]),
-                        functions: Some(&[LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Constant { value: 1f32 },
-                                add: false,
-                            },
-                            conditions: None,
-                        }]),
-                    },
-                ],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: Some(&[LootCondition::EntityProperties {
-                    entity: "this",
-                    expected_type: None,
-                    is_on_fire: None,
-                    mainhand_enchantment_tag: None,
-                }]),
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.52f32, 0.52f32],
         eye_height: 0.325f32,
+        spawn_dimensions_scale: 4f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -8011,6 +5208,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -8019,9 +5217,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 4u32,
+        update_interval: 10u32,
+        track_deltas: true,
         dimension: [0.3125f32, 0.3125f32],
         eye_height: 0.265625f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -8061,7 +5262,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 1u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntitySnifferHurt),
+        death_sound: Some(Sound::EntitySnifferDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -8070,13 +5272,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/sniffer"),
-            pools: None,
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.9f32, 1.75f32],
         eye_height: 1.05f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -8115,7 +5316,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 0u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntitySnowGolemHurt),
+        death_sound: Some(Sound::EntitySnowGolemDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -8124,36 +5326,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/snow_golem"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:snowball",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: Some(&[LootFunction {
-                        content: LootFunctionTypes::SetCount {
-                            count: LootFunctionNumberProvider::Uniform {
-                                min: 0f32,
-                                max: 15f32,
-                            },
-                            add: false,
-                        },
-                        conditions: None,
-                    }]),
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.7f32, 1.9f32],
         eye_height: 1.7f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -8165,6 +5343,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -8173,9 +5352,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 4u32,
+        update_interval: 10u32,
+        track_deltas: true,
         dimension: [0.25f32, 0.25f32],
         eye_height: 0.2125f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -8187,6 +5369,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -8195,9 +5378,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.98f32, 0.7f32],
         eye_height: 0.595f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -8209,6 +5395,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(false),
         mob: false,
         saveable: true,
@@ -8217,9 +5404,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 4u32,
+        update_interval: 20u32,
+        track_deltas: true,
         dimension: [0.5f32, 0.5f32],
         eye_height: 0.13f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -8259,7 +5449,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 5u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntitySpiderHurt),
+        death_sound: Some(Sound::EntitySpiderDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -8268,88 +5459,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/spider"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:string",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 2f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:spider_eye",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: -1f32,
-                                        max: 1f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: Some(&[LootCondition::KilledByPlayer]),
-                    functions: None,
-                },
-            ]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.4f32, 0.9f32],
         eye_height: 0.65f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -8361,6 +5476,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -8369,9 +5485,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 4u32,
+        update_interval: 10u32,
+        track_deltas: true,
         dimension: [0.25f32, 0.25f32],
         eye_height: 0.2125f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -8383,6 +5502,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -8391,9 +5511,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -8405,6 +5528,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -8413,9 +5537,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.375f32, 0.5625f32],
         eye_height: 0.5625f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -8454,7 +5581,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 1u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntitySquidHurt),
+        death_sound: Some(Sound::EntitySquidDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -8463,49 +5591,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::WATER_CREATURE,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/squid"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:ink_sac",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: Some(&[
-                        LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 1f32,
-                                    max: 3f32,
-                                },
-                                add: false,
-                            },
-                            conditions: None,
-                        },
-                        LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease {
-                                enchantment: "minecraft:looting",
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 1f32,
-                                },
-                                limit: None,
-                            },
-                            conditions: None,
-                        },
-                    ]),
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.8f32, 0.8f32],
         eye_height: 0.4f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::InWater,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -8546,6 +5637,7 @@ impl EntityType {
         ],
         experience_reward: 5u32,
         hurt_sound: Some(Sound::EntityStrayHurt),
+        death_sound: Some(Sound::EntityStrayDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -8554,131 +5646,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/stray"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:arrow",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 2f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:bone",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 2f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:tipped_arrow",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: Some(1f32),
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::SetPotion {
-                                    id: "minecraft:slowness",
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: Some(&[LootCondition::KilledByPlayer]),
-                    functions: None,
-                },
-            ]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.6f32, 1.99f32],
         eye_height: 1.74f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -8717,8 +5690,9 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 2u32,
-        hurt_sound: None,
+        experience_reward: 3u32,
+        hurt_sound: Some(Sound::EntityStriderHurt),
+        death_sound: Some(Sound::EntityStriderDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -8727,49 +5701,12 @@ impl EntityType {
         fire_immune: true,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/strider"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:string",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: Some(&[
-                        LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 2f32,
-                                    max: 5f32,
-                                },
-                                add: false,
-                            },
-                            conditions: None,
-                        },
-                        LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease {
-                                enchantment: "minecraft:looting",
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 1f32,
-                                },
-                                limit: None,
-                            },
-                            conditions: None,
-                        },
-                    ]),
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.9f32, 1.7f32],
         eye_height: 1.445f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::InLava,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -8809,7 +5746,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 2u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntitySmallSulfurCubeHurt),
+        death_sound: Some(Sound::EntitySmallSulfurCubeDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -8818,13 +5756,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/sulfur_cube"),
-            pools: None,
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.49f32, 0.49f32],
         eye_height: 0.175f32,
+        spawn_dimensions_scale: 2f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -8864,7 +5801,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 3u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityTadpoleHurt),
+        death_sound: Some(Sound::EntityTadpoleDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -8873,13 +5811,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/tadpole"),
-            pools: None,
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.4f32, 0.3f32],
         eye_height: 0.19500001f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -8891,6 +5828,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -8899,9 +5837,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 1u32,
+        track_deltas: true,
         dimension: [0f32, 0f32],
         eye_height: 0f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -8913,6 +5854,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -8921,9 +5863,12 @@ impl EntityType {
         fire_immune: true,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 10u32,
+        update_interval: 10u32,
+        track_deltas: true,
         dimension: [0.98f32, 0.98f32],
         eye_height: 0.15f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -8935,6 +5880,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -8943,9 +5889,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.98f32, 0.7f32],
         eye_height: 0.595f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -8984,8 +5933,9 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 1u32,
-        hurt_sound: None,
+        experience_reward: 2u32,
+        hurt_sound: Some(Sound::EntityLlamaHurt),
+        death_sound: Some(Sound::EntityLlamaDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -8994,49 +5944,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/trader_llama"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:leather",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: Some(&[
-                        LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 2f32,
-                                },
-                                add: false,
-                            },
-                            conditions: None,
-                        },
-                        LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease {
-                                enchantment: "minecraft:looting",
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 1f32,
-                                },
-                                limit: None,
-                            },
-                            conditions: None,
-                        },
-                    ]),
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.9f32, 1.87f32],
         eye_height: 1.7765f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -9048,6 +5961,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(false),
         mob: false,
         saveable: true,
@@ -9056,9 +5970,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 4u32,
+        update_interval: 20u32,
+        track_deltas: true,
         dimension: [0.5f32, 0.5f32],
         eye_height: 0.13f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -9096,8 +6013,9 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 2u32,
-        hurt_sound: None,
+        experience_reward: 1u32,
+        hurt_sound: Some(Sound::EntityTropicalFishHurt),
+        death_sound: Some(Sound::EntityTropicalFishDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -9106,50 +6024,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::WATER_AMBIENT,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/tropical_fish"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:tropical_fish",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Constant { value: 1f32 },
-                                add: false,
-                            },
-                            conditions: None,
-                        }]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:bone_meal",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: None,
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: Some(&[LootCondition::RandomChance { chance: 0.05f32 }]),
-                    functions: None,
-                },
-            ]),
-        }),
+        client_tracking_range: 4u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.5f32, 0.4f32],
         eye_height: 0.26f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::InWater,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -9189,7 +6069,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 2u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityTurtleHurt),
+        death_sound: Some(Sound::EntityTurtleDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -9198,69 +6079,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/turtle"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:seagrass",
-                        }),
-                        weight: 3i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 2f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:bowl",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: None,
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: Some(&[LootCondition::DamageSourceProperties {
-                        expected_source_type: None,
-                        expected_direct_type: None,
-                    }]),
-                    functions: None,
-                },
-            ]),
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.2f32, 0.4f32],
         eye_height: 0.34f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -9300,7 +6124,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 3u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityVexHurt),
+        death_sound: Some(Sound::EntityVexDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -9309,13 +6134,12 @@ impl EntityType {
         fire_immune: true,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/vex"),
-            pools: None,
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.4f32, 0.8f32],
         eye_height: 0.51875f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -9354,7 +6178,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 0u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityVillagerHurt),
+        death_sound: Some(Sound::EntityVillagerDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -9363,13 +6188,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/villager"),
-            pools: None,
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.6f32, 1.95f32],
         eye_height: 1.62f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -9409,7 +6233,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 5u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityVindicatorHurt),
+        death_sound: Some(Sound::EntityVindicatorDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -9418,49 +6243,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/vindicator"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:emerald",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: Some(&[
-                        LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 1f32,
-                                },
-                                add: false,
-                            },
-                            conditions: None,
-                        },
-                        LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease {
-                                enchantment: "minecraft:looting",
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 1f32,
-                                },
-                                limit: None,
-                            },
-                            conditions: None,
-                        },
-                    ]),
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: Some(&[LootCondition::KilledByPlayer]),
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.6f32, 1.95f32],
         eye_height: 1.6575f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -9499,7 +6287,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 0u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityWanderingTraderHurt),
+        death_sound: Some(Sound::EntityWanderingTraderDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -9508,13 +6297,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/wandering_trader"),
-            pools: None,
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.6f32, 1.95f32],
         eye_height: 1.62f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -9554,7 +6342,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 5u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityWardenHurt),
+        death_sound: Some(Sound::EntityWardenDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -9563,27 +6352,12 @@ impl EntityType {
         fire_immune: true,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/warden"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:sculk_catalyst",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: None,
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 16u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.9f32, 2.9f32],
         eye_height: 2.4650002f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -9595,6 +6369,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -9603,9 +6378,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 4u32,
+        update_interval: 10u32,
+        track_deltas: true,
         dimension: [0.3125f32, 0.3125f32],
         eye_height: 0f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -9645,7 +6423,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 5u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityWitchHurt),
+        death_sound: Some(Sound::EntityWitchDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -9654,250 +6433,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/witch"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[
-                        LootPoolEntry {
-                            content: LootPoolEntryTypes::Item(ItemEntry {
-                                name: "minecraft:glowstone_dust",
-                            }),
-                            weight: 1i32,
-                            quality: 0i32,
-                            conditions: None,
-                            functions: Some(&[
-                                LootFunction {
-                                    content: LootFunctionTypes::SetCount {
-                                        count: LootFunctionNumberProvider::Uniform {
-                                            min: 0f32,
-                                            max: 2f32,
-                                        },
-                                        add: false,
-                                    },
-                                    conditions: None,
-                                },
-                                LootFunction {
-                                    content: LootFunctionTypes::EnchantedCountIncrease {
-                                        enchantment: "minecraft:looting",
-                                        count: LootFunctionNumberProvider::Uniform {
-                                            min: 0f32,
-                                            max: 1f32,
-                                        },
-                                        limit: None,
-                                    },
-                                    conditions: None,
-                                },
-                            ]),
-                        },
-                        LootPoolEntry {
-                            content: LootPoolEntryTypes::Item(ItemEntry {
-                                name: "minecraft:sugar",
-                            }),
-                            weight: 1i32,
-                            quality: 0i32,
-                            conditions: None,
-                            functions: Some(&[
-                                LootFunction {
-                                    content: LootFunctionTypes::SetCount {
-                                        count: LootFunctionNumberProvider::Uniform {
-                                            min: 0f32,
-                                            max: 2f32,
-                                        },
-                                        add: false,
-                                    },
-                                    conditions: None,
-                                },
-                                LootFunction {
-                                    content: LootFunctionTypes::EnchantedCountIncrease {
-                                        enchantment: "minecraft:looting",
-                                        count: LootFunctionNumberProvider::Uniform {
-                                            min: 0f32,
-                                            max: 1f32,
-                                        },
-                                        limit: None,
-                                    },
-                                    conditions: None,
-                                },
-                            ]),
-                        },
-                        LootPoolEntry {
-                            content: LootPoolEntryTypes::Item(ItemEntry {
-                                name: "minecraft:spider_eye",
-                            }),
-                            weight: 1i32,
-                            quality: 0i32,
-                            conditions: None,
-                            functions: Some(&[
-                                LootFunction {
-                                    content: LootFunctionTypes::SetCount {
-                                        count: LootFunctionNumberProvider::Uniform {
-                                            min: 0f32,
-                                            max: 2f32,
-                                        },
-                                        add: false,
-                                    },
-                                    conditions: None,
-                                },
-                                LootFunction {
-                                    content: LootFunctionTypes::EnchantedCountIncrease {
-                                        enchantment: "minecraft:looting",
-                                        count: LootFunctionNumberProvider::Uniform {
-                                            min: 0f32,
-                                            max: 1f32,
-                                        },
-                                        limit: None,
-                                    },
-                                    conditions: None,
-                                },
-                            ]),
-                        },
-                        LootPoolEntry {
-                            content: LootPoolEntryTypes::Item(ItemEntry {
-                                name: "minecraft:glass_bottle",
-                            }),
-                            weight: 1i32,
-                            quality: 0i32,
-                            conditions: None,
-                            functions: Some(&[
-                                LootFunction {
-                                    content: LootFunctionTypes::SetCount {
-                                        count: LootFunctionNumberProvider::Uniform {
-                                            min: 0f32,
-                                            max: 2f32,
-                                        },
-                                        add: false,
-                                    },
-                                    conditions: None,
-                                },
-                                LootFunction {
-                                    content: LootFunctionTypes::EnchantedCountIncrease {
-                                        enchantment: "minecraft:looting",
-                                        count: LootFunctionNumberProvider::Uniform {
-                                            min: 0f32,
-                                            max: 1f32,
-                                        },
-                                        limit: None,
-                                    },
-                                    conditions: None,
-                                },
-                            ]),
-                        },
-                        LootPoolEntry {
-                            content: LootPoolEntryTypes::Item(ItemEntry {
-                                name: "minecraft:gunpowder",
-                            }),
-                            weight: 1i32,
-                            quality: 0i32,
-                            conditions: None,
-                            functions: Some(&[
-                                LootFunction {
-                                    content: LootFunctionTypes::SetCount {
-                                        count: LootFunctionNumberProvider::Uniform {
-                                            min: 0f32,
-                                            max: 2f32,
-                                        },
-                                        add: false,
-                                    },
-                                    conditions: None,
-                                },
-                                LootFunction {
-                                    content: LootFunctionTypes::EnchantedCountIncrease {
-                                        enchantment: "minecraft:looting",
-                                        count: LootFunctionNumberProvider::Uniform {
-                                            min: 0f32,
-                                            max: 1f32,
-                                        },
-                                        limit: None,
-                                    },
-                                    conditions: None,
-                                },
-                            ]),
-                        },
-                        LootPoolEntry {
-                            content: LootPoolEntryTypes::Item(ItemEntry {
-                                name: "minecraft:stick",
-                            }),
-                            weight: 2i32,
-                            quality: 0i32,
-                            conditions: None,
-                            functions: Some(&[
-                                LootFunction {
-                                    content: LootFunctionTypes::SetCount {
-                                        count: LootFunctionNumberProvider::Uniform {
-                                            min: 0f32,
-                                            max: 2f32,
-                                        },
-                                        add: false,
-                                    },
-                                    conditions: None,
-                                },
-                                LootFunction {
-                                    content: LootFunctionTypes::EnchantedCountIncrease {
-                                        enchantment: "minecraft:looting",
-                                        count: LootFunctionNumberProvider::Uniform {
-                                            min: 0f32,
-                                            max: 1f32,
-                                        },
-                                        limit: None,
-                                    },
-                                    conditions: None,
-                                },
-                            ]),
-                        },
-                    ],
-                    rolls: LootNumberProviderTypes::Object(
-                        LootNumberProviderTypesProvider::Uniform(UniformLootNumberProvider {
-                            min: 1f32,
-                            max: 3f32,
-                        }),
-                    ),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:redstone",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 4f32,
-                                        max: 8f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-            ]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.6f32, 1.95f32],
         eye_height: 1.62f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -9938,7 +6479,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 50u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityWitherHurt),
+        death_sound: Some(Sound::EntityWitherDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -9947,13 +6489,12 @@ impl EntityType {
         fire_immune: true,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/wither"),
-            pools: None,
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: false,
         dimension: [0.9f32, 3.5f32],
         eye_height: 2.9750001f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -9994,6 +6535,7 @@ impl EntityType {
         ],
         experience_reward: 5u32,
         hurt_sound: Some(Sound::EntityWitherSkeletonHurt),
+        death_sound: Some(Sound::EntityWitherSkeletonDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -10002,109 +6544,12 @@ impl EntityType {
         fire_immune: true,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/wither_skeleton"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:coal",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: -1f32,
-                                        max: 1f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:bone",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 2f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:wither_skeleton_skull",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: None,
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: Some(&[
-                        LootCondition::KilledByPlayer,
-                        LootCondition::RandomChanceWithEnchantedBonus {
-                            enchantment: "minecraft:looting",
-                            chances: None,
-                        },
-                    ]),
-                    functions: None,
-                },
-            ]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.7f32, 2.4f32],
         eye_height: 2.1f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -10116,6 +6561,7 @@ impl EntityType {
         attributes: &[],
         experience_reward: 0u32,
         hurt_sound: None,
+        death_sound: None,
         attackable: Some(true),
         mob: false,
         saveable: true,
@@ -10124,9 +6570,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MISC,
         can_spawn_far_from_player: true,
-        loot_table: None,
+        client_tracking_range: 4u32,
+        update_interval: 10u32,
+        track_deltas: true,
         dimension: [0.3125f32, 0.3125f32],
         eye_height: 0.265625f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -10166,8 +6615,9 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 2u32,
-        hurt_sound: None,
+        experience_reward: 1u32,
+        hurt_sound: Some(Sound::EntityWolfHurt),
+        death_sound: Some(Sound::EntityWolfDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -10176,13 +6626,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::CREATURE,
         can_spawn_far_from_player: true,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/wolf"),
-            pools: None,
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.6f32, 0.85f32],
         eye_height: 0.68f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -10222,7 +6671,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 5u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityZoglinHurt),
+        death_sound: Some(Sound::EntityZoglinDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -10231,49 +6681,12 @@ impl EntityType {
         fire_immune: true,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/zoglin"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:rotten_flesh",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: Some(&[
-                        LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 1f32,
-                                    max: 3f32,
-                                },
-                                add: false,
-                            },
-                            conditions: None,
-                        },
-                        LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease {
-                                enchantment: "minecraft:looting",
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 1f32,
-                                },
-                                limit: None,
-                            },
-                            conditions: None,
-                        },
-                    ]),
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.3964844f32, 1.4f32],
         eye_height: 1.19f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -10315,6 +6728,7 @@ impl EntityType {
         ],
         experience_reward: 5u32,
         hurt_sound: Some(Sound::EntityZombieHurt),
+        death_sound: Some(Sound::EntityZombieDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -10323,173 +6737,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/zombie"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:rotten_flesh",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 2f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:red_mushroom",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: Some(&[LootCondition::EntityProperties {
-                            entity: "this",
-                            expected_type: None,
-                            is_on_fire: None,
-                            mainhand_enchantment_tag: None,
-                        }]),
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[
-                        LootPoolEntry {
-                            content: LootPoolEntryTypes::Item(ItemEntry {
-                                name: "minecraft:iron_ingot",
-                            }),
-                            weight: 1i32,
-                            quality: 0i32,
-                            conditions: None,
-                            functions: None,
-                        },
-                        LootPoolEntry {
-                            content: LootPoolEntryTypes::Item(ItemEntry {
-                                name: "minecraft:carrot",
-                            }),
-                            weight: 1i32,
-                            quality: 0i32,
-                            conditions: None,
-                            functions: None,
-                        },
-                        LootPoolEntry {
-                            content: LootPoolEntryTypes::Item(ItemEntry {
-                                name: "minecraft:potato",
-                            }),
-                            weight: 1i32,
-                            quality: 0i32,
-                            conditions: None,
-                            functions: Some(&[LootFunction {
-                                content: LootFunctionTypes::FurnaceSmelt,
-                                conditions: Some(&[LootCondition::AnyOf(&[
-                                    LootCondition::EntityProperties {
-                                        entity: "this",
-                                        expected_type: None,
-                                        is_on_fire: Some(true),
-                                        mainhand_enchantment_tag: None,
-                                    },
-                                    LootCondition::EntityProperties {
-                                        entity: "direct_attacker",
-                                        expected_type: None,
-                                        is_on_fire: None,
-                                        mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
-                                    },
-                                ])]),
-                            }]),
-                        },
-                    ],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: Some(&[
-                        LootCondition::KilledByPlayer,
-                        LootCondition::RandomChanceWithEnchantedBonus {
-                            enchantment: "minecraft:looting",
-                            chances: None,
-                        },
-                    ]),
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:music_disc_lava_chicken",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: None,
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: Some(&[
-                        LootCondition::KilledByPlayer,
-                        LootCondition::EntityProperties {
-                            entity: "this",
-                            expected_type: None,
-                            is_on_fire: None,
-                            mainhand_enchantment_tag: None,
-                        },
-                    ]),
-                    functions: None,
-                },
-            ]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.6f32, 1.95f32],
         eye_height: 1.74f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -10528,8 +6781,9 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 2u32,
-        hurt_sound: None,
+        experience_reward: 1u32,
+        hurt_sound: Some(Sound::EntityZombieHorseHurt),
+        death_sound: Some(Sound::EntityZombieHorseDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -10538,49 +6792,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/zombie_horse"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:rotten_flesh",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: Some(&[
-                        LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 2f32,
-                                    max: 3f32,
-                                },
-                                add: false,
-                            },
-                            conditions: None,
-                        },
-                        LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease {
-                                enchantment: "minecraft:looting",
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 1f32,
-                                },
-                                limit: None,
-                            },
-                            conditions: None,
-                        },
-                    ]),
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: None,
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [1.3964844f32, 1.6f32],
         eye_height: 1.52f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -10620,8 +6837,9 @@ impl EntityType {
             (Attributes::WATER_MOVEMENT_EFFICIENCY, 0f64),
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
-        experience_reward: 2u32,
-        hurt_sound: None,
+        experience_reward: 1u32,
+        hurt_sound: Some(Sound::EntityZombieNautilusHurtLand),
+        death_sound: Some(Sound::EntityZombieNautilusDeathLand),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -10630,49 +6848,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/zombie_nautilus"),
-            pools: Some(&[LootPool {
-                entries: &[LootPoolEntry {
-                    content: LootPoolEntryTypes::Item(ItemEntry {
-                        name: "minecraft:rotten_flesh",
-                    }),
-                    weight: 1i32,
-                    quality: 0i32,
-                    conditions: None,
-                    functions: Some(&[
-                        LootFunction {
-                            content: LootFunctionTypes::SetCount {
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 3f32,
-                                },
-                                add: false,
-                            },
-                            conditions: None,
-                        },
-                        LootFunction {
-                            content: LootFunctionTypes::EnchantedCountIncrease {
-                                enchantment: "minecraft:looting",
-                                count: LootFunctionNumberProvider::Uniform {
-                                    min: 0f32,
-                                    max: 1f32,
-                                },
-                                limit: None,
-                            },
-                            conditions: None,
-                        },
-                    ]),
-                }],
-                rolls: LootNumberProviderTypes::Constant(1f32),
-                bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                conditions: Some(&[LootCondition::KilledByPlayer]),
-                functions: None,
-            }]),
-        }),
+        client_tracking_range: 10u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.875f32, 0.95f32],
         eye_height: 0.2751f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::Unrestricted,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -10714,6 +6895,7 @@ impl EntityType {
         ],
         experience_reward: 5u32,
         hurt_sound: Some(Sound::EntityZombieVillagerHurt),
+        death_sound: Some(Sound::EntityZombieVillagerDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -10722,108 +6904,12 @@ impl EntityType {
         fire_immune: false,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/zombie_villager"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:rotten_flesh",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 2f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[
-                        LootPoolEntry {
-                            content: LootPoolEntryTypes::Item(ItemEntry {
-                                name: "minecraft:iron_ingot",
-                            }),
-                            weight: 1i32,
-                            quality: 0i32,
-                            conditions: None,
-                            functions: None,
-                        },
-                        LootPoolEntry {
-                            content: LootPoolEntryTypes::Item(ItemEntry {
-                                name: "minecraft:carrot",
-                            }),
-                            weight: 1i32,
-                            quality: 0i32,
-                            conditions: None,
-                            functions: None,
-                        },
-                        LootPoolEntry {
-                            content: LootPoolEntryTypes::Item(ItemEntry {
-                                name: "minecraft:potato",
-                            }),
-                            weight: 1i32,
-                            quality: 0i32,
-                            conditions: None,
-                            functions: Some(&[LootFunction {
-                                content: LootFunctionTypes::FurnaceSmelt,
-                                conditions: Some(&[LootCondition::AnyOf(&[
-                                    LootCondition::EntityProperties {
-                                        entity: "this",
-                                        expected_type: None,
-                                        is_on_fire: Some(true),
-                                        mainhand_enchantment_tag: None,
-                                    },
-                                    LootCondition::EntityProperties {
-                                        entity: "direct_attacker",
-                                        expected_type: None,
-                                        is_on_fire: None,
-                                        mainhand_enchantment_tag: Some("#minecraft:smelts_loot"),
-                                    },
-                                ])]),
-                            }]),
-                        },
-                    ],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: Some(&[
-                        LootCondition::KilledByPlayer,
-                        LootCondition::RandomChanceWithEnchantedBonus {
-                            enchantment: "minecraft:looting",
-                            chances: None,
-                        },
-                    ]),
-                    functions: None,
-                },
-            ]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.6f32, 1.95f32],
         eye_height: 1.74f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
@@ -10864,7 +6950,8 @@ impl EntityType {
             (Attributes::WAYPOINT_TRANSMIT_RANGE, 0f64),
         ],
         experience_reward: 5u32,
-        hurt_sound: None,
+        hurt_sound: Some(Sound::EntityZombifiedPiglinHurt),
+        death_sound: Some(Sound::EntityZombifiedPiglinDeath),
         attackable: Some(true),
         mob: true,
         saveable: true,
@@ -10873,115 +6960,178 @@ impl EntityType {
         fire_immune: true,
         category: &MobCategory::MONSTER,
         can_spawn_far_from_player: false,
-        loot_table: Some(LootTable {
-            r#type: LootTableType::Entity,
-            random_sequence: Some("minecraft:entities/zombified_piglin"),
-            pools: Some(&[
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:rotten_flesh",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:gold_nugget",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: Some(&[
-                            LootFunction {
-                                content: LootFunctionTypes::SetCount {
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    add: false,
-                                },
-                                conditions: None,
-                            },
-                            LootFunction {
-                                content: LootFunctionTypes::EnchantedCountIncrease {
-                                    enchantment: "minecraft:looting",
-                                    count: LootFunctionNumberProvider::Uniform {
-                                        min: 0f32,
-                                        max: 1f32,
-                                    },
-                                    limit: None,
-                                },
-                                conditions: None,
-                            },
-                        ]),
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: None,
-                    functions: None,
-                },
-                LootPool {
-                    entries: &[LootPoolEntry {
-                        content: LootPoolEntryTypes::Item(ItemEntry {
-                            name: "minecraft:gold_ingot",
-                        }),
-                        weight: 1i32,
-                        quality: 0i32,
-                        conditions: None,
-                        functions: None,
-                    }],
-                    rolls: LootNumberProviderTypes::Constant(1f32),
-                    bonus_rolls: LootNumberProviderTypes::Constant(0f32),
-                    conditions: Some(&[
-                        LootCondition::KilledByPlayer,
-                        LootCondition::RandomChanceWithEnchantedBonus {
-                            enchantment: "minecraft:looting",
-                            chances: None,
-                        },
-                    ]),
-                    functions: None,
-                },
-            ]),
-        }),
+        client_tracking_range: 8u32,
+        update_interval: 3u32,
+        track_deltas: true,
         dimension: [0.6f32, 1.95f32],
         eye_height: 1.79f32,
+        spawn_dimensions_scale: 1f32,
         spawn_restriction: SpawnRestriction {
             location: SpawnLocation::OnGround,
             heightmap: HeightMap::MotionBlockingNoLeaves,
         },
         resource_name: "zombified_piglin",
     };
+    pub const ALL: &'static [&'static Self] = &[
+        &Self::ACACIA_BOAT,
+        &Self::ACACIA_CHEST_BOAT,
+        &Self::ALLAY,
+        &Self::AREA_EFFECT_CLOUD,
+        &Self::ARMADILLO,
+        &Self::ARMOR_STAND,
+        &Self::ARROW,
+        &Self::AXOLOTL,
+        &Self::BAMBOO_CHEST_RAFT,
+        &Self::BAMBOO_RAFT,
+        &Self::BAT,
+        &Self::BEE,
+        &Self::BIRCH_BOAT,
+        &Self::BIRCH_CHEST_BOAT,
+        &Self::BLAZE,
+        &Self::BLOCK_DISPLAY,
+        &Self::BOGGED,
+        &Self::BREEZE,
+        &Self::BREEZE_WIND_CHARGE,
+        &Self::CAMEL,
+        &Self::CAMEL_HUSK,
+        &Self::CAT,
+        &Self::CAVE_SPIDER,
+        &Self::CHERRY_BOAT,
+        &Self::CHERRY_CHEST_BOAT,
+        &Self::CHEST_MINECART,
+        &Self::CHICKEN,
+        &Self::COD,
+        &Self::COMMAND_BLOCK_MINECART,
+        &Self::COPPER_GOLEM,
+        &Self::COW,
+        &Self::CREAKING,
+        &Self::CREEPER,
+        &Self::DARK_OAK_BOAT,
+        &Self::DARK_OAK_CHEST_BOAT,
+        &Self::DOLPHIN,
+        &Self::DONKEY,
+        &Self::DRAGON_FIREBALL,
+        &Self::DROWNED,
+        &Self::EGG,
+        &Self::ELDER_GUARDIAN,
+        &Self::END_CRYSTAL,
+        &Self::ENDER_DRAGON,
+        &Self::ENDER_PEARL,
+        &Self::ENDERMAN,
+        &Self::ENDERMITE,
+        &Self::EVOKER,
+        &Self::EVOKER_FANGS,
+        &Self::EXPERIENCE_BOTTLE,
+        &Self::EXPERIENCE_ORB,
+        &Self::EYE_OF_ENDER,
+        &Self::FALLING_BLOCK,
+        &Self::FIREBALL,
+        &Self::FIREWORK_ROCKET,
+        &Self::FISHING_BOBBER,
+        &Self::FOX,
+        &Self::FROG,
+        &Self::FURNACE_MINECART,
+        &Self::GHAST,
+        &Self::GIANT,
+        &Self::GLOW_ITEM_FRAME,
+        &Self::GLOW_SQUID,
+        &Self::GOAT,
+        &Self::GUARDIAN,
+        &Self::HAPPY_GHAST,
+        &Self::HOGLIN,
+        &Self::HOPPER_MINECART,
+        &Self::HORSE,
+        &Self::HUSK,
+        &Self::ILLUSIONER,
+        &Self::INTERACTION,
+        &Self::IRON_GOLEM,
+        &Self::ITEM,
+        &Self::ITEM_DISPLAY,
+        &Self::ITEM_FRAME,
+        &Self::JUNGLE_BOAT,
+        &Self::JUNGLE_CHEST_BOAT,
+        &Self::LEASH_KNOT,
+        &Self::LIGHTNING_BOLT,
+        &Self::LINGERING_POTION,
+        &Self::LLAMA,
+        &Self::LLAMA_SPIT,
+        &Self::MAGMA_CUBE,
+        &Self::MANGROVE_BOAT,
+        &Self::MANGROVE_CHEST_BOAT,
+        &Self::MANNEQUIN,
+        &Self::MARKER,
+        &Self::MINECART,
+        &Self::MOOSHROOM,
+        &Self::MULE,
+        &Self::NAUTILUS,
+        &Self::OAK_BOAT,
+        &Self::OAK_CHEST_BOAT,
+        &Self::OCELOT,
+        &Self::OMINOUS_ITEM_SPAWNER,
+        &Self::PAINTING,
+        &Self::PALE_OAK_BOAT,
+        &Self::PALE_OAK_CHEST_BOAT,
+        &Self::PANDA,
+        &Self::PARCHED,
+        &Self::PARROT,
+        &Self::PHANTOM,
+        &Self::PIG,
+        &Self::PIGLIN,
+        &Self::PIGLIN_BRUTE,
+        &Self::PILLAGER,
+        &Self::PLAYER,
+        &Self::POLAR_BEAR,
+        &Self::PUFFERFISH,
+        &Self::RABBIT,
+        &Self::RAVAGER,
+        &Self::SALMON,
+        &Self::SHEEP,
+        &Self::SHULKER,
+        &Self::SHULKER_BULLET,
+        &Self::SILVERFISH,
+        &Self::SKELETON,
+        &Self::SKELETON_HORSE,
+        &Self::SLIME,
+        &Self::SMALL_FIREBALL,
+        &Self::SNIFFER,
+        &Self::SNOW_GOLEM,
+        &Self::SNOWBALL,
+        &Self::SPAWNER_MINECART,
+        &Self::SPECTRAL_ARROW,
+        &Self::SPIDER,
+        &Self::SPLASH_POTION,
+        &Self::SPRUCE_BOAT,
+        &Self::SPRUCE_CHEST_BOAT,
+        &Self::SQUID,
+        &Self::STRAY,
+        &Self::STRIDER,
+        &Self::SULFUR_CUBE,
+        &Self::TADPOLE,
+        &Self::TEXT_DISPLAY,
+        &Self::TNT,
+        &Self::TNT_MINECART,
+        &Self::TRADER_LLAMA,
+        &Self::TRIDENT,
+        &Self::TROPICAL_FISH,
+        &Self::TURTLE,
+        &Self::VEX,
+        &Self::VILLAGER,
+        &Self::VINDICATOR,
+        &Self::WANDERING_TRADER,
+        &Self::WARDEN,
+        &Self::WIND_CHARGE,
+        &Self::WITCH,
+        &Self::WITHER,
+        &Self::WITHER_SKELETON,
+        &Self::WITHER_SKULL,
+        &Self::WOLF,
+        &Self::ZOGLIN,
+        &Self::ZOMBIE,
+        &Self::ZOMBIE_HORSE,
+        &Self::ZOMBIE_NAUTILUS,
+        &Self::ZOMBIE_VILLAGER,
+        &Self::ZOMBIFIED_PIGLIN,
+    ];
     pub const fn from_raw(id: u16) -> Option<&'static Self> {
         match id {
             0 => Some(&Self::ACACIA_BOAT),
@@ -11308,6 +7458,27 @@ impl EntityType {
             "zombified_piglin" => Some(&Self::ZOMBIFIED_PIGLIN),
             _ => None,
         }
+    }
+    #[must_use]
+    pub const fn width(&self) -> f32 {
+        self.dimension[0]
+    }
+    #[must_use]
+    pub const fn height(&self) -> f32 {
+        self.dimension[1]
+    }
+    #[must_use]
+    pub fn get_spawn_bounding_box(&self, x: f64, y: f64, z: f64) -> BoundingBox {
+        let half_width = f64::from(self.spawn_dimensions_scale * self.dimension[0] / 2.0);
+        let height = f64::from(self.spawn_dimensions_scale * self.dimension[1]);
+        BoundingBox::new(
+            Vector3::new(x - half_width, y, z - half_width),
+            Vector3::new(x + half_width, y + height, z + half_width),
+        )
+    }
+    #[must_use]
+    pub fn get_spawn_aabb(&self, x: f64, y: f64, z: f64) -> BoundingBox {
+        self.get_spawn_bounding_box(x, y, z)
     }
 }
 impl IDSetContent for EntityType {

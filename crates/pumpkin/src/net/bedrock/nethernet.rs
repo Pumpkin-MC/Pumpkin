@@ -1,10 +1,11 @@
 use std::{
     fs::OpenOptions,
+    future::Future,
     io::{ErrorKind, Write},
     net::{IpAddr, SocketAddr},
     path::Path as FsPath,
     sync::{
-        Arc,
+        Arc, Mutex as StdMutex,
         atomic::{AtomicBool, AtomicU8, Ordering},
     },
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -15,14 +16,17 @@ use axum::{
     Router,
     body::Bytes,
     extract::{ConnectInfo, DefaultBodyLimit, Path, State},
-    http::{HeaderValue, StatusCode, header::CONTENT_TYPE},
+    http::{
+        HeaderMap, HeaderValue, StatusCode, Uri,
+        header::{CONTENT_TYPE, HOST},
+    },
     response::{IntoResponse, Response},
     routing::{get, post},
 };
 use base64::{Engine, engine::general_purpose};
 use bytes::{BufMut, BytesMut};
-use pumpkin_util::jwt::Jwks;
-use pumpkin_util::p384::{
+use pumpkin_auth::jwt::Jwks;
+use pumpkin_auth::p384::{
     PublicKey,
     ecdsa::{
         Signature, SigningKey,
@@ -33,16 +37,17 @@ use pumpkin_util::p384::{
 use serde_json::{Value, json};
 use tokio::{
     net::TcpListener,
-    sync::{Mutex, RwLock, mpsc},
+    sync::{Mutex, OnceCell, RwLock, mpsc},
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, trace, warn};
 use webrtc::{
     data_channel::{DataChannel, DataChannelEvent},
     peer_connection::{
-        PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCConfigurationBuilder,
-        RTCIceCandidateInit, RTCIceConnectionState, RTCIceGatheringState, RTCIceServer,
-        RTCPeerConnectionState, RTCSessionDescription,
+        PeerConnection, PeerConnectionBuilder, PeerConnectionEventHandler, RTCConfiguration,
+        RTCConfigurationBuilder, RTCIceCandidateInit, RTCIceCandidateType, RTCIceConnectionState,
+        RTCIceGatheringState, RTCIceServer, RTCPeerConnectionState, RTCSessionDescription,
+        SettingEngine,
     },
 };
 
@@ -50,6 +55,9 @@ use crate::STOP_INTERRUPT;
 use crate::net::bedrock::status::IceSocket;
 
 pub mod discovery;
+mod ice_router;
+
+use ice_router::{IceRouter, Registration, proxy_answer, proxy_offer};
 
 const RELIABLE_CHANNEL: &str = "ReliableDataChannel";
 const UNRELIABLE_CHANNEL: &str = "UnreliableDataChannel";
@@ -61,8 +69,30 @@ const MAX_FRAGMENT_SIZE: usize = 10_000;
 #[allow(dead_code)]
 const MAX_INBOUND_MESSAGE_SIZE: usize = 262_144;
 const MAX_SDP_SIZE: usize = 1 << 20;
+const RELIABLE_FLUSH_POLL_INTERVAL: Duration = Duration::from_millis(5);
 
 type IncomingSession = (Arc<NetherNetSession>, SocketAddr);
+
+async fn wait_for_reliable_delivery<F, Fut>(
+    timeout: Duration,
+    mut outstanding_bytes: F,
+) -> Result<(), String>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<usize, String>>,
+{
+    tokio::time::timeout(timeout, async {
+        loop {
+            match outstanding_bytes().await {
+                Ok(0) => return Ok(()),
+                Ok(_) => tokio::time::sleep(RELIABLE_FLUSH_POLL_INTERVAL).await,
+                Err(error) => return Err(error),
+            }
+        }
+    })
+    .await
+    .map_err(|_| "timed out waiting for reliable messages to be acknowledged".to_string())?
+}
 
 /// Accepts Bedrock `NetherNet` connections negotiated through Mojang's HTTP endpoint.
 pub struct NetherNetListener {
@@ -76,25 +106,27 @@ struct EndpointState {
     incoming: mpsc::Sender<IncomingSession>,
     identity_key: Arc<SigningKey>,
     require_client_identity: bool,
-    oidc_verifier: Option<Arc<(String, Jwks)>>,
+    oidc_verifier: Option<Arc<OnceCell<(String, Jwks)>>>,
     stun_servers: Arc<[String]>,
-    #[allow(dead_code)]
     ice_local_addr: SocketAddr,
+    external_ip: Option<IpAddr>,
+    ice_router: Arc<IceRouter>,
 }
 
 impl NetherNetListener {
     pub async fn bind(
         address: SocketAddr,
         ice_socket: IceSocket,
-        _external_ip: Option<IpAddr>,
+        external_ip: Option<IpAddr>,
         identity_key: Arc<SigningKey>,
         require_client_identity: bool,
-        oidc_verifier: Option<Arc<(String, Jwks)>>,
+        oidc_verifier: Option<Arc<OnceCell<(String, Jwks)>>>,
         stun_servers: Vec<String>,
     ) -> std::io::Result<Self> {
         let listener = TcpListener::bind(address).await?;
         let local_addr = listener.local_addr()?;
-        let ice_local_addr = ice_socket.local_addr()?;
+        let ice_router = Arc::new(IceRouter::bind(ice_socket).await?);
+        let ice_local_addr = ice_router.public_addr();
         let (incoming, receiver) = mpsc::channel(128);
         let state = EndpointState {
             incoming,
@@ -103,6 +135,8 @@ impl NetherNetListener {
             oidc_verifier,
             stun_servers: stun_servers.into(),
             ice_local_addr,
+            external_ip,
+            ice_router,
         };
         let router = Router::new()
             .route("/v1/join", get(ping))
@@ -193,6 +227,8 @@ async fn join(
     State(state): State<EndpointState>,
     ConnectInfo(address): ConnectInfo<SocketAddr>,
     Path(network_id): Path<String>,
+    uri: Uri,
+    headers: HeaderMap,
     offer: Bytes,
 ) -> Response {
     trace!(%address, %network_id, length = offer.len(), "Received NetherNet SDP offer");
@@ -205,7 +241,19 @@ async fn join(
         return (StatusCode::BAD_REQUEST, "SDP offer must be UTF-8").into_response();
     };
 
-    match Box::pin(negotiate(&state, address, &offer, None)).await {
+    let host = headers.get(HOST).and_then(|host| host.to_str().ok());
+    let uri_authority = uri.authority().map(axum::http::uri::Authority::as_str);
+    let advertised_ip = host
+        .or(uri_authority)
+        .and_then(|host| host.parse::<axum::http::uri::Authority>().ok())
+        .and_then(|authority| authority.host().parse().ok());
+    trace!(
+        ?host,
+        ?uri_authority,
+        ?advertised_ip,
+        "Resolved NetherNet advertised address"
+    );
+    match Box::pin(negotiate_direct(&state, address, &offer, advertised_ip)).await {
         Ok((answer, _session)) => {
             trace!(%address, %network_id, length = answer.len(), "Returning NetherNet SDP answer");
             let mut response = (StatusCode::OK, answer).into_response();
@@ -227,13 +275,41 @@ async fn negotiate(
     offer: &str,
     candidates: Option<mpsc::UnboundedReceiver<RTCIceCandidateInit>>,
 ) -> Result<(String, Arc<NetherNetSession>), String> {
+    Box::pin(negotiate_inner(state, address, offer, candidates, None)).await
+}
+
+async fn negotiate_direct(
+    state: &EndpointState,
+    address: SocketAddr,
+    offer: &str,
+    advertised_ip: Option<IpAddr>,
+) -> Result<(String, Arc<NetherNetSession>), String> {
+    Box::pin(negotiate_inner(state, address, offer, None, advertised_ip)).await
+}
+
+#[expect(clippy::too_many_lines)]
+async fn negotiate_inner(
+    state: &EndpointState,
+    address: SocketAddr,
+    offer: &str,
+    candidates: Option<mpsc::UnboundedReceiver<RTCIceCandidateInit>>,
+    advertised_ip: Option<IpAddr>,
+) -> Result<(String, Arc<NetherNetSession>), String> {
     let signaling = if candidates.is_some() { "LAN" } else { "HTTP" };
+    let direct_ip = candidates.is_none();
+    let advertised_ip = state.external_ip.or(advertised_ip);
     trace!(%address, signaling, "Starting NetherNet negotiation");
-    let (offer, client_public_key) = authenticate_client_offer(
-        offer,
-        state.require_client_identity,
-        state.oidc_verifier.as_deref(),
-    )?;
+    let (offer, client_public_key) = {
+        let offer = offer.to_string();
+        let require_identity = state.require_client_identity;
+        let oidc_verifier = state.oidc_verifier.as_ref().and_then(|c| c.get()).cloned();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        rayon::spawn(move || {
+            let res = authenticate_client_offer(&offer, require_identity, oidc_verifier.as_ref());
+            let _ = tx.send(res);
+        });
+        rx.await.map_err(|_| "Task cancelled".to_string())??
+    };
     trace!(
         %address,
         signaling,
@@ -249,29 +325,21 @@ async fn negotiate(
         gathering_notify: gathering_notify.clone(),
     });
 
-    let configuration = if state.stun_servers.is_empty() {
-        RTCConfigurationBuilder::default().build()
-    } else {
-        RTCConfigurationBuilder::default()
-            .with_ice_servers(vec![RTCIceServer {
-                urls: state.stun_servers.to_vec(),
-                ..Default::default()
-            }])
-            .build()
-    };
+    let configuration = rtc_configuration(&state.stun_servers);
 
-    let ice_bind_addr = SocketAddr::new(state.ice_local_addr.ip(), 0);
-    let peer: Arc<dyn PeerConnection> = Arc::new(
-        Box::pin(
-            PeerConnectionBuilder::new()
-                .with_configuration(configuration)
-                .with_handler(handler.clone())
-                .with_udp_addrs(vec![ice_bind_addr])
-                .build(),
-        )
-        .await
-        .map_err(|error| error.to_string())?,
-    );
+    let (offer, remote_candidates) = if direct_ip {
+        proxy_offer(&offer, state.ice_router.internal_addr())
+    } else {
+        (offer, Vec::new())
+    };
+    let peer = Box::pin(build_peer(
+        state,
+        configuration,
+        handler.clone(),
+        direct_ip,
+        advertised_ip,
+    ))
+    .await?;
     let session = Arc::new(NetherNetSession::new(
         peer.clone(),
         client_public_key,
@@ -309,6 +377,21 @@ async fn negotiate(
         .await
         .ok_or_else(|| "WebRTC did not produce a local description".to_string())?;
     let answer = remove_component_two_candidates(&answer.sdp);
+    let answer = if direct_ip {
+        let (answer, ufrag, internal) = proxy_answer(
+            &answer,
+            advertised_ip,
+            state.ice_router.public_addr().port(),
+        )?;
+        session.set_ice_route(
+            state
+                .ice_router
+                .register(ufrag, internal, remote_candidates),
+        );
+        answer
+    } else {
+        answer
+    };
     trace!(
         %address,
         signaling,
@@ -316,7 +399,63 @@ async fn negotiate(
         "Gathered NetherNet ICE candidates"
     );
     trace!(%address, signaling, "Completed NetherNet negotiation");
-    Ok((add_server_identity(&answer, &state.identity_key)?, session))
+
+    let answer = {
+        let identity_key = state.identity_key.clone();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        rayon::spawn(move || {
+            let res = add_server_identity(&answer, &identity_key);
+            let _ = tx.send(res);
+        });
+        rx.await.map_err(|_| "Task cancelled".to_string())??
+    };
+    Ok((answer, session))
+}
+
+async fn build_peer(
+    state: &EndpointState,
+    configuration: RTCConfiguration,
+    handler: Arc<NetherNetEventHandler>,
+    direct_ip: bool,
+    advertised_ip: Option<IpAddr>,
+) -> Result<Arc<dyn PeerConnection>, String> {
+    let ice_bind_addr = if direct_ip {
+        // Direct connections are relayed through the router's loopback socket.
+        // Binding every interface would make the inner ICE source differ from
+        // the loopback route registered after SDP generation.
+        SocketAddr::new(state.ice_router.internal_addr().ip(), 0)
+    } else {
+        SocketAddr::new(state.ice_local_addr.ip(), 0)
+    };
+    let mut setting_engine = SettingEngine::default();
+    if direct_ip && let Some(external_ip) = advertised_ip {
+        setting_engine.set_nat_1to1_ips(vec![external_ip.to_string()], RTCIceCandidateType::Host);
+    }
+    Ok(Arc::new(
+        Box::pin(
+            PeerConnectionBuilder::new()
+                .with_configuration(configuration)
+                .with_setting_engine(setting_engine)
+                .with_handler(handler)
+                .with_udp_addrs(vec![ice_bind_addr])
+                .build(),
+        )
+        .await
+        .map_err(|error| error.to_string())?,
+    ))
+}
+
+fn rtc_configuration(stun_servers: &[String]) -> RTCConfiguration {
+    if stun_servers.is_empty() {
+        RTCConfigurationBuilder::default().build()
+    } else {
+        RTCConfigurationBuilder::default()
+            .with_ice_servers(vec![RTCIceServer {
+                urls: stun_servers.to_vec(),
+                ..Default::default()
+            }])
+            .build()
+    }
 }
 
 struct NetherNetEventHandler {
@@ -426,6 +565,7 @@ pub struct NetherNetSession {
     client_public_key: Option<PublicKey>,
     address: SocketAddr,
     incoming: mpsc::Sender<IncomingSession>,
+    ice_route: StdMutex<Option<Registration>>,
 }
 
 impl NetherNetSession {
@@ -449,6 +589,16 @@ impl NetherNetSession {
             client_public_key,
             address,
             incoming,
+            ice_route: StdMutex::new(None),
+        }
+    }
+
+    fn set_ice_route(&self, route: Registration) {
+        if !self.closed.is_cancelled() {
+            *self
+                .ice_route
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(route);
         }
     }
 
@@ -629,6 +779,31 @@ impl NetherNetSession {
         Ok(())
     }
 
+    /// Waits for every reliable message handed to SCTP to be acknowledged by the peer.
+    ///
+    /// [`DataChannel::send`] only queues data, so closing the peer immediately afterwards can
+    /// discard the final message before it reaches the client. This is intended for terminal
+    /// protocol messages where delivery matters more than keeping the connection alive.
+    pub(super) async fn flush_reliable(&self, timeout: Duration) -> Result<(), String> {
+        let channel = self
+            .reliable
+            .read()
+            .await
+            .clone()
+            .ok_or_else(|| "reliable channel is not open".to_string())?;
+
+        wait_for_reliable_delivery(timeout, || {
+            let channel = channel.clone();
+            async move {
+                channel
+                    .outstanding_bytes()
+                    .await
+                    .map_err(|error| error.to_string())
+            }
+        })
+        .await
+    }
+
     pub const fn client_public_key(&self) -> Option<&PublicKey> {
         self.client_public_key.as_ref()
     }
@@ -641,6 +816,10 @@ impl NetherNetSession {
         if !self.closed.is_cancelled() {
             trace!(address = %self.address, "NetherNet session closed");
             self.closed.cancel();
+            self.ice_route
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .take();
         }
     }
 
@@ -649,6 +828,10 @@ impl NetherNetSession {
             return;
         }
         self.closed.cancel();
+        self.ice_route
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
         let _ = self.peer.close().await;
     }
 }
@@ -711,12 +894,12 @@ fn verify_and_strip_identity(
         {
             return Err("invalid identity provider".to_string());
         }
-        pumpkin_util::jwt::verify_oidc_token(token, issuer, keys)
+        pumpkin_auth::jwt::verify_oidc_token(token, issuer, keys)
             .map_err(|error| format!("invalid GameServerToken: {error}"))?;
     } else {
         validate_token_expiration(token)?;
     }
-    let public_key = pumpkin_util::jwt::extract_cpk_from_token(token)
+    let public_key = pumpkin_auth::jwt::extract_cpk_from_token(token)
         .map_err(|error| format!("invalid identity public key: {error}"))?;
     let fingerprints = assertion["fingerprints"]
         .as_str()
@@ -793,7 +976,7 @@ fn verify_fingerprint_assertion(
         .map_err(|error| format!("invalid fingerprint signature: {error}"))?;
     let signature = Signature::from_slice(&signature)
         .map_err(|error| format!("invalid ES384 signature: {error}"))?;
-    let verifying_key = pumpkin_util::p384::ecdsa::VerifyingKey::from(public_key);
+    let verifying_key = pumpkin_auth::p384::ecdsa::VerifyingKey::from(public_key);
     verifying_key
         .verify(format!("{header}.{payload_b64}").as_bytes(), &signature)
         .map_err(|_| "fingerprint signature verification failed".to_string())
@@ -890,9 +1073,7 @@ fn unix_time() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Duration;
-    use tokio::net::UdpSocket;
-    use webrtc::data_channel::RTCDataChannelInit;
+    use std::sync::atomic::AtomicUsize;
 
     #[test]
     fn fragments_round_trip() {
@@ -918,6 +1099,32 @@ mod tests {
         assert!(fragments.push(2, b"one").unwrap().is_none());
         assert!(fragments.push(0, b"three").is_err());
         assert_eq!(fragments.push(0, b"complete").unwrap().unwrap(), "complete");
+    }
+
+    #[tokio::test]
+    async fn reliable_delivery_waits_until_no_bytes_are_outstanding() {
+        let polls = Arc::new(AtomicUsize::new(0));
+        let result = wait_for_reliable_delivery(Duration::from_secs(1), || {
+            let polls = polls.clone();
+            async move {
+                let poll = polls.fetch_add(1, Ordering::Relaxed);
+                Ok(usize::from(poll == 0))
+            }
+        })
+        .await;
+
+        assert!(result.is_ok());
+        assert_eq!(polls.load(Ordering::Relaxed), 2);
+    }
+
+    #[tokio::test]
+    async fn reliable_delivery_wait_is_bounded() {
+        let result = wait_for_reliable_delivery(Duration::from_millis(1), || async { Ok(1) }).await;
+
+        assert_eq!(
+            result.unwrap_err(),
+            "timed out waiting for reliable messages to be acknowledged"
+        );
     }
 
     #[test]
@@ -1008,141 +1215,5 @@ mod tests {
     fn online_mode_rejects_an_offer_without_identity() {
         let error = authenticate_client_offer("v=0\r\n", true, None).unwrap_err();
         assert_eq!(error, "SDP offer is missing its identity assertion");
-    }
-
-    async fn receive_packet(session: &NetherNetSession) -> Bytes {
-        tokio::time::timeout(Duration::from_secs(5), session.recv())
-            .await
-            .unwrap()
-            .unwrap()
-    }
-
-    async fn receive_bytes(receiver: &mut mpsc::Receiver<Bytes>) -> Bytes {
-        tokio::time::timeout(Duration::from_secs(5), receiver.recv())
-            .await
-            .unwrap()
-            .unwrap()
-    }
-
-    struct ClientHandler {
-        notify: Arc<tokio::sync::Notify>,
-    }
-    #[async_trait]
-    impl PeerConnectionEventHandler for ClientHandler {
-        async fn on_ice_gathering_state_change(&self, state: RTCIceGatheringState) {
-            if state == RTCIceGatheringState::Complete {
-                self.notify.notify_waiters();
-            }
-        }
-    }
-
-    #[tokio::test]
-    #[allow(clippy::too_many_lines)]
-    async fn negotiates_channels_and_receives_a_packet() {
-        let _ = tracing_subscriber::fmt().with_test_writer().try_init();
-        let client_notify = Arc::new(tokio::sync::Notify::new());
-        let client: Arc<dyn PeerConnection> = Arc::new(
-            Box::pin(
-                PeerConnectionBuilder::new()
-                    .with_configuration(RTCConfigurationBuilder::default().build())
-                    .with_handler(Arc::new(ClientHandler {
-                        notify: client_notify.clone(),
-                    }))
-                    .with_udp_addrs(vec!["127.0.0.1:0"])
-                    .build(),
-            )
-            .await
-            .unwrap(),
-        );
-        let reliable = client
-            .create_data_channel(
-                RELIABLE_CHANNEL,
-                Some(RTCDataChannelInit {
-                    ordered: true,
-                    ..Default::default()
-                }),
-            )
-            .await
-            .unwrap();
-        let unreliable = client
-            .create_data_channel(
-                UNRELIABLE_CHANNEL,
-                Some(RTCDataChannelInit {
-                    ordered: false,
-                    max_retransmits: Some(0),
-                    ..Default::default()
-                }),
-            )
-            .await
-            .unwrap();
-        let (unreliable_sender, mut unreliable_receiver) = mpsc::channel(1);
-        let unreliable_poller = unreliable.clone();
-        tokio::spawn(async move {
-            while let Some(event) = unreliable_poller.poll().await {
-                if let DataChannelEvent::OnMessage(msg) = event {
-                    let _ = unreliable_sender.send(msg.data.into()).await;
-                }
-            }
-        });
-        let offer = client.create_offer(None).await.unwrap();
-        client.set_local_description(offer).await.unwrap();
-        let _ = tokio::time::timeout(Duration::from_secs(2), client_notify.notified()).await;
-        let offer = client.local_description().await.unwrap();
-        let client_key = SigningKey::from_slice(&[8; 48]).unwrap();
-        let offer = add_server_identity(&offer.sdp, &client_key).unwrap();
-        let (incoming, mut receiver) = mpsc::channel(1);
-        let server_key = Arc::new(SigningKey::from_slice(&[9; 48]).unwrap());
-        let ice_socket = UdpSocket::bind("0.0.0.0:0").await.unwrap();
-        let ice_local_addr = ice_socket.local_addr().unwrap();
-        let state = EndpointState {
-            incoming,
-            identity_key: server_key.clone(),
-            require_client_identity: true,
-            oidc_verifier: None,
-            stun_servers: Arc::from([]),
-            ice_local_addr,
-        };
-        let (answer, _server_session) =
-            negotiate(&state, "127.0.0.1:19132".parse().unwrap(), &offer, None)
-                .await
-                .unwrap();
-        let (answer, public_key) = verify_and_strip_identity(&answer, None).unwrap();
-        assert_eq!(public_key, PublicKey::from(server_key.verifying_key()));
-        client
-            .set_remote_description(RTCSessionDescription::answer(answer).unwrap())
-            .await
-            .unwrap();
-        let reliable_poller = reliable.clone();
-        tokio::spawn(async move { while reliable_poller.poll().await.is_some() {} });
-        let Ok(Some((session, _))) =
-            tokio::time::timeout(Duration::from_secs(5), receiver.recv()).await
-        else {
-            panic!("connection did not open");
-        };
-        reliable
-            .send(BytesMut::from(&b"\0hello"[..]))
-            .await
-            .unwrap();
-        let packet = receive_packet(&session).await;
-        assert_eq!(packet, b"hello".as_slice());
-        let large_packet = vec![42; 100_000];
-        let chunks = large_packet.chunks(10_000).collect::<Vec<_>>();
-        let chunk_count = chunks.len();
-        for (index, chunk) in chunks.into_iter().enumerate() {
-            let mut segment = BytesMut::with_capacity(chunk.len() + 1);
-            segment.put_u8((chunk_count - index - 1) as u8);
-            segment.extend_from_slice(chunk);
-            reliable.send(segment).await.unwrap();
-        }
-        let packet = receive_packet(&session).await;
-        assert_eq!(packet, large_packet);
-        session
-            .send_unreliable(Bytes::from_static(b"world"))
-            .await
-            .unwrap();
-        let packet = receive_bytes(&mut unreliable_receiver).await;
-        assert_eq!(packet, b"\0world".as_slice());
-        session.close().await;
-        client.close().await.unwrap();
     }
 }

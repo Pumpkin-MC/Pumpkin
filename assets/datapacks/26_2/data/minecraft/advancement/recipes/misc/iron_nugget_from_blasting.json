@@ -1,0 +1,197 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_chainmail_boots": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:chainmail_boots"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_chainmail_chestplate": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:chainmail_chestplate"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_chainmail_helmet": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:chainmail_helmet"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_chainmail_leggings": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:chainmail_leggings"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_iron_axe": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:iron_axe"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_iron_boots": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:iron_boots"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_iron_chestplate": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:iron_chestplate"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_iron_helmet": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:iron_helmet"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_iron_hoe": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:iron_hoe"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_iron_horse_armor": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:iron_horse_armor"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_iron_leggings": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:iron_leggings"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_iron_nautilus_armor": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:iron_nautilus_armor"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_iron_pickaxe": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:iron_pickaxe"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_iron_shovel": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:iron_shovel"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_iron_spear": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:iron_spear"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_iron_sword": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:iron_sword"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:iron_nugget_from_blasting"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_iron_pickaxe",
+      "has_iron_shovel",
+      "has_iron_axe",
+      "has_iron_hoe",
+      "has_iron_sword",
+      "has_iron_spear",
+      "has_iron_helmet",
+      "has_iron_chestplate",
+      "has_iron_leggings",
+      "has_iron_boots",
+      "has_iron_horse_armor",
+      "has_chainmail_helmet",
+      "has_chainmail_chestplate",
+      "has_chainmail_leggings",
+      "has_chainmail_boots",
+      "has_iron_nautilus_armor"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:iron_nugget_from_blasting"
+    ]
+  }
+}

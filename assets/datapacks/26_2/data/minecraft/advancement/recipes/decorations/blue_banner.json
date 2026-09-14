@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_blue_wool": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:blue_wool"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:blue_banner"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_blue_wool"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:blue_banner"
+    ]
+  }
+}

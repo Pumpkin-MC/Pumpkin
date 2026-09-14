@@ -11,7 +11,7 @@ use crate::world::World;
 
 use super::{HorizontalFacingRailExt, Rail, RailElevation, RailProperties, StraightRailShapeExt};
 
-pub(super) async fn rail_placement_is_valid(world: &World, block: &Block, pos: &BlockPos) -> bool {
+pub(super) fn rail_placement_is_valid(world: &World, block: &Block, pos: &BlockPos) -> bool {
     if !can_place_rail_at(world, pos) {
         return false;
     }
@@ -40,7 +40,7 @@ pub(super) fn can_place_rail_at(world: &dyn BlockAccessor, pos: &BlockPos) -> bo
     state.is_side_solid(BlockDirection::Up)
 }
 
-pub(super) async fn compute_placed_rail_shape(
+pub(super) fn compute_placed_rail_shape(
     world: &World,
     block_pos: &BlockPos,
     player_facing: HorizontalFacing,
@@ -107,7 +107,7 @@ pub(super) async fn compute_placed_rail_shape(
     player_facing.to_rail_shape_flat()
 }
 
-pub(super) async fn update_flanking_rails_shape(
+pub(super) fn update_flanking_rails_shape(
     world: &Arc<World>,
     block: &Block,
     state_id: BlockStateId,
@@ -126,13 +126,11 @@ pub(super) async fn update_flanking_rails_shape(
 
         if new_shape != flanking_rail.properties.shape() {
             flanking_rail.properties.set_shape(new_shape);
-            world
-                .set_block_state(
-                    &flanking_rail.position,
-                    flanking_rail.properties.to_state_id(flanking_rail.block),
-                    BlockFlags::NOTIFY_ALL,
-                )
-                .await;
+            world.set_block_state(
+                &flanking_rail.position,
+                flanking_rail.properties.to_state_id(flanking_rail.block),
+                BlockFlags::NOTIFY_ALL,
+            );
         }
     }
 }

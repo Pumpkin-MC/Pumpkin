@@ -1,10 +1,10 @@
-use pumpkin_data::packet::clientbound::PLAY_START_CONFIGURATION;
+use pumpkin_data::packet::clientbound::play::START_CONFIGURATION;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
 use pumpkin_util::version::JavaMinecraftVersion;
 
-#[java_packet(PLAY_START_CONFIGURATION)]
+#[java_packet(START_CONFIGURATION)]
 pub struct CStartConfiguration;
 
 impl ClientPacket for CStartConfiguration {

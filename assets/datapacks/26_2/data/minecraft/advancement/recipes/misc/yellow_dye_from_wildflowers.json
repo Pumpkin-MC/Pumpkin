@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:yellow_dye_from_wildflowers"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    },
+    "has_wildflowers": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:wildflowers"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_wildflowers"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:yellow_dye_from_wildflowers"
+    ]
+  }
+}

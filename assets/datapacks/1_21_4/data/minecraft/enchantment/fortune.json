@@ -1,0 +1,21 @@
+{
+  "description": {
+    "translate": "enchantment.minecraft.fortune"
+  },
+  "min_cost": {
+    "base": 15,
+    "per_level_above_first": 9
+  },
+  "max_cost": {
+    "base": 65,
+    "per_level_above_first": 9
+  },
+  "anvil_cost": 4,
+  "slots": [
+    "mainhand"
+  ],
+  "supported_items": "#minecraft:enchantable/mining_loot",
+  "weight": 2,
+  "max_level": 3,
+  "exclusive_set": "#minecraft:exclusive_set/mining"
+}

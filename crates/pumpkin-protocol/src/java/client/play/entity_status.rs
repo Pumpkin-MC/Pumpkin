@@ -1,4 +1,4 @@
-use pumpkin_data::packet::clientbound::PLAY_ENTITY_EVENT;
+use pumpkin_data::packet::clientbound::play::ENTITY_EVENT;
 use pumpkin_macros::java_packet;
 
 use crate::ClientPacket;
@@ -11,7 +11,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 /// warrant a complex packet of their own. It primarily handles visual
 /// and logical state triggers, such as tool breaking, totem usage,
 /// or sheep shearing.
-#[java_packet(PLAY_ENTITY_EVENT)]
+#[java_packet(ENTITY_EVENT)]
 pub struct CEntityStatus {
     /// The Entity ID of the entity affected by the status change.
     pub entity_id: i32,

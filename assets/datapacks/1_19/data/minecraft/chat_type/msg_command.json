@@ -1,0 +1,26 @@
+{
+  "chat": {
+    "decoration": {
+      "translation_key": "commands.message.display.incoming",
+      "style": {
+        "color": "gray",
+        "italic": 1
+      },
+      "parameters": [
+        "sender",
+        "content"
+      ]
+    }
+  },
+  "narration": {
+    "priority": "chat",
+    "decoration": {
+      "translation_key": "chat.type.text.narrate",
+      "style": {},
+      "parameters": [
+        "sender",
+        "content"
+      ]
+    }
+  }
+}

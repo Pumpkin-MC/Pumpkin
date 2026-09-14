@@ -31,8 +31,7 @@ impl BendingTrunkPlacer {
         below_trunk_provider: &BlockStateProvider,
         trunk_block: &BlockState,
     ) -> (Vec<TreeNode>, Vec<BlockPos>) {
-        let horizontal_directions = BlockDirection::horizontal();
-        let direction = horizontal_directions[random.next_bounded_i32(4) as usize];
+        let direction = BlockDirection::random_horizontal(random);
         let log_height = height as i32 - 1;
         let mut pos = start_pos;
 

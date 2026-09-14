@@ -1,0 +1,28 @@
+{
+  "parent": "minecraft:end/kill_dragon",
+  "criteria": {
+    "entered_end_gateway": {
+      "conditions": {
+        "block": "minecraft:end_gateway"
+      },
+      "trigger": "minecraft:enter_block"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.end.enter_end_gateway.description"
+    },
+    "icon": {
+      "id": "minecraft:ender_pearl"
+    },
+    "title": {
+      "translate": "advancements.end.enter_end_gateway.title"
+    }
+  },
+  "requirements": [
+    [
+      "entered_end_gateway"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

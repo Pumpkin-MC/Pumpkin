@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:smelting",
+  "category": "blocks",
+  "experience": 0.1,
+  "ingredient": "#minecraft:smelts_to_glass",
+  "result": {
+    "id": "minecraft:glass"
+  }
+}

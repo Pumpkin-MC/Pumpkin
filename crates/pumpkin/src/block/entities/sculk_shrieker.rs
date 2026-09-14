@@ -1,8 +1,7 @@
 use super::BlockEntity;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
-use std::pin::Pin;
-use tokio::sync::Mutex;
+use std::sync::Mutex;
 
 pub struct SculkShriekerBlockEntity {
     pub position: BlockPos,
@@ -29,13 +28,10 @@ impl BlockEntity for SculkShriekerBlockEntity {
         }
     }
 
-    fn write_nbt<'a>(
-        &'a self,
-        nbt: &'a mut NbtCompound,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            nbt.put_int("warning_level", *self.warning_level.lock().await);
-        })
+    fn write_nbt(&self, nbt: &mut NbtCompound) {
+        if let Ok(warning_level) = self.warning_level.lock() {
+            nbt.put_int("warning_level", *warning_level);
+        }
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
@@ -52,7 +48,7 @@ impl BlockEntity for SculkShriekerBlockEntity {
 impl SculkShriekerBlockEntity {
     pub const ID: &'static str = "minecraft:sculk_shrieker";
     #[must_use]
-    pub fn new(position: BlockPos) -> Self {
+    pub const fn new(position: BlockPos) -> Self {
         Self {
             position,
             warning_level: Mutex::new(0),

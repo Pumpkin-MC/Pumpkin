@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:blasting",
+  "experience": 1.0,
+  "group": "diamond",
+  "ingredient": "minecraft:deepslate_diamond_ore",
+  "result": {
+    "id": "minecraft:diamond"
+  }
+}

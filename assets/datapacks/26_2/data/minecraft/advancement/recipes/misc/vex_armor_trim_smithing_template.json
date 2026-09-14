@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:vex_armor_trim_smithing_template"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    },
+    "has_vex_armor_trim_smithing_template": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:vex_armor_trim_smithing_template"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_vex_armor_trim_smithing_template"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:vex_armor_trim_smithing_template"
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "values": [
+    "minecraft:iron_golem",
+    "minecraft:snow_golem",
+    "minecraft:shulker",
+    "minecraft:allay",
+    "minecraft:bat",
+    "minecraft:bee",
+    "minecraft:blaze",
+    "minecraft:cat",
+    "minecraft:chicken",
+    "minecraft:ghast",
+    "minecraft:phantom",
+    "minecraft:magma_cube",
+    "minecraft:ocelot",
+    "minecraft:parrot",
+    "minecraft:wither"
+  ]
+}

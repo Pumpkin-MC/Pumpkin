@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_transmute",
+  "add_material_count_to_result": true,
+  "group": "map_cloning",
+  "input": "minecraft:filled_map",
+  "material": "minecraft:map",
+  "material_count": {
+    "max": 8,
+    "min": 1
+  },
+  "result": {
+    "id": "minecraft:filled_map"
+  }
+}

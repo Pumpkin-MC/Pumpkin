@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_lingering_potion": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:lingering_potion"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "minecraft:tipped_arrow"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_lingering_potion"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:tipped_arrow"
+    ]
+  }
+}
