@@ -91,7 +91,7 @@ impl RevengeGoal {
             if other_mob.get_mob_entity().get_target().is_some() {
                 continue;
             }
-            if mob.is_tamed() && mob.get_owner_uuid() != other_mob.get_owner_uuid() {
+            if mob.as_tamable().is_some() && mob.get_owner_uuid() != other_mob.get_owner_uuid() {
                 continue;
             }
             if other.is_allied_to(attacker.as_ref()) {
