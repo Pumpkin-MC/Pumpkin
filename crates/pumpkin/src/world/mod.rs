@@ -4958,18 +4958,31 @@ impl World {
             .collect()
     }
 
+    fn closest_entity_matching<T: EntityBase + ?Sized>(
+        entities: &[Arc<T>],
+        pos: Vector3<f64>,
+        radius: f64,
+        predicate: impl Fn(&Entity) -> bool,
+    ) -> Option<Arc<T>> {
+        let radius_squared = radius.powi(2);
+        let mut closest = None;
+        let mut closest_distance = f64::INFINITY;
+        for entity in entities {
+            let base = entity.get_entity();
+            if !predicate(base) {
+                continue;
+            }
+            let distance = base.pos.load().squared_distance_to_vec(&pos);
+            if distance <= radius_squared && (closest.is_none() || distance < closest_distance) {
+                closest = Some(entity);
+                closest_distance = distance;
+            }
+        }
+        closest.cloned()
+    }
+
     pub fn get_closest_player(&self, pos: Vector3<f64>, radius: f64) -> Option<Arc<Player>> {
-        let players = self.get_nearby_players(pos, radius);
-        players
-            .iter()
-            .min_by(|a, b| {
-                a.get_entity()
-                    .pos
-                    .load()
-                    .squared_distance_to_vec(&pos)
-                    .total_cmp(&b.get_entity().pos.load().squared_distance_to_vec(&pos))
-            })
-            .cloned()
+        Self::closest_entity_matching(&self.players.load(), pos, radius, |_| true)
     }
 
     /// Gets the closest entity to a position, with optional filtering by entity type.
@@ -4989,33 +5002,16 @@ impl World {
         radius: f64,
         entity_types: Option<&[&'static EntityType]>,
     ) -> Option<Arc<dyn EntityBase>> {
-        // Get regular entities
-        let entities = self.get_nearby_entities(pos, radius);
-
-        // Filter by entity type if specified
-        let filtered_entities = if let Some(types) = entity_types {
-            entities
-                .into_iter()
-                .filter(|(_, entity)| {
-                    let entity_type = entity.get_entity().entity_type;
-                    types.contains(&entity_type)
+        let entities = self.entities.load();
+        // Choose the predicate once so unfiltered scans have no per-entity type check.
+        entity_types.map_or_else(
+            || Self::closest_entity_matching(&entities, pos, radius, |_| true),
+            |types| {
+                Self::closest_entity_matching(&entities, pos, radius, |entity| {
+                    types.contains(&entity.entity_type)
                 })
-                .collect::<HashMap<_, _>>()
-        } else {
-            entities
-        };
-
-        // Find the closest entity
-        filtered_entities
-            .iter()
-            .min_by(|a, b| {
-                a.1.get_entity()
-                    .pos
-                    .load()
-                    .squared_distance_to_vec(&pos)
-                    .total_cmp(&b.1.get_entity().pos.load().squared_distance_to_vec(&pos))
-            })
-            .map(|p| p.1.clone())
+            },
+        )
     }
 
     /// Adds entities to the provided [`Vec`] that satisfy a particular condition and are
