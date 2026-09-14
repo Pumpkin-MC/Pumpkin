@@ -86,12 +86,7 @@ impl Goal for AvoidEntityGoal {
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
-        let navigator = mob
-            .get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        !navigator.is_idle()
+        !mob.is_navigator_idle()
     }
 
     fn start(&mut self, mob: &dyn Mob) {

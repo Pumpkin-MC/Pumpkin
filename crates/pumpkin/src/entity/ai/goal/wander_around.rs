@@ -72,12 +72,7 @@ impl Goal for WanderAroundGoal {
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
-        let idle = mob
-            .get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_idle();
+        let idle = mob.is_navigator_idle();
         !idle && !mob.get_entity().has_passengers()
     }
 

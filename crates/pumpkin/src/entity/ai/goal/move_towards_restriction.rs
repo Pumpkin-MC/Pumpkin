@@ -57,11 +57,7 @@ impl Goal for MoveTowardsRestrictionGoal {
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
-        !mob.get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_idle()
+        !mob.is_navigator_idle()
     }
 
     fn start(&mut self, mob: &dyn Mob) {

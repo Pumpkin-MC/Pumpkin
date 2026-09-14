@@ -77,12 +77,7 @@ impl Goal for MeleeAttackGoal {
         }
 
         if !self.pause_when_mob_idle {
-            let is_idle = mob
-                .get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .is_idle();
+            let is_idle = mob.is_navigator_idle();
             return !is_idle;
         }
 

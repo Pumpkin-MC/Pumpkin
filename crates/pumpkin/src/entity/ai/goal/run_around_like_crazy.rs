@@ -42,12 +42,7 @@ impl Goal for RunAroundLikeCrazyGoal {
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
-        let is_idle = mob
-            .get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_idle();
+        let is_idle = mob.is_navigator_idle();
 
         !mob.is_tamed() && !is_idle && mob.get_entity().has_passengers()
     }

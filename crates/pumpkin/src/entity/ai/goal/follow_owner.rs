@@ -151,14 +151,7 @@ impl Goal for FollowOwnerGoal {
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
-        let is_idle = {
-            let navigator = mob
-                .get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            navigator.is_idle()
-        };
+        let is_idle = mob.is_navigator_idle();
         if is_idle {
             return false;
         }

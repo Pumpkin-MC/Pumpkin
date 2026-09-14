@@ -157,12 +157,7 @@ impl Goal for BowAttackGoal {
     }
 
     fn should_continue(&mut self, mob: &dyn Mob) -> bool {
-        let navigating = !mob
-            .get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_idle();
+        let navigating = !mob.is_navigator_idle();
         (self.can_start(mob) || navigating) && Self::is_holding_bow(mob)
     }
 

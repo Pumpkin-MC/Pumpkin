@@ -61,11 +61,7 @@ impl Goal for FollowMobGoal {
             return false;
         }
 
-        let is_idle = mob
-            .get_mob_entity()
-            .navigator
-            .try_lock()
-            .is_ok_and(|nav| nav.is_idle());
+        let is_idle = mob.is_navigator_idle();
 
         let mob_pos = mob.get_entity().pos.load();
         let follow_pos = following.get_entity().pos.load();

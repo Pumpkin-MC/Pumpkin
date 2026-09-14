@@ -59,11 +59,7 @@ impl Goal for OcelotAttackGoal {
             return false;
         }
 
-        let is_idle = mob
-            .get_mob_entity()
-            .navigator
-            .try_lock()
-            .is_ok_and(|nav| nav.is_idle());
+        let is_idle = mob.is_navigator_idle();
 
         !is_idle || mob.get_mob_entity().get_target().is_some()
     }

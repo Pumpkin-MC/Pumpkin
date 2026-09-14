@@ -81,12 +81,7 @@ impl Goal for MoveTowardsTargetGoal {
             return false;
         }
 
-        let navigator = mob
-            .get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if navigator.is_idle() {
+        if mob.is_navigator_idle() {
             return false;
         }
 

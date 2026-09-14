@@ -133,12 +133,7 @@ impl Goal for PathfindToRaidGoal {
         }
 
         // Pathfind towards raid center if idle
-        let is_idle = mob
-            .get_mob_entity()
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_idle();
+        let is_idle = mob.is_navigator_idle();
 
         if is_idle {
             let raid_center = Vector3::new(

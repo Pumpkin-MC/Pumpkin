@@ -659,6 +659,15 @@ pub trait Mob: EntityBase + Send + Sync {
         rand::rng()
     }
 
+    /// Takes the navigation lock, so callers must not already hold it.
+    fn is_navigator_idle(&self) -> bool {
+        self.get_mob_entity()
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_idle()
+    }
+
     fn has_line_of_sight(&self, target: &crate::entity::Entity) -> bool {
         let mob_entity = self.get_mob_entity();
         mob_entity
