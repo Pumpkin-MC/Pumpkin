@@ -635,6 +635,7 @@ mod tests {
                 random: RandomGenerator::Legacy(LegacyRand::from_seed(seed)),
                 sea_level: 63,
                 min_y: -64,
+                height: 384,
                 height_sampler: Some(&mut sampler),
                 structure_key: None,
             })

@@ -31,8 +31,7 @@ pub mod time;
 pub mod villager_poi;
 
 use crate::block::RandomTickArgs;
-use crate::world::chunker::get_view_distance;
-use crate::world::chunker::is_within_view_distance;
+use crate::world::chunker::is_within_chebyshev_distance;
 use crate::{block::BlockEvent, entity::item::ItemEntity};
 use crate::{
     block::{
@@ -87,6 +86,7 @@ use pumpkin_data::{
 };
 use pumpkin_inventory::crafting::recipe_provider::RecipeProvider;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
+use pumpkin_inventory::{Clearable, Inventory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::bedrock::client::set_actor_data::{CSetActorData, PropertySyncData};
 use pumpkin_protocol::bedrock::client::start_game::{CStartGame, ServerTelemetryData};
@@ -148,12 +148,10 @@ use pumpkin_util::{
     math::{get_section_cord, position::chunk_section_from_pos, vector2::Vector2},
     random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
-use pumpkin_world::inventory::Clearable;
 use pumpkin_world::world::{GetBlockError, WorldPortalExt};
 use pumpkin_world::{
     CURRENT_BEDROCK_MC_VERSION, biome,
     chunk::{io::Dirtiable, palette::bedrock_water_state},
-    inventory::Inventory,
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
 use pumpkin_world::{level::Level, tick::TickPriority};
@@ -448,8 +446,11 @@ impl World {
         let mut newly_active = Vec::new();
         let mut current_players = FxHashSet::default();
 
+        let spectators_generate_chunks =
+            self.level_info.load().game_rules.spectators_generate_chunks;
+
         for player in players.iter() {
-            if player.is_spectator() {
+            if player.is_spectator() && !spectators_generate_chunks {
                 continue;
             }
             let id = player.gameprofile.id;
@@ -544,6 +545,29 @@ impl World {
             level_info.spawn_yaw,
             level_info.spawn_pitch,
         )
+    }
+
+    #[must_use]
+    pub fn is_in_spawn_protection(&self, player: &Player, position: &BlockPos) -> bool {
+        if player.permission_lvl.load() == pumpkin_util::permission::PermissionLvl::Four {
+            return false;
+        }
+
+        let Some(server) = self.server.upgrade() else {
+            return false;
+        };
+
+        let radius = server.basic_config.spawn_protection;
+        if radius == 0 {
+            return false;
+        }
+
+        let radius = i32::try_from(radius).unwrap_or(i32::MAX);
+        let spawn = self.get_spawn_location().0;
+        let dx = (spawn.0.x - position.0.x).abs();
+        let dz = (spawn.0.z - position.0.z).abs();
+
+        dx <= radius && dz <= radius
     }
 
     pub async fn shutdown(&self) {
@@ -1242,7 +1266,7 @@ impl World {
         category: SoundCategory,
         position: &Vector3<f64>,
     ) {
-        let seed = rng().random::<f64>();
+        let seed = rng().random::<i64>();
         let packet = CSoundEffect::new(
             data_to_proto_sound(sound),
             category,
@@ -1263,7 +1287,7 @@ impl World {
         category: SoundCategory,
         position: &Vector3<f64>,
     ) {
-        let seed = rng().random::<f64>();
+        let seed = rng().random::<i64>();
         let packet = CSoundEffect::new(
             data_to_proto_sound(sound),
             category,
@@ -1295,7 +1319,7 @@ impl World {
         volume: f32,
         pitch: f32,
     ) {
-        let seed = rand::random::<f64>();
+        let seed = rand::random::<i64>();
         let packet = CSoundEffect::new(
             pumpkin_protocol::IdOr::Value(pumpkin_protocol::SoundEvent {
                 sound_name: sound_name.into(),
@@ -1352,7 +1376,7 @@ impl World {
         let chunk_pos = BlockPos::floored_v(*position).chunk_position();
 
         for player in self.players.load().iter() {
-            if is_within_view_distance(chunk_pos, player.get_entity().chunk_pos.load(), 1)
+            if is_within_chebyshev_distance(chunk_pos, player.get_entity().chunk_pos.load(), 1)
                 && let ClientPlatform::Bedrock(client) = player.client.as_ref()
                 && let Ok(data) = client.serialize_packet(&packet)
             {
@@ -1379,7 +1403,7 @@ impl World {
         volume: f32,
         pitch: f32,
     ) {
-        let seed = rand::rng().random::<f64>();
+        let seed = rand::rng().random::<i64>();
         let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
 
         // Calculate the number of chunks the sound can be heard from based on its volume.
@@ -1390,7 +1414,7 @@ impl World {
         let recipients = players.iter().filter(|p| {
             let center = p.get_entity().chunk_pos.load();
             // If the sound reaches their chunk, send it!
-            is_within_view_distance(chunk_pos, center, audible_chunks)
+            is_within_chebyshev_distance(chunk_pos, center, audible_chunks)
         });
 
         let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
@@ -1406,7 +1430,7 @@ impl World {
         volume: f32,
         pitch: f32,
     ) {
-        let seed = rand::rng().random::<f64>();
+        let seed = rand::rng().random::<i64>();
         let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
 
         let audible_chunks = f64::from(volume.max(1.0)).ceil() as i32;
@@ -1420,7 +1444,7 @@ impl World {
             }
 
             let center = p.get_entity().chunk_pos.load();
-            is_within_view_distance(chunk_pos, center, audible_chunks)
+            is_within_chebyshev_distance(chunk_pos, center, audible_chunks)
         });
 
         let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
@@ -1595,6 +1619,10 @@ impl World {
                 be.tick(self);
             }
         });
+        // Drained after all ticks, so changes (hopper -> chest) land in the same tick.
+        let guard = be_handle.enter();
+        self.flush_comparator_updates(&block_entities);
+        drop(guard);
         let block_entity_elapsed = t_be.elapsed();
 
         self.level
@@ -1706,9 +1734,9 @@ impl World {
                 let mut java_recipients = Vec::new();
 
                 let recipients = players.iter().filter(|p| {
-                    let center = p.get_entity().chunk_pos.load();
-                    let view_distance = get_view_distance(p).get() as i32;
-                    is_within_view_distance(chunk_pos, center, view_distance)
+                    p.watched_section
+                        .load()
+                        .is_within_distance(chunk_pos.x, chunk_pos.y)
                 });
 
                 let mut bedrock_packets = Vec::new();
@@ -1785,9 +1813,10 @@ impl World {
             if !bedrock_water_packets.is_empty() {
                 let players = self.players.load();
                 let recipients = players.iter().filter(|player| {
-                    let center = player.get_entity().chunk_pos.load();
-                    let view_distance = get_view_distance(player).get() as i32;
-                    is_within_view_distance(chunk_pos, center, view_distance)
+                    player
+                        .watched_section
+                        .load()
+                        .is_within_distance(chunk_pos.x, chunk_pos.y)
                 });
                 for player in recipients {
                     if let ClientPlatform::Bedrock(client) = player.client.as_ref() {
@@ -1896,6 +1925,7 @@ impl World {
     #[expect(clippy::too_many_lines)]
     pub fn tick_chunks(self: &Arc<Self>, server: &Arc<Server>) {
         const BATCH_SIZE: usize = 32;
+        const INHABITED_TIME_BATCH_SIZE: usize = 1024;
         let random_tick_speed = self.level_info.load().game_rules.random_tick_speed;
 
         let active_chunks = self
@@ -2032,14 +2062,18 @@ impl World {
             });
         }
 
-        // Update chunk inhabited time for active chunks in parallel with Rayon
+        // Batch these cheap lookups and atomic increments to avoid waking Rayon
+        // workers for tiny tasks every tick, while retaining parallelism for large sets.
         let loaded_chunks = self.level.loaded_chunks.clone();
         let active_chunks_vec: Vec<_> = active_chunks.iter().copied().collect();
-        active_chunks_vec.par_iter().for_each(|pos| {
-            if let Some(chunk) = loaded_chunks.get(pos) {
-                chunk.inhabited_time.fetch_add(1, Relaxed);
-            }
-        });
+        active_chunks_vec
+            .par_iter()
+            .with_min_len(INHABITED_TIME_BATCH_SIZE)
+            .for_each(|pos| {
+                if let Some(chunk) = loaded_chunks.get(pos) {
+                    chunk.inhabited_time.fetch_add(1, Relaxed);
+                }
+            });
     }
 
     pub fn check_fluid_collision(&self, bounding_box: BoundingBox) -> bool {
@@ -3223,6 +3257,9 @@ impl World {
         );
 
         self.send_player_equipment(&player);
+        player
+            .living_entity
+            .send_current_equipment_attribute_modifiers();
 
         // Broadcast metadata to Java players so they can correctly interact with the new player
         let skin_parts = player.config.load().skin_parts;
@@ -4011,6 +4048,9 @@ impl World {
         player.send_active_effects();
         player.breath_manager.send_air_supply(player);
         self.send_player_equipment(player);
+        player
+            .living_entity
+            .send_current_equipment_attribute_modifiers();
 
         if let crate::net::ClientPlatform::Java(java_client) = player.client.as_ref()
             && server.advanced_config.recipe.send_recipes
@@ -4626,22 +4666,13 @@ impl World {
 
     // NOTE: This function doesn't actually await on anything, it just spawns two tokio tasks
     /// IMPORTANT: Chunks have to be non-empty
-    fn spawn_world_entity_chunks(
-        self: &Arc<Self>,
-        player: Arc<Player>,
-        chunks: Vec<Vector2<i32>>,
-        center_chunk: Vector2<i32>,
-    ) {
+    fn spawn_world_entity_chunks(self: &Arc<Self>, player: Arc<Player>, chunks: Vec<Vector2<i32>>) {
         #[cfg(debug_assertions)]
         let inst = std::time::Instant::now();
 
-        // Sort such that the first chunks are closest to the center.
-        let mut chunks = chunks;
-        chunks.sort_unstable_by_key(|pos| {
-            let rel_x = pos.x - center_chunk.x;
-            let rel_z = pos.y - center_chunk.y;
-            rel_x * rel_x + rel_z * rel_z
-        });
+        // Note: `chunks` originates from `Cylindrical::changed_chunks`, which is
+        // already ordered from closest to farthest from center by the precompiled
+        // cylindrical chunk view LUT. No re-sorting needed.
 
         let mut entity_receiver = self.level.receive_entity_chunks(chunks);
         let level = self.level.clone();
@@ -5205,10 +5236,11 @@ impl World {
 
         let players = self.players.load();
         for player in players.iter() {
-            let center = player.get_entity().chunk_pos.load();
-            let view_distance = get_view_distance(player).get() as i32;
-
-            if is_within_view_distance(chunk_pos, center, view_distance) {
+            if player
+                .watched_section
+                .load()
+                .is_within_distance(chunk_pos.x, chunk_pos.y)
+            {
                 player.client.try_enqueue_spawn_packet(entity);
             }
         }
@@ -5511,6 +5543,17 @@ impl World {
         cause: Option<&Arc<Player>>,
         flags: BlockFlags,
     ) -> Option<BlockStateId> {
+        if let Some(player) = cause
+            && self.is_in_spawn_protection(player, position)
+        {
+            player.send_system_message(&TextComponent::translate_cross(
+                pumpkin_data::translation::java::BUILD_SPAWN_PROTECTION,
+                pumpkin_data::translation::java::BUILD_SPAWN_PROTECTION,
+                [TextComponent::text(player.gameprofile.name.clone())],
+            ));
+            return None;
+        }
+
         let (broken_block, broken_block_state) = self.get_block_and_state(position);
         if broken_block_state.is_air() {
             return None;
@@ -5558,7 +5601,42 @@ impl World {
             Block::AIR.default_state.id
         };
 
-        Some(self.set_block_state(position, new_state_id, flags))
+        let broken_state_id = self.set_block_state(position, new_state_id, flags);
+        let broken_block = Block::from_state_id(broken_state_id);
+        if !broken_block.is_air()
+            && broken_state_id != new_state_id
+            && broken_block != &Block::FIRE
+            && broken_block != &Block::SOUL_FIRE
+        {
+            let je_packet = CWorldEvent::new(
+                WorldEvent::ParticlesDestroyBlock as i32,
+                *position,
+                broken_state_id.as_u16().into(),
+                false,
+            );
+            let be_packet = CLevelEvent {
+                event_id: VarInt(LevelEvent::ParticlesDestroyBlock as i32),
+                position: position.to_centered_f64().to_f32_lossy(),
+                data: VarInt(BlockState::to_be_network_id(broken_state_id).into()),
+            };
+            let chunk_pos = position.chunk_position();
+            if let Some(player) = cause {
+                // Java predicts its own break effect; Bedrock needs the server event.
+                if let ClientPlatform::Bedrock(client) = player.client.as_ref() {
+                    client.try_enqueue_client_packet(&be_packet);
+                }
+                self.broadcast_to_chunk_except_editioned(
+                    chunk_pos,
+                    &[player.get_entity().entity_uuid],
+                    &je_packet,
+                    &be_packet,
+                );
+            } else {
+                self.broadcast_to_chunk_editioned(chunk_pos, &je_packet, &be_packet);
+            }
+        }
+
+        Some(broken_state_id)
     }
 
     #[must_use]
@@ -5662,10 +5740,14 @@ impl World {
         self.environment_attributes().get_value_activity(baby, pos)
     }
 
-    pub fn get_max_local_raw_brightness(&self, pos: &BlockPos) -> u8 {
-        let sky_light = (self.get_sky_light_level(pos) as i32 - self.get_sky_darken()).max(0) as u8;
+    pub fn get_raw_brightness(&self, pos: &BlockPos, sky_darken: u8) -> u8 {
+        let sky_light = self.get_sky_light_level(pos).saturating_sub(sky_darken);
         let block_light = self.get_block_light_level(pos).unwrap_or(0);
         sky_light.max(block_light)
+    }
+
+    pub fn get_max_local_raw_brightness(&self, pos: &BlockPos) -> u8 {
+        self.get_raw_brightness(pos, self.get_sky_darken() as u8)
     }
 
     pub fn get_block_light_level(&self, position: &BlockPos) -> Option<u8> {
@@ -5966,6 +6048,10 @@ impl World {
         );
     }
 
+    pub fn sync_global_world_event(&self, world_event: WorldEvent, position: BlockPos, data: i32) {
+        self.broadcast_packet_all(&CWorldEvent::new(world_event as i32, position, data, true));
+    }
+
     pub fn set_block_destroy_stage(&self, entity_id: i32, location: BlockPos, stage: i8) {
         let chunk_pos = location.chunk_position();
         let packet = CSetBlockDestroyStage::new(entity_id.into(), location, stage);
@@ -6035,11 +6121,59 @@ impl World {
         if let Some(fluid) = Fluid::from_state_id(id) {
             return fluid.to_flowing();
         }
-        if id.is_waterlogged() {
+        // These blocks contain source water without a `waterlogged` property.
+        if matches!(
+            id.to_block_id(),
+            pumpkin_data::BlockId::KELP
+                | pumpkin_data::BlockId::KELP_PLANT
+                | pumpkin_data::BlockId::SEAGRASS
+                | pumpkin_data::BlockId::TALL_SEAGRASS
+                | pumpkin_data::BlockId::BUBBLE_COLUMN
+        ) || id.is_waterlogged()
+        {
             &Fluid::FLOWING_WATER
         } else {
             &Fluid::EMPTY
         }
+    }
+
+    fn fluid_state_from_block_state(id: BlockStateId) -> (&'static Fluid, FluidState) {
+        let fluid = Self::get_fluid_from_state_id(id);
+        let source = if fluid.matches_type(&Fluid::WATER) {
+            &Fluid::WATER
+        } else if fluid.matches_type(&Fluid::LAVA) {
+            &Fluid::LAVA
+        } else {
+            &Fluid::EMPTY
+        };
+        let mut state = source.states[source.default_state_index as usize].clone();
+
+        if matches!(
+            id.to_block_id(),
+            pumpkin_data::BlockId::WATER | pumpkin_data::BlockId::LAVA
+        ) {
+            // LiquidBlock#getFluidState: source, amounts 7..1, then falling amount 8.
+            // The fluid family's first state is not the state of the actual block.
+            let level =
+                pumpkin_data::block_properties::WaterLikeProperties::from_state_id(id).level;
+            let amount = if level == 0 || level >= 8 {
+                8
+            } else {
+                8 - level
+            };
+            state.height = f32::from(amount) / 9.0;
+            state.level = i16::from(amount);
+            state.is_source = level == 0;
+            state.is_still = state.is_source;
+            state.falling = level >= 8;
+            state.block_state_id = pumpkin_data::block_properties::WaterLikeProperties {
+                level: level.min(8),
+            }
+            .to_state_id(id.to_block());
+        }
+
+        // Keep the normalized family used by fluid callbacks, independently of source state.
+        (fluid, state)
     }
 
     pub fn get_fluid(&self, position: &BlockPos) -> &'static pumpkin_data::fluid::Fluid {
@@ -6058,13 +6192,21 @@ impl World {
         (id.to_block(), Self::get_fluid_from_state_id(id))
     }
 
-    pub fn get_fluid_and_fluid_state(
-        &self,
-        position: &BlockPos,
-    ) -> (&'static Fluid, &'static FluidState) {
+    pub fn get_fluid_and_fluid_state(&self, position: &BlockPos) -> (&'static Fluid, FluidState) {
         let id = self.get_block_state_id(position);
-        let fluid = Self::get_fluid_from_state_id(id);
-        (fluid, &fluid.states[0])
+        Self::fluid_state_from_block_state(id)
+    }
+
+    /// `FluidState#getHeight` includes the full block when the same fluid is above.
+    /// Keep `state.height` as the own height used by flow-velocity calculations.
+    pub fn get_fluid_height(&self, position: &BlockPos, fluid: &Fluid, state: &FluidState) -> f32 {
+        if state.is_empty {
+            0.0
+        } else if fluid.matches_type(self.get_fluid(&position.up())) {
+            1.0
+        } else {
+            state.height
+        }
     }
 
     pub fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
@@ -6202,6 +6344,22 @@ impl World {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    /// Sends output-signal updates for block entities changed this tick, in list order.
+    fn flush_comparator_updates(self: &Arc<Self>, block_entities: &[Arc<dyn BlockEntity>]) {
+        for be in block_entities {
+            // Vanilla `BlockEntity.setChanged` -> `Level.updateNeighbourForOutputSignal`.
+            if !be.is_comparator_dirty() {
+                continue;
+            }
+            be.clear_comparator_dirty();
+            let pos = be.get_position();
+            // The list is a snapshot, so the chunk may be gone by now.
+            if let Some(state_id) = self.get_block_state_id_if_loaded(&pos) {
+                self.update_neighbour_for_output_signal(&pos, state_id.to_block());
             }
         }
     }
@@ -6822,11 +6980,13 @@ impl World {
 
         let mut block = BlockPos::floored(from.x, from.y, from.z);
 
-        let (collision, direction) = self.ray_outline_check(&block, from, to);
-        if let Some(dir) = direction
-            && collision
-        {
-            return Some((block, dir));
+        if hit_check(&block, self) {
+            let (collision, direction) = self.ray_outline_check(&block, from, to);
+            if let Some(dir) = direction
+                && collision
+            {
+                return Some((block, dir));
+            }
         }
 
         let difference = to.sub(&from);
@@ -6918,16 +7078,13 @@ impl World {
     }
 
     /// Broadcasts a packet to all players who currently have the target chunk loaded.
-    /// This uses highly optimized Chebyshev distance math (Chunk Grid) instead of floating point distance checks.
     pub fn broadcast_to_chunk<P: ClientPacket>(&self, chunk_pos: Vector2<i32>, packet: &P) {
         let players = self.players.load();
 
         let recipients = players.iter().filter(|p| {
-            let center = p.get_entity().chunk_pos.load();
-            let view_distance = get_view_distance(p).get() as i32;
-
-            // Chebyshev distance (Minecraft's chunk loading shape)
-            is_within_view_distance(chunk_pos, center, view_distance)
+            p.watched_section
+                .load()
+                .is_within_distance(chunk_pos.x, chunk_pos.y)
         });
 
         let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
@@ -6941,9 +7098,10 @@ impl World {
     ) {
         let players = self.players.load();
         let recipients = players.iter().filter_map(|player| {
-            let center = player.get_entity().chunk_pos.load();
-            let view_distance = get_view_distance(player).get() as i32;
-            if is_within_view_distance(chunk_pos, center, view_distance)
+            if player
+                .watched_section
+                .load()
+                .is_within_distance(chunk_pos.x, chunk_pos.y)
                 && let ClientPlatform::Bedrock(client) = player.client.as_ref()
             {
                 return Some(client);
@@ -6964,9 +7122,9 @@ impl World {
         let mut bedrock_recipients = Vec::new();
 
         let recipients = players.iter().filter(|p| {
-            let center = p.get_entity().chunk_pos.load();
-            let view_distance = get_view_distance(p).get() as i32;
-            is_within_view_distance(chunk_pos, center, view_distance)
+            p.watched_section
+                .load()
+                .is_within_distance(chunk_pos.x, chunk_pos.y)
         });
 
         for p in recipients {
@@ -6995,10 +7153,9 @@ impl World {
             if except.contains(&p.get_entity().entity_uuid) {
                 return false;
             }
-            let center = p.get_entity().chunk_pos.load();
-            let view_distance = get_view_distance(p).get() as i32;
-
-            is_within_view_distance(chunk_pos, center, view_distance)
+            p.watched_section
+                .load()
+                .is_within_distance(chunk_pos.x, chunk_pos.y)
         });
 
         let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
@@ -7017,10 +7174,9 @@ impl World {
             if except.contains(&p.get_entity().entity_uuid) {
                 return false;
             }
-            let center = p.get_entity().chunk_pos.load();
-            let view_distance = get_view_distance(p).get() as i32;
-
-            is_within_view_distance(chunk_pos, center, view_distance)
+            p.watched_section
+                .load()
+                .is_within_distance(chunk_pos.x, chunk_pos.y)
         });
 
         let mut java_recipients = Vec::new();
@@ -7399,7 +7555,7 @@ impl WorldPortalExt for WorldPortal {
     ) -> bool {
         self.0.block_registry.can_place_at(
             None,
-            None,
+            Some(&self.0),
             block_accessor,
             None,
             block,
@@ -7537,11 +7693,70 @@ pub fn calculate_celestial_angle(time_of_day: i64) -> f32 {
 mod tests {
     use pumpkin_data::{
         Block,
-        block_properties::{ChestLikeProperties, ChestType, HorizontalFacing},
+        block_properties::{ChestLikeProperties, ChestType, HorizontalFacing, WaterLikeProperties},
+        fluid::Fluid,
     };
     use pumpkin_util::math::position::BlockPos;
 
-    use super::{bedrock_block_breaking_rate, bedrock_chest_block_actor};
+    use super::{World, bedrock_block_breaking_rate, bedrock_chest_block_actor};
+
+    #[test]
+    fn liquid_block_states_preserve_source_flow_and_falling_depths() {
+        // Liquid block level and fluid amount are different: all falling levels
+        // resolve to amount 8, rather than wrapping through the fluid state array.
+        let amounts = [8, 7, 6, 5, 4, 3, 2, 1, 8, 8, 8, 8, 8, 8, 8, 8];
+        for (block, expected_fluid) in [
+            (&Block::WATER, &Fluid::FLOWING_WATER),
+            (&Block::LAVA, &Fluid::FLOWING_LAVA),
+        ] {
+            for (level, amount) in amounts.into_iter().enumerate() {
+                let id = WaterLikeProperties { level: level as u8 }.to_state_id(block);
+                let (fluid, state) = World::fluid_state_from_block_state(id);
+                assert_eq!(fluid.id, expected_fluid.id);
+                assert_eq!(state.level, amount);
+                assert!((state.height - f32::from(amount) / 9.0).abs() < f32::EPSILON);
+                assert_eq!(state.is_source, level == 0);
+                assert_eq!(state.is_still, level == 0);
+                assert_eq!(state.falling, level >= 8);
+                assert!(!state.is_empty);
+                assert_eq!(
+                    state.block_state_id,
+                    WaterLikeProperties {
+                        level: level.min(8) as u8
+                    }
+                    .to_state_id(block)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn aquatic_and_waterlogged_blocks_contain_source_water() {
+        let wet_stairs = Block::OAK_STAIRS
+            .set_waterlogged(Block::OAK_STAIRS.default_state.id, true)
+            .unwrap();
+        for id in [
+            Block::KELP.default_state.id,
+            Block::KELP_PLANT.default_state.id,
+            Block::SEAGRASS.default_state.id,
+            Block::TALL_SEAGRASS.default_state.id,
+            Block::BUBBLE_COLUMN.default_state.id,
+            wet_stairs,
+        ] {
+            let (fluid, state) = World::fluid_state_from_block_state(id);
+            assert!(fluid.matches_type(&Fluid::WATER));
+            assert!(state.is_source && state.is_still && !state.is_empty && !state.falling);
+            assert_eq!(state.level, 8);
+            assert!((state.height - 8.0 / 9.0).abs() < f32::EPSILON);
+        }
+
+        for block in [&Block::AIR, &Block::OAK_STAIRS, &Block::WATER_CAULDRON] {
+            let (fluid, state) = World::fluid_state_from_block_state(block.default_state.id);
+            assert_eq!(fluid.id, Fluid::EMPTY.id);
+            assert!(state.is_empty);
+            assert_eq!(state.height, 0.0);
+        }
+    }
 
     #[test]
     fn bedrock_block_breaking_rate_uses_progress_per_tick() {

@@ -2,6 +2,7 @@ use std::any::Any;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::Entity;
 use crate::entity::decoration::item_frame::ItemFrameEntity;
 use crate::entity::decoration::painting::PaintingEntity;
@@ -39,7 +40,7 @@ impl ItemBehaviour for HangingEntityItem {
         _cursor_pos: Vector3<f32>,
         _block: &Block,
         _server: &Server,
-    ) {
+    ) -> BlockActionResult {
         let world = player.world();
         let target_pos = location.offset(face.to_offset());
         let pos = Vector3::new(
@@ -50,7 +51,7 @@ impl ItemBehaviour for HangingEntityItem {
 
         if item.item.id == Item::PAINTING.id {
             if face == BlockDirection::Up || face == BlockDirection::Down {
-                return;
+                return BlockActionResult::Fail;
             }
 
             let entity = Entity::new(world.clone(), pos, &EntityType::PAINTING);
@@ -76,6 +77,7 @@ impl ItemBehaviour for HangingEntityItem {
             world.spawn_entity(frame_arc);
         }
         item.decrement_unless_creative(player.gamemode.load(), 1);
+        BlockActionResult::Success
     }
 
     fn as_any(&self) -> &dyn Any {

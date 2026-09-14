@@ -3,6 +3,7 @@ use std::borrow::Cow;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
 
+use crate::inventory::Inventory;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{EnchantmentsImpl, MaxDamageImpl, StoredEnchantmentsImpl};
 use pumpkin_data::enchantment::Enchantment;
@@ -12,7 +13,6 @@ use pumpkin_data::screen::WindowType;
 use pumpkin_data::tag::Enchantment as EnchantmentTag;
 use pumpkin_data::tag::Taggable;
 use pumpkin_protocol::java::server::play::SlotActionType;
-use pumpkin_world::inventory::Inventory;
 
 use crate::{
     anvil::anvil_screen_handler::calculate_increased_repair_cost,

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::Entity;
 use crate::entity::player::Player;
 use crate::entity::vehicle::minecart::MinecartEntity;
@@ -20,7 +21,7 @@ use pumpkin_util::math::vector3::Vector3;
 pub struct MinecartItem;
 
 impl MinecartItem {
-    fn item_to_entity(item: &Item) -> &'static EntityType {
+    pub(crate) fn item_to_entity(item: &Item) -> &'static EntityType {
         match item.id {
             val if val == Item::MINECART.id => &EntityType::MINECART,
             val if val == Item::TNT_MINECART.id => &EntityType::TNT_MINECART,
@@ -60,11 +61,11 @@ impl ItemBehaviour for MinecartItem {
         _cursor_pos: Vector3<f32>,
         block: &Block,
         _server: &Server,
-    ) {
+    ) -> BlockActionResult {
         let world = player.world();
 
         if !block.has_tag(&tag::Block::MINECRAFT_RAILS) {
-            return;
+            return BlockActionResult::Fail;
         }
         let state_id = world.get_block_state_id(&location);
         let is_ascending = if PoweredRailLikeProperties::handles_block_id(block.id) {
@@ -87,6 +88,7 @@ impl ItemBehaviour for MinecartItem {
         let minecart_entity = Arc::new(MinecartEntity::new(entity));
         world.spawn_entity(minecart_entity);
         item.decrement_unless_creative(player.gamemode.load(), 1);
+        BlockActionResult::Success
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

@@ -96,7 +96,9 @@ impl LoadConfiguration for PumpkinConfig {
         self.advanced.validate();
         self.telemetry.validate();
 
-        let min_vd = NonZero::<u8>::MIN;
+        let Some(min_vd) = NonZero::new(2) else {
+            return;
+        };
         let Some(max_vd) = NonZero::new(64) else {
             return;
         };
@@ -214,6 +216,13 @@ pub struct BasicConfiguration {
     pub white_list: bool,
     /// Whether to enforce the whitelist.
     pub enforce_whitelist: bool,
+    /// Whether this server accepts incoming transfers from other servers.
+    #[serde(alias = "accepts-transfers", alias = "accepts_transfers")]
+    pub accepts_transfers: bool,
+    /// The radius of the spawn protection area around the world spawn point.
+    /// Players without operator privileges cannot break or place blocks within this radius.
+    /// Set to 0 to disable spawn protection.
+    pub spawn_protection: u32,
 }
 
 impl Default for BasicConfiguration {
@@ -235,6 +244,8 @@ impl Default for BasicConfiguration {
             allow_chat_reports: false,
             white_list: false,
             enforce_whitelist: false,
+            accepts_transfers: true,
+            spawn_protection: 16,
         }
     }
 }
@@ -277,6 +288,7 @@ pub trait LoadConfiguration {
             debug!("creating new config root folder");
             let _ = fs::create_dir(config_dir);
         }
+
         let path = config_dir.join(Self::get_path());
 
         let config = if path.exists() {
@@ -421,4 +433,26 @@ pub trait LoadConfiguration {
 
     /// Validates the configuration after loading or merging.
     fn validate(&self);
+}
+
+#[cfg(test)]
+mod tests {
+    use toml::from_str;
+
+    use super::BasicConfiguration;
+
+    #[test]
+    fn accepts_transfers_defaults_to_true() {
+        let config: BasicConfiguration = BasicConfiguration::default();
+        assert!(config.accepts_transfers);
+    }
+
+    #[test]
+    fn accepts_transfers_reads_vanilla_aliases() {
+        let config: BasicConfiguration = from_str("accepts-transfers = false").unwrap();
+        assert!(!config.accepts_transfers);
+
+        let config: BasicConfiguration = from_str("accepts_transfers = false").unwrap();
+        assert!(!config.accepts_transfers);
+    }
 }

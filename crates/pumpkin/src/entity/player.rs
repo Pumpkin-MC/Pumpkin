@@ -19,6 +19,7 @@ use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::Receiver;
 use crossbeam::queue::SegQueue;
 use pumpkin_data::dimension::Dimension;
+use pumpkin_inventory::Inventory;
 use pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler;
 use pumpkin_inventory::player::ender_chest_inventory::EnderChestInventory;
 use pumpkin_protocol::RawPacket;
@@ -43,7 +44,6 @@ use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_util::translation::Locale;
 use pumpkin_util::version::JavaMinecraftVersion;
 use pumpkin_world::chunk::ChunkData;
-use pumpkin_world::inventory::Inventory;
 use tokio::task::JoinHandle;
 use tracing::{debug, warn};
 use uuid::Uuid;
@@ -388,6 +388,12 @@ pub enum PlayerWeather {
     Downfall,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SpamType {
+    Chat,
+    Command,
+}
+
 pub struct Player {
     /// The underlying living entity object that represents the player.
     pub living_entity: LivingEntity,
@@ -575,13 +581,13 @@ impl Player {
         let bytes = if let Ok(handle) = tokio::runtime::Handle::try_current() {
             tokio::task::block_in_place(|| {
                 handle.block_on(async {
-                    let client = pumpkin_util::client();
+                    let client = pumpkin_auth::client();
                     client.get(&url).send().await.ok()?.bytes().await.ok()
                 })
             })?
         } else {
             tokio::runtime::Runtime::new().ok()?.block_on(async {
-                let client = pumpkin_util::client();
+                let client = pumpkin_auth::client();
                 client.get(&url).send().await.ok()?.bytes().await.ok()
             })?
         };
@@ -1172,8 +1178,7 @@ impl Player {
         {
             let stack = &item_stack;
             if stack.is_empty() {
-                // Vanilla fist: base_attack_damage = -1.0, base_attack_speed = -2.4
-                add_damage = -1.0;
+                // Vanilla fist: base_attack_speed = -2.4
                 add_speed = -2.4;
             } else if let Some(modifiers) = stack.get_data_component::<AttributeModifiersImpl>() {
                 for item_mod in modifiers.attribute_modifiers.iter() {
@@ -1321,6 +1326,18 @@ impl Player {
 
         player_attack_sound(&pos, &world, attack_type);
 
+        if matches!(attack_type, AttackType::Critical) {
+            let je_packet =
+                CEntityAnimation::new(victim_entity.entity_id.into(), Animation::CriticalEffect);
+            let be_packet = pumpkin_protocol::bedrock::server::animate::SAnimate {
+                action: pumpkin_protocol::bedrock::server::animate::AnimateAction::CriticalHit,
+                target_actor_runtime_id: VarULong(victim_entity.entity_id as u64),
+                data: 0.0,
+                swing_source: None,
+            };
+            world.broadcast_editioned(&je_packet, &be_packet);
+        }
+
         self.living_entity.last_attacking_id.store(
             victim_entity.entity_id,
             std::sync::atomic::Ordering::Relaxed,
@@ -1416,6 +1433,33 @@ impl Player {
             .map_or(0, |w| w.item_damage_per_attack as i32)
     }
 
+    /// Pushes current inventory contents to the client via `CONTAINER_SET_SLOT`.
+    ///
+    /// `minecraft:set_player_inventory` is missing on 1.21.0/1.21.1 and is not
+    /// applied to the local hotbar on later 1.21.x clients. Screen-handler slot
+    /// updates are the vanilla path and (should) work on every supported version.
+    pub fn sync_inventory_to_client(&self) {
+        if let Ok(mut handler) = self.player_screen_handler.try_lock() {
+            handler.send_content_updates();
+        }
+
+        let Ok(current_guard) = self.current_screen_handler.try_lock() else {
+            return;
+        };
+        let current = current_guard.clone();
+        drop(current_guard);
+
+        let player_screen_ptr = Arc::as_ptr(&self.player_screen_handler).cast::<()>();
+        let current_ptr = Arc::as_ptr(&current).cast::<()>();
+        if player_screen_ptr == current_ptr {
+            return;
+        }
+
+        if let Ok(mut handler) = current.try_lock() {
+            handler.send_content_updates();
+        }
+    }
+
     pub fn try_send_slot_set_packet(&self, packet: &CSetPlayerInventory) {
         match self.client.as_ref() {
             ClientPlatform::Java(java) => {
@@ -1454,6 +1498,7 @@ impl Player {
             (slot_index as i32).into(),
             &ItemStackSerializer::from(stack.clone()),
         ));
+        self.sync_inventory_to_client();
 
         if slot_index == self.inventory.get_selected_slot() as usize {
             self.living_entity
@@ -1531,6 +1576,7 @@ impl Player {
                 (slot_index as i32).into(),
                 &ItemStackSerializer::from(updated_stack.clone()),
             ));
+            self.sync_inventory_to_client();
 
             self.living_entity
                 .send_equipment_changes(&[(slot.clone(), updated_stack)]);
@@ -2219,7 +2265,7 @@ impl Player {
         position: &Vector3<f64>,
         volume: f32,
         pitch: f32,
-        seed: f64,
+        seed: i64,
     ) {
         let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
         self.try_send_client_packet(&packet);
@@ -2232,7 +2278,7 @@ impl Player {
         position: &Vector3<f64>,
         volume: f32,
         pitch: f32,
-        seed: f64,
+        seed: i64,
     ) {
         let packet = CSoundEffect::new(IdOr::Value(sound), category, position, volume, pitch, seed);
         self.try_send_client_packet(&packet);
@@ -2267,7 +2313,7 @@ impl Player {
             position,
             volume,
             pitch,
-            rand::random::<f64>(),
+            rand::random::<i64>(),
         );
     }
 
@@ -2567,11 +2613,9 @@ impl Player {
         if let Ok(listener) = self.chunk_listener.try_lock()
             && let Ok(mut sender) = self.chunk_sender.try_lock()
         {
-            let center = self.get_entity().chunk_pos.load();
-            let view_dist =
-                std::num::NonZeroI32::from(self.watched_section.load().view_distance).get();
+            let watched = self.watched_section.load();
             while let Ok((pos, _)) = listener.try_recv() {
-                if (pos.x - center.x).abs().max((pos.y - center.y).abs()) <= view_dist {
+                if watched.is_within_distance(pos.x, pos.y) {
                     sender.enqueue_chunk(pos);
                 }
             }
@@ -2585,8 +2629,9 @@ impl Player {
             ClientPlatform::Bedrock(_) => JavaMinecraftVersion::V_1_20_2,
         };
 
+        let view_distance = self.watched_section.load().view_distance;
         let prepared_batch = self.chunk_sender.try_lock().ok().and_then(|mut sender| {
-            sender.prepare_batch(&world.level, player_chunk, epoch, version)
+            sender.prepare_batch(&world.level, player_chunk, view_distance, epoch, version)
         });
 
         let total_sent_chunks = prepared_batch.map_or_else(
@@ -3280,8 +3325,17 @@ impl Player {
             PermissionLvl::Three => EntityStatus::PermissionLevelAdmins,
             PermissionLvl::Four => EntityStatus::PermissionLevelOwners,
         };
-        self.world()
-            .send_entity_status(&self.living_entity.entity, status, None);
+        // The player may not have a tracking entry yet after changing dimensions.
+        // Permission levels belong to this connection, not to tracking clients.
+        if let ClientPlatform::Java(java) = self.client.as_ref() {
+            let packet = pumpkin_protocol::java::client::play::CEntityStatus::new(
+                self.living_entity.entity.entity_id,
+                status as i8,
+            );
+            if let Ok(data) = java.serialize_packet(&packet) {
+                java.try_enqueue_packet(data);
+            }
+        }
     }
 
     /// Sets the player's difficulty level.
@@ -3299,7 +3353,7 @@ impl Player {
     /// Sets the player's permission level and notifies the client.
     pub fn set_permission_lvl(
         self: &Arc<Self>,
-        server: &Server,
+        server: &Arc<Server>,
         lvl: PermissionLvl,
         command_dispatcher: &CommandDispatcher,
     ) {
@@ -3958,11 +4012,7 @@ impl Player {
     }
 
     /// Checks whether sending a chat message or command constitutes spam.
-    ///
-    /// Increments the player's spam counter by `message_cost`. If the counter
-    /// exceeds `spam_threshold`, the player is kicked with the vanilla
-    /// `disconnect.spam` message and this method returns `true`.
-    pub fn check_chat_spam(&self, server: &Server) -> bool {
+    pub fn check_chat_spam(&self, server: &Server, spam_type: SpamType) -> bool {
         let anti_spam = &server.advanced_config.chat.anti_spam;
         if !anti_spam.enabled {
             return false;
@@ -3972,15 +4022,20 @@ impl Player {
             return false;
         }
 
+        let threshold = match spam_type {
+            SpamType::Chat => anti_spam.chat_threshold_ticks(),
+            SpamType::Command => anti_spam.command_threshold_ticks(),
+        };
+
         let new_count = self
             .chat_spam_tick_count
             .fetch_add(anti_spam.message_cost, Ordering::SeqCst)
             + anti_spam.message_cost;
 
-        if new_count > anti_spam.spam_threshold {
+        if new_count > threshold {
             warn!(
                 "Player {} kicked for spamming (spam score: {}/{})",
-                self.gameprofile.name, new_count, anti_spam.spam_threshold
+                self.gameprofile.name, new_count, threshold
             );
             self.kick(
                 DisconnectReason::Kicked,
@@ -4122,7 +4177,9 @@ impl Player {
                         5.0,
                     ),
                 ],
-                tick: VarULong(self.tick_counter.load(Ordering::Relaxed).max(0) as u64),
+                // This is a client input tick, not our independent server tick counter.
+                // Zero applies the authoritative values without prediction-history matching.
+                tick: VarULong(0),
             },
         );
     }
@@ -4893,11 +4950,27 @@ impl Player {
 
             self.last_sent_xp.store(level, Ordering::Relaxed);
 
-            self.try_send_client_packet(&CSetExperience::new(
-                progress.clamp(0.0, 1.0),
-                level.into(),
-                points.into(),
-            ));
+            let attribute = |name: &str, current_value, max_value| BedrockAttribute {
+                min_value: 0.0,
+                max_value,
+                current_value,
+                default_min_value: 0.0,
+                default_max_value: max_value,
+                default_value: 0.0,
+                name: name.to_string(),
+                modifiers: Vec::new(),
+            };
+            self.try_enqueue_packet_editioned(
+                &CSetExperience::new(progress.clamp(0.0, 1.0), level.into(), points.into()),
+                &CBedrockAttributes {
+                    target_runtime_id: VarULong(self.entity_id() as u64),
+                    attribute_list: vec![
+                        attribute("minecraft:player.experience", progress.clamp(0.0, 1.0), 1.0),
+                        attribute("minecraft:player.level", level.max(0) as f32, 24_791.0),
+                    ],
+                    tick: VarULong(0),
+                },
+            );
         }
     }
 
@@ -5273,6 +5346,7 @@ impl Player {
             (slot_index as i32).into(),
             &ItemStackSerializer::from(updated_stack.clone()),
         ));
+        self.sync_inventory_to_client();
 
         self.living_entity
             .send_equipment_changes(&[(equipment_slot, updated_stack)]);
@@ -6683,6 +6757,8 @@ impl EntityBase for Player {
     fn read_custom_nbt(&self, nbt: &NbtCompound) {
         self.inventory.read_nbt_non_mut(nbt);
         self.ender_chest_inventory.read_nbt_non_mut(nbt);
+        self.living_entity
+            .apply_current_equipment_attribute_modifiers();
 
         let xp_p = nbt.get_float("XpP").unwrap_or(0.0);
         let xp_level = nbt.get_int("XpLevel");
@@ -7496,41 +7572,8 @@ impl InventoryPlayer for Player {
     }
 
     fn enqueue_slot_set_packet(&self, packet: &CSetPlayerInventory) {
-        match self.client.as_ref() {
-            ClientPlatform::Java(java) => {
-                if let Ok(data) = java.serialize_packet(packet) {
-                    java.try_enqueue_packet(data);
-                }
-            }
-            ClientPlatform::Bedrock(bedrock) => {
-                use pumpkin_protocol::bedrock::{
-                    client::inventory_slot::CInventorySlot,
-                    network_item::{ContainerName, FullContainerName, NetworkItemStackDescriptor},
-                };
-                use pumpkin_protocol::codec::var_uint::VarUInt;
-
-                tracing::info!(
-                    "enqueue_slot_set_packet: slot={}, sending CInventorySlot to Bedrock client",
-                    packet.slot.0
-                );
-
-                let item_stack = &*packet.item.0;
-                let item_desc = NetworkItemStackDescriptor::from(item_stack);
-                let bedrock_packet = CInventorySlot {
-                    container_id: VarUInt(0),
-                    slot: VarUInt(packet.slot.0 as u32),
-                    full_container_name: Some(FullContainerName {
-                        container_name: ContainerName::Inventory,
-                        dynamic_id: None,
-                    }),
-                    storage_item: None,
-                    item: item_desc,
-                };
-                if let Ok(data) = bedrock.serialize_packet(&bedrock_packet) {
-                    bedrock.try_enqueue_packet(data);
-                }
-            }
-        }
+        self.try_send_slot_set_packet(packet);
+        self.sync_inventory_to_client();
     }
 
     fn enqueue_set_held_item_packet(&self, packet: &CSetSelectedSlot) {

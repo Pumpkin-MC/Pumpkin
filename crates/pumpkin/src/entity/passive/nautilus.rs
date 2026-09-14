@@ -18,6 +18,7 @@ use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
     Entity, EntityBase,
+    custom_sound::CustomSound,
     mob::{Mob, MobEntity},
     passive::animal::Animal,
     player::Player,
@@ -97,60 +98,6 @@ impl NautilusEntity {
         }
     }
 
-    pub fn get_hurt_sound(&self) -> Sound {
-        let is_baby = self
-            .mob_entity
-            .living_entity
-            .entity
-            .age
-            .load(Ordering::Relaxed)
-            < 0;
-        let is_water = self
-            .mob_entity
-            .living_entity
-            .entity
-            .touching_water
-            .load(Ordering::Relaxed);
-        if is_baby {
-            if is_water {
-                Sound::EntityBabyNautilusHurt
-            } else {
-                Sound::EntityBabyNautilusHurtLand
-            }
-        } else if is_water {
-            Sound::EntityNautilusHurt
-        } else {
-            Sound::EntityNautilusHurtLand
-        }
-    }
-
-    pub fn get_death_sound(&self) -> Sound {
-        let is_baby = self
-            .mob_entity
-            .living_entity
-            .entity
-            .age
-            .load(Ordering::Relaxed)
-            < 0;
-        let is_water = self
-            .mob_entity
-            .living_entity
-            .entity
-            .touching_water
-            .load(Ordering::Relaxed);
-        if is_baby {
-            if is_water {
-                Sound::EntityBabyNautilusDeath
-            } else {
-                Sound::EntityBabyNautilusDeathLand
-            }
-        } else if is_water {
-            Sound::EntityNautilusDeath
-        } else {
-            Sound::EntityNautilusDeathLand
-        }
-    }
-
     pub fn get_dash_sound(&self) -> Sound {
         let is_water = self
             .mob_entity
@@ -220,7 +167,47 @@ impl Animal for NautilusEntity {
     }
 }
 
+impl CustomSound for NautilusEntity {
+    fn hurt_sound(&self) -> Option<Sound> {
+        let entity = self.get_entity();
+        let is_baby = entity.age.load(Ordering::Relaxed) < 0;
+        let is_water = entity.touching_water.load(Ordering::Relaxed);
+        Some(if is_baby {
+            if is_water {
+                Sound::EntityBabyNautilusHurt
+            } else {
+                Sound::EntityBabyNautilusHurtLand
+            }
+        } else if is_water {
+            Sound::EntityNautilusHurt
+        } else {
+            Sound::EntityNautilusHurtLand
+        })
+    }
+
+    fn death_sound(&self) -> Option<Sound> {
+        let entity = self.get_entity();
+        let is_baby = entity.age.load(Ordering::Relaxed) < 0;
+        let is_water = entity.touching_water.load(Ordering::Relaxed);
+        Some(if is_baby {
+            if is_water {
+                Sound::EntityBabyNautilusDeath
+            } else {
+                Sound::EntityBabyNautilusDeathLand
+            }
+        } else if is_water {
+            Sound::EntityNautilusDeath
+        } else {
+            Sound::EntityNautilusDeathLand
+        })
+    }
+}
+
 impl Mob for NautilusEntity {
+    fn as_custom_sound(&self) -> Option<&dyn crate::entity::custom_sound::CustomSound> {
+        Some(self)
+    }
+
     fn as_animal(&self) -> Option<&dyn Animal> {
         Some(self)
     }
