@@ -1,3 +1,4 @@
+use crate::command::CommandSource;
 use crate::command::argument_types::FromStringReader;
 use crate::command::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
 use crate::command::context::command_context::CommandContext;
@@ -9,7 +10,6 @@ use pumpkin_data::{Advancement, translation};
 use pumpkin_util::identifier::Identifier;
 use pumpkin_util::resource::ResourceKey;
 use pumpkin_util::text::TextComponent;
-use std::pin::Pin;
 use std::string::ToString;
 
 pub static ADVANCEMENT_REGISTRY: &Identifier = &Identifier::vanilla_static("advancement");
@@ -43,7 +43,7 @@ pub static ERROR_INVALID: CommandErrorType<0> = CommandErrorType::new(
     translation::java::ARGUMENT_ID_INVALID,
 );
 
-impl ArgumentType for ResourceKeyArgument {
+impl ArgumentType<CommandSource> for ResourceKeyArgument {
     type Item = ResourceKey;
 
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {
@@ -55,23 +55,19 @@ impl ArgumentType for ResourceKeyArgument {
         &self,
         context: &CommandContext,
         suggestions_builder: SuggestionsBuilder,
-    ) -> Pin<Box<dyn Future<Output = Suggestions> + Send>> {
+    ) -> Suggestions {
         if self.0 == ADVANCEMENT_REGISTRY {
             let advancements = context.server().advancement_manager.get_advancements();
-            Box::pin(async move {
-                suggestions_builder
-                    .filter_and_suggest_iter(advancements.iter().map(ToString::to_string))
-                    .build()
-            })
+            suggestions_builder
+                .filter_and_suggest_iter(advancements.iter().map(ToString::to_string))
+                .build()
         } else if self.0 == BIOME_REGISTRY {
-            Box::pin(async move {
-                let biomes = pumpkin_data::biome::Biome::ALL
-                    .iter()
-                    .map(|biome| format!("minecraft:{}", biome.registry_id));
-                suggestions_builder.filter_and_suggest_iter(biomes).build()
-            })
+            let biomes = pumpkin_data::biome::Biome::ALL
+                .iter()
+                .map(|biome| format!("minecraft:{}", biome.registry_id));
+            suggestions_builder.filter_and_suggest_iter(biomes).build()
         } else {
-            Box::pin(async move { Suggestions::empty() })
+            Suggestions::empty()
         }
     }
 

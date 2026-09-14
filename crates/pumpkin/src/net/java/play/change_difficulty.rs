@@ -3,7 +3,7 @@ use super::*;
 use pumpkin_protocol::java::server::play::SChangeDifficulty;
 
 impl JavaClient {
-    pub async fn handle_change_difficulty(
+    pub fn handle_change_difficulty(
         &self,
         server: &Server,
         player: &Player,
@@ -26,7 +26,7 @@ impl JavaClient {
             return;
         }
 
-        server.set_difficulty(packet.difficulty, false).await;
+        server.set_difficulty(packet.difficulty, false);
 
         info!(
             "Player {} changed difficulty to {:?}",

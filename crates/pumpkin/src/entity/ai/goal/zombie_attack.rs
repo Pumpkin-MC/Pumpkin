@@ -1,5 +1,5 @@
 use super::{Controls, Goal};
-use crate::entity::ai::goal::GoalFuture;
+
 use crate::entity::ai::goal::melee_attack::MeleeAttackGoal;
 use crate::entity::mob::Mob;
 
@@ -19,40 +19,34 @@ impl ZombieAttackGoal {
 }
 
 impl Goal for ZombieAttackGoal {
-    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async { self.melee_attack_goal.can_start(mob).await })
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        self.melee_attack_goal.can_start(mob)
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async { self.melee_attack_goal.should_continue(mob).await })
+    fn should_continue(&self, mob: &dyn Mob) -> bool {
+        self.melee_attack_goal.should_continue(mob)
     }
 
-    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async {
-            self.melee_attack_goal.start(mob).await;
-            self.ticks = 0;
-        })
+    fn start(&mut self, mob: &dyn Mob) {
+        self.melee_attack_goal.start(mob);
+        self.ticks = 0;
     }
 
-    fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async {
-            self.melee_attack_goal.stop(mob).await;
+    fn stop(&mut self, mob: &dyn Mob) {
+        self.melee_attack_goal.stop(mob);
+        mob.get_mob_entity().set_attacking(false);
+    }
+
+    fn tick(&mut self, mob: &dyn Mob) {
+        self.melee_attack_goal.tick(mob);
+        self.ticks += 1;
+        if self.ticks >= 5
+            && self.melee_attack_goal.cooldown < self.melee_attack_goal.get_max_cooldown() / 2
+        {
+            mob.get_mob_entity().set_attacking(true);
+        } else {
             mob.get_mob_entity().set_attacking(false);
-        })
-    }
-
-    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async {
-            self.melee_attack_goal.tick(mob).await;
-            self.ticks += 1;
-            if self.ticks >= 5
-                && self.melee_attack_goal.cooldown < self.melee_attack_goal.get_max_cooldown() / 2
-            {
-                mob.get_mob_entity().set_attacking(true);
-            } else {
-                mob.get_mob_entity().set_attacking(false);
-            }
-        })
+        }
     }
 
     fn should_run_every_tick(&self) -> bool {

@@ -1,7 +1,6 @@
-use std::{env, fs, path::Path};
+use std::{env, fs, path::Path, sync::RwLock};
 
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
 use tracing::{debug, error, warn};
 
 const DATA_FOLDER: &str = "data/";

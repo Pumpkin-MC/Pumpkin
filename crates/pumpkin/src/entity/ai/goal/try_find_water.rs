@@ -4,7 +4,7 @@ use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_util::math::position::BlockPos;
 
-use super::{Controls, Goal, GoalFuture};
+use super::{Controls, Goal};
 use crate::entity::mob::Mob;
 use crate::world::World;
 
@@ -50,53 +50,49 @@ impl TryFindWaterGoal {
 }
 
 impl Goal for TryFindWaterGoal {
-    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move {
-            let entity = mob.get_entity();
-            if !entity.on_ground.load(Ordering::Relaxed) {
-                return false;
-            }
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        let entity = mob.get_entity();
+        if !entity.on_ground.load(Ordering::Relaxed) {
+            return false;
+        }
 
-            let world = entity.world.load();
-            let block_pos = entity.block_pos.load();
-            !Self::is_water(&world, &block_pos)
-        })
+        let world = entity.world.load();
+        let block_pos = entity.block_pos.load();
+        !Self::is_water(&world, &block_pos)
     }
 
-    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            let entity = mob.get_entity();
-            let world = entity.world.load();
-            let mob_pos = entity.pos.load();
+    fn start(&mut self, mob: &dyn Mob) {
+        let entity = mob.get_entity();
+        let world = entity.world.load();
+        let mob_pos = entity.pos.load();
 
-            let (min_pos, max_pos) = Self::find_water_range(mob_pos);
-            let mut water_pos: Option<BlockPos> = None;
+        let (min_pos, max_pos) = Self::find_water_range(mob_pos);
+        let mut water_pos: Option<BlockPos> = None;
 
-            'outer: for x in min_pos.0.x..=max_pos.0.x {
-                for y in min_pos.0.y..=max_pos.0.y {
-                    for z in min_pos.0.z..=max_pos.0.z {
-                        let pos = BlockPos::new(x, y, z);
-                        if Self::is_water(&world, &pos) {
-                            water_pos = Some(pos);
-                            break 'outer;
-                        }
+        'outer: for x in min_pos.0.x..=max_pos.0.x {
+            for y in min_pos.0.y..=max_pos.0.y {
+                for z in min_pos.0.z..=max_pos.0.z {
+                    let pos = BlockPos::new(x, y, z);
+                    if Self::is_water(&world, &pos) {
+                        water_pos = Some(pos);
+                        break 'outer;
                     }
                 }
             }
+        }
 
-            if let Some(pos) = water_pos {
-                mob.get_mob_entity()
-                    .move_control
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .set_wanted_position(
-                        f64::from(pos.0.x),
-                        f64::from(pos.0.y),
-                        f64::from(pos.0.z),
-                        1.0,
-                    );
-            }
-        })
+        if let Some(pos) = water_pos {
+            mob.get_mob_entity()
+                .move_control
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .set_wanted_position(
+                    f64::from(pos.0.x),
+                    f64::from(pos.0.y),
+                    f64::from(pos.0.z),
+                    1.0,
+                );
+        }
     }
 
     fn controls(&self) -> Controls {

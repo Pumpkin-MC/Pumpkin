@@ -1,3 +1,5 @@
+// Last verified for v2169
+
 use pumpkin_macros::packet;
 
 use crate::{codec::var_int::VarInt, serial::PacketWrite};

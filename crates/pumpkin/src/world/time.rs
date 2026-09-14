@@ -116,7 +116,7 @@ impl LevelTime {
         }
     }
 
-    pub async fn send_time(&self, world: &World) {
+    pub fn send_time(&self, world: &World) {
         let advance_time = {
             let lock = world.level_info.load();
             lock.game_rules.advance_time
@@ -124,12 +124,10 @@ impl LevelTime {
 
         let (total_ticks, partial_tick, rate) = self.pack_network_state(advance_time);
 
-        world
-            .broadcast_editioned(
-                &CUpdateTime::new_clock(self.world_age, 0, total_ticks, partial_tick, rate),
-                &CSetTime::new(self.time_of_day as _), // TODO do we need to tell bedrock that time is frozen?
-            )
-            .await;
+        world.broadcast_editioned(
+            &CUpdateTime::new_clock(self.world_age, 0, total_ticks, partial_tick, rate),
+            &CSetTime::new(self.time_of_day as _), // TODO do we need to tell bedrock that time is frozen?
+        );
     }
 
     pub fn add_time(&mut self, time: i64) {

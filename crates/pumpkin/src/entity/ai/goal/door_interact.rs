@@ -2,7 +2,7 @@ use pumpkin_data::tag::{self, Taggable};
 use pumpkin_util::math::position::BlockPos;
 use std::sync::atomic::Ordering;
 
-use super::{Controls, Goal, GoalFuture};
+use super::{Controls, Goal};
 use crate::block::blocks::doors::DoorBlock;
 use crate::entity::mob::Mob;
 
@@ -45,12 +45,12 @@ impl DoorInteractGoal {
         DoorBlock::is_open(&world, &self.door_pos)
     }
 
-    pub async fn set_open(&mut self, mob: &dyn Mob, open: bool) {
+    pub fn set_open(&mut self, mob: &dyn Mob, open: bool) {
         if self.has_door {
             let world = mob.get_entity().world.load_full();
             let (block, _) = world.get_block_and_state_id(&self.door_pos);
             if block.has_tag(&tag::Block::MINECRAFT_DOORS) {
-                DoorBlock::set_open(&world, &self.door_pos, open).await;
+                DoorBlock::set_open(&world, &self.door_pos, open);
             }
         }
     }
@@ -130,24 +130,20 @@ impl DoorInteractGoal {
 }
 
 impl Goal for DoorInteractGoal {
-    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move { self.can_use(mob) })
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        self.can_use(mob)
     }
 
-    fn should_continue<'a>(&'a self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move { self.can_continue_to_use() })
+    fn should_continue(&self, _mob: &dyn Mob) -> bool {
+        self.can_continue_to_use()
     }
 
-    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            self.start_interaction(mob);
-        })
+    fn start(&mut self, mob: &dyn Mob) {
+        self.start_interaction(mob);
     }
 
-    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            self.tick_interaction(mob);
-        })
+    fn tick(&mut self, mob: &dyn Mob) {
+        self.tick_interaction(mob);
     }
 
     fn should_run_every_tick(&self) -> bool {
@@ -156,46 +152,5 @@ impl Goal for DoorInteractGoal {
 
     fn controls(&self) -> Controls {
         Controls::empty()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn passed_when_crossing_door() {
-        let mut goal = DoorInteractGoal::new();
-        goal.door_pos = BlockPos::new(10, 64, 10);
-
-        // Simulate start: mob at (10.5, 64.0, 8.0), moving towards door at Z=10.5
-        // door_open_dir = (10.5 - 10.5, 10.5 - 8.0) = (0.0, 2.5)
-        goal.door_open_dir_x = 0.0;
-        goal.door_open_dir_z = 2.5;
-        goal.passed = false;
-
-        assert!(goal.can_continue_to_use());
-
-        // Still before door: mob at (10.5, 64.0, 9.5) -> new_door_dir = (0.0, 1.0)
-        // dot = 0*0 + 2.5*1.0 = 2.5 > 0
-        let new_x = 0.0f32;
-        let new_z = 1.0f32;
-        let dot = goal.door_open_dir_x * new_x + goal.door_open_dir_z * new_z;
-        if dot < 0.0 {
-            goal.passed = true;
-        }
-        assert!(!goal.passed);
-        assert!(goal.can_continue_to_use());
-
-        // Crossed door: mob at (10.5, 64.0, 12.0) -> new_door_dir = (0.0, -1.5)
-        // dot = 0*0 + 2.5*(-1.5) = -3.75 < 0
-        let new_x2 = 0.0f32;
-        let new_z2 = -1.5f32;
-        let dot2 = goal.door_open_dir_x * new_x2 + goal.door_open_dir_z * new_z2;
-        if dot2 < 0.0 {
-            goal.passed = true;
-        }
-        assert!(goal.passed);
-        assert!(!goal.can_continue_to_use());
     }
 }

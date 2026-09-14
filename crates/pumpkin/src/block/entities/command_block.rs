@@ -1,12 +1,10 @@
-use std::{
-    pin::Pin,
-    sync::atomic::{AtomicBool, AtomicU32, Ordering},
+use std::sync::{
+    Mutex as StdMutex,
+    atomic::{AtomicBool, AtomicU32, Ordering},
 };
 
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
-
-use tokio::sync::Mutex;
 
 use super::BlockEntity;
 
@@ -17,8 +15,8 @@ pub struct CommandBlockEntity {
     pub condition_met: AtomicBool,
     pub auto: AtomicBool,
     pub dirty: AtomicBool,
-    pub command: Mutex<String>,
-    pub last_output: Mutex<String>,
+    pub command: StdMutex<String>,
+    pub last_output: StdMutex<String>,
     pub track_output: AtomicBool,
     pub success_count: AtomicU32,
 }
@@ -26,18 +24,44 @@ pub struct CommandBlockEntity {
 impl CommandBlockEntity {
     pub const ID: &'static str = "minecraft:command_block";
     #[must_use]
-    pub fn new(position: BlockPos, track_output: bool, is_chain: bool) -> Self {
+    pub const fn new(position: BlockPos, track_output: bool, is_chain: bool) -> Self {
         Self {
             position,
             powered: AtomicBool::new(false),
             condition_met: AtomicBool::new(false),
             auto: AtomicBool::new(is_chain),
             dirty: AtomicBool::new(false),
-            command: Mutex::new(String::new()),
-            last_output: Mutex::new(String::new()),
+            command: StdMutex::new(String::new()),
+            last_output: StdMutex::new(String::new()),
             track_output: AtomicBool::new(track_output),
             success_count: AtomicU32::new(0),
         }
+    }
+
+    fn write_sync_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_bool("auto", self.auto.load(Ordering::SeqCst));
+        nbt.put_string(
+            "Command",
+            self.command
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .to_string(),
+        );
+        nbt.put_bool("conditionMet", self.condition_met.load(Ordering::SeqCst));
+        nbt.put_string(
+            "LastOutput",
+            self.last_output
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .to_string(),
+        );
+        nbt.put_bool("powered", self.powered.load(Ordering::SeqCst));
+        nbt.put_bool("TrackOutput", self.track_output.load(Ordering::SeqCst));
+        nbt.put_bool("UpdateLastExecution", false);
+        nbt.put_int(
+            "SuccessCount",
+            self.success_count.load(Ordering::SeqCst).cast_signed(),
+        );
     }
 }
 
@@ -56,8 +80,8 @@ impl BlockEntity for CommandBlockEntity {
         let condition_met = AtomicBool::new(nbt.get_bool("conditionMet").unwrap_or(false));
         let auto = AtomicBool::new(nbt.get_bool("auto").unwrap_or(false));
         let powered = AtomicBool::new(nbt.get_bool("powered").unwrap_or(false));
-        let command = Mutex::new(nbt.get_string("Command").unwrap_or("").to_string());
-        let last_output = Mutex::new(nbt.get_string("LastOutput").unwrap_or("").to_string());
+        let command = StdMutex::new(nbt.get_string("Command").unwrap_or("").to_string());
+        let last_output = StdMutex::new(nbt.get_string("LastOutput").unwrap_or("").to_string());
         let track_output = AtomicBool::new(nbt.get_bool("TrackOutput").unwrap_or(false));
         let success_count =
             AtomicU32::new(nbt.get_int("SuccessCount").unwrap_or(0).cast_unsigned());
@@ -75,30 +99,13 @@ impl BlockEntity for CommandBlockEntity {
         }
     }
 
-    fn write_nbt<'a>(
-        &'a self,
-        nbt: &'a mut NbtCompound,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async {
-            nbt.put_bool("auto", self.auto.load(Ordering::SeqCst));
-            nbt.put_string("Command", self.command.lock().await.to_string());
-            nbt.put_bool("conditionMet", self.condition_met.load(Ordering::SeqCst));
-            nbt.put_string("LastOutput", self.last_output.lock().await.to_string());
-            nbt.put_bool("powered", self.powered.load(Ordering::SeqCst));
-            nbt.put_bool("TrackOutput", self.track_output.load(Ordering::SeqCst));
-            nbt.put_bool("UpdateLastExecution", false);
-            nbt.put_int(
-                "SuccessCount",
-                self.success_count.load(Ordering::SeqCst).cast_signed(),
-            );
-        })
+    fn write_nbt(&self, nbt: &mut NbtCompound) {
+        self.write_sync_nbt(nbt);
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
-        futures::executor::block_on(async {
-            self.write_nbt(&mut nbt).await;
-        });
+        self.write_sync_nbt(&mut nbt);
         Some(nbt)
     }
 

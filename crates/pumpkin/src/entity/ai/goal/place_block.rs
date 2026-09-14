@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use super::{Goal, GoalFuture, to_goal_ticks};
+use super::{Goal, to_goal_ticks};
 use crate::entity::mob::Mob;
 use crate::entity::mob::enderman::EndermanEntity;
 use pumpkin_data::Block;
@@ -20,70 +20,62 @@ impl PlaceBlockGoal {
 }
 
 impl Goal for PlaceBlockGoal {
-    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move {
-            if self.enderman.get_carried_block().is_none() {
-                return false;
-            }
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        if self.enderman.get_carried_block().is_none() {
+            return false;
+        }
 
-            let entity = &mob.get_mob_entity().living_entity.entity;
-            let world = entity.world.load();
-            if !world.level_info.load().game_rules.mob_griefing {
-                return false;
-            }
+        let entity = &mob.get_mob_entity().living_entity.entity;
+        let world = entity.world.load();
+        if !world.level_info.load().game_rules.mob_griefing {
+            return false;
+        }
 
-            if mob.get_random().random_range(0..to_goal_ticks(2000)) != 0 {
-                return false;
-            }
+        if mob.get_random().random_range(0..to_goal_ticks(2000)) != 0 {
+            return false;
+        }
 
-            true
-        })
+        true
     }
 
-    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            let Some(block_state_id) = self.enderman.get_carried_block() else {
-                return;
-            };
+    fn tick(&mut self, mob: &dyn Mob) {
+        let Some(block_state_id) = self.enderman.get_carried_block() else {
+            return;
+        };
 
-            let entity = &mob.get_mob_entity().living_entity.entity;
-            let pos = entity.pos.load();
+        let entity = &mob.get_mob_entity().living_entity.entity;
+        let pos = entity.pos.load();
 
-            let (bx, by, bz) = {
-                let mut rng = mob.get_random();
-                (
-                    pos.x.floor() as i32 + rng.random_range(-1..=1),
-                    pos.y.floor() as i32 + rng.random_range(0..=2),
-                    pos.z.floor() as i32 + rng.random_range(-1..=1),
-                )
-            };
+        let (bx, by, bz) = {
+            let mut rng = mob.get_random();
+            (
+                pos.x.floor() as i32 + rng.random_range(-1..=1),
+                pos.y.floor() as i32 + rng.random_range(0..=2),
+                pos.z.floor() as i32 + rng.random_range(-1..=1),
+            )
+        };
 
-            let world = entity.world.load();
-            let target_pos = BlockPos::new(bx, by, bz);
+        let world = entity.world.load();
+        let target_pos = BlockPos::new(bx, by, bz);
 
-            let state_id = world.get_block_state_id(&target_pos);
-            if !is_air(state_id) {
-                return;
-            }
+        let state_id = world.get_block_state_id(&target_pos);
+        if !is_air(state_id) {
+            return;
+        }
 
-            let below_pos = BlockPos::new(bx, by - 1, bz);
-            let (below_block, below_state) = world.get_block_and_state(&below_pos);
-            if !below_state.is_solid()
-                || !below_state.is_full_cube()
-                || below_block == &Block::BEDROCK
-            {
-                return;
-            }
+        let below_pos = BlockPos::new(bx, by - 1, bz);
+        let (below_block, below_state) = world.get_block_and_state(&below_pos);
+        if !below_state.is_solid() || !below_state.is_full_cube() || below_block == &Block::BEDROCK
+        {
+            return;
+        }
 
-            // TODO: Validate canPlaceAt and check entity collisions at target position
-            world
-                .set_block_state(&target_pos, block_state_id, BlockFlags::NOTIFY_ALL)
-                .await;
-            self.enderman.set_carried_block(None);
-        })
+        let world_clone = entity.world.load_full();
+        world_clone.set_block_state(&target_pos, block_state_id, BlockFlags::NOTIFY_ALL);
+        self.enderman.set_carried_block(None);
     }
 
-    fn should_continue<'a>(&'a self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async { false })
+    fn should_continue(&self, _mob: &dyn Mob) -> bool {
+        false
     }
 }

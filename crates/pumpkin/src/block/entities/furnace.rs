@@ -1,11 +1,10 @@
-use pumpkin_data::block_properties::BlockProperties;
-use pumpkin_world::inventory::Inventory;
+use pumpkin_inventory::Inventory;
 
 use std::{
     array::from_fn,
     collections::HashMap,
     sync::{
-        Arc, Mutex as StdMutex,
+        Arc, Mutex as StdMutex, RwLock,
         atomic::{AtomicBool, AtomicU16, Ordering},
     },
 };
@@ -23,13 +22,14 @@ use crate::{
 pub struct FurnaceBlockEntity {
     pub position: BlockPos,
     pub dirty: AtomicBool,
+    pub comparator_dirty: AtomicBool,
 
     pub cooking_time_spent: AtomicU16,
     pub cooking_total_time: AtomicU16,
     pub lit_time_remaining: AtomicU16,
     pub lit_total_time: AtomicU16,
 
-    pub items: tokio::sync::RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
+    pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
 
     /// Tracks recipes used for XP calculation (vanilla `RecipesUsed` NBT format)
     /// Maps result item ID -> craft count
@@ -45,7 +45,8 @@ impl FurnaceBlockEntity {
         Self {
             position,
             dirty: AtomicBool::new(false),
-            items: tokio::sync::RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
+            comparator_dirty: AtomicBool::new(false),
+            items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             cooking_total_time: AtomicU16::new(0),
             cooking_time_spent: AtomicU16::new(0),
             lit_total_time: AtomicU16::new(0),

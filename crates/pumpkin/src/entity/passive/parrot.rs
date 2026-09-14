@@ -7,7 +7,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
 
 use crate::entity::{
-    Entity, EntityBase, EntityBaseFuture,
+    Entity, EntityBase,
     ai::goal::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
@@ -58,7 +58,7 @@ impl ParrotEntity {
 
     /// Feeds the parrot a cookie: it is poisoned and then killed, as in vanilla
     /// `Parrot.mobInteract`.
-    async fn eat_cookie(&self, player: &Arc<Player>, item_stack: &mut ItemStack) {
+    fn eat_cookie(&self, player: &Arc<Player>, item_stack: &mut ItemStack) {
         item_stack.decrement_unless_creative(player.gamemode.load(), 1);
 
         self.mob_entity
@@ -71,8 +71,7 @@ impl ParrotEntity {
                 show_particles: true,
                 show_icon: true,
                 blend: true,
-            })
-            .await;
+            });
 
         // Vanilla guards this call with `player.isCreative() || !this.isInvulnerable()`,
         // but `hurt` re-checks invulnerability itself and `player_attack` doesn't bypass
@@ -84,8 +83,7 @@ impl ParrotEntity {
             None,
             Some(player.as_ref()),
             Some(player.as_ref()),
-        )
-        .await;
+        );
     }
 }
 
@@ -94,25 +92,19 @@ impl Mob for ParrotEntity {
         &self.mob_entity
     }
 
-    fn mob_interact<'a>(
-        &'a self,
-        player: &'a Arc<Player>,
-        item_stack: &'a mut ItemStack,
-    ) -> EntityBaseFuture<'a, bool> {
-        Box::pin(async move {
-            // Vanilla checks the poisonous food tag last, after taming, which isn't
-            // implemented yet. Nothing in `parrot_food` is also in
-            // `parrot_poisonous_food`, so the two branches can't be confused.
-            if !item_stack
-                .get_item()
-                .has_tag(&tag::Item::MINECRAFT_PARROT_POISONOUS_FOOD)
-            {
-                return self.mob_entity.mob_interact(player, item_stack).await;
-            }
+    fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+        // Vanilla checks the poisonous food tag last, after taming, which isn't
+        // implemented yet. Nothing in `parrot_food` is also in
+        // `parrot_poisonous_food`, so the two branches can't be confused.
+        if !item_stack
+            .get_item()
+            .has_tag(&tag::Item::MINECRAFT_PARROT_POISONOUS_FOOD)
+        {
+            return self.mob_entity.mob_interact(player, item_stack);
+        }
 
-            self.eat_cookie(player, item_stack).await;
-            true
-        })
+        self.eat_cookie(player, item_stack);
+        true
     }
 }
 

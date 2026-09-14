@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use pumpkin_util::math::vector3::Vector3;
 
-use super::{Controls, Goal, GoalFuture, to_goal_ticks};
+use super::{Controls, Goal, to_goal_ticks};
 use crate::entity::{EntityBase, ai::pathfinder::NavigatorGoal, mob::Mob, player::Player};
 
 pub struct TradeWithPlayerGoal {
@@ -78,47 +78,37 @@ impl TradeWithPlayerGoal {
 }
 
 impl Goal for TradeWithPlayerGoal {
-    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move {
-            self.player = Self::trading_player_in_range(mob);
-            self.player.is_some()
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        self.player = Self::trading_player_in_range(mob);
+        self.player.is_some()
+    }
+
+    fn should_continue(&self, mob: &dyn Mob) -> bool {
+        let Some(current) = Self::trading_player_in_range(mob) else {
+            return false;
+        };
+        self.player.as_ref().is_some_and(|player| {
+            player.get_entity().entity_uuid == current.get_entity().entity_uuid
         })
     }
 
-    fn should_continue<'a>(&'a self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move {
-            let Some(current) = Self::trading_player_in_range(mob) else {
-                return false;
-            };
-            self.player.as_ref().is_some_and(|player| {
-                player.get_entity().entity_uuid == current.get_entity().entity_uuid
-            })
-        })
+    fn start(&mut self, mob: &dyn Mob) {
+        self.update_countdown = 0;
+        self.follow_player(mob);
     }
 
-    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            self.update_countdown = 0;
-            self.follow_player(mob);
-        })
+    fn stop(&mut self, mob: &dyn Mob) {
+        self.player = None;
+        mob.get_mob_entity()
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .stop();
     }
 
-    fn stop<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            self.player = None;
-            mob.get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .stop();
-        })
-    }
-
-    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            self.update_countdown -= 1;
-            self.follow_player(mob);
-        })
+    fn tick(&mut self, mob: &dyn Mob) {
+        self.update_countdown -= 1;
+        self.follow_player(mob);
     }
 
     fn should_run_every_tick(&self) -> bool {

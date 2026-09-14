@@ -2,8 +2,7 @@ use super::BlockEntity;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::position::BlockPos;
-use std::pin::Pin;
-use tokio::sync::Mutex;
+use std::sync::Mutex;
 
 pub struct BeehiveBlockEntity {
     pub position: BlockPos,
@@ -24,14 +23,24 @@ impl BlockEntity for BeehiveBlockEntity {
     where
         Self: Sized,
     {
-        let bees = nbt.get_list("Bees").map(<[_]>::to_vec);
-        let flower_pos = nbt.get_compound("FlowerPos").map(|c| {
-            BlockPos::new(
-                c.get_int("X").unwrap_or(0),
-                c.get_int("Y").unwrap_or(0),
-                c.get_int("Z").unwrap_or(0),
-            )
-        });
+        let bees = nbt
+            .get_list("bees")
+            .or_else(|| nbt.get_list("Bees"))
+            .map(<[_]>::to_vec);
+        let flower_pos = nbt
+            .get_int_array("flower_pos")
+            .and_then(|arr| (arr.len() == 3).then(|| BlockPos::new(arr[0], arr[1], arr[2])))
+            .or_else(|| {
+                nbt.get_compound("flower_pos")
+                    .or_else(|| nbt.get_compound("FlowerPos"))
+                    .map(|c| {
+                        BlockPos::new(
+                            c.get_int("X").or_else(|| c.get_int("x")).unwrap_or(0),
+                            c.get_int("Y").or_else(|| c.get_int("y")).unwrap_or(0),
+                            c.get_int("Z").or_else(|| c.get_int("z")).unwrap_or(0),
+                        )
+                    })
+            });
         Self {
             position,
             bees: Mutex::new(bees),
@@ -39,22 +48,20 @@ impl BlockEntity for BeehiveBlockEntity {
         }
     }
 
-    fn write_nbt<'a>(
-        &'a self,
-        nbt: &'a mut NbtCompound,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
-        Box::pin(async move {
-            if let Some(b) = self.bees.lock().await.as_ref() {
-                nbt.put_list("Bees", b.clone());
-            }
-            if let Some(fp) = self.flower_pos.lock().await.as_ref() {
-                let mut fp_nbt = NbtCompound::new();
-                fp_nbt.put_int("X", fp.0.x);
-                fp_nbt.put_int("Y", fp.0.y);
-                fp_nbt.put_int("Z", fp.0.z);
-                nbt.put_compound("FlowerPos", fp_nbt);
-            }
-        })
+    fn write_nbt(&self, nbt: &mut NbtCompound) {
+        if let Ok(b) = self.bees.lock()
+            && let Some(b) = b.as_ref()
+        {
+            nbt.put_list("bees", b.clone());
+        }
+        if let Ok(fp) = self.flower_pos.lock()
+            && let Some(fp) = fp.as_ref()
+        {
+            nbt.put(
+                "flower_pos",
+                pumpkin_nbt::tag::NbtTag::IntArray(vec![fp.0.x, fp.0.y, fp.0.z]),
+            );
+        }
     }
 
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
@@ -62,16 +69,15 @@ impl BlockEntity for BeehiveBlockEntity {
         if let Ok(bees) = self.bees.try_lock()
             && let Some(ref b) = *bees
         {
-            nbt.put_list("Bees", b.clone());
+            nbt.put_list("bees", b.clone());
         }
         if let Ok(flower_pos) = self.flower_pos.try_lock()
             && let Some(ref fp) = *flower_pos
         {
-            let mut fp_nbt = NbtCompound::new();
-            fp_nbt.put_int("X", fp.0.x);
-            fp_nbt.put_int("Y", fp.0.y);
-            fp_nbt.put_int("Z", fp.0.z);
-            nbt.put_compound("FlowerPos", fp_nbt);
+            nbt.put(
+                "flower_pos",
+                pumpkin_nbt::tag::NbtTag::IntArray(vec![fp.0.x, fp.0.y, fp.0.z]),
+            );
         }
         Some(nbt)
     }
@@ -87,8 +93,8 @@ impl BeehiveBlockEntity {
     pub const fn new(position: BlockPos) -> Self {
         Self {
             position,
-            bees: Mutex::const_new(None),
-            flower_pos: Mutex::const_new(None),
+            bees: Mutex::new(None),
+            flower_pos: Mutex::new(None),
         }
     }
 }

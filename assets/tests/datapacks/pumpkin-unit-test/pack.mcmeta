@@ -1,0 +1,7 @@
+{
+  "pack": {
+    "description": "Real Pumpkin GameTests",
+    "min_format": [107, 1],
+    "max_format": 107
+  }
+}

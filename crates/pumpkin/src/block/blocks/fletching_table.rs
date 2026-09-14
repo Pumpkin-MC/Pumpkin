@@ -1,5 +1,5 @@
 use crate::block::registry::BlockActionResult;
-use crate::block::{BlockBehaviour, BlockFuture, NormalUseArgs};
+use crate::block::{BlockBehaviour, NormalUseArgs};
 
 use pumpkin_macros::pumpkin_block;
 
@@ -7,7 +7,7 @@ use pumpkin_macros::pumpkin_block;
 pub struct FletchingTableBlock;
 
 impl BlockBehaviour for FletchingTableBlock {
-    fn normal_use<'a>(&'a self, _args: NormalUseArgs<'a>) -> BlockFuture<'a, BlockActionResult> {
-        Box::pin(async move { BlockActionResult::Pass })
+    fn normal_use(&self, _args: NormalUseArgs<'_>) -> BlockActionResult {
+        BlockActionResult::Pass
     }
 }

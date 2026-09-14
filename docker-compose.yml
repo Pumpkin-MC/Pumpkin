@@ -6,6 +6,7 @@ services:
     build: .
     ports:
       - "25565:25565"
+      - "19132:19132/udp"
     volumes:
       - ./data:/pumpkin
       # Use the following, if you want to make your config immutable

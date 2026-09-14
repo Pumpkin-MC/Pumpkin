@@ -1,3 +1,4 @@
+use pumpkin_data::{Block, BlockDirection};
 use pumpkin_util::{
     math::position::BlockPos,
     random::{RandomGenerator, RandomImpl},
@@ -36,52 +37,156 @@ impl RootSystemFeature {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) -> bool {
-        if !self.allowed_tree_position.test(block_registry, chunk, &pos) {
+        if !chunk.is_air(&pos.0) {
             return false;
         }
 
-        if !self.can_place_tree(chunk, pos) {
-            return false;
-        }
-
-        if !self.feature.generate(
+        let mut working_pos = pos;
+        if self.place_dirt_and_tree(
             chunk,
             block_registry,
             min_y,
             height,
             feature_name,
             random,
+            &mut working_pos,
             pos,
         ) {
-            return false;
+            self.place_roots(chunk, block_registry, random, pos);
         }
 
-        self.place_roots(chunk, block_registry, random, pos);
         true
     }
 
-    fn can_place_tree<T: GenerationCache>(&self, chunk: &T, pos: BlockPos) -> bool {
-        let mut mutable_pos = pos;
+    fn space_for_tree<T: GenerationCache>(&self, chunk: &T, pos: BlockPos) -> bool {
+        let mut column_up = pos;
         for i in 1..=self.required_vertical_space_for_tree {
-            mutable_pos = mutable_pos.add(0, 1, 0);
-            if !self.is_allowed_tree_space(chunk, mutable_pos, i) {
+            column_up = column_up.up();
+            let state = GenerationCache::get_block_state(chunk, &column_up.0);
+            if !self.is_allowed_tree_space(state.to_block_id(), i) {
                 return false;
             }
         }
         true
     }
 
-    fn is_allowed_tree_space<T: GenerationCache>(
+    fn is_allowed_tree_space(
         &self,
-        chunk: &T,
-        pos: BlockPos,
-        vertical_space: i32,
+        block_id: pumpkin_data::BlockId,
+        blocks_above_origin: i32,
     ) -> bool {
-        if chunk.is_air(&pos.0) {
+        if block_id == Block::AIR.id {
             return true;
         }
-        // TODO: check for water.
-        vertical_space <= self.allowed_vertical_water_for_tree
+        let blocks_above_ground = blocks_above_origin + 1;
+        blocks_above_ground <= self.allowed_vertical_water_for_tree && block_id == Block::WATER.id
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn place_dirt_and_tree<T: GenerationCache>(
+        &self,
+        chunk: &mut T,
+        block_registry: &dyn WorldPortalExt,
+        min_y: i8,
+        height: u16,
+        feature_name: pumpkin_data::placed_feature::PlacedFeature,
+        random: &mut RandomGenerator,
+        working_pos: &mut BlockPos,
+        pos: BlockPos,
+    ) -> bool {
+        for y in 0..self.root_column_max_height {
+            *working_pos = working_pos.up();
+            if chunk.top_block_height_exclusive(working_pos.0.x, working_pos.0.z) < working_pos.0.y
+            {
+                return false;
+            }
+
+            if self
+                .allowed_tree_position
+                .test(block_registry, chunk, working_pos)
+                && self.space_for_tree(chunk, *working_pos)
+            {
+                let below_pos = working_pos.down();
+                let below_state = GenerationCache::get_block_state(chunk, &below_pos.0);
+                if below_state.to_block_id() == Block::LAVA.id
+                    || !below_state.to_state().is_side_solid(BlockDirection::Up)
+                {
+                    return false;
+                }
+
+                if self.feature.generate(
+                    chunk,
+                    block_registry,
+                    min_y,
+                    height,
+                    feature_name,
+                    random,
+                    *working_pos,
+                ) {
+                    self.place_dirt(chunk, block_registry, random, pos, pos.0.y + y);
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+
+    fn place_dirt<T: GenerationCache>(
+        &self,
+        chunk: &mut T,
+        block_registry: &dyn WorldPortalExt,
+        random: &mut RandomGenerator,
+        origin: BlockPos,
+        target_height: i32,
+    ) {
+        let origin_x = origin.0.x;
+        let origin_z = origin.0.z;
+
+        for y in origin.0.y..target_height {
+            self.place_rooted_dirt(
+                chunk,
+                block_registry,
+                random,
+                origin_x,
+                origin_z,
+                BlockPos::new(origin_x, y, origin_z),
+            );
+        }
+    }
+
+    fn place_rooted_dirt<T: GenerationCache>(
+        &self,
+        chunk: &mut T,
+        block_registry: &dyn WorldPortalExt,
+        random: &mut RandomGenerator,
+        origin_x: i32,
+        origin_z: i32,
+        mut working_pos: BlockPos,
+    ) {
+        let root_radius = self.root_radius.max(1);
+
+        for _ in 0..self.root_placement_attempts {
+            working_pos = working_pos.add(
+                random.next_bounded_i32(root_radius) - random.next_bounded_i32(root_radius),
+                0,
+                random.next_bounded_i32(root_radius) - random.next_bounded_i32(root_radius),
+            );
+
+            if self
+                .root_replaceable
+                .test(block_registry, chunk, &working_pos)
+            {
+                chunk.set_block_state(
+                    &working_pos.0,
+                    self.root_state_provider
+                        .get(random, working_pos, chunk, block_registry),
+                );
+            }
+
+            working_pos.0.x = origin_x;
+            working_pos.0.z = origin_z;
+        }
     }
 
     fn place_roots<T: GenerationCache>(
@@ -91,92 +196,29 @@ impl RootSystemFeature {
         random: &mut RandomGenerator,
         pos: BlockPos,
     ) {
-        self.place_rooted_dirt(chunk, block_registry, random, pos);
-        self.place_hanging_roots(chunk, block_registry, random, pos);
-    }
+        let root_radius = self.hanging_root_radius.max(1);
+        let vertical_span = self.hanging_roots_vertical_span.max(1);
 
-    fn place_rooted_dirt<T: GenerationCache>(
-        &self,
-        chunk: &mut T,
-        block_registry: &dyn WorldPortalExt,
-        random: &mut RandomGenerator,
-        pos: BlockPos,
-    ) {
-        for _ in 0..self.root_placement_attempts {
-            let mut mutable_pos = pos.add(
-                random.next_bounded_i32(self.root_radius.max(1))
-                    - random.next_bounded_i32(self.root_radius.max(1)),
-                0,
-                random.next_bounded_i32(self.root_radius.max(1))
-                    - random.next_bounded_i32(self.root_radius.max(1)),
-            );
-
-            if self
-                .root_replaceable
-                .test(block_registry, chunk, &mutable_pos)
-            {
-                chunk.set_block_state(
-                    &mutable_pos.0,
-                    self.root_state_provider.get_with_context(
-                        block_registry,
-                        chunk,
-                        random,
-                        mutable_pos,
-                    ),
-                );
-            }
-
-            for _ in 0..self.root_column_max_height {
-                mutable_pos = mutable_pos.add(0, -1, 0);
-                if chunk.out_of_height(mutable_pos.0.y as i16)
-                    || !self
-                        .root_replaceable
-                        .test(block_registry, chunk, &mutable_pos)
-                {
-                    break;
-                }
-                chunk.set_block_state(
-                    &mutable_pos.0,
-                    self.root_state_provider.get_with_context(
-                        block_registry,
-                        chunk,
-                        random,
-                        mutable_pos,
-                    ),
-                );
-            }
-        }
-    }
-
-    fn place_hanging_roots<T: GenerationCache>(
-        &self,
-        chunk: &mut T,
-        block_registry: &dyn WorldPortalExt,
-        random: &mut RandomGenerator,
-        pos: BlockPos,
-    ) {
         for _ in 0..self.hanging_root_placement_attempts {
-            let mutable_pos = pos.add(
-                random.next_bounded_i32(self.hanging_root_radius.max(1))
-                    - random.next_bounded_i32(self.hanging_root_radius.max(1)),
-                random.next_bounded_i32(self.hanging_roots_vertical_span.max(1))
-                    - random.next_bounded_i32(self.hanging_roots_vertical_span.max(1)),
-                random.next_bounded_i32(self.hanging_root_radius.max(1))
-                    - random.next_bounded_i32(self.hanging_root_radius.max(1)),
+            let working_pos = pos.add(
+                random.next_bounded_i32(root_radius) - random.next_bounded_i32(root_radius),
+                random.next_bounded_i32(vertical_span) - random.next_bounded_i32(vertical_span),
+                random.next_bounded_i32(root_radius) - random.next_bounded_i32(root_radius),
             );
 
-            if chunk.is_air(&mutable_pos.0) {
-                let state = self.hanging_root_state_provider.get_with_context(
-                    block_registry,
-                    chunk,
-                    random,
-                    mutable_pos,
-                );
-                // In vanilla, it checks if it can survive and if the block above is sturdy.
-                // For now, let's just check if the block above is NOT air.
-                let above = mutable_pos.add(0, 1, 0);
-                if !chunk.is_air(&above.0) {
-                    chunk.set_block_state(&mutable_pos.0, state);
+            if chunk.is_air(&working_pos.0) {
+                let above = working_pos.up();
+                let above_state = GenerationCache::get_block_state(chunk, &above.0);
+                if above_state.to_state().is_side_solid(BlockDirection::Down) {
+                    chunk.set_block_state(
+                        &working_pos.0,
+                        self.hanging_root_state_provider.get(
+                            random,
+                            working_pos,
+                            chunk,
+                            block_registry,
+                        ),
+                    );
                 }
             }
         }

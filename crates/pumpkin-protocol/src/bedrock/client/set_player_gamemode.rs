@@ -1,9 +1,10 @@
-use crate::serial::PacketWrite;
+// Last verified for v2169
+
+use crate::{bedrock::client::GameType, serial::PacketWrite};
 use pumpkin_macros::packet;
-use pumpkin_util::GameMode;
 
 #[derive(PacketWrite)]
 #[packet(62)]
-pub struct CSetPlayerGamemode {
-    pub gamemode: GameMode,
+pub struct CSetPlayerGameType {
+    pub player_game_type: GameType,
 }

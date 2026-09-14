@@ -1,4 +1,4 @@
-use super::{Controls, Goal, GoalFuture};
+use super::{Controls, Goal};
 use crate::entity::mob::Mob;
 use pumpkin_data::Block;
 use pumpkin_data::tag::{self, Taggable};
@@ -29,83 +29,71 @@ impl EatGrassGoal {
 }
 
 impl Goal for EatGrassGoal {
-    fn can_start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move {
-            if mob.get_random().random_range(0..1000) != 0 {
-                return false;
-            }
+    fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        if mob.get_random().random_range(0..1000) != 0 {
+            return false;
+        }
 
+        let entity = &mob.get_mob_entity().living_entity.entity;
+        let block_pos = entity.block_pos.load();
+        let world = entity.world.load();
+
+        let block_at_pos = world.get_block(&block_pos);
+        if block_at_pos.has_tag(&tag::Block::MINECRAFT_EDIBLE_FOR_SHEEP) {
+            return true;
+        }
+
+        let block_below = world.get_block(&block_pos.down());
+        block_below.id == Block::GRASS_BLOCK.id
+    }
+
+    fn should_continue(&self, _mob: &dyn Mob) -> bool {
+        self.timer > 0
+    }
+
+    fn start(&mut self, mob: &dyn Mob) {
+        self.timer = MAX_TIMER;
+        let mut navigator = mob
+            .get_mob_entity()
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        navigator.stop();
+    }
+
+    fn tick(&mut self, mob: &dyn Mob) {
+        self.timer -= 1;
+
+        if self.timer == 4 {
             let entity = &mob.get_mob_entity().living_entity.entity;
             let block_pos = entity.block_pos.load();
-            let world = entity.world.load();
+            let world = entity.world.load_full();
 
             let block_at_pos = world.get_block(&block_pos);
             if block_at_pos.has_tag(&tag::Block::MINECRAFT_EDIBLE_FOR_SHEEP) {
-                return true;
-            }
-
-            let block_below = world.get_block(&block_pos.down());
-            block_below.id == Block::GRASS_BLOCK.id
-        })
-    }
-
-    fn should_continue<'a>(&'a self, _mob: &'a dyn Mob) -> GoalFuture<'a, bool> {
-        Box::pin(async move { self.timer > 0 })
-    }
-
-    fn start<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            self.timer = MAX_TIMER;
-            let mut navigator = mob
-                .get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            navigator.stop();
-        })
-    }
-
-    fn tick<'a>(&'a mut self, mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            self.timer -= 1;
-
-            if self.timer == 4 {
-                let entity = &mob.get_mob_entity().living_entity.entity;
-                let block_pos = entity.block_pos.load();
-                let world = entity.world.load_full();
-
-                let block_at_pos = world.get_block(&block_pos);
-                if block_at_pos.has_tag(&tag::Block::MINECRAFT_EDIBLE_FOR_SHEEP) {
-                    world
-                        .set_block_state(
-                            &block_pos,
-                            Block::AIR.default_state.id,
-                            BlockFlags::NOTIFY_ALL,
-                        )
-                        .await;
-                    mob.on_eating_grass().await;
-                } else {
-                    let below_pos = block_pos.down();
-                    let block_below = world.get_block(&below_pos);
-                    if block_below.id == Block::GRASS_BLOCK.id {
-                        world
-                            .set_block_state(
-                                &below_pos,
-                                Block::DIRT.default_state.id,
-                                BlockFlags::NOTIFY_ALL,
-                            )
-                            .await;
-                        mob.on_eating_grass().await;
-                    }
+                world.set_block_state(
+                    &block_pos,
+                    Block::AIR.default_state.id,
+                    BlockFlags::NOTIFY_ALL,
+                );
+                mob.on_eating_grass();
+            } else {
+                let below_pos = block_pos.down();
+                let block_below = world.get_block(&below_pos);
+                if block_below.id == Block::GRASS_BLOCK.id {
+                    world.set_block_state(
+                        &below_pos,
+                        Block::DIRT.default_state.id,
+                        BlockFlags::NOTIFY_ALL,
+                    );
+                    mob.on_eating_grass();
                 }
             }
-        })
+        }
     }
 
-    fn stop<'a>(&'a mut self, _mob: &'a dyn Mob) -> GoalFuture<'a, ()> {
-        Box::pin(async move {
-            self.timer = 0;
-        })
+    fn stop(&mut self, _mob: &dyn Mob) {
+        self.timer = 0;
     }
 
     fn should_run_every_tick(&self) -> bool {

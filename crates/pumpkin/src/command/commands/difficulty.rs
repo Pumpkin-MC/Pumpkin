@@ -17,68 +17,58 @@ const FAILURE_ERROR_TYPE: CommandErrorType<1> =
 struct DifficultyQueryExecutor;
 
 impl CommandExecutor for DifficultyQueryExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let difficulty = context.server().get_difficulty();
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let difficulty = context.server().get_difficulty();
 
-            context
-                .source
-                .send_feedback(
-                    TextComponent::translate_cross(
-                        "commands.difficulty.query",
-                        "commands.difficulty.query",
-                        [TextComponent::translate_cross(
-                            difficulty.translation_key(),
-                            difficulty.translation_key(),
-                            [],
-                        )],
-                    ),
-                    false,
-                )
-                .await;
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                "commands.difficulty.query",
+                "commands.difficulty.query",
+                [TextComponent::translate_cross(
+                    difficulty.translation_key(),
+                    difficulty.translation_key(),
+                    [],
+                )],
+            ),
+            false,
+        );
 
-            Ok(difficulty as i32)
-        })
+        Ok(difficulty as i32)
     }
 }
 
 struct DifficultySetExecutor(Difficulty);
 
 impl CommandExecutor for DifficultySetExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let difficulty = self.0;
-            let server = context.server();
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let difficulty = self.0;
+        let server = context.server();
 
-            {
-                let level_info = server.level_info.load();
+        {
+            let level_info = server.level_info.load();
 
-                if level_info.difficulty == difficulty {
-                    return Err(FAILURE_ERROR_TYPE
-                        .create_without_context(TextComponent::text(difficulty.name())));
-                }
+            if level_info.difficulty == difficulty {
+                return Err(FAILURE_ERROR_TYPE
+                    .create_without_context(TextComponent::text(difficulty.name())));
             }
+        }
 
-            server.set_difficulty(difficulty, true).await;
+        server.set_difficulty(difficulty, true);
 
-            context
-                .source
-                .send_feedback(
-                    TextComponent::translate_cross(
-                        pumpkin_data::translation::java::COMMANDS_DIFFICULTY_SUCCESS,
-                        pumpkin_data::translation::bedrock::COMMANDS_DIFFICULTY_SUCCESS,
-                        [TextComponent::translate_cross(
-                            difficulty.translation_key(),
-                            difficulty.translation_key(),
-                            [],
-                        )],
-                    ),
-                    true,
-                )
-                .await;
+        context.source.send_feedback(
+            TextComponent::translate_cross(
+                pumpkin_data::translation::java::COMMANDS_DIFFICULTY_SUCCESS,
+                pumpkin_data::translation::bedrock::COMMANDS_DIFFICULTY_SUCCESS,
+                [TextComponent::translate_cross(
+                    difficulty.translation_key(),
+                    difficulty.translation_key(),
+                    [],
+                )],
+            ),
+            true,
+        );
 
-            Ok(0)
-        })
+        Ok(0)
     }
 }
 

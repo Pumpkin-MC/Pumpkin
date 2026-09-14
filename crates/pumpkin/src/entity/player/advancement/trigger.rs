@@ -26,23 +26,22 @@ pub enum AdvancementTrigger {
 
 impl Player {
     #[allow(clippy::collapsible_if, clippy::too_many_lines)]
-    pub async fn trigger_advancement(&self, trigger: AdvancementTrigger) {
+    pub fn trigger_advancement(&self, trigger: AdvancementTrigger) {
         use pumpkin_data::advancement::Advancement;
         use pumpkin_data::item::Item;
 
         match trigger {
             AdvancementTrigger::InventoryChanged => {
-                if !self.has_advancement(Advancement::STORY_ROOT).await {
-                    if self.has_item_in_inventory(&Item::CRAFTING_TABLE).await {
+                if !self.has_advancement(Advancement::STORY_ROOT) {
+                    if self.has_item_in_inventory(&Item::CRAFTING_TABLE) {
                         self.trigger_advancement_criterion(
                             Advancement::STORY_ROOT,
                             "crafting_table",
-                        )
-                        .await;
+                        );
                     }
                 }
 
-                if !self.has_advancement(Advancement::STORY_MINE_STONE).await {
+                if !self.has_advancement(Advancement::STORY_MINE_STONE) {
                     let stone_items = [
                         &Item::COBBLESTONE,
                         &Item::STONE,
@@ -54,65 +53,59 @@ impl Player {
                         &Item::BLACKSTONE,
                     ];
                     for item in stone_items {
-                        if self.has_item_in_inventory(item).await {
+                        if self.has_item_in_inventory(item) {
                             self.trigger_advancement_criterion(
                                 Advancement::STORY_MINE_STONE,
                                 "get_stone",
-                            )
-                            .await;
+                            );
                             break;
                         }
                     }
                 }
 
-                if !self.has_advancement(Advancement::STORY_UPGRADE_TOOLS).await {
-                    if self.has_item_in_inventory(&Item::STONE_PICKAXE).await {
+                if !self.has_advancement(Advancement::STORY_UPGRADE_TOOLS) {
+                    if self.has_item_in_inventory(&Item::STONE_PICKAXE) {
                         self.trigger_advancement_criterion(
                             Advancement::STORY_UPGRADE_TOOLS,
                             "stone_pickaxe",
-                        )
-                        .await;
+                        );
                     }
                 }
 
-                if !self.has_advancement(Advancement::STORY_SMELT_IRON).await {
-                    if self.has_item_in_inventory(&Item::IRON_INGOT).await {
-                        self.trigger_advancement_criterion(Advancement::STORY_SMELT_IRON, "iron")
-                            .await;
+                if !self.has_advancement(Advancement::STORY_SMELT_IRON) {
+                    if self.has_item_in_inventory(&Item::IRON_INGOT) {
+                        self.trigger_advancement_criterion(Advancement::STORY_SMELT_IRON, "iron");
                     }
                 }
 
-                if !self.has_advancement(Advancement::STORY_IRON_TOOLS).await {
-                    if self.has_item_in_inventory(&Item::IRON_PICKAXE).await {
+                if !self.has_advancement(Advancement::STORY_IRON_TOOLS) {
+                    if self.has_item_in_inventory(&Item::IRON_PICKAXE) {
                         self.trigger_advancement_criterion(
                             Advancement::STORY_IRON_TOOLS,
                             "iron_pickaxe",
-                        )
-                        .await;
+                        );
                     }
                 }
 
-                if !self.has_advancement(Advancement::STORY_MINE_DIAMOND).await {
-                    if self.has_item_in_inventory(&Item::DIAMOND).await {
+                if !self.has_advancement(Advancement::STORY_MINE_DIAMOND) {
+                    if self.has_item_in_inventory(&Item::DIAMOND) {
                         self.trigger_advancement_criterion(
                             Advancement::STORY_MINE_DIAMOND,
                             "diamond",
-                        )
-                        .await;
+                        );
                     }
                 }
 
-                if !self.has_advancement(Advancement::STORY_LAVA_BUCKET).await {
-                    if self.has_item_in_inventory(&Item::LAVA_BUCKET).await {
+                if !self.has_advancement(Advancement::STORY_LAVA_BUCKET) {
+                    if self.has_item_in_inventory(&Item::LAVA_BUCKET) {
                         self.trigger_advancement_criterion(
                             Advancement::STORY_LAVA_BUCKET,
                             "lava_bucket",
-                        )
-                        .await;
+                        );
                     }
                 }
 
-                if !self.has_advancement(Advancement::STORY_OBTAIN_ARMOR).await {
+                if !self.has_advancement(Advancement::STORY_OBTAIN_ARMOR) {
                     let armor = [
                         (&Item::IRON_HELMET, "iron_helmet"),
                         (&Item::IRON_CHESTPLATE, "iron_chestplate"),
@@ -120,17 +113,16 @@ impl Player {
                         (&Item::IRON_BOOTS, "iron_boots"),
                     ];
                     for (item, criterion) in armor {
-                        if self.has_item_in_inventory(item).await {
+                        if self.has_item_in_inventory(item) {
                             self.trigger_advancement_criterion(
                                 Advancement::STORY_OBTAIN_ARMOR,
                                 criterion,
-                            )
-                            .await;
+                            );
                         }
                     }
                 }
 
-                if !self.has_advancement(Advancement::STORY_SHINY_GEAR).await {
+                if !self.has_advancement(Advancement::STORY_SHINY_GEAR) {
                     let armor = [
                         (&Item::DIAMOND_HELMET, "diamond_helmet"),
                         (&Item::DIAMOND_CHESTPLATE, "diamond_chestplate"),
@@ -138,104 +130,74 @@ impl Player {
                         (&Item::DIAMOND_BOOTS, "diamond_boots"),
                     ];
                     for (item, criterion) in armor {
-                        if self.has_item_in_inventory(item).await {
+                        if self.has_item_in_inventory(item) {
                             self.trigger_advancement_criterion(
                                 Advancement::STORY_SHINY_GEAR,
                                 criterion,
-                            )
-                            .await;
+                            );
                         }
                     }
                 }
 
-                if !self.has_advancement(Advancement::STORY_FORM_OBSIDIAN).await {
-                    if self.has_item_in_inventory(&Item::OBSIDIAN).await {
+                if !self.has_advancement(Advancement::STORY_FORM_OBSIDIAN) {
+                    if self.has_item_in_inventory(&Item::OBSIDIAN) {
                         self.trigger_advancement_criterion(
                             Advancement::STORY_FORM_OBSIDIAN,
                             "obsidian",
-                        )
-                        .await;
+                        );
                     }
                 }
 
-                if !self
-                    .has_advancement(Advancement::NETHER_GET_WITHER_SKULL)
-                    .await
-                {
-                    if self
-                        .has_item_in_inventory(&Item::WITHER_SKELETON_SKULL)
-                        .await
-                    {
+                if !self.has_advancement(Advancement::NETHER_GET_WITHER_SKULL) {
+                    if self.has_item_in_inventory(&Item::WITHER_SKELETON_SKULL) {
                         self.trigger_advancement_criterion(
                             Advancement::NETHER_GET_WITHER_SKULL,
                             "wither_skull",
-                        )
-                        .await;
+                        );
                     }
                 }
 
-                if !self
-                    .has_advancement(Advancement::NETHER_OBTAIN_ANCIENT_DEBRIS)
-                    .await
-                {
-                    if self.has_item_in_inventory(&Item::ANCIENT_DEBRIS).await {
+                if !self.has_advancement(Advancement::NETHER_OBTAIN_ANCIENT_DEBRIS) {
+                    if self.has_item_in_inventory(&Item::ANCIENT_DEBRIS) {
                         self.trigger_advancement_criterion(
                             Advancement::NETHER_OBTAIN_ANCIENT_DEBRIS,
                             "ancient_debris",
-                        )
-                        .await;
+                        );
                     }
                 }
 
-                if !self
-                    .has_advancement(Advancement::NETHER_OBTAIN_BLAZE_ROD)
-                    .await
-                {
-                    if self.has_item_in_inventory(&Item::BLAZE_ROD).await {
+                if !self.has_advancement(Advancement::NETHER_OBTAIN_BLAZE_ROD) {
+                    if self.has_item_in_inventory(&Item::BLAZE_ROD) {
                         self.trigger_advancement_criterion(
                             Advancement::NETHER_OBTAIN_BLAZE_ROD,
                             "blaze_rod",
-                        )
-                        .await;
+                        );
                     }
                 }
 
-                if !self
-                    .has_advancement(Advancement::NETHER_OBTAIN_CRYING_OBSIDIAN)
-                    .await
-                {
-                    if self.has_item_in_inventory(&Item::CRYING_OBSIDIAN).await {
+                if !self.has_advancement(Advancement::NETHER_OBTAIN_CRYING_OBSIDIAN) {
+                    if self.has_item_in_inventory(&Item::CRYING_OBSIDIAN) {
                         self.trigger_advancement_criterion(
                             Advancement::NETHER_OBTAIN_CRYING_OBSIDIAN,
                             "crying_obsidian",
-                        )
-                        .await;
+                        );
                     }
                 }
 
-                if !self
-                    .has_advancement(Advancement::NETHER_NETHERITE_ARMOR)
-                    .await
-                {
-                    if self.has_item_in_inventory(&Item::NETHERITE_HELMET).await
-                        && self
-                            .has_item_in_inventory(&Item::NETHERITE_CHESTPLATE)
-                            .await
-                        && self.has_item_in_inventory(&Item::NETHERITE_LEGGINGS).await
-                        && self.has_item_in_inventory(&Item::NETHERITE_BOOTS).await
+                if !self.has_advancement(Advancement::NETHER_NETHERITE_ARMOR) {
+                    if self.has_item_in_inventory(&Item::NETHERITE_HELMET)
+                        && self.has_item_in_inventory(&Item::NETHERITE_CHESTPLATE)
+                        && self.has_item_in_inventory(&Item::NETHERITE_LEGGINGS)
+                        && self.has_item_in_inventory(&Item::NETHERITE_BOOTS)
                     {
                         self.trigger_advancement_criterion(
                             Advancement::NETHER_NETHERITE_ARMOR,
                             "netherite_armor",
-                        )
-                        .await;
+                        );
                     }
                 }
 
-                if !self
-                    .has_advancement(Advancement::HUSBANDRY_TACTICAL_FISHING)
-                    .await
-                {
+                if !self.has_advancement(Advancement::HUSBANDRY_TACTICAL_FISHING) {
                     let fish_buckets = [
                         (&Item::COD_BUCKET, "cod_bucket"),
                         (&Item::SALMON_BUCKET, "salmon_bucket"),
@@ -243,157 +205,129 @@ impl Player {
                         (&Item::TROPICAL_FISH_BUCKET, "tropical_fish_bucket"),
                     ];
                     for (item, criterion) in fish_buckets {
-                        if self.has_item_in_inventory(item).await {
+                        if self.has_item_in_inventory(item) {
                             self.trigger_advancement_criterion(
                                 Advancement::HUSBANDRY_TACTICAL_FISHING,
                                 criterion,
-                            )
-                            .await;
+                            );
                         }
                     }
                 }
 
-                if !self
-                    .has_advancement(Advancement::HUSBANDRY_AXOLOTL_IN_A_BUCKET)
-                    .await
-                {
-                    if self.has_item_in_inventory(&Item::AXOLOTL_BUCKET).await {
+                if !self.has_advancement(Advancement::HUSBANDRY_AXOLOTL_IN_A_BUCKET) {
+                    if self.has_item_in_inventory(&Item::AXOLOTL_BUCKET) {
                         self.trigger_advancement_criterion(
                             Advancement::HUSBANDRY_AXOLOTL_IN_A_BUCKET,
                             "axolotl_bucket",
-                        )
-                        .await;
+                        );
                     }
                 }
 
-                if !self
-                    .has_advancement(Advancement::HUSBANDRY_TADPOLE_IN_A_BUCKET)
-                    .await
-                {
-                    if self.has_item_in_inventory(&Item::TADPOLE_BUCKET).await {
+                if !self.has_advancement(Advancement::HUSBANDRY_TADPOLE_IN_A_BUCKET) {
+                    if self.has_item_in_inventory(&Item::TADPOLE_BUCKET) {
                         self.trigger_advancement_criterion(
                             Advancement::HUSBANDRY_TADPOLE_IN_A_BUCKET,
                             "tadpole_bucket",
-                        )
-                        .await;
+                        );
                     }
                 }
 
-                if !self
-                    .has_advancement(Advancement::HUSBANDRY_OBTAIN_NETHERITE_HOE)
-                    .await
-                {
-                    if self.has_item_in_inventory(&Item::NETHERITE_HOE).await {
+                if !self.has_advancement(Advancement::HUSBANDRY_OBTAIN_NETHERITE_HOE) {
+                    if self.has_item_in_inventory(&Item::NETHERITE_HOE) {
                         self.trigger_advancement_criterion(
                             Advancement::HUSBANDRY_OBTAIN_NETHERITE_HOE,
                             "netherite_hoe",
-                        )
-                        .await;
+                        );
                     }
                 }
 
-                if !self.has_advancement(Advancement::STORY_ENCHANT_ITEM).await {
-                    let mut has_enchanted = false;
-                    let main_inv = self.inventory().main_inventory.read().await;
-                    for stack in main_inv.iter() {
-                        if !stack.is_empty() && stack.has_enchantments() {
-                            has_enchanted = true;
-                            break;
-                        }
-                    }
+                if !self.has_advancement(Advancement::STORY_ENCHANT_ITEM) {
+                    let has_enchanted = {
+                        let main_inv = self
+                            .inventory()
+                            .main_inventory
+                            .read()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        main_inv
+                            .iter()
+                            .any(|stack| !stack.is_empty() && stack.has_enchantments())
+                    };
                     if has_enchanted {
                         self.trigger_advancement_criterion(
                             Advancement::STORY_ENCHANT_ITEM,
                             "enchanted_item",
-                        )
-                        .await;
+                        );
                     }
                 }
 
-                if !self.has_advancement(Advancement::NETHER_BREW_POTION).await {
+                if !self.has_advancement(Advancement::NETHER_BREW_POTION) {
                     let potions = [&Item::POTION, &Item::SPLASH_POTION, &Item::LINGERING_POTION];
                     for item in potions {
-                        if self.has_item_in_inventory(item).await {
+                        if self.has_item_in_inventory(item) {
                             self.trigger_advancement_criterion(
                                 Advancement::NETHER_BREW_POTION,
                                 "potion",
-                            )
-                            .await;
+                            );
                             break;
                         }
                     }
                 }
 
-                if !self
-                    .has_advancement(Advancement::NETHER_CREATE_BEACON)
-                    .await
-                {
-                    if self.has_item_in_inventory(&Item::BEACON).await {
+                if !self.has_advancement(Advancement::NETHER_CREATE_BEACON) {
+                    if self.has_item_in_inventory(&Item::BEACON) {
                         self.trigger_advancement_criterion(
                             Advancement::NETHER_CREATE_BEACON,
                             "beacon",
-                        )
-                        .await;
+                        );
                     }
                 }
-                if !self
-                    .has_advancement(Advancement::NETHER_CREATE_FULL_BEACON)
-                    .await
-                {
-                    if self.has_item_in_inventory(&Item::BEACON).await {
+                if !self.has_advancement(Advancement::NETHER_CREATE_FULL_BEACON) {
+                    if self.has_item_in_inventory(&Item::BEACON) {
                         self.trigger_advancement_criterion(
                             Advancement::NETHER_CREATE_FULL_BEACON,
                             "beacon",
-                        )
-                        .await;
+                        );
                     }
                 }
 
-                if !self.has_advancement(Advancement::END_ELYTRA).await {
-                    if self.has_item_in_inventory(&Item::ELYTRA).await {
-                        self.trigger_advancement_criterion(Advancement::END_ELYTRA, "elytra")
-                            .await;
+                if !self.has_advancement(Advancement::END_ELYTRA) {
+                    if self.has_item_in_inventory(&Item::ELYTRA) {
+                        self.trigger_advancement_criterion(Advancement::END_ELYTRA, "elytra");
                     }
                 }
 
-                if !self.has_advancement(Advancement::END_DRAGON_EGG).await {
-                    if self.has_item_in_inventory(&Item::DRAGON_EGG).await {
+                if !self.has_advancement(Advancement::END_DRAGON_EGG) {
+                    if self.has_item_in_inventory(&Item::DRAGON_EGG) {
                         self.trigger_advancement_criterion(
                             Advancement::END_DRAGON_EGG,
                             "dragon_egg",
-                        )
-                        .await;
+                        );
                     }
                 }
 
-                if !self.has_advancement(Advancement::END_DRAGON_BREATH).await {
-                    if self.has_item_in_inventory(&Item::DRAGON_BREATH).await {
+                if !self.has_advancement(Advancement::END_DRAGON_BREATH) {
+                    if self.has_item_in_inventory(&Item::DRAGON_BREATH) {
                         self.trigger_advancement_criterion(
                             Advancement::END_DRAGON_BREATH,
                             "dragon_breath",
-                        )
-                        .await;
+                        );
                     }
                 }
 
-                if !self.has_advancement(Advancement::END_FIND_END_CITY).await {
+                if !self.has_advancement(Advancement::END_FIND_END_CITY) {
                     let city_items = [&Item::SHULKER_SHELL, &Item::CHORUS_FRUIT];
                     for item in city_items {
-                        if self.has_item_in_inventory(item).await {
+                        if self.has_item_in_inventory(item) {
                             self.trigger_advancement_criterion(
                                 Advancement::END_FIND_END_CITY,
                                 "in_city",
-                            )
-                            .await;
+                            );
                             break;
                         }
                     }
                 }
 
-                if !self
-                    .has_advancement(Advancement::NETHER_EXPLORE_NETHER)
-                    .await
-                {
+                if !self.has_advancement(Advancement::NETHER_EXPLORE_NETHER) {
                     let pos = self.position().to_block_pos();
                     let biome = self.world().level.get_rough_biome(&pos);
                     let biome_resource = format!("minecraft:{}", biome.registry_id);
@@ -408,15 +342,11 @@ impl Player {
                         self.trigger_advancement_criterion(
                             Advancement::NETHER_EXPLORE_NETHER,
                             &biome_resource,
-                        )
-                        .await;
+                        );
                     }
                 }
 
-                if !self
-                    .has_advancement(Advancement::ADVENTURE_ADVENTURING_TIME)
-                    .await
-                {
+                if !self.has_advancement(Advancement::ADVENTURE_ADVENTURING_TIME) {
                     let pos = self.position().to_block_pos();
                     let biome = self.world().level.get_rough_biome(&pos);
                     let biome_resource = format!("minecraft:{}", biome.registry_id);
@@ -481,8 +411,7 @@ impl Player {
                         self.trigger_advancement_criterion(
                             Advancement::ADVENTURE_ADVENTURING_TIME,
                             &biome_resource,
-                        )
-                        .await;
+                        );
                     }
                 }
             }
@@ -492,38 +421,28 @@ impl Player {
                 self.trigger_advancement_criterion(
                     Advancement::ADVENTURE_KILL_A_MOB,
                     &entity_type_resource,
-                )
-                .await;
+                );
                 self.trigger_advancement_criterion(
                     Advancement::ADVENTURE_KILL_ALL_MOBS,
                     &entity_type_resource,
-                )
-                .await;
-                if !self.has_advancement(Advancement::ADVENTURE_ROOT).await {
+                );
+                if !self.has_advancement(Advancement::ADVENTURE_ROOT) {
                     self.trigger_advancement_criterion(
                         Advancement::ADVENTURE_ROOT,
                         "killed_something",
-                    )
-                    .await;
+                    );
                 }
             }
             AdvancementTrigger::SleptInBed => {
-                if !self
-                    .has_advancement(Advancement::ADVENTURE_SLEEP_IN_BED)
-                    .await
-                {
+                if !self.has_advancement(Advancement::ADVENTURE_SLEEP_IN_BED) {
                     self.trigger_advancement_criterion(
                         Advancement::ADVENTURE_SLEEP_IN_BED,
                         "slept_in_bed",
-                    )
-                    .await;
+                    );
                 }
             }
             AdvancementTrigger::FishedItem { item_id } => {
-                if !self
-                    .has_advancement(Advancement::HUSBANDRY_FISHY_BUSINESS)
-                    .await
-                {
+                if !self.has_advancement(Advancement::HUSBANDRY_FISHY_BUSINESS) {
                     let fishes = [
                         ("minecraft:cod", "cod"),
                         ("minecraft:salmon", "salmon"),
@@ -535,18 +454,14 @@ impl Player {
                             self.trigger_advancement_criterion(
                                 Advancement::HUSBANDRY_FISHY_BUSINESS,
                                 criterion,
-                            )
-                            .await;
+                            );
                             break;
                         }
                     }
                 }
             }
             AdvancementTrigger::PlacedBlock { block_id } => {
-                if !self
-                    .has_advancement(Advancement::HUSBANDRY_PLANT_SEED)
-                    .await
-                {
+                if !self.has_advancement(Advancement::HUSBANDRY_PLANT_SEED) {
                     let seed_blocks = [
                         ("minecraft:wheat", "wheat"),
                         ("minecraft:pumpkin_stem", "pumpkin_stem"),
@@ -561,8 +476,7 @@ impl Player {
                             self.trigger_advancement_criterion(
                                 Advancement::HUSBANDRY_PLANT_SEED,
                                 criterion,
-                            )
-                            .await;
+                            );
                             break;
                         }
                     }
@@ -570,44 +484,36 @@ impl Player {
             }
             AdvancementTrigger::EnterDimension { dimension } => {
                 if dimension == "the_nether" {
-                    if !self
-                        .has_advancement(Advancement::STORY_ENTER_THE_NETHER)
-                        .await
-                    {
+                    if !self.has_advancement(Advancement::STORY_ENTER_THE_NETHER) {
                         self.trigger_advancement_criterion(
                             Advancement::STORY_ENTER_THE_NETHER,
                             "entered_nether",
-                        )
-                        .await;
+                        );
                     }
-                    if !self.has_advancement(Advancement::NETHER_ROOT).await {
+                    if !self.has_advancement(Advancement::NETHER_ROOT) {
                         self.trigger_advancement_criterion(
                             Advancement::NETHER_ROOT,
                             "entered_nether",
-                        )
-                        .await;
+                        );
                     }
                 } else if dimension == "the_end" {
-                    if !self.has_advancement(Advancement::STORY_ENTER_THE_END).await {
+                    if !self.has_advancement(Advancement::STORY_ENTER_THE_END) {
                         self.trigger_advancement_criterion(
                             Advancement::STORY_ENTER_THE_END,
                             "entered_end",
-                        )
-                        .await;
+                        );
                     }
-                    if !self.has_advancement(Advancement::END_ROOT).await {
-                        self.trigger_advancement_criterion(Advancement::END_ROOT, "entered_end")
-                            .await;
+                    if !self.has_advancement(Advancement::END_ROOT) {
+                        self.trigger_advancement_criterion(Advancement::END_ROOT, "entered_end");
                     }
                 }
             }
             AdvancementTrigger::ConsumeItem { item_id } => {
-                if !self.has_advancement(Advancement::HUSBANDRY_ROOT).await {
+                if !self.has_advancement(Advancement::HUSBANDRY_ROOT) {
                     self.trigger_advancement_criterion(
                         Advancement::HUSBANDRY_ROOT,
                         "consumed_item",
-                    )
-                    .await;
+                    );
                 }
                 let food_name = item_id.strip_prefix("minecraft:").unwrap_or(&item_id);
                 if Advancement::HUSBANDRY_BALANCED_DIET
@@ -617,143 +523,105 @@ impl Player {
                     self.trigger_advancement_criterion(
                         Advancement::HUSBANDRY_BALANCED_DIET,
                         food_name,
-                    )
-                    .await;
+                    );
                 }
             }
             AdvancementTrigger::PlayerKilled => {
-                if !self.has_advancement(Advancement::ADVENTURE_ROOT).await {
+                if !self.has_advancement(Advancement::ADVENTURE_ROOT) {
                     self.trigger_advancement_criterion(
                         Advancement::ADVENTURE_ROOT,
                         "killed_by_something",
-                    )
-                    .await;
+                    );
                 }
             }
             AdvancementTrigger::DeflectedDamage => {
-                if !self.has_advancement(Advancement::STORY_DEFLECT_ARROW).await {
+                if !self.has_advancement(Advancement::STORY_DEFLECT_ARROW) {
                     self.trigger_advancement_criterion(
                         Advancement::STORY_DEFLECT_ARROW,
                         "deflected_projectile",
-                    )
-                    .await;
+                    );
                 }
             }
             AdvancementTrigger::LaunchedEyeOfEnder => {
-                if !self
-                    .has_advancement(Advancement::STORY_FOLLOW_ENDER_EYE)
-                    .await
-                {
+                if !self.has_advancement(Advancement::STORY_FOLLOW_ENDER_EYE) {
                     self.trigger_advancement_criterion(
                         Advancement::STORY_FOLLOW_ENDER_EYE,
                         "in_stronghold",
-                    )
-                    .await;
+                    );
                 }
             }
             AdvancementTrigger::GlowedSign => {
-                if !self
-                    .has_advancement(Advancement::HUSBANDRY_MAKE_A_SIGN_GLOW)
-                    .await
-                {
+                if !self.has_advancement(Advancement::HUSBANDRY_MAKE_A_SIGN_GLOW) {
                     self.trigger_advancement_criterion(
                         Advancement::HUSBANDRY_MAKE_A_SIGN_GLOW,
                         "make_a_sign_glow",
-                    )
-                    .await;
+                    );
                 }
             }
             AdvancementTrigger::BredAnimal { parent_type } => {
-                self.trigger_advancement_criterion(Advancement::HUSBANDRY_BREED_AN_ANIMAL, "bred")
-                    .await;
+                self.trigger_advancement_criterion(Advancement::HUSBANDRY_BREED_AN_ANIMAL, "bred");
                 self.trigger_advancement_criterion(
                     Advancement::HUSBANDRY_BRED_ALL_ANIMALS,
                     &parent_type,
-                )
-                .await;
+                );
             }
             AdvancementTrigger::EnterBlock { block_id: _ } => {}
             AdvancementTrigger::DealtOverkillDamage => {
-                if !self
-                    .has_advancement(Advancement::ADVENTURE_OVEROVERKILL)
-                    .await
-                {
+                if !self.has_advancement(Advancement::ADVENTURE_OVEROVERKILL) {
                     self.trigger_advancement_criterion(
                         Advancement::ADVENTURE_OVEROVERKILL,
                         "overoverkill",
-                    )
-                    .await;
+                    );
                 }
             }
             AdvancementTrigger::SniperDuel => {
-                if !self
-                    .has_advancement(Advancement::ADVENTURE_SNIPER_DUEL)
-                    .await
-                {
+                if !self.has_advancement(Advancement::ADVENTURE_SNIPER_DUEL) {
                     self.trigger_advancement_criterion(
                         Advancement::ADVENTURE_SNIPER_DUEL,
                         "killed_skeleton",
-                    )
-                    .await;
+                    );
                 }
             }
             AdvancementTrigger::TwoBirdsOneArrow => {
-                if !self
-                    .has_advancement(Advancement::ADVENTURE_TWO_BIRDS_ONE_ARROW)
-                    .await
-                {
+                if !self.has_advancement(Advancement::ADVENTURE_TWO_BIRDS_ONE_ARROW) {
                     self.trigger_advancement_criterion(
                         Advancement::ADVENTURE_TWO_BIRDS_ONE_ARROW,
                         "two_birds",
-                    )
-                    .await;
+                    );
                 }
             }
             AdvancementTrigger::Arbalistic => {
-                if !self
-                    .has_advancement(Advancement::ADVENTURE_ARBALISTIC)
-                    .await
-                {
+                if !self.has_advancement(Advancement::ADVENTURE_ARBALISTIC) {
                     self.trigger_advancement_criterion(
                         Advancement::ADVENTURE_ARBALISTIC,
                         "arbalistic",
-                    )
-                    .await;
+                    );
                 }
             }
             AdvancementTrigger::Bullseye => {
-                if !self.has_advancement(Advancement::ADVENTURE_BULLSEYE).await {
-                    self.trigger_advancement_criterion(Advancement::ADVENTURE_BULLSEYE, "bullseye")
-                        .await;
+                if !self.has_advancement(Advancement::ADVENTURE_BULLSEYE) {
+                    self.trigger_advancement_criterion(Advancement::ADVENTURE_BULLSEYE, "bullseye");
                 }
             }
             AdvancementTrigger::CuredZombieVillager => {
-                if !self
-                    .has_advancement(Advancement::STORY_CURE_ZOMBIE_VILLAGER)
-                    .await
-                {
+                if !self.has_advancement(Advancement::STORY_CURE_ZOMBIE_VILLAGER) {
                     self.trigger_advancement_criterion(
                         Advancement::STORY_CURE_ZOMBIE_VILLAGER,
                         "cured_zombie",
-                    )
-                    .await;
+                    );
                 }
             }
             AdvancementTrigger::TradedWithVillager => {
-                if !self.has_advancement(Advancement::ADVENTURE_TRADE).await {
-                    self.trigger_advancement_criterion(Advancement::ADVENTURE_TRADE, "traded")
-                        .await;
+                if !self.has_advancement(Advancement::ADVENTURE_TRADE) {
+                    self.trigger_advancement_criterion(Advancement::ADVENTURE_TRADE, "traded");
                 }
                 if self.living_entity.entity.pos.load().y >= 319.0
-                    && !self
-                        .has_advancement(Advancement::ADVENTURE_TRADE_AT_WORLD_HEIGHT)
-                        .await
+                    && !self.has_advancement(Advancement::ADVENTURE_TRADE_AT_WORLD_HEIGHT)
                 {
                     self.trigger_advancement_criterion(
                         Advancement::ADVENTURE_TRADE_AT_WORLD_HEIGHT,
                         "trade_at_world_height",
-                    )
-                    .await;
+                    );
                 }
             }
         }

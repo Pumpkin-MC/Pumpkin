@@ -1,3 +1,5 @@
+// Last verified for v2169
+
 use std::io::{Error, Read};
 
 use pumpkin_macros::packet;
@@ -11,92 +13,92 @@ use crate::{
 #[derive(Debug, PacketRead)]
 #[packet(36)]
 pub struct SPlayerAction {
-    pub runtime_id: VarULong,
-    pub action: Action,
-    pub block_pos: BlockPos,
+    pub player_runtime_id: VarULong,
+    pub action: PlayerActionType,
+    pub block_position: BlockPos,
     pub result_pos: BlockPos,
     pub face: VarInt,
 }
 
 #[derive(Debug)]
 #[repr(i32)]
-pub enum Action {
+pub enum PlayerActionType {
     Unknown = -1,
-    StartBreak = 0,
-    AbortBreak = 1,
-    StopBreak = 2,
-    GetUpdatedBlock = 3,
+    StartDestroyBlock,
+    AbortDestroyBlock,
+    StopDestroyBlock,
+    GetUpdatedBlock,
     /// Seems to be not used, or atleast not send by client
-    DropItem = 4,
-    StartSleeping = 5,
-    StopSleeping = 6,
-    Respawn = 7,
-    Jump = 8,
-    StartSprint = 9,
-    StopSprint = 10,
-    StartSneak = 11,
-    StopSneak = 12,
-    CreativePlayerDestroyBlock = 13,
-    DimensionChangeAck = 14,
-    StartGlide = 15,
-    StopGlide = 16,
-    BuildDenied = 17,
-    CrackBreak = 18,
-    ChangeSkin = 19,
-    SetEnchantmentSeed = 20,
-    Swimming = 21,
-    StopSwimming = 22,
-    StartSpinAttack = 23,
-    StopSpinAttack = 24,
-    InteractBlock = 25,
-    PredictDestroyBlock = 26,
-    ContinueDestroyBlock = 27,
-    StartItemUseOn = 28,
-    StopItemUseOn = 29,
-    HandledTeleport = 30,
-    MissedSwing = 31,
-    StartCrawling = 32,
-    StopCrawling = 33,
-    StartFlying = 34,
-    StopFlying = 35,
-    ClientAckServerData = 36,
-    StartUsingItem = 37,
-    InternalUpdate = 38,
-    Count = 39,
+    DropItem,
+    StartSleeping,
+    StopSleeping,
+    Respawn,
+    StartJump,
+    StartSprinting,
+    StopSprinting,
+    StartSneaking,
+    StopSneaking,
+    CreativeDestroyBlock,
+    ChangeDimensionAck,
+    StartGliding,
+    StopGliding,
+    DenyDestroyBlock,
+    CrackBlock,
+    ChangeSkin,
+    UpdatedEnchantingSeed,
+    StartSwimming,
+    StopSwimming,
+    StartSpinAttack,
+    StopSpinAttack,
+    InteractWithBlock,
+    PredictDestroyBlock,
+    ContinueDestroyBlock,
+    StartItemUseOn,
+    StopItemUseOn,
+    HandledTeleport,
+    MissedSwing,
+    StartCrawling,
+    StopCrawling,
+    StartFlying,
+    StopFlying,
+    ClientAckServerData,
+    StartUsingItem,
+    InternalUpdate,
+    Count,
 }
 
-impl TryFrom<i32> for Action {
+impl TryFrom<i32> for PlayerActionType {
     type Error = String;
 
     fn try_from(value: i32) -> Result<Self, Self::Error> {
         match value {
             -1 => Ok(Self::Unknown),
-            0 => Ok(Self::StartBreak),
-            1 => Ok(Self::AbortBreak),
-            2 => Ok(Self::StopBreak),
+            0 => Ok(Self::StartDestroyBlock),
+            1 => Ok(Self::AbortDestroyBlock),
+            2 => Ok(Self::StopDestroyBlock),
             3 => Ok(Self::GetUpdatedBlock),
             4 => Ok(Self::DropItem),
             5 => Ok(Self::StartSleeping),
             6 => Ok(Self::StopSleeping),
             7 => Ok(Self::Respawn),
-            8 => Ok(Self::Jump),
-            9 => Ok(Self::StartSprint),
-            10 => Ok(Self::StopSprint),
-            11 => Ok(Self::StartSneak),
-            12 => Ok(Self::StopSneak),
-            13 => Ok(Self::CreativePlayerDestroyBlock),
-            14 => Ok(Self::DimensionChangeAck),
-            15 => Ok(Self::StartGlide),
-            16 => Ok(Self::StopGlide),
-            17 => Ok(Self::BuildDenied),
-            18 => Ok(Self::CrackBreak),
+            8 => Ok(Self::StartJump),
+            9 => Ok(Self::StartSprinting),
+            10 => Ok(Self::StopSprinting),
+            11 => Ok(Self::StartSneaking),
+            12 => Ok(Self::StopSneaking),
+            13 => Ok(Self::CreativeDestroyBlock),
+            14 => Ok(Self::ChangeDimensionAck),
+            15 => Ok(Self::StartGliding),
+            16 => Ok(Self::StopGliding),
+            17 => Ok(Self::DenyDestroyBlock),
+            18 => Ok(Self::CrackBlock),
             19 => Ok(Self::ChangeSkin),
-            20 => Ok(Self::SetEnchantmentSeed),
-            21 => Ok(Self::Swimming),
+            20 => Ok(Self::UpdatedEnchantingSeed),
+            21 => Ok(Self::StartSwimming),
             22 => Ok(Self::StopSwimming),
             23 => Ok(Self::StartSpinAttack),
             24 => Ok(Self::StopSpinAttack),
-            25 => Ok(Self::InteractBlock),
+            25 => Ok(Self::InteractWithBlock),
             26 => Ok(Self::PredictDestroyBlock),
             27 => Ok(Self::ContinueDestroyBlock),
             28 => Ok(Self::StartItemUseOn),
@@ -116,7 +118,7 @@ impl TryFrom<i32> for Action {
     }
 }
 
-impl PacketRead for Action {
+impl PacketRead for PlayerActionType {
     fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
         let action = VarInt::read(reader)?;
 

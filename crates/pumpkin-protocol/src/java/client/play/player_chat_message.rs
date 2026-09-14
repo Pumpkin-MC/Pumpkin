@@ -108,11 +108,14 @@ impl ClientPacket for CPlayerChatMessage {
             Ok(())
         })?;
         write.write_option(&self.unsigned_content, |p, v| p.write_component(v, version))?;
-        write.write_var_int(&VarInt(match self.filter_type {
-            FilterType::PassThrough => 0,
-            FilterType::FullyFiltered => 1,
-            FilterType::PartiallyFiltered(_) => 2,
-        }))?;
+        match &self.filter_type {
+            FilterType::PassThrough => write.write_var_int(&VarInt(0))?,
+            FilterType::FullyFiltered => write.write_var_int(&VarInt(1))?,
+            FilterType::PartiallyFiltered(bit_set) => {
+                write.write_var_int(&VarInt(2))?;
+                bit_set.encode(&mut write)?;
+            }
+        }
         write.write_var_int(&self.chat_type)?;
         write.write_component(&self.sender_name, version)?;
         write.write_option(&self.target_name, |p, v| p.write_component(v, version))?;

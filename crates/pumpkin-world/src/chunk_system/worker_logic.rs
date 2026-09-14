@@ -4,12 +4,10 @@ use super::{ChunkPos, IOLock};
 use crate::ProtoChunk;
 use crate::chunk::format::LightContainer;
 use crate::chunk::io::LoadedData::Loaded;
-use crate::chunk::io::{FileIO, LoadedData};
+use crate::chunk::io::{FileIO, LoadedData, run_blocking};
 use crate::level::Level;
-use crossfire::compat::AsyncRx;
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_data::chunk::ChunkStatus;
-use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
@@ -56,16 +54,57 @@ fn needs_relighting(chunk: &crate::chunk::ChunkData, config: LightingEngineConfi
     !has_complex_light
 }
 
+fn load_proto_chunk(chunk: &crate::chunk::ChunkData, level: &Level) -> ProtoChunk {
+    ProtoChunk::from_chunk_data(chunk, &level.world_gen.load())
+}
+
+fn process_loaded_chunk(chunk: Arc<crate::chunk::ChunkData>, level: &Level) -> Chunk {
+    let pos = ChunkPos::new(chunk.x, chunk.z);
+    if chunk.status == ChunkStatus::Full {
+        let needs_relight = needs_relighting(&chunk, level.lighting_config);
+        if needs_relight {
+            debug!(
+                "Chunk {pos:?} has uniform lighting, downgrading to Features stage for relighting"
+            );
+
+            let mut proto = load_proto_chunk(&chunk, level);
+
+            // Clear all lighting data
+            let section_count = proto.light.sky_light.len();
+            proto.light.sky_light = (0..section_count)
+                .map(|_| LightContainer::new_empty(15))
+                .collect();
+            proto.light.block_light = (0..section_count)
+                .map(|_| LightContainer::new_empty(0))
+                .collect();
+            proto.stage = StagedChunkEnum::Features;
+            Chunk::Proto(Box::new(proto))
+        } else {
+            Chunk::Level(chunk)
+        }
+    } else {
+        let proto = load_proto_chunk(&chunk, level);
+        Chunk::Proto(Box::new(proto))
+    }
+}
+
 pub async fn io_read_work(
-    recv: crossfire::compat::MAsyncRx<Vec<ChunkPos>>,
-    send: crossfire::compat::MTx<(ChunkPos, RecvChunk)>,
+    recv: Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<Vec<ChunkPos>>>>,
+    send: crossbeam::channel::Sender<(ChunkPos, RecvChunk)>,
     level: Arc<Level>,
     lock: IOLock,
 ) {
     debug!("io read thread start");
 
     // Cleaner loop and async recv
-    while let Ok(batch) = recv.recv().await {
+    loop {
+        let batch = {
+            let mut lock_rx = recv.lock().await;
+            lock_rx.recv().await
+        };
+        let Some(batch) = batch else {
+            break;
+        };
         for pos in &batch {
             // Lock handling
             loop {
@@ -102,54 +141,18 @@ pub async fn io_read_work(
             match data {
                 Loaded(chunk) => {
                     let pos = ChunkPos::new(chunk.x, chunk.z);
-                    if chunk.status == ChunkStatus::Full {
-                        // Relighting check
-                        let needs_relight = needs_relighting(&chunk, level.lighting_config);
-
-                        if needs_relight {
-                            debug!(
-                                "Chunk {pos:?} has uniform lighting, downgrading to Features stage for relighting"
-                            );
-
-                            // Create ProtoChunk using the async method
-                            let mut proto =
-                                ProtoChunk::from_chunk_data(&chunk, &level.world_gen.load());
-
-                            // Clear all lighting data
-                            let section_count = proto.light.sky_light.len();
-                            proto.light.sky_light = (0..section_count)
-                                .map(|_| LightContainer::new_empty(15))
-                                .collect();
-                            proto.light.block_light = (0..section_count)
-                                .map(|_| LightContainer::new_empty(0))
-                                .collect();
-
-                            // Set stage to Features
-                            proto.stage = StagedChunkEnum::Features;
-
-                            if send
-                                .send((pos, RecvChunk::IO(Chunk::Proto(Box::new(proto)))))
-                                .is_err()
-                            {
-                                break;
-                            }
-                        } else {
-                            // Send fully valid chunk
-                            if send
-                                .send((pos, RecvChunk::IO(Chunk::Level(chunk))))
-                                .is_err()
-                            {
-                                break;
-                            }
-                        }
-                    } else {
-                        // Standard ProtoChunk handling for non-full chunks
-                        let val = RecvChunk::IO(Chunk::Proto(Box::new(
-                            ProtoChunk::from_chunk_data(&chunk, &level.world_gen.load()),
-                        )));
-                        if send.send((pos, val)).is_err() {
-                            break;
-                        }
+                    let level = level.clone();
+                    let result = run_blocking(move || process_loaded_chunk(chunk, &level)).await;
+                    let received = match result {
+                        Ok(processed) => RecvChunk::IO(processed),
+                        Err(err) => RecvChunk::GenerationFailure {
+                            pos,
+                            stage: StagedChunkEnum::Empty,
+                            error: err.to_string(),
+                        },
+                    };
+                    if send.send((pos, received)).is_err() {
+                        break;
                     }
                 }
                 LoadedData::Missing(pos) | LoadedData::Error((pos, _)) => {
@@ -174,61 +177,79 @@ pub async fn io_read_work(
     debug!("io read thread stop");
 }
 
-pub async fn io_write_work(recv: AsyncRx<Vec<(ChunkPos, Chunk)>>, level: Arc<Level>, lock: IOLock) {
+pub async fn io_write_work(
+    mut recv: tokio::sync::mpsc::Receiver<Vec<(ChunkPos, Chunk)>>,
+    level: Arc<Level>,
+    lock: IOLock,
+) {
     loop {
         // Don't check cancel_token here (keep saving chunks)
-        let Ok(data) = recv.recv().await else { break };
+        let Some(data) = recv.recv().await else { break };
         // debug!("io write thread receive chunks size {}", data.len());
-        let mut vec = Vec::with_capacity(data.len());
-        let mut positions = Vec::with_capacity(data.len());
-        for (pos, chunk) in data {
-            positions.push(pos);
-
-            match chunk {
-                Chunk::Level(chunk) => vec.push((pos, chunk)),
-                Chunk::Proto(chunk) => {
-                    let mut temp = Chunk::Proto(chunk);
-                    temp.upgrade_to_level_chunk(
-                        level.world_gen.load().dimension(),
-                        &level.lighting_config,
-                    );
-                    let Chunk::Level(chunk) = temp else { panic!() };
-                    vec.push((pos, chunk));
+        let positions = data.iter().map(|(pos, _)| *pos).collect::<Vec<_>>();
+        let level_for_upgrade = level.clone();
+        let upgrade_result = run_blocking(move || {
+            let mut vec = Vec::with_capacity(data.len());
+            for (pos, chunk) in data {
+                match chunk {
+                    Chunk::Level(chunk) => vec.push((pos, chunk)),
+                    Chunk::Proto(chunk) => {
+                        let mut temp = Chunk::Proto(chunk);
+                        temp.upgrade_to_level_chunk(
+                            level_for_upgrade.world_gen.load().dimension(),
+                            &level_for_upgrade.lighting_config,
+                        );
+                        let Chunk::Level(chunk) = temp else { panic!() };
+                        vec.push((pos, chunk));
+                    }
                 }
             }
-        }
-        if let Err(e) = level
-            .chunk_saver
-            .save_chunks(&level.level_folder, vec)
-            .await
-        {
-            error!("Failed to save chunks: {:?}", e);
-        }
+            vec
+        })
+        .await;
+        let upgrade_failed = match upgrade_result {
+            Ok(vec) => {
+                if let Err(e) = level
+                    .chunk_saver
+                    .save_chunks(&level.level_folder, vec)
+                    .await
+                {
+                    error!("Failed to save chunks: {:?}", e);
+                }
+                false
+            }
+            Err(_) => true,
+        };
 
-        for i in positions {
+        {
             let mut data = lock
                 .0
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            match data.entry(i) {
-                Entry::Occupied(mut entry) => {
-                    let rc = entry.get_mut();
-                    if *rc == 1 {
-                        entry.remove();
-                        drop(data);
-                        lock.1.notify_waiters();
-                    } else {
-                        *rc -= 1;
+            for i in positions {
+                match data.entry(i) {
+                    Entry::Occupied(mut entry) => {
+                        let rc = entry.get_mut();
+                        if *rc <= 1 {
+                            entry.remove();
+                        } else {
+                            *rc -= 1;
+                        }
+                    }
+                    Entry::Vacant(_) => {
+                        warn!(
+                            "io_write: attempted to release missing lock entry for {:?}",
+                            i
+                        );
                     }
                 }
-                Entry::Vacant(_) => {
-                    warn!(
-                        "io_write: attempted to release missing lock entry for {:?}",
-                        i
-                    );
-                    // continue without panicking to avoid crashing on shutdown races
-                }
             }
+        }
+        lock.1.notify_waiters();
+
+        if upgrade_failed {
+            error!("Failed to upgrade chunks for saving");
+            break;
         }
     }
 }
@@ -238,7 +259,6 @@ pub fn run_generation(
     mut cache: Cache,
     stage: StagedChunkEnum,
     level: &Level,
-    _settings: &GenerationSettings,
 ) -> RecvChunk {
     let portal = level.world_portal.load_full();
     let Some(portal_ref) = portal.as_deref() else {
@@ -280,26 +300,6 @@ pub fn run_generation(
                 stage,
                 error: msg.to_string(),
             }
-        }
-    }
-}
-
-pub fn generation_work(
-    recv: &crossfire::compat::MRx<(ChunkPos, Cache, StagedChunkEnum)>,
-    send: &crossfire::compat::MTx<(ChunkPos, RecvChunk)>,
-    level: &Arc<Level>,
-) {
-    let settings = GenerationSettings::from_dimension(level.world_gen.load().dimension());
-
-    loop {
-        let Ok((pos, cache, stage)) = recv.recv() else {
-            debug!("generation channel closed, exiting");
-            break;
-        };
-
-        let result = run_generation(pos, cache, stage, level, settings);
-        if send.send((pos, result)).is_err() {
-            break;
         }
     }
 }

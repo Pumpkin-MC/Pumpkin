@@ -9,7 +9,10 @@ use pumpkin_world::level::SyncChunk;
 use std::{
     net::SocketAddr,
     num::NonZero,
-    sync::{Arc, atomic::Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 
 use pumpkin_data::translation;
@@ -28,6 +31,9 @@ use thiserror::Error;
 use uuid::Uuid;
 pub mod authentication;
 pub mod bedrock;
+pub mod chat;
+pub mod chunk_sender;
+pub use chunk_sender::ChunkSender;
 pub mod java;
 pub mod lan_broadcast;
 pub mod packet_limiter;
@@ -116,6 +122,17 @@ pub enum PacketHandlerResult {
     ReadyToPlay(GameProfile, PlayerConfig),
 }
 
+/// Maximum payload bytes that may be queued for a client before it is considered stalled/overflowing and disconnected.
+pub const MAX_PENDING_BYTES: usize = 64 * 1024 * 1024; // 64 MB
+
+/// Defensively decrement an atomic pending byte counter without underflowing.
+#[inline]
+pub fn decrement_pending_bytes(pending_bytes: &AtomicUsize, bytes: usize) {
+    let _ = pending_bytes.fetch_update(Ordering::Release, Ordering::Relaxed, |val| {
+        Some(val.saturating_sub(bytes))
+    });
+}
+
 /// This is just a Wrapper for both Java & Bedrock connections
 #[expect(clippy::large_enum_variant)]
 pub enum ClientPlatform {
@@ -170,6 +187,14 @@ impl ClientPlatform {
         match self {
             Self::Java(_) => BedrockMinecraftVersion::Unknown,
             Self::Bedrock(bedrock) => bedrock.version.load(),
+        }
+    }
+
+    #[must_use]
+    pub fn pending_bytes(&self) -> usize {
+        match self {
+            Self::Java(java) => java.pending_bytes.load(Ordering::Relaxed),
+            Self::Bedrock(bedrock) => bedrock.pending_bytes.load(Ordering::Relaxed),
         }
     }
 
@@ -251,31 +276,13 @@ impl ClientPlatform {
     }
 
     pub fn try_enqueue_spawn_packet(&self, entity: &Arc<dyn crate::entity::EntityBase>) {
-        match self {
-            Self::Java(java) => {
-                let ent = entity.get_entity();
-                let version = java.version.load();
-                let is_mob = ent.entity_type.mob || entity.get_mob().is_some();
-                if version < JavaMinecraftVersion::V_1_19 && is_mob {
-                    let packet = ent.create_spawn_living_packet(None);
-                    if let Ok(data) = java.serialize_packet(&packet) {
-                        java.try_enqueue_packet(data);
-                    }
-                } else {
-                    let packet = ent.create_spawn_packet();
-                    if let Ok(data) = java.serialize_packet(&packet) {
-                        java.try_enqueue_packet(data);
-                    }
-                }
-            }
-            Self::Bedrock(bedrock) => bedrock.enqueue_spawn_packet(entity.clone()),
-        }
+        self.enqueue_spawn_packet(entity);
     }
 
-    pub async fn enqueue_spawn_packet(&self, entity: &Arc<dyn crate::entity::EntityBase>) {
+    pub fn enqueue_spawn_packet(&self, entity: &Arc<dyn crate::entity::EntityBase>) {
         match self {
-            Self::Java(java) => entity.send_java_spawn_packet(java).await,
-            Self::Bedrock(bedrock) => entity.send_bedrock_spawn_packet(bedrock).await,
+            Self::Java(java) => entity.send_java_spawn_packet(java),
+            Self::Bedrock(bedrock) => entity.send_bedrock_spawn_packet(bedrock),
         }
     }
 
@@ -316,6 +323,13 @@ impl ClientPlatform {
         self.send_packet_now(data).await;
     }
 
+    pub fn try_kick(&self, reason: DisconnectReason, message: &TextComponent) {
+        match self {
+            Self::Java(java) => java.try_kick(message),
+            Self::Bedrock(bedrock) => bedrock.try_kick(reason, message.clone().get_text()),
+        }
+    }
+
     pub async fn kick(&self, reason: DisconnectReason, message: TextComponent) {
         match self {
             Self::Java(java) => java.kick(message).await,
@@ -333,7 +347,11 @@ pub async fn can_not_join(
         "[year]-[month]-[day] at [hour]:[minute]:[second] [offset_hour sign:mandatory]:[offset_minute]"
     );
 
-    let mut banned_players = server.data.banned_player_list.write().await;
+    let mut banned_players = server
+        .data
+        .banned_player_list
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if let Some(entry) = banned_players.get_entry(profile) {
         let text = TextComponent::translate_cross(
             translation::java::MULTIPLAYER_DISCONNECT_BANNED_REASON,
@@ -354,8 +372,16 @@ pub async fn can_not_join(
     drop(banned_players);
 
     if server.white_list.load(Ordering::Relaxed) {
-        let ops = server.data.operator_config.read().await;
-        let whitelist = server.data.whitelist_config.read().await;
+        let ops = server
+            .data
+            .operator_config
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let whitelist = server
+            .data
+            .whitelist_config
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         if ops.get_entry(&profile.id).is_none() && !whitelist.is_whitelisted(profile) {
             return Some(TextComponent::translate_cross(
@@ -370,7 +396,7 @@ pub async fn can_not_join(
         .data
         .banned_ip_list
         .write()
-        .await
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .get_entry(&address.ip())
     {
         let text = TextComponent::translate_cross(
@@ -689,5 +715,19 @@ mod tests {
             !is_valid_player_name(&name),
             "Name containing DEL (127) should be invalid"
         );
+    }
+
+    #[test]
+    fn decrement_pending_bytes_saturating() {
+        use super::decrement_pending_bytes;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let counter = AtomicUsize::new(100);
+        decrement_pending_bytes(&counter, 40);
+        assert_eq!(counter.load(Ordering::Relaxed), 60);
+
+        // Underflow protection: decrementing more than current value should clamp to 0
+        decrement_pending_bytes(&counter, 100);
+        assert_eq!(counter.load(Ordering::Relaxed), 0);
     }
 }

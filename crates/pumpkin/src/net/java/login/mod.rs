@@ -1,7 +1,7 @@
 use arc_swap::ArcSwap;
 use pumpkin_data::translation;
 use pumpkin_protocol::{
-    ConnectionState, KnownPack, Label, Link, LinkType,
+    ConnectionState, Label, Link, LinkType,
     java::client::{
         config::{
             CConfigAddResourcePack, CConfigServerLinks, CFeatureFlags, CFinishConfig, CKnownPacks,
@@ -9,7 +9,6 @@ use pumpkin_protocol::{
         },
         login::{CLoginSuccess, CSetCompression},
     },
-    java::server::config::SKnownPacks,
     java::server::login::{
         SEncryptionResponse, SLoginCookieResponse, SLoginPluginResponse, SLoginStart,
     },
@@ -26,7 +25,7 @@ use crate::{
         can_not_join, is_valid_player_name,
         java::pending::PendingConnection,
         offline_uuid,
-        proxy::{bungeecord, velocity},
+        proxy::{bungeecord, velocity, vine},
     },
     server::Server,
 };

@@ -35,18 +35,15 @@ fn create_copy_on_click_text(content: String) -> TextComponent {
 }
 
 impl CommandExecutor for SeedCommandExecutor {
-    fn execute<'a>(&'a self, context: &'a CommandContext) -> CommandExecutorResult<'a> {
-        Box::pin(async move {
-            let seed = context.world().level.seed.0;
-            let seed_string = seed.to_string();
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let seed = context.world().level.seed.0;
+        let seed_string = seed.to_string();
 
-            context
-                .source
-                .send_feedback(create_copy_on_click_text(seed_string), false)
-                .await;
+        context
+            .source
+            .send_feedback(create_copy_on_click_text(seed_string), false);
 
-            Ok(seed as i32)
-        })
+        Ok(seed as i32)
     }
 }
 

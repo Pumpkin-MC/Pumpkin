@@ -4,7 +4,7 @@ use pumpkin_macros::java_packet;
 use crate::{
     ServerPacket,
     codec::var_int::VarInt,
-    ser::{NetworkReadExt, ReadingError},
+    ser::{NetworkReadExt, NetworkReadSliceExt, ReadingError},
 };
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -45,11 +45,17 @@ impl SPlayResourcePack {
 }
 
 impl<'a> ServerPacket<'a> for SPlayResourcePack {
-    fn read(bytebuf: &mut &'a [u8], _version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        Ok(Self {
-            uuid: bytebuf.get_uuid()?,
-            result: bytebuf.get_var_int()?,
-        })
+    fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        let uuid = if *version >= JavaMinecraftVersion::V_1_20_3 {
+            bytebuf.get_uuid()?
+        } else {
+            uuid::Uuid::nil()
+        };
+        if *version < JavaMinecraftVersion::V_1_10 {
+            let _hash = bytebuf.get_str_bounded_borrowed(40)?;
+        }
+        let result = bytebuf.get_var_int()?;
+        Ok(Self { uuid, result })
     }
 }
 

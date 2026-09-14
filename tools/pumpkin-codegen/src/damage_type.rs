@@ -134,7 +134,7 @@ pub fn build() -> TokenStream {
     quote! {
         use crate::tag::{RegistryKey, Tag, Taggable};
 
-        #[derive(Clone, Copy, PartialEq)]
+        #[derive(Clone, Copy, PartialEq, Debug)]
         pub struct DamageType {
             pub death_message_type: DeathMessageType,
             pub exhaustion: f32,
@@ -144,14 +144,14 @@ pub fn build() -> TokenStream {
             pub id: u8,
         }
 
-        #[derive(Clone, Copy, PartialEq)]
+        #[derive(Clone, Copy, PartialEq, Debug)]
         pub enum DeathMessageType {
             Default,
             FallVariants,
             IntentionalGameDesign,
         }
 
-        #[derive(Clone, Copy, PartialEq)]
+        #[derive(Clone, Copy, PartialEq, Debug)]
         pub enum DamageEffects {
             Hurt,
             Thorns,
@@ -161,7 +161,7 @@ pub fn build() -> TokenStream {
             Freezing,
         }
 
-        #[derive(Clone, Copy, PartialEq)]
+        #[derive(Clone, Copy, PartialEq, Debug)]
         pub enum DamageScaling {
             Never,
             WhenCausedByLivingNonPlayer,

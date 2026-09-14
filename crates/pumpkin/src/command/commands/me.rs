@@ -1,57 +1,46 @@
 use pumpkin_data::world::EMOTE_COMMAND;
+use pumpkin_util::PermissionLvl;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 
-use crate::command::{
-    CommandError, CommandExecutor, CommandResult, CommandSender,
-    args::{Arg, ConsumedArgs, message::MsgArgConsumer},
-    tree::{CommandTree, builder::argument},
-};
-use CommandError::InvalidConsumption;
-
-const NAMES: [&str; 1] = ["me"];
+use crate::command::argument_builder::{ArgumentBuilder, argument, command};
+use crate::command::argument_types::core::string::StringArgumentType;
+use crate::command::context::command_context::CommandContext;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
 
 const DESCRIPTION: &str = "Broadcasts a narrative message about yourself.";
+const PERMISSION: &str = "minecraft:command.me";
 
-const ARG_MESSAGE: &str = "action";
+struct MeExecutor;
 
-struct Executor;
+impl CommandExecutor for MeExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let msg = StringArgumentType::get(context, "action")?;
+        let sender = &context.source;
+        let server = sender.server();
 
-impl CommandExecutor for Executor {
-    fn execute<'a>(
-        &'a self,
-        sender: &'a CommandSender,
-        server: &'a crate::server::Server,
-        args: &'a ConsumedArgs<'a>,
-    ) -> CommandResult<'a> {
-        Box::pin(async move {
-            let Some(Arg::Msg(msg)) = args.get(ARG_MESSAGE) else {
-                return Err(InvalidConsumption(Some(ARG_MESSAGE.into())));
-            };
+        server.broadcast_message(
+            &TextComponent::text(msg.to_string()),
+            &context.source.display_name,
+            EMOTE_COMMAND,
+            None,
+        );
 
-            let Some(server_arc) = sender
-                .world_or_first(server)
-                .and_then(|w| w.server.upgrade())
-            else {
-                return Err(CommandError::CommandFailed(TextComponent::text(
-                    "Failed to get server instance",
-                )));
-            };
-
-            server_arc
-                .broadcast_message(
-                    &TextComponent::text(msg.clone()),
-                    &TextComponent::text(format!("{sender}")),
-                    EMOTE_COMMAND,
-                    None,
-                )
-                .await;
-
-            Ok(1)
-        })
+        Ok(1)
     }
 }
 
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION)
-        .then(argument(ARG_MESSAGE, MsgArgConsumer).execute(Executor))
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Zero),
+    ));
+
+    dispatcher.register(
+        command("me", DESCRIPTION)
+            .requires(PERMISSION)
+            .then(argument("action", StringArgumentType::GreedyPhrase).executes(MeExecutor)),
+    );
 }

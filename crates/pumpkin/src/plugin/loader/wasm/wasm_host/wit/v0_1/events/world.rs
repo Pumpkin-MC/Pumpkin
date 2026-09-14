@@ -60,11 +60,14 @@ impl ToFromWasmEvent for ChunkLoad {
             .add_world(self.world.clone())
             .expect("failed to add world resource");
 
-        let guard = self.chunk.blocking_read();
+        let (chunk_x, chunk_z) = self
+            .chunk
+            .try_read()
+            .map_or((0, 0), |guard| (guard.x, guard.z));
         Event::ChunkLoadEvent(ChunkLoadEventData {
             target_world,
-            chunk_x: guard.x,
-            chunk_z: guard.z,
+            chunk_x,
+            chunk_z,
             cancelled: self.cancelled,
         })
     }
@@ -110,11 +113,14 @@ impl ToFromWasmEvent for ChunkSave {
             .add_world(self.world.clone())
             .expect("failed to add world resource");
 
-        let guard = self.chunk.blocking_read();
+        let (chunk_x, chunk_z) = self
+            .chunk
+            .try_read()
+            .map_or((0, 0), |guard| (guard.x, guard.z));
         Event::ChunkSaveEvent(ChunkSaveEventData {
             target_world,
-            chunk_x: guard.x,
-            chunk_z: guard.z,
+            chunk_x,
+            chunk_z,
             cancelled: self.cancelled,
         })
     }

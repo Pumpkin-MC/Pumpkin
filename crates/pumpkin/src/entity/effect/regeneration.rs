@@ -1,4 +1,4 @@
-use crate::entity::effect::{EffectFuture, MobEffect};
+use crate::entity::effect::MobEffect;
 use crate::entity::living::LivingEntity;
 
 pub struct RegenerationMobEffect;
@@ -16,17 +16,11 @@ impl MobEffect for RegenerationMobEffect {
         }
     }
 
-    fn apply_effect_tick<'a>(
-        &'a self,
-        living: &'a LivingEntity,
-        _amplifier: u8,
-    ) -> EffectFuture<'a, ()> {
-        Box::pin(async move {
-            let current_health = living.health.load();
-            let max_health = living.get_max_health();
-            if current_health < max_health && current_health > 0.0 {
-                living.heal(1.0);
-            }
-        })
+    fn apply_effect_tick(&self, living: &LivingEntity, _amplifier: u8) {
+        let current_health = living.health.load();
+        let max_health = living.get_max_health();
+        if current_health < max_health && current_health > 0.0 {
+            living.heal(1.0);
+        }
     }
 }

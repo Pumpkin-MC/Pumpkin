@@ -1,4 +1,5 @@
 /* This file is generated. Do not edit manually. */
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u16)]
 pub enum WorldEvent {
     AnimationDragonSummonRoar = 3001u16,

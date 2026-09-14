@@ -1,9 +1,11 @@
 use std::sync::Arc;
 
-use pumpkin_data::{Block, BlockDirection, BlockState};
+use pumpkin_data::{Block, BlockDirection, BlockState, Mirror, Rotation};
 use pumpkin_util::{
     math::{block_box::BlockBox, position::BlockPos, vector3::Vector3},
-    random::{RandomDeriverImpl, RandomGenerator, RandomImpl},
+    random::{
+        RandomDeriverImpl, RandomGenerator, RandomImpl, hash_block_pos, legacy_rand::LegacyRand,
+    },
 };
 
 use crate::{
@@ -12,18 +14,19 @@ use crate::{
         positions::chunk_pos::{start_block_x, start_block_z},
         structure::{
             piece::StructurePieceType,
-            shiftable_piece::ShiftableStructurePiece,
             structures::{
                 StructureGenerator, StructureGeneratorContext, StructurePiece, StructurePieceBase,
-                StructurePiecesCollector, StructurePosition,
+                StructurePiecesCollector, StructurePosition, WorldPortalExt,
             },
-            template::{BlockRotation, StructureTemplate, get_template, place_template},
+            template::{
+                BlockStateResolver, StructurePlaceSettings, StructureTemplate, get_template,
+                processor::{IgnoredBlock, ProcessorContext, StructureProcessor},
+            },
         },
     },
-    world::WorldPortalExt,
 };
 
-const TEMPLATE_NAMES: [&str; 14] = [
+pub const FOSSILS: [&str; 14] = [
     "nether_fossils/fossil_1",
     "nether_fossils/fossil_2",
     "nether_fossils/fossil_3",
@@ -42,9 +45,10 @@ const TEMPLATE_NAMES: [&str; 14] = [
 
 /// Vanilla height provider bounds for nether fossils.
 /// From `nether_fossil.json`: uniform(absolute=32, `below_top=2`).
-/// Vanilla `BelowTop`: height - 1 + `min_y` - offset = 256 - 1 + 0 - 2 = 253.
+/// In vanilla Nether, generator gen depth is 128:
+/// `below_top=2`: height - 1 + `min_y` - offset = 128 - 1 + 0 - 2 = 125.
 const HEIGHT_MIN: i32 = 32;
-const HEIGHT_MAX: i32 = 253;
+const HEIGHT_MAX: i32 = 125;
 
 pub struct NetherFossilGenerator;
 
@@ -53,12 +57,13 @@ impl StructureGenerator for NetherFossilGenerator {
         &self,
         mut context: StructureGeneratorContext<'_>,
     ) -> Option<StructurePosition> {
-        // Vanilla random call order:
+        // Vanilla random call order (NetherFossilStructure.java):
         // 1. nextInt(16) for X offset within chunk
         // 2. nextInt(16) for Z offset within chunk
-        // 3. height.get(random) for initial Y (uniform 32..254)
-        // 4. Column scan (no random calls)
-        // 5. BlockRotation.random(random) - nextInt(4)
+        // 3. height.sample(random, generationContext) for initial Y (uniform 32..125)
+        // 4. Column scan downward to seaLevel (no random calls)
+        //    If y <= seaLevel: return empty
+        // 5. Rotation.getRandom(random) - nextInt(4)
         // 6. Util.getRandom(FOSSILS, random) - nextInt(14)
 
         let x = start_block_x(context.chunk_x) + context.random.next_bounded_i32(16);
@@ -69,97 +74,178 @@ impl StructureGenerator for NetherFossilGenerator {
             .map(|key| pumpkin_data::structures::Structure::get(&key));
 
         let initial_y = if let Some(hp) = structure.and_then(|s| s.start_height) {
-            hp.get(&mut context.random, context.min_y as i8, 256)
+            hp.get(&mut context.random, context.min_y as i8, context.height)
         } else {
             let height_range = HEIGHT_MAX - HEIGHT_MIN + 1;
             HEIGHT_MIN + context.random.next_bounded_i32(height_range)
         };
 
-        // Column scan is deferred to place() since we don't have block data here.
-        // Consume random in vanilla order for determinism.
-        let rotation_index = context.random.next_bounded_i32(4) as u8;
-        let rotation = BlockRotation::from_index(rotation_index);
+        let mut y = initial_y;
+        if let Some(sampler) = context.height_sampler.as_deref_mut() {
+            let mut checked_column = false;
+            while y > context.sea_level {
+                let Some(current) = sampler.sample_column_block(x, z, y) else {
+                    break;
+                };
+                checked_column = true;
+                y -= 1;
+                let below = sampler
+                    .sample_column_block(x, z, y)
+                    .unwrap_or(Block::AIR.default_state);
+                if current.is_air()
+                    && (Block::from_state_id(below.id) == &Block::SOUL_SAND
+                        || below.is_side_solid(BlockDirection::Up))
+                {
+                    break;
+                }
+            }
 
-        let template_index = context.random.next_bounded_i32(14) as usize;
-        let template_name = TEMPLATE_NAMES[template_index];
+            if checked_column && y <= context.sea_level {
+                return None;
+            }
+        }
+
+        let rotation_index = context.random.next_bounded_i32(4) as u8;
+        let rotation = Rotation::from_index(rotation_index);
+
+        let template_index = context.random.next_bounded_i32(FOSSILS.len() as i32) as usize;
+        let template_name = FOSSILS[template_index];
 
         let template = get_template(template_name)?;
-
-        let rotated_size = rotation.transform_size(template.size);
+        let position = Vector3::new(x, y, z);
 
         let mut collector = StructurePiecesCollector::default();
 
-        let piece = NetherFossilPiece {
-            shiftable_structure_piece: ShiftableStructurePiece::new(
-                StructurePieceType::NetherFossil,
-                x,
-                initial_y,
-                z,
-                rotated_size.x,
-                rotated_size.y,
-                rotated_size.z,
-                rotation.to_axis(),
-            ),
-            template,
-            rotation,
-            initial_y,
-            sea_level: context.sea_level,
-        };
+        let piece = NetherFossilPiece::new(template, template_name.to_string(), position, rotation);
 
         collector.add_piece(Box::new(piece));
 
         Some(StructurePosition {
-            start_pos: BlockPos::new(x, initial_y, z),
+            start_pos: BlockPos::new(x, y, z),
             collector: Arc::new(collector.into()),
         })
     }
 }
 
-struct NetherFossilPiece {
-    shiftable_structure_piece: ShiftableStructurePiece,
-    template: Arc<StructureTemplate>,
-    rotation: BlockRotation,
-    initial_y: i32,
-    sea_level: i32,
+pub struct NetherFossilPiece {
+    pub piece: StructurePiece,
+    pub template: Arc<StructureTemplate>,
+    pub template_name: String,
+    pub place_settings: StructurePlaceSettings,
+    pub template_position: Vector3<i32>,
 }
 
 impl NetherFossilPiece {
-    /// Vanilla column scan: search downward from `initial_y` for air above (soul sand OR solid block).
-    /// Returns the Y of the support block, or None if no valid position found above sea level.
-    ///
-    /// Mirrors vanilla's pre-decrement loop:
-    /// ```java
-    /// while (l > k) {
-    ///     BlockState lv5 = lv3.getState(l);
-    ///     BlockState lv6 = lv3.getState(--l);  // pre-decrement
-    ///     if (lv5.isAir() && (lv6.isOf(SOUL_SAND) || lv6.isSideSolidFullSquare(...))) break;
-    /// }
-    /// if (l <= k) return empty;
-    /// ```
-    /// After the loop, l is the support block Y. Vanilla rejects if l <= `sea_level`.
-    fn find_placement_y(&self, chunk: &ProtoChunk) -> Option<i32> {
-        let origin = self.shiftable_structure_piece.piece.bounding_box.min;
-        let mut y = self.initial_y;
+    #[must_use]
+    pub fn new(
+        template: Arc<StructureTemplate>,
+        template_name: String,
+        template_position: Vector3<i32>,
+        rotation: Rotation,
+    ) -> Self {
+        let place_settings = make_settings(rotation);
+        let bounding_box = template.get_bounding_box(&place_settings, template_position);
 
-        while y > self.sea_level {
-            let upper = chunk.get_block_state(&Vector3::new(origin.x, y, origin.z));
-            // Pre-decrement: y now points to the lower block (vanilla's --l)
-            y -= 1;
-            let lower = chunk.get_block_state(&Vector3::new(origin.x, y, origin.z));
+        Self {
+            piece: StructurePiece::new(StructurePieceType::NetherFossil, bounding_box, 0),
+            template,
+            template_name,
+            place_settings,
+            template_position,
+        }
+    }
 
-            let upper_state = BlockState::from_id(upper);
-            let lower_state = BlockState::from_id(lower);
+    fn place_blocks(&self, chunk: &mut ProtoChunk, chunk_box: &BlockBox) {
+        let rotation = self.place_settings.get_rotation();
+        let mirror = self.place_settings.get_mirror();
+        let pivot = self.place_settings.get_rotation_pivot();
 
-            if upper_state.is_air()
-                && (Block::from_state_id(lower) == &Block::SOUL_SAND
-                    || lower_state.is_side_solid(BlockDirection::Up))
-            {
-                break;
+        let mut context_rng = LegacyRand::from_seed(hash_block_pos(
+            self.template_position.x,
+            self.template_position.y,
+            self.template_position.z,
+        ) as u64);
+        let mut context = ProcessorContext::new(
+            self.template_position,
+            self.place_settings.get_processors(),
+            &mut context_rng,
+        );
+
+        for block in &self.template.blocks {
+            let palette_entry = &self.template.palette[block.state as usize];
+
+            let mut block_entity_nbt = block.nbt.clone();
+            let placed_entry = palette_entry.clone();
+
+            let Some(state) = BlockStateResolver::resolve(&placed_entry, rotation, mirror) else {
+                continue;
+            };
+
+            let local_pos =
+                StructureTemplate::transform_block_pos(block.pos, mirror, rotation, pivot);
+            let world_pos = self.template_position + local_pos;
+
+            if !chunk_box.contains_pos(&world_pos) {
+                continue;
+            }
+
+            let mut processed_state = Some(state);
+            let mut capped_idx = 0;
+            for processor in self.place_settings.get_processors() {
+                let Some(current_state) = processed_state else {
+                    break;
+                };
+                processed_state = processor.process_with_context(
+                    chunk,
+                    world_pos,
+                    current_state,
+                    &mut block_entity_nbt,
+                    &mut context,
+                    &mut capped_idx,
+                    &mut context_rng,
+                );
+            }
+
+            let Some(final_state) = processed_state else {
+                continue;
+            };
+
+            chunk.set_block_state(world_pos.x, world_pos.y, world_pos.z, final_state);
+        }
+    }
+
+    fn place_dried_ghast(
+        chunk: &mut ProtoChunk,
+        seed: i64,
+        fossil_bb: &BlockBox,
+        chunk_bb: &BlockBox,
+    ) {
+        use pumpkin_util::random::xoroshiro128::Xoroshiro;
+
+        let center_x = i32::midpoint(fossil_bb.min.x, fossil_bb.max.x);
+        let center_y = i32::midpoint(fossil_bb.min.y, fossil_bb.max.y);
+        let center_z = i32::midpoint(fossil_bb.min.z, fossil_bb.max.z);
+
+        let mut rng = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(seed as u64));
+        let splitter = rng.next_splitter();
+        let mut positional_random = splitter.split_pos(center_x, center_y, center_z);
+
+        if positional_random.next_f32() < 0.5 {
+            let x_span = (fossil_bb.max.x - fossil_bb.min.x + 1).max(1);
+            let z_span = (fossil_bb.max.z - fossil_bb.min.z + 1).max(1);
+            let x = fossil_bb.min.x + positional_random.next_bounded_i32(x_span);
+            let y = fossil_bb.min.y;
+            let z = fossil_bb.min.z + positional_random.next_bounded_i32(z_span);
+            let random_pos = Vector3::new(x, y, z);
+
+            let block_at = chunk.get_block_state(&random_pos);
+            if BlockState::from_id(block_at).is_air() && chunk_bb.contains_pos(&random_pos) {
+                let rot_idx = positional_random.next_bounded_i32(4) as u8;
+                let rot = Rotation::from_index(rot_idx);
+                let state = Block::DRIED_GHAST.default_state.rotate(rot);
+                chunk.set_block_state(random_pos.x, random_pos.y, random_pos.z, state);
             }
         }
-
-        // Vanilla: if (l <= k) return empty
-        if y <= self.sea_level { None } else { Some(y) }
     }
 }
 
@@ -167,97 +253,122 @@ impl StructurePieceBase for NetherFossilPiece {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
+    fn get_structure_piece(&self) -> &StructurePiece {
+        &self.piece
+    }
+    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
+        &mut self.piece
+    }
     fn place(
         &mut self,
         chunk: &mut ProtoChunk,
-        block_registry: &dyn WorldPortalExt,
+        _block_registry: &dyn WorldPortalExt,
         _random: &mut RandomGenerator,
         seed: i64,
         chunk_box: &BlockBox,
     ) {
-        // Vanilla column scan: find air above soul sand or solid block
-        let Some(placement_y) = self.find_placement_y(chunk) else {
-            return;
-        };
+        let fossil_bb = self.piece.bounding_box;
+        let mut enlarged_box = *chunk_box;
+        enlarged_box.encompass(&fossil_bb);
 
-        // Adjust bounding box to placement Y
-        let current_y = self.shiftable_structure_piece.piece.bounding_box.min.y;
-        let offset = placement_y - current_y;
-        self.shiftable_structure_piece.piece.bounding_box.min.y += offset;
-        self.shiftable_structure_piece.piece.bounding_box.max.y += offset;
-
-        let origin = self.shiftable_structure_piece.piece.bounding_box.min;
-
-        // Vanilla uses IGNORE_AIR_AND_STRUCTURE_BLOCKS processor
-        place_template(
-            chunk,
-            &self.template,
-            origin,
-            (0, 0),
-            self.rotation,
-            true,
-            false,
-            &[],
-            Some(chunk_box),
-        );
-
-        // Vanilla: 50% chance to place a dried ghast block at the fossil base.
-        // Uses a deterministic random seeded from world seed + bounding box center.
-        self.try_place_dried_ghast(chunk, block_registry, seed);
-    }
-
-    fn get_structure_piece(&self) -> &StructurePiece {
-        &self.shiftable_structure_piece.piece
-    }
-
-    fn get_structure_piece_mut(&mut self) -> &mut StructurePiece {
-        &mut self.shiftable_structure_piece.piece
+        self.place_blocks(chunk, &enlarged_box);
+        Self::place_dried_ghast(chunk, seed, &fossil_bb, chunk_box);
     }
 }
 
-impl NetherFossilPiece {
-    fn try_place_dried_ghast(
-        &self,
-        chunk: &mut ProtoChunk,
-        _block_registry: &dyn WorldPortalExt,
-        seed: i64,
-    ) {
-        use pumpkin_util::random::xoroshiro128::Xoroshiro;
+fn make_settings(rotation: Rotation) -> StructurePlaceSettings {
+    StructurePlaceSettings::new()
+        .set_rotation(rotation)
+        .set_mirror(Mirror::None)
+        .add_processor(StructureProcessor::BlockIgnore(vec![
+            IgnoredBlock {
+                block_id: Block::STRUCTURE_BLOCK.id,
+                properties: None,
+            },
+            IgnoredBlock {
+                block_id: Block::AIR.id,
+                properties: None,
+            },
+        ]))
+}
 
-        let bbox = self.shiftable_structure_piece.piece.bounding_box;
-        let center_x = i32::midpoint(bbox.min.x, bbox.max.x);
-        let center_y = i32::midpoint(bbox.min.y, bbox.max.y);
-        let center_z = i32::midpoint(bbox.min.z, bbox.max.z);
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::generation::structure::structures::HeightSampler;
+    use pumpkin_data::Block;
 
-        // Vanilla: Random.create(world.getSeed()).nextSplitter().split(box.getCenter())
-        let mut rng = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(seed as u64));
-        let splitter = rng.next_splitter();
-        let mut rng = splitter.split_pos(center_x, center_y, center_z);
+    struct MockColumnSampler {
+        ground_y: i32,
+    }
 
-        if rng.next_f32() >= 0.5 {
-            return;
+    impl HeightSampler for MockColumnSampler {
+        fn estimate_height(&mut self, _block_x: i32, _block_z: i32) -> i32 {
+            self.ground_y
         }
 
-        let block_count_x = (bbox.max.x - bbox.min.x + 1).max(1);
-        let block_count_z = (bbox.max.z - bbox.min.z + 1).max(1);
-        let x = bbox.min.x + rng.next_bounded_i32(block_count_x);
-        let y = bbox.min.y;
-        let z = bbox.min.z + rng.next_bounded_i32(block_count_z);
-
-        // Vanilla: chunkBox.contains(pos) - only place if within current chunk
-        let chunk_x = start_block_x(chunk.x);
-        let chunk_z = start_block_z(chunk.z);
-        if x < chunk_x || x > chunk_x + 15 || z < chunk_z || z > chunk_z + 15 {
-            return;
+        fn sample_column_block(
+            &mut self,
+            _block_x: i32,
+            _block_z: i32,
+            y: i32,
+        ) -> Option<&'static BlockState> {
+            if y > self.ground_y {
+                Some(Block::AIR.default_state)
+            } else {
+                Some(Block::NETHERRACK.default_state)
+            }
         }
+    }
 
-        let block_at = chunk.get_block_state(&Vector3::new(x, y, z));
-        if !BlockState::from_id(block_at).is_air() {
-            return;
+    #[test]
+    fn nether_fossil_never_places_on_roof() {
+        for seed in 0..100 {
+            let mut sampler = MockColumnSampler { ground_y: 60 };
+            let context = StructureGeneratorContext {
+                seed,
+                chunk_x: 0,
+                chunk_z: 0,
+                random: crate::generation::structure::structures::create_chunk_random(seed, 0, 0),
+                sea_level: 32,
+                min_y: 0,
+                height: 128,
+                height_sampler: Some(&mut sampler),
+                structure_key: Some(pumpkin_data::structures::StructureKeys::NetherFossil),
+            };
+            if let Some(pos) = NetherFossilGenerator.get_structure_position(context) {
+                assert!(
+                    pos.start_pos.0.y <= 125,
+                    "Fossil placed at {}, above logical nether height!",
+                    pos.start_pos.0.y
+                );
+                assert!(
+                    pos.start_pos.0.y >= 32,
+                    "Fossil placed at {}, below sea level!",
+                    pos.start_pos.0.y
+                );
+            }
         }
+    }
 
-        // Place dried ghast with random rotation (vanilla: Blocks.DRIED_GHAST.getDefaultState().rotate())
-        // Dried ghast default state is sufficient since rotation is cosmetic
-        chunk.set_block_state(x, y, z, Block::DRIED_GHAST.default_state);
+    #[test]
+    fn nether_fossil_rejects_when_no_ground_above_sea_level() {
+        let mut sampler = MockColumnSampler { ground_y: 20 }; // below sea_level (32)
+        let context = StructureGeneratorContext {
+            seed: 42,
+            chunk_x: 0,
+            chunk_z: 0,
+            random: crate::generation::structure::structures::create_chunk_random(42, 0, 0),
+            sea_level: 32,
+            min_y: 0,
+            height: 128,
+            height_sampler: Some(&mut sampler),
+            structure_key: Some(pumpkin_data::structures::StructureKeys::NetherFossil),
+        };
+        assert!(
+            NetherFossilGenerator
+                .get_structure_position(context)
+                .is_none()
+        );
     }
 }

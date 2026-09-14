@@ -5,7 +5,7 @@ use pumpkin_world::world::{BlockAccessor, BlockFlags};
 use rand::seq::SliceRandom;
 
 use crate::block::{
-    BlockBehaviour, BlockFuture, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
+    BlockBehaviour, BlockMetadata, CanPlaceAtArgs, GetStateForNeighborUpdateArgs,
     blocks::plant::PlantBlockBase,
 };
 
@@ -33,16 +33,14 @@ impl BlockBehaviour for DryVegetationBlock {
             })
     }
 
-    fn perform_bonemeal<'a>(&'a self, args: crate::block::BonemealArgs<'a>) -> BlockFuture<'a, ()> {
-        Box::pin(async move {
+    fn perform_bonemeal(&self, args: crate::block::BonemealArgs<'_>) {
+        {
             if args.block == &Block::SHORT_DRY_GRASS {
-                args.world
-                    .set_block_state(
-                        args.position,
-                        Block::TALL_DRY_GRASS.default_state.id,
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
+                args.world.set_block_state(
+                    args.position,
+                    Block::TALL_DRY_GRASS.default_state.id,
+                    BlockFlags::NOTIFY_ALL,
+                );
                 return;
             }
 
@@ -52,34 +50,29 @@ impl BlockBehaviour for DryVegetationBlock {
                 let position = args.position.offset(direction.to_offset());
                 can_spread_to(args.world, position).then_some(position)
             }) {
-                args.world
-                    .set_block_state(
-                        &position,
-                        Block::SHORT_DRY_GRASS.default_state.id,
-                        BlockFlags::NOTIFY_ALL,
-                    )
-                    .await;
+                args.world.set_block_state(
+                    &position,
+                    Block::SHORT_DRY_GRASS.default_state.id,
+                    BlockFlags::NOTIFY_ALL,
+                );
             }
-        })
+        }
     }
 
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }
 
-    fn get_state_for_neighbor_update<'a>(
-        &'a self,
-        args: GetStateForNeighborUpdateArgs<'a>,
-    ) -> BlockFuture<'a, BlockStateId> {
-        Box::pin(async move {
-            <Self as PlantBlockBase>::get_state_for_neighbor_update(
-                self,
-                args.world,
-                args.position,
-                args.state_id,
-            )
-            .await
-        })
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        <Self as PlantBlockBase>::get_state_for_neighbor_update(
+            self,
+            args.world,
+            args.position,
+            args.state_id,
+        )
     }
 }
 
