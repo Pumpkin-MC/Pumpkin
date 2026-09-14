@@ -53,7 +53,12 @@ impl EscapeDangerGoal {
         let world = entity.world.load();
         let mob_pos = entity.block_pos.load();
 
-        if world.get_block_state(&mob_pos).is_solid() {
+        if world
+            .get_block_state(&mob_pos)
+            .get_block_collision_shapes_at(&mob_pos)
+            .next()
+            .is_some()
+        {
             return None;
         }
 
