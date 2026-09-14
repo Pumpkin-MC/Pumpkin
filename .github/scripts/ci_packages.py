@@ -159,7 +159,7 @@ def select_packages(
     for path in changed:
         path_text = path.as_posix()
         if path_text in FULL_REBUILD_PATHS or path_text.startswith(".cargo/"):
-            return all_packages, True, f"workspace-wide input changed: {path_text}"
+            return all_packages, True, f"Workspace file changed: {path_text}"
 
         matching_roots = [
             root for root in package_roots if path == root or root in path.parents
@@ -174,12 +174,12 @@ def select_packages(
 
         # Unknown repository-level inputs may be consumed by build scripts or
         # include_* macros, so fall back to the complete workspace.
-        return all_packages, True, f"unmapped build input changed: {path_text}"
+        return all_packages, True, f"Unmapped file changed: {path_text}"
 
     affected = sorted(
         reverse_dependency_closure(directly_affected, reverse_dependencies)
     )
-    return affected, False, "affected packages and their reverse dependencies"
+    return affected, False, "Changed packages and their dependents"
 
 
 def write_outputs(output_path: Path, outputs: dict[str, str]) -> None:
@@ -201,7 +201,10 @@ def plan(args: argparse.Namespace) -> None:
     else:
         selected = all_packages
         run_full = True
-        reason = f"{args.event} runs the complete workspace"
+        reason = {
+            "push": "Pushed to master",
+            "workflow_dispatch": "Started manually",
+        }.get(args.event, f"Triggered by {args.event.replace('_', ' ')}")
 
     has_code = bool(selected)
     test_matrix = FULL_TEST_MATRIX if run_full else PR_TEST_MATRIX
