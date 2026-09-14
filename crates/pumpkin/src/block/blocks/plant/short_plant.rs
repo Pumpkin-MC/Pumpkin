@@ -1,6 +1,4 @@
-use pumpkin_data::block_properties::{
-    BlockProperties, DoubleBlockHalf, TallSeagrassLikeProperties,
-};
+use pumpkin_data::block_properties::{DoubleBlockHalf, TallSeagrassLikeProperties};
 use pumpkin_data::{Block, BlockId, BlockStateId};
 use pumpkin_world::world::BlockFlags;
 
@@ -35,7 +33,7 @@ impl BlockBehaviour for ShortPlantBlock {
             let lower = grown.default_state.id;
             args.world
                 .set_block_state(args.position, lower, BlockFlags::NOTIFY_LISTENERS);
-            let mut props = TallSeagrassLikeProperties::from_state_id(lower, grown);
+            let mut props = TallSeagrassLikeProperties::from_state_id(lower);
             props.half = DoubleBlockHalf::Upper;
             args.world.set_block_state(
                 &args.position.up(),

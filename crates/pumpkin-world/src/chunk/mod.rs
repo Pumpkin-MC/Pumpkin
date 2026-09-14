@@ -8,7 +8,7 @@ use pumpkin_data::tag::Block::MINECRAFT_LEAVES;
 use pumpkin_data::{Block, BlockState, BlockStateId};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use std::sync::RwLock;
 use std::sync::atomic::AtomicBool;
@@ -649,6 +649,117 @@ impl ChunkData {
             self.update_heightmap(relative_x, relative_y, relative_z, state);
         }
         old
+    }
+
+    /// Sets multiple blocks in the chunk at absolute Y coordinates in a single batch.
+    ///
+    /// This acquires section write locks and heightmap locks once across all updates,
+    /// significantly speeding up bulk block modifications.
+    ///
+    /// Returns a list of `(relative_x, y, relative_z, replaced_block_state_id)`.
+    pub fn set_blocks_batch(
+        &self,
+        updates: impl IntoIterator<Item = (usize, i32, usize, BlockStateId)>,
+    ) -> Vec<(usize, i32, usize, BlockStateId)> {
+        let min_y = self.section.min_y;
+        let mut results = Vec::new();
+
+        let mut sections = self
+            .section
+            .block_sections
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut random_tick_sections_guard = self
+            .section
+            .random_tick_sections
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        let mut changed_columns = FxHashSet::default();
+        let mut modified = false;
+
+        for (rel_x, y, rel_z, new_state_id) in updates {
+            let y_rel = y - min_y;
+            if y_rel < 0 {
+                continue;
+            }
+            let rel_y = y_rel as usize;
+            let section_index = rel_y / BlockPalette::SIZE;
+            let sub_y = rel_y % BlockPalette::SIZE;
+
+            if let Some(section) = sections.get_mut(section_index) {
+                let replaced_id = section.set(rel_x, sub_y, rel_z, new_state_id);
+                if replaced_id != new_state_id {
+                    modified = true;
+                    changed_columns.insert((rel_x, rel_z));
+                    if (has_random_ticks(new_state_id) || has_random_ticking_fluid(new_state_id))
+                        && random_tick_sections_guard.is_none()
+                    {
+                        let new_cache = vec![RandomTickSectionCache::default(); self.section.count]
+                            .into_boxed_slice();
+                        *random_tick_sections_guard = Some(new_cache);
+                    }
+
+                    if let Some(random_tick_sections) = random_tick_sections_guard.as_mut() {
+                        let random_tick_cache = &mut random_tick_sections[section_index];
+                        if has_random_ticks(replaced_id) {
+                            random_tick_cache.random_ticking_block_count = random_tick_cache
+                                .random_ticking_block_count
+                                .saturating_sub(1);
+                        }
+                        if has_random_ticking_fluid(replaced_id) {
+                            random_tick_cache.random_ticking_fluid_count = random_tick_cache
+                                .random_ticking_fluid_count
+                                .saturating_sub(1);
+                        }
+                        if has_random_ticks(new_state_id) {
+                            random_tick_cache.random_ticking_block_count = random_tick_cache
+                                .random_ticking_block_count
+                                .saturating_add(1);
+                        }
+                        if has_random_ticking_fluid(new_state_id) {
+                            random_tick_cache.random_ticking_fluid_count = random_tick_cache
+                                .random_ticking_fluid_count
+                                .saturating_add(1);
+                        }
+
+                        let mut mask = self
+                            .section
+                            .randomly_ticking_mask
+                            .load(std::sync::atomic::Ordering::Relaxed);
+                        if random_tick_cache.is_randomly_ticking() {
+                            mask |= 1 << section_index;
+                        } else {
+                            mask &= !(1 << section_index);
+                        }
+                        self.section
+                            .randomly_ticking_mask
+                            .store(mask, std::sync::atomic::Ordering::Relaxed);
+                    }
+                }
+                results.push((rel_x, y, rel_z, replaced_id));
+            }
+        }
+
+        if modified {
+            self.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+
+        drop(sections);
+        drop(random_tick_sections_guard);
+
+        if !changed_columns.is_empty() {
+            let mut heightmap = self
+                .heightmap
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let highest_non_empty_subchunk = self.get_highest_non_empty_subchunk();
+            for (x, z) in changed_columns {
+                self.populate_heightmaps(&mut heightmap, highest_non_empty_subchunk, x, z);
+            }
+        }
+
+        results
     }
 
     fn update_heightmap(

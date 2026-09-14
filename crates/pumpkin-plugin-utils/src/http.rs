@@ -31,10 +31,18 @@ impl HttpClient {
     /// Creates a new HTTP client with the specified User-Agent header.
     #[must_use]
     pub fn new(user_agent: &str) -> Self {
-        let client = reqwest::blocking::Client::builder()
-            .user_agent(user_agent)
-            .build()
-            .unwrap_or_default();
+        // reqwest is built with `rustls-no-provider`; install the ring provider (the
+        // one the rest of the workspace uses) before any client is constructed.
+        let _ = rustls::crypto::ring::default_provider().install_default();
+        let builder = reqwest::blocking::Client::builder().user_agent(user_agent);
+        #[cfg(target_os = "android")]
+        let builder = {
+            let certs = webpki_root_certs::TLS_SERVER_ROOT_CERTS
+                .iter()
+                .filter_map(|c| reqwest::Certificate::from_der(c.as_ref()).ok());
+            builder.tls_certs_only(certs)
+        };
+        let client = builder.build().unwrap_or_default();
         Self { client }
     }
 

@@ -1,4 +1,4 @@
-use wasmtime::component::Resource;
+use wasmtime::component::{Access, HasSelf, Resource};
 
 use crate::{
     command::{
@@ -347,11 +347,23 @@ impl pumpkin::plugin::command::HostCommand for PluginHostState {
 impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
     async fn get_command_sender_type(
         &mut self,
-        _res: Resource<CommandSender>,
+        res: Resource<CommandSender>,
     ) -> wasmtime::Result<CommandSenderType> {
-        Err(wasmtime::Error::msg(
-            "get_command_sender_type not implemented",
-        ))
+        let sender = self.get_sender_res(&res)?.provider.clone();
+        match sender {
+            crate::command::CommandSender::Rcon(_) => Ok(CommandSenderType::Rcon),
+            crate::command::CommandSender::Console => Ok(CommandSenderType::Console),
+            crate::command::CommandSender::Player(player) => {
+                Ok(CommandSenderType::Player(self.add_player(player)?))
+            }
+            crate::command::CommandSender::CommandBlock(block_entity, world) => {
+                Ok(CommandSenderType::CommandBlock((
+                    self.add_block_entity(block_entity)?,
+                    self.add_world(world)?,
+                )))
+            }
+            crate::command::CommandSender::Dummy => Ok(CommandSenderType::Dummy),
+        }
     }
 
     async fn get_name(&mut self, sender: Resource<CommandSender>) -> wasmtime::Result<String> {
@@ -478,20 +490,6 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
         Ok(self.get_sender_res(&sender)?.provider.permission_lvl() >= required)
     }
 
-    async fn has_permission(
-        &mut self,
-        sender: Resource<CommandSender>,
-        server: Resource<Server>,
-        node: String,
-    ) -> wasmtime::Result<bool> {
-        let sender_provider = &self.get_sender_res(&sender)?.provider;
-        let server_provider = &self
-            .resource_table
-            .get::<ServerResource>(&Resource::new_own(server.rep()))?
-            .provider;
-        Ok(sender_provider.has_permission(server_provider, &node))
-    }
-
     async fn position(
         &mut self,
         sender: Resource<CommandSender>,
@@ -554,6 +552,38 @@ impl pumpkin::plugin::command::HostCommandSender for PluginHostState {
             .delete::<CommandSenderResource>(Resource::new_own(rep.rep()))
             .map_err(wasmtime::Error::from)?;
         Ok(())
+    }
+}
+
+impl pumpkin::plugin::command::HostCommandSenderWithStore<PluginHostState>
+    for HasSelf<PluginHostState>
+{
+    async fn has_permission(
+        mut host: Access<'_, PluginHostState, Self>,
+        sender: Resource<CommandSender>,
+        server: Resource<Server>,
+        node: String,
+    ) -> wasmtime::Result<bool> {
+        let (sender, server, plugin) = {
+            let state = host.get();
+            let sender = state.get_sender_res(&sender)?.provider.clone();
+            let server = state
+                .resource_table
+                .get::<ServerResource>(&Resource::new_own(server.rep()))?
+                .provider
+                .clone();
+            let plugin = state
+                .plugin
+                .as_ref()
+                .and_then(std::sync::Weak::upgrade)
+                .ok_or_else(|| wasmtime::Error::msg("Plugin instance not available"))?;
+            (sender, server, plugin)
+        };
+
+        plugin
+            .store
+            .pump_blocking(&mut host, move || sender.has_permission(&server, &node))
+            .await
     }
 }
 

@@ -49,7 +49,7 @@ impl JavaClient {
                     if block == &pumpkin_data::Block::NOTE_BLOCK {
                         let props =
                             pumpkin_data::block_properties::NoteBlockLikeProperties::from_state_id(
-                                state.id, block,
+                                state.id,
                             );
                         crate::block::blocks::note::NoteBlock::play_note(&props, &world, &position);
                         player.increment_stat(
@@ -121,7 +121,7 @@ impl JavaClient {
                                 player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
                                 player.increment_stat(
                                     StatisticCategory::Mined,
-                                    broken_state.id.as_u16() as i32,
+                                    block.id.as_u16() as i32,
                                     1,
                                 );
                             }
@@ -160,9 +160,22 @@ impl JavaClient {
                         self.update_sequence(player_action.sequence.0);
                         return;
                     }
-                    player.mining.store(false, Ordering::Relaxed);
                     let entity = &player.get_entity();
-                    entity.world.load().set_block_breaking(
+                    let world = entity.world.load_full();
+                    if let Some(server_arc) = world.server.upgrade() {
+                        let mut abort_event = crate::plugin::api::events::block::block_damage_abort::BlockDamageAbortEvent::new(
+                            player.clone(),
+                            player_action.position,
+                            world.clone(),
+                            player.inventory().held_item(),
+                        );
+                        server_arc
+                            .plugin_manager
+                            .fire_blocking(&server_arc, &mut abort_event);
+                    }
+
+                    player.mining.store(false, Ordering::Relaxed);
+                    world.set_block_breaking(
                         entity,
                         player_action.position,
                         BlockBreakingProgress::Stop,
@@ -214,7 +227,7 @@ impl JavaClient {
                         player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
                         player.increment_stat(
                             StatisticCategory::Mined,
-                            state.id.as_u16() as i32,
+                            block.id.as_u16() as i32,
                             1,
                         );
                     }
@@ -246,7 +259,12 @@ impl JavaClient {
                     player.swap_item();
                 }
                 Status::SpearJab => {
-                    debug!("todo");
+                    if player.gamemode.load() == GameMode::Spectator {
+                        return;
+                    }
+
+                    let stack = player.inventory().held_item();
+                    server.item_registry.on_spear_jab(&stack, player);
                 }
             },
             Err(_) => self.try_kick(&TextComponent::text("Invalid status")),

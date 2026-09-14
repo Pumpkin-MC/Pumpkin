@@ -75,9 +75,39 @@ impl RangedCrossbowAttackGoal {
         let target_entity = target.get_entity();
         let target_pos = target_entity.pos.load();
 
+        let equipment_guard = mob
+            .get_mob_entity()
+            .living_entity
+            .entity_equipment
+            .try_lock();
+        let weapon_opt = equipment_guard
+            .as_ref()
+            .ok()
+            .map(|eq| eq.get(&EquipmentSlot::MAIN_HAND));
+
         let arrow_entity = Entity::new(world.clone(), mob_pos, &EntityType::ARROW);
         let projectile = ItemStack::new(1, &Item::ARROW);
-        let arrow = ArrowEntity::new_shot(arrow_entity, entity, &projectile, ArrowPickup::Allowed);
+        let arrow = if let Some(ref weapon) = weapon_opt {
+            ArrowEntity::new_shot_with_weapon(
+                arrow_entity,
+                entity,
+                &projectile,
+                weapon,
+                ArrowPickup::Allowed,
+            )
+        } else {
+            ArrowEntity::new_shot(arrow_entity, entity, &projectile, ArrowPickup::Allowed)
+        };
+
+        if let Some(ref item) = weapon_opt {
+            arrow.set_pierce_level(
+                crate::enchantment::EnchantmentHelper::process_projectile_piercing(item, 0),
+            );
+        }
+        arrow.apply_on_projectile_spawned(&projectile);
+        if entity.is_on_fire() {
+            arrow.set_flame(true);
+        }
 
         let dx = target_pos.x - mob_pos.x;
         let dy = (target_pos.y + f64::from(target_entity.entity_dimension.load().height) / 3.0)

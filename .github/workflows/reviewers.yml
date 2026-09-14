@@ -1,0 +1,128 @@
+name: Request reviewers
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  request-reviewers:
+    name: Request reviewers
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify reviewers based on changed files
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const rules = [
+              { pattern: 'crates/pumpkin-protocol/', reviewers: ['Snowiiii', 'xRookieFight'] },
+              { pattern: 'crates/pumpkin/src/net/', reviewers: ['Snowiiii', 'xRookieFight'] },
+
+              { pattern: 'assets/bedrock/', reviewers: ['ZlordHUN', 'xRookieFight'] },
+              { pattern: 'crates/pumpkin-protocol/src/bedrock/', reviewers: ['ZlordHUN', 'xRookieFight', 'QuantumSegfault'] },
+              { pattern: 'crates/pumpkin/src/net/bedrock/', reviewers: ['ZlordHUN', 'xRookieFight', 'QuantumSegfault'] },
+
+              { pattern: 'crates/pumpkin/src/command/', reviewers: ['aure31'] },
+
+              { pattern: 'crates/pumpkin-plugin-api/', reviewers: ['vyPal', 'yunuservices'] },
+              { pattern: 'crates/pumpkin-plugin-wit/', reviewers: ['vyPal', 'yunuservices', 'QuantumSegfault'] },
+              { pattern: 'crates/pumpkin-api-macros/', reviewers: ['vyPal', 'yunuservices'] },
+              { pattern: 'crates/pumpkin/src/plugin/', reviewers: ['vyPal', 'yunuservices', 'QuantumSegfault'] },
+
+              { pattern: '*.md', reviewers: ['Q2297045667'] },
+              { pattern: 'docs/', reviewers: ['Q2297045667'] },
+
+              { pattern: 'crates/pumpkin/src/entity/mob/', reviewers: ['Snowiiii', 'RoosterBooster007'] },
+              { pattern: 'crates/pumpkin/src/entity/projectile/', reviewers: ['Snowiiii', 'RoosterBooster007'] },
+
+              { pattern: 'crates/pumpkin/src/block/', reviewers: ['Snowiiii', 'RoosterBooster007'] },
+              { pattern: 'crates/pumpkin/src/item/', reviewers: ['Snowiiii', 'RoosterBooster007'] },
+
+              { pattern: 'crates/pumpkin-world/src/generation/feature/', reviewers: ['Snowiiii', 'RoosterBooster007', 'MegalithOfficial'] },
+              { pattern: 'crates/pumpkin-world/src/generation/noise/', reviewers: ['Snowiiii', 'RoosterBooster007', 'MegalithOfficial'] },
+            ];
+
+            const matches = (path, pattern) => {
+              if (pattern === '*') return true;
+              if (pattern.endsWith('/')) return path.startsWith(pattern);
+              if (pattern.startsWith('*.')) return path.endsWith(pattern.slice(1));
+              return path === pattern;
+            };
+
+            const files = await github.paginate(
+              github.rest.pulls.listFiles,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+                per_page: 100,
+              },
+            );
+
+            const reviewers = new Set();
+            for (const file of files) {
+              const matchingRule = [...rules].reverse().find((rule) => matches(file.filename, rule.pattern));
+              matchingRule?.reviewers.forEach((reviewer) => reviewers.add(reviewer));
+            }
+
+            const author = context.payload.pull_request.user.login;
+            reviewers.delete(author);
+
+            if (reviewers.size === 0) {
+              core.info('No reviewers matched the changed files.');
+              return;
+            }
+
+            const mentionList = [...reviewers].sort().map((reviewer) => `@${reviewer}`);
+            const marker = '<!-- pumpkin-reviewers -->';
+            const body = [
+              marker,
+              'Review requested from:',
+              '',
+              mentionList.join(' '),
+            ].join('\n');
+
+            const comments = await github.paginate(
+              github.rest.issues.listComments,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                per_page: 100,
+              },
+            );
+            const previousComment = comments
+              .filter((comment) => comment.body?.includes(marker))
+              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+
+            if (previousComment?.body === body) {
+              core.info('Reviewer notification is already up to date.');
+              return;
+            }
+
+            try {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            } catch (error) {
+              if (error.status === 403) {
+                core.setFailed(
+                  'GitHub Actions cannot comment on this pull request. Enable "Read and write permissions" for GITHUB_TOKEN in Settings > Actions > General.',
+                );
+                return;
+              }
+              throw error;
+            }
+
+            core.info(`Notified reviewers: ${mentionList.join(', ')}`);

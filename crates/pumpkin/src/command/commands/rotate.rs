@@ -10,7 +10,9 @@ use crate::command::argument_builder::{ArgumentBuilder, argument, command, liter
 use crate::command::argument_types::coordinates::rotation::RotationArgumentType;
 use crate::command::argument_types::coordinates::vec3::Vec3ArgumentType;
 use crate::command::argument_types::entity::EntityArgumentType;
-use crate::command::argument_types::entity_anchor::{EntityAnchor, EntityAnchorArgumentType};
+use crate::command::argument_types::entity_anchor::{
+    EntityAnchor, EntityAnchorArgumentType, EntityAnchorExt,
+};
 use crate::command::context::command_context::CommandContext;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
@@ -78,10 +80,10 @@ impl CommandExecutor for RotateFacingLocationExecutor {
         let facing_pos =
             Vec3ArgumentType::get_coordinates(context, "facingLocation")?.resolve(&context.source);
 
-        let entity = target.get_entity();
-        let eye_height = entity.get_eye_height();
-        let pos = entity.pos.load();
-        let looking_from = Vector3::new(pos.x, pos.y + eye_height, pos.z);
+        let looking_from = context
+            .source
+            .entity_anchor
+            .position_at_entity(target.get_entity());
 
         let (yaw, pitch) = yaw_pitch_facing_position(&looking_from, &facing_pos);
 
@@ -106,10 +108,10 @@ impl CommandExecutor for RotateFacingEntityExecutor {
             EntityAnchor::Feet
         };
 
-        let target_entity = target.get_entity();
-        let eye_height = target_entity.get_eye_height();
-        let pos = target_entity.pos.load();
-        let looking_from = Vector3::new(pos.x, pos.y + eye_height, pos.z);
+        let looking_from = context
+            .source
+            .entity_anchor
+            .position_at_entity(target.get_entity());
 
         let looking_towards = anchor.position_at_entity(facing_entity.get_entity());
 

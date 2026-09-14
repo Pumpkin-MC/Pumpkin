@@ -9,7 +9,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::Metadata;
+use rand::RngExt;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -27,6 +27,7 @@ use crate::entity::{
         animal::Animal,
         tamable::{TamableAnimal, TamableData},
     },
+    player::Player,
 };
 
 pub struct WolfEntity {
@@ -290,42 +291,77 @@ impl Mob for WolfEntity {
         let entity = self.get_entity();
         let is_baby = entity.age.load(Ordering::Relaxed) < 0;
         if is_baby {
-            entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::wolf::BABY_ID,
-                    true,
-                )],
-                None,
-            );
+            entity.set_synced_data(pumpkin_data::tracked_data::wolf::BABY_ID, true);
         }
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::wolf::TAMEABLE_FLAGS,
-                self.get_tame_flags(),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::wolf::TAMEABLE_FLAGS,
+            self.get_tame_flags(),
         );
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::wolf::COLLAR_COLOR,
-                VarInt(self.collar_color.load(Ordering::Relaxed) as i32),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::wolf::COLLAR_COLOR,
+            VarInt(self.collar_color.load(Ordering::Relaxed) as i32),
         );
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::wolf::WOLF_VARIANT_ID,
-                VarInt(self.variant.load(Ordering::Relaxed) as i32),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::wolf::WOLF_VARIANT_ID,
+            VarInt(self.variant.load(Ordering::Relaxed) as i32),
         );
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::wolf::OWNER_UUID,
-                self.get_owner(),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::wolf::OWNER_UUID,
+            self.get_owner(),
         );
+    }
+
+    fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+        let item = item_stack.get_item();
+        if self.is_tame() {
+            if self.is_food(item_stack)
+                && self.mob_entity.living_entity.health.load()
+                    < self.mob_entity.living_entity.get_max_health()
+            {
+                item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+                self.mob_entity.living_entity.heal(2.0);
+                self.play_eating_sound(pumpkin_data::sound::Sound::EntityWolfAmbient);
+                return true;
+            }
+
+            if self.is_owned_by(&player.gameprofile.id) {
+                if let Some(color) = super::animal::get_dye_color_from_item(item)
+                    && color != self.get_collar_color()
+                {
+                    self.set_collar_color(color);
+                    item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+                    return true;
+                }
+
+                let parent_interaction = self.animal_interact(
+                    player,
+                    item_stack,
+                    pumpkin_data::sound::Sound::EntityWolfAmbient,
+                );
+                if !parent_interaction {
+                    self.set_ordered_to_sit(!self.is_ordered_to_sit());
+                    return true;
+                }
+                return parent_interaction;
+            }
+        } else if item == &Item::BONE && !self.mob_entity.is_attacking() {
+            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+            let mut rng = rand::rng();
+            if rng.random_range(0..3) == 0 {
+                TamableAnimal::tame(self, player.gameprofile.id);
+                self.set_ordered_to_sit(true);
+                self.spawn_taming_particles(true);
+            } else {
+                self.spawn_taming_particles(false);
+            }
+            return true;
+        }
+
+        self.animal_interact(
+            player,
+            item_stack,
+            pumpkin_data::sound::Sound::EntityWolfAmbient,
+        )
     }
 }
 
@@ -337,12 +373,9 @@ impl WolfEntity {
     pub fn set_collar_color(&self, color: u8) {
         self.collar_color.store(color, Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::wolf::COLLAR_COLOR,
-                VarInt(color as i32),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::wolf::COLLAR_COLOR,
+            VarInt(color as i32),
         );
     }
 }

@@ -10,7 +10,6 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::potion::Potion;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tracked_data;
-use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -118,13 +117,10 @@ impl WitchEntity {
 
     pub fn set_drinking_potion(&self, drinking: bool) {
         self.drinking_potion.store(drinking, Ordering::Relaxed);
-        self.mob_entity.living_entity.entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::witch::DATA_USING_ITEM,
-                drinking,
-            )],
-            None,
-        );
+        self.mob_entity
+            .living_entity
+            .entity
+            .set_synced_data(tracked_data::witch::DATA_USING_ITEM, drinking);
     }
 
     #[must_use]

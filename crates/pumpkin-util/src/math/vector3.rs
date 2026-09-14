@@ -474,6 +474,18 @@ impl<T: Math + Copy> Mul<T> for Vector3<T> {
     }
 }
 
+impl<T: Math + Copy> Div<T> for Vector3<T> {
+    type Output = Self;
+
+    fn div(self, scalar: T) -> Self {
+        Self {
+            x: self.x / scalar,
+            y: self.y / scalar,
+            z: self.z / scalar,
+        }
+    }
+}
+
 impl<T: Math + Copy> Add for Vector3<T> {
     type Output = Self;
 

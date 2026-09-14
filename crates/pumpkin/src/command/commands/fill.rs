@@ -2,6 +2,7 @@ use pumpkin_data::translation;
 use pumpkin_data::{Block, BlockStateId};
 use pumpkin_util::PermissionLvl;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
@@ -49,6 +50,7 @@ enum FilterMode {
     KeepAir,
 }
 
+#[expect(clippy::too_many_lines)]
 fn fill_blocks(
     source: &CommandSource,
     from: BlockPos,
@@ -84,67 +86,145 @@ fn fill_blocks(
     }
 
     let target_state_id = target_block.default_state.id;
-    let mut count = 0;
+    let mut changed_positions = Vec::new();
 
-    for x in min_x..=max_x {
-        for y in min_y..=max_y {
-            for z in min_z..=max_z {
-                let pos = BlockPos(Vector3::new(x, y, z));
-                let current_block = world.get_block(&pos);
+    let min_chunk_x = min_x >> 4;
+    let max_chunk_x = max_x >> 4;
+    let min_chunk_z = min_z >> 4;
+    let max_chunk_z = max_z >> 4;
 
-                match mode {
-                    FillMode::Keep => {
-                        if !current_block.is_air() {
+    for chunk_x in min_chunk_x..=max_chunk_x {
+        for chunk_z in min_chunk_z..=max_chunk_z {
+            let chunk_pos = Vector2::new(chunk_x, chunk_z);
+            let local_start_x = (min_x - (chunk_x << 4)).clamp(0, 15) as usize;
+            let local_end_x = (max_x - (chunk_x << 4)).clamp(0, 15) as usize;
+            let local_start_z = (min_z - (chunk_z << 4)).clamp(0, 15) as usize;
+            let local_end_z = (max_z - (chunk_z << 4)).clamp(0, 15) as usize;
+
+            let result = world.level.read_chunk_sync(&chunk_pos, |chunk| {
+                let mut updates_for_chunk = Vec::new();
+                let mut block_entities_to_remove = Vec::new();
+                let min_y_chunk = chunk.section.min_y;
+
+                {
+                    let block_sections = chunk
+                        .section
+                        .block_sections
+                        .read()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+                    for y in min_y..=max_y {
+                        let y_rel = y - min_y_chunk;
+                        if y_rel < 0 {
                             continue;
                         }
-                    }
-                    _ => {
-                        if let Some(f) = filter
-                            && !f.test(current_block)
-                        {
+                        let rel_y = y_rel as usize;
+                        let section_index = rel_y / pumpkin_world::chunk::CHUNK_WIDTH;
+                        let sub_y = rel_y % pumpkin_world::chunk::CHUNK_WIDTH;
+
+                        let Some(section) = block_sections.get(section_index) else {
                             continue;
+                        };
+
+                        for rel_z in local_start_z..=local_end_z {
+                            for rel_x in local_start_x..=local_end_x {
+                                let global_x = (chunk_x << 4) + rel_x as i32;
+                                let global_z = (chunk_z << 4) + rel_z as i32;
+                                let pos = BlockPos(Vector3::new(global_x, y, global_z));
+
+                                let current_state_id = section.get(rel_x, sub_y, rel_z);
+                                let current_block = Block::from_state_id(current_state_id);
+
+                                match mode {
+                                    FillMode::Keep => {
+                                        if !current_block.is_air() {
+                                            continue;
+                                        }
+                                    }
+                                    _ => {
+                                        if let Some(f) = filter
+                                            && !f.test(current_block)
+                                        {
+                                            continue;
+                                        }
+                                    }
+                                }
+
+                                let is_edge = global_x == min_x
+                                    || global_x == max_x
+                                    || y == min_y
+                                    || y == max_y
+                                    || global_z == min_z
+                                    || global_z == max_z;
+
+                                let block_to_place = match mode {
+                                    FillMode::Outline => is_edge.then_some(target_state_id),
+                                    FillMode::Hollow => {
+                                        if is_edge {
+                                            Some(target_state_id)
+                                        } else {
+                                            Some(BlockStateId::AIR)
+                                        }
+                                    }
+                                    FillMode::Destroy => {
+                                        if current_state_id != target_state_id {
+                                            world.break_block(
+                                                &pos,
+                                                None,
+                                                BlockFlags::SKIP_DROPS
+                                                    | BlockFlags::NOTIFY_ALL
+                                                    | BlockFlags::FORCE_STATE,
+                                            );
+                                        }
+                                        Some(target_state_id)
+                                    }
+                                    FillMode::Replace | FillMode::Keep => Some(target_state_id),
+                                };
+
+                                if let Some(state_id) = block_to_place {
+                                    if current_block.default_state.block_entity_type != u16::MAX {
+                                        block_entities_to_remove.push(pos);
+                                    }
+                                    updates_for_chunk.push((rel_x, y, rel_z, state_id, pos));
+                                }
+                            }
                         }
                     }
                 }
 
-                let is_edge = x == min_x
-                    || x == max_x
-                    || y == min_y
-                    || y == max_y
-                    || z == min_z
-                    || z == max_z;
-
-                let block_to_place = match mode {
-                    FillMode::Outline => is_edge.then_some(target_state_id),
-                    FillMode::Hollow => {
-                        if is_edge {
-                            Some(target_state_id)
-                        } else {
-                            Some(BlockStateId::AIR)
-                        }
-                    }
-                    FillMode::Destroy => {
-                        world.break_block(
-                            &pos,
-                            None,
-                            BlockFlags::SKIP_DROPS | BlockFlags::FORCE_STATE,
-                        );
-                        Some(target_state_id)
-                    }
-                    FillMode::Replace | FillMode::Keep => Some(target_state_id),
-                };
-
-                if let Some(state_id) = block_to_place {
-                    world.set_block_state(&pos, state_id, BlockFlags::FORCE_STATE);
-                    count += 1;
+                if updates_for_chunk.is_empty() {
+                    return (Vec::new(), block_entities_to_remove);
                 }
+
+                let batch_inputs = updates_for_chunk
+                    .iter()
+                    .map(|&(rx, y, rz, sid, _)| (rx, y, rz, sid));
+                chunk.set_blocks_batch(batch_inputs);
+
+                let chunk_changed = updates_for_chunk
+                    .into_iter()
+                    .map(|(_, _, _, new_id, pos)| (pos, new_id))
+                    .collect::<Vec<_>>();
+
+                (chunk_changed, block_entities_to_remove)
+            });
+
+            if let Some((chunk_changed, be_to_remove)) = result {
+                for pos in be_to_remove {
+                    world.remove_block_entity(&pos);
+                }
+                changed_positions.extend(chunk_changed);
             }
         }
     }
 
+    let count = changed_positions.len() as i32;
     if count == 0 {
         return Err(ERROR_FAILED.create_without_context());
     }
+
+    world.queue_block_updates(&changed_positions);
+    world.flush_block_updates();
 
     source.send_feedback(
         TextComponent::translate_cross(

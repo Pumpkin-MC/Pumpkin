@@ -7,9 +7,7 @@ use crate::block::{
 };
 use pumpkin_data::{
     Block, BlockDirection, BlockId, BlockStateId,
-    block_properties::{
-        BlockProperties, HorizontalFacing, WallTorchLikeProperties, WheatLikeProperties,
-    },
+    block_properties::{HorizontalFacing, WallTorchLikeProperties, WheatLikeProperties},
     tag::{self, Taggable},
 };
 use pumpkin_util::{
@@ -32,7 +30,7 @@ impl BlockMetadata for StemBlock {
 
 impl StemBlock {
     fn state_with_age(block: &Block, state: BlockStateId, age: i32) -> BlockStateId {
-        let mut props = StemProperties::from_state_id(state, block);
+        let mut props = StemProperties::from_state_id(state);
         props.age = age as u8;
         props.to_state_id(block)
     }
@@ -65,7 +63,7 @@ impl BlockBehaviour for StemBlock {
     fn perform_bonemeal(&self, args: crate::block::BonemealArgs<'_>) {
         <Self as CropBlockBase>::perform_bonemeal(self, args.world, args.position);
         let (_, state) = args.world.get_block_and_state_id(args.position);
-        if StemProperties::from_state_id(state, args.block).age == 7 {
+        if StemProperties::from_state_id(state).age == 7 {
             BlockBehaviour::random_tick(
                 self,
                 RandomTickArgs {
@@ -98,7 +96,7 @@ impl BlockBehaviour for StemBlock {
         let f: f32 = get_available_moisture(args.world, args.position, args.block);
         if rand::rng().random_range(0..=(25.0 / f).floor() as i32) == 0 {
             let (block, state) = args.world.get_block_and_state_id(args.position);
-            let props = StemProperties::from_state_id(state, block);
+            let props = StemProperties::from_state_id(state);
             let age = i32::from(props.age);
             if age < 7 {
                 args.world.set_block_state(

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::Entity;
 use crate::entity::decoration::end_crystal::EndCrystalEntity;
 use crate::entity::player::Player;
@@ -31,11 +32,11 @@ impl ItemBehaviour for EndCrystalItem {
         _cursor_pos: Vector3<f32>,
         _block: &Block,
         _server: &Server,
-    ) {
+    ) -> BlockActionResult {
         let world = player.world();
         let block = world.get_block(&location);
         if block != &Block::OBSIDIAN && block != &Block::BEDROCK {
-            return;
+            return BlockActionResult::Fail;
         }
 
         let location = location.up();
@@ -45,14 +46,19 @@ impl ItemBehaviour for EndCrystalItem {
             || !world
                 .get_entities_at_box(&BoundingBox::new(
                     Vector3::new(location_vec.x, location_vec.y, location_vec.z),
-                    Vector3::new(location_vec.x + 1.0, location_vec.y + 2.0, location_vec.z),
+                    Vector3::new(
+                        location_vec.x + 1.0,
+                        location_vec.y + 2.0,
+                        location_vec.z + 1.0,
+                    ),
                 ))
                 .is_empty()
         {
-            return;
+            return BlockActionResult::Fail;
         }
 
-        let entity = Entity::new(world.clone(), location.to_f64(), &EntityType::END_CRYSTAL);
+        let spawn_pos = Vector3::new(location_vec.x + 0.5, location_vec.y, location_vec.z + 0.5);
+        let entity = Entity::new(world.clone(), spawn_pos, &EntityType::END_CRYSTAL);
         let end_crystal = Arc::new(EndCrystalEntity::new(entity));
         world.spawn_entity(end_crystal.clone());
         end_crystal.set_show_bottom(false);
@@ -63,6 +69,8 @@ impl ItemBehaviour for EndCrystalItem {
         {
             fight.try_respawn(&world);
         }
+
+        BlockActionResult::Success
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

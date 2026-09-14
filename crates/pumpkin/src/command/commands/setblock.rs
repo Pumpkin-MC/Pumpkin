@@ -47,11 +47,15 @@ impl CommandExecutor for SetBlockExecutor {
 
         let success = match mode {
             Mode::Destroy => {
-                world.break_block(&pos, None, BlockFlags::SKIP_DROPS | BlockFlags::FORCE_STATE);
+                world.break_block(
+                    &pos,
+                    None,
+                    BlockFlags::SKIP_DROPS | BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE,
+                );
                 world.set_block_state(
                     &pos,
                     block_state_id,
-                    BlockFlags::FORCE_STATE | BlockFlags::NOTIFY_NEIGHBORS,
+                    BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE,
                 );
                 true
             }
@@ -59,7 +63,7 @@ impl CommandExecutor for SetBlockExecutor {
                 world.set_block_state(
                     &pos,
                     block_state_id,
-                    BlockFlags::FORCE_STATE | BlockFlags::NOTIFY_NEIGHBORS,
+                    BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE,
                 );
                 true
             }
@@ -69,7 +73,7 @@ impl CommandExecutor for SetBlockExecutor {
                     world.set_block_state(
                         &pos,
                         block_state_id,
-                        BlockFlags::FORCE_STATE | BlockFlags::NOTIFY_NEIGHBORS,
+                        BlockFlags::NOTIFY_ALL | BlockFlags::FORCE_STATE,
                     );
                     true
                 } else {
@@ -77,12 +81,19 @@ impl CommandExecutor for SetBlockExecutor {
                 }
             }
             Mode::Strict => {
-                world.set_block_state(&pos, block_state_id, BlockFlags::SKIP_BLOCK_ADDED_CALLBACK);
+                world.set_block_state(
+                    &pos,
+                    block_state_id,
+                    BlockFlags::NOTIFY_LISTENERS
+                        | BlockFlags::SKIP_BLOCK_ADDED_CALLBACK
+                        | BlockFlags::FORCE_STATE,
+                );
                 true
             }
         };
 
         if success {
+            world.flush_block_updates();
             context.source.send_feedback(
                 TextComponent::translate_cross(
                     pumpkin_data::translation::java::COMMANDS_SETBLOCK_SUCCESS,

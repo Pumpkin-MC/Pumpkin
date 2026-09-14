@@ -19662,6 +19662,294 @@ pub static RECIPES_STONECUTTING: &[StonecutterRecipe] = &[
         },
     },
 ];
+pub static RECIPES_SMITHING_TRIM: &[SmithingTrimRecipe] = &[
+    SmithingTrimRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:bolt_armor_trim_smithing_template"),
+        base: RecipeIngredientTypes::Tagged("#minecraft:trimmable_armor"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:trim_materials"),
+        pattern: "minecraft:bolt",
+    },
+    SmithingTrimRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:coast_armor_trim_smithing_template"),
+        base: RecipeIngredientTypes::Tagged("#minecraft:trimmable_armor"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:trim_materials"),
+        pattern: "minecraft:coast",
+    },
+    SmithingTrimRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:dune_armor_trim_smithing_template"),
+        base: RecipeIngredientTypes::Tagged("#minecraft:trimmable_armor"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:trim_materials"),
+        pattern: "minecraft:dune",
+    },
+    SmithingTrimRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:eye_armor_trim_smithing_template"),
+        base: RecipeIngredientTypes::Tagged("#minecraft:trimmable_armor"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:trim_materials"),
+        pattern: "minecraft:eye",
+    },
+    SmithingTrimRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:flow_armor_trim_smithing_template"),
+        base: RecipeIngredientTypes::Tagged("#minecraft:trimmable_armor"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:trim_materials"),
+        pattern: "minecraft:flow",
+    },
+    SmithingTrimRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:host_armor_trim_smithing_template"),
+        base: RecipeIngredientTypes::Tagged("#minecraft:trimmable_armor"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:trim_materials"),
+        pattern: "minecraft:host",
+    },
+    SmithingTrimRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:raiser_armor_trim_smithing_template"),
+        base: RecipeIngredientTypes::Tagged("#minecraft:trimmable_armor"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:trim_materials"),
+        pattern: "minecraft:raiser",
+    },
+    SmithingTrimRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:rib_armor_trim_smithing_template"),
+        base: RecipeIngredientTypes::Tagged("#minecraft:trimmable_armor"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:trim_materials"),
+        pattern: "minecraft:rib",
+    },
+    SmithingTrimRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:sentry_armor_trim_smithing_template"),
+        base: RecipeIngredientTypes::Tagged("#minecraft:trimmable_armor"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:trim_materials"),
+        pattern: "minecraft:sentry",
+    },
+    SmithingTrimRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:shaper_armor_trim_smithing_template"),
+        base: RecipeIngredientTypes::Tagged("#minecraft:trimmable_armor"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:trim_materials"),
+        pattern: "minecraft:shaper",
+    },
+    SmithingTrimRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:silence_armor_trim_smithing_template"),
+        base: RecipeIngredientTypes::Tagged("#minecraft:trimmable_armor"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:trim_materials"),
+        pattern: "minecraft:silence",
+    },
+    SmithingTrimRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:snout_armor_trim_smithing_template"),
+        base: RecipeIngredientTypes::Tagged("#minecraft:trimmable_armor"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:trim_materials"),
+        pattern: "minecraft:snout",
+    },
+    SmithingTrimRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:spire_armor_trim_smithing_template"),
+        base: RecipeIngredientTypes::Tagged("#minecraft:trimmable_armor"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:trim_materials"),
+        pattern: "minecraft:spire",
+    },
+    SmithingTrimRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:tide_armor_trim_smithing_template"),
+        base: RecipeIngredientTypes::Tagged("#minecraft:trimmable_armor"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:trim_materials"),
+        pattern: "minecraft:tide",
+    },
+    SmithingTrimRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:vex_armor_trim_smithing_template"),
+        base: RecipeIngredientTypes::Tagged("#minecraft:trimmable_armor"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:trim_materials"),
+        pattern: "minecraft:vex",
+    },
+    SmithingTrimRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:ward_armor_trim_smithing_template"),
+        base: RecipeIngredientTypes::Tagged("#minecraft:trimmable_armor"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:trim_materials"),
+        pattern: "minecraft:ward",
+    },
+    SmithingTrimRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:wayfinder_armor_trim_smithing_template"),
+        base: RecipeIngredientTypes::Tagged("#minecraft:trimmable_armor"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:trim_materials"),
+        pattern: "minecraft:wayfinder",
+    },
+    SmithingTrimRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:wild_armor_trim_smithing_template"),
+        base: RecipeIngredientTypes::Tagged("#minecraft:trimmable_armor"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:trim_materials"),
+        pattern: "minecraft:wild",
+    },
+];
+pub static RECIPES_SMITHING_TRANSFORM: &[SmithingTransformRecipe] = &[
+    SmithingTransformRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:netherite_upgrade_smithing_template"),
+        base: RecipeIngredientTypes::Simple("minecraft:diamond_axe"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:netherite_tool_materials"),
+        result: RecipeResultStruct {
+            id: "minecraft:netherite_axe",
+            count: 1u8,
+        },
+    },
+    SmithingTransformRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:netherite_upgrade_smithing_template"),
+        base: RecipeIngredientTypes::Simple("minecraft:diamond_boots"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:netherite_tool_materials"),
+        result: RecipeResultStruct {
+            id: "minecraft:netherite_boots",
+            count: 1u8,
+        },
+    },
+    SmithingTransformRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:netherite_upgrade_smithing_template"),
+        base: RecipeIngredientTypes::Simple("minecraft:diamond_chestplate"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:netherite_tool_materials"),
+        result: RecipeResultStruct {
+            id: "minecraft:netherite_chestplate",
+            count: 1u8,
+        },
+    },
+    SmithingTransformRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:netherite_upgrade_smithing_template"),
+        base: RecipeIngredientTypes::Simple("minecraft:diamond_helmet"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:netherite_tool_materials"),
+        result: RecipeResultStruct {
+            id: "minecraft:netherite_helmet",
+            count: 1u8,
+        },
+    },
+    SmithingTransformRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:netherite_upgrade_smithing_template"),
+        base: RecipeIngredientTypes::Simple("minecraft:diamond_hoe"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:netherite_tool_materials"),
+        result: RecipeResultStruct {
+            id: "minecraft:netherite_hoe",
+            count: 1u8,
+        },
+    },
+    SmithingTransformRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:netherite_upgrade_smithing_template"),
+        base: RecipeIngredientTypes::Simple("minecraft:diamond_horse_armor"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:netherite_tool_materials"),
+        result: RecipeResultStruct {
+            id: "minecraft:netherite_horse_armor",
+            count: 1u8,
+        },
+    },
+    SmithingTransformRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:netherite_upgrade_smithing_template"),
+        base: RecipeIngredientTypes::Simple("minecraft:diamond_leggings"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:netherite_tool_materials"),
+        result: RecipeResultStruct {
+            id: "minecraft:netherite_leggings",
+            count: 1u8,
+        },
+    },
+    SmithingTransformRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:netherite_upgrade_smithing_template"),
+        base: RecipeIngredientTypes::Simple("minecraft:diamond_nautilus_armor"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:netherite_tool_materials"),
+        result: RecipeResultStruct {
+            id: "minecraft:netherite_nautilus_armor",
+            count: 1u8,
+        },
+    },
+    SmithingTransformRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:netherite_upgrade_smithing_template"),
+        base: RecipeIngredientTypes::Simple("minecraft:diamond_pickaxe"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:netherite_tool_materials"),
+        result: RecipeResultStruct {
+            id: "minecraft:netherite_pickaxe",
+            count: 1u8,
+        },
+    },
+    SmithingTransformRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:netherite_upgrade_smithing_template"),
+        base: RecipeIngredientTypes::Simple("minecraft:diamond_shovel"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:netherite_tool_materials"),
+        result: RecipeResultStruct {
+            id: "minecraft:netherite_shovel",
+            count: 1u8,
+        },
+    },
+    SmithingTransformRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:netherite_upgrade_smithing_template"),
+        base: RecipeIngredientTypes::Simple("minecraft:diamond_spear"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:netherite_tool_materials"),
+        result: RecipeResultStruct {
+            id: "minecraft:netherite_spear",
+            count: 1u8,
+        },
+    },
+    SmithingTransformRecipe {
+        template: RecipeIngredientTypes::Simple("minecraft:netherite_upgrade_smithing_template"),
+        base: RecipeIngredientTypes::Simple("minecraft:diamond_sword"),
+        addition: RecipeIngredientTypes::Tagged("#minecraft:netherite_tool_materials"),
+        result: RecipeResultStruct {
+            id: "minecraft:netherite_sword",
+            count: 1u8,
+        },
+    },
+];
+#[derive(Clone, Debug, Serialize)]
+pub struct SmithingTrimRecipe {
+    pub template: RecipeIngredientTypes,
+    pub base: RecipeIngredientTypes,
+    pub addition: RecipeIngredientTypes,
+    pub pattern: &'static str,
+}
+impl SmithingTrimRecipe {
+    #[must_use]
+    pub fn matches(&self, template: &Item, base: &Item, addition: &Item) -> bool {
+        self.template.match_item(template)
+            && self.base.match_item(base)
+            && self.addition.match_item(addition)
+    }
+}
+#[must_use]
+pub fn get_smithing_trim_recipe(
+    template: &Item,
+    base: &Item,
+    addition: &Item,
+) -> Option<&'static SmithingTrimRecipe> {
+    RECIPES_SMITHING_TRIM
+        .iter()
+        .find(|recipe| recipe.matches(template, base, addition))
+}
+#[derive(Clone, Debug, Serialize)]
+pub struct SmithingTransformRecipe {
+    pub template: RecipeIngredientTypes,
+    pub base: RecipeIngredientTypes,
+    pub addition: RecipeIngredientTypes,
+    pub result: RecipeResultStruct,
+}
+impl SmithingTransformRecipe {
+    #[must_use]
+    pub fn matches(&self, template: &Item, base: &Item, addition: &Item) -> bool {
+        self.template.match_item(template)
+            && self.base.match_item(base)
+            && self.addition.match_item(addition)
+    }
+}
+#[must_use]
+pub fn get_smithing_transform_recipe(
+    template: &Item,
+    base: &Item,
+    addition: &Item,
+) -> Option<&'static SmithingTransformRecipe> {
+    RECIPES_SMITHING_TRANSFORM
+        .iter()
+        .find(|recipe| recipe.matches(template, base, addition))
+}
+#[doc = r" Returns the trim material registry key for a given item, if it is a valid trim material."]
+#[must_use]
+pub fn get_trim_material_for_item(item: &Item) -> Option<&'static str> {
+    match item.registry_key {
+        "amethyst_shard" => Some("minecraft:amethyst"),
+        "copper_ingot" => Some("minecraft:copper"),
+        "diamond" => Some("minecraft:diamond"),
+        "emerald" => Some("minecraft:emerald"),
+        "gold_ingot" => Some("minecraft:gold"),
+        "iron_ingot" => Some("minecraft:iron"),
+        "lapis_lazuli" => Some("minecraft:lapis"),
+        "netherite_ingot" => Some("minecraft:netherite"),
+        "quartz" => Some("minecraft:quartz"),
+        "redstone" => Some("minecraft:redstone"),
+        "resin_brick" | "resin_clump" => Some("minecraft:resin"),
+        _ => None,
+    }
+}
 #[must_use]
 pub fn get_cooking_recipe_with_ingredient(
     ingredient: &Item,

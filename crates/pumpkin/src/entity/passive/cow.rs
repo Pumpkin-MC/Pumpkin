@@ -94,6 +94,17 @@ impl Mob for CowEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+        if item_stack.get_item() == &Item::BUCKET && !self.is_baby() {
+            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+            let entity = &self.mob_entity.living_entity.entity;
+            let world = entity.world.load();
+            world.play_sound(
+                Sound::EntityCowMilk,
+                pumpkin_data::sound::SoundCategory::Neutral,
+                &entity.pos.load(),
+            );
+            return true;
+        }
         self.animal_interact(player, item_stack, Sound::EntityCowAmbient)
     }
 }

@@ -21,21 +21,28 @@ impl AttachedToLogsTreeDecorator {
         random: &mut RandomGenerator,
         log_positions: &[BlockPos],
     ) {
-        // TODO: shuffle
-        for pos in log_positions {
-            // TODO: random
-            let pos = pos.offset(self.directions[0].to_offset());
-            if random.next_f32() > self.probability
-                || !GenerationCache::get_block_state(chunk, &pos.0)
-                    .to_state()
-                    .is_air()
-            {
-                continue;
+        if self.directions.is_empty() || log_positions.is_empty() {
+            return;
+        }
+
+        let mut shuffled = log_positions.to_vec();
+        for i in (1..shuffled.len()).rev() {
+            let j = random.next_bounded_i32((i + 1) as i32) as usize;
+            shuffled.swap(i, j);
+        }
+
+        for log_pos in shuffled {
+            let dir_idx = random.next_bounded_i32(self.directions.len() as i32) as usize;
+            let direction = self.directions[dir_idx];
+            let placement_pos = log_pos.offset(direction.to_offset());
+
+            if random.next_f32() <= self.probability && chunk.is_air(&placement_pos.0) {
+                chunk.set_block_state(
+                    &placement_pos.0,
+                    self.block_provider
+                        .get(random, placement_pos, chunk, block_registry),
+                );
             }
-            chunk.set_block_state(
-                &pos.0,
-                self.block_provider.get(random, pos, chunk, block_registry),
-            );
         }
     }
 }

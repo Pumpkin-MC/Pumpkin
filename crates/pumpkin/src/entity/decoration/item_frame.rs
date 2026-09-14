@@ -129,12 +129,9 @@ impl ItemFrameEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = item_stack;
 
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::item_frame::ITEM,
-                &item_serializer,
-            )],
-            None,
+        self.entity.set_synced_data(
+            pumpkin_data::tracked_data::item_frame::ITEM,
+            item_serializer,
         );
 
         if play_sound {
@@ -156,13 +153,8 @@ impl ItemFrameEntity {
         let rot = rotation % 8;
         self.rotation.store(rot, Ordering::Relaxed);
 
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::item_frame::ROTATION,
-                rot as i32,
-            )],
-            None,
-        );
+        self.entity
+            .set_synced_data(pumpkin_data::tracked_data::item_frame::ROTATION, rot as i32);
 
         if update_neighbours {
             let world = self.entity.world.load();
@@ -247,12 +239,9 @@ impl ItemFrameEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = ItemStack::EMPTY.clone();
         let item_serializer = ItemStackSerializer::from(ItemStack::EMPTY.clone());
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::item_frame::ITEM,
-                &item_serializer,
-            )],
-            None,
+        self.entity.set_synced_data(
+            pumpkin_data::tracked_data::item_frame::ITEM,
+            item_serializer,
         );
 
         let is_creative_player = caused_by.is_some_and(|s| {
@@ -343,20 +332,12 @@ impl EntityBase for ItemFrameEntity {
         );
         let rotation = self.get_rotation() as i32;
 
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::item_frame::ITEM,
-                &item_serializer,
-            )],
-            None,
+        self.entity.set_synced_data(
+            pumpkin_data::tracked_data::item_frame::ITEM,
+            item_serializer,
         );
-        self.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::item_frame::ROTATION,
-                rotation,
-            )],
-            None,
-        );
+        self.entity
+            .set_synced_data(pumpkin_data::tracked_data::item_frame::ROTATION, rotation);
     }
 
     fn send_java_spawn_packet(&self, client: &crate::net::java::JavaClient) {

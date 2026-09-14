@@ -10,28 +10,25 @@ use crate::plugin::loader::wasm::wasm_host::{
 };
 use wasmtime::component::Resource;
 
-pub fn cleanup_player(state: &mut PluginHostState, player: &Resource<Player>) {
+fn cleanup_player(state: &mut PluginHostState, player: &Resource<Player>) {
     let _ = state
         .resource_table
         .delete::<PlayerResource>(Resource::new_own(player.rep()));
 }
 
-pub fn cleanup_world(state: &mut PluginHostState, world: &Resource<World>) {
+fn cleanup_world(state: &mut PluginHostState, world: &Resource<World>) {
     let _ = state
         .resource_table
         .delete::<WorldResource>(Resource::new_own(world.rep()));
 }
 
-pub fn cleanup_text_component(
-    state: &mut PluginHostState,
-    text_component: &Resource<TextComponent>,
-) {
+fn cleanup_text_component(state: &mut PluginHostState, text_component: &Resource<TextComponent>) {
     let _ = state
         .resource_table
         .delete::<TextComponentResource>(Resource::new_own(text_component.rep()));
 }
 
-pub fn cleanup_item_stack(state: &mut PluginHostState, item: &Resource<ItemStack>) {
+fn cleanup_item_stack(state: &mut PluginHostState, item: &Resource<ItemStack>) {
     let _ = state
         .resource_table
         .delete::<ItemStackResource>(Resource::new_own(item.rep()));

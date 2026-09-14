@@ -48,6 +48,7 @@ impl CommandExecutor for TeamMsgCommandExecutor {
         let message_component = TextComponent::text(message_text);
 
         let online_players = world.players.load();
+        let mut recipients = 0;
 
         for player in online_players.iter() {
             if team.players.contains(&player.gameprofile.name) {
@@ -74,10 +75,11 @@ impl CommandExecutor for TeamMsgCommandExecutor {
                 };
 
                 player.send_system_message(&msg);
+                recipients += 1;
             }
         }
 
-        Ok(1)
+        Ok(recipients)
     }
 }
 

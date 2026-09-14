@@ -1,4 +1,4 @@
-use pumpkin_data::block_properties::{BarrelLikeProperties, BlockProperties};
+use pumpkin_data::block_properties::BarrelLikeProperties;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, FacingExt, item_stack::ItemStack};
 use pumpkin_nbt::compound::NbtCompound;
@@ -18,7 +18,7 @@ use std::{
 
 use crate::block::viewer::{ViewerCountListener, ViewerCountTracker, ViewerCountTrackerExt};
 use crate::world::{BlockFlags, World};
-use pumpkin_world::inventory::{Clearable, Inventory, sync_write_items_to_nbt};
+use pumpkin_inventory::{Clearable, Inventory, sync_write_items_to_nbt};
 
 use super::BlockEntity;
 
@@ -26,6 +26,7 @@ pub struct BarrelBlockEntity {
     pub position: BlockPos,
     pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
     pub dirty: AtomicBool,
+    pub comparator_dirty: AtomicBool,
 
     // Viewer
     viewers: ViewerCountTracker,
@@ -48,10 +49,11 @@ impl BlockEntity for BarrelBlockEntity {
             position,
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
             viewers: ViewerCountTracker::new(),
         };
 
-        pumpkin_world::inventory::sync_read_items_from_nbt(
+        pumpkin_inventory::sync_read_items_from_nbt(
             nbt,
             barrel
                 .items
@@ -73,6 +75,14 @@ impl BlockEntity for BarrelBlockEntity {
 
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
         Some(self)
+    }
+
+    fn is_comparator_dirty(&self) -> bool {
+        self.comparator_dirty.load(Ordering::Relaxed)
+    }
+
+    fn clear_comparator_dirty(&self) {
+        self.comparator_dirty.store(false, Ordering::Relaxed);
     }
 
     fn is_dirty(&self) -> bool {
@@ -118,13 +128,14 @@ impl BarrelBlockEntity {
             position,
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
             viewers: ViewerCountTracker::new(),
         }
     }
 
     fn set_open(&self, world: &Arc<World>, open: bool) {
         let state = world.get_block_state(&self.position);
-        let mut properties = BarrelLikeProperties::from_state_id(state.id, &Block::BARREL);
+        let mut properties = BarrelLikeProperties::from_state_id(state.id);
 
         properties.open = open;
 
@@ -139,7 +150,7 @@ impl BarrelBlockEntity {
         let mut rng = Xoroshiro::from_seed(get_seed());
 
         let state = world.get_block_state(&self.position);
-        let properties = BarrelLikeProperties::from_state_id(state.id, &Block::BARREL);
+        let properties = BarrelLikeProperties::from_state_id(state.id);
         let direction = properties.facing.to_block_direction().to_offset();
         let position = Vector3::new(
             self.position.0.x as f64 + 0.5 + direction.x as f64 / 2.0,
@@ -220,6 +231,7 @@ impl Inventory for BarrelBlockEntity {
 
     fn mark_dirty(&self) {
         self.dirty.store(true, Ordering::Relaxed);
+        self.comparator_dirty.store(true, Ordering::Relaxed);
     }
 
     fn as_any(&self) -> &dyn Any {

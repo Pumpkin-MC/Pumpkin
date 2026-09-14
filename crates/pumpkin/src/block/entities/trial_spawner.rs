@@ -1,13 +1,15 @@
 use rustc_hash::FxHashSet;
 use std::sync::{Arc, Mutex};
 
-use pumpkin_data::block_properties::{
-    BlockProperties, TrialSpawnerLikeProperties, TrialSpawnerState,
-};
+use pumpkin_data::block_properties::{TrialSpawnerLikeProperties, TrialSpawnerState};
+use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::potion::Effect;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_data::trial_spawner::TrialSpawnerKey;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
@@ -205,7 +207,91 @@ impl Default for TrialSpawnerConfig {
     }
 }
 
+impl From<&pumpkin_data::trial_spawner::TrialSpawnerConfigData> for TrialSpawnerConfig {
+    fn from(data: &pumpkin_data::trial_spawner::TrialSpawnerConfigData) -> Self {
+        let spawn_potentials = data
+            .spawn_potentials
+            .iter()
+            .map(|sp| {
+                let entity_type = EntityType::from_name(
+                    sp.entity_id
+                        .strip_prefix("minecraft:")
+                        .unwrap_or(sp.entity_id),
+                );
+                let equipment = sp.equipment_loot_table.map(|loot_table| {
+                    let mut cmp = NbtCompound::new();
+                    cmp.put_string("loot_table", loot_table.to_string());
+                    if let Some(chances) = sp.equipment_slot_drop_chances {
+                        cmp.put_float("slot_drop_chances", chances);
+                    }
+                    cmp
+                });
+                WeightedSpawnData {
+                    data: SpawnData {
+                        entity_type,
+                        custom_spawn_rules: None,
+                        equipment,
+                        raw_entity_nbt: None,
+                    },
+                    weight: sp.weight,
+                }
+            })
+            .collect();
+
+        let loot_tables_to_eject = data
+            .loot_tables_to_eject
+            .iter()
+            .map(|lt| WeightedLootTable {
+                data: lt.loot_table.to_string(),
+                weight: lt.weight,
+            })
+            .collect();
+
+        Self {
+            spawn_range: data.spawn_range,
+            total_mobs: data.total_mobs,
+            simultaneous_mobs: data.simultaneous_mobs,
+            total_mobs_added_per_player: data.total_mobs_added_per_player,
+            simultaneous_mobs_added_per_player: data.simultaneous_mobs_added_per_player,
+            ticks_between_spawn: data.ticks_between_spawn,
+            spawn_potentials,
+            loot_tables_to_eject,
+            items_to_drop_when_ominous: data.items_to_drop_when_ominous.map(ToString::to_string),
+        }
+    }
+}
+
 impl TrialSpawnerConfig {
+    #[must_use]
+    pub fn from_key(key: &str) -> Option<Self> {
+        if let Some(cfg) = pumpkin_data::trial_spawner::get_trial_spawner_config(key) {
+            return Some(Self::from(cfg));
+        }
+        if let Some(trial_key) = TrialSpawnerKey::from_name(key) {
+            return Some(Self::from(trial_key.normal_config()));
+        }
+        let with_normal = format!("{key}/normal");
+        if let Some(cfg) = pumpkin_data::trial_spawner::get_trial_spawner_config(&with_normal) {
+            return Some(Self::from(cfg));
+        }
+        None
+    }
+
+    #[must_use]
+    pub fn from_ominous_key(key: &str) -> Option<Self> {
+        if let Some(cfg) = pumpkin_data::trial_spawner::get_trial_spawner_config(key) {
+            return Some(Self::from(cfg));
+        }
+        if let Some(trial_key) = TrialSpawnerKey::from_name(key) {
+            return Some(Self::from(trial_key.ominous_config()));
+        }
+        let with_ominous = format!("{key}/ominous");
+        if let Some(cfg) = pumpkin_data::trial_spawner::get_trial_spawner_config(&with_ominous) {
+            return Some(Self::from(cfg));
+        }
+        None
+    }
+
     #[must_use]
     pub fn calculate_target_total_mobs(&self, player_count: usize) -> i32 {
         let additional = player_count.saturating_sub(1) as f32 * self.total_mobs_added_per_player;
@@ -422,6 +508,16 @@ impl Default for TrialSpawnerFullConfig {
 
 impl TrialSpawnerFullConfig {
     #[must_use]
+    pub fn from_key(key: &pumpkin_data::trial_spawner::TrialSpawnerKey) -> Self {
+        Self {
+            normal: TrialSpawnerConfig::from(key.normal_config()),
+            ominous: TrialSpawnerConfig::from(key.ominous_config()),
+            target_cooldown_length: 36000,
+            required_player_range: 14,
+        }
+    }
+
+    #[must_use]
     pub fn override_entity(&self, entity_type: &'static EntityType) -> Self {
         Self {
             normal: self.normal.with_spawning(entity_type),
@@ -433,13 +529,27 @@ impl TrialSpawnerFullConfig {
 
     #[must_use]
     pub fn from_nbt(nbt: &NbtCompound) -> Self {
+        if let Some(key_str) = nbt.get_string("key").or_else(|| nbt.get_string("config"))
+            && let Some(trial_key) = TrialSpawnerKey::from_name(key_str)
+        {
+            return Self::from_key(&trial_key);
+        }
+
         let normal = nbt
             .get_compound("normal_config")
             .map(TrialSpawnerConfig::from_nbt)
+            .or_else(|| {
+                nbt.get_string("normal_config")
+                    .and_then(TrialSpawnerConfig::from_key)
+            })
             .unwrap_or_default();
         let ominous = nbt
             .get_compound("ominous_config")
             .map(TrialSpawnerConfig::from_nbt)
+            .or_else(|| {
+                nbt.get_string("ominous_config")
+                    .and_then(TrialSpawnerConfig::from_ominous_key)
+            })
             .unwrap_or_default();
 
         let target_cooldown_length = nbt
@@ -715,7 +825,78 @@ impl TrialSpawner {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .query_gametime();
+
+        for &id in &self.data.current_mobs {
+            if let Some(entity) = world.get_entity_by_uuid(id) {
+                let ent = entity.get_entity();
+                let block_pos =
+                    BlockPos::floored(ent.pos.load().x, ent.pos.load().y, ent.pos.load().z);
+                world.sync_world_event(
+                    WorldEvent::ParticlesTrialSpawnerSpawnMobAt,
+                    block_pos,
+                    TrialSpawnerFlameParticle::Normal.encode(),
+                );
+                world.remove_entity(entity.as_ref());
+            }
+        }
+
         self.data.reset_after_becoming_ominous(game_time);
+        self.data.next_mob_spawns_at =
+            game_time + i64::from(self.active_config().ticks_between_spawn);
+    }
+
+    pub fn try_detect_players(&mut self, world: &Arc<World>, spawner_pos: BlockPos) -> bool {
+        let detected =
+            self.player_detector
+                .detect(world, spawner_pos, self.config.required_player_range);
+
+        if !self.is_ominous {
+            let mut ominous_player = None;
+            for &uuid in &detected {
+                if let Some(player) = world.get_player_by_uuid(uuid) {
+                    if player.has_effect(&StatusEffect::TRIAL_OMEN) {
+                        ominous_player = Some((player, false));
+                        break;
+                    }
+                    if player.has_effect(&StatusEffect::BAD_OMEN) {
+                        ominous_player = Some((player, true));
+                    }
+                }
+            }
+
+            if let Some((player, has_bad_omen)) = ominous_player {
+                if has_bad_omen && let Some(bad_omen) = player.get_effect(&StatusEffect::BAD_OMEN) {
+                    let amplifier = i32::from(bad_omen.amplifier) + 1;
+                    let duration = 18000 * amplifier;
+                    player.remove_effect(&StatusEffect::BAD_OMEN);
+                    player.add_effect(Effect {
+                        effect_type: &StatusEffect::TRIAL_OMEN,
+                        duration,
+                        amplifier: 0,
+                        ambient: false,
+                        show_particles: true,
+                        show_icon: true,
+                        blend: true,
+                    });
+                }
+                let eye_pos = player.eye_position();
+                let eye_block_pos = BlockPos::floored(eye_pos.x, eye_pos.y, eye_pos.z);
+                world.sync_world_event(
+                    WorldEvent::ParticlesTrialSpawnerBecomeOminous,
+                    eye_block_pos,
+                    0,
+                );
+                self.apply_ominous(world, spawner_pos);
+            }
+        }
+
+        let mut newly_detected = false;
+        for uuid in detected {
+            if self.data.registered_players.insert(uuid) {
+                newly_detected = true;
+            }
+        }
+        newly_detected
     }
 
     pub fn remove_ominous(&mut self, world: &Arc<World>, spawner_pos: BlockPos) {
@@ -742,7 +923,7 @@ impl TrialSpawner {
         let block_id = world.get_block_state_id(&spawner_pos);
         let block = world.get_block(&spawner_pos);
         if block.id == pumpkin_data::BlockId::TRIAL_SPAWNER {
-            TrialSpawnerLikeProperties::from_state_id(block_id, block).trial_spawner_state
+            TrialSpawnerLikeProperties::from_state_id(block_id).trial_spawner_state
         } else {
             TrialSpawnerState::Inactive
         }
@@ -752,7 +933,7 @@ impl TrialSpawner {
         let block_id = world.get_block_state_id(&spawner_pos);
         let block = world.get_block(&spawner_pos);
         if block.id == pumpkin_data::BlockId::TRIAL_SPAWNER {
-            let mut props = TrialSpawnerLikeProperties::from_state_id(block_id, block);
+            let mut props = TrialSpawnerLikeProperties::from_state_id(block_id);
             if props.trial_spawner_state != state {
                 props.trial_spawner_state = state;
                 world.set_block_state(
@@ -768,7 +949,7 @@ impl TrialSpawner {
         let block_id = world.get_block_state_id(&spawner_pos);
         let block = world.get_block(&spawner_pos);
         if block.id == pumpkin_data::BlockId::TRIAL_SPAWNER {
-            let mut props = TrialSpawnerLikeProperties::from_state_id(block_id, block);
+            let mut props = TrialSpawnerLikeProperties::from_state_id(block_id);
             if props.ominous != ominous {
                 props.ominous = ominous;
                 world.set_block_state(
@@ -795,8 +976,9 @@ impl TrialSpawner {
         level_info.game_rules.spawn_mobs
     }
 
+    #[allow(clippy::too_many_lines)]
     pub fn spawn_mob(&mut self, world: &Arc<World>, spawner_pos: BlockPos) -> Option<Uuid> {
-        let (entity_type, spawn_range) = {
+        let (entity_type, spawn_range, equipment_loot_table, is_baby, slime_size) = {
             let active_cfg = if self.is_ominous {
                 &self.config.ominous
             } else {
@@ -804,7 +986,25 @@ impl TrialSpawner {
             };
             let spawn_data = self.data.get_or_create_next_spawn_data(active_cfg);
             let ent_type = spawn_data.and_then(|sd| sd.entity_type)?;
-            (ent_type, active_cfg.spawn_range)
+            let equip = spawn_data
+                .and_then(|sd| {
+                    sd.equipment
+                        .as_ref()
+                        .and_then(|eq| eq.get_string("loot_table"))
+                })
+                .map(ToString::to_string);
+            let raw = spawn_data.and_then(|sd| sd.raw_entity_nbt.as_ref());
+            let baby = raw
+                .and_then(|r| {
+                    r.get_bool("IsBaby")
+                        .or_else(|| r.get_byte("IsBaby").map(|b| b != 0))
+                })
+                .unwrap_or(false);
+            let size = raw.and_then(|r| {
+                r.get_byte("Size")
+                    .or_else(|| r.get_int("Size").map(|i| i as i8))
+            });
+            (ent_type, active_cfg.spawn_range, equip, baby, size)
         };
 
         let mut rng = rand::rng();
@@ -841,6 +1041,40 @@ impl TrialSpawner {
 
         let yaw = rng.random::<f32>() * 360.0;
         entity.get_entity().set_rotation(yaw, 0.0);
+
+        if is_baby {
+            let ent = entity.get_entity();
+            ent.age.store(-24000, std::sync::atomic::Ordering::Relaxed);
+            ent.set_synced_data(pumpkin_data::tracked_data::ageable_mob::DATA_BABY_ID, true);
+        }
+
+        if let Some(size) = slime_size {
+            entity
+                .get_entity()
+                .set_synced_data(pumpkin_data::tracked_data::slime::ID_SIZE, i32::from(size));
+        }
+
+        if let Some(equip) = equipment_loot_table
+            && let Some(loot_table) = pumpkin_data::loot_table::get_loot_table(&equip)
+            && let Some(living) = entity.get_living_entity()
+        {
+            let seed = rand::random::<i64>();
+            let items = crate::world::loot::generate_loot(loot_table, seed);
+            let mut equipment = living
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut equipment_changes = Vec::new();
+            for item in items {
+                let slot = item
+                    .get_data_component::<pumpkin_data::data_component_impl::EquippableImpl>()
+                    .map_or(EquipmentSlot::MAIN_HAND, |eq| eq.slot.clone());
+                equipment.put(&slot, item.clone());
+                equipment_changes.push((slot, item));
+            }
+            drop(equipment);
+            living.send_equipment_changes(&equipment_changes);
+        }
 
         let mut event =
             crate::plugin::api::events::entity::trial_spawner_spawn::TrialSpawnerSpawnEvent::new(
@@ -892,10 +1126,10 @@ impl TrialSpawner {
     ) {
         let mut dropped_any = false;
         if let Some(key) = ejecting_loot_table
-            && let Some(loot_table) = pumpkin_data::chest_loot_table::get_chest_loot_table(key)
+            && let Some(loot_table) = pumpkin_data::loot_table::get_loot_table(key)
         {
             let seed = rand::random::<i64>();
-            let items = crate::world::loot::generate_chest_loot(loot_table, seed);
+            let items = crate::world::loot::generate_loot(loot_table, seed);
             for stack in items {
                 world.drop_stack(&spawner_pos, stack);
                 dropped_any = true;
@@ -977,12 +1211,7 @@ impl TrialSpawner {
                     return TrialSpawnerState::Inactive;
                 }
 
-                let newly_detected = self.data.try_detect_players(
-                    world,
-                    spawner_pos,
-                    self.config.required_player_range,
-                    &self.player_detector,
-                );
+                let newly_detected = self.try_detect_players(world, spawner_pos);
 
                 if self.data.registered_players.is_empty() {
                     TrialSpawnerState::WaitingForPlayers
@@ -1015,12 +1244,7 @@ impl TrialSpawner {
                     return TrialSpawnerState::Inactive;
                 }
 
-                self.data.try_detect_players(
-                    world,
-                    spawner_pos,
-                    self.config.required_player_range,
-                    &self.player_detector,
-                );
+                self.try_detect_players(world, spawner_pos);
 
                 let (total_mobs_needed, max_simultaneous, ticks_between_spawn) = {
                     let active_config = self.active_config();
@@ -1057,7 +1281,7 @@ impl TrialSpawner {
             TrialSpawnerState::WaitingForRewardEjection => {
                 if game_time >= self.data.next_mob_spawns_at {
                     world.play_sound(
-                        Sound::BlockTrialSpawnerSpawnItemBegin,
+                        Sound::BlockTrialSpawnerOpenShutter,
                         SoundCategory::Blocks,
                         &spawner_pos.to_f64(),
                     );
@@ -1069,24 +1293,40 @@ impl TrialSpawner {
             }
             TrialSpawnerState::EjectingReward => {
                 if game_time >= self.data.next_mob_spawns_at {
-                    self.eject_reward(world, spawner_pos, self.data.ejecting_loot_table.as_deref());
-                    world.play_sound(
-                        Sound::BlockTrialSpawnerEjectItem,
-                        SoundCategory::Blocks,
-                        &spawner_pos.to_f64(),
-                    );
-                    world.play_sound(
-                        Sound::BlockTrialSpawnerCloseShutter,
-                        SoundCategory::Blocks,
-                        &spawner_pos.to_f64(),
-                    );
-                    self.data.next_mob_spawns_at = game_time + 20;
-                    TrialSpawnerState::Cooldown
+                    if let Some(player_id) = self.data.registered_players.iter().copied().next() {
+                        self.data.registered_players.remove(&player_id);
+                        let loot_table = self.active_config().pick_loot_table();
+                        self.eject_reward(world, spawner_pos, loot_table.as_deref());
+                        world.play_sound(
+                            Sound::BlockTrialSpawnerEjectItem,
+                            SoundCategory::Blocks,
+                            &spawner_pos.to_f64(),
+                        );
+                        self.data.next_mob_spawns_at = game_time + 20;
+                        TrialSpawnerState::EjectingReward
+                    } else {
+                        world.play_sound(
+                            Sound::BlockTrialSpawnerCloseShutter,
+                            SoundCategory::Blocks,
+                            &spawner_pos.to_f64(),
+                        );
+                        self.data.next_mob_spawns_at = game_time + 20;
+                        TrialSpawnerState::Cooldown
+                    }
                 } else {
                     TrialSpawnerState::EjectingReward
                 }
             }
             TrialSpawnerState::Cooldown => {
+                if !self.is_ominous {
+                    self.try_detect_players(world, spawner_pos);
+                    if self.is_ominous {
+                        self.data.total_mobs_spawned = 0;
+                        self.data.next_mob_spawns_at = 0;
+                        return TrialSpawnerState::Active;
+                    }
+                }
+
                 if game_time >= self.data.cooldown_ends_at {
                     self.data.reset();
                     if self.is_ominous {
@@ -1138,7 +1378,7 @@ impl BlockEntity for TrialSpawnerBlockEntity {
         let block_id = world.get_block_state_id(&self.position);
         let block = world.get_block(&self.position);
         let is_ominous = if block.id == pumpkin_data::BlockId::TRIAL_SPAWNER {
-            TrialSpawnerLikeProperties::from_state_id(block_id, block).ominous
+            TrialSpawnerLikeProperties::from_state_id(block_id).ominous
         } else {
             false
         };
@@ -1187,6 +1427,33 @@ impl TrialSpawnerBlockEntity {
         Self {
             position,
             trial_spawner: Mutex::new(TrialSpawner::default()),
+        }
+    }
+
+    #[must_use]
+    pub fn with_config(position: BlockPos, config: TrialSpawnerFullConfig) -> Self {
+        Self {
+            position,
+            trial_spawner: Mutex::new(TrialSpawner::new(config, PlayerDetector::default())),
+        }
+    }
+
+    #[must_use]
+    pub fn from_key(position: BlockPos, key: &TrialSpawnerKey) -> Self {
+        Self::with_config(position, TrialSpawnerFullConfig::from_key(key))
+    }
+
+    pub fn set_entity_type(&self, entity_type: &'static EntityType, world: &Arc<World>) {
+        if let Ok(mut spawner) = self.trial_spawner.lock() {
+            spawner.override_entity_to_spawn(entity_type, world, self.position);
+        }
+    }
+
+    pub fn set_trial_spawner_key(&self, key: &TrialSpawnerKey, world: &Arc<World>) {
+        if let Ok(mut spawner) = self.trial_spawner.lock() {
+            spawner.config = TrialSpawnerFullConfig::from_key(key);
+            spawner.data.reset();
+            spawner.set_state(world, self.position, TrialSpawnerState::Inactive);
         }
     }
 }

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::{
     block::{
         BlockBehaviour, CanPlaceAtArgs, GetComparatorOutputArgs, GetStateForNeighborUpdateArgs,
-        NormalUseArgs, OnPlaceArgs, OnScheduledTickArgs, UseWithItemArgs,
+        NormalUseArgs, OnPlaceArgs, OnScheduledTickArgs, PathComputationType, UseWithItemArgs,
         blocks::candle_cakes::cake_from_candle, registry::BlockActionResult,
     },
     entity::player::Player,
@@ -11,8 +11,8 @@ use crate::{
 };
 use pumpkin_data::item::Item;
 use pumpkin_data::{
-    Block, BlockStateId,
-    block_properties::{BlockProperties, CakeLikeProperties},
+    Block, BlockState, BlockStateId,
+    block_properties::CakeLikeProperties,
     sound::{Sound, SoundCategory},
 };
 use pumpkin_macros::pumpkin_block;
@@ -21,6 +21,16 @@ use pumpkin_world::{
     tick::TickPriority,
     world::{BlockAccessor, BlockFlags},
 };
+
+/// Vanilla `CakeBlock.getOutputSignal`. Saturates -> an out-of-range bite count reads 0.
+#[must_use]
+pub const fn cake_output_signal(bites: u8) -> u8 {
+    7u8.saturating_sub(bites) * 2
+}
+
+/// Vanilla `CakeBlock.FULL_CAKE_SIGNAL`.
+pub const FULL_CAKE_SIGNAL: u8 = cake_output_signal(0);
+
 #[pumpkin_block("minecraft:cake")]
 pub struct CakeBlock;
 
@@ -37,7 +47,7 @@ impl CakeBlock {
         }
         player.hunger_manager.eat(player, 2, 0.4);
 
-        let mut properties = CakeLikeProperties::from_state_id(state_id, block);
+        let mut properties = CakeLikeProperties::from_state_id(state_id);
         match properties.bites {
             0..=5 => {
                 player.increment_stat(
@@ -85,7 +95,7 @@ impl BlockBehaviour for CakeBlock {
 
     fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         let state_id = args.world.get_block_state_id(args.position);
-        let properties = CakeLikeProperties::from_state_id(state_id, args.block);
+        let properties = CakeLikeProperties::from_state_id(state_id);
         let item = args.item_stack.item;
         match item.id {
             id if (Item::CANDLE.id..=Item::BLACK_CANDLE.id).contains(&id) => {
@@ -148,15 +158,13 @@ impl BlockBehaviour for CakeBlock {
     }
 
     fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
-        {
-            let state_id = args.world.get_block_state_id(args.position);
-            let properties = CakeLikeProperties::from_state_id(state_id, args.block);
-            if properties.bites <= 6 {
-                Some((7 - properties.bites) * 2)
-            } else {
-                Some(0)
-            }
-        }
+        let state_id = args.world.get_block_state_id(args.position);
+        let properties = CakeLikeProperties::from_state_id(state_id);
+        Some(cake_output_signal(properties.bites))
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
 

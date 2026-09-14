@@ -136,6 +136,23 @@ impl Mob for PigEntity {
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
         use super::animal::Animal;
+        if item_stack.get_item() == &pumpkin_data::item::Item::SADDLE
+            && self.can_be_saddled()
+            && !self.is_saddled()
+        {
+            self.set_saddled(true);
+            item_stack.decrement_unless_creative(player.gamemode.load(), 1);
+            let entity = self.get_entity();
+            let world = entity.world.load();
+            let pos = entity.pos.load();
+            world.play_sound(
+                Sound::EntityPigSaddle,
+                pumpkin_data::sound::SoundCategory::Neutral,
+                &pos,
+            );
+            return true;
+        }
+
         if self.is_saddled() && !self.is_food(item_stack) {
             let world = player.world();
             if let Some(vehicle) = world.get_entity_by_id(self.get_entity().entity_id)

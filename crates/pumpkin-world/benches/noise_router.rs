@@ -20,8 +20,7 @@ fn bench_noise_router_creation(c: &mut Criterion) {
 
     // Production overworld cell geometry (384 block world height / 8 = 48 vertical
     // cells). the previous vertical_cell_count of 4 under-measured by ~12x.
-    let builder_options =
-        ChunkNoiseFunctionBuilderOptions::new(4, 8, 48, 4, 0, 0, 4, vec![], vec![], None);
+    let builder_options = ChunkNoiseFunctionBuilderOptions::new(vec![], vec![], None);
 
     // Benchmarking
     c.bench_function("noise_router_creation_with_pooling", |b| {

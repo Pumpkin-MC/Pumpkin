@@ -1,10 +1,10 @@
 use pumpkin_data::BlockStateId;
 use pumpkin_data::biome::Biome;
-use pumpkin_data::block_properties::{BlockProperties, HorizontalAxis};
+use pumpkin_data::block_properties::HorizontalAxis;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_data::{Block, BlockDirection, BlockState};
+use pumpkin_data::{Block, BlockDirection};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -34,31 +34,21 @@ impl FireBlock {
         30 + rand::rng().random_range(0..10)
     }
 
-    fn is_flammable(block_state: &BlockState) -> bool {
-        if Block::from_state_id(block_state.id)
-            .properties(block_state.id)
-            .and_then(|props| {
-                props
-                    .to_props()
-                    .into_iter()
-                    .find(|p| p.0 == "waterlogged")
-                    .map(|(_, v)| v == "true")
-            })
-            .unwrap_or(false)
-        {
+    fn is_flammable(id: BlockStateId) -> bool {
+        let block = id.to_block();
+
+        if block.is_waterlogged(id) {
             return false;
         }
-        Block::from_state_id(block_state.id)
-            .flammable
-            .as_ref()
-            .is_some_and(|f| f.burn_chance > 0)
+
+        block.flammable.as_ref().is_some_and(|f| f.burn_chance > 0)
     }
 
     fn are_blocks_around_flammable(block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
         for direction in BlockDirection::all() {
             let neighbor_pos = pos.offset(direction.to_offset());
-            let block_state = block_accessor.get_block_state(&neighbor_pos);
-            if Self::is_flammable(block_state) {
+            let state_id = block_accessor.get_block_state_id(&neighbor_pos);
+            if Self::is_flammable(state_id) {
                 return true;
             }
         }
@@ -73,14 +63,14 @@ impl FireBlock {
     ) -> BlockStateId {
         let down_pos = pos.down();
         let down_state = world.get_block_state(&down_pos);
-        if Self::is_flammable(down_state) || down_state.is_side_solid(BlockDirection::Up) {
+        if Self::is_flammable(down_state.id) || down_state.is_side_solid(BlockDirection::Up) {
             return block.default_state.id;
         }
-        let mut fire_props = FireProperties::from_state_id(block.default_state.id, block);
+        let mut fire_props = FireProperties::from_state_id(block.default_state.id);
         for direction in BlockDirection::all() {
             let neighbor_pos = pos.offset(direction.to_offset());
-            let neighbor_state = world.get_block_state(&neighbor_pos);
-            if Self::is_flammable(neighbor_state) {
+            let neighbor_state_id = world.get_block_state_id(&neighbor_pos);
+            if Self::is_flammable(neighbor_state_id) {
                 match direction {
                     BlockDirection::North => fire_props.north = true,
                     BlockDirection::South => fire_props.south = true,
@@ -154,22 +144,29 @@ impl FireBlock {
         let block = world.get_block(pos);
         let odds = Self::get_burn_odds(block);
         if rand::rng().random_range(0..chance) < odds {
+            if let Some(server) = world.server.upgrade() {
+                let mut event = crate::plugin::api::events::block::block_burn::BlockBurnEvent {
+                    igniting_block: &Block::FIRE,
+                    block,
+                    cancelled: false,
+                };
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return;
+                }
+            }
             let old_block = block;
             if rand::rng().random_range(0..(age + 10) as i32) < 5
                 && !Self::is_near_rain(world.as_ref(), pos)
             {
                 let new_age = (age + (rand::rng().random_range(0..5) / 4)).min(15) as u8;
                 let state_id = self.get_state_for_position(world.as_ref(), &Block::FIRE, pos);
-                let mut fire_props = FireProperties::from_state_id(state_id, &Block::FIRE);
+                let mut fire_props = FireProperties::from_state_id(state_id);
                 fire_props.age = new_age;
                 let new_state_id = fire_props.to_state_id(&Block::FIRE);
-                world.set_block_state(pos, new_state_id, BlockFlags::NOTIFY_NEIGHBORS);
+                world.set_block_state(pos, new_state_id, BlockFlags::NOTIFY_ALL);
             } else {
-                world.set_block_state(
-                    pos,
-                    Block::AIR.default_state.id,
-                    BlockFlags::NOTIFY_NEIGHBORS,
-                );
+                world.set_block_state(pos, Block::AIR.default_state.id, BlockFlags::NOTIFY_ALL);
             }
 
             if old_block == &Block::TNT {
@@ -286,7 +283,7 @@ impl BlockBehaviour for FireBlock {
             _ => false,
         };
 
-        let mut fire_props = FireProperties::from_state_id(block_state.id, &Block::FIRE);
+        let mut fire_props = FireProperties::from_state_id(block_state.id);
         let age = fire_props.age;
 
         // Check if rain should extinguish the fire
@@ -308,7 +305,7 @@ impl BlockBehaviour for FireBlock {
         if new_age != age {
             fire_props.age = new_age;
             let new_state_id = fire_props.to_state_id(&Block::FIRE);
-            world.set_block_state(pos, new_state_id, BlockFlags::NOTIFY_NEIGHBORS);
+            world.set_block_state(pos, new_state_id, BlockFlags::NOTIFY_ALL);
         }
 
         if !infiniburn {
@@ -316,11 +313,7 @@ impl BlockBehaviour for FireBlock {
             if !Self::are_blocks_around_flammable(world.as_ref(), pos) {
                 let block_below_state = world.get_block_state(&pos.down());
                 if !block_below_state.is_side_solid(BlockDirection::Up) || new_age > 3 {
-                    world.set_block_state(
-                        pos,
-                        Block::AIR.default_state.id,
-                        BlockFlags::NOTIFY_NEIGHBORS,
-                    );
+                    world.set_block_state(pos, Block::AIR.default_state.id, BlockFlags::NOTIFY_ALL);
                     return;
                 }
             }
@@ -328,13 +321,9 @@ impl BlockBehaviour for FireBlock {
             // At max age, fire has a chance to extinguish if not on flammable block
             if new_age == 15
                 && rand::rng().random_range(0..4) == 0
-                && !Self::is_flammable(world.get_block_state(&pos.down()))
+                && !Self::is_flammable(world.get_block_state_id(&pos.down()))
             {
-                world.set_block_state(
-                    pos,
-                    Block::AIR.default_state.id,
-                    BlockFlags::NOTIFY_NEIGHBORS,
-                );
+                world.set_block_state(pos, Block::AIR.default_state.id, BlockFlags::NOTIFY_ALL);
                 return;
             }
         }
@@ -436,12 +425,26 @@ impl BlockBehaviour for FireBlock {
                                 let fire_state_id =
                                     self.get_state_for_position(world.as_ref(), block, &offset_pos);
                                 let mut new_fire_props =
-                                    FireProperties::from_state_id(fire_state_id, &Block::FIRE);
+                                    FireProperties::from_state_id(fire_state_id);
                                 new_fire_props.age = spread_age;
+                                let new_state_id = new_fire_props.to_state_id(&Block::FIRE);
+
+                                if let Some(server) = world.server.upgrade() {
+                                    let mut event = crate::plugin::api::events::block::block_spread::BlockSpreadEvent::new(
+                                        *pos,
+                                        offset_pos,
+                                        world.clone(),
+                                        new_state_id,
+                                    );
+                                    server.plugin_manager.fire_blocking(&server, &mut event);
+                                    if event.cancelled {
+                                        continue;
+                                    }
+                                }
 
                                 world.set_block_state(
                                     &offset_pos,
-                                    new_fire_props.to_state_id(&Block::FIRE),
+                                    new_state_id,
                                     BlockFlags::NOTIFY_NEIGHBORS,
                                 );
                             }

@@ -16,7 +16,7 @@ pub struct CSoundEffect {
     pub position: Vector3<i32>,
     pub volume: f32,
     pub pitch: f32,
-    pub seed: f64,
+    pub seed: i64,
 }
 
 impl CSoundEffect {
@@ -27,7 +27,7 @@ impl CSoundEffect {
         position: &Vector3<f64>,
         volume: f32,
         pitch: f32,
-        seed: f64,
+        seed: i64,
     ) -> Self {
         Self {
             sound_event,
@@ -97,7 +97,7 @@ impl ClientPacket for CSoundEffect {
         }
 
         if *version >= JavaMinecraftVersion::V_1_19 {
-            write.write_i64_be(self.seed as i64)?;
+            write.write_i64_be(self.seed)?;
         }
 
         Ok(())
@@ -135,7 +135,7 @@ mod tests {
             &Vector3::new(1.0, 2.0, 3.0),
             1.0,
             1.0,
-            42.0,
+            42,
         );
         let mut bytes = Vec::new();
 
@@ -158,7 +158,7 @@ mod tests {
             &Vector3::new(1.0, 2.0, 3.0),
             1.0,
             1.0,
-            42.0,
+            42,
         );
         let mut bytes = Vec::new();
 
@@ -180,7 +180,7 @@ mod tests {
             &Vector3::new(1.0, 2.0, 3.0),
             1.0,
             1.0,
-            42.0,
+            42,
         );
         let mut bytes = Vec::new();
 
@@ -199,7 +199,7 @@ mod tests {
             &Vector3::new(2.5, 3.5, 4.5),
             1.0,
             1.0,
-            42.0,
+            42,
         );
         let mut bytes = Vec::new();
 

@@ -11,7 +11,6 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -171,12 +170,9 @@ impl ArmadilloEntity {
         self.state.store(state.id(), Ordering::Relaxed);
         self.in_state_ticks.store(0, Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::armadillo::ARMADILLO_STATE,
-                VarInt(state.id()),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::armadillo::ARMADILLO_STATE,
+            VarInt(state.id()),
         );
     }
 
@@ -412,20 +408,11 @@ impl Mob for ArmadilloEntity {
         let entity = self.get_entity();
         let is_baby = entity.age.load(Ordering::Relaxed) < 0;
         if is_baby {
-            entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::armadillo::BABY_ID,
-                    true,
-                )],
-                None,
-            );
+            entity.set_synced_data(pumpkin_data::tracked_data::armadillo::BABY_ID, true);
         }
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::armadillo::ARMADILLO_STATE,
-                VarInt(self.get_state().id()),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::armadillo::ARMADILLO_STATE,
+            VarInt(self.get_state().id()),
         );
     }
 

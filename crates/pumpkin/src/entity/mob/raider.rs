@@ -8,7 +8,6 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tracked_data;
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 
@@ -93,13 +92,7 @@ pub trait Raider: PatrollingMonster {
             .is_celebrating
             .store(celebrating, Ordering::Relaxed);
         let entity = &self.get_mob_entity().living_entity.entity;
-        entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::pillager::IS_CELEBRATING,
-                celebrating,
-            )],
-            None,
-        );
+        entity.set_synced_data(tracked_data::pillager::IS_CELEBRATING, celebrating);
     }
 
     fn has_active_raid(&self) -> bool {

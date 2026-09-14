@@ -6,7 +6,6 @@ use uuid::Uuid;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::entity::{
@@ -129,12 +128,9 @@ impl EvokerEntity {
     pub fn set_is_casting_spell(&self, spell: IllagerSpell) {
         self.current_spell.store(spell as u8, Ordering::Relaxed);
         let entity = &self.mob_entity.living_entity.entity;
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::evoker::SPELL_CASTING_ID,
-                spell as u8 as i8,
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::evoker::SPELL_CASTING_ID,
+            spell as u8 as i8,
         );
     }
 

@@ -87,10 +87,10 @@ impl CommandExecutor for SimpleTriggerExecutor {
                 translation::java::COMMANDS_TRIGGER_SIMPLE_SUCCESS,
                 [objective_display_name],
             ),
-            false,
+            true,
         );
 
-        Ok(1)
+        Ok(new_value)
     }
 }
 
@@ -158,10 +158,10 @@ impl CommandExecutor for AddTriggerExecutor {
                     TextComponent::text(value.to_string()),
                 ],
             ),
-            false,
+            true,
         );
 
-        Ok(value)
+        Ok(new_value)
     }
 }
 
@@ -221,7 +221,7 @@ impl CommandExecutor for SetTriggerExecutor {
                     TextComponent::text(value.to_string()),
                 ],
             ),
-            false,
+            true,
         );
 
         Ok(value)

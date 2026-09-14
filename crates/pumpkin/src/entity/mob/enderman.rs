@@ -19,7 +19,7 @@ use pumpkin_data::{
     tag::Taggable,
 };
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_protocol::{codec::var_int::VarInt, java::client::play::Metadata};
+use pumpkin_protocol::codec::var_int::VarInt;
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use rand::RngExt;
 
@@ -290,13 +290,10 @@ impl EndermanEntity {
 
     pub fn set_angry(&self, angry: bool) {
         self.angry.store(angry, Ordering::Relaxed);
-        self.mob_entity.living_entity.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::enderman::CREEPY,
-                angry,
-            )],
-            None,
-        );
+        self.mob_entity
+            .living_entity
+            .entity
+            .set_synced_data(pumpkin_data::tracked_data::enderman::CREEPY, angry);
     }
 
     pub fn is_angry(&self) -> bool {
@@ -305,25 +302,19 @@ impl EndermanEntity {
 
     pub fn set_provoked(&self, provoked: bool) {
         self.provoked.store(provoked, Ordering::Relaxed);
-        self.mob_entity.living_entity.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::enderman::STARED_AT,
-                provoked,
-            )],
-            None,
-        );
+        self.mob_entity
+            .living_entity
+            .entity
+            .set_synced_data(pumpkin_data::tracked_data::enderman::STARED_AT, provoked);
     }
 
     pub fn set_carried_block(&self, block_state: Option<BlockStateId>) {
         self.carried_block.store(block_state);
         let value = block_state.map_or(VarInt(0), |id| VarInt(id.as_u16() as i32));
-        self.mob_entity.living_entity.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::enderman::CARRY_STATE,
-                value,
-            )],
-            None,
-        );
+        self.mob_entity
+            .living_entity
+            .entity
+            .set_synced_data(pumpkin_data::tracked_data::enderman::CARRY_STATE, value);
     }
 
     pub fn get_carried_block(&self) -> Option<BlockStateId> {

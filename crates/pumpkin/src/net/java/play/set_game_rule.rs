@@ -13,6 +13,20 @@ impl JavaClient {
             return;
         }
 
+        let world = player.world();
+        let minecart_improvements_enabled = world.server.upgrade().map_or_else(
+            || {
+                world
+                    .level_info
+                    .load()
+                    .data_packs
+                    .enabled
+                    .iter()
+                    .any(|p| p == "minecart_improvements" || p == "file/minecart_improvements")
+            },
+            |s| s.is_feature_enabled("minecraft:minecart_improvements"),
+        );
+
         for entry in &packet.entries {
             let key = entry
                 .game_rule_key
@@ -22,6 +36,14 @@ impl JavaClient {
                 warn!("Unknown game rule: {}", entry.game_rule_key);
                 continue;
             };
+
+            if *rule == GameRule::MaxMinecartSpeed && !minecart_improvements_enabled {
+                warn!(
+                    "Player {} tried to set game rule {} which is not enabled by feature flags",
+                    player.gameprofile.name, entry.game_rule_key
+                );
+                continue;
+            }
 
             let level_info = player.world().level_info.load();
             let current_val = level_info.game_rules.get(rule);

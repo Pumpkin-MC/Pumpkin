@@ -32,9 +32,8 @@ mod bedrock_creative;
 mod biome;
 mod bitsets;
 mod block;
+mod block_transformer;
 mod carver;
-pub mod chest_loot;
-mod chunk_gen_settings;
 mod chunk_status;
 mod chunk_view_lut;
 mod composter_increase_chance;
@@ -48,6 +47,7 @@ mod enchantments;
 mod entity_pose;
 mod entity_status;
 mod entity_type;
+mod environment_attribute;
 mod flower_pot_transformations;
 mod fluid;
 mod fuels;
@@ -55,13 +55,15 @@ mod game_event;
 mod game_rules;
 mod item;
 mod jukebox_song;
-pub mod loot;
+pub mod loot_table;
 mod map_color;
 mod map_decoration;
+mod material_rule;
 mod message_type;
 mod meta_data_type;
 mod noise_parameter;
 mod noise_router;
+mod noise_settings;
 mod packet;
 mod particle;
 mod placed_feature;
@@ -82,6 +84,7 @@ mod structures;
 mod tag;
 mod tracked_data;
 mod translations;
+mod trial_spawner;
 mod version;
 mod villager;
 mod wit;
@@ -132,7 +135,8 @@ pub fn main() {
         (block::build, "block.rs"),
         (item::build, "item.rs"),
         (structures::build, "structures.rs"),
-        (chunk_gen_settings::build, "chunk_gen_settings.rs"),
+        (material_rule::build, "material_rule.rs"),
+        (noise_settings::build, "noise_settings.rs"),
         (fluid::build, "fluid.rs"),
         (entity_status::build, "entity_status.rs"),
         (tag::build, "tag.rs"),
@@ -151,6 +155,7 @@ pub fn main() {
         (fuels::build, "fuels.rs"),
         (data_component::build, "data_component.rs"),
         (attributes::build, "attributes.rs"),
+        (environment_attribute::build, "environment_attribute.rs"),
         (effect::build, "effect.rs"),
         (potion::build, "potion.rs"),
         (potion_brewing::build, "potion_brewing.rs"),
@@ -163,10 +168,12 @@ pub fn main() {
             "configured_features_generated.rs",
         ),
         (carver::build, "carver.rs"),
-        (chest_loot::build, "chest_loot.rs"),
+        (loot_table::build, "loot_table.rs"),
         (map_color::build, "map_color.rs"),
         (map_decoration::build, "map_decoration.rs"),
         (dye_color::build, "dye_color.rs"),
+        (block_transformer::build, "block_transformer.rs"),
+        (trial_spawner::build, "trial_spawner.rs"),
     ];
     build_functions.extend(remap::build());
 

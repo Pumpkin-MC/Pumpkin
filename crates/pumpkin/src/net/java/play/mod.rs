@@ -37,7 +37,7 @@ use crate::block::entities::jigsaw_block::JigsawBlockEntity;
 use crate::plugin::player::player_toggle_sprint_event::PlayerToggleSprintEvent;
 use crate::server::{Server, seasonal_events};
 use crate::world::{BlockBreakingProgress, World, chunker};
-use pumpkin_data::block_properties::{BlockProperties, CommandBlockLikeProperties};
+use pumpkin_data::block_properties::CommandBlockLikeProperties;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
     BlocksAttacksImpl, ConsumableImpl, DataComponentImpl, EquipmentSlot, EquippableImpl, FoodImpl,
@@ -223,6 +223,7 @@ pub mod chat_message;
 pub mod chunk_batch;
 pub mod client_command;
 pub mod client_information;
+pub mod client_tick_end;
 pub mod close_container;
 pub mod command_suggestion;
 pub mod configuration_acknowledged;

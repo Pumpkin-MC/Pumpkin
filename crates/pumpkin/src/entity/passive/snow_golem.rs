@@ -1,8 +1,11 @@
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
+use pumpkin_nbt::compound::NbtCompound;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -11,18 +14,24 @@ use crate::entity::{
         look_at_entity::LookAtEntityGoal, ranged_attack::RangedAttackGoal,
         wander_around::WanderAroundGoal,
     },
+    item::ItemEntity,
     mob::{Mob, MobEntity, RangedAttackMob},
+    player::Player,
     projectile::snowball::SnowballEntity,
 };
 
 pub struct SnowGolemEntity {
     pub mob_entity: MobEntity,
+    pub has_pumpkin: AtomicBool,
 }
 
 impl SnowGolemEntity {
     pub fn new(entity: Entity) -> Arc<Self> {
         let mob_entity = MobEntity::new(entity);
-        let snow_golem = Self { mob_entity };
+        let snow_golem = Self {
+            mob_entity,
+            has_pumpkin: AtomicBool::new(true),
+        };
         let mob_arc = Arc::new(snow_golem);
         let mob_weak: Weak<dyn Mob> = {
             let mob_arc: Arc<dyn Mob> = mob_arc.clone();
@@ -65,6 +74,21 @@ impl SnowGolemEntity {
         mob_arc
     }
 
+    #[must_use]
+    pub fn has_pumpkin(&self) -> bool {
+        self.has_pumpkin.load(Ordering::Relaxed)
+    }
+
+    pub fn set_has_pumpkin(&self, has_pumpkin: bool) {
+        self.has_pumpkin.store(has_pumpkin, Ordering::Relaxed);
+        let entity = self.get_entity();
+        let flags = if has_pumpkin { 16u8 } else { 0u8 };
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::snow_golem::DATA_PUMPKIN_ID,
+            flags as i8,
+        );
+    }
+
     pub fn throw_snowball(&self, target: &Arc<dyn EntityBase>) {
         let entity = self.get_entity();
         let world = entity.world.load_full();
@@ -95,8 +119,45 @@ impl SnowGolemEntity {
 }
 
 impl Mob for SnowGolemEntity {
+    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
+        nbt.put_bool("Pumpkin", self.has_pumpkin());
+    }
+
+    fn mob_read_nbt(&self, nbt: &NbtCompound) {
+        if let Some(pumpkin) = nbt.get_bool("Pumpkin") {
+            self.set_has_pumpkin(pumpkin);
+        }
+    }
+
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn mob_init_data_tracker(&self) {
+        let entity = self.get_entity();
+        let flags = if self.has_pumpkin() { 16u8 } else { 0u8 };
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::snow_golem::DATA_PUMPKIN_ID,
+            flags as i8,
+        );
+    }
+
+    fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
+        if item_stack.get_item() == &Item::SHEARS && self.has_pumpkin() {
+            self.set_has_pumpkin(false);
+            let entity = self.get_entity();
+            let world = entity.world.load();
+            let pos = entity.pos.load();
+            world.play_sound(Sound::EntitySnowGolemShear, SoundCategory::Players, &pos);
+            let item_entity = Arc::new(ItemEntity::new(
+                Entity::new(world.clone(), pos, &EntityType::ITEM),
+                ItemStack::new(1, &Item::CARVED_PUMPKIN),
+            ));
+            world.spawn_entity(item_entity);
+            player.damage_held_item(1);
+            return true;
+        }
+        false
     }
 }
 

@@ -52,6 +52,9 @@ impl JavaClient {
         if !player.has_client_loaded() {
             return;
         }
+        // A movement packet was received this tick — tracked for SClientTickEnd zeroing.
+        self.received_movement_this_tick
+            .store(true, Ordering::Relaxed);
         if player.get_entity().has_vehicle() {
             return;
         }
@@ -169,6 +172,7 @@ impl JavaClient {
                 // Only update idle timeout if there's actual movement (vanilla threshold)
                 if delta.length_squared() > 1.0E-5 {
                     player.update_last_action_time();
+                    player.check_location_enchantments(pos, packet.collision & FLAG_ON_GROUND != 0);
                 }
                 player.progress_motion(delta);
             }
@@ -189,6 +193,9 @@ impl JavaClient {
         if !player.has_client_loaded() {
             return;
         }
+        // A movement packet was received this tick — tracked for SClientTickEnd zeroing.
+        self.received_movement_this_tick
+            .store(true, Ordering::Relaxed);
         if player.get_entity().has_vehicle() {
             return;
         }
@@ -331,6 +338,7 @@ impl JavaClient {
                 // Only update idle timeout if there's actual movement (vanilla threshold)
                 if delta.length_squared() > 1.0E-5 {
                     player.update_last_action_time();
+                    player.check_location_enchantments(pos, (packet.collision & FLAG_ON_GROUND) != 0);
                 }
                 player.progress_motion(delta);
             }

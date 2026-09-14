@@ -53,23 +53,7 @@ pub fn build() -> TokenStream {
         let lo = u64::from_be_bytes(hash[0..8].try_into().unwrap());
         let hi = u64::from_be_bytes(hash[8..16].try_into().unwrap());
 
-        // 2. Amplitude Pre-calculation
         let amplitudes = &parameter.amplitudes;
-        let mut min_octave = i32::MAX;
-        let mut max_octave = i32::MIN;
-
-        for (index, amp) in amplitudes.iter().enumerate() {
-            if *amp != 0.0 {
-                min_octave = i32::min(min_octave, index as i32);
-                max_octave = i32::max(max_octave, index as i32);
-            }
-        }
-
-        // Equivalent to your create_amplitude logic
-        let octaves = max_octave - min_octave;
-        let create_amp_val = 0.1f64 * (1.0f64 + 1.0f64 / (octaves + 1) as f64);
-        let final_amplitude = 0.16666666666666666f64 / create_amp_val;
-
         let first_octave = parameter.first_octave;
 
         variants.extend([quote! {
@@ -78,8 +62,7 @@ pub fn build() -> TokenStream {
                 #first_octave,
                 &[#(#amplitudes),*],
                 #lo,
-                #hi,
-                #final_amplitude
+                #hi
             );
         }]);
 
@@ -96,7 +79,6 @@ pub fn build() -> TokenStream {
             pub amplitudes: &'static [f64],
             pub lo: u64,
             pub hi: u64,
-            pub amplitude: f64,
         }
 
         impl DoublePerlinNoiseParameters {
@@ -108,9 +90,8 @@ pub fn build() -> TokenStream {
                 amplitudes: &'static [f64],
                 lo: u64,
                 hi: u64,
-                amplitude: f64,
             ) -> Self {
-                Self { id, first_octave, amplitudes, lo, hi, amplitude }
+                Self { id, first_octave, amplitudes, lo, hi }
             }
 
             pub fn id_to_parameters(id: &str) -> Option<&'static DoublePerlinNoiseParameters> {

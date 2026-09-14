@@ -9,8 +9,7 @@ use crate::{
 use pumpkin_data::{
     Block, BlockDirection, BlockId, BlockStateId, FacingExt, HorizontalFacingExt,
     block_properties::{
-        BlockProperties, Facing, HorizontalFacing, LadderLikeProperties,
-        MangroveRootsLikeProperties,
+        Facing, HorizontalFacing, LadderLikeProperties, MangroveRootsLikeProperties,
     },
     tag::{self, Taggable},
 };
@@ -115,18 +114,17 @@ impl BlockBehaviour for CoralFanBlock {
 
             // VANILLA FIX: Explicitly set waterlogged to false when dying
             let dead_block_state_id = if is_wall_fan(args.block) {
-                let mut props =
-                    CoralWallFanLikeProperties::from_state_id(current_state.id, args.block);
+                let mut props = CoralWallFanLikeProperties::from_state_id(current_state.id);
                 props.waterlogged = false;
                 props.to_state_id(dead_block)
             } else {
-                let mut props = CoralFanLikeProperties::from_state_id(current_state.id, args.block);
+                let mut props = CoralFanLikeProperties::from_state_id(current_state.id);
                 props.waterlogged = false;
                 props.to_state_id(dead_block)
             };
 
             args.world
-                .set_block_state(args.position, dead_block_state_id, BlockFlags::empty());
+                .set_block_state(args.position, dead_block_state_id, BlockFlags::NOTIFY_ALL);
         }
     }
 
@@ -148,7 +146,7 @@ impl BlockBehaviour for CoralFanBlock {
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
         if is_wall_fan(args.block) {
-            let props = CoralWallFanLikeProperties::from_state_id(args.state_id, args.block);
+            let props = CoralWallFanLikeProperties::from_state_id(args.state_id);
             if props.facing.to_block_direction().opposite() == args.direction
                 && !can_place_at(args.world, args.position, props.facing.opposite())
             {

@@ -10,7 +10,6 @@ use pumpkin_data::sound::Sound;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::var_int::VarInt;
-use pumpkin_protocol::java::client::play::Metadata;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -122,12 +121,9 @@ impl FoxEntity {
     pub fn set_variant(&self, variant: FoxVariant) {
         self.variant.store(variant.id(), Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::fox::TYPE_ID,
-                VarInt(variant.id()),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::fox::TYPE_ID,
+            VarInt(variant.id()),
         );
     }
 
@@ -144,13 +140,7 @@ impl FoxEntity {
         };
         self.flags.store(new_flags, Ordering::Relaxed);
         let entity = self.get_entity();
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::fox::FLAGS_ID,
-                new_flags,
-            )],
-            None,
-        );
+        entity.set_synced_data(pumpkin_data::tracked_data::fox::FLAGS_ID, new_flags);
     }
 
     #[must_use]
@@ -286,27 +276,15 @@ impl Mob for FoxEntity {
         let entity = self.get_entity();
         let is_baby = entity.age.load(Ordering::Relaxed) < 0;
         if is_baby {
-            entity.send_meta_data(
-                &[Metadata::new(
-                    pumpkin_data::tracked_data::fox::BABY_ID,
-                    true,
-                )],
-                None,
-            );
+            entity.set_synced_data(pumpkin_data::tracked_data::fox::BABY_ID, true);
         }
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::fox::TYPE_ID,
-                VarInt(self.get_variant().id()),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::fox::TYPE_ID,
+            VarInt(self.get_variant().id()),
         );
-        entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::fox::FLAGS_ID,
-                self.flags.load(Ordering::Relaxed),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::fox::FLAGS_ID,
+            self.flags.load(Ordering::Relaxed),
         );
     }
 

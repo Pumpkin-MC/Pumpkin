@@ -10,8 +10,8 @@
 
 use std::{any::Any, sync::Arc};
 
+use crate::inventory::{Clearable, Inventory};
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_world::inventory::{Clearable, Inventory};
 
 /// A composite inventory combining two inventories.
 ///
