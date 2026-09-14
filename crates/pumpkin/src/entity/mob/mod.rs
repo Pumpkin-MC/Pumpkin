@@ -5,6 +5,7 @@ use crate::entity::ai::control::move_control::MoveControl;
 use crate::entity::ai::goal::goal_selector::GoalSelector;
 use crate::entity::ai::sensing::Sensing;
 use crate::entity::player::Player;
+use crate::entity::predicate::EntityPredicate;
 use crate::server::Server;
 use crate::world::World;
 use crossbeam::atomic::AtomicCell;
@@ -936,9 +937,20 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn mob_read_nbt(&self, _nbt: &NbtCompound) {}
 
+    /// Drops a target the mob is not allowed to attack, such as a creative player.
+    fn as_valid_target(&self, target: Option<Arc<dyn EntityBase>>) -> Option<Arc<dyn EntityBase>> {
+        let target = target?;
+        if !EntityPredicate::ExceptCreativeOrSpectator.test(target.get_entity()) {
+            return None;
+        }
+        let living = target.get_living_entity()?;
+        self.can_attack(living).then_some(target)
+    }
+
     /// Set or clear the mob's target. Override to add side effects when targeting changes.
     fn set_mob_target(&self, target: Option<Arc<dyn EntityBase>>) {
         let mob = self.get_mob_entity();
+        let target = self.as_valid_target(target);
         let target_id = target.as_ref().map(|t| t.get_entity().entity_id);
         *mob.target
             .lock()
