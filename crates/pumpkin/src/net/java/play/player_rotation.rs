@@ -28,7 +28,6 @@ impl JavaClient {
         // TODO: use `pumpkin_util::math::pack_degrees`.
         let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0);
         let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0);
-        // let head_yaw = modulus(entity.head_yaw * 256.0 / 360.0, 256.0);
 
         let world = entity.world.load_full();
         let je_packet =
@@ -36,25 +35,10 @@ impl JavaClient {
 
         let pos = entity.pos.load();
 
-        let be_packet = CMovePlayer::new(
-            VarULong(entity_id as u64),
-            Vector3::new(
-                pos.x as f32,
-                pos.y as f32 + player.get_entity().entity_type.eye_height,
-                pos.z as f32,
-            ),
-            entity.pitch.load(),
-            entity.yaw.load(),
-            entity.head_yaw.load(),
-            // MODE_ROTATION not used for other players -> AvatarEntity always sends
-            // MODE_NORMAL (client already lerps). MODE_ROTATION drops live head yaw on Bedrock.
-            CMovePlayer::MODE_NORMAL,
-            rotation.ground,
-            VarULong(0),
-            0,
-            0,
-            VarULong(0),
-        );
+        // MODE_ROTATION not used for other players -> AvatarEntity always sends
+        // MODE_NORMAL (client already lerps). MODE_ROTATION drops live head yaw on Bedrock.
+        let be_packet =
+            bedrock_move_player_packet(entity, pos, CMovePlayer::MODE_NORMAL, rotation.ground);
 
         world.broadcast_packet_except_editioned(&[player.gameprofile.id], &je_packet, &be_packet);
 

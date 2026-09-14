@@ -135,18 +135,11 @@ impl JavaClient {
                             ),
                             packet.collision & FLAG_ON_GROUND != 0,
                         ),
-                        &CMovePlayer::new(
-                            VarULong(player.entity_id() as u64),
-                            Vector3::new(pos.x as f32, pos.y as f32 + player.get_entity().entity_type.eye_height, pos.z as f32),
-                            entity.pitch.load(),
-                            entity.yaw.load(),
-                            entity.head_yaw.load(),
+                        &bedrock_move_player_packet(
+                            entity,
+                            pos,
                             CMovePlayer::MODE_NORMAL,
-                            (packet.collision & FLAG_ON_GROUND) != 0,
-                            VarULong(0),
-                            0,
-                            0,
-                            VarULong(0),
+                            packet.collision & FLAG_ON_GROUND != 0,
                         ),
                     );
                 }
@@ -275,7 +268,6 @@ impl JavaClient {
                 // TODO: use `pumpkin_util::math::pack_degrees`.
                 let yaw = (entity.yaw.load() * 256.0 / 360.0).rem_euclid(256.0);
                 let pitch = (entity.pitch.load() * 256.0 / 360.0).rem_euclid(256.0);
-                // let head_yaw = (entity.head_yaw * 256.0 / 360.0).floor();
                 let world = entity.world.load_full();
 
                 // TODO: Warn when player moves to quickly
@@ -296,18 +288,11 @@ impl JavaClient {
                             pitch as u8,
                             (packet.collision & FLAG_ON_GROUND) != 0,
                         ),
-                        &CMovePlayer::new(
-                            VarULong(entity_id as u64),
-                            Vector3::new(pos.x as f32, pos.y as f32 + player.get_entity().entity_type.eye_height, pos.z as f32),
-                            entity.pitch.load(),
-                            entity.yaw.load(),
-                            entity.head_yaw.load(),
+                        &bedrock_move_player_packet(
+                            entity,
+                            pos,
                             CMovePlayer::MODE_NORMAL,
                             (packet.collision & FLAG_ON_GROUND) != 0,
-                            VarULong(0),
-                            0,
-                            0,
-                            VarULong(0),
                         ),
                     );
                 }
