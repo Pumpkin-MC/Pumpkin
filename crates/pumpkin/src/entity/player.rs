@@ -2757,10 +2757,18 @@ impl Player {
             && level_info.game_rules.natural_health_regeneration
         {
             let tick_count = self.tick_counter.load(Ordering::Relaxed);
-            if self.can_food_heal() && tick_count % 20 == 0 {
-                self.heal(1.0);
+            if tick_count % 20 == 0 {
+                if self.can_food_heal() {
+                    self.heal(1.0);
+                }
+
+                let saturation = self.hunger_manager.saturation.load();
+                if saturation < 20.0 {
+                    self.hunger_manager.set_saturation(saturation + 1.0);
+                }
             }
-            if self.hunger_manager.level.load() < 20 && tick_count % 10 == 0 {
+
+            if tick_count % 10 == 0 && self.hunger_manager.level.load() < 20 {
                 self.hunger_manager.add_hunger(1);
             }
         }

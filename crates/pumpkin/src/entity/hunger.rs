@@ -138,12 +138,11 @@ impl HungerManager {
     }
 
     pub fn set_level(&self, level: u8) {
-        self.level.store(level.min(MAX_FOOD));
+        self.level.store(level);
     }
 
     pub fn set_saturation(&self, saturation: f32) {
-        self.saturation
-            .store(saturation.min(f32::from(self.level.load())));
+        self.saturation.store(saturation);
     }
 
     pub fn get_exhaustion(&self) -> f32 {
