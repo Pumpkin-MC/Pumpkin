@@ -74,6 +74,7 @@ impl ClientPacket for CTeleportEntity<'_> {
             write.write_f32_be(self.pitch)?;
             write.write_i32_be(PositionFlag::get_bitfield(self.relatives))?;
         } else {
+            // TODO: use `pumpkin_util::math::pack_degrees`.
             write.write_u8((self.yaw.rem_euclid(360.0) * 256.0 / 360.0).floor() as u8)?;
             write.write_u8((self.pitch.rem_euclid(360.0) * 256.0 / 360.0).floor() as u8)?;
         }
