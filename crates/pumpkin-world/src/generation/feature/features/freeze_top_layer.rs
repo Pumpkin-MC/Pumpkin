@@ -47,7 +47,7 @@ impl FreezeTopLayerFeature {
                         .weather
                         .compute_temperature(x as f64, y, z as f64, chunk.get_sea_level());
 
-                if top_temp < 0.15 {
+                if biome.weather.has_precipitation() && top_temp < 0.15 {
                     let top_raw = GenerationCache::get_block_state(chunk, &top_vec);
                     // topPos must be air; belowPos must not be air (something to stand on)
                     // with a full top face (unless overridden), in darkness (vanilla
@@ -77,9 +77,7 @@ impl FreezeTopLayerFeature {
     }
 }
 
-// Duplicated from `LayeredSnowBlock::can_place_at` in the `pumpkin` crate:
-// `pumpkin-world` cannot depend on `pumpkin`, so the face-full check lives
-// here too. `Block.isFaceFull` equivalent: the union of the collision shapes
+// `Block.isFaceFull` equivalent: the union of the collision shapes
 // must fully cover the top face (per-shape checks miss multipart blocks
 // whose boxes only cover it together).
 fn is_top_face_full(state: &BlockState) -> bool {
