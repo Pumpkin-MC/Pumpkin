@@ -198,6 +198,18 @@ impl Chunk {
             Self::Level(_) => StagedChunkEnum::Full as u8,
         }
     }
+    /// Whether this chunk already holds light. Such light is authoritative and must not be
+    /// recomputed from a bare descent, which cannot see what reached it horizontally.
+    #[must_use]
+    pub fn is_lit(&self) -> bool {
+        match self {
+            Self::Proto(chunk) => chunk.stage >= StagedChunkEnum::Lighting,
+            Self::Level(chunk) => chunk
+                .light_populated
+                .load(std::sync::atomic::Ordering::Relaxed),
+        }
+    }
+
     pub fn get_proto_chunk_mut(&mut self) -> &mut ProtoChunk {
         match self {
             Self::Level(_) => panic!("chunk isn't a ProtoChunk"),
@@ -287,6 +299,7 @@ impl Chunk {
                 dirty: AtomicBool::new(false),
                 inhabited_time: AtomicU64::new(0),
                 custom_data: Mutex::new(NbtCompound::new()),
+                sky_light_height_cache: std::sync::atomic::AtomicU32::new(0),
             })),
         ) {
             Self::Proto(proto) => proto,
@@ -333,8 +346,18 @@ impl Chunk {
             status: proto_chunk.stage.into(),
             blending_data: proto_chunk.blending_data,
             inhabited_time: AtomicU64::new(0),
-            custom_data: Mutex::new(NbtCompound::new()),
+            // Carried over, not dropped. A full chunk with uniform lighting is demoted to a
+            // proto chunk and rebuilt through here; starting from an empty compound would
+            // erase every plugin's stored data on that round trip.
+            custom_data: Mutex::new(proto_chunk.custom_data),
+            sky_light_height_cache: std::sync::atomic::AtomicU32::new(proto_chunk.sky_light_height),
         };
+
+        // Worldgen already computed the cut -> persist it right away so the
+        // level chunk need not re-derive it on the first sky light access.
+        if proto_chunk.sky_light_height != 0 {
+            crate::lighting::SkyLightHeightMigration::ensure_persisted(&chunk);
+        }
 
         *self = Self::Level(Arc::new(chunk));
     }
