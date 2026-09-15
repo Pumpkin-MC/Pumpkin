@@ -5573,7 +5573,8 @@ impl World {
             Block::AIR.default_state.id
         };
 
-        let broken_state_id = self.set_block_state(position, new_state_id, flags);
+        let broken_state_id =
+            self.set_block_state(position, new_state_id, flags - BlockFlags::SKIP_DROPS);
         let broken_block = Block::from_state_id(broken_state_id);
         if !broken_block.is_air()
             && broken_state_id != new_state_id
