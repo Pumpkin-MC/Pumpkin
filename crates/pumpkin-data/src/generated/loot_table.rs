@@ -5019,6 +5019,24 @@ static BLOCKS_COPPER_TRAPDOOR_POOLS: &[LootPool] = &[LootPool {
 pub static BLOCKS_COPPER_TRAPDOOR: LootTable = LootTable {
     pools: BLOCKS_COPPER_TRAPDOOR_POOLS,
 };
+static BLOCKS_COPPER_WALL_TORCH_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
+    item: "minecraft:copper_torch",
+    weight: 1i32,
+    min_count: 1i32,
+    max_count: 1i32,
+    condition: LootCondition::None,
+    bonus_formula: None,
+}];
+static BLOCKS_COPPER_WALL_TORCH_POOLS: &[LootPool] = &[LootPool {
+    entries: BLOCKS_COPPER_WALL_TORCH_POOL0_ENTRIES,
+    min_rolls: 1i32,
+    max_rolls: 1i32,
+    empty_weight: 0i32,
+    condition: LootCondition::SurvivesExplosion,
+}];
+pub static BLOCKS_COPPER_WALL_TORCH: LootTable = LootTable {
+    pools: BLOCKS_COPPER_WALL_TORCH_POOLS,
+};
 static BLOCKS_CORNFLOWER_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     item: "minecraft:cornflower",
     weight: 1i32,
@@ -17249,6 +17267,24 @@ static BLOCKS_REDSTONE_TORCH_POOLS: &[LootPool] = &[LootPool {
 pub static BLOCKS_REDSTONE_TORCH: LootTable = LootTable {
     pools: BLOCKS_REDSTONE_TORCH_POOLS,
 };
+static BLOCKS_REDSTONE_WALL_TORCH_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
+    item: "minecraft:redstone_torch",
+    weight: 1i32,
+    min_count: 1i32,
+    max_count: 1i32,
+    condition: LootCondition::None,
+    bonus_formula: None,
+}];
+static BLOCKS_REDSTONE_WALL_TORCH_POOLS: &[LootPool] = &[LootPool {
+    entries: BLOCKS_REDSTONE_WALL_TORCH_POOL0_ENTRIES,
+    min_rolls: 1i32,
+    max_rolls: 1i32,
+    empty_weight: 0i32,
+    condition: LootCondition::SurvivesExplosion,
+}];
+pub static BLOCKS_REDSTONE_WALL_TORCH: LootTable = LootTable {
+    pools: BLOCKS_REDSTONE_WALL_TORCH_POOLS,
+};
 static BLOCKS_REDSTONE_WIRE_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     item: "minecraft:redstone",
     weight: 1i32,
@@ -18414,6 +18450,24 @@ static BLOCKS_SOUL_TORCH_POOLS: &[LootPool] = &[LootPool {
 }];
 pub static BLOCKS_SOUL_TORCH: LootTable = LootTable {
     pools: BLOCKS_SOUL_TORCH_POOLS,
+};
+static BLOCKS_SOUL_WALL_TORCH_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
+    item: "minecraft:soul_torch",
+    weight: 1i32,
+    min_count: 1i32,
+    max_count: 1i32,
+    condition: LootCondition::None,
+    bonus_formula: None,
+}];
+static BLOCKS_SOUL_WALL_TORCH_POOLS: &[LootPool] = &[LootPool {
+    entries: BLOCKS_SOUL_WALL_TORCH_POOL0_ENTRIES,
+    min_rolls: 1i32,
+    max_rolls: 1i32,
+    empty_weight: 0i32,
+    condition: LootCondition::SurvivesExplosion,
+}];
+pub static BLOCKS_SOUL_WALL_TORCH: LootTable = LootTable {
+    pools: BLOCKS_SOUL_WALL_TORCH_POOLS,
 };
 static BLOCKS_SPAWNER_POOLS: &[LootPool] = &[];
 pub static BLOCKS_SPAWNER: LootTable = LootTable {
@@ -20267,6 +20321,24 @@ static BLOCKS_VINE_POOLS: &[LootPool] = &[LootPool {
 }];
 pub static BLOCKS_VINE: LootTable = LootTable {
     pools: BLOCKS_VINE_POOLS,
+};
+static BLOCKS_WALL_TORCH_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
+    item: "minecraft:torch",
+    weight: 1i32,
+    min_count: 1i32,
+    max_count: 1i32,
+    condition: LootCondition::None,
+    bonus_formula: None,
+}];
+static BLOCKS_WALL_TORCH_POOLS: &[LootPool] = &[LootPool {
+    entries: BLOCKS_WALL_TORCH_POOL0_ENTRIES,
+    min_rolls: 1i32,
+    max_rolls: 1i32,
+    empty_weight: 0i32,
+    condition: LootCondition::SurvivesExplosion,
+}];
+pub static BLOCKS_WALL_TORCH: LootTable = LootTable {
+    pools: BLOCKS_WALL_TORCH_POOLS,
 };
 static BLOCKS_WARPED_BUTTON_POOL0_ENTRIES: &[LootEntry] = &[LootEntry {
     item: "minecraft:warped_button",
@@ -36328,6 +36400,9 @@ pub fn get_loot_table(key: &str) -> Option<&'static LootTable> {
         "minecraft:blocks/copper_trapdoor" | "blocks/copper_trapdoor" => {
             Some(&BLOCKS_COPPER_TRAPDOOR)
         }
+        "minecraft:blocks/copper_wall_torch" | "blocks/copper_wall_torch" => {
+            Some(&BLOCKS_COPPER_WALL_TORCH)
+        }
         "minecraft:blocks/cornflower" | "blocks/cornflower" => Some(&BLOCKS_CORNFLOWER),
         "minecraft:blocks/cracked_deepslate_bricks" | "blocks/cracked_deepslate_bricks" => {
             Some(&BLOCKS_CRACKED_DEEPSLATE_BRICKS)
@@ -37603,6 +37678,9 @@ pub fn get_loot_table(key: &str) -> Option<&'static LootTable> {
         "minecraft:blocks/redstone_lamp" | "blocks/redstone_lamp" => Some(&BLOCKS_REDSTONE_LAMP),
         "minecraft:blocks/redstone_ore" | "blocks/redstone_ore" => Some(&BLOCKS_REDSTONE_ORE),
         "minecraft:blocks/redstone_torch" | "blocks/redstone_torch" => Some(&BLOCKS_REDSTONE_TORCH),
+        "minecraft:blocks/redstone_wall_torch" | "blocks/redstone_wall_torch" => {
+            Some(&BLOCKS_REDSTONE_WALL_TORCH)
+        }
         "minecraft:blocks/redstone_wire" | "blocks/redstone_wire" => Some(&BLOCKS_REDSTONE_WIRE),
         "minecraft:blocks/reinforced_deepslate" | "blocks/reinforced_deepslate" => {
             Some(&BLOCKS_REINFORCED_DEEPSLATE)
@@ -37692,6 +37770,9 @@ pub fn get_loot_table(key: &str) -> Option<&'static LootTable> {
         "minecraft:blocks/soul_sand" | "blocks/soul_sand" => Some(&BLOCKS_SOUL_SAND),
         "minecraft:blocks/soul_soil" | "blocks/soul_soil" => Some(&BLOCKS_SOUL_SOIL),
         "minecraft:blocks/soul_torch" | "blocks/soul_torch" => Some(&BLOCKS_SOUL_TORCH),
+        "minecraft:blocks/soul_wall_torch" | "blocks/soul_wall_torch" => {
+            Some(&BLOCKS_SOUL_WALL_TORCH)
+        }
         "minecraft:blocks/spawner" | "blocks/spawner" => Some(&BLOCKS_SPAWNER),
         "minecraft:blocks/sponge" | "blocks/sponge" => Some(&BLOCKS_SPONGE),
         "minecraft:blocks/spore_blossom" | "blocks/spore_blossom" => Some(&BLOCKS_SPORE_BLOSSOM),
@@ -37878,6 +37959,7 @@ pub fn get_loot_table(key: &str) -> Option<&'static LootTable> {
             Some(&BLOCKS_VERDANT_FROGLIGHT)
         }
         "minecraft:blocks/vine" | "blocks/vine" => Some(&BLOCKS_VINE),
+        "minecraft:blocks/wall_torch" | "blocks/wall_torch" => Some(&BLOCKS_WALL_TORCH),
         "minecraft:blocks/warped_button" | "blocks/warped_button" => Some(&BLOCKS_WARPED_BUTTON),
         "minecraft:blocks/warped_door" | "blocks/warped_door" => Some(&BLOCKS_WARPED_DOOR),
         "minecraft:blocks/warped_fence" | "blocks/warped_fence" => Some(&BLOCKS_WARPED_FENCE),
