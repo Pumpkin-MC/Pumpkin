@@ -133,3 +133,74 @@ impl<'a> ServerPacket<'a> for CSetEquipment {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_data::item::Item;
+    use pumpkin_data::item_stack::ItemStack;
+    use pumpkin_data::packet::clientbound::play::SET_EQUIPMENT;
+    use pumpkin_util::version::JavaMinecraftVersion;
+
+    use crate::{
+        ClientPacket, VarInt, codec::item_stack_seralizer::ItemStackSerializer,
+        packet::MultiVersionJavaPacket, ser::NetworkReadExt,
+    };
+
+    use super::CSetEquipment;
+
+    fn encoded_armor(version: JavaMinecraftVersion) -> Vec<u8> {
+        let chest = ItemStackSerializer::from(ItemStack::new(1, &Item::DIAMOND_CHESTPLATE));
+        let legs = ItemStackSerializer::from(ItemStack::new(1, &Item::DIAMOND_LEGGINGS));
+        let packet = CSetEquipment::new(VarInt(42), vec![(4, chest), (3, legs)]);
+        let mut buf = Vec::new();
+        packet.write_packet_data(&mut buf, &version).unwrap();
+        buf
+    }
+
+    fn assert_armor_payload(bytes: &[u8], version: JavaMinecraftVersion) {
+        let mut cursor = bytes;
+        let entity_id = cursor.get_var_int().unwrap();
+        assert_eq!(entity_id, VarInt(42));
+
+        let first_slot = cursor.get_i8().unwrap();
+        assert_eq!(
+            first_slot,
+            4i8 | -128,
+            "chest must set the continuation bit"
+        );
+        let first_item = ItemStackSerializer::read_with_version(&mut cursor, &version).unwrap();
+        assert_eq!(first_item.0.item.id, Item::DIAMOND_CHESTPLATE.id);
+        assert_eq!(first_item.0.item_count, 1);
+
+        let second_slot = cursor.get_i8().unwrap();
+        assert_eq!(
+            second_slot, 3,
+            "legs is the last entry and must not set 0x80"
+        );
+        let second_item = ItemStackSerializer::read_with_version(&mut cursor, &version).unwrap();
+        assert_eq!(second_item.0.item.id, Item::DIAMOND_LEGGINGS.id);
+        assert!(cursor.is_empty());
+    }
+
+    #[test]
+    fn set_equipment_packet_id_for_1_21_and_26() {
+        assert_eq!(
+            CSetEquipment::to_id(JavaMinecraftVersion::V_1_21),
+            SET_EQUIPMENT.to_id(JavaMinecraftVersion::V_1_21)
+        );
+        assert_eq!(CSetEquipment::to_id(JavaMinecraftVersion::V_1_21), 91);
+        assert_eq!(CSetEquipment::to_id(JavaMinecraftVersion::V_26_2), 102);
+    }
+
+    #[test]
+    fn armour_slots_encode_for_1_21() {
+        let version = JavaMinecraftVersion::V_1_21;
+        assert_armor_payload(&encoded_armor(version), version);
+    }
+
+    #[test]
+    fn armour_slots_encode_for_26_2() {
+        let version = JavaMinecraftVersion::V_26_2;
+        assert_armor_payload(&encoded_armor(version), version);
+    }
+}

@@ -3,13 +3,13 @@ use std::borrow::Cow;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, Ordering};
 
+use crate::inventory::Inventory;
 use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{EnchantmentsImpl, StoredEnchantmentsImpl};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::screen::WindowType;
-use pumpkin_world::inventory::Inventory;
 
 use crate::{
     player::player_inventory::PlayerInventory,
@@ -559,11 +559,11 @@ impl ScreenHandler for AnvilScreenHandler {
 mod tests {
     use super::*;
     use crate::entity_equipment::EntityEquipment;
+    use crate::inventory::SimpleInventory;
     use pumpkin_protocol::java::client::play::{
         CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
         CSetPlayerInventory, CSetSelectedSlot,
     };
-    use pumpkin_world::inventory::SimpleInventory;
     use std::sync::Mutex;
     use std::sync::atomic::AtomicI32;
 

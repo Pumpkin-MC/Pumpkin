@@ -15,8 +15,10 @@ use pumpkin_protocol::java::client::play::{
 use pumpkin_protocol::{BClientPacket, ClientPacket};
 use pumpkin_util::GameMode;
 use pumpkin_util::math::get_section_cord;
+use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::version::JavaMinecraftVersion;
+use rustc_hash::FxHashSet;
 use uuid::Uuid;
 
 use crate::entity::EntityBase;
@@ -24,7 +26,7 @@ use crate::entity::player::Player;
 use crate::net::ClientPlatform;
 use crate::net::java::JavaClient;
 use crate::world::World;
-use crate::world::chunker::{get_view_distance, is_within_view_distance};
+use crate::world::chunker::get_view_distance;
 
 pub struct TrackedEntity {
     pub entity: Arc<dyn EntityBase>,
@@ -113,17 +115,27 @@ impl TrackedEntity {
         let range_sq = visible_range_blocks * visible_range_blocks;
 
         let entity_chunk = self.entity.get_entity().chunk_pos.load();
-        let player_chunk = player_entity.chunk_pos.load();
-        let in_view = is_within_view_distance(entity_chunk, player_chunk, player_vd);
+        let in_view = player
+            .watched_section
+            .load()
+            .is_within_distance(entity_chunk.x, entity_chunk.y);
 
-        let is_visible = dist_sq <= range_sq && self.broadcast_to_player(player) && in_view;
+        // Vanilla `isChunkTracked`: never spawn before the chunk packet.
+        let is_visible = dist_sq <= range_sq
+            && self.broadcast_to_player(player)
+            && in_view
+            && player
+                .chunk_sender
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_chunk_ready(&entity_chunk);
 
         if is_visible {
             if self.seen_by.insert(player.gameprofile.id) {
                 self.add_pairing(player);
             }
-        } else if self.seen_by.remove(&player.gameprofile.id).is_some() {
-            self.remove_pairing(player);
+        } else {
+            self.remove_player(player);
         }
     }
 
@@ -136,6 +148,7 @@ impl TrackedEntity {
     #[allow(clippy::too_many_lines)]
     pub fn add_pairing(&self, player: &Arc<Player>) {
         player.client.try_enqueue_spawn_packet(&self.entity);
+        player.try_restore_vehicle(&self.entity);
 
         if let Some(target_player) = self.entity.get_player() {
             let skin_parts = target_player.config.load().skin_parts;
@@ -202,7 +215,7 @@ impl TrackedEntity {
         if let ClientPlatform::Java(client) = player.client.as_ref() {
             let version = client.version.load();
             // TODO: Support older versions
-            if version >= JavaMinecraftVersion::V_26_2
+            if version >= JavaMinecraftVersion::V_1_21
                 && let Some(non_default) = self
                     .entity
                     .get_entity()
@@ -273,7 +286,7 @@ impl TrackedEntity {
         }
     }
 
-    pub fn remove_pairing(&self, player: &Arc<Player>) {
+    pub fn remove_pairing(&self, player: &Player) {
         let entity_ids = [self.entity_id.into()];
         match player.client.as_ref() {
             ClientPlatform::Java(client) => {
@@ -317,8 +330,11 @@ impl TrackedEntity {
         self.seen_by.clear();
     }
 
-    pub fn remove_player(&self, player_uuid: &Uuid) {
-        self.seen_by.remove(player_uuid);
+    /// Vanilla `TrackedEntity.removePlayer`: despawn on the client, only if it was paired.
+    pub fn remove_player(&self, player: &Player) {
+        if self.seen_by.remove(&player.gameprofile.id).is_some() {
+            self.remove_pairing(player);
+        }
     }
 
     pub fn send_to_tracking_players<P: ClientPacket + Sync>(&self, packet: &P, world: &World) {
@@ -522,12 +538,29 @@ impl EntityTracker {
         }
     }
 
+    /// Pairs entities in chunks whose packet was just queued for `player`.
+    pub fn update_player_chunks(
+        &self,
+        player: &Arc<Player>,
+        world: &World,
+        chunks: &[Vector2<i32>],
+    ) {
+        let chunks: FxHashSet<_> = chunks.iter().copied().collect();
+        let entity_id = player.get_entity().entity_id;
+        for entry in &self.entity_map {
+            if *entry.key() != entity_id
+                && chunks.contains(&entry.value().entity.get_entity().chunk_pos.load())
+            {
+                entry.value().update_player(player, world);
+            }
+        }
+    }
+
     pub fn remove_entity(&self, entity: &dyn EntityBase, world: &World) {
         let entity_id = entity.get_entity().entity_id;
         if let Some(player) = entity.get_player() {
-            let player_id = player.gameprofile.id;
             for entry in &self.entity_map {
-                entry.value().remove_player(&player_id);
+                entry.value().remove_player(player);
             }
         }
 

@@ -3,13 +3,16 @@ use crate::entity::ai::control::MoveControlTrait;
 use crate::entity::ai::control::look_control::LookControl;
 use crate::entity::ai::control::move_control::MoveControl;
 use crate::entity::ai::goal::goal_selector::GoalSelector;
+use crate::entity::ai::sensing::Sensing;
 use crate::entity::player::Player;
+use crate::entity::predicate::EntityPredicate;
 use crate::server::Server;
 use crate::world::World;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
@@ -77,6 +80,7 @@ pub struct MobEntity {
     pub navigator: std::sync::Mutex<Navigator>,
     pub target: std::sync::Mutex<Option<Arc<dyn EntityBase>>>,
     pub look_control: std::sync::Mutex<LookControl>,
+    pub sensing: std::sync::Mutex<Sensing>,
     pub move_control: std::sync::Mutex<Box<dyn MoveControlTrait>>,
     pub position_target: AtomicCell<BlockPos>,
     pub position_target_range: AtomicI32,
@@ -163,6 +167,7 @@ impl MobEntity {
             navigator: std::sync::Mutex::new(Navigator::default()),
             target: std::sync::Mutex::new(None),
             look_control: std::sync::Mutex::new(LookControl::default()),
+            sensing: std::sync::Mutex::new(Sensing::default()),
             move_control: std::sync::Mutex::new(Box::new(MoveControl::default())),
             position_target: AtomicCell::new(BlockPos::ZERO),
             position_target_range: AtomicI32::new(-1),
@@ -630,6 +635,11 @@ impl MobEntity {
             })
             .fold(f64::MAX, f64::min);
 
+        // Mobs like a converting zombie villager refuse to despawn (`removeWhenFarAway`).
+        if !mob.remove_when_far_away(nearest_dist_sq) {
+            return;
+        }
+
         if nearest_dist_sq == f64::MAX {
             mob.get_entity().remove();
             return;
@@ -649,6 +659,36 @@ impl MobEntity {
 pub trait Mob: EntityBase + Send + Sync {
     fn get_random(&self) -> rand::rngs::ThreadRng {
         rand::rng()
+    }
+
+    fn can_attack(&self, target: &crate::entity::living::LivingEntity) -> bool {
+        if target.entity.entity_type == &EntityType::GHAST {
+            return false;
+        }
+        if let Some(tamable) = self.as_tamable()
+            && tamable.is_owned_by(&target.entity.entity_uuid)
+        {
+            return false;
+        }
+        self.get_mob_entity().living_entity.can_attack(target)
+    }
+
+    /// Takes the navigation lock, so callers must not already hold it.
+    fn is_navigator_idle(&self) -> bool {
+        self.get_mob_entity()
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_idle()
+    }
+
+    fn has_line_of_sight(&self, target: &crate::entity::Entity) -> bool {
+        let mob_entity = self.get_mob_entity();
+        mob_entity
+            .sensing
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .has_line_of_sight(&mob_entity.living_entity.entity, target)
     }
 
     fn requires_custom_persistence(&self) -> bool {
@@ -702,6 +742,8 @@ pub trait Mob: EntityBase + Send + Sync {
     fn get_trading_player(&self) -> Option<Arc<Player>> {
         None
     }
+
+    fn clear_trading_player(&self) {}
 
     fn get_home(&self) -> Option<BlockPos> {
         None
@@ -762,8 +804,18 @@ pub trait Mob: EntityBase + Send + Sync {
         None
     }
 
+    fn as_custom_sound(&self) -> Option<&dyn crate::entity::custom_sound::CustomSound> {
+        None
+    }
+
     fn as_animal(&self) -> Option<&dyn crate::entity::passive::animal::Animal> {
         None
+    }
+
+    /// How much this mob likes standing on `pos`, used to rank stroll candidates.
+    fn get_walk_target_value(&self, pos: &BlockPos) -> f32 {
+        self.as_animal()
+            .map_or(0.0, |animal| animal.animal_walk_target_value(pos))
     }
 
     fn as_tamable(&self) -> Option<&dyn crate::entity::passive::tamable::TamableAnimal> {
@@ -885,9 +937,20 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn mob_read_nbt(&self, _nbt: &NbtCompound) {}
 
+    /// Drops a target the mob is not allowed to attack, such as a creative player.
+    fn as_valid_target(&self, target: Option<Arc<dyn EntityBase>>) -> Option<Arc<dyn EntityBase>> {
+        let target = target?;
+        if !EntityPredicate::ExceptCreativeOrSpectator.test(target.get_entity()) {
+            return None;
+        }
+        let living = target.get_living_entity()?;
+        self.can_attack(living).then_some(target)
+    }
+
     /// Set or clear the mob's target. Override to add side effects when targeting changes.
     fn set_mob_target(&self, target: Option<Arc<dyn EntityBase>>) {
         let mob = self.get_mob_entity();
+        let target = self.as_valid_target(target);
         let target_id = target.as_ref().map(|t| t.get_entity().entity_id);
         *mob.target
             .lock()
@@ -1063,6 +1126,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         Some(self)
     }
 
+    fn is_pushable(&self) -> bool {
+        self.get_mob_entity().living_entity.is_pushable()
+    }
+
     fn on_lightning_strike(
         &self,
         caller: &dyn EntityBase,
@@ -1130,6 +1197,12 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
         let age = mob_entity.living_entity.entity.age.load(Relaxed);
         let entity_id = mob_entity.living_entity.entity.entity_id;
+
+        mob_entity
+            .sensing
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .tick();
 
         // 1. "Take" selectors out of the mutexes
         let mut target_selector = {

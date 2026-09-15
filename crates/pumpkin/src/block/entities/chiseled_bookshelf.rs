@@ -18,13 +18,14 @@ use crate::{
     block::entities::BlockEntity,
     world::{BlockFlags, World},
 };
-use pumpkin_world::inventory::{Clearable, Inventory, sync_write_items_to_nbt};
+use pumpkin_inventory::{Clearable, Inventory, sync_write_items_to_nbt};
 
 pub struct ChiseledBookshelfBlockEntity {
     pub position: BlockPos,
     pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
     pub last_interacted_slot: AtomicI8,
     pub dirty: AtomicBool,
+    pub comparator_dirty: AtomicBool,
 }
 
 const LAST_INTERACTED_SLOT: &str = "last_interacted_slot";
@@ -47,8 +48,9 @@ impl BlockEntity for ChiseledBookshelfBlockEntity {
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             last_interacted_slot: AtomicI8::new(-1),
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
         };
-        pumpkin_world::inventory::sync_read_items_from_nbt(
+        pumpkin_inventory::sync_read_items_from_nbt(
             nbt,
             bookshelf
                 .items
@@ -80,6 +82,14 @@ impl BlockEntity for ChiseledBookshelfBlockEntity {
         Some(self as Arc<dyn Inventory>)
     }
 
+    fn is_comparator_dirty(&self) -> bool {
+        self.comparator_dirty.load(Ordering::Relaxed)
+    }
+
+    fn clear_comparator_dirty(&self) {
+        self.comparator_dirty.store(false, Ordering::Relaxed);
+    }
+
     fn is_dirty(&self) -> bool {
         self.dirty.load(Ordering::Relaxed)
     }
@@ -104,6 +114,7 @@ impl ChiseledBookshelfBlockEntity {
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             last_interacted_slot: AtomicI8::new(-1),
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
         }
     }
 
@@ -226,6 +237,7 @@ impl Inventory for ChiseledBookshelfBlockEntity {
 
     fn mark_dirty(&self) {
         self.dirty.store(true, Ordering::Relaxed);
+        self.comparator_dirty.store(true, Ordering::Relaxed);
     }
 
     fn as_any(&self) -> &dyn Any {

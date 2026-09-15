@@ -27,6 +27,7 @@ use crate::screen_handler::{
 };
 use crate::slot::{NormalSlot, Slot};
 
+use crate::inventory::Inventory;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::recipes::{CraftingRecipeTypes, RECIPES_CRAFTING};
 use pumpkin_data::screen::WindowType;
@@ -34,7 +35,6 @@ use pumpkin_data::statistic::StatisticCategory;
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
 use pumpkin_protocol::codec::recipe::{DynamicRecipe, OwnedCraftingRecipe};
-use pumpkin_world::inventory::Inventory;
 
 /// The result slot in a crafting screen.
 pub struct ResultSlot {

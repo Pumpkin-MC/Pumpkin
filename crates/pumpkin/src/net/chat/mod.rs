@@ -169,8 +169,8 @@ pub struct PlayerChatMessage {
 
 impl PlayerChatMessage {
     pub const SYSTEM_SENDER: Uuid = Uuid::nil();
-    pub const MESSAGE_EXPIRES_AFTER_SERVER: Duration = Duration::from_secs(300); // 5 minutes
-    pub const MESSAGE_EXPIRES_AFTER_CLIENT: Duration = Duration::from_secs(420); // 7 minutes
+    pub const MESSAGE_EXPIRES_AFTER_SERVER: Duration = Duration::from_mins(5);
+    pub const MESSAGE_EXPIRES_AFTER_CLIENT: Duration = Duration::from_mins(7);
 
     #[must_use]
     pub const fn system(content: String) -> Self {

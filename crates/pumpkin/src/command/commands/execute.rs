@@ -21,7 +21,7 @@ use crate::command::argument_types::coordinates::swizzle::SwizzleArgumentType;
 use crate::command::argument_types::coordinates::vec3::Vec3ArgumentType;
 use crate::command::argument_types::core::string::StringArgumentType;
 use crate::command::argument_types::entity::EntityArgumentType;
-use crate::command::argument_types::entity_anchor::EntityAnchorArgumentType;
+use crate::command::argument_types::entity_anchor::{EntityAnchorArgumentType, EntityAnchorExt};
 use crate::command::argument_types::identifier::IdentifierArgumentType;
 use crate::command::argument_types::nbt_path::{NbtPath, NbtPathArgumentType};
 use crate::command::argument_types::objective::ObjectiveArgumentType;

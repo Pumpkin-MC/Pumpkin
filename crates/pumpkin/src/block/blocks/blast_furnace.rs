@@ -8,13 +8,13 @@ use crate::block::entities::{
 use pumpkin_data::{
     BlockStateId, block_properties::FurnaceLikeProperties, screen::WindowType, translation,
 };
+use pumpkin_inventory::Inventory;
 use pumpkin_inventory::{
     furnace_like::furnace_like_screen_handler::FurnaceLikeScreenHandler,
     player::player_inventory::PlayerInventory,
     screen_handler::{InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler},
 };
 use pumpkin_macros::pumpkin_block;
-use pumpkin_world::inventory::Inventory;
 
 use crate::{
     block::{
@@ -144,14 +144,6 @@ impl BlockBehaviour for BlastFurnaceBlock {
     }
 
     fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
-        if let Some(block_entity) = args.world.get_block_entity(args.position)
-            && let Some(inventory) = block_entity.get_inventory()
-        {
-            Some(crate::block::calculate_comparator_output(
-                inventory.as_ref(),
-            ))
-        } else {
-            None
-        }
+        crate::block::container_comparator_output(&args)
     }
 }

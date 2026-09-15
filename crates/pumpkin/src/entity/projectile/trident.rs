@@ -15,8 +15,8 @@ use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 
-use super::ProjectileHit;
 use super::arrow::ArrowPickup;
+use super::{ProjectileHit, calculate_ray_intersection};
 
 pub struct TridentEntity {
     pub entity: Entity,
@@ -332,7 +332,7 @@ impl EntityBase for TridentEntity {
                     &hit_pos,
                     1.0,
                     1.0,
-                    0.0,
+                    0,
                 );
                 let chunk_pos = entity.chunk_pos.load();
                 world.broadcast_to_chunk(chunk_pos, &sound_packet);
@@ -372,9 +372,10 @@ impl EntityBase for TridentEntity {
                     &hit_pos,
                     1.0,
                     1.0,
-                    0.0,
+                    0,
                 );
-                world.broadcast_packet_all(&sound_packet);
+                let chunk_pos = entity.chunk_pos.load();
+                world.broadcast_to_chunk(chunk_pos, &sound_packet);
 
                 // Standard bounce/fall-back behavior
                 entity.velocity.store(Vector3::new(0.0, -0.1, 0.0));
@@ -414,36 +415,6 @@ impl EntityBase for TridentEntity {
             self.get_entity().remove();
         }
     }
-}
-
-/// Ray intersection algorithm for AABBs, returning a t value
-fn calculate_ray_intersection(
-    start: &Vector3<f64>,
-    dir: &Vector3<f64>,
-    bb: &BoundingBox,
-) -> Option<f64> {
-    let mut t_min = 0.0f64;
-    let mut t_max = 1.0f64;
-
-    let b_min = [bb.min.x, bb.min.y, bb.min.z];
-    let b_max = [bb.max.x, bb.max.y, bb.max.z];
-    let s = [start.x, start.y, start.z];
-    let d = [dir.x, dir.y, dir.z];
-
-    for i in 0..3 {
-        if d[i].abs() < 1e-9 {
-            if s[i] < b_min[i] || s[i] > b_max[i] {
-                return None;
-            }
-        } else {
-            let t1 = (b_min[i] - s[i]) / d[i];
-            let t2 = (b_max[i] - s[i]) / d[i];
-            t_min = t_min.max(t1.min(t2));
-            t_max = t_max.min(t1.max(t2));
-        }
-    }
-
-    (0.0..=1.0).contains(&t_min).then_some(t_min)
 }
 
 /// Get the face of the block that was hit

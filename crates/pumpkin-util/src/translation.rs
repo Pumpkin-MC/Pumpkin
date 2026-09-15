@@ -130,6 +130,61 @@ pub fn get_translation(key: &str, locale: Locale) -> String {
     )
 }
 
+/// What a `%` in a translation string introduces.
+enum Placeholder {
+    /// `%%`, which stands for a single literal `%`.
+    Escape,
+    /// `%<conversion>`, which takes the next substitution in order.
+    Next,
+    /// `%<digits>$<conversion>`, which takes the substitution at that one-based
+    /// index.
+    Indexed(usize),
+}
+
+/// Whether `byte` closes a placeholder. The shipped tables use `s` and `d`
+/// (`en_us_bedrock.lang` is where the `%d` forms come from), and every
+/// conversion is substituted the same way here, so the letter only marks the
+/// end of the token.
+const fn is_conversion(byte: u8) -> bool {
+    byte.is_ascii_alphabetic()
+}
+
+/// Classifies the `%` at `start`, returning what it introduces together with the
+/// inclusive byte index it ends at.
+///
+/// Returns `None` when the `%` starts nothing this module understands, such as a
+/// trailing `%` or digits with no conversion after them; those are literal text.
+/// The end is reported rather than assumed because a [`SubstitutionRange`] has to
+/// span the whole placeholder for the callers that resume reading at `end + 1`.
+fn placeholder_at(bytes: &[u8], start: usize) -> Option<(Placeholder, usize)> {
+    let after = start + 1;
+    match bytes.get(after) {
+        Some(&b'%') => return Some((Placeholder::Escape, after)),
+        Some(&byte) if is_conversion(byte) => return Some((Placeholder::Next, after)),
+        _ => {}
+    }
+
+    let mut end = after;
+    while bytes.get(end).is_some_and(u8::is_ascii_digit) {
+        end += 1;
+    }
+    if end == after
+        || bytes.get(end) != Some(&b'$')
+        || !bytes.get(end + 1).copied().is_some_and(is_conversion)
+    {
+        return None;
+    }
+
+    // Saturating so that an absurdly long run of digits still lands on the last
+    // substitution instead of failing to parse.
+    let index = bytes[after..end].iter().fold(0usize, |index, digit| {
+        index
+            .saturating_mul(10)
+            .saturating_add(usize::from(digit - b'0'))
+    });
+    Some((Placeholder::Indexed(index), end + 1))
+}
+
 /// Reorders substitution placeholders within a translation string.
 ///
 /// # Arguments
@@ -143,63 +198,50 @@ pub fn reorder_substitutions(
     translation: &str,
     with: Vec<TextComponentBase>,
 ) -> (Vec<TextComponentBase>, Vec<SubstitutionRange>) {
-    let indices: Vec<usize> = translation
-        .match_indices('%')
-        .filter(|(i, _)| *i == 0 || translation.as_bytes()[i - 1] != b'\\')
-        .map(|(i, _)| i)
-        .collect();
-
-    if translation.matches("%s").count() == indices.len() {
-        return (
-            with,
-            indices
-                .iter()
-                .map(|&i| SubstitutionRange {
-                    start: i,
-                    end: i + 1,
-                })
-                .collect(),
-        );
-    }
-
-    let mut substitutions: Vec<TextComponentBase> = indices
-        .iter()
-        .map(|_| TextComponentBase {
-            content: Box::new(TextContent::Text { text: "".into() }),
+    fn literal(text: &'static str) -> TextComponentBase {
+        TextComponentBase {
+            content: Box::new(TextContent::Text { text: text.into() }),
             style: Box::new(Style::default()),
             extra: vec![],
-        })
-        .collect();
-    let mut ranges: Vec<SubstitutionRange> = vec![];
-
-    let bytes = translation.as_bytes();
-    let mut next_idx = 0usize;
-    for (idx, &i) in indices.iter().enumerate() {
-        let mut num_chars = String::new();
-        let mut pos = 1;
-        while i + pos < bytes.len() && bytes[i + pos].is_ascii_digit() {
-            num_chars.push(bytes[i + pos] as char);
-            pos += 1;
-        }
-
-        if num_chars.is_empty() {
-            ranges.push(SubstitutionRange {
-                start: i,
-                end: i + 1,
-            });
-            substitutions[idx] = with[next_idx].clone();
-            next_idx = (next_idx + 1).clamp(0, with.len() - 1);
-            continue;
-        }
-
-        ranges.push(SubstitutionRange {
-            start: i,
-            end: i + pos + 1,
-        });
-        if let Ok(digit) = num_chars.parse::<usize>() {
-            substitutions[idx] = with[digit.clamp(1, with.len()) - 1].clone();
         }
     }
+
+    // A placeholder may repeat an index (`%1$s ... %1$s`), so the arguments are
+    // read from rather than drained. Freeze them for that read-only access.
+    let with = with.into_boxed_slice();
+
+    let bytes = translation.as_bytes();
+    let mut substitutions: Vec<TextComponentBase> = vec![];
+    let mut ranges: Vec<SubstitutionRange> = vec![];
+    let mut next_idx = 0usize;
+    let mut i = 0usize;
+
+    while i < bytes.len() {
+        if bytes[i] != b'%' || (i > 0 && bytes[i - 1] == b'\\') {
+            i += 1;
+            continue;
+        }
+        let Some((placeholder, end)) = placeholder_at(bytes, i) else {
+            i += 1;
+            continue;
+        };
+
+        substitutions.push(match placeholder {
+            Placeholder::Escape => literal("%"),
+            Placeholder::Next => {
+                let taken = with.get(next_idx).cloned().unwrap_or_else(|| literal(""));
+                next_idx = (next_idx + 1).min(with.len().saturating_sub(1));
+                taken
+            }
+            Placeholder::Indexed(index) => with
+                .get(index.clamp(1, with.len().max(1)) - 1)
+                .cloned()
+                .unwrap_or_else(|| literal("")),
+        });
+        ranges.push(SubstitutionRange { start: i, end });
+        i = end + 1;
+    }
+
     (substitutions, ranges)
 }
 
@@ -677,5 +719,185 @@ impl FromStr for Locale {
             "zlm_arab" => Ok(Self::ZlmArab), // Malay (Jawi)
             _ => Ok(Self::EnUs),             // Default to English (US) if not found
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Locale, TRANSLATIONS, get_translation_text, reorder_substitutions};
+    use crate::text::{TextComponentBase, TextContent, style::Style};
+
+    fn arg(text: &str) -> TextComponentBase {
+        TextComponentBase {
+            content: Box::new(TextContent::Text {
+                text: text.to_string().into(),
+            }),
+            style: Box::new(Style::default()),
+            extra: vec![],
+        }
+    }
+
+    /// `SubstitutionRange` documents itself as spanning the full placeholder, and
+    /// the renderer resumes at `end + 1` on that promise. A lone `%` is one byte
+    /// wide, so it is not a placeholder and must not claim a range.
+    #[test]
+    fn a_lone_percent_is_not_a_placeholder() {
+        let (substitutions, ranges) = reorder_substitutions("100% of %s", vec![arg("A")]);
+
+        assert_eq!(ranges.len(), 1, "only the %s is a placeholder");
+        assert_eq!(ranges[0].start, 8);
+        assert_eq!(ranges[0].end, 9);
+        assert_eq!(substitutions.len(), 1);
+    }
+
+    /// `assets/en_us_java.json` ships this verbatim as `attribute.modifier.plus.1`.
+    /// It also reaches the renderer as a format string in its own right, because
+    /// `get_translation` returns the key when the key is unknown.
+    #[test]
+    fn an_escaped_percent_renders_as_one_percent() {
+        assert_eq!(
+            get_translation_text("+%s%% %s", Locale::EnUs, vec![arg("10"), arg("Speed")]),
+            "+10% Speed"
+        );
+        // Shipped as `options.languageWarning`. Passed here as an unknown key, so
+        // `get_translation` hands it back as its own format string, lowercased.
+        assert_eq!(
+            get_translation_text(
+                "Language translations may not be 100%% accurate",
+                Locale::EnUs,
+                vec![arg("unused")]
+            ),
+            "language translations may not be 100% accurate"
+        );
+    }
+
+    /// Shipped as `translation.test.escape`, which is the escape rule stated as a
+    /// test by the game's own translation data: `%%` is one literal `%`, and only
+    /// a `%` left over after the escapes introduces a substitution.
+    #[test]
+    fn runs_of_percents_escape_pairwise() {
+        assert_eq!(
+            get_translation_text(
+                "%%s %%%s %%%%s %%%%%s",
+                Locale::EnUs,
+                vec![arg("A"), arg("B")]
+            ),
+            "%s %A %%s %%B"
+        );
+    }
+
+    /// Callers index `substitutions` by the position of the range they are on,
+    /// so the two must always line up. They used to diverge whenever `with` was
+    /// not exactly as long as the placeholder count.
+    #[test]
+    fn a_substitution_is_produced_for_every_range() {
+        for (translation, count) in [
+            ("%s %s %s", 3),
+            ("%s", 1),
+            ("%1$s %1$s", 2),
+            ("%% %s", 2),
+            ("no placeholders", 0),
+        ] {
+            for args in 0..4 {
+                let with = (0..args).map(|_| arg("x")).collect();
+                let (substitutions, ranges) = reorder_substitutions(translation, with);
+
+                assert_eq!(ranges.len(), count, "{translation:?} with {args} args");
+                assert_eq!(
+                    substitutions.len(),
+                    ranges.len(),
+                    "{translation:?} with {args} args"
+                );
+            }
+        }
+    }
+
+    /// Shipped as `translation.test.invalid`.
+    #[test]
+    fn a_trailing_percent_renders_instead_of_panicking() {
+        assert_eq!(
+            get_translation_text("hi %", Locale::EnUs, vec![arg("A")]),
+            "hi %"
+        );
+    }
+
+    /// Digits with no `$s` after them are not a placeholder either, and used to
+    /// run the cursor off the end of the string.
+    #[test]
+    fn trailing_digits_without_a_conversion_render_instead_of_panicking() {
+        assert_eq!(
+            get_translation_text("%5", Locale::EnUs, vec![arg("A")]),
+            "%5"
+        );
+    }
+
+    /// The renderer has to survive the data it ships with. `en_us_java.json`
+    /// alone holds 19 strings that used to take the whole server down, so walk
+    /// the loaded table and render every one of them.
+    #[test]
+    fn every_shipped_translation_renders() {
+        // Collect first: `get_translation` takes the same lock.
+        let keys: Vec<String> = {
+            let translations = TRANSLATIONS
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            translations[Locale::EnUs as usize]
+                .keys()
+                .cloned()
+                .collect()
+        };
+
+        assert!(keys.len() > 1000, "the vanilla table should be loaded");
+        for key in keys {
+            // A non-empty `with` is what sends a string down the substituting path.
+            get_translation_text(key, Locale::EnUs, vec![arg("A"), arg("B")]);
+        }
+    }
+
+    /// The control: the forms this module substitutes must be untouched.
+    #[test]
+    fn supported_placeholders_still_substitute() {
+        assert_eq!(
+            get_translation_text("%s joined", Locale::EnUs, vec![arg("Steve")]),
+            "Steve joined"
+        );
+        assert_eq!(
+            get_translation_text(
+                "%1$s was slain by %2$s",
+                Locale::EnUs,
+                vec![arg("Steve"), arg("Alex")]
+            ),
+            "Steve was slain by Alex"
+        );
+    }
+
+    /// `assets/en_us_bedrock.lang` is loaded into the same table and closes its
+    /// placeholders with `d`, so a conversion is not always `s`. Reading only `s`
+    /// would leave these rendering as literal text.
+    #[test]
+    fn a_numeric_conversion_substitutes_too() {
+        assert_eq!(
+            get_translation_text("+%d %s", Locale::EnUs, vec![arg("10"), arg("Speed")]),
+            "+10 Speed"
+        );
+        assert_eq!(
+            get_translation_text("%1$d blocks cloned", Locale::EnUs, vec![arg("42")]),
+            "42 blocks cloned"
+        );
+    }
+
+    /// Digits that never reach a conversion are not a placeholder. The renderer
+    /// used to consume the character after them, turning `(%5 blocks away)` into
+    /// `(Alocks away)`.
+    #[test]
+    fn digits_without_a_conversion_do_not_eat_the_next_character() {
+        assert_eq!(
+            get_translation_text("%1$s (%5 blocks away)", Locale::EnUs, vec![arg("Village")]),
+            "Village (%5 blocks away)"
+        );
+        assert_eq!(
+            get_translation_text("entered (%.2f)", Locale::EnUs, vec![arg("x")]),
+            "entered (%.2f)"
+        );
     }
 }
