@@ -6,6 +6,7 @@ use std::sync::{
 };
 
 use crate::block::entities::PropertyDelegate;
+use pumpkin_data::block_properties::BlockProperties;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::potion::Potion;
@@ -658,22 +659,28 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
             // Update the block state properties for the brewing stand to reflect bottle presence
             let (block, state) = world.get_block_and_state(&self.position);
             // Use generated block properties helper to produce a new state id with the bits set
-            let mut props =
-                pumpkin_data::block_properties::BrewingStandLikeProperties::from_state_id(state.id);
-            // Generated field names use raw identifiers for clarity
-            props.r#has_bottle_0 = current[0];
-            props.r#has_bottle_1 = current[1];
-            props.r#has_bottle_2 = current[2];
+            if pumpkin_data::block_properties::BrewingStandLikeProperties::handles_block_id(
+                block.id,
+            ) {
+                let mut props =
+                    pumpkin_data::block_properties::BrewingStandLikeProperties::from_state_id(
+                        state.id,
+                    );
+                // Generated field names use raw identifiers for clarity
+                props.r#has_bottle_0 = current[0];
+                props.r#has_bottle_1 = current[1];
+                props.r#has_bottle_2 = current[2];
 
-            world.set_block_state(
-                &self.position,
-                props.to_state_id(block),
-                crate::world::BlockFlags::NOTIFY_ALL,
-            );
+                world.set_block_state(
+                    &self.position,
+                    props.to_state_id(block),
+                    crate::world::BlockFlags::NOTIFY_ALL,
+                );
 
-            // Also mark dirty so inventory/container updates are sent to open screens.
-            // The slot change that flipped these bits already flagged the comparator.
-            self.mark_timer_dirty();
+                // Also mark dirty so inventory/container updates are sent to open screens.
+                // The slot change that flipped these bits already flagged the comparator.
+                self.mark_timer_dirty();
+            }
         }
     }
 
