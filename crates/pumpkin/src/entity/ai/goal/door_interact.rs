@@ -134,7 +134,7 @@ impl Goal for DoorInteractGoal {
         self.can_use(mob)
     }
 
-    fn should_continue(&self, _mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
         self.can_continue_to_use()
     }
 

@@ -2,7 +2,7 @@ use pumpkin_data::{BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block;
 
 use crate::{
-    block::{BlockBehaviour, OnPlaceArgs, PathComputationType},
+    block::{BlockBehaviour, GetComparatorOutputArgs, OnPlaceArgs, PathComputationType},
     entity::EntityBase,
 };
 
@@ -17,6 +17,12 @@ impl BlockBehaviour for EndPortalFrameBlock {
         end_portal_frame_props.facing = args.player.get_entity().get_horizontal_facing().opposite();
 
         end_portal_frame_props.to_state_id(args.block)
+    }
+
+    /// A frame with an eye reads full strength.
+    fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
+        let props = EndPortalFrameProperties::from_state_id(args.state.id);
+        Some(if props.eye { 15 } else { 0 })
     }
 
     fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {

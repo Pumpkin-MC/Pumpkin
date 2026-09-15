@@ -9,6 +9,7 @@ use pumpkin_inventory::screen_handler::InventoryPlayer;
 use pumpkin_protocol::bedrock::client::take_item_actor::CTakeItemActor;
 use pumpkin_protocol::bedrock::server::actor_event::{ActorEventID, SActorEvent};
 use pumpkin_protocol::codec::var_ulong::VarULong;
+use pumpkin_util::Difficulty;
 use pumpkin_util::GameMode;
 use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
@@ -111,6 +112,8 @@ pub struct LivingEntity {
     pub last_attacker_id: AtomicI32,
     /// The tick at which this entity was last attacked (entity age).
     pub last_attacked_time: AtomicI32,
+    last_damage_type: std::sync::Mutex<Option<DamageType>>,
+    last_damage_stamp: std::sync::atomic::AtomicI64,
 
     /// The entity ID of the entity this living entity last attacked.
     pub last_attacking_id: AtomicI32,
@@ -205,24 +208,6 @@ fn is_allowed_by_team_rules(
         || same_team
 }
 
-/// Resolves an entity's scoreboard team. Players are
-/// tracked by name; all other entities are tracked by their UUID string.
-fn get_entity_team(entity: &dyn EntityBase) -> Option<crate::world::scoreboard::Team> {
-    if let Some(player) = entity.get_player() {
-        return player.get_team();
-    }
-
-    let entity_ref = entity.get_entity();
-    entity_ref
-        .world
-        .load()
-        .scoreboard
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .get_entity_team(&entity_ref.entity_uuid.to_string())
-        .cloned()
-}
-
 impl LivingEntity {
     const USING_ITEM_FLAG: u8 = 1;
     const OFF_HAND_ACTIVE_FLAG: u8 = 2;
@@ -304,6 +289,8 @@ impl LivingEntity {
             climbing_pos: AtomicCell::new(None),
             last_attacker_id: AtomicI32::new(0),
             last_attacked_time: AtomicI32::new(0),
+            last_damage_type: std::sync::Mutex::new(None),
+            last_damage_stamp: std::sync::atomic::AtomicI64::new(0),
             last_attacking_id: AtomicI32::new(0),
             last_attack_time: AtomicI32::new(0),
             combat_tracker: std::sync::Mutex::new(CombatTracker::new()),
@@ -1413,7 +1400,7 @@ impl LivingEntity {
     fn push_entities(&self, dyn_self: &dyn EntityBase) {
         let world = self.entity.world.load();
         let entity_bb = self.entity.bounding_box.load();
-        let own_team = get_entity_team(dyn_self);
+        let own_team = dyn_self.get_team();
 
         let pushable: Vec<Arc<dyn EntityBase>> = world
             .get_all_at_box(&entity_bb)
@@ -1423,10 +1410,7 @@ impl LivingEntity {
                 entity_ref.entity_id != self.entity.entity_id
                     && !entity.is_spectator()
                     && entity.is_pushable()
-                    && is_allowed_by_team_rules(
-                        own_team.as_ref(),
-                        get_entity_team(&**entity).as_ref(),
-                    )
+                    && is_allowed_by_team_rules(own_team.as_ref(), entity.get_team().as_ref())
             })
             .collect();
 
@@ -1918,6 +1902,10 @@ impl LivingEntity {
     }
 
     #[allow(clippy::redundant_closure_for_method_calls)]
+    /// Builds the chat death message for this entity: picks the
+    /// `death.attack.<id>` (or the `.player` variant when a killer entity is
+    /// known, or the kill-credit name when the killer is offline/removed)
+    /// translation and fills in the victim and killer display names.
     pub fn get_death_message(
         dyn_self: &dyn EntityBase,
         damage_type: DamageType,
@@ -1962,6 +1950,10 @@ impl LivingEntity {
         }
     }
 
+    /// Marks the entity as dead exactly once and runs the server-side death
+    /// flow: stop movement input, attribute the kill, drop loot, broadcast the
+    /// `Death` (3) entity event, and hand out XP. Safe to call on every lethal
+    /// damage event; only the first call has an effect.
     #[allow(clippy::too_many_lines)]
     pub fn on_death(
         &self,
@@ -2511,12 +2503,34 @@ impl LivingEntity {
             .unwrap_or_else(|| ItemStack::EMPTY.clone())
     }
 
+    /// Forgotten after 40 ticks.
+    pub fn get_last_damage_type(&self) -> Option<DamageType> {
+        let stamp = self.last_damage_stamp.load(Ordering::Relaxed);
+        let mut last = self
+            .last_damage_type
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if self.entity.world.load().get_world_age() - stamp > 40 {
+            *last = None;
+        }
+        *last
+    }
+
     pub fn can_take_damage(&self) -> bool {
         !self.entity.invulnerable.load(Ordering::Relaxed) && self.is_part_of_game()
     }
 
     pub fn is_part_of_game(&self) -> bool {
         !self.is_spectator() && self.entity.is_alive()
+    }
+
+    pub fn can_attack(&self, target: &Self) -> bool {
+        if target.entity.entity_type == &EntityType::PLAYER
+            && self.entity.world.load().level_info.load().difficulty == Difficulty::Peaceful
+        {
+            return false;
+        }
+        target.can_take_damage()
     }
 
     pub fn reset_state(&self) {
@@ -3078,6 +3092,13 @@ impl LivingEntity {
         self.last_damage_taken.store(amount);
         let damage_amount = damage_amount.max(0.0);
 
+        // Record the source once the hit is confirmed.
+        *self
+            .last_damage_type
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(damage_type);
+        self.last_damage_stamp.store(world.get_world_age(), Relaxed);
+
         let Some(server) = world.server.upgrade() else {
             return false;
         };
@@ -3274,6 +3295,10 @@ impl EntityBase for LivingEntity {
         self.get_attribute_value(&Attributes::GRAVITY)
     }
 
+    /// Advances the living entity by one tick: base entity tick, movement and
+    /// physics while alive (still applied during the 20-tick death animation so
+    /// knockback lands), velocity coalescing, status effects, void damage, and
+    /// death-animation completion.
     #[allow(clippy::too_many_lines)]
     fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         self.entity.tick(caller, server);
@@ -3526,14 +3551,15 @@ impl EntityBase for LivingEntity {
                 // respawn. Removing one here breaks reconnecting while dead.
                 return;
             }
-            // Only send death particles once (on the exact tick death_time reaches 20)
-            // and then remove the entity, preventing entity_event spam.
-            if time == 20 && !self.entity.removed.swap(true, Ordering::Relaxed) {
-                self.entity.world.load().send_entity_status(
-                    &self.entity,
-                    EntityStatus::Death,
-                    Some(ActorEventID::Death),
-                );
+            // Vanilla `LivingEntity.tickDeath` sends the POOF (60) particle event
+            // once the death animation finished; the death event (3) was already
+            // broadcast in `on_death`. Sending it again here would restart the
+            // client-side death animation.
+            if time >= 20 && !self.entity.removed.swap(true, Ordering::Relaxed) {
+                self.entity
+                    .world
+                    .load()
+                    .send_entity_status(&self.entity, EntityStatus::Poof, None);
                 self.entity.remove();
             }
         }
