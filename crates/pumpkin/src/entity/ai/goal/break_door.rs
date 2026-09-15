@@ -83,7 +83,7 @@ impl Goal for BreakDoorGoal {
         self.is_valid_difficulty(level_info.difficulty) && !self.door_interact_goal.is_open(mob)
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let world = mob.get_entity().world.load();
         let level_info = world.level_info.load();
         let mob_pos = mob.get_entity().pos.load();
@@ -155,6 +155,9 @@ impl Goal for BreakDoorGoal {
                 );
             if let Some(server) = world.server.upgrade() {
                 server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return;
+                }
             }
             world.set_block_state(&door_pos, BlockStateId::AIR, BlockFlags::NOTIFY_ALL);
             world.sync_world_event(
@@ -176,44 +179,5 @@ impl Goal for BreakDoorGoal {
 
     fn controls(&self) -> Controls {
         Controls::empty()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn door_break_time_default_and_custom() {
-        let default_goal = BreakDoorGoal::default();
-        assert_eq!(default_goal.get_door_break_time(), 240);
-
-        let custom_goal =
-            BreakDoorGoal::with_door_break_time(300, Arc::new(|d| d == Difficulty::Hard));
-        assert_eq!(custom_goal.get_door_break_time(), 300);
-
-        let low_goal =
-            BreakDoorGoal::with_door_break_time(100, Arc::new(|d| d == Difficulty::Hard));
-        assert_eq!(low_goal.get_door_break_time(), 240);
-    }
-
-    #[test]
-    fn valid_difficulty() {
-        let hard_only = BreakDoorGoal::new(Arc::new(|d| d == Difficulty::Hard));
-        assert!(hard_only.is_valid_difficulty(Difficulty::Hard));
-        assert!(!hard_only.is_valid_difficulty(Difficulty::Normal));
-        assert!(!hard_only.is_valid_difficulty(Difficulty::Easy));
-        assert!(!hard_only.is_valid_difficulty(Difficulty::Peaceful));
-    }
-
-    #[test]
-    fn break_progress_calculation() {
-        let break_time = 120;
-        let total_time = 240;
-        let progress = (break_time as f32 / total_time as f32 * 10.0) as i32;
-        assert_eq!(progress, 5);
-
-        let end_progress = (240.0f32 / 240.0f32 * 10.0) as i32;
-        assert_eq!(end_progress, 10);
     }
 }

@@ -3,16 +3,14 @@ use std::sync::Arc;
 use crate::{
     block::{
         BlockBehaviour, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
-        PlacedArgs,
+        PathComputationType, PlacedArgs,
     },
     entity::player::Player,
     world::World,
 };
 use pumpkin_data::{
-    Block, BlockDirection, BlockStateId,
-    block_properties::{
-        BlockProperties, PointedDripstoneLikeProperties, SpeleothemThickness, VerticalDirection,
-    },
+    Block, BlockDirection, BlockState, BlockStateId,
+    block_properties::{PointedDripstoneLikeProperties, SpeleothemThickness, VerticalDirection},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -66,7 +64,7 @@ impl BlockBehaviour for DripstoneBlock {
     fn broken(&self, args: BrokenArgs<'_>) {
         {
             let broken_dripstone_props =
-                PointedDripstoneLikeProperties::from_state_id(args.state.id, args.block);
+                PointedDripstoneLikeProperties::from_state_id(args.state.id);
             let new_tip_pos = match broken_dripstone_props.vertical_direction {
                 VerticalDirection::Up => args.position.down(),
                 VerticalDirection::Down => args.position.up(),
@@ -94,8 +92,7 @@ impl BlockBehaviour for DripstoneBlock {
         if !can_place_at_pos(args.world, args.position, None, None) {
             return Block::AIR.default_state.id;
         }
-        let mut dripstone_props =
-            PointedDripstoneLikeProperties::from_state_id(args.state_id, args.block);
+        let mut dripstone_props = PointedDripstoneLikeProperties::from_state_id(args.state_id);
         if dripstone_props.thickness != SpeleothemThickness::TipMerge {
             return args.state_id;
         }
@@ -116,6 +113,10 @@ impl BlockBehaviour for DripstoneBlock {
             }
         }
         args.state_id
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
 fn update_stalagmite(world: &Arc<World>, stalagmite_len: u8, tip_pos: &BlockPos) {
@@ -246,8 +247,7 @@ fn get_stalagmite_or_stalactice_len_and_dir_from_tip_pos(
     position: &BlockPos,
     block_state_id: BlockStateId,
 ) -> (u8, VerticalDirection) {
-    let props =
-        PointedDripstoneLikeProperties::from_state_id(block_state_id, &Block::POINTED_DRIPSTONE);
+    let props = PointedDripstoneLikeProperties::from_state_id(block_state_id);
 
     let mut dripstone_len = 1;
     let mut next_dripstone_pos = offset_pos_by_vertical_dir(position, props.vertical_direction);
@@ -300,7 +300,7 @@ fn get_support_block_vertical_direction(
         if block != &Block::POINTED_DRIPSTONE {
             return None;
         }
-        let props = PointedDripstoneLikeProperties::from_state_id(state.id, block);
+        let props = PointedDripstoneLikeProperties::from_state_id(state.id);
         return Some(flip_dir(props.vertical_direction));
     };
     match block_direction_to_vertical_direction(placing_direction) {
@@ -355,10 +355,7 @@ fn can_support_dripstone(support_block: &Block) -> bool {
     if support_block == &Block::POINTED_DRIPSTONE {
         return true;
     }
-    if support_block.default_state.is_full_cube() && support_block.default_state.is_solid_block() {
-        return true;
-    }
-    false
+    support_block.default_state.is_solid_render()
 }
 fn modify_dripstone_thickness_to(
     world: &Arc<World>,
@@ -371,8 +368,7 @@ fn modify_dripstone_thickness_to(
         //this shouldn't happen
         return;
     }
-    let mut support_props =
-        PointedDripstoneLikeProperties::from_state_id(support_block_state_id, block);
+    let mut support_props = PointedDripstoneLikeProperties::from_state_id(support_block_state_id);
     if support_props.thickness == new_thickness {
         return;
     }

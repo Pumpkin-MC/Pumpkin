@@ -19,12 +19,13 @@ pumpkin-data = { workspace = true, features = [
     "statistic",
 ] }
 
-pumpkin-world.workspace = true
 pumpkin-util.workspace = true
+pumpkin-nbt.workspace = true
 
 rand.workspace = true
 tracing.workspace = true
 thiserror.workspace = true
+rustc-hash.workspace = true
 
 [lints]
 workspace = true

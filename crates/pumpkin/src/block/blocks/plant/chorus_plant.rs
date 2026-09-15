@@ -1,6 +1,6 @@
 use pumpkin_data::{
-    Block, BlockDirection, BlockStateId,
-    block_properties::{BlockProperties, BrownMushroomBlockLikeProperties},
+    Block, BlockDirection, BlockState, BlockStateId,
+    block_properties::BrownMushroomBlockLikeProperties,
     tag::{self, Taggable},
 };
 use pumpkin_macros::pumpkin_block;
@@ -11,7 +11,8 @@ use pumpkin_world::{
 };
 
 use crate::block::{
-    BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs,
+    BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
+    OnScheduledTickArgs, PathComputationType,
 };
 
 #[pumpkin_block("minecraft:chorus_plant")]
@@ -45,7 +46,7 @@ impl BlockBehaviour for ChorusPlantBlock {
             || (args.direction == BlockDirection::Down
                 && neighbor_block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_CHORUS_PLANT));
 
-        let mut props = BrownMushroomBlockLikeProperties::from_state_id(args.state_id, args.block);
+        let mut props = BrownMushroomBlockLikeProperties::from_state_id(args.state_id);
         match args.direction {
             BlockDirection::Down => props.down = connect,
             BlockDirection::Up => props.up = connect,
@@ -64,6 +65,10 @@ impl BlockBehaviour for ChorusPlantBlock {
             args.world
                 .break_block(args.position, None, BlockFlags::empty());
         }
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }
 

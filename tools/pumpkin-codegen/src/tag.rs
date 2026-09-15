@@ -646,10 +646,21 @@ pub(crate) fn build() -> TokenStream {
             fn registry_key(&self) -> &str;
             fn registry_id(&self) -> u16;
 
-           #[must_use]
-           fn is_tagged_with(&self, tag: &str) -> Option<bool> {
-                let tag = tag.strip_prefix("#").unwrap_or(tag);
-                let items = get_tag_ids(Self::tag_key(), tag)?;
+            #[must_use]
+            fn is_tagged_with(&self, tag: &str) -> Option<bool> {
+                let tag = tag.strip_prefix('#').unwrap_or(tag);
+                let items = get_tag_ids(Self::tag_key(), tag).or_else(|| {
+                    if !tag.contains(':') {
+                        let mut full = String::with_capacity(10 + tag.len());
+                        full.push_str("minecraft:");
+                        full.push_str(tag);
+                        get_tag_ids(Self::tag_key(), &full)
+                    } else if let Some(stripped) = tag.strip_prefix("minecraft:") {
+                        get_tag_ids(Self::tag_key(), stripped)
+                    } else {
+                        None
+                    }
+                })?;
                 Some(items.contains(&self.registry_id()))
             }
 
@@ -660,8 +671,19 @@ pub(crate) fn build() -> TokenStream {
 
             #[must_use]
             fn get_tag_values(tag: &str) -> Option<&'static [&'static str]> {
-                let tag = tag.strip_prefix("#").unwrap_or(tag);
-                get_tag_values(Self::tag_key(), tag)
+                let tag = tag.strip_prefix('#').unwrap_or(tag);
+                get_tag_values(Self::tag_key(), tag).or_else(|| {
+                    if !tag.contains(':') {
+                        let mut full = String::with_capacity(10 + tag.len());
+                        full.push_str("minecraft:");
+                        full.push_str(tag);
+                        get_tag_values(Self::tag_key(), &full)
+                    } else if let Some(stripped) = tag.strip_prefix("minecraft:") {
+                        get_tag_values(Self::tag_key(), stripped)
+                    } else {
+                        None
+                    }
+                })
             }
         }
     }

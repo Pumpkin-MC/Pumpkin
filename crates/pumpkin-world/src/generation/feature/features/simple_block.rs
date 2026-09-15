@@ -27,9 +27,7 @@ impl SimpleBlockFeature {
             return false;
         }
 
-        // TODO: check things..
         chunk.set_block_state(&pos.0, state);
-        // TODO: schedule tick when needed
         true
     }
 }

@@ -4,11 +4,11 @@ use crate::entity::mob::Mob;
 use crate::entity::player::Player;
 use pumpkin_data::item::Item;
 use pumpkin_data::tag::{self, Taggable};
-use pumpkin_protocol::java::client::play::Metadata;
 use rand::RngExt;
 use std::sync::Arc;
 
 pub struct BegGoal {
+    look_distance: f64,
     look_distance_sq: f64,
     look_time: i32,
     player: Option<Arc<Player>>,
@@ -18,6 +18,7 @@ impl BegGoal {
     #[must_use]
     pub fn new(look_distance: f32) -> Box<Self> {
         Box::new(Self {
+            look_distance: f64::from(look_distance),
             look_distance_sq: f64::from(look_distance) * f64::from(look_distance),
             look_time: 0,
             player: None,
@@ -45,13 +46,10 @@ impl BegGoal {
     }
 
     fn set_is_interested(mob: &dyn Mob, value: bool) {
-        mob.get_mob_entity().living_entity.entity.send_meta_data(
-            &[Metadata::new(
-                pumpkin_data::tracked_data::wolf::INTERESTED_ID,
-                value,
-            )],
-            None,
-        );
+        mob.get_mob_entity()
+            .living_entity
+            .entity
+            .set_synced_data(pumpkin_data::tracked_data::wolf::INTERESTED_ID, value);
     }
 }
 
@@ -61,19 +59,9 @@ impl Goal for BegGoal {
         let world = mob_entity.living_entity.entity.world.load();
         let pos = mob_entity.living_entity.entity.pos.load();
 
-        let mut closest_player = None;
-        let mut min_distance = self.look_distance_sq;
-
-        for player in world.get_nearby_players(pos, 8.0) {
-            let distance = Self::distance_sq(mob, &player);
-
-            if distance < min_distance {
-                min_distance = distance;
-                closest_player = Some(player);
-            }
-        }
-
-        let Some(player) = closest_player else {
+        let Some(player) = world.get_nearest_player(pos, self.look_distance, |player| {
+            player.living_entity.is_part_of_game()
+        }) else {
             return false;
         };
 
@@ -85,7 +73,7 @@ impl Goal for BegGoal {
         true
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let Some(player) = &self.player else {
             return false;
         };

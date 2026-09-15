@@ -120,11 +120,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn formats_vanilla_26_40_advertisement() {
+    fn formats_vanilla_26_45_advertisement() {
         let info = ServerInfo {
             motd: "Pumpkin",
-            protocol: 2168,
-            version: "1.26.40",
+            protocol: 2169,
+            version: "1.26.45",
             players: 2,
             max_players: 20,
             server_guid: 42,
@@ -137,7 +137,7 @@ mod tests {
 
         assert_eq!(
             info.to_string(),
-            "MCPE;Pumpkin;2168;1.26.40;2;20;42;world;Creative;1;19132;19133;0;"
+            "MCPE;Pumpkin;2169;1.26.45;2;20;42;world;Creative;1;19132;19133;0;"
         );
     }
 

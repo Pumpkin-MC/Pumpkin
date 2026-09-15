@@ -68,7 +68,7 @@ impl ChickenEntity {
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.4));
             goal_selector.add_goal(2, BreedGoal::new(1.0));
-            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.0, TEMPT_ITEMS)));
+            goal_selector.add_goal(3, Box::new(TemptGoal::new(1.0, TEMPT_ITEMS, false)));
             goal_selector.add_goal(4, Box::new(FollowParentGoal::new(1.1)));
             goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
             goal_selector.add_goal(
@@ -150,20 +150,11 @@ impl Mob for ChickenEntity {
         let entity = self.get_entity();
         let is_baby = entity.age.load(Ordering::Relaxed) < 0;
         if is_baby {
-            entity.send_meta_data(
-                &[pumpkin_protocol::java::client::play::Metadata::new(
-                    pumpkin_data::tracked_data::chicken::BABY_ID,
-                    true,
-                )],
-                None,
-            );
+            entity.set_synced_data(pumpkin_data::tracked_data::chicken::BABY_ID, true);
         }
-        entity.send_meta_data(
-            &[pumpkin_protocol::java::client::play::Metadata::new(
-                pumpkin_data::tracked_data::chicken::VARIANT,
-                VarInt(self.variant.load(Ordering::Relaxed) as i32),
-            )],
-            None,
+        entity.set_synced_data(
+            pumpkin_data::tracked_data::chicken::VARIANT,
+            VarInt(self.variant.load(Ordering::Relaxed) as i32),
         );
     }
 

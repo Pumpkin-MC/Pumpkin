@@ -221,6 +221,25 @@ impl IDSetContent for Block {
     }
 }
 
+impl IDSetContent for crate::item::Item {
+    fn registry_id(&self) -> u16 {
+        self.id
+    }
+
+    fn from_id(id: u16) -> Option<&'static Self> {
+        crate::item::Item::from_id(id)
+    }
+
+    fn from_str(name: &str) -> Option<&'static Self> {
+        let name = name.strip_prefix("minecraft:").unwrap_or(name);
+        crate::item::Item::from_registry_key(name)
+    }
+
+    fn to_string(&self) -> String {
+        self.registry_key.to_string()
+    }
+}
+
 #[derive(Clone, Hash, PartialEq, Debug)]
 pub enum IDSet<T: IDSetContent + 'static> {
     Tag(Cow<'static, str>),
@@ -544,11 +563,21 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         DataComponent::ItemModel => Some(ItemModelImpl::read_data(data)?.to_dyn()),
         DataComponent::Consumable => Some(ConsumableImpl::read_data(data)?.to_dyn()),
         DataComponent::Equippable => Some(EquippableImpl::read_data(data)?.to_dyn()),
+        DataComponent::AttackRange => Some(AttackRangeImpl::read_data(data)?.to_dyn()),
+        DataComponent::KineticWeapon => Some(KineticWeaponImpl::read_data(data)?.to_dyn()),
+        DataComponent::PiercingWeapon => Some(PiercingWeaponImpl::read_data(data)?.to_dyn()),
+        DataComponent::MinimumAttackCharge => {
+            Some(MinimumAttackChargeImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::DamageType => Some(DamageTypeImpl::read_data(data)?.to_dyn()),
         DataComponent::StoredEnchantments => {
             Some(StoredEnchantmentsImpl::read_data(data)?.to_dyn())
         }
         DataComponent::UseCooldown => Some(UseCooldownImpl::read_data(data)?.to_dyn()),
+        DataComponent::RepairCost => Some(RepairCostImpl::read_data(data)?.to_dyn()),
+        DataComponent::Repairable => Some(RepairableImpl::read_data(data)?.to_dyn()),
         DataComponent::MapId => Some(MapIdImpl::read_data(data)?.to_dyn()),
+        DataComponent::MapPostProcessing => Some(MapPostProcessingImpl::read_data(data)?.to_dyn()),
         DataComponent::ChargedProjectiles => {
             Some(ChargedProjectilesImpl::read_data(data)?.to_dyn())
         }
@@ -620,7 +649,44 @@ pub fn read_data(id: DataComponent, data: &NbtTag) -> Option<Box<dyn DataCompone
         DataComponent::Trim => Some(TrimImpl::read_data(data)?.to_dyn()),
         DataComponent::CanPlaceOn => Some(CanPlaceOnImpl::read_data(data)?.to_dyn()),
         DataComponent::CanBreak => Some(CanBreakImpl::read_data(data)?.to_dyn()),
-        _ => None,
+        DataComponent::SwingAnimation => Some(SwingAnimationImpl::read_data(data)?.to_dyn()),
+        DataComponent::Rarity => Some(RarityImpl::read_data(data)?.to_dyn()),
+        DataComponent::BannerPatterns => Some(BannerPatternsImpl::read_data(data)?.to_dyn()),
+        DataComponent::UseEffects => Some(UseEffectsImpl::read_data(data)?.to_dyn()),
+        DataComponent::UseRemainder => Some(UseRemainderImpl::read_data(data)?.to_dyn()),
+        DataComponent::Weapon => Some(WeaponImpl::read_data(data)?.to_dyn()),
+        DataComponent::TooltipDisplay => Some(TooltipDisplayImpl::read_data(data)?.to_dyn()),
+        DataComponent::CreativeSlotLock => Some(CreativeSlotLockImpl::read_data(data)?.to_dyn()),
+        DataComponent::EnchantmentGlintOverride => {
+            Some(EnchantmentGlintOverrideImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::DeathProtection => Some(DeathProtectionImpl::read_data(data)?.to_dyn()),
+        DataComponent::BlocksAttacks => Some(BlocksAttacksImpl::read_data(data)?.to_dyn()),
+        DataComponent::AdditionalTradeCost => {
+            Some(AdditionalTradeCostImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::Dye => Some(DyeImpl::read_data(data)?.to_dyn()),
+        DataComponent::MapColor => Some(MapColorImpl::read_data(data)?.to_dyn()),
+        DataComponent::MapDecorations => Some(MapDecorationsImpl::read_data(data)?.to_dyn()),
+        DataComponent::DebugStickState => Some(DebugStickStateImpl::read_data(data)?.to_dyn()),
+        DataComponent::EntityData => Some(EntityDataImpl::read_data(data)?.to_dyn()),
+        DataComponent::BucketEntityData => Some(BucketEntityDataImpl::read_data(data)?.to_dyn()),
+        DataComponent::Instrument => Some(InstrumentImpl::read_data(data)?.to_dyn()),
+        DataComponent::ProvidesTrimMaterial => {
+            Some(ProvidesTrimMaterialImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::JukeboxPlayable => Some(JukeboxPlayableImpl::read_data(data)?.to_dyn()),
+        DataComponent::ProvidesBannerPatterns => {
+            Some(ProvidesBannerPatternsImpl::read_data(data)?.to_dyn())
+        }
+        DataComponent::Recipes => Some(RecipesImpl::read_data(data)?.to_dyn()),
+        DataComponent::PotDecorations => Some(PotDecorationsImpl::read_data(data)?.to_dyn()),
+        DataComponent::Bees => Some(BeesImpl::read_data(data)?.to_dyn()),
+        DataComponent::SulfurCubeContent => Some(SulfurCubeContentImpl::read_data(data)?.to_dyn()),
+        DataComponent::BreakSound => Some(BreakSoundImpl::read_data(data)?.to_dyn()),
+        DataComponent::AttributeModifiers => {
+            Some(AttributeModifiersImpl::read_data(data)?.to_dyn())
+        }
     }
 }
 
@@ -844,5 +910,17 @@ mod tests {
         assert_eq!(enc2.enchantment.len(), 1);
         assert!(enc2.enchantment[0].0 == &crate::Enchantment::SHARPNESS);
         assert_eq!(enc2.enchantment[0].1, 2);
+    }
+
+    #[test]
+    fn swing_animation_round_trip() {
+        assert_round_trip(
+            SwingAnimationImpl {
+                animation_type: SwingAnimationType::Stab,
+                duration: 19,
+            },
+            SwingAnimationImpl::read_data,
+        );
+        assert_round_trip(SwingAnimationImpl::DEFAULT, SwingAnimationImpl::read_data);
     }
 }

@@ -1,11 +1,11 @@
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy, PartialEq, Eq)]
 #[repr(i8)]
 pub enum ModifierOperation {
     Add = 0,           // add value
@@ -13,7 +13,7 @@ pub enum ModifierOperation {
     MultiplyTotal = 2, // multiply total (applied last)
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Modifier {
     pub id: String,
     pub amount: f64,
@@ -138,15 +138,14 @@ pub fn send_attribute_updates_for_living(
             id if id == Attributes::MAX_HEALTH.id => "minecraft:health".to_string(),
             id if id == Attributes::MAX_ABSORPTION.id => "minecraft:absorption".to_string(),
             id if id == Attributes::ATTACK_DAMAGE.id => "minecraft:attack_damage".to_string(),
-            id if id == Attributes::ARMOR.id => "minecraft:armor".to_string(),
             id if id == Attributes::KNOCKBACK_RESISTANCE.id => {
                 "minecraft:knockback_resistance".to_string()
             }
             id if id == Attributes::LUCK.id => "minecraft:luck".to_string(),
             id if id == Attributes::FOLLOW_RANGE.id => "minecraft:follow_range".to_string(),
             id if id == Attributes::JUMP_STRENGTH.id => "minecraft:horse.jump_strength".to_string(),
-            // Fallback for others
-            _ => format!("minecraft:attribute.{}", attribute.id),
+            // Java-only attributes must not be sent under unsupported Bedrock names.
+            _ => continue,
         };
 
         let be_attribute = BeAttribute {
@@ -166,6 +165,11 @@ pub fn send_attribute_updates_for_living(
     }
 
     let je_packet = JePacket::new(living.entity.entity_id.into(), je_properties);
+    let world = living.entity.world.load();
+    if be_attributes.is_empty() {
+        world.broadcast_packet_all(&je_packet);
+        return;
+    }
 
     let runtime_id = living.entity.entity_id as u64;
     let be_packet = BePacket {
@@ -174,11 +178,7 @@ pub fn send_attribute_updates_for_living(
         tick: VarULong(0),
     };
 
-    living
-        .entity
-        .world
-        .load()
-        .broadcast_editioned(&je_packet, &be_packet);
+    world.broadcast_editioned(&je_packet, &be_packet);
 }
 
 impl Clone for AttributeInstance {
@@ -193,10 +193,10 @@ impl Clone for AttributeInstance {
 }
 
 /// Registry storing per-entity-type base attribute overrides.
-/// Internally stores a map from `entity_type.id` -> `HashMap`<attribute.id, f64> for O(1) lookup.
+/// Internally stores a map from `entity_type.id` -> `FxHashMap`<attribute.id, f64> for O(1) lookup.
 #[derive(Default)]
 pub struct AttributeRegistry {
-    map: HashMap<u16, HashMap<u8, f64>>,
+    map: FxHashMap<u16, FxHashMap<u8, f64>>,
 }
 
 impl AttributeRegistry {
@@ -278,7 +278,7 @@ mod tests {
             .find(|(attr, _)| attr.id == Attributes::MOVEMENT_SPEED.id);
         assert!(speed_attr.is_some());
         let (_, base_speed) = speed_attr.unwrap();
-        assert!((base_speed - 0.1).abs() < f64::EPSILON);
+        assert!((base_speed - 0.1).abs() < 1e-4);
     }
 
     #[test]

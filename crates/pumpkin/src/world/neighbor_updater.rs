@@ -96,12 +96,13 @@ impl Drop for CascadeGuard {
     }
 }
 
-pub(super) fn update_neighbors(
+pub(super) fn update_neighbors_at(
     world: &Arc<World>,
     position: &BlockPos,
+    source_block: &Block,
     except: Option<BlockDirection>,
 ) {
-    let source_block = world.get_block(position).id;
+    let source_block = source_block.id;
     let source_position = *position;
     submit(
         world,

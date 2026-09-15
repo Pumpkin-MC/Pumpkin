@@ -29,7 +29,7 @@ macro_rules! register_host_event {
     };
 }
 
-fn register_typed_event<E: crate::plugin::Payload + ToFromWasmEvent + 'static>(
+fn register_typed_event<E: crate::plugin::Payload + ToFromWasmEvent + Clone + 'static>(
     resource: &ContextResource,
     handler: &Arc<WasmPluginEventHandler>,
     priority: crate::plugin::EventPriority,
@@ -1764,14 +1764,18 @@ impl pumpkin::plugin::context::HostContext for PluginHostState {
         command: Resource<Command>,
         permission: String,
     ) -> wasmtime::Result<()> {
-        // Updated return type
-        // Use your helpers to safely take/get resources
-        let command_res = self.take_command(&command)?;
-        let context_res = self.get_context(&context)?;
+        use crate::command::argument_builder::ArgumentBuilder;
 
-        context_res
-            .provider
-            .register_command(command_res.provider, permission);
+        let command = self.take_command(&command)?.provider;
+        let context = self.get_context(&context)?.provider.clone();
+        let aliases = if command.names.len() > 1 {
+            command.names[1..].to_vec()
+        } else {
+            Vec::new()
+        };
+        let node = command.builder.build();
+        context.register_command_with_aliases(node, &aliases, permission);
+
         Ok(())
     }
 

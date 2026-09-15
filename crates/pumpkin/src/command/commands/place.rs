@@ -1,4 +1,4 @@
-use pumpkin_data::chunk_gen_settings::GenerationSettings;
+use pumpkin_data::noise_settings::NoiseSettings;
 use pumpkin_data::placed_feature::PlacedFeature as PlacedFeatureKey;
 use pumpkin_data::structures::{Structure, StructureKeys, StructureType};
 use pumpkin_data::translation;
@@ -193,14 +193,18 @@ impl CommandExecutor for PlaceJigsawExecutor {
             let seed = hash_block_pos(block_pos.0.x, block_pos.0.y, block_pos.0.z) as u64;
             let random = RandomGenerator::Legacy(LegacyRand::from_seed(seed));
             let world_gen = context.world().level.world_gen();
-            let settings = GenerationSettings::from_dimension(world_gen.dimension());
+            let settings = NoiseSettings::from_dimension(world_gen.dimension());
             let mut structure_context = StructureGeneratorContext {
                 seed: seed as i64,
                 chunk_x: 0,
                 chunk_z: 0,
                 random,
                 sea_level: settings.sea_level,
-                min_y: world_gen.dimension().min_y,
+                min_y: (settings.shape.min_y as i32).max(world_gen.dimension().min_y),
+                height: settings
+                    .shape
+                    .height
+                    .min(world_gen.dimension().height as u16),
                 height_sampler: None,
                 structure_key: None,
             };
@@ -284,7 +288,7 @@ impl CommandExecutor for PlaceStructureExecutor {
 
         let (_piece_count, placer) = {
             let world_gen = context.world().level.world_gen();
-            let settings = GenerationSettings::from_dimension(world_gen.dimension());
+            let settings = NoiseSettings::from_dimension(world_gen.dimension());
 
             if structure.structure_type == StructureType::Jigsaw {
                 let pool = structure.start_pool.ok_or_else(|| {
@@ -307,7 +311,11 @@ impl CommandExecutor for PlaceStructureExecutor {
                         chunk_z: block_pos.0.z >> 4,
                         random,
                         sea_level: settings.sea_level,
-                        min_y: world_gen.dimension().min_y,
+                        min_y: (settings.shape.min_y as i32).max(world_gen.dimension().min_y),
+                        height: settings
+                            .shape
+                            .height
+                            .min(world_gen.dimension().height as u16),
                         height_sampler: None,
                         structure_key: Some(key),
                     },
@@ -355,7 +363,11 @@ impl CommandExecutor for PlaceStructureExecutor {
                         chunk_z: block_pos.0.z >> 4,
                         random,
                         sea_level: settings.sea_level,
-                        min_y: world_gen.dimension().min_y,
+                        min_y: (settings.shape.min_y as i32).max(world_gen.dimension().min_y),
+                        height: settings
+                            .shape
+                            .height
+                            .min(world_gen.dimension().height as u16),
                         height_sampler: None,
                         structure_key: Some(key),
                     },

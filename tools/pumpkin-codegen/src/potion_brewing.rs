@@ -2,109 +2,158 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use serde::Deserialize;
 use std::fs;
+use std::path::Path;
 
-/// Raw deserialization shape for the brewing recipe data from `potion_brewing.json`.
 #[derive(Deserialize)]
-struct PotionBrewing {
-    //potion_types: Vec<Vec<String>>,
-    /// Recipes that transform one potion into another using a brewing ingredient.
-    potion_recipes: Vec<Recipes>,
-    /// Recipes that transform one item into another using a brewing ingredient.
-    item_recipes: Vec<Recipes>,
+struct DataDrivenBrewingRecipe {
+    input: BrewingInput,
+    reagent: BrewingReagent,
+    output: BrewingOutput,
 }
 
-/// A single brewing recipe entry mapping a source item/potion and ingredient to an output.
 #[derive(Deserialize)]
-pub struct Recipes {
-    /// Namespaced resource location of the input potion or item.
-    from: String,
-    /// List of namespaced resource locations for valid brewing ingredients.
-    ingredient: Vec<String>,
-    /// Namespaced resource location of the output potion or item.
-    to: String,
+struct BrewingInput {
+    item: String,
+    potion_contents: BrewingPotionContents,
 }
 
-impl Recipes {
-    /// Converts this recipe into a `TokenStream` for a `PotionRecipe` struct literal.
-    pub fn get_tokens_potion(self) -> TokenStream {
-        let from = format_ident!(
-            "{}",
-            self.from.strip_prefix("minecraft:").unwrap().to_uppercase()
-        );
-        let to = format_ident!(
-            "{}",
-            self.to.strip_prefix("minecraft:").unwrap().to_uppercase()
-        );
-
-        let slots = self.ingredient.iter().map(|slot| {
-            format_ident!(
-                "{}",
-                slot.strip_prefix("minecraft:").unwrap().to_uppercase()
-            )
-        });
-
-        quote! {
-            PotionRecipe {
-                from: &Potion::#from,
-                ingredient: &[#(&Item::#slots),*],
-                to: &Potion::#to,
-            },
-        }
-    }
-
-    /// Converts this recipe into a `TokenStream` for an `ItemRecipe` struct literal.
-    pub fn get_tokens_item(self) -> TokenStream {
-        let from = format_ident!(
-            "{}",
-            self.from.strip_prefix("minecraft:").unwrap().to_uppercase()
-        );
-        let to = format_ident!(
-            "{}",
-            self.to.strip_prefix("minecraft:").unwrap().to_uppercase()
-        );
-
-        let slots = self.ingredient.iter().map(|slot| {
-            format_ident!(
-                "{}",
-                slot.strip_prefix("minecraft:").unwrap().to_uppercase()
-            )
-        });
-
-        quote! {
-            ItemRecipe {
-                from: &Item::#from,
-                ingredient: &[#(&Item::#slots),*],
-                to: &Item::#to,
-            },
-        }
-    }
+#[derive(Deserialize)]
+struct BrewingPotionContents {
+    #[serde(alias = "potion")]
+    potions: String,
 }
 
-/// Generates the `TokenStream` for `POTION_RECIPES` and `ITEM_RECIPES` constant arrays.
+#[derive(Deserialize)]
+struct BrewingReagent {
+    item: String,
+}
+
+#[derive(Deserialize)]
+struct BrewingOutput {
+    id: String,
+    components: BrewingComponents,
+}
+
+#[derive(Deserialize)]
+struct BrewingComponents {
+    #[serde(rename = "minecraft:potion_contents")]
+    potion_contents: BrewingOutputPotionContents,
+}
+
+#[derive(Deserialize)]
+struct BrewingOutputPotionContents {
+    potion: String,
+}
+
+/// Generates the `TokenStream` for `BREWING_RECIPES`, `POTION_RECIPES` and `ITEM_RECIPES`.
 pub fn build() -> TokenStream {
-    let json: PotionBrewing =
-        serde_json::from_str(&fs::read_to_string("../../assets/potion_brewing.json").unwrap())
-            .expect("Failed to parse potion_brewing.json");
-
-    let item_recipes_tokens: Vec<TokenStream> = json
-        .item_recipes
-        .into_iter()
-        .map(Recipes::get_tokens_item)
+    // 2. Load 26.3 data-driven brewing recipes from datapack
+    let brewing_dir = Path::new("../../assets/datapacks/26_2/data/minecraft/recipe/brewing");
+    let mut entries: Vec<_> = fs::read_dir(brewing_dir)
+        .expect("Missing brewing recipe directory")
+        .flatten()
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
         .collect();
-    let item_len = item_recipes_tokens.len();
+    entries.sort_by_key(|e| e.path());
 
-    // 3. Generate Potion Recipes
-    let potion_recipes_tokens: Vec<TokenStream> = json
-        .potion_recipes
-        .into_iter()
-        .map(Recipes::get_tokens_potion)
-        .collect();
-    let potion_len = potion_recipes_tokens.len();
+    let mut brewing_tokens = Vec::new();
+    for entry in entries {
+        let content = fs::read_to_string(entry.path()).expect("Failed to read brewing recipe");
+        let recipe: DataDrivenBrewingRecipe = serde_json::from_str(&content).unwrap_or_else(|e| {
+            panic!(
+                "Failed to parse brewing recipe {}: {e}",
+                entry.path().display()
+            )
+        });
+
+        let from_item = format_ident!(
+            "{}",
+            recipe
+                .input
+                .item
+                .strip_prefix("minecraft:")
+                .unwrap_or(&recipe.input.item)
+                .to_uppercase()
+        );
+        let from_potion = format_ident!(
+            "{}",
+            recipe
+                .input
+                .potion_contents
+                .potions
+                .strip_prefix("minecraft:")
+                .unwrap_or(&recipe.input.potion_contents.potions)
+                .to_uppercase()
+        );
+        let ingredient = format_ident!(
+            "{}",
+            recipe
+                .reagent
+                .item
+                .strip_prefix("minecraft:")
+                .unwrap_or(&recipe.reagent.item)
+                .to_uppercase()
+        );
+        let to_item = format_ident!(
+            "{}",
+            recipe
+                .output
+                .id
+                .strip_prefix("minecraft:")
+                .unwrap_or(&recipe.output.id)
+                .to_uppercase()
+        );
+        let to_potion = format_ident!(
+            "{}",
+            recipe
+                .output
+                .components
+                .potion_contents
+                .potion
+                .strip_prefix("minecraft:")
+                .unwrap_or(&recipe.output.components.potion_contents.potion)
+                .to_uppercase()
+        );
+
+        brewing_tokens.push(quote! {
+            BrewingRecipe {
+                from_item: &Item::#from_item,
+                from_potion: &Potion::#from_potion,
+                ingredient: &Item::#ingredient,
+                to_item: &Item::#to_item,
+                to_potion: &Potion::#to_potion,
+            }
+        });
+    }
+    let brewing_len = brewing_tokens.len();
 
     quote! {
         #![allow(dead_code)]
         use crate::potion::Potion;
         use crate::item::Item;
+
+        pub struct BrewingRecipe {
+            pub from_item: &'static Item,
+            pub from_potion: &'static Potion,
+            pub ingredient: &'static Item,
+            pub to_item: &'static Item,
+            pub to_potion: &'static Potion,
+        }
+
+        impl BrewingRecipe {
+            #[must_use]
+            pub const fn from_item(&self) -> &'static Item { self.from_item }
+            #[must_use]
+            pub const fn from_potion(&self) -> &'static Potion { self.from_potion }
+            #[must_use]
+            pub const fn ingredient(&self) -> &'static Item { self.ingredient }
+            #[must_use]
+            pub const fn reagent(&self) -> &'static Item { self.ingredient }
+            #[must_use]
+            pub const fn to_item(&self) -> &'static Item { self.to_item }
+            #[must_use]
+            pub const fn to_potion(&self) -> &'static Potion { self.to_potion }
+        }
 
         pub struct PotionRecipe {
             from: &'static Potion,
@@ -136,7 +185,18 @@ pub fn build() -> TokenStream {
             pub const fn to(&self) -> &'static Item { self.to }
         }
 
-        pub const ITEM_RECIPES: [ItemRecipe; #item_len] = [#(#item_recipes_tokens)*];
-        pub const POTION_RECIPES: [PotionRecipe; #potion_len] = [#(#potion_recipes_tokens)*];
+        pub const BREWING_RECIPES: [BrewingRecipe; #brewing_len] = [#(#brewing_tokens),*];
+        pub const ITEM_RECIPES: [ItemRecipe; 0] = [];
+        pub const POTION_RECIPES: [PotionRecipe; 0] = [];
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_potion_brewing() {
+        let _ = build();
     }
 }

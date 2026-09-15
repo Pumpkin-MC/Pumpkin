@@ -13,11 +13,11 @@
 use std::any::Any;
 use std::sync::{Arc, Mutex, RwLock};
 
-use pumpkin_data::item_stack::ItemStack;
-use pumpkin_world::{
-    block::viewer::ViewerCountTracker,
+use crate::{
     inventory::{Clearable, Inventory},
+    viewer::ViewerCountTracker,
 };
+use pumpkin_data::item_stack::ItemStack;
 
 /// A player's ender chest inventory.
 ///

@@ -4,14 +4,14 @@ use crate::block::entities::calibrated_sculk_sensor::CalibratedSculkSensorBlockE
 use crate::block::entities::sculk_sensor::SculkSensorBlockEntity;
 use crate::block::{
     BlockBehaviour, BlockMetadata, EmitsRedstonePowerArgs, GetComparatorOutputArgs,
-    GetRedstonePowerArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
+    GetRedstonePowerArgs, OnPlaceArgs, OnScheduledTickArgs, PathComputationType, PlacedArgs,
 };
 use crate::world::World;
 use pumpkin_data::block_properties::{
-    BlockProperties, CalibratedSculkSensorLikeProperties, HorizontalFacing,
-    SculkSensorLikeProperties, SculkSensorPhase,
+    CalibratedSculkSensorLikeProperties, HorizontalFacing, SculkSensorLikeProperties,
+    SculkSensorPhase,
 };
-use pumpkin_data::{Block, BlockDirection, BlockId, BlockStateId};
+use pumpkin_data::{Block, BlockDirection, BlockId, BlockState, BlockStateId};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
@@ -33,11 +33,20 @@ const fn horizontal_facing_to_dir(facing: HorizontalFacing) -> BlockDirection {
     }
 }
 
+/// Both sensor variants carry the same phase property under different types.
+fn sculk_sensor_phase(block: &Block, state_id: BlockStateId) -> SculkSensorPhase {
+    if block.id == BlockId::CALIBRATED_SCULK_SENSOR {
+        CalibratedSculkSensorLikeProperties::from_state_id(state_id).sculk_sensor_phase
+    } else {
+        SculkSensorLikeProperties::from_state_id(state_id).sculk_sensor_phase
+    }
+}
+
 impl SculkSensorBlock {
     pub fn trigger(world: &Arc<World>, pos: &BlockPos, block: &Block, power: u8) {
         if block.id == BlockId::SCULK_SENSOR {
             let state = world.get_block_state(pos);
-            let mut props = SculkSensorLikeProperties::from_state_id(state.id, block);
+            let mut props = SculkSensorLikeProperties::from_state_id(state.id);
             if props.sculk_sensor_phase == SculkSensorPhase::Inactive {
                 if let Some(be) = world.get_block_entity(pos)
                     && let Some(sensor_be) = be.as_any().downcast_ref::<SculkSensorBlockEntity>()
@@ -56,7 +65,7 @@ impl SculkSensorBlock {
             }
         } else if block.id == BlockId::CALIBRATED_SCULK_SENSOR {
             let state = world.get_block_state(pos);
-            let mut props = CalibratedSculkSensorLikeProperties::from_state_id(state.id, block);
+            let mut props = CalibratedSculkSensorLikeProperties::from_state_id(state.id);
             if props.sculk_sensor_phase == SculkSensorPhase::Inactive {
                 let back_dir = horizontal_facing_to_dir(props.facing).opposite();
                 let back_pos = pos.offset(back_dir.to_offset());
@@ -120,15 +129,14 @@ impl BlockBehaviour for SculkSensorBlock {
 
     fn get_weak_redstone_power(&self, args: GetRedstonePowerArgs<'_>) -> u8 {
         if args.block.id == BlockId::SCULK_SENSOR {
-            let props = SculkSensorLikeProperties::from_state_id(args.state.id, args.block);
+            let props = SculkSensorLikeProperties::from_state_id(args.state.id);
             if props.sculk_sensor_phase == SculkSensorPhase::Active {
                 props.power
             } else {
                 0
             }
         } else if args.block.id == BlockId::CALIBRATED_SCULK_SENSOR {
-            let props =
-                CalibratedSculkSensorLikeProperties::from_state_id(args.state.id, args.block);
+            let props = CalibratedSculkSensorLikeProperties::from_state_id(args.state.id);
             if props.sculk_sensor_phase == SculkSensorPhase::Active {
                 props.power
             } else {
@@ -140,6 +148,11 @@ impl BlockBehaviour for SculkSensorBlock {
     }
 
     fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
+        // Vanilla reads the frequency only while the sensor is active.
+        if sculk_sensor_phase(args.block, args.state.id) != SculkSensorPhase::Active {
+            return Some(0);
+        }
+
         let be = args.world.get_block_entity(args.position)?;
         if let Some(sensor_be) = be.as_any().downcast_ref::<SculkSensorBlockEntity>() {
             return Some(
@@ -166,7 +179,7 @@ impl BlockBehaviour for SculkSensorBlock {
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
         let state = args.world.get_block_state(args.position);
         if args.block.id == BlockId::SCULK_SENSOR {
-            let mut props = SculkSensorLikeProperties::from_state_id(state.id, args.block);
+            let mut props = SculkSensorLikeProperties::from_state_id(state.id);
             match props.sculk_sensor_phase {
                 SculkSensorPhase::Active => {
                     props.sculk_sensor_phase = SculkSensorPhase::Cooldown;
@@ -195,8 +208,7 @@ impl BlockBehaviour for SculkSensorBlock {
                 SculkSensorPhase::Inactive => {}
             }
         } else if args.block.id == BlockId::CALIBRATED_SCULK_SENSOR {
-            let mut props =
-                CalibratedSculkSensorLikeProperties::from_state_id(state.id, args.block);
+            let mut props = CalibratedSculkSensorLikeProperties::from_state_id(state.id);
             match props.sculk_sensor_phase {
                 SculkSensorPhase::Active => {
                     props.sculk_sensor_phase = SculkSensorPhase::Cooldown;
@@ -225,5 +237,9 @@ impl BlockBehaviour for SculkSensorBlock {
                 SculkSensorPhase::Inactive => {}
             }
         }
+    }
+
+    fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
+        false
     }
 }

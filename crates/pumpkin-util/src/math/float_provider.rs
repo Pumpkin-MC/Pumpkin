@@ -8,7 +8,7 @@ use serde::Deserialize;
 use syn::LitFloat;
 
 /// Represents different types of number providers that generate floating-point values.
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug, PartialEq)]
 #[serde(tag = "type")]
 pub enum NormalFloatProvider {
     /// Always returns the same constant value.
@@ -54,7 +54,7 @@ impl ToTokens for NormalFloatProvider {
 }
 
 /// A flexible float provider that can be either a constant value or a complex provider.
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug, PartialEq)]
 #[serde(untagged)]
 pub enum FloatProvider {
     /// A complex provider with configurable distribution.
@@ -135,7 +135,7 @@ impl FloatProvider {
 }
 
 /// A float provider that always returns the same constant value.
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq)]
 pub struct ConstantFloatProvider {
     /// The constant value that will always be returned.
     value: f32,
@@ -195,7 +195,7 @@ impl ConstantFloatProvider {
 }
 
 /// A float provider that generates uniformly distributed random values.
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq)]
 pub struct UniformFloatProvider {
     /// The minimum value (inclusive) that can be generated.
     min_inclusive: f32,
@@ -264,7 +264,7 @@ impl UniformFloatProvider {
 }
 
 /// A float provider that generates values from a normal (Gaussian) distribution.
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq)]
 pub struct ClampedNormalFloatProvider {
     /// The mean (centre) of the normal distribution.
     mean: f32,
@@ -351,7 +351,7 @@ impl ClampedNormalFloatProvider {
 }
 
 /// A float provider that generates values from a trapezoidal distribution.
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq)]
 pub struct TrapezoidFloatProvider {
     /// The minimum value (inclusive) that can be generated.
     min: f32,

@@ -1,3 +1,4 @@
+use crate::block::registry::BlockActionResult;
 use std::sync::Arc;
 
 use crate::entity::Entity;
@@ -17,19 +18,6 @@ use pumpkin_util::math::wrap_degrees;
 
 pub struct ArmorStandItem;
 
-impl ArmorStandItem {
-    fn calculate_placement_position(location: &BlockPos, face: BlockDirection) -> BlockPos {
-        match face {
-            BlockDirection::Up => location.offset(Vector3::new(0, 1, 0)),
-            BlockDirection::Down => location.offset(Vector3::new(0, -1, 0)),
-            BlockDirection::North => location.offset(Vector3::new(0, 0, -1)),
-            BlockDirection::South => location.offset(Vector3::new(0, 0, 1)),
-            BlockDirection::West => location.offset(Vector3::new(-1, 0, 0)),
-            BlockDirection::East => location.offset(Vector3::new(1, 0, 0)),
-        }
-    }
-}
-
 impl ItemMetadata for ArmorStandItem {
     fn ids() -> Box<[u16]> {
         [Item::ARMOR_STAND.id].into()
@@ -46,11 +34,18 @@ impl ItemBehaviour for ArmorStandItem {
         _cursor_pos: Vector3<f32>,
         _block: &Block,
         _server: &Server,
-    ) {
-        let world = player.world();
-        let position = Self::calculate_placement_position(&location, face).to_f64();
+    ) -> BlockActionResult {
+        if face == BlockDirection::Down {
+            return BlockActionResult::Fail;
+        }
 
-        let bottom_center = Vector3::new(position.x, position.y, position.z);
+        let world = player.world();
+        let target_pos = location.offset(face.to_offset());
+        let bottom_center = Vector3::new(
+            f64::from(target_pos.0.x) + 0.5,
+            f64::from(target_pos.0.y),
+            f64::from(target_pos.0.z) + 0.5,
+        );
 
         let armor_stand_dimensions = EntityType::ARMOR_STAND.dimension;
         let width = f64::from(armor_stand_dimensions[0]);
@@ -74,7 +69,7 @@ impl ItemBehaviour for ArmorStandItem {
             let (player_yaw, _) = player.rotation();
             let rotation = ((wrap_degrees(player_yaw - 180.0) + 22.5) / 45.0).floor() * 45.0;
 
-            let entity = Entity::new(world.clone(), position, &EntityType::ARMOR_STAND);
+            let entity = Entity::new(world.clone(), bottom_center, &EntityType::ARMOR_STAND);
 
             entity.set_rotation(rotation, 0.0);
 
@@ -88,6 +83,9 @@ impl ItemBehaviour for ArmorStandItem {
 
             world.spawn_entity(Arc::new(armor_stand));
             item.decrement_unless_creative(player.gamemode.load(), 1);
+            BlockActionResult::Success
+        } else {
+            BlockActionResult::Fail
         }
     }
 

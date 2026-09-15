@@ -1,64 +1,74 @@
 use pumpkin_data::world::{MSG_COMMAND_INCOMING, MSG_COMMAND_OUTGOING};
+use pumpkin_util::PermissionLvl;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
 use pumpkin_util::text::TextComponent;
 
-use crate::command::{
-    CommandError, CommandExecutor, CommandResult, CommandSender,
-    args::{
-        Arg, ConsumedArgs, FindArgDefaultName, message::MsgArgConsumer,
-        players::PlayersArgumentConsumer,
-    },
-    tree::{
-        CommandTree,
-        builder::{argument, argument_default_name},
-    },
-};
+use crate::command::argument_builder::{ArgumentBuilder, argument, command};
+use crate::command::argument_types::core::string::StringArgumentType;
+use crate::command::argument_types::entity::EntityArgumentType;
+use crate::command::context::command_context::CommandContext;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::entity::EntityBase;
-use CommandError::InvalidConsumption;
 
 const NAMES: [&str; 3] = ["msg", "tell", "w"];
-
 const DESCRIPTION: &str = "Sends a private message to one or more players.";
+const PERMISSION: &str = "minecraft:command.msg";
 
-const ARG_MESSAGE: &str = "message";
+struct MsgExecutor;
 
-struct Executor;
+impl CommandExecutor for MsgExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let targets = EntityArgumentType::get_players(context, "targets")?;
+        let msg = StringArgumentType::get(context, "message")?;
 
-impl CommandExecutor for Executor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        _server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        let Some(Arg::Msg(msg)) = args.get(ARG_MESSAGE) else {
-            return Err(InvalidConsumption(Some(ARG_MESSAGE.into())));
-        };
-        let targets = PlayersArgumentConsumer.find_arg_default_name(args)?;
-        let player = sender.as_player().ok_or(CommandError::InvalidRequirement)?;
+        let sender_name = &context.source.display_name;
+        let msg_text = TextComponent::text(msg.to_string());
 
-        for target in targets {
-            let msg_text = TextComponent::text(msg.clone());
-            player.send_message(
-                &msg_text,
-                MSG_COMMAND_OUTGOING,
-                &player.get_display_name(),
-                Some(&target.get_display_name()),
-            );
-            target.send_message(
-                &msg_text,
-                MSG_COMMAND_INCOMING,
-                &player.get_display_name(),
-                Some(&target.get_display_name()),
-            );
+        if let Some(player) = context.source.player_or_none() {
+            for target in &targets {
+                player.send_message(
+                    &msg_text,
+                    MSG_COMMAND_OUTGOING,
+                    &player.get_display_name(),
+                    Some(&target.get_display_name()),
+                );
+                target.send_message(
+                    &msg_text,
+                    MSG_COMMAND_INCOMING,
+                    &player.get_display_name(),
+                    Some(&target.get_display_name()),
+                );
+            }
+        } else {
+            for target in &targets {
+                target.send_message(
+                    &msg_text,
+                    MSG_COMMAND_INCOMING,
+                    sender_name,
+                    Some(&target.get_display_name()),
+                );
+            }
         }
 
         Ok(targets.len() as i32)
     }
 }
 
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).then(
-        argument_default_name(PlayersArgumentConsumer)
-            .then(argument(ARG_MESSAGE, MsgArgConsumer).execute(Executor)),
-    )
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Zero),
+    ));
+
+    for name in NAMES {
+        dispatcher.register(
+            command(name, DESCRIPTION).requires(PERMISSION).then(
+                argument("targets", EntityArgumentType::Players).then(
+                    argument("message", StringArgumentType::GreedyPhrase).executes(MsgExecutor),
+                ),
+            ),
+        );
+    }
 }

@@ -1,66 +1,63 @@
-use crate::command::args::GetCloned;
-use crate::command::args::gamemode::GamemodeArgumentConsumer;
+use std::sync::Arc;
 
-use crate::TextComponent;
 use pumpkin_data::translation;
+use pumpkin_util::PermissionLvl;
+use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry};
+use pumpkin_util::text::TextComponent;
 
-use crate::command::args::players::PlayersArgumentConsumer;
-
-use crate::command::args::{Arg, ConsumedArgs};
-use crate::command::dispatcher::CommandError::{InvalidConsumption, InvalidRequirement};
-use crate::command::tree::CommandTree;
-use crate::command::tree::builder::{argument, require};
-use crate::command::{CommandExecutor, CommandResult, CommandSender};
+use crate::command::argument_builder::{ArgumentBuilder, argument, command};
+use crate::command::argument_types::entity::EntityArgumentType;
+use crate::command::argument_types::gamemode::GameModeArgumentType;
+use crate::command::context::command_context::CommandContext;
+use crate::command::errors::error_types::CommandErrorType;
+use crate::command::node::dispatcher::CommandDispatcher;
+use crate::command::node::{CommandExecutor, CommandExecutorResult};
 use crate::entity::EntityBase;
 
-const NAMES: [&str; 1] = ["gamemode"];
-
 const DESCRIPTION: &str = "Change a player's gamemode.";
+const PERMISSION: &str = "minecraft:command.gamemode";
 
-const ARG_GAMEMODE: &str = "gamemode";
-const ARG_TARGET: &str = "target";
+const ERROR_NOT_PLAYER: CommandErrorType<0> = CommandErrorType::new(
+    translation::java::PERMISSIONS_REQUIRES_PLAYER,
+    translation::java::PERMISSIONS_REQUIRES_PLAYER,
+);
 
-struct TargetExecutor {
+struct GamemodeExecutor {
     is_self: bool,
 }
 
-impl CommandExecutor for TargetExecutor {
-    fn execute(
-        &self,
-        sender: &CommandSender,
-        server: &crate::server::Server,
-        args: &ConsumedArgs,
-    ) -> CommandResult {
-        let Some(Arg::GameMode(gamemode)) = args.get_cloned(&ARG_GAMEMODE) else {
-            return Err(InvalidConsumption(Some(ARG_GAMEMODE.into())));
-        };
+impl CommandExecutor for GamemodeExecutor {
+    fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        let gamemode = GameModeArgumentType::get(context, "gamemode")?;
 
         let targets = if self.is_self {
-            let Some(player) = sender.as_player() else {
-                return Err(InvalidRequirement);
-            };
-            &[player]
+            let player = context
+                .source
+                .output
+                .as_player()
+                .ok_or_else(|| ERROR_NOT_PLAYER.create_without_context())?;
+            vec![player]
         } else {
-            let Some(Arg::Players(targets)) = args.get(ARG_TARGET) else {
-                return Err(InvalidConsumption(Some(ARG_TARGET.into())));
-            };
-            targets.as_slice()
+            EntityArgumentType::get_players(context, "target")?
         };
 
         let mut succeeded: i32 = 0;
-        for target in targets {
+        let server = context.source.server();
+
+        for target in &targets {
             if target.gamemode.load() != gamemode {
                 target.set_gamemode(gamemode);
                 succeeded += 1;
                 let gamemode_string = format!("{gamemode:?}").to_lowercase();
                 let gamemode_string = format!("gameMode.{gamemode_string}");
-                // Checking if the target was the sender of this command.
-                let gamemode_comp = TextComponent::translate_cross(
-                    gamemode_string.clone(),
-                    gamemode_string.clone(),
-                    [],
-                );
-                if sender.as_player().as_ref() == Some(target) {
+                let gamemode_comp =
+                    TextComponent::translate_cross(gamemode_string.clone(), gamemode_string, []);
+                let is_self = context
+                    .source
+                    .output
+                    .as_player()
+                    .is_some_and(|p| Arc::ptr_eq(&p, target));
+                if is_self {
                     target.send_system_message(&TextComponent::translate_cross(
                         translation::java::COMMANDS_GAMEMODE_SUCCESS_SELF,
                         translation::bedrock::COMMANDS_GAMEMODE_SUCCESS_SELF,
@@ -74,11 +71,14 @@ impl CommandExecutor for TargetExecutor {
                             [gamemode_comp.clone()],
                         ));
                     }
-                    sender.send_message(TextComponent::translate_cross(
-                        translation::java::COMMANDS_GAMEMODE_SUCCESS_OTHER,
-                        translation::bedrock::COMMANDS_GAMEMODE_SUCCESS_OTHER,
-                        [target.get_display_name(), gamemode_comp],
-                    ));
+                    context.source.send_feedback(
+                        TextComponent::translate_cross(
+                            translation::java::COMMANDS_GAMEMODE_SUCCESS_OTHER,
+                            translation::bedrock::COMMANDS_GAMEMODE_SUCCESS_OTHER,
+                            [target.as_ref().get_display_name(), gamemode_comp],
+                        ),
+                        true,
+                    );
                 }
             }
         }
@@ -87,14 +87,21 @@ impl CommandExecutor for TargetExecutor {
     }
 }
 
-#[expect(clippy::redundant_closure_for_method_calls)]
-pub fn init_command_tree() -> CommandTree {
-    CommandTree::new(NAMES, DESCRIPTION).then(
-        argument(ARG_GAMEMODE, GamemodeArgumentConsumer)
-            .then(require(|sender| sender.is_player()).execute(TargetExecutor { is_self: true }))
-            .then(
-                argument(ARG_TARGET, PlayersArgumentConsumer)
-                    .execute(TargetExecutor { is_self: false }),
-            ),
-    )
+pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistry) {
+    registry.register_permission_or_panic(Permission::new(
+        PERMISSION,
+        DESCRIPTION,
+        PermissionDefault::Op(PermissionLvl::Two),
+    ));
+
+    dispatcher.register(
+        command("gamemode", DESCRIPTION).requires(PERMISSION).then(
+            argument("gamemode", GameModeArgumentType)
+                .executes(GamemodeExecutor { is_self: true })
+                .then(
+                    argument("target", EntityArgumentType::Players)
+                        .executes(GamemodeExecutor { is_self: false }),
+                ),
+        ),
+    );
 }

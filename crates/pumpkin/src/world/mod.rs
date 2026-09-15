@@ -10,26 +10,29 @@ use pumpkin_protocol::codec::data_component::data_to_proto_sound;
 use pumpkin_world::generation::proto_chunk::GenerationCache;
 use rayon::prelude::*;
 use std::sync::atomic::Ordering::Relaxed;
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, RwLock, Weak};
 use std::{
     collections::{BTreeMap, HashMap},
     sync::atomic::Ordering,
 };
 use tracing::{debug, error, info, trace, warn};
 
+mod active_chunks;
 pub mod chunker;
 pub mod explosion;
+pub mod generation_cache;
 pub mod loot;
 pub mod map;
 mod neighbor_updater;
 pub mod portal;
 pub mod raid;
+pub mod random_sequences;
+pub mod stopwatches;
 pub mod time;
 pub mod villager_poi;
 
 use crate::block::RandomTickArgs;
-use crate::world::chunker::get_view_distance;
-use crate::world::chunker::is_within_view_distance;
+use crate::world::chunker::is_within_chebyshev_distance;
 use crate::{block::BlockEvent, entity::item::ItemEntity};
 use crate::{
     block::{
@@ -40,12 +43,16 @@ use crate::{
     entity::{Entity, EntityBase, RemovalReason, player::Player, r#type::from_type},
     error::PumpkinError,
     net::{ClientPlatform, bedrock::BedrockClient, java::JavaClient},
-    plugin::player::{
-        player_change_world::PlayerChangeWorldEvent, player_join::PlayerJoinEvent,
-        player_leave::PlayerLeaveEvent, player_respawn::PlayerRespawnEvent,
+    plugin::{
+        block::block_break::BlockBreakEvent,
+        player::{
+            player_change_world::PlayerChangeWorldEvent, player_join::PlayerJoinEvent,
+            player_leave::PlayerLeaveEvent, player_respawn::PlayerRespawnEvent,
+        },
     },
     server::Server,
 };
+use active_chunks::{ActiveChunkTracker, ActivePlayerArea};
 use arc_swap::ArcSwap;
 use border::Worldborder;
 use bytes::BufMut;
@@ -56,12 +63,12 @@ pub use explosion::{
 use pumpkin_config::BasicConfiguration;
 use pumpkin_data::block_properties::{blocks_movement, is_air};
 use pumpkin_data::block_rotation::{Mirror, Rotation};
-use pumpkin_data::chunk_gen_settings::GenerationSettings;
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::MobCategory;
 use pumpkin_data::fluid::FluidState;
 use pumpkin_data::game_rules::{GameRule, GameRuleValue};
+use pumpkin_data::noise_settings::NoiseSettings;
 use pumpkin_data::{
     Block, BlockStateId,
     entity::{EntityStatus, EntityType},
@@ -74,12 +81,13 @@ use pumpkin_data::{
 };
 use pumpkin_data::{
     BlockDirection, BlockState, HorizontalFacingExt,
-    block_properties::{BlockProperties, ChestLikeProperties, ChestType},
+    block_properties::{ChestLikeProperties, ChestType},
     tag::Taggable,
     translation,
 };
 use pumpkin_inventory::crafting::recipe_provider::RecipeProvider;
 use pumpkin_inventory::screen_handler::InventoryPlayer;
+use pumpkin_inventory::{Clearable, Inventory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::bedrock::client::set_actor_data::{CSetActorData, PropertySyncData};
 use pumpkin_protocol::bedrock::client::start_game::{CStartGame, ServerTelemetryData};
@@ -117,17 +125,18 @@ use pumpkin_protocol::{
     java::{
         self,
         client::play::{
-            CBlockEntityData, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate,
-            CPlayerChatMessage, CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo,
-            CSetSelectedSlot, CSoundEffect, CSpawnEntity, FilterType, GameEvent, InitChat,
-            PlayerAction, PlayerInfoFlags,
+            CBlockEntityData, CDamageEvent, CEntityStatus, CGameEvent, CLogin, CMultiBlockUpdate,
+            CPlayerInfoUpdate, CRemoveEntities, CRemovePlayerInfo, CSetSelectedSlot, CSoundEffect,
+            CSpawnEntity, GameEvent, InitChat, PlayerAction, PlayerInfoFlags,
         },
         server::play::SChatMessage,
     },
 };
 use pumpkin_protocol::{
     codec::item_stack_seralizer::ItemStackSerializer,
-    java::client::play::{CBlockEvent, CRemoveMobEffect, CSetEquipment, CUpdateMobEffect},
+    java::client::play::{
+        CBlockEvent, CParticle, CRemoveMobEffect, CSetEquipment, CUpdateMobEffect,
+    },
 };
 use pumpkin_util::resource_location::ResourceLocation;
 use pumpkin_util::text::{TextComponent, color::NamedColor};
@@ -140,12 +149,10 @@ use pumpkin_util::{
     math::{get_section_cord, position::chunk_section_from_pos, vector2::Vector2},
     random::{RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
-use pumpkin_world::inventory::Clearable;
 use pumpkin_world::world::{GetBlockError, WorldPortalExt};
 use pumpkin_world::{
     CURRENT_BEDROCK_MC_VERSION, biome,
     chunk::{io::Dirtiable, palette::bedrock_water_state},
-    inventory::Inventory,
 };
 use pumpkin_world::{chunk::ChunkData, world::BlockAccessor};
 use pumpkin_world::{level::Level, tick::TickPriority};
@@ -161,9 +168,14 @@ pub mod bossbar;
 pub mod custom_bossbar;
 pub mod dragon_fight;
 pub mod end_podium;
+pub mod entity_tracker;
+pub mod environment;
 pub mod natural_spawner;
 pub mod scoreboard;
 pub mod weather;
+
+pub use environment::EnvironmentAttributes;
+pub use pumpkin_data::environment_attribute::{Activity, MoonPhase};
 
 use crate::world::natural_spawner::{SpawnState, spawn_for_chunk};
 use pumpkin_config::lighting::LightingEngineConfig;
@@ -191,7 +203,7 @@ fn bedrock_chest_block_actor(state_id: BlockStateId, position: BlockPos) -> Opti
     nbt.put_int("z", position.0.z);
     nbt.put_bool("isMovable", true);
 
-    let properties = ChestLikeProperties::from_state_id(state_id, block);
+    let properties = ChestLikeProperties::from_state_id(state_id);
     if properties.r#type != ChestType::Single {
         let direction = if properties.r#type == ChestType::Left {
             properties.facing.rotate_clockwise()
@@ -272,15 +284,19 @@ pub struct World {
     /// End Dragon fight manager (only present in `THE_END` dimension).
     pub dragon_fight: Option<std::sync::Mutex<dragon_fight::DragonFight>>,
     pub spawn_state: ArcSwap<SpawnState>,
-    pub active_chunks: ArcSwap<FxHashSet<Vector2<i32>>>,
+    pub active_chunks: RwLock<FxHashSet<Vector2<i32>>>,
+    active_chunk_tracker: std::sync::Mutex<ActiveChunkTracker>,
     pub forced_chunks: std::sync::Mutex<FxHashSet<Vector2<i32>>>,
     /// Block entities indexed by chunk, so ticking only visits the currently
     /// active chunks instead of scanning every loaded block entity each tick.
     pub block_entities: DashMap<Vector2<i32>, FxHashMap<BlockPos, Arc<dyn BlockEntity>>>,
+    pending_block_entity_migrations: crossbeam::queue::SegQueue<Vector2<i32>>,
     /// Persistent custom data for the world (matching Bukkit's `PersistentDataHolder`)
     pub custom_data: std::sync::Mutex<NbtCompound>,
     /// Persistent custom data for block entities at specific positions
     pub custom_block_entity_data: DashMap<BlockPos, NbtCompound>,
+    /// Entity tracker responsible for tracking entity visibility and sending delta/status packets to watchers.
+    pub entity_tracker: entity_tracker::EntityTracker,
 }
 
 #[derive(Clone, Copy)]
@@ -347,7 +363,7 @@ impl World {
         server: Weak<Server>,
     ) -> Self {
         // TODO
-        let generation_settings = GenerationSettings::from_dimension(&dimension);
+        let generation_settings = NoiseSettings::from_dimension(&dimension);
 
         // Load portal POI from disk (PoiStorage::new automatically loads from disk if files exist)
         let portal_poi = portal::PortalPoiStorage::new(level.level_folder.poi_folder.clone());
@@ -398,41 +414,103 @@ impl World {
             raids: std::sync::Mutex::new(raid::Raids::default()),
             dragon_fight,
             spawn_state: ArcSwap::new(Arc::new(SpawnState::empty())),
-            active_chunks: ArcSwap::new(Arc::new(FxHashSet::default())),
+            active_chunks: RwLock::new(FxHashSet::default()),
+            active_chunk_tracker: std::sync::Mutex::new(ActiveChunkTracker::default()),
             forced_chunks: std::sync::Mutex::new(FxHashSet::default()),
             server,
             block_entities: DashMap::new(),
+            pending_block_entity_migrations: crossbeam::queue::SegQueue::new(),
             custom_data: std::sync::Mutex::new(custom_data),
             custom_block_entity_data: DashMap::new(),
+            entity_tracker: entity_tracker::EntityTracker::new(),
         }
     }
 
     pub fn update_active_chunks(&self) {
-        let mut active_chunks = FxHashSet::default();
         let sim_dist = self.server.upgrade().map_or(10, |s| {
             s.advanced_config.networking.java.simulation_distance.get()
         }) as i32;
-        for player in self.players.load().iter() {
-            let center = player.get_entity().chunk_pos.load();
-            for dx in -sim_dist..=sim_dist {
-                for dy in -sim_dist..=sim_dist {
-                    active_chunks.insert(center.add_raw(dx, dy));
+        let players = self.players.load();
+        let forced_chunks = self
+            .forced_chunks
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        let mut tracker = self
+            .active_chunk_tracker
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut active_chunks = self
+            .active_chunks
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut newly_active = Vec::new();
+        let mut current_players = FxHashSet::default();
+
+        let spectators_generate_chunks =
+            self.level_info.load().game_rules.spectators_generate_chunks;
+
+        for player in players.iter() {
+            if player.is_spectator() && !spectators_generate_chunks {
+                continue;
+            }
+            let id = player.gameprofile.id;
+            current_players.insert(id);
+            tracker.update_player(
+                id,
+                ActivePlayerArea {
+                    center: player.get_entity().chunk_pos.load(),
+                    simulation_distance: sim_dist,
+                },
+                &mut active_chunks,
+                &mut newly_active,
+            );
+        }
+        let removed_players: Vec<_> = tracker
+            .players
+            .keys()
+            .filter(|id| !current_players.contains(id))
+            .copied()
+            .collect();
+        for id in removed_players {
+            tracker.remove_player(id, &mut active_chunks);
+        }
+        tracker.sync_forced_chunks(&forced_chunks, &mut active_chunks, &mut newly_active);
+
+        for pos in newly_active {
+            if self.level.is_chunk_loaded(&pos) && tracker.loaded_active_chunks.insert(pos) {
+                self.migrate_pending_block_entities(pos);
+            }
+        }
+        for change in self.level.loaded_chunk_changes() {
+            match change {
+                pumpkin_world::level::LoadedChunkChange::Loaded(pos) => {
+                    if active_chunks.contains(&pos)
+                        && self.level.is_chunk_loaded(&pos)
+                        && tracker.loaded_active_chunks.insert(pos)
+                    {
+                        self.migrate_pending_block_entities(pos);
+                    }
+                }
+                pumpkin_world::level::LoadedChunkChange::Unloaded(pos) => {
+                    if !self.level.is_chunk_loaded(&pos) {
+                        tracker.loaded_active_chunks.remove(&pos);
+                    }
                 }
             }
         }
-        if let Ok(forced) = self.forced_chunks.lock() {
-            active_chunks.extend(forced.iter().copied());
+        let mut pending_migrations = FxHashSet::default();
+        while let Some(pos) = self.pending_block_entity_migrations.pop() {
+            pending_migrations.insert(pos);
         }
-
-        let mut spawnable_chunks = 0;
-        for pos in &active_chunks {
-            if self.level.is_chunk_loaded(pos) {
-                spawnable_chunks += 1;
-                self.migrate_pending_block_entities(*pos);
+        for pos in pending_migrations {
+            if active_chunks.contains(&pos) && self.level.is_chunk_loaded(&pos) {
+                self.migrate_pending_block_entities(pos);
             }
         }
-
-        self.active_chunks.store(Arc::new(active_chunks));
+        let spawnable_chunks = tracker.loaded_active_chunks.len() as i32;
+        drop(active_chunks);
+        drop(tracker);
 
         self.spawn_state.store(Arc::new(SpawnState::new(
             spawnable_chunks,
@@ -468,6 +546,29 @@ impl World {
             level_info.spawn_yaw,
             level_info.spawn_pitch,
         )
+    }
+
+    #[must_use]
+    pub fn is_in_spawn_protection(&self, player: &Player, position: &BlockPos) -> bool {
+        if player.permission_lvl.load() == pumpkin_util::permission::PermissionLvl::Four {
+            return false;
+        }
+
+        let Some(server) = self.server.upgrade() else {
+            return false;
+        };
+
+        let radius = server.basic_config.spawn_protection;
+        if radius == 0 {
+            return false;
+        }
+
+        let radius = i32::try_from(radius).unwrap_or(i32::MAX);
+        let spawn = self.get_spawn_location().0;
+        let dx = (spawn.0.x - position.0.x).abs();
+        let dz = (spawn.0.z - position.0.z).abs();
+
+        dx <= radius && dz <= radius
     }
 
     pub async fn shutdown(&self) {
@@ -547,14 +648,15 @@ impl World {
         }
     }
 
-    /// Sends an entity status update to all players tracking the specified entity.
-    pub fn send_entity_status(
+    /// Broadcasts an entity status update / event to all players tracking the specified entity,
+    /// and to the entity itself if it is a player.
+    /// Matching Vanilla's `ServerLevel.broadcastEntityEvent(entity, event)`.
+    pub fn broadcast_entity_event(
         &self,
         entity: &Entity,
         java_status: EntityStatus,
         bedrock_status: Option<ActorEventID>,
     ) {
-        let chunk_pos = entity.chunk_pos.load();
         let je_packet = CEntityStatus::new(entity.entity_id, java_status as i8);
         if let Some(be_event) = bedrock_status {
             let be_packet = SActorEvent {
@@ -563,14 +665,44 @@ impl World {
                 data: VarInt(0),
                 fire_at_position: None,
             };
-            self.broadcast_to_chunk_editioned(chunk_pos, &je_packet, &be_packet);
+            self.send_to_tracking_players_and_self_editioned(entity, &je_packet, &be_packet);
         } else {
-            self.broadcast_to_chunk(chunk_pos, &je_packet);
+            self.send_to_tracking_players_and_self(entity, &je_packet);
         }
     }
 
+    /// Broadcasts a damage event to all players tracking the specified entity,
+    /// and to the entity itself if it is a player.
+    /// Matching Vanilla's `ServerLevel.broadcastDamageEvent(entity, source)`.
+    pub fn broadcast_damage_event(
+        &self,
+        entity: &Entity,
+        damage_type_id: i32,
+        source_entity_id: Option<i32>,
+        cause_entity_id: Option<i32>,
+        position: Option<Vector3<f64>>,
+    ) {
+        let je_packet = CDamageEvent::new(
+            entity.entity_id.into(),
+            damage_type_id.into(),
+            source_entity_id.map(Into::into),
+            cause_entity_id.map(Into::into),
+            position,
+        );
+        self.send_to_tracking_players_and_self(entity, &je_packet);
+    }
+
+    /// Sends an entity status update to all players tracking the specified entity.
+    pub fn send_entity_status(
+        &self,
+        entity: &Entity,
+        java_status: EntityStatus,
+        bedrock_status: Option<ActorEventID>,
+    ) {
+        self.broadcast_entity_event(entity, java_status, bedrock_status);
+    }
+
     pub fn send_remove_mob_effect(&self, entity: &Entity, effect_type: &'static StatusEffect) {
-        let chunk_pos = entity.chunk_pos.load();
         let je_packet =
             CRemoveMobEffect::new(entity.entity_id.into(), VarInt(i32::from(effect_type.id)));
 
@@ -584,11 +716,10 @@ impl World {
             tick: VarULong(0),
             ambient: false,
         };
-        self.broadcast_to_chunk_editioned(chunk_pos, &je_packet, &be_packet);
+        self.send_to_tracking_players_and_self_editioned(entity, &je_packet, &be_packet);
     }
 
     pub fn send_add_mob_effect(&self, entity: &Entity, effect: &pumpkin_data::potion::Effect) {
-        let chunk_pos = entity.chunk_pos.load();
         let mut flags: i8 = 0;
         if effect.ambient {
             flags |= 0x01;
@@ -619,7 +750,91 @@ impl World {
             ambient: effect.ambient,
         };
 
-        self.broadcast_to_chunk_editioned(chunk_pos, &je_packet, &be_packet);
+        self.send_to_tracking_players_and_self_editioned(entity, &je_packet, &be_packet);
+    }
+
+    pub fn send_to_tracking_players<P: ClientPacket + Sync>(&self, entity: &Entity, packet: &P) {
+        if let Some(tracked) = self.entity_tracker.get_tracked_entity(entity.entity_id) {
+            tracked.send_to_tracking_players(packet, self);
+        }
+    }
+
+    pub fn send_to_tracking_players_bedrock<P: BClientPacket + Sync>(
+        &self,
+        entity: &Entity,
+        packet: &P,
+    ) {
+        if let Some(tracked) = self.entity_tracker.get_tracked_entity(entity.entity_id) {
+            tracked.send_to_tracking_players_bedrock(packet, self);
+        }
+    }
+
+    pub fn send_to_tracking_players_editioned<J: ClientPacket + Sync, B: BClientPacket + Sync>(
+        &self,
+        entity: &Entity,
+        je_packet: &J,
+        be_packet: &B,
+    ) {
+        if let Some(tracked) = self.entity_tracker.get_tracked_entity(entity.entity_id) {
+            tracked.send_to_tracking_players_editioned(je_packet, be_packet, self);
+        }
+    }
+
+    pub fn send_to_tracking_players_and_self<P: ClientPacket + Sync>(
+        &self,
+        entity: &Entity,
+        packet: &P,
+    ) {
+        if let Some(tracked) = self.entity_tracker.get_tracked_entity(entity.entity_id) {
+            tracked.send_to_tracking_players_and_self(packet, self);
+        }
+    }
+
+    pub fn send_to_tracking_players_and_self_editioned<
+        J: ClientPacket + Sync,
+        B: BClientPacket + Sync,
+    >(
+        &self,
+        entity: &Entity,
+        je_packet: &J,
+        be_packet: &B,
+    ) {
+        if let Some(tracked) = self.entity_tracker.get_tracked_entity(entity.entity_id) {
+            tracked.send_to_tracking_players_and_self_editioned(je_packet, be_packet, self);
+        }
+    }
+
+    pub fn send_to_tracking_players_filtered<P: ClientPacket + Sync, F: Fn(&Player) -> bool>(
+        &self,
+        entity: &Entity,
+        packet: &P,
+        filter: F,
+    ) {
+        if let Some(tracked) = self.entity_tracker.get_tracked_entity(entity.entity_id) {
+            tracked.send_to_tracking_players_filtered(packet, self, filter);
+        }
+    }
+
+    pub fn send_to_tracking_players_filtered_editioned<
+        J: ClientPacket + Sync,
+        B: BClientPacket + Sync,
+        F: Fn(&Player) -> bool,
+    >(
+        &self,
+        entity: &Entity,
+        je_packet: &J,
+        be_packet: &B,
+        filter: F,
+    ) {
+        if let Some(tracked) = self.entity_tracker.get_tracked_entity(entity.entity_id) {
+            tracked.send_to_tracking_players_filtered_editioned(je_packet, be_packet, self, filter);
+        }
+    }
+
+    #[must_use]
+    pub fn is_tracked_by_any_player(&self, entity: &Entity) -> bool {
+        self.entity_tracker
+            .is_tracked_by_any_player(entity.entity_id)
     }
 
     pub fn set_difficulty(&self, difficulty: Difficulty) {
@@ -849,7 +1064,35 @@ impl World {
         );
     }
 
-    pub async fn broadcast_secure_player_chat(
+    pub fn broadcast_chat_message(
+        &self,
+        message: &crate::net::chat::PlayerChatMessage,
+        is_filtered: impl Fn(&Player) -> bool,
+        sender_player: Option<&Arc<Player>>,
+        chat_type: VarInt,
+        sender_name: &TextComponent,
+        target_name: Option<&TextComponent>,
+    ) {
+        let tracked = crate::net::chat::OutgoingChatMessage::create(message.clone());
+        let mut was_fully_filtered = false;
+
+        let players = self.players.load();
+        for player in players.iter() {
+            let filtered = is_filtered(player);
+            tracked.send_to_player(player, filtered, chat_type, sender_name, target_name);
+            was_fully_filtered |= filtered && message.is_fully_filtered();
+        }
+
+        if was_fully_filtered && let Some(sender) = sender_player {
+            let filter_notice =
+                TextComponent::translate(pumpkin_data::translation::java::CHAT_FILTERED_FULL, [])
+                    .color_named(pumpkin_util::text::color::NamedColor::Red)
+                    .italic();
+            sender.send_system_message(&filter_notice);
+        }
+    }
+
+    pub fn broadcast_secure_player_chat(
         &self,
         sender: &Arc<Player>,
         chat_message: &SChatMessage<'_>,
@@ -865,79 +1108,36 @@ impl World {
                 .signature_cache
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            cache.last_seen.clone()
+            cache.last_seen.as_ref().to_vec()
         };
 
-        for recipient in self.players.load().iter() {
-            let messages_received: i32 = recipient
-                .chat_session
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .messages_received;
-            let packet = &CPlayerChatMessage::new(
-                VarInt(messages_received),
-                sender.gameprofile.id,
-                VarInt(messages_sent),
-                chat_message.signature.map(std::convert::Into::into),
-                chat_message.message.into(),
-                chat_message.timestamp,
-                chat_message.salt,
-                sender_last_seen.indexed_for(recipient),
-                Some(decorated_message.clone()),
-                FilterType::PassThrough,
-                (RAW + 1).into(), // Custom registry chat_type with no sender name
-                TextComponent::empty(), // Not needed since we're injecting the name in the message for custom formatting
-                None,
-            );
-            let packet_data = recipient.client.java().map_or_else(
-                || {
-                    JavaClient::serialize_packet_for_version(
-                        packet,
-                        recipient.client.java_version(),
-                    )
-                },
-                |j| j.serialize_packet(packet),
-            );
-            if let Ok(data) = packet_data {
-                recipient.client.enqueue_packet(data).await;
-            }
+        let link = crate::net::chat::SignedMessageLink::new(
+            messages_sent,
+            sender.gameprofile.id,
+            Uuid::nil(),
+        );
+        let signed_body = crate::net::chat::SignedMessageBody::new(
+            chat_message.message.to_string(),
+            chat_message.timestamp,
+            chat_message.salt,
+            sender_last_seen,
+        );
+        let player_chat_msg = crate::net::chat::PlayerChatMessage::new(
+            link,
+            chat_message.signature.map(std::convert::Into::into),
+            signed_body,
+            Some(decorated_message.clone()),
+            crate::net::chat::FilterMask::PassThrough,
+        );
 
-            if let Some(signature) = chat_message.signature {
-                let mut cache = recipient
-                    .signature_cache
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                cache.add_seen_signature(signature);
-                cache.last_seen_validator.add_pending(signature);
-                let tracked_count = cache.last_seen_validator.tracked_messages_count();
-                drop(cache);
-
-                if tracked_count > 4096 {
-                    recipient.kick(
-                        crate::net::DisconnectReason::Kicked,
-                        &TextComponent::translate_cross(
-                            pumpkin_data::translation::java::MULTIPLAYER_DISCONNECT_TOO_MANY_PENDING_CHATS,
-                            pumpkin_data::translation::java::MULTIPLAYER_DISCONNECT_TOO_MANY_PENDING_CHATS,
-                            [],
-                        ),
-                    );
-                }
-            }
-
-            if recipient.gameprofile.id != sender.gameprofile.id {
-                // Sender may update recipient on signatures recipient hasn't seen
-                recipient
-                    .signature_cache
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .cache_signatures(sender_last_seen.as_ref());
-            }
-            recipient
-                .chat_session
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .messages_received += 1;
-        }
+        self.broadcast_chat_message(
+            &player_chat_msg,
+            Player::is_text_filtering_enabled,
+            Some(sender),
+            (RAW + 1).into(),
+            &TextComponent::empty(),
+            None,
+        );
 
         sender
             .chat_session
@@ -1067,7 +1267,7 @@ impl World {
         category: SoundCategory,
         position: &Vector3<f64>,
     ) {
-        let seed = rng().random::<f64>();
+        let seed = rng().random::<i64>();
         let packet = CSoundEffect::new(
             data_to_proto_sound(sound),
             category,
@@ -1079,6 +1279,27 @@ impl World {
         self.broadcast_packet_all(&packet);
     }
 
+    pub fn play_sound_event_expect(
+        &self,
+        player: &Player,
+        sound: &pumpkin_data::data_component_impl::IdOr<
+            pumpkin_data::data_component_impl::SoundEvent,
+        >,
+        category: SoundCategory,
+        position: &Vector3<f64>,
+    ) {
+        let seed = rng().random::<i64>();
+        let packet = CSoundEffect::new(
+            data_to_proto_sound(sound),
+            category,
+            position,
+            1.0,
+            1.0,
+            seed,
+        );
+        self.broadcast_packet_except(&[player.gameprofile.id], &packet);
+    }
+
     pub fn play_sound_fine(
         &self,
         sound: Sound,
@@ -1088,6 +1309,52 @@ impl World {
         pitch: f32,
     ) {
         self.play_sound_raw(sound as u16, category, position, volume, pitch);
+    }
+
+    /// Plays a custom sound event by identifier for all players in range.
+    pub fn play_custom_sound(
+        &self,
+        sound_name: &str,
+        category: SoundCategory,
+        position: &Vector3<f64>,
+        volume: f32,
+        pitch: f32,
+    ) {
+        let seed = rand::random::<i64>();
+        let packet = CSoundEffect::new(
+            pumpkin_protocol::IdOr::Value(pumpkin_protocol::SoundEvent {
+                sound_name: sound_name.into(),
+                range: None,
+            }),
+            category,
+            position,
+            volume,
+            pitch,
+            seed,
+        );
+        self.broadcast_packet_all(&packet);
+    }
+
+    /// Spawns a cluster of particles in the world for all players in range.
+    pub fn spawn_particles(
+        &self,
+        particle: pumpkin_data::particle::Particle,
+        pos: Vector3<f64>,
+        count: u32,
+        offset: Vector3<f32>,
+        max_speed: f32,
+    ) {
+        let packet = CParticle::new(
+            false,
+            false,
+            pos,
+            offset,
+            max_speed,
+            count as i32,
+            (particle.to_id() as i32).into(),
+            &[],
+        );
+        self.broadcast_packet_all(&packet);
     }
 
     /// Plays a Bedrock level sound for players close enough to hear it.
@@ -1110,7 +1377,7 @@ impl World {
         let chunk_pos = BlockPos::floored_v(*position).chunk_position();
 
         for player in self.players.load().iter() {
-            if is_within_view_distance(chunk_pos, player.get_entity().chunk_pos.load(), 1)
+            if is_within_chebyshev_distance(chunk_pos, player.get_entity().chunk_pos.load(), 1)
                 && let ClientPlatform::Bedrock(client) = player.client.as_ref()
                 && let Ok(data) = client.serialize_packet(&packet)
             {
@@ -1137,7 +1404,7 @@ impl World {
         volume: f32,
         pitch: f32,
     ) {
-        let seed = rand::rng().random::<f64>();
+        let seed = rand::rng().random::<i64>();
         let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
 
         // Calculate the number of chunks the sound can be heard from based on its volume.
@@ -1148,7 +1415,7 @@ impl World {
         let recipients = players.iter().filter(|p| {
             let center = p.get_entity().chunk_pos.load();
             // If the sound reaches their chunk, send it!
-            is_within_view_distance(chunk_pos, center, audible_chunks)
+            is_within_chebyshev_distance(chunk_pos, center, audible_chunks)
         });
 
         let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
@@ -1164,7 +1431,7 @@ impl World {
         volume: f32,
         pitch: f32,
     ) {
-        let seed = rand::rng().random::<f64>();
+        let seed = rand::rng().random::<i64>();
         let packet = CSoundEffect::new(IdOr::Id(sound_id), category, position, volume, pitch, seed);
 
         let audible_chunks = f64::from(volume.max(1.0)).ceil() as i32;
@@ -1178,7 +1445,7 @@ impl World {
             }
 
             let center = p.get_entity().chunk_pos.load();
-            is_within_view_distance(chunk_pos, center, audible_chunks)
+            is_within_chebyshev_distance(chunk_pos, center, audible_chunks)
         });
 
         let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
@@ -1271,7 +1538,10 @@ impl World {
 
         let entities_to_tick = self.entities.load();
         let entity_count = entities_to_tick.len();
-        let active_chunks = self.active_chunks.load();
+        let active_chunks = self
+            .active_chunks
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let level_for_entities = self.level.clone();
         let entity_handle = handle.clone();
 
@@ -1324,10 +1594,20 @@ impl World {
             });
         let entity_elapsed = t_entities.elapsed();
 
+        self.entity_tracker.update_all(self);
+
         let mut block_entities: Vec<Arc<dyn BlockEntity>> = Vec::new();
-        for chunk_pos in active_chunks.iter() {
-            if let Some(chunk_block_entities) = self.block_entities.get(chunk_pos) {
-                block_entities.extend(chunk_block_entities.values().cloned());
+        if self.block_entities.len() < active_chunks.len() {
+            for chunk_block_entities in &self.block_entities {
+                if active_chunks.contains(chunk_block_entities.key()) {
+                    block_entities.extend(chunk_block_entities.values().cloned());
+                }
+            }
+        } else {
+            for chunk_pos in active_chunks.iter() {
+                if let Some(chunk_block_entities) = self.block_entities.get(chunk_pos) {
+                    block_entities.extend(chunk_block_entities.values().cloned());
+                }
             }
         }
         let block_entity_count = block_entities.len();
@@ -1340,6 +1620,10 @@ impl World {
                 be.tick(self);
             }
         });
+        // Drained after all ticks, so changes (hopper -> chest) land in the same tick.
+        let guard = be_handle.enter();
+        self.flush_comparator_updates(&block_entities);
+        drop(guard);
         let block_entity_elapsed = t_be.elapsed();
 
         self.level
@@ -1451,9 +1735,9 @@ impl World {
                 let mut java_recipients = Vec::new();
 
                 let recipients = players.iter().filter(|p| {
-                    let center = p.get_entity().chunk_pos.load();
-                    let view_distance = get_view_distance(p).get() as i32;
-                    is_within_view_distance(chunk_pos, center, view_distance)
+                    p.watched_section
+                        .load()
+                        .is_within_distance(chunk_pos.x, chunk_pos.y)
                 });
 
                 let mut bedrock_packets = Vec::new();
@@ -1530,9 +1814,10 @@ impl World {
             if !bedrock_water_packets.is_empty() {
                 let players = self.players.load();
                 let recipients = players.iter().filter(|player| {
-                    let center = player.get_entity().chunk_pos.load();
-                    let view_distance = get_view_distance(player).get() as i32;
-                    is_within_view_distance(chunk_pos, center, view_distance)
+                    player
+                        .watched_section
+                        .load()
+                        .is_within_distance(chunk_pos.x, chunk_pos.y)
                 });
                 for player in recipients {
                     if let ClientPlatform::Bedrock(client) = player.client.as_ref() {
@@ -1641,9 +1926,13 @@ impl World {
     #[expect(clippy::too_many_lines)]
     pub fn tick_chunks(self: &Arc<Self>, server: &Arc<Server>) {
         const BATCH_SIZE: usize = 32;
+        const INHABITED_TIME_BATCH_SIZE: usize = 1024;
         let random_tick_speed = self.level_info.load().game_rules.random_tick_speed;
 
-        let active_chunks = self.active_chunks.load();
+        let active_chunks = self
+            .active_chunks
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let tick_data = self.level.get_tick_data(&active_chunks, random_tick_speed);
         let handle = server.runtime.clone();
 
@@ -1774,14 +2063,18 @@ impl World {
             });
         }
 
-        // Update chunk inhabited time for active chunks in parallel with Rayon
+        // Batch these cheap lookups and atomic increments to avoid waking Rayon
+        // workers for tiny tasks every tick, while retaining parallelism for large sets.
         let loaded_chunks = self.level.loaded_chunks.clone();
         let active_chunks_vec: Vec<_> = active_chunks.iter().copied().collect();
-        active_chunks_vec.par_iter().for_each(|pos| {
-            if let Some(chunk) = loaded_chunks.get(pos) {
-                chunk.inhabited_time.fetch_add(1, Relaxed);
-            }
-        });
+        active_chunks_vec
+            .par_iter()
+            .with_min_len(INHABITED_TIME_BATCH_SIZE)
+            .for_each(|pos| {
+                if let Some(chunk) = loaded_chunks.get(pos) {
+                    chunk.inhabited_time.fetch_add(1, Relaxed);
+                }
+            });
     }
 
     pub fn check_fluid_collision(&self, bounding_box: BoundingBox) -> bool {
@@ -1802,6 +2095,28 @@ impl World {
                         if height >= bounding_box.min.y {
                             return true;
                         }
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
+    pub fn contains_any_liquid(&self, bounding_box: BoundingBox) -> bool {
+        let min_x = bounding_box.min.x.floor() as i32;
+        let max_x = bounding_box.max.x.ceil() as i32;
+        let min_y = bounding_box.min.y.floor() as i32;
+        let max_y = bounding_box.max.y.ceil() as i32;
+        let min_z = bounding_box.min.z.floor() as i32;
+        let max_z = bounding_box.max.z.ceil() as i32;
+
+        for x in min_x..max_x {
+            for y in min_y..max_y {
+                for z in min_z..max_z {
+                    let pos = BlockPos::new(x, y, z);
+                    if self.get_fluid_and_fluid_state(&pos).0.id != Fluid::EMPTY.id {
+                        return true;
                     }
                 }
             }
@@ -2943,6 +3258,9 @@ impl World {
         );
 
         self.send_player_equipment(&player);
+        player
+            .living_entity
+            .send_current_equipment_attribute_modifiers();
 
         // Broadcast metadata to Java players so they can correctly interact with the new player
         let skin_parts = player.config.load().skin_parts;
@@ -3128,6 +3446,8 @@ impl World {
                 true,
             ))
             .await;
+
+        self.pair_new_player_with_tracked_entities(player);
 
         // Send the current ticking state to the new player so they are in sync.
         server.tick_rate_manager.update_joining_player(player).await;
@@ -3729,6 +4049,9 @@ impl World {
         player.send_active_effects();
         player.breath_manager.send_air_supply(player);
         self.send_player_equipment(player);
+        player
+            .living_entity
+            .send_current_equipment_attribute_modifiers();
 
         if let crate::net::ClientPlatform::Java(java_client) = player.client.as_ref()
             && server.advanced_config.recipe.send_recipes
@@ -3789,13 +4112,7 @@ impl World {
             container_id: 0,
         };
 
-        let chunk_pos = from.get_entity().chunk_pos.load();
-        self.broadcast_to_chunk_except_editioned(
-            chunk_pos,
-            &[from.get_entity().entity_uuid],
-            &je_packet,
-            &be_mob_equipment,
-        );
+        self.send_to_tracking_players_editioned(from.get_entity(), &je_packet, &be_mob_equipment);
     }
 
     pub fn send_world_info(
@@ -3941,6 +4258,87 @@ impl World {
                 VarInt(particle as i32),
                 sound,
             ));
+        }
+    }
+
+    pub(crate) fn despawn_dead_java_player_for_bedrock(&self, subject: &Entity) {
+        let Some(player) = self.get_player_by_id(subject.entity_id) else {
+            return;
+        };
+        if matches!(player.client.as_ref(), ClientPlatform::Java(_)) {
+            self.broadcast_to_chunk_bedrock(
+                subject.chunk_pos.load(),
+                &CRemoveActor::new(VarLong(subject.entity_id.into())),
+            );
+        }
+    }
+
+    async fn refresh_java_player_for_bedrock(&self, subject: &Player) {
+        if !matches!(subject.client.as_ref(), ClientPlatform::Java(_)) {
+            return;
+        }
+
+        let entity = subject.get_entity();
+        let entity_id = subject.entity_id();
+        let position = entity.pos.load();
+        let velocity = entity.velocity.load();
+        let player_list = CPlayerList {
+            action: CPlayerList::ACTION_ADD,
+            entries: vec![PlayerListEntry {
+                uuid: subject.gameprofile.id,
+                entity_unique_id: VarLong(entity_id.into()),
+                username: subject.gameprofile.name.clone(),
+                xuid: String::new(),
+                platform_chat_id: String::new(),
+                build_platform: BuildPlatform::Unknown,
+                skin: (**subject.bedrock_skin.load()).clone(),
+                is_teacher: false,
+                is_host: false,
+                is_sub_client: false,
+                player_color: [0; 4],
+            }],
+        };
+        let add_player = CAddPlayer {
+            uuid: subject.gameprofile.id,
+            player_name: subject.gameprofile.name.clone(),
+            target_runtime_id: VarULong(entity_id as u64),
+            platform_chat_id: String::new(),
+            position: Vector3::new(position.x as f32, position.y as f32, position.z as f32),
+            velocity: Vector3::new(velocity.x as f32, velocity.y as f32, velocity.z as f32),
+            rotation: Vector2::new(entity.pitch.load(), entity.yaw.load()),
+            y_head_rotation: entity.head_yaw.load(),
+            carried_item: NetworkItemStackDescriptor::default(),
+            player_game_type: subject.gamemode.load().into(),
+            entity_data: entity.bedrock_metadata(),
+            synced_properties: PropertySyncData::default(),
+            abilities_data: pumpkin_protocol::bedrock::client::SerializedAbilitiesData {
+                target_player_raw_id: entity_id as i64,
+                player_permissions:
+                    pumpkin_protocol::bedrock::client::PlayerPermissionLevel::Visitor,
+                command_permissions: pumpkin_protocol::bedrock::client::CommandPermissionLevel::Any,
+                layers: vec![
+                    pumpkin_protocol::bedrock::client::SerializedAbilitiesDataSerializedLayer {
+                        serialized_layer: 0,
+                        abilities_set: 0,
+                        ability_value: 0,
+                        fly_speed: 0.05,
+                        vertical_fly_speed: 0.05,
+                        walk_speed: 0.1,
+                    },
+                ],
+            },
+            actor_links: Vec::new(),
+            device_id: String::new(),
+            build_platform: BuildPlatform::Unknown,
+        };
+        let remove = CRemoveActor::new(VarLong(entity_id.into()));
+
+        for recipient in self.players.load().iter() {
+            if let ClientPlatform::Bedrock(client) = recipient.client.as_ref() {
+                client.send_packet(&remove).await;
+                client.send_packet(&player_list).await;
+                client.send_packet(&add_player).await;
+            }
         }
     }
 
@@ -4096,11 +4494,7 @@ impl World {
                         // observer sees the player in a world whose chunk manager doesn't match.
                         self.remove_player(player, false).await;
                         player.unload_watched_chunks(self).await;
-                        player
-                            .chunk_manager
-                            .lock()
-                            .unwrap_or_else(std::sync::PoisonError::into_inner)
-                            .change_world(&self.level, destination.clone());
+                        player.change_world_chunks(&self.level, &destination);
                         player.living_entity.entity.set_world(destination.clone());
                         destination.players.rcu(|current_list| {
                             let mut new_list = (**current_list).clone();
@@ -4234,6 +4628,8 @@ impl World {
 
         // Send teleport packet after at least the center chunk was delivered
         player.request_teleport(position, yaw, pitch);
+
+        target_world.refresh_java_player_for_bedrock(player).await;
     }
 
     /// Returns true if enough players are sleeping and we should skip the night.
@@ -4271,22 +4667,13 @@ impl World {
 
     // NOTE: This function doesn't actually await on anything, it just spawns two tokio tasks
     /// IMPORTANT: Chunks have to be non-empty
-    fn spawn_world_entity_chunks(
-        self: &Arc<Self>,
-        player: Arc<Player>,
-        chunks: Vec<Vector2<i32>>,
-        center_chunk: Vector2<i32>,
-    ) {
+    fn spawn_world_entity_chunks(self: &Arc<Self>, player: Arc<Player>, chunks: Vec<Vector2<i32>>) {
         #[cfg(debug_assertions)]
         let inst = std::time::Instant::now();
 
-        // Sort such that the first chunks are closest to the center.
-        let mut chunks = chunks;
-        chunks.sort_unstable_by_key(|pos| {
-            let rel_x = pos.x - center_chunk.x;
-            let rel_z = pos.y - center_chunk.y;
-            rel_x * rel_x + rel_z * rel_z
-        });
+        // Note: `chunks` originates from `Cylindrical::changed_chunks`, which is
+        // already ordered from closest to farthest from center by the precompiled
+        // cylindrical chunk view LUT. No re-sorting needed.
 
         let mut entity_receiver = self.level.receive_entity_chunks(chunks);
         let level = self.level.clone();
@@ -4337,8 +4724,6 @@ impl World {
                             .lock()
                             .unwrap_or_else(std::sync::PoisonError::into_inner),
                     );
-                    let mut entities_to_add: Vec<Arc<dyn EntityBase>> =
-                        Vec::with_capacity(entity_nbts.len());
                     for entity_nbt in &entity_nbts {
                         let Some(id) = entity_nbt.get_string("id") else {
                             debug!("Entity has no ID");
@@ -4367,30 +4752,11 @@ impl World {
                         // stale data.
                         base_entity.velocity.store(Vector3::default());
 
-                        player.client.enqueue_spawn_packet(&entity);
-                        player.try_restore_vehicle(&entity);
-                        entities_to_add.push(entity);
-                    }
-
-                    if !entities_to_add.is_empty() {
-                        world.entities.rcu(|current_entities| {
-                            let mut new_entities = (**current_entities).clone();
-                            new_entities.extend(entities_to_add.iter().cloned());
-                            new_entities
-                        });
-                    }
-                } else {
-                    // The chunk's entities are already live (another watcher loaded
-                    // them). Just send this player the spawn packets for the live
-                    // entities currently in this chunk.
-                    for entity in world.entities.load().iter() {
-                        let base_entity = entity.get_entity();
-                        if base_entity.chunk_pos.load() == position {
-                            player.client.enqueue_spawn_packet(entity);
-                            player.try_restore_vehicle(entity);
-                        }
+                        // Tracker owns pairing: spawn packets for every watcher.
+                        world.add_entity_silent(entity);
                     }
                 }
+                // Already-live chunk: tracker pairs on its next pass.
             }
 
             #[cfg(debug_assertions)]
@@ -4572,10 +4938,17 @@ impl World {
             .collect()
     }
 
-    pub fn get_closest_player(&self, pos: Vector3<f64>, radius: f64) -> Option<Arc<Player>> {
-        let players = self.get_nearby_players(pos, radius);
-        players
-            .iter()
+    /// Closest player that satisfies `predicate`. Unlike [`Self::get_closest_player`], a nearer
+    /// player failing the predicate does not hide a farther one that passes it.
+    pub fn get_nearest_player(
+        &self,
+        pos: Vector3<f64>,
+        radius: f64,
+        predicate: impl Fn(&Arc<Player>) -> bool,
+    ) -> Option<Arc<Player>> {
+        self.get_nearby_players(pos, radius)
+            .into_iter()
+            .filter(|player| predicate(player))
             .min_by(|a, b| {
                 a.get_entity()
                     .pos
@@ -4583,7 +4956,34 @@ impl World {
                     .squared_distance_to_vec(&pos)
                     .total_cmp(&b.get_entity().pos.load().squared_distance_to_vec(&pos))
             })
-            .cloned()
+    }
+
+    /// Closest entity that satisfies `predicate`. See [`Self::get_nearest_player`] for why this is
+    /// not [`Self::get_closest_entity`] followed by a check.
+    pub fn get_nearest_entity(
+        &self,
+        pos: Vector3<f64>,
+        radius: f64,
+        entity_types: Option<&[&'static EntityType]>,
+        predicate: impl Fn(&Arc<dyn EntityBase>) -> bool,
+    ) -> Option<Arc<dyn EntityBase>> {
+        self.get_nearby_entities(pos, radius)
+            .into_values()
+            .filter(|entity| {
+                entity_types.is_none_or(|types| types.contains(&entity.get_entity().entity_type))
+                    && predicate(entity)
+            })
+            .min_by(|a, b| {
+                a.get_entity()
+                    .pos
+                    .load()
+                    .squared_distance_to_vec(&pos)
+                    .total_cmp(&b.get_entity().pos.load().squared_distance_to_vec(&pos))
+            })
+    }
+
+    pub fn get_closest_player(&self, pos: Vector3<f64>, radius: f64) -> Option<Arc<Player>> {
+        self.get_nearest_player(pos, radius, |_| true)
     }
 
     /// Gets the closest entity to a position, with optional filtering by entity type.
@@ -4603,33 +5003,7 @@ impl World {
         radius: f64,
         entity_types: Option<&[&'static EntityType]>,
     ) -> Option<Arc<dyn EntityBase>> {
-        // Get regular entities
-        let entities = self.get_nearby_entities(pos, radius);
-
-        // Filter by entity type if specified
-        let filtered_entities = if let Some(types) = entity_types {
-            entities
-                .into_iter()
-                .filter(|(_, entity)| {
-                    let entity_type = entity.get_entity().entity_type;
-                    types.contains(&entity_type)
-                })
-                .collect::<HashMap<_, _>>()
-        } else {
-            entities
-        };
-
-        // Find the closest entity
-        filtered_entities
-            .iter()
-            .min_by(|a, b| {
-                a.1.get_entity()
-                    .pos
-                    .load()
-                    .squared_distance_to_vec(&pos)
-                    .total_cmp(&b.1.get_entity().pos.load().squared_distance_to_vec(&pos))
-            })
-            .map(|p| p.1.clone())
+        self.get_nearest_entity(pos, radius, entity_types, |_| true)
     }
 
     /// Adds entities to the provided [`Vec`] that satisfy a particular condition and are
@@ -4711,7 +5085,15 @@ impl World {
             new_list.push(player.clone());
             new_list
         });
+        self.entity_tracker
+            .add_entity(&(player.clone() as Arc<dyn EntityBase>), self);
         Ok(())
+    }
+
+    /// Must only be called after the player's own `CLogin` packet has been sent.
+    pub fn pair_new_player_with_tracked_entities(&self, player: &Arc<Player>) {
+        self.entity_tracker
+            .pair_new_player_with_tracked_entities(player, self);
     }
 
     /// Removes a player from the world and broadcasts a disconnect message if enabled.
@@ -4752,6 +5134,8 @@ impl World {
             new_list
         });
         if let Some(ref player) = removed_player {
+            self.entity_tracker
+                .remove_entity(player.as_ref() as &dyn EntityBase, self);
             let uuid = player.gameprofile.id;
             let entity_id = player.entity_id();
 
@@ -4806,7 +5190,7 @@ impl World {
     #[expect(clippy::needless_pass_by_value)]
     pub fn spawn_entity_non_save(&self, entity: Arc<dyn EntityBase>) {
         let _base_entity = entity.get_entity();
-        self.broadcast_entity_spawn(&entity);
+        self.entity_tracker.add_entity(&entity, self);
         self.spawn_state.load().add_entity(self, entity.as_ref());
 
         self.entities.rcu(|current_entities| {
@@ -4830,24 +5214,8 @@ impl World {
             return;
         }
 
-        self.broadcast_entity_spawn(&entity);
         entity.init_data_tracker();
         self.add_entity_silent(entity);
-    }
-
-    pub fn broadcast_entity_spawn(&self, entity: &Arc<dyn EntityBase>) {
-        let base_entity = entity.get_entity();
-        let chunk_pos = base_entity.chunk_pos.load();
-
-        let players = self.players.load();
-        for player in players.iter() {
-            let center = player.get_entity().chunk_pos.load();
-            let view_distance = get_view_distance(player).get() as i32;
-
-            if is_within_view_distance(chunk_pos, center, view_distance) {
-                player.client.try_enqueue_spawn_packet(entity);
-            }
-        }
     }
 
     #[expect(clippy::needless_pass_by_value)]
@@ -4870,6 +5238,7 @@ impl World {
         // unload (see `save_entity`), never at spawn, so it can't be both live and
         // serialized at once (which would double it on the next reload).
         self.spawn_state.load().add_entity(self, entity.as_ref());
+        self.entity_tracker.add_entity(&entity, self);
 
         self.entities.rcu(|current_entities| {
             let mut new_entities = (**current_entities).clone();
@@ -4890,18 +5259,12 @@ impl World {
         base_entity.removed.store(true, Ordering::Release);
 
         self.spawn_state.load().remove_entity(self, entity);
+        self.entity_tracker.remove_entity(entity, self);
         self.entities.rcu(|current_entities| {
             let mut new_entities = (**current_entities).clone();
             new_entities.retain(|e| e.get_entity().entity_uuid != base_entity.entity_uuid);
             new_entities
         });
-
-        let chunk_pos = base_entity.chunk_pos.load();
-        self.broadcast_to_chunk_editioned(
-            chunk_pos,
-            &CRemoveEntities::new(&[base_entity.entity_id.into()]),
-            &CRemoveActor::new(VarLong(base_entity.entity_id as i64)),
-        );
     }
 
     pub async fn remove_entities_in_chunks(
@@ -4930,6 +5293,7 @@ impl World {
         });
 
         for entity in entities_to_remove {
+            self.entity_tracker.remove_entity(entity.as_ref(), self);
             self.save_entity(&entity).await;
             self.spawn_state.load().remove_entity(self, entity.as_ref());
         }
@@ -5085,8 +5449,10 @@ impl World {
             }
 
             if flags.contains(BlockFlags::NOTIFY_NEIGHBORS) {
-                self.update_neighbors(position, None);
-                // TODO: updateNeighbourForOutputSignal if blockState.hasAnalogOutputSignal()
+                self.update_neighbors_at(position, old_block, None);
+                if block_state_id.has_analog_output_signal() {
+                    self.update_neighbour_for_output_signal(position, new_block);
+                }
             }
 
             if !flags.contains(BlockFlags::MOVED) {
@@ -5130,9 +5496,15 @@ impl World {
             }
         }
 
-        self.level
-            .light_engine
-            .update_lighting_at(&self.level, *position);
+        let old_state = replaced_block_state_id.to_state();
+        let new_state = block_state_id.to_state();
+        if pumpkin_world::lighting::LightEngine::has_different_light_properties(
+            old_state, new_state,
+        ) {
+            self.level
+                .light_engine
+                .update_lighting_at(&self.level, *position);
+        }
 
         replaced_block_state_id
     }
@@ -5140,16 +5512,48 @@ impl World {
     pub fn break_block(
         self: &Arc<Self>,
         position: &BlockPos,
-        cause: Option<&Player>,
+        cause: Option<&Arc<Player>>,
         flags: BlockFlags,
     ) -> Option<BlockStateId> {
+        if let Some(player) = cause
+            && self.is_in_spawn_protection(player, position)
+        {
+            player.send_system_message(&TextComponent::translate_cross(
+                pumpkin_data::translation::java::BUILD_SPAWN_PROTECTION,
+                pumpkin_data::translation::java::BUILD_SPAWN_PROTECTION,
+                [TextComponent::text(player.gameprofile.name.clone())],
+            ));
+            return None;
+        }
+
         let (broken_block, broken_block_state) = self.get_block_and_state(position);
         if broken_block_state.is_air() {
             return None;
         }
 
+        let mut event = BlockBreakEvent::new(
+            cause.cloned(),
+            broken_block,
+            *position,
+            0,
+            !flags.contains(BlockFlags::SKIP_DROPS),
+        );
+        if let Some(server) = self.server.upgrade() {
+            server.plugin_manager.fire_blocking(&server, &mut event);
+        }
+        if event.cancelled {
+            return None;
+        }
+
+        let mut flags = flags;
+        if event.drop {
+            flags.remove(BlockFlags::SKIP_DROPS);
+        } else {
+            flags.insert(BlockFlags::SKIP_DROPS);
+        }
+
         if !flags.contains(BlockFlags::SKIP_DROPS) {
-            let tool = cause.and_then(|p| {
+            let tool = cause.as_ref().and_then(|p| {
                 let item = p.inventory().held_item();
                 if item.is_empty() { None } else { Some(item) }
             });
@@ -5160,32 +5564,162 @@ impl World {
                 killed_by_player: Some(cause.is_some()),
                 ..Default::default()
             };
-            crate::block::drop_loot(self, broken_block, position, true, params);
+            crate::block::drop_loot(self, broken_block, position, true, &params);
         }
 
-        let new_state_id = if broken_block
-            .properties(broken_block_state.id)
-            .and_then(|properties| {
-                properties
-                    .to_props()
-                    .into_iter()
-                    .find(|p| p.0 == "waterlogged")
-                    .map(|(_, value)| value == "true")
-            })
-            .unwrap_or(false)
-        {
+        let new_state_id = if broken_block.is_waterlogged(broken_block_state.id) {
             Block::WATER.default_state.id
         } else {
             Block::AIR.default_state.id
         };
 
-        Some(self.set_block_state(position, new_state_id, flags))
+        let broken_state_id = self.set_block_state(position, new_state_id, flags);
+        let broken_block = Block::from_state_id(broken_state_id);
+        if !broken_block.is_air()
+            && broken_state_id != new_state_id
+            && broken_block != &Block::FIRE
+            && broken_block != &Block::SOUL_FIRE
+        {
+            let je_packet = CWorldEvent::new(
+                WorldEvent::ParticlesDestroyBlock as i32,
+                *position,
+                broken_state_id.as_u16().into(),
+                false,
+            );
+            let be_packet = CLevelEvent {
+                event_id: VarInt(LevelEvent::ParticlesDestroyBlock as i32),
+                position: position.to_centered_f64().to_f32_lossy(),
+                data: VarInt(BlockState::to_be_network_id(broken_state_id).into()),
+            };
+            let chunk_pos = position.chunk_position();
+            if let Some(player) = cause {
+                // Java predicts its own break effect; Bedrock needs the server event.
+                if let ClientPlatform::Bedrock(client) = player.client.as_ref() {
+                    client.try_enqueue_client_packet(&be_packet);
+                }
+                self.broadcast_to_chunk_except_editioned(
+                    chunk_pos,
+                    &[player.get_entity().entity_uuid],
+                    &je_packet,
+                    &be_packet,
+                );
+            } else {
+                self.broadcast_to_chunk_editioned(chunk_pos, &je_packet, &be_packet);
+            }
+        }
+
+        Some(broken_state_id)
+    }
+
+    #[must_use]
+    pub const fn environment_attributes(&self) -> EnvironmentAttributes<'_> {
+        EnvironmentAttributes::new(self)
+    }
+
+    #[must_use]
+    pub fn get_sky_darken(&self) -> i32 {
+        let sky_light_level = self.environment_attributes().get_dimension_value_f32(
+            pumpkin_data::environment_attribute::EnvironmentAttribute::GameplaySkyLightLevel,
+        );
+        (15.0 - sky_light_level).clamp(0.0, 15.0) as i32
+    }
+
+    #[must_use]
+    pub fn is_bright_outside(&self) -> bool {
+        !self.dimension.has_fixed_time && self.get_sky_darken() < 4
+    }
+
+    #[must_use]
+    pub fn is_dark_outside(&self) -> bool {
+        !self.dimension.has_fixed_time && !self.is_bright_outside()
+    }
+
+    /// Checks if daylight burns undead monsters (`EnvironmentAttributes.MONSTERS_BURN`).
+    #[must_use]
+    pub fn monsters_burn(&self, pos: &BlockPos) -> bool {
+        self.environment_attributes().get_value_bool(
+            pumpkin_data::environment_attribute::EnvironmentAttribute::GameplayMonstersBurn,
+            pos,
+        )
+    }
+
+    /// Checks if bees should stay inside beehives/nests (`EnvironmentAttributes.BEES_STAY_IN_HIVE`).
+    #[must_use]
+    pub fn bees_stay_in_hive(&self, pos: &BlockPos) -> bool {
+        self.environment_attributes().get_value_bool(
+            pumpkin_data::environment_attribute::EnvironmentAttribute::GameplayBeesStayInHive,
+            pos,
+        )
+    }
+
+    /// Checks if a creaking heart is active (`EnvironmentAttributes.CREAKING_ACTIVE`).
+    #[must_use]
+    pub fn creaking_active(&self, pos: &BlockPos) -> bool {
+        self.environment_attributes().get_value_bool(
+            pumpkin_data::environment_attribute::EnvironmentAttribute::GameplayCreakingActive,
+            pos,
+        )
+    }
+
+    /// Checks if an eyeblossom flower should be open (`EnvironmentAttributes.EYEBLOSSOM_OPEN`).
+    #[must_use]
+    pub fn eyeblossom_open(&self, pos: &BlockPos) -> Option<bool> {
+        self.environment_attributes().get_value_tri_state(
+            pumpkin_data::environment_attribute::EnvironmentAttribute::GameplayEyeblossomOpen,
+            pos,
+        )
+    }
+
+    #[must_use]
+    pub fn get_effective_sky_brightness(&self, pos: &BlockPos) -> i32 {
+        let sky_light = self.get_sky_light_level(pos) as i32;
+        sky_light - self.get_sky_darken()
+    }
+
+    #[must_use]
+    pub fn get_sun_angle(&self, pos: &BlockPos) -> f32 {
+        let sun_angle_deg = self.environment_attributes().get_value_f32(
+            pumpkin_data::environment_attribute::EnvironmentAttribute::VisualSunAngle,
+            pos,
+        );
+        sun_angle_deg * (std::f32::consts::PI / 180.0)
+    }
+
+    #[must_use]
+    pub fn get_moon_phase(&self) -> MoonPhase {
+        self.environment_attributes()
+            .get_dimension_value_moon_phase()
+    }
+
+    #[must_use]
+    pub fn can_pillager_patrol_spawn(&self, pos: &BlockPos) -> bool {
+        self.environment_attributes().get_value_bool(
+            pumpkin_data::environment_attribute::EnvironmentAttribute::GameplayCanPillagerPatrolSpawn,
+            pos,
+        )
+    }
+
+    #[must_use]
+    pub fn surface_slime_spawn_chance(&self, pos: &BlockPos) -> f32 {
+        self.environment_attributes().get_value_f32(
+            pumpkin_data::environment_attribute::EnvironmentAttribute::GameplaySurfaceSlimeSpawnChance,
+            pos,
+        )
+    }
+
+    #[must_use]
+    pub fn villager_activity(&self, pos: &BlockPos, baby: bool) -> Activity {
+        self.environment_attributes().get_value_activity(baby, pos)
+    }
+
+    pub fn get_raw_brightness(&self, pos: &BlockPos, sky_darken: u8) -> u8 {
+        let sky_light = self.get_sky_light_level(pos).saturating_sub(sky_darken);
+        let block_light = self.get_block_light_level(pos).unwrap_or(0);
+        sky_light.max(block_light)
     }
 
     pub fn get_max_local_raw_brightness(&self, pos: &BlockPos) -> u8 {
-        let sky_light = self.get_sky_light_level(pos);
-        let block_light = self.get_block_light_level(pos).unwrap_or(0);
-        sky_light.max(block_light) // TODO: getSkyDarken
+        self.get_raw_brightness(pos, self.get_sky_darken() as u8)
     }
 
     pub fn get_block_light_level(&self, position: &BlockPos) -> Option<u8> {
@@ -5279,12 +5813,16 @@ impl World {
     }
 
     pub fn drop_stack(self: &Arc<Self>, pos: &BlockPos, stack: ItemStack) {
-        let height = EntityType::ITEM.dimension[1] / 2.0;
+        if stack.is_empty() {
+            return;
+        }
+
+        let half_height = f64::from(EntityType::ITEM.dimension[1]) / 2.0;
         let spawn_pos = {
             let mut r = rand::rng();
             Vector3::new(
                 f64::from(pos.0.x) + 0.5 + r.random_range(-0.25..0.25),
-                f64::from(pos.0.y) + 0.5 + r.random_range(-0.25..0.25) - f64::from(height),
+                f64::from(pos.0.y) + 0.5 + r.random_range(-0.25..0.25) - half_height,
                 f64::from(pos.0.z) + 0.5 + r.random_range(-0.25..0.25),
             )
         };
@@ -5305,6 +5843,90 @@ impl World {
         }
 
         let item_entity = Arc::new(ItemEntity::new(entity, stack));
+        self.spawn_entity(item_entity);
+    }
+
+    pub fn drop_stack_from_face(
+        self: &Arc<Self>,
+        pos: &BlockPos,
+        face: BlockDirection,
+        stack: ItemStack,
+    ) {
+        if stack.is_empty() {
+            return;
+        }
+
+        let offset = face.to_offset();
+        let step_x = offset.x;
+        let step_y = offset.y;
+        let step_z = offset.z;
+
+        let half_width = f64::from(EntityType::ITEM.dimension[0]) / 2.0;
+        let half_height = f64::from(EntityType::ITEM.dimension[1]) / 2.0;
+
+        let (spawn_pos, velocity) = {
+            let mut r = rand::rng();
+            let x = f64::from(pos.0.x)
+                + 0.5
+                + if step_x == 0 {
+                    r.random_range(-0.25..0.25)
+                } else {
+                    f64::from(step_x) * (0.5 + half_width)
+                };
+            let y = f64::from(pos.0.y)
+                + 0.5
+                + if step_y == 0 {
+                    r.random_range(-0.25..0.25)
+                } else {
+                    f64::from(step_y) * (0.5 + half_height)
+                }
+                - half_height;
+            let z = f64::from(pos.0.z)
+                + 0.5
+                + if step_z == 0 {
+                    r.random_range(-0.25..0.25)
+                } else {
+                    f64::from(step_z) * (0.5 + half_width)
+                };
+
+            let delta_x = if step_x == 0 {
+                r.random_range(-0.1..0.1)
+            } else {
+                f64::from(step_x) * 0.1
+            };
+            let delta_y = if step_y == 0 {
+                r.random_range(0.0..0.1)
+            } else {
+                f64::from(step_y) * 0.1 + 0.1
+            };
+            let delta_z = if step_z == 0 {
+                r.random_range(-0.1..0.1)
+            } else {
+                f64::from(step_z) * 0.1
+            };
+
+            (
+                Vector3::new(x, y, z),
+                Vector3::new(delta_x, delta_y, delta_z),
+            )
+        };
+
+        let entity = Entity::new(self.clone(), spawn_pos, &EntityType::ITEM);
+        let mut item_event = crate::plugin::api::events::entity::item_spawn::ItemSpawnEvent::new(
+            entity.entity_id,
+            spawn_pos,
+            stack.item.registry_key.to_string(),
+        );
+        if let Some(server) = self.server.upgrade() {
+            server
+                .plugin_manager
+                .fire_blocking(&server, &mut item_event);
+        }
+        if item_event.cancelled {
+            return;
+        }
+
+        let item_entity = Arc::new(ItemEntity::new_with_velocity(entity, stack, velocity, 10));
         self.spawn_entity(item_entity);
     }
 
@@ -5398,6 +6020,10 @@ impl World {
         );
     }
 
+    pub fn sync_global_world_event(&self, world_event: WorldEvent, position: BlockPos, data: i32) {
+        self.broadcast_packet_all(&CWorldEvent::new(world_event as i32, position, data, true));
+    }
+
     pub fn set_block_destroy_stage(&self, entity_id: i32, location: BlockPos, stage: i8) {
         let chunk_pos = location.chunk_position();
         let packet = CSetBlockDestroyStage::new(entity_id.into(), location, stage);
@@ -5463,29 +6089,68 @@ impl World {
         self.get_block_state_id_if_loaded(position).is_some()
     }
 
-    pub fn get_fluid(&self, position: &BlockPos) -> &'static pumpkin_data::fluid::Fluid {
-        let id = self.get_block_state_id(position);
-        let fluid = Fluid::from_state_id(id).ok_or(&Fluid::EMPTY);
-        if let Ok(fluid) = fluid {
+    fn get_fluid_from_state_id(id: BlockStateId) -> &'static pumpkin_data::fluid::Fluid {
+        if let Some(fluid) = Fluid::from_state_id(id) {
             return fluid.to_flowing();
         }
-        let block = Block::from_state_id(id);
-        block
-            .properties(id)
-            .and_then(|props| {
-                props
-                    .to_props()
-                    .into_iter()
-                    .find(|p| p.0 == "waterlogged")
-                    .map(|(_, value)| {
-                        if value == "true" {
-                            &Fluid::FLOWING_WATER
-                        } else {
-                            &Fluid::EMPTY
-                        }
-                    })
-            })
-            .unwrap_or(&Fluid::EMPTY)
+        // These blocks contain source water without a `waterlogged` property.
+        if matches!(
+            id.to_block_id(),
+            pumpkin_data::BlockId::KELP
+                | pumpkin_data::BlockId::KELP_PLANT
+                | pumpkin_data::BlockId::SEAGRASS
+                | pumpkin_data::BlockId::TALL_SEAGRASS
+                | pumpkin_data::BlockId::BUBBLE_COLUMN
+        ) || id.is_waterlogged()
+        {
+            &Fluid::FLOWING_WATER
+        } else {
+            &Fluid::EMPTY
+        }
+    }
+
+    fn fluid_state_from_block_state(id: BlockStateId) -> (&'static Fluid, FluidState) {
+        let fluid = Self::get_fluid_from_state_id(id);
+        let source = if fluid.matches_type(&Fluid::WATER) {
+            &Fluid::WATER
+        } else if fluid.matches_type(&Fluid::LAVA) {
+            &Fluid::LAVA
+        } else {
+            &Fluid::EMPTY
+        };
+        let mut state = source.states[source.default_state_index as usize].clone();
+
+        if matches!(
+            id.to_block_id(),
+            pumpkin_data::BlockId::WATER | pumpkin_data::BlockId::LAVA
+        ) {
+            // LiquidBlock#getFluidState: source, amounts 7..1, then falling amount 8.
+            // The fluid family's first state is not the state of the actual block.
+            let level =
+                pumpkin_data::block_properties::WaterLikeProperties::from_state_id(id).level;
+            let amount = if level == 0 || level >= 8 {
+                8
+            } else {
+                8 - level
+            };
+            state.height = f32::from(amount) / 9.0;
+            state.level = i16::from(amount);
+            state.is_source = level == 0;
+            state.is_still = state.is_source;
+            state.falling = level >= 8;
+            state.block_state_id = pumpkin_data::block_properties::WaterLikeProperties {
+                level: level.min(8),
+            }
+            .to_state_id(id.to_block());
+        }
+
+        // Keep the normalized family used by fluid callbacks, independently of source state.
+        (fluid, state)
+    }
+
+    pub fn get_fluid(&self, position: &BlockPos) -> &'static pumpkin_data::fluid::Fluid {
+        let id = self.get_block_state_id(position);
+        Self::get_fluid_from_state_id(id)
     }
 
     pub fn get_block_and_fluid(
@@ -5496,61 +6161,24 @@ impl World {
         &'static pumpkin_data::fluid::Fluid,
     ) {
         let id = self.get_block_state_id(position);
-        let block = Block::from_state_id(id);
-
-        let fluid = Fluid::from_state_id(id)
-            .map(Fluid::to_flowing)
-            .ok_or(&Fluid::EMPTY)
-            .unwrap_or_else(|_| {
-                block
-                    .properties(id)
-                    .and_then(|props| {
-                        props
-                            .to_props()
-                            .into_iter()
-                            .find(|p| p.0 == "waterlogged")
-                            .map(|(_, value)| {
-                                if value == "true" {
-                                    &Fluid::FLOWING_WATER
-                                } else {
-                                    &Fluid::EMPTY
-                                }
-                            })
-                    })
-                    .unwrap_or(&Fluid::EMPTY)
-            });
-        (block, fluid)
+        (id.to_block(), Self::get_fluid_from_state_id(id))
     }
 
-    pub fn get_fluid_and_fluid_state(
-        &self,
-        position: &BlockPos,
-    ) -> (&'static Fluid, &'static FluidState) {
+    pub fn get_fluid_and_fluid_state(&self, position: &BlockPos) -> (&'static Fluid, FluidState) {
         let id = self.get_block_state_id(position);
+        Self::fluid_state_from_block_state(id)
+    }
 
-        let Some(raw_fluid) = Fluid::from_state_id(id) else {
-            let block = Block::from_state_id(id);
-            if let Some(properties) = block.properties(id) {
-                for (name, value) in properties.to_props() {
-                    if name == "waterlogged" {
-                        if value == "true" {
-                            let state = &Fluid::FLOWING_WATER.states[0];
-                            return (&Fluid::FLOWING_WATER, state);
-                        }
-
-                        break;
-                    }
-                }
-            }
-
-            let state = &Fluid::EMPTY.states[0];
-            return (&Fluid::EMPTY, state);
-        };
-
-        let fluid = raw_fluid.to_flowing();
-        let state = &fluid.states[0];
-
-        (fluid, state)
+    /// `FluidState#getHeight` includes the full block when the same fluid is above.
+    /// Keep `state.height` as the own height used by flow-velocity calculations.
+    pub fn get_fluid_height(&self, position: &BlockPos, fluid: &Fluid, state: &FluidState) -> f32 {
+        if state.is_empty {
+            0.0
+        } else if fluid.matches_type(self.get_fluid(&position.up())) {
+            1.0
+        } else {
+            state.height
+        }
     }
 
     pub fn get_block_state_id(&self, position: &BlockPos) -> BlockStateId {
@@ -5579,13 +6207,24 @@ impl World {
         (Block::from_state_id(id), id)
     }
 
+    /// Updates neighboring blocks of a block with a specified source block
+    pub fn update_neighbors_at(
+        self: &Arc<Self>,
+        block_pos: &BlockPos,
+        source_block: &Block,
+        except: Option<BlockDirection>,
+    ) {
+        neighbor_updater::update_neighbors_at(self, block_pos, source_block, except);
+    }
+
     /// Updates neighboring blocks of a block
     pub fn update_neighbors(
         self: &Arc<Self>,
         block_pos: &BlockPos,
         except: Option<BlockDirection>,
     ) {
-        neighbor_updater::update_neighbors(self, block_pos, except);
+        let source_block = self.get_block(block_pos);
+        self.update_neighbors_at(block_pos, source_block, except);
     }
 
     pub fn update_neighbor(self: &Arc<Self>, neighbor_block_pos: &BlockPos, source_block: &Block) {
@@ -5631,6 +6270,46 @@ impl World {
             && let Some(pumpkin_fluid) = self.block_registry.get_pumpkin_fluid(fluid.id)
         {
             pumpkin_fluid.on_neighbor_update(self, fluid, position, false);
+        }
+    }
+
+    pub fn update_neighbour_for_output_signal(
+        self: &Arc<Self>,
+        pos: &BlockPos,
+        changed_block: &Block,
+    ) {
+        for direction in BlockDirection::horizontal() {
+            let mut relative_pos = pos.offset(direction.to_offset());
+            if self.is_loaded(&relative_pos) {
+                let state = self.get_block_state(&relative_pos);
+                if state.id.to_block() == &Block::COMPARATOR {
+                    self.update_neighbor(&relative_pos, changed_block);
+                } else if state.is_solid_block() {
+                    relative_pos = relative_pos.offset(direction.to_offset());
+                    if self.is_loaded(&relative_pos) {
+                        let second_state = self.get_block_state(&relative_pos);
+                        if second_state.id.to_block() == &Block::COMPARATOR {
+                            self.update_neighbor(&relative_pos, changed_block);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Sends output-signal updates for block entities changed this tick, in list order.
+    fn flush_comparator_updates(self: &Arc<Self>, block_entities: &[Arc<dyn BlockEntity>]) {
+        for be in block_entities {
+            // Vanilla `BlockEntity.setChanged` -> `Level.updateNeighbourForOutputSignal`.
+            if !be.is_comparator_dirty() {
+                continue;
+            }
+            be.clear_comparator_dirty();
+            let pos = be.get_position();
+            // The list is a snapshot, so the chunk may be gone by now.
+            if let Some(state_id) = self.get_block_state_id_if_loaded(&pos) {
+                self.update_neighbour_for_output_signal(&pos, state_id.to_block());
+            }
         }
     }
 
@@ -5842,7 +6521,8 @@ impl World {
     }
 
     pub(crate) fn add_block_entity_nbt(&self, block_pos: BlockPos, nbt: &NbtCompound) {
-        self.level
+        if self
+            .level
             .read_chunk_sync(&block_pos.chunk_position(), |chunk| {
                 chunk
                     .pending_block_entities
@@ -5850,7 +6530,12 @@ impl World {
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .insert(block_pos, nbt.clone());
                 chunk.mark_dirty(true);
-            });
+            })
+            .is_some()
+        {
+            self.pending_block_entity_migrations
+                .push(block_pos.chunk_position());
+        }
     }
 
     pub fn remove_block_entity(&self, block_pos: &BlockPos) {
@@ -5999,25 +6684,17 @@ impl World {
         Some((t_hit, direction, hit_pos))
     }
 
-    pub fn ray_outline_check_detailed(
-        &self,
+    /// Clips the segment against the outline shapes of `state`. A shapeless block,
+    /// air above all, cannot be hit.
+    fn clip_outline_shapes(
+        state: &BlockState,
         block_pos: &BlockPos,
         from: Vector3<f64>,
         to: Vector3<f64>,
     ) -> Option<(BlockDirection, Vector3<f64>)> {
-        let state = self.get_block_state(block_pos);
-
-        if state.outline_shapes.is_empty() {
-            let block_min = block_pos.0.to_f64();
-            let block_max = block_min.add_raw(1.0, 1.0, 1.0);
-            return Self::intersects_aabb_with_hit(from, to, block_min, block_max)
-                .map(|(_, dir, hit_pos)| (dir, hit_pos));
-        }
-
-        let bounding_boxes = state.get_block_outline_shapes_at(block_pos);
         let mut closest_hit: Option<(f64, BlockDirection, Vector3<f64>)> = None;
 
-        for shape in bounding_boxes {
+        for shape in state.get_block_outline_shapes_at(block_pos) {
             let world_min = shape.min.add(&block_pos.0.to_f64());
             let world_max = shape.max.add(&block_pos.0.to_f64());
 
@@ -6032,6 +6709,15 @@ impl World {
         }
 
         closest_hit.map(|(_, dir, hit_pos)| (dir, hit_pos))
+    }
+
+    pub fn ray_outline_check_detailed(
+        &self,
+        block_pos: &BlockPos,
+        from: Vector3<f64>,
+        to: Vector3<f64>,
+    ) -> Option<(BlockDirection, Vector3<f64>)> {
+        Self::clip_outline_shapes(self.get_block_state(block_pos), block_pos, from, to)
     }
 
     fn ray_outline_check(
@@ -6229,6 +6915,8 @@ impl World {
             .collect()
     }
 
+    /// Returns the closest entity the segment from `start` to `end` hits, or
+    /// `None`. Convenience wrapper over [`Self::ray_trace_entities`].
     pub fn ray_trace_entity(
         &self,
         start: Vector3<f64>,
@@ -6237,6 +6925,14 @@ impl World {
         self.ray_trace_entities(start, end).into_iter().next()
     }
 
+    /// Traces the block grid from `start_pos` to `end_pos` (vanilla
+    /// `Block.clip` semantics) and returns the first block the ray actually
+    /// passes through whose outline collides and whose `hit_check` returns
+    /// true, together with the direction reported for that hit. The start
+    /// block is tested like any other; since the ray begins inside it, the
+    /// reported direction there is a fallback rather than a true entry face.
+    /// Returns `None` when nothing is hit or the ray starts and ends in the
+    /// same block.
     pub fn raycast(
         self: &Arc<Self>,
         start_pos: Vector3<f64>,
@@ -6253,11 +6949,13 @@ impl World {
 
         let mut block = BlockPos::floored(from.x, from.y, from.z);
 
-        let (collision, direction) = self.ray_outline_check(&block, from, to);
-        if let Some(dir) = direction
-            && collision
-        {
-            return Some((block, dir));
+        if hit_check(&block, self) {
+            let (collision, direction) = self.ray_outline_check(&block, from, to);
+            if let Some(dir) = direction
+                && collision
+            {
+                return Some((block, dir));
+            }
         }
 
         let difference = to.sub(&from);
@@ -6349,16 +7047,13 @@ impl World {
     }
 
     /// Broadcasts a packet to all players who currently have the target chunk loaded.
-    /// This uses highly optimized Chebyshev distance math (Chunk Grid) instead of floating point distance checks.
     pub fn broadcast_to_chunk<P: ClientPacket>(&self, chunk_pos: Vector2<i32>, packet: &P) {
         let players = self.players.load();
 
         let recipients = players.iter().filter(|p| {
-            let center = p.get_entity().chunk_pos.load();
-            let view_distance = get_view_distance(p).get() as i32;
-
-            // Chebyshev distance (Minecraft's chunk loading shape)
-            is_within_view_distance(chunk_pos, center, view_distance)
+            p.watched_section
+                .load()
+                .is_within_distance(chunk_pos.x, chunk_pos.y)
         });
 
         let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
@@ -6372,9 +7067,10 @@ impl World {
     ) {
         let players = self.players.load();
         let recipients = players.iter().filter_map(|player| {
-            let center = player.get_entity().chunk_pos.load();
-            let view_distance = get_view_distance(player).get() as i32;
-            if is_within_view_distance(chunk_pos, center, view_distance)
+            if player
+                .watched_section
+                .load()
+                .is_within_distance(chunk_pos.x, chunk_pos.y)
                 && let ClientPlatform::Bedrock(client) = player.client.as_ref()
             {
                 return Some(client);
@@ -6395,9 +7091,9 @@ impl World {
         let mut bedrock_recipients = Vec::new();
 
         let recipients = players.iter().filter(|p| {
-            let center = p.get_entity().chunk_pos.load();
-            let view_distance = get_view_distance(p).get() as i32;
-            is_within_view_distance(chunk_pos, center, view_distance)
+            p.watched_section
+                .load()
+                .is_within_distance(chunk_pos.x, chunk_pos.y)
         });
 
         for p in recipients {
@@ -6426,10 +7122,9 @@ impl World {
             if except.contains(&p.get_entity().entity_uuid) {
                 return false;
             }
-            let center = p.get_entity().chunk_pos.load();
-            let view_distance = get_view_distance(p).get() as i32;
-
-            is_within_view_distance(chunk_pos, center, view_distance)
+            p.watched_section
+                .load()
+                .is_within_distance(chunk_pos.x, chunk_pos.y)
         });
 
         let recipients_by_version = Self::collect_java_recipients_by_version(recipients);
@@ -6448,10 +7143,9 @@ impl World {
             if except.contains(&p.get_entity().entity_uuid) {
                 return false;
             }
-            let center = p.get_entity().chunk_pos.load();
-            let view_distance = get_view_distance(p).get() as i32;
-
-            is_within_view_distance(chunk_pos, center, view_distance)
+            p.watched_section
+                .load()
+                .is_within_distance(chunk_pos.x, chunk_pos.y)
         });
 
         let mut java_recipients = Vec::new();
@@ -6830,7 +7524,7 @@ impl WorldPortalExt for WorldPortal {
     ) -> bool {
         self.0.block_registry.can_place_at(
             None,
-            None,
+            Some(&self.0),
             block_accessor,
             None,
             block,
@@ -6888,15 +7582,166 @@ impl WorldPortalExt for WorldPortal {
     }
 }
 
+struct CubicCurve {
+    a: f32,
+    b: f32,
+    c: f32,
+}
+
+impl CubicCurve {
+    fn new(v1: f32, v2: f32) -> Self {
+        Self {
+            a: 3.0 * v1 - 3.0 * v2 + 1.0,
+            b: -6.0 * v1 + 3.0 * v2,
+            c: 3.0 * v1,
+        }
+    }
+
+    fn sample(&self, t: f32) -> f32 {
+        ((self.a * t + self.b) * t + self.c) * t
+    }
+
+    fn sample_gradient(&self, t: f32) -> f32 {
+        (3.0 * self.a * t + 2.0 * self.b) * t + self.c
+    }
+}
+
+/// Calculates the celestial (sun) angle fraction in `[0.0, 1.0]`.
+/// Matches vanilla 26.2 `EnvironmentAttributes.SUN_ANGLE` easing with `symmetricCubicBezier(0.362, 0.241)`.
+#[must_use]
+pub fn calculate_celestial_angle(time_of_day: i64) -> f32 {
+    let ticks = time_of_day.rem_euclid(24000);
+    let alpha = if ticks < 6000 {
+        (ticks + 18000) as f32 / 24000.0
+    } else {
+        (ticks - 6000) as f32 / 24000.0
+    };
+
+    let x_curve = CubicCurve::new(0.362, 0.638);
+    let y_curve = CubicCurve::new(0.241, 0.759);
+
+    let mut t = alpha;
+    let mut solved = false;
+    for _ in 0..4 {
+        let error = x_curve.sample(t) - alpha;
+        if error.abs() < 1e-5 {
+            solved = true;
+            break;
+        }
+        let gradient = x_curve.sample_gradient(t);
+        if gradient < 1e-5 {
+            break;
+        }
+        t -= (error / gradient).clamp(-0.25, 0.25);
+    }
+
+    if !solved {
+        let mut t0 = 0.0f32;
+        let mut t1 = 1.0f32;
+        for _ in 0..64 {
+            if t0 >= t1 {
+                break;
+            }
+            let error = x_curve.sample(t) - alpha;
+            if error.abs() < 1e-5 {
+                break;
+            }
+            if error < 0.0 {
+                t0 = t;
+            } else {
+                t1 = t;
+            }
+            t = f32::midpoint(t1, t0);
+        }
+    }
+
+    y_curve.sample(t)
+}
+
 #[cfg(test)]
 mod tests {
     use pumpkin_data::{
         Block,
-        block_properties::{BlockProperties, ChestLikeProperties, ChestType, HorizontalFacing},
+        block_properties::{ChestLikeProperties, ChestType, HorizontalFacing, WaterLikeProperties},
+        fluid::Fluid,
     };
     use pumpkin_util::math::position::BlockPos;
 
-    use super::{bedrock_block_breaking_rate, bedrock_chest_block_actor};
+    use super::{World, bedrock_block_breaking_rate, bedrock_chest_block_actor};
+
+    #[test]
+    fn liquid_block_states_preserve_source_flow_and_falling_depths() {
+        // Liquid block level and fluid amount are different: all falling levels
+        // resolve to amount 8, rather than wrapping through the fluid state array.
+        let amounts = [8, 7, 6, 5, 4, 3, 2, 1, 8, 8, 8, 8, 8, 8, 8, 8];
+        for (block, expected_fluid) in [
+            (&Block::WATER, &Fluid::FLOWING_WATER),
+            (&Block::LAVA, &Fluid::FLOWING_LAVA),
+        ] {
+            for (level, amount) in amounts.into_iter().enumerate() {
+                let id = WaterLikeProperties { level: level as u8 }.to_state_id(block);
+                let (fluid, state) = World::fluid_state_from_block_state(id);
+                assert_eq!(fluid.id, expected_fluid.id);
+                assert_eq!(state.level, amount);
+                assert!((state.height - f32::from(amount) / 9.0).abs() < f32::EPSILON);
+                assert_eq!(state.is_source, level == 0);
+                assert_eq!(state.is_still, level == 0);
+                assert_eq!(state.falling, level >= 8);
+                assert!(!state.is_empty);
+                assert_eq!(
+                    state.block_state_id,
+                    WaterLikeProperties {
+                        level: level.min(8) as u8
+                    }
+                    .to_state_id(block)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn aquatic_and_waterlogged_blocks_contain_source_water() {
+        let wet_stairs = Block::OAK_STAIRS
+            .set_waterlogged(Block::OAK_STAIRS.default_state.id, true)
+            .unwrap();
+        for id in [
+            Block::KELP.default_state.id,
+            Block::KELP_PLANT.default_state.id,
+            Block::SEAGRASS.default_state.id,
+            Block::TALL_SEAGRASS.default_state.id,
+            Block::BUBBLE_COLUMN.default_state.id,
+            wet_stairs,
+        ] {
+            let (fluid, state) = World::fluid_state_from_block_state(id);
+            assert!(fluid.matches_type(&Fluid::WATER));
+            assert!(state.is_source && state.is_still && !state.is_empty && !state.falling);
+            assert_eq!(state.level, 8);
+            assert!((state.height - 8.0 / 9.0).abs() < f32::EPSILON);
+        }
+
+        for block in [&Block::AIR, &Block::OAK_STAIRS, &Block::WATER_CAULDRON] {
+            let (fluid, state) = World::fluid_state_from_block_state(block.default_state.id);
+            assert_eq!(fluid.id, Fluid::EMPTY.id);
+            assert!(state.is_empty);
+            assert_eq!(state.height, 0.0);
+        }
+    }
+
+    #[test]
+    fn a_shapeless_block_never_stops_a_ray() {
+        // The ray always starts inside a block, usually air, and that block must not
+        // count as a hit or every raycast would stop where it began.
+        let pos = BlockPos::new(10, 64, 10);
+        let from = pumpkin_util::math::vector3::Vector3::new(10.5, 64.5, 10.5);
+        let to = pumpkin_util::math::vector3::Vector3::new(20.5, 64.5, 10.5);
+
+        assert!(
+            super::World::clip_outline_shapes(Block::AIR.default_state, &pos, from, to).is_none()
+        );
+        assert!(
+            super::World::clip_outline_shapes(Block::STONE.default_state, &pos, from, to).is_some()
+        );
+    }
 
     #[test]
     fn bedrock_block_breaking_rate_uses_progress_per_tick() {

@@ -5,7 +5,6 @@ use std::sync::{
 
 use pumpkin_data::Block;
 use pumpkin_data::data_component_impl::EquipmentSlot;
-use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -13,7 +12,6 @@ use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tracked_data;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
-use pumpkin_protocol::java::client::play::Metadata;
 use pumpkin_util::math::boundingbox::EntityDimensions;
 use pumpkin_util::math::position::BlockPos;
 
@@ -115,10 +113,8 @@ impl PiglinEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-            // Retaliate when attacked
             target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
 
-            // Hostile to players unless wearing safe gold armor
             target_selector.add_goal(
                 2,
                 Box::new(ActiveTargetGoal::new(
@@ -133,7 +129,6 @@ impl PiglinEntity {
                 )),
             );
 
-            // Hostile to wither skeletons and withers
             target_selector.add_goal(
                 3,
                 ActiveTargetGoal::with_default(
@@ -147,7 +142,6 @@ impl PiglinEntity {
                 ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::WITHER, true),
             );
 
-            // Adults that can hunt are hostile to hoglins
             let piglin_clone = mob_arc.clone();
             target_selector.add_goal(
                 4,
@@ -175,20 +169,17 @@ impl PiglinEntity {
     pub fn set_immune_to_zombification(&self, immune: bool) {
         self.immune_to_zombification
             .store(immune, Ordering::Relaxed);
-        self.mob_entity.living_entity.entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::piglin::DATA_IMMUNE_TO_ZOMBIFICATION,
-                immune,
-            )],
-            None,
-        );
+        self.mob_entity
+            .living_entity
+            .entity
+            .set_synced_data(tracked_data::piglin::DATA_IMMUNE_TO_ZOMBIFICATION, immune);
     }
 
     #[must_use]
     pub fn is_converting(&self, world: &World) -> bool {
         !self.is_immune_to_zombification()
             && !self.mob_entity.is_no_ai()
-            && world.dimension.minecraft_name != Dimension::THE_NETHER.minecraft_name
+            && world.dimension.piglins_zombify
     }
 
     #[must_use]
@@ -204,10 +195,7 @@ impl PiglinEntity {
     pub fn set_baby(&self, baby: bool) {
         self.is_baby.store(baby, Ordering::Relaxed);
         let entity = &self.mob_entity.living_entity.entity;
-        entity.send_meta_data(
-            &[Metadata::new(tracked_data::piglin::DATA_BABY_ID, baby)],
-            None,
-        );
+        entity.set_synced_data(tracked_data::piglin::DATA_BABY_ID, baby);
         if baby {
             entity.entity_dimension.store(Self::BABY_DIMENSIONS);
         } else {
@@ -223,13 +211,10 @@ impl PiglinEntity {
     pub fn set_charging_crossbow(&self, is_charging: bool) {
         self.is_charging_crossbow
             .store(is_charging, Ordering::Relaxed);
-        self.mob_entity.living_entity.entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::piglin::DATA_IS_CHARGING_CROSSBOW,
-                is_charging,
-            )],
-            None,
-        );
+        self.mob_entity
+            .living_entity
+            .entity
+            .set_synced_data(tracked_data::piglin::DATA_IS_CHARGING_CROSSBOW, is_charging);
     }
 
     #[must_use]
@@ -239,13 +224,10 @@ impl PiglinEntity {
 
     pub fn set_dancing(&self, is_dancing: bool) {
         self.is_dancing.store(is_dancing, Ordering::Relaxed);
-        self.mob_entity.living_entity.entity.send_meta_data(
-            &[Metadata::new(
-                tracked_data::piglin::DATA_IS_DANCING,
-                is_dancing,
-            )],
-            None,
-        );
+        self.mob_entity
+            .living_entity
+            .entity
+            .set_synced_data(tracked_data::piglin::DATA_IS_DANCING, is_dancing);
     }
 
     #[must_use]
@@ -506,7 +488,6 @@ impl Mob for PiglinEntity {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-            // Spawn weapon: 50% crossbow, 5% golden spear (10% of remaining 50%), 45% golden sword
             let weapon = if rand::random::<f32>() < 0.5 {
                 &Item::CROSSBOW
             } else if rand::random_range(0..10) == 0 {
@@ -516,7 +497,6 @@ impl Mob for PiglinEntity {
             };
             equipment.put(&EquipmentSlot::MAIN_HAND, ItemStack::new(1, weapon));
 
-            // Armor: 10% chance per piece for golden armor
             if rand::random::<f32>() < 0.1 {
                 equipment.put(
                     &EquipmentSlot::HEAD,
@@ -543,27 +523,17 @@ impl Mob for PiglinEntity {
 
     fn mob_init_data_tracker(&self) {
         let entity = self.get_entity();
-        let mut meta = Vec::new();
         if self.is_immune_to_zombification() {
-            meta.push(Metadata::new(
-                tracked_data::piglin::DATA_IMMUNE_TO_ZOMBIFICATION,
-                true,
-            ));
+            entity.set_synced_data(tracked_data::piglin::DATA_IMMUNE_TO_ZOMBIFICATION, true);
         }
         if self.is_baby() {
-            meta.push(Metadata::new(tracked_data::piglin::DATA_BABY_ID, true));
+            entity.set_synced_data(tracked_data::piglin::DATA_BABY_ID, true);
         }
         if self.is_charging_crossbow() {
-            meta.push(Metadata::new(
-                tracked_data::piglin::DATA_IS_CHARGING_CROSSBOW,
-                true,
-            ));
+            entity.set_synced_data(tracked_data::piglin::DATA_IS_CHARGING_CROSSBOW, true);
         }
         if self.is_dancing() {
-            meta.push(Metadata::new(tracked_data::piglin::DATA_IS_DANCING, true));
-        }
-        if !meta.is_empty() {
-            entity.send_meta_data(&meta, None);
+            entity.set_synced_data(tracked_data::piglin::DATA_IS_DANCING, true);
         }
     }
 

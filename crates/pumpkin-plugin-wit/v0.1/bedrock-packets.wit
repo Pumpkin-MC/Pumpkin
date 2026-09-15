@@ -1,0 +1,1709 @@
+package pumpkin:plugin@0.1.0;
+
+interface bedrock-packets {
+  use uuid.{ uuid };
+  record s-actor-event {
+    target-runtime-id: s64,
+    event-id: actor-event-id,
+    data: s32,
+    fire-at-position: option<tuple<f64, f64, f64>>,
+  }
+  enum actor-event-id {
+    none,
+    jump,
+    hurt,
+    death,
+    start-attacking,
+    stop-attacking,
+    taming-failed,
+    taming-succeeded,
+    shake-wetness,
+    eat-grass,
+    fishhook-bubble,
+    fishhook-fish-pos,
+    fishhook-hook-time,
+    fishhook-tease,
+    squid-fleeing,
+    zombie-converting,
+    play-ambient,
+    spawn-alive,
+    start-offer-flower,
+    stop-offer-flower,
+    love-hearts,
+    villager-angry,
+    villager-happy,
+    witch-hat-magic,
+    fireworks-explode,
+    in-love-hearts,
+    silverfish-merge-animation,
+    guardian-attack-sound,
+    drink-potion,
+    throw-potion,
+    prime-tnt-cart,
+    prime-creeper,
+    air-supply,
+    deprecated-add-player-levels,
+    guardian-mining-fatigue,
+    agent-swing-arm,
+    dragon-start-death-anim,
+    ground-dust,
+    shake,
+    feed,
+    baby-age,
+    instant-death,
+    notify-trade,
+    leash-destroyed,
+    caravan-updated,
+    talisman-activate,
+    deprecated-update-structure-feature,
+    player-spawned-mob,
+    puke,
+    update-stack-size,
+    start-swimming,
+    balloon-pop,
+    treasure-hunt,
+    summon-agent,
+    finished-charging-item,
+    actor-grow-up,
+    vibration-detected,
+    drink-milk,
+    shake-wetness-stop,
+    kinetic-damage-dealt,
+    hurt-without-receiving-damage,
+  }
+  enum animate-action {
+    no-action,
+    swing-arm,
+    wake-up,
+    critical-hit,
+    magic-critical-hit,
+  }
+  enum actor-swing-source {
+    none,
+    build,
+    mine,
+    interact,
+    attack,
+    use-item,
+    throw-item,
+    drop-item,
+    event,
+  }
+  record s-animate {
+    action: animate-action,
+    target-actor-runtime-id: s64,
+    data: f32,
+    swing-source: option<actor-swing-source>,
+  }
+  record s-block-pick-request {
+    position: tuple<s32, s32, s32>,
+    with-data: bool,
+    max-slots: u8,
+  }
+  record s-client-cache-blob-status {
+    miss-hashes: list<s64>,
+    hit-hashes: list<s64>,
+  }
+  record s-client-cache-status {
+    is-cache-supported: bool,
+  }
+  record s-command-request {
+    command: string,
+    origin: command-origin-data,
+    is-internal: bool,
+    version: string,
+  }
+  record command-origin-data {
+    r-type: string,
+    uuid: uuid,
+    request-id: string,
+    player-id: s64,
+  }
+  record s-container-close {
+    container-id: u8,
+    container-type: u8,
+    server-initiated-close: bool,
+  }
+  record s-emote {
+    actor-runtime-id: s64,
+    emote-id: string,
+    emote-length-ticks: s32,
+    xuid: string,
+    platform-id: string,
+    %flags: u8,
+  }
+  record s-emote-list {
+    runtime-id: s64,
+    emote-piece-ids: list<uuid>,
+  }
+  record s-interact {
+    action: action,
+    target-runtime-id: s64,
+    position: option<tuple<f64, f64, f64>>,
+  }
+  enum action {
+    invalid,
+    stop-riding,
+    interact-update,
+    npc-open,
+    open-inventory,
+  }
+  variant inventory-action-source {
+    container,
+    %world,
+    creative,
+    todo,
+    unknown(s32),
+  }
+  variant transaction-data {
+    normal(string),
+    mismatch(string),
+    use-item(use-item-transaction-data),
+    use-item-on-entity(use-item-on-entity-transaction-data),
+    release-item(release-item-transaction-data),
+  }
+  record legacy-set-item-slot {
+    container-id: u8,
+    slots: list<u8>,
+  }
+  record inventory-action {
+    source-type: s32,
+    window-id: option<s32>,
+    source-flags: option<s32>,
+    inventory-slot: s32,
+    old-item: network-item-descriptor,
+    new-item: network-item-descriptor,
+  }
+  record use-item-transaction-data {
+    action-type: s32,
+    trigger-type: u8,
+    block-position: tuple<s32, s32, s32>,
+    block-face: u8,
+    hot-bar-slot: s32,
+    item-in-hand: network-item-descriptor,
+    player-position: tuple<f64, f64, f64>,
+    click-position: tuple<f64, f64, f64>,
+    block-runtime-id: s32,
+    client-prediction: u8,
+    client-cooldown-state: u8,
+  }
+  record use-item-on-entity-transaction-data {
+    target-entity-runtime-id: s64,
+    action-type: s32,
+    hot-bar-slot: s32,
+    item-in-hand: network-item-descriptor,
+    player-position: tuple<f64, f64, f64>,
+    click-position: tuple<f64, f64, f64>,
+  }
+  record release-item-transaction-data {
+    action-type: s32,
+    hot-bar-slot: s32,
+    item-in-hand: network-item-descriptor,
+    head-position: tuple<f64, f64, f64>,
+  }
+  record s-inventory-transaction {
+    legacy-request-id: s32,
+    legacy-set-item-slots: list<legacy-set-item-slot>,
+    has-value: bool,
+    actions: list<inventory-action>,
+    transaction-type: s32,
+    transaction-data: transaction-data,
+  }
+  record item-stack-request-slot-info {
+    container-name: full-container-name,
+    slot-id: u8,
+    stack-id: s32,
+  }
+  record stack-request-item {
+    identifier: option<string>,
+    metadata-value: s32,
+    count: s32,
+    block-runtime-id: s32,
+    extra-data: list<u8>,
+  }
+  record item-stack-request-action-take {
+    count: u8,
+    source: item-stack-request-slot-info,
+    destination: item-stack-request-slot-info,
+  }
+  record item-stack-request-action-place {
+    count: u8,
+    source: item-stack-request-slot-info,
+    destination: item-stack-request-slot-info,
+  }
+  record item-stack-request-action-swap {
+    slot1: item-stack-request-slot-info,
+    slot2: item-stack-request-slot-info,
+  }
+  record item-stack-request-action-drop {
+    count: u8,
+    source: item-stack-request-slot-info,
+    randomly: bool,
+  }
+  record item-stack-request-action-destroy {
+    count: u8,
+    source: item-stack-request-slot-info,
+  }
+  record item-stack-request-action-consume {
+    count: u8,
+    source: item-stack-request-slot-info,
+  }
+  record item-stack-request-action-create {
+    result-index: u8,
+  }
+  record item-stack-request-action-beacon-payment {
+    primary-effect-id: s32,
+    secondary-effect-id: s32,
+  }
+  record item-stack-request-action-mine-block {
+    hotbar-slot: s32,
+    predicted-durability: s32,
+    stack-id: s32,
+  }
+  record item-stack-request-action-craft-recipe {
+    recipe-id: s32,
+    repetitions: u8,
+  }
+  record item-stack-request-action-craft-recipe-auto {
+    recipe-id: s32,
+    repetitions: u8,
+  }
+  record item-stack-request-action-craft-creative {
+    creative-item-id: s32,
+    repetitions: u8,
+  }
+  record item-stack-request-action-optional {
+    recipe-id: s32,
+    filter-string-index: s32,
+  }
+  record item-stack-request-action-grindstone {
+    recipe-id: s32,
+    repair-cost: s32,
+    repetitions: u8,
+  }
+  record item-stack-request-action-loom {
+    pattern-id: string,
+    repetitions: u8,
+  }
+  record item-stack-request-action-craft-results-deprecated {
+    result-items: list<stack-request-item>,
+    times-crafted: u8,
+  }
+  variant item-stack-request-action {
+    take(item-stack-request-action-take),
+    place(item-stack-request-action-place),
+    swap(item-stack-request-action-swap),
+    drop(item-stack-request-action-drop),
+    destroy(item-stack-request-action-destroy),
+    consume(item-stack-request-action-consume),
+    create(item-stack-request-action-create),
+    lab-table-combine,
+    beacon-payment(item-stack-request-action-beacon-payment),
+    mine-block(item-stack-request-action-mine-block),
+    craft-recipe(item-stack-request-action-craft-recipe),
+    craft-recipe-auto(item-stack-request-action-craft-recipe-auto),
+    craft-creative(item-stack-request-action-craft-creative),
+    optional(item-stack-request-action-optional),
+    grindstone(item-stack-request-action-grindstone),
+    loom(item-stack-request-action-loom),
+    craft-non-implemented,
+    craft-results-deprecated(item-stack-request-action-craft-results-deprecated),
+  }
+  record item-stack-request {
+    request-id: s32,
+    actions: list<item-stack-request-action>,
+    filter-strings: list<string>,
+    filter-cause: s32,
+  }
+  record s-item-stack-request {
+    requests: list<item-stack-request>,
+  }
+  record s-loading-screen {
+    loading-screen-packet-type: loading-screen-packet-type,
+    loading-screen-id: option<s32>,
+  }
+  enum loading-screen-packet-type {
+    start-loading-screen,
+    end-loading-screen,
+  }
+  record s-login {
+    protocol-version: s32,
+    jwt: list<u8>,
+    raw-token: list<u8>,
+  }
+  record skin-animation {
+    frames: f64,
+    image: string,
+    image-height: s32,
+    image-width: s32,
+    animation-type: s32,
+    animation-expression: s32,
+  }
+  record persona-piece {
+    is-default: bool,
+    pack-id: string,
+    piece-id: string,
+    piece-type: string,
+    product-id: string,
+  }
+  record persona-piece-tint-colour {
+    colours: list<string>,
+    piece-type: string,
+  }
+  record client-data {
+    client-random-id: s64,
+    device-os: s32,
+    device-id: string,
+    game-version: string,
+    language-code: string,
+    current-input-mode: s32,
+    default-input-mode: s32,
+    ui-profile: s32,
+    server-address: string,
+    device-model: string,
+    gui-scale: s32,
+    client-is-editor-capable: bool,
+    client-editor-connection-intent: s32,
+    max-view-distance: s32,
+    memory-tier: s32,
+    platform-type: s32,
+    graphics-mode: s32,
+    compatible-with-client-side-chunk-gen: bool,
+    platform-offline-id: string,
+    platform-online-id: string,
+    platform-user-id: string,
+    self-signed-id: string,
+    play-fab-id: string,
+    third-party-name: string,
+    third-party-name-only: bool,
+    skin-id: string,
+    skin-data: string,
+    skin-image-height: s32,
+    skin-image-width: s32,
+    skin-colour: string,
+    arm-size: string,
+    persona-skin: bool,
+    premium-skin: bool,
+    trusted-skin: bool,
+    override-skin: bool,
+    cape-data: string,
+    cape-id: string,
+    cape-image-height: s32,
+    cape-image-width: s32,
+    cape-on-classic-skin: bool,
+    skin-geometry: string,
+    skin-geometry-version: string,
+    skin-resource-patch: string,
+    animated-image-data: list<skin-animation>,
+    skin-animation-data: string,
+    persona-pieces: list<persona-piece>,
+    piece-tint-colours: list<persona-piece-tint-colour>,
+  }
+  record s-mob-equipment {
+    entity-runtime-id: s64,
+    item: network-item-stack-descriptor,
+    slot: u8,
+    selected-slot: u8,
+    container-id: u8,
+  }
+  record s-modal-form-response {
+    form-id: s32,
+    json-response: option<string>,
+    form-cancel-reason: option<u8>,
+  }
+  record s-packet-violation-warning {
+    violation-type: s32,
+    violation-severity: s32,
+    violation-packet-id: s32,
+    violation-context: string,
+  }
+  record s-player-action {
+    player-runtime-id: s64,
+    action: player-action-type,
+    block-position: tuple<s32, s32, s32>,
+    result-pos: tuple<s32, s32, s32>,
+    face: s32,
+  }
+  enum player-action-type {
+    unknown,
+    start-destroy-block,
+    abort-destroy-block,
+    stop-destroy-block,
+    get-updated-block,
+    drop-item,
+    start-sleeping,
+    stop-sleeping,
+    respawn,
+    start-jump,
+    start-sprinting,
+    stop-sprinting,
+    start-sneaking,
+    stop-sneaking,
+    creative-destroy-block,
+    change-dimension-ack,
+    start-gliding,
+    stop-gliding,
+    deny-destroy-block,
+    crack-block,
+    change-skin,
+    updated-enchanting-seed,
+    start-swimming,
+    stop-swimming,
+    start-spin-attack,
+    stop-spin-attack,
+    interact-with-block,
+    predict-destroy-block,
+    continue-destroy-block,
+    start-item-use-on,
+    stop-item-use-on,
+    handled-teleport,
+    missed-swing,
+    start-crawling,
+    stop-crawling,
+    start-flying,
+    stop-flying,
+    client-ack-server-data,
+    start-using-item,
+    internal-update,
+    count,
+  }
+  record s-player-auth-input {
+    pitch: f32,
+    yaw: f32,
+    position: tuple<f64, f64, f64>,
+    move-vec: tuple<f64, f64>,
+    head-yaw: f32,
+    input-data: list<s64>,
+    input-mode: s32,
+    play-mode: s32,
+    interaction-model: s32,
+    interact-pitch: f32,
+    interact-yaw: f32,
+    tick: s64,
+    delta: tuple<f64, f64, f64>,
+    block-actions: option<list<player-block-action>>,
+    item-interaction: option<player-inventory-action>,
+    item-stack-request: option<item-stack-request>,
+    vehicle-rotation: option<tuple<f64, f64>>,
+    vehicle-unique-id: option<s64>,
+    analog-move: tuple<f64, f64>,
+    camera-orientation: tuple<f64, f64, f64>,
+    raw-move: tuple<f64, f64>,
+  }
+  record player-inventory-action {
+    legacy-request-id: s32,
+    legacy-slots: list<legacy-set-item-slot>,
+    actions: list<inventory-action>,
+    transaction: player-use-item-transaction-data,
+  }
+  record player-use-item-transaction-data {
+    action-type: s32,
+    trigger-type: u8,
+    block-position: tuple<s32, s32, s32>,
+    block-face: u8,
+    hot-bar-slot: s32,
+    item-in-hand: network-item-descriptor,
+    player-position: tuple<f64, f64, f64>,
+    click-position: tuple<f64, f64, f64>,
+    block-runtime-id: s32,
+    client-prediction: u8,
+    client-cooldown-state: u8,
+  }
+  record player-block-action {
+    action: s32,
+    block-pos: tuple<s32, s32, s32>,
+    face: s32,
+  }
+  enum input-mode {
+    mouse,
+    touch,
+    game-pad,
+    motion-controller,
+  }
+  enum play-mode {
+    normal,
+    teaser,
+    screen,
+    exit-level,
+    num-modes,
+  }
+  enum interaction-model {
+    touch,
+    crosshair,
+    classic,
+  }
+  enum input-data {
+    ascend,
+    descend,
+    north-jump,
+    jump-down,
+    sprint-down,
+    change-height,
+    jumping,
+    auto-jumping-in-water,
+    sneaking,
+    sneak-down,
+    up,
+    down,
+    left,
+    right,
+    up-left,
+    up-right,
+    want-up,
+    want-down,
+    want-down-slow,
+    want-up-slow,
+    sprinting,
+    ascend-block,
+    descend-block,
+    sneak-toggle-down,
+    persist-sneak,
+    start-sprinting,
+    stop-sprinting,
+    start-sneaking,
+    stop-sneaking,
+    start-swimming,
+    stop-swimming,
+    start-jumping,
+    start-gliding,
+    stop-gliding,
+    perform-item-interaction,
+    perform-block-actions,
+    perform-item-stack-request,
+    handled-teleport,
+    emoting,
+    missed-swing,
+    start-crawling,
+    stop-crawling,
+    start-flying,
+    stop-flying,
+    client-ack-server-data,
+    client-predicted-vehicle,
+    paddling-left,
+    paddling-right,
+    block-breaking-delay-enabled,
+    horizontal-collision,
+    vertical-collision,
+    down-left,
+    down-right,
+    start-using-item,
+    camera-relative-movement-enabled,
+    rot-controlled-by-move-direction,
+    start-spin-attack,
+    stop-spin-attack,
+    is-hotbar-touch-only,
+    jump-released-raw,
+    jump-pressed-raw,
+    jump-current-raw,
+    sneak-released-raw,
+    sneak-pressed-raw,
+    sneak-current-raw,
+    internal-update,
+  }
+  record s-player-hotbar {
+    selected-slot: s32,
+    container-id: u8,
+    should-select-slot: bool,
+  }
+  variant ability-value {
+    %bool(bool),
+    float(f32),
+  }
+  record s-request-ability {
+    ability: s32,
+    value: ability-value,
+  }
+  record s-request-chunk-radius {
+    chunk-radius: s32,
+    max-chunk-radius: u8,
+  }
+  record s-request-network-settings {
+    client-network-version: s32,
+  }
+  record s-resource-pack-client-response {
+    response: u8,
+    download-size: s32,
+    pack-ids: list<string>,
+  }
+  record s-respawn {
+    position: tuple<f64, f64, f64>,
+    state: respawn-state,
+    player-runtime-id: s64,
+  }
+  enum respawn-state {
+    searching-for-spawn,
+    ready-to-spawn,
+    client-ready-to-spawn,
+  }
+  record s-set-local-player-as-initialized {
+    player-id: s64,
+  }
+  record s-set-player-inventory-options {
+    left-inventory-tab: s32,
+    right-inventory-tab: s32,
+    filtering: bool,
+    layout-inv: s32,
+    layout-craft: s32,
+  }
+  record s-text {
+    needs-translation: bool,
+    r-type: text-packet-type,
+    source-name: string,
+    message: string,
+    parameters: list<string>,
+    xuid: string,
+    platform-chat-id: string,
+    filtered-message: option<string>,
+  }
+  enum text-packet-type {
+    raw,
+    chat,
+    translation,
+    popup,
+    jukebox-popup,
+    tip,
+    system,
+    whisper,
+    announcement,
+    json-whisper,
+    json,
+    json-announcement,
+  }
+  record c-add-actor {
+    target-actor-id: s64,
+    target-runtime-id: s64,
+    actor-type: string,
+    position: tuple<f64, f64, f64>,
+    velocity: tuple<f64, f64, f64>,
+    rotation: tuple<f64, f64>,
+    y-head-rotation: f32,
+    y-body-rotation: f32,
+    attributes-list: list<synced-attribute>,
+    actor-data: string,
+    synced-properties: property-sync-data,
+    actor-links: list<actor-link>,
+  }
+  record synced-attribute {
+    attribute-name: string,
+    min-value: f32,
+    current-value: f32,
+    max-value: f32,
+  }
+  record c-add-item-actor {
+    target-actor-id: s64,
+    target-runtime-id: s64,
+    item: item-stack-wrapper,
+    position: tuple<f64, f64, f64>,
+    velocity: tuple<f64, f64, f64>,
+    entity-data: string,
+    is-from-fishing: bool,
+  }
+  record c-add-player {
+    uuid: uuid,
+    player-name: string,
+    target-runtime-id: s64,
+    platform-chat-id: string,
+    position: tuple<f64, f64, f64>,
+    velocity: tuple<f64, f64, f64>,
+    rotation: tuple<f64, f64>,
+    y-head-rotation: f32,
+    carried-item: network-item-stack-descriptor,
+    player-game-type: game-type,
+    entity-data: string,
+    synced-properties: property-sync-data,
+    abilities-data: serialized-abilities-data,
+    actor-links: list<actor-link>,
+    device-id: string,
+    build-platform: build-platform,
+  }
+  record c-available-commands {
+    enum-values: list<string>,
+    chained-subcommand-values: list<string>,
+    post-fixes: list<string>,
+    enum-data: list<enum-data>,
+    chained-subcommand-data: list<chained-subcommand-data>,
+    commands: list<command-data>,
+    soft-enums: list<soft-enum-data>,
+    constraints: list<constrained-value-data>,
+  }
+  record enum-data {
+    name: string,
+    values: list<s32>,
+  }
+  record chained-subcommand-data {
+    name: string,
+    subcommand-values: list<chained-subcommand-relationship>,
+  }
+  record chained-subcommand-relationship {
+    index: s32,
+    value: s32,
+  }
+  record command-data {
+    name: string,
+    description: string,
+    %flags: s32,
+    permission-level: command-permission-level,
+    alias-enum: s32,
+    command-data-chained-subcommand-indexes: list<s32>,
+    overloads: list<overload-data>,
+  }
+  record overload-data {
+    is-chaining: bool,
+    parameter-data: list<param-data>,
+  }
+  record param-data {
+    name: string,
+    parse-symbol: s32,
+    is-optional: bool,
+    options: u8,
+  }
+  record soft-enum-data {
+    enum-name: string,
+    enum-options: list<string>,
+  }
+  record constrained-value-data {
+    enum-value-symbol: s32,
+    enum-symbol: s32,
+    constraint-indices: list<u8>,
+  }
+  record c-block-actor-data {
+    block-position: tuple<s32, s32, s32>,
+    actor-data-tags: string,
+  }
+  record c-block-event {
+    block-position: tuple<s32, s32, s32>,
+    event-type: s32,
+    event-value: s32,
+  }
+  record c-boss-event {
+    boss-entity-id: s64,
+    player-entity-id: s64,
+    event-type: u8,
+    title: string,
+    filtered-title: string,
+    health-percentage: f32,
+    color: u8,
+    overlay: u8,
+  }
+  record c-change-dimension {
+    dimension-id: s32,
+    position: tuple<f64, f64, f64>,
+    respawn: bool,
+    loading-screen-id: option<s32>,
+  }
+  record c-chunk-radius-updated {
+    chunk-radius: s32,
+  }
+  record missing-blob-data {
+    blob-id: s64,
+    blob-data: list<u8>,
+  }
+  record c-client-cache-miss-response {
+    missing-blobs: list<missing-blob-data>,
+  }
+  enum build-platform {
+    unknown,
+    google,
+    ios,
+    osx,
+    amazon,
+    gear-vr,
+    uwp,
+    win32,
+    dedicated,
+    tv-os,
+    sony,
+    nx,
+    xbox,
+    windows-phone,
+    linux,
+  }
+  enum game-type {
+    unknown,
+    survival,
+    creative,
+    adventure,
+    default,
+    spectator,
+  }
+  record serialized-abilities-data {
+    target-player-raw-id: s64,
+    player-permissions: player-permission-level,
+    command-permissions: command-permission-level,
+    layers: list<serialized-abilities-data-serialized-layer>,
+  }
+  enum player-permission-level {
+    visitor,
+    member,
+    operator,
+    custom,
+  }
+  enum command-permission-level {
+    any,
+    game-directors,
+    admin,
+    host,
+    owner,
+    internal,
+  }
+  record serialized-abilities-data-serialized-layer {
+    serialized-layer: s32,
+    abilities-set: s32,
+    ability-value: s32,
+    fly-speed: f32,
+    vertical-fly-speed: f32,
+    walk-speed: f32,
+  }
+  record actor-link {
+    ridden-unique-id: s64,
+    rider-unique-id: s64,
+    link-type: u8,
+    immediate: bool,
+    rider-initiated: bool,
+    vehicle-angular-velocity: f32,
+  }
+  record c-container-open {
+    container-id: u8,
+    container-type: u8,
+    position: tuple<s32, s32, s32>,
+    target-entity-id: s64,
+  }
+  record c-correct-player-move-prediction {
+    prediction-type: u8,
+    pos: tuple<f64, f64, f64>,
+    pos-delta: tuple<f64, f64, f64>,
+    rotation: tuple<f64, f64>,
+    vehicle-angular-velocity: option<f32>,
+    on-ground: bool,
+    tick: s64,
+  }
+  record item-descriptor-count {
+    item-identifier: string,
+    metadata-value: s32,
+    count: s32,
+  }
+  record recipe-unlock-requirement {
+    context: s32,
+  }
+  record bedrock-shapeless-recipe {
+    recipe-id: string,
+    input: list<item-descriptor-count>,
+    output: list<network-item-descriptor>,
+    uuid: uuid,
+    block: string,
+    priority: s32,
+    unlock-requirement: recipe-unlock-requirement,
+    recipe-network-id: s32,
+  }
+  record bedrock-shaped-recipe {
+    recipe-id: string,
+    width: s32,
+    height: s32,
+    input: list<item-descriptor-count>,
+    output: list<network-item-descriptor>,
+    uuid: uuid,
+    block: string,
+    priority: s32,
+    assume-symmetry: bool,
+    unlock-requirement: recipe-unlock-requirement,
+    recipe-network-id: s32,
+  }
+  variant bedrock-recipe {
+    shapeless(bedrock-shapeless-recipe),
+    shaped(bedrock-shaped-recipe),
+  }
+  record c-crafting-data {
+    recipes: list<bedrock-recipe>,
+    clean-recipes: bool,
+  }
+  record c-creative-content {
+    groups: list<creative-group-info-payload>,
+    entries: list<creative-item-entry-payload>,
+  }
+  enum creative-category {
+    all,
+    construction,
+    nature,
+    equipment,
+    items,
+    item-command-only,
+    undefined,
+  }
+  record creative-group-info-payload {
+    creative-category: creative-category,
+    name: string,
+    group-icon-item: network-item-descriptor,
+  }
+  record creative-item-entry-payload {
+    id: s32,
+    item: network-item-descriptor,
+    group-index: s32,
+  }
+  record c-disconnect {
+    reason: s32,
+    skip-message: bool,
+    message: string,
+    filtered-message: string,
+  }
+  record c-gamerules-changed {
+    rule-data: list<game-rule>,
+  }
+  record game-rule {
+    rule-name: string,
+    rule-can-be-modified: bool,
+    rule-value: rule-value,
+  }
+  enum rule-value {
+    null,
+  }
+  record c-inventory-content {
+    container-id: s32,
+    slots: list<network-item-stack-descriptor>,
+    full-container-name: full-container-name,
+    storage-item: network-item-stack-descriptor,
+  }
+  record c-inventory-slot {
+    container-id: s32,
+    slot: s32,
+    full-container-name: option<full-container-name>,
+    storage-item: option<network-item-stack-descriptor>,
+    item: network-item-stack-descriptor,
+  }
+  record c-item-registry {
+    items: list<item-data>,
+  }
+  record item-data {
+    item-name: string,
+    item-id: s32,
+    is-component-based: bool,
+    item-version: s32,
+    component-data: list<u8>,
+  }
+  record item-stack-response-slot-info {
+    requested-slot: u8,
+    slot: u8,
+    amount: u8,
+    item-stack-net-id: s32,
+    custom-name: string,
+    filtered-custom-name: string,
+    durability-correction: s32,
+  }
+  record item-stack-response-container-info {
+    full-container-name: full-container-name,
+    slots: list<item-stack-response-slot-info>,
+  }
+  record item-stack-response-info {
+    %result: u8,
+    client-request-id: s32,
+    containers: list<item-stack-response-container-info>,
+  }
+  record c-item-stack-response {
+    responses: list<item-stack-response-info>,
+  }
+  record c-level-chunk {
+    dimension: s32,
+    cache-enabled: bool,
+    chunk: list<u8>,
+    block-actors: list<string>,
+  }
+  record c-level-event {
+    event-id: s32,
+    position: tuple<f64, f64, f64>,
+    data: s32,
+  }
+  enum level-event {
+    particles-destroy-block,
+    block-start-break,
+    block-stop-break,
+    block-update-break,
+  }
+  record c-level-sound-event {
+    sound-event: string,
+    position: tuple<f64, f64, f64>,
+    data: s32,
+    actor-identifier: string,
+    is-baby: bool,
+    is-global: bool,
+    actor-unique-id: s64,
+    fire-at-position: option<tuple<f64, f64, f64>>,
+  }
+  record c-mob-effect {
+    target-runtime-id: s64,
+    event-id: u8,
+    effect-id: s32,
+    effect-amplifier: s32,
+    show-particles: bool,
+    effect-duration-ticks: s32,
+    tick: s64,
+    ambient: bool,
+  }
+  record c-mob-equipment {
+    target-runtime-id: s64,
+    item: network-item-stack-descriptor,
+    slot: u8,
+    selected-slot: u8,
+    container-id: u8,
+  }
+  record c-modal-form-request {
+    form-id: s32,
+    form-ui-json: string,
+  }
+  record c-move-actor-absolute {
+    actor-runtime-id: s64,
+    header: u8,
+    position: tuple<f64, f64, f64>,
+    rotation-x: u8,
+    rotation-y: u8,
+    rotation-y-head: u8,
+  }
+  record c-move-actor-delta {
+    entity-runtime-id: s64,
+    %flags: s32,
+    x: f32,
+    y: f32,
+    z: f32,
+    pitch: u8,
+    yaw: u8,
+    head-yaw: u8,
+  }
+  record c-move-player {
+    player-runtime-id: s64,
+    position: tuple<f64, f64, f64>,
+    pitch: f32,
+    yaw: f32,
+    head-yaw: f32,
+    mode: u8,
+    on-ground: bool,
+    riding-runtime-id: s64,
+    teleport-cause: s32,
+    teleport-source-entity-type: s32,
+    tick: s64,
+  }
+  record c-network-chunk-publisher-update {
+    pos-for-view: tuple<s32, s32, s32>,
+    new-radius: s32,
+    server-build-chunk-list: list<tuple<f64, f64>>,
+  }
+  record c-network-settings {
+    compression-threshold: s32,
+    compression-algorithm: s32,
+    client-throttle-enabled: bool,
+    client-throttle-threshold: u8,
+    client-throttle-scalar: f32,
+  }
+  enum c-play-status {
+    login-success,
+    outdated-client,
+    outdated-server,
+    player-spawn,
+    invalid-tenant,
+    edition-mismatch-edu-to-vanilla,
+    edition-mismatch-vanilla-to-edu,
+    server-full-sub-client,
+    editor-mismatch-editor-to-vanilla,
+    editor-mismatch-vanilla-to-editor,
+  }
+  record c-player-hotbar {
+    selected-slot: s32,
+    container-id: u8,
+    should-select-slot: bool,
+  }
+  record c-player-list {
+    action: u8,
+    entries: list<player-list-entry>,
+  }
+  record player-list-entry {
+    uuid: uuid,
+    entity-unique-id: s64,
+    username: string,
+    xuid: string,
+    platform-chat-id: string,
+    build-platform: build-platform,
+    skin: skin,
+    is-teacher: bool,
+    is-host: bool,
+    is-sub-client: bool,
+    player-color: list<u8>,
+  }
+  record skin {
+    skin-id: string,
+    play-fab-id: string,
+    resource-patch: list<u8>,
+    image-width: s32,
+    image-height: s32,
+    skin-data: list<u8>,
+    animations: list<skin-animation>,
+    cape-width: s32,
+    cape-height: s32,
+    cape-data: list<u8>,
+    geometry-data: list<u8>,
+    animation-data: list<u8>,
+    geometry-data-engine-version: list<u8>,
+    cape-id: string,
+    full-id: string,
+    arm-size: string,
+    skin-color: string,
+    persona-pieces: list<persona-piece>,
+    piece-tint-colors: list<piece-tint-color>,
+    is-premium: bool,
+    is-persona: bool,
+    persona-cape-on-classic: bool,
+    is-primary-user: bool,
+    override-appearance: bool,
+    is-trusted: bool,
+    profile-hash: string,
+  }
+  record piece-tint-color {
+    piece-type: string,
+    colors: list<s32>,
+  }
+  record c-remove-actor {
+    target-actor-id: s64,
+  }
+  record c-remove-objective {
+    objective-name: string,
+  }
+  record pack-instance-id {
+    pack-id: string,
+    version: string,
+    sub-pack-name: string,
+  }
+  record c-resource-pack-stack-packet {
+    texture-pack-required: bool,
+    texture-pack-list: list<pack-instance-id>,
+    base-game-version: string,
+    experiments: experiments,
+    include-editor-packs: bool,
+  }
+  record pack-info-data {
+    pack-id-version: pack-id-version,
+    pack-size: s64,
+    content-key: string,
+    subpack-name: string,
+    content-identity: string,
+    has-scripts: bool,
+    is-addon-pack: bool,
+    is-ray-tracing-capable: bool,
+    cdn-url: string,
+  }
+  record c-resource-packs-info {
+    resource-pack-required: bool,
+    has-addon-packs: bool,
+    has-scripts: bool,
+    force-disable-vibrant-visuals: bool,
+    world-template-id-and-version: pack-id-version,
+    resource-packs: list<pack-info-data>,
+  }
+  record pack-id-version {
+    pack-uuid: uuid,
+    pack-version: string,
+  }
+  record c-set-actor-data {
+    target-runtime-id: s64,
+    actor-data: string,
+    synced-properties: property-sync-data,
+    tick: s64,
+  }
+  variant metadata-value {
+    byte(u8),
+    short(s32),
+    int(s32),
+    float(f32),
+    %string(string),
+    compound-tag,
+    item-pos(tuple<s32, s32, s32>),
+    int64(s64),
+    vec3(tuple<f64, f64, f64>),
+  }
+  record property-sync-data {
+    int-entries-list: list<tuple<s32, s32>>,
+    float-entries-list: list<tuple<s32, f32>>,
+  }
+  record c-set-actor-link {
+    link: actor-link,
+  }
+  record c-set-actor-motion {
+    target-runtime-id: s64,
+    motion: tuple<f64, f64, f64>,
+    tick: s64,
+  }
+  record c-set-difficulty {
+    difficulty: s32,
+  }
+  record c-set-display-objective {
+    display-slot-name: string,
+    objective-name: string,
+    objective-display-name: string,
+    criteria-name: string,
+    sort-order: s32,
+  }
+  record c-set-health {
+    health: s32,
+  }
+  record c-set-player-game-type {
+    player-game-type: game-type,
+  }
+  record c-set-score {
+    action: s32,
+    entries: list<score-entry>,
+  }
+  record score-entry {
+    scoreboard-id: s64,
+    objective-name: string,
+    score: s32,
+    entry-type: s32,
+    entity-unique-id: s64,
+    custom-name: string,
+  }
+  record c-set-spawn-position {
+    spawn-position-type: spawn-position-type,
+    block-position: tuple<s32, s32, s32>,
+    dimension-type: s32,
+    spawn-block-pos: tuple<s32, s32, s32>,
+  }
+  enum spawn-position-type {
+    player-respawn,
+    world-respawn,
+  }
+  record c-set-time {
+    time: s32,
+  }
+  record c-set-title {
+    title-type: title-type,
+    title-text: string,
+    fade-in-time: s32,
+    stay-time: s32,
+    fade-out-time: s32,
+    xuid: string,
+    platform-online-id: string,
+    filtered-title-message: string,
+  }
+  enum title-type {
+    clear,
+    reset,
+    title,
+    subtitle,
+    actionbar,
+    times,
+    title-text-object,
+    subtitle-text-object,
+    actionbar-text-object,
+  }
+  record c-show-credits {
+    player-runtime-id: s64,
+    credits-state: s32,
+  }
+  record c-start-game {
+    entity-id: s64,
+    runtime-entity-id: s64,
+    player-gamemode: game-type,
+    position: tuple<f64, f64, f64>,
+    pitch: f32,
+    yaw: f32,
+    level-settings: level-settings,
+    level-id: string,
+    level-name: string,
+    premium-world-template-id: string,
+    is-trial: bool,
+    rewind-history-size: s32,
+    server-authoritative-block-breaking: bool,
+    current-level-time: s64,
+    enchantment-seed: s32,
+    block-properties-size: s32,
+    multiplayer-correlation-id: string,
+    enable-itemstack-net-manager: bool,
+    server-version: string,
+    compound-id: u8,
+    compound-len: s32,
+    compound-end: u8,
+    block-registry-checksum: s64,
+    world-template-id: uuid,
+    enable-clientside-generation: bool,
+    blocknetwork-ids-are-hashed: bool,
+    server-auth-sounds: bool,
+    server-join-information: option<server-join-information>,
+    telemetry: server-telemetry-data,
+  }
+  record server-join-information {
+    gathering: option<gathering-join-info>,
+    store-entry-point: option<store-entry-point-info>,
+    presence: option<presence-info>,
+  }
+  record gathering-join-info {
+    experience-id: uuid,
+    experience-name: string,
+    experience-world-id: uuid,
+    experience-world-name: string,
+    creator-id: string,
+    unknown-uuid-1: uuid,
+    unknown-uuid-2: uuid,
+    server-id: string,
+  }
+  record store-entry-point-info {
+    store-id: string,
+    store-name: string,
+  }
+  record presence-info {
+    experience-name: string,
+    world-name: string,
+  }
+  record server-telemetry-data {
+    server-id: string,
+    scenario-id: string,
+    world-id: string,
+    owner-id: string,
+  }
+  record level-settings {
+    seed: s64,
+    spawn-biome-type: s32,
+    custom-biome-name: string,
+    dimension: s32,
+    generator-type: s32,
+    world-gamemode: game-type,
+    hardcore: bool,
+    difficulty: s32,
+    spawn-position: tuple<s32, s32, s32>,
+    has-achievements-disabled: bool,
+    editor-world-type: s32,
+    is-created-in-editor: bool,
+    is-exported-from-editor: bool,
+    day-cycle-stop-time: s32,
+    education-edition-offer: s32,
+    has-education-features-enabled: bool,
+    education-product-id: string,
+    rain-level: f32,
+    lightning-level: f32,
+    has-confirmed-platform-locked-content: bool,
+    was-multiplayer-intended: bool,
+    was-lan-broadcasting-intended: bool,
+    xbox-live-broadcast-setting: game-publish-setting,
+    platform-broadcast-setting: game-publish-setting,
+    commands-enabled: bool,
+    is-texture-packs-required: bool,
+    rule-data: list<game-rule>,
+    experiments: experiments,
+    bonus-chest: bool,
+    has-start-with-map-enabled: bool,
+    permission-level: u8,
+    server-simulation-distance: s32,
+    has-locked-behavior-pack: bool,
+    has-locked-resource-pack: bool,
+    is-from-locked-world-template: bool,
+    is-using-msa-gamertags-only: bool,
+    is-from-world-template: bool,
+    is-world-template-option-locked: bool,
+    is-only-spawning-v1-villagers: bool,
+    is-disabling-personas: bool,
+    is-disabling-custom-skins: bool,
+    emote-chat-muted: bool,
+    game-version: string,
+    limited-world-width: s32,
+    limited-world-height: s32,
+    new-nether: bool,
+    edu-shared-uri-button-name: string,
+    edu-shared-uri-link-uri: string,
+    override-force-experimental-gameplay-has-value: bool,
+    chat-restriction-level: u8,
+    disable-player-interactions: bool,
+    server-editor-connection-policy: s32,
+    allow-anonymous-block-drops-in-editor-worlds: bool,
+  }
+  record experiments {
+    toggles: list<experiment-toggle>,
+    experiments-ever-toggled: bool,
+  }
+  record experiment-toggle {
+    name: string,
+    enabled: bool,
+  }
+  enum game-publish-setting {
+    no-multi-play,
+    invite-only,
+    friends-only,
+    friends-of-friends,
+    public,
+  }
+  record gg {
+    name: string,
+    id: u8,
+    len: s32,
+    end: u8,
+  }
+  record c-take-item-actor {
+    item-runtime-id: s64,
+    actor-runtime-id: s64,
+  }
+  record c-transfer {
+    server-address: string,
+    server-port: s32,
+    reload-world: bool,
+  }
+  record c-update-abilities {
+    data: serialized-abilities-data,
+  }
+  enum ability {
+    build,
+    mine,
+    doors-and-switches,
+    open-containers,
+    attack-players,
+    attack-mobs,
+    operator-commands,
+    teleport,
+    invulnerable,
+    flying,
+    may-fly,
+    instabuild,
+    lightning,
+    fly-speed,
+    walk-speed,
+    muted,
+    world-builder,
+    no-clip,
+    privileged-builder,
+    vertical-fly-speed,
+    ability-count,
+  }
+  record c-update-attributes {
+    target-runtime-id: s64,
+    attribute-list: list<attribute-data>,
+    tick: s64,
+  }
+  record attribute-data {
+    min-value: f32,
+    max-value: f32,
+    current-value: f32,
+    default-min-value: f32,
+    default-max-value: f32,
+    default-value: f32,
+    name: string,
+    modifiers: list<attribute-modifier>,
+  }
+  record attribute-modifier {
+    id: string,
+    name: string,
+    amount: f32,
+    operation: s32,
+    operand: s32,
+    is-serializable: bool,
+  }
+  record c-update-block {
+    block-position: tuple<s32, s32, s32>,
+    block-runtime-id: s32,
+    %flags: s32,
+    layer: s32,
+  }
+  record c-update-trade {
+    container-id: u8,
+    r-type: u8,
+    size: s32,
+    trader-tier: s32,
+    entity-unique-id: s64,
+    last-trading-player: s64,
+    display-name: string,
+    use-new-trade-screen: bool,
+    using-economy-trade: bool,
+    data: string,
+  }
+  record network-item-descriptor {
+    id: s32,
+    stack-size: s32,
+    aux-value: s32,
+    block-runtime-id: s32,
+    nbt-data: string,
+    place-on-blocks: list<string>,
+    destroy-blocks: list<string>,
+    shield-blocking-tick: s64,
+  }
+  record item-stack-wrapper {
+    id: s32,
+    stack-size: s32,
+    aux-value: s32,
+    block-runtime-id: s32,
+    nbt-data: string,
+    place-on-blocks: list<string>,
+    destroy-blocks: list<string>,
+    shield-blocking-tick: s64,
+    net-id: option<s32>,
+  }
+  record network-item-stack-descriptor {
+    id: s32,
+    stack-size: s32,
+    aux-value: s32,
+    block-runtime-id: s32,
+    extra-data: list<u8>,
+    net-id: option<s32>,
+  }
+  record full-container-name {
+    container-name: container-name,
+    dynamic-id: option<s32>,
+  }
+  enum container-name {
+    anvil-input,
+    anvil-material,
+    anvil-result-preview,
+    smithing-table-input,
+    smithing-table-material,
+    smithing-table-result-preview,
+    armor,
+    level-entity,
+    beacon-payment,
+    brewing-stand-input,
+    brewing-stand-result,
+    brewing-stand-fuel,
+    combined-hot-bar-and-inventory,
+    crafting-input,
+    crafting-output-preview,
+    recipe-construction,
+    recipe-nature,
+    recipe-items,
+    recipe-search,
+    recipe-search-bar,
+    recipe-equipment,
+    recipe-book,
+    enchanting-input,
+    enchanting-material,
+    furnace-fuel,
+    furnace-ingredient,
+    furnace-result,
+    horse-equip,
+    hot-bar,
+    inventory,
+    shulker-box,
+    trade-ingredient1,
+    trade-ingredient2,
+    trade-result-preview,
+    offhand,
+    compound-creator-input,
+    compound-creator-output-preview,
+    element-constructor-output-preview,
+    material-reducer-input,
+    material-reducer-output,
+    lab-table-input,
+    loom-input,
+    loom-dye,
+    loom-material,
+    loom-result-preview,
+    blast-furnace-ingredient,
+    smoker-ingredient,
+    trade2-ingredient1,
+    trade2-ingredient2,
+    trade2-result-preview,
+    grindstone-input,
+    grindstone-additional,
+    grindstone-result-preview,
+    stonecutter-input,
+    stonecutter-result-preview,
+    cartography-input,
+    cartography-additional,
+    cartography-result-preview,
+    barrel,
+    cursor,
+    created-output,
+    smithing-table-template,
+    crafter-level-entity,
+    dynamic,
+    recipe-food,
+    recipe-blocks,
+    recipe-furnace-items,
+  }
+  record network-item-stack {
+    id: s32,
+    count: s32,
+    aux-value: s32,
+    block-runtime-id: s32,
+    extra-data: list<u8>,
+  }
+  variant serverbound-packet {
+    s-actor-event(s-actor-event),
+    s-animate(s-animate),
+    s-block-pick-request(s-block-pick-request),
+    s-client-cache-blob-status(s-client-cache-blob-status),
+    s-client-cache-status(s-client-cache-status),
+    s-command-request(s-command-request),
+    s-container-close(s-container-close),
+    s-emote(s-emote),
+    s-emote-list(s-emote-list),
+    s-interact(s-interact),
+    s-inventory-transaction(s-inventory-transaction),
+    s-item-stack-request(s-item-stack-request),
+    s-loading-screen(s-loading-screen),
+    s-login(s-login),
+    s-mob-equipment(s-mob-equipment),
+    s-modal-form-response(s-modal-form-response),
+    s-packet-violation-warning(s-packet-violation-warning),
+    s-player-action(s-player-action),
+    s-player-auth-input(s-player-auth-input),
+    s-player-hotbar(s-player-hotbar),
+    s-request-ability(s-request-ability),
+    s-request-chunk-radius(s-request-chunk-radius),
+    s-request-network-settings(s-request-network-settings),
+    s-resource-pack-client-response(s-resource-pack-client-response),
+    s-respawn(s-respawn),
+    s-set-local-player-as-initialized(s-set-local-player-as-initialized),
+    s-set-player-inventory-options(s-set-player-inventory-options),
+    s-text(s-text),
+    unknown,
+  }
+  variant clientbound-packet {
+    c-add-actor(c-add-actor),
+    c-add-item-actor(c-add-item-actor),
+    c-add-player(c-add-player),
+    c-available-commands(c-available-commands),
+    c-biome-definition-list,
+    c-block-actor-data(c-block-actor-data),
+    c-block-event(c-block-event),
+    c-boss-event(c-boss-event),
+    c-change-dimension(c-change-dimension),
+    c-chunk-radius-updated(c-chunk-radius-updated),
+    c-client-cache-miss-response(c-client-cache-miss-response),
+    c-container-open(c-container-open),
+    c-correct-player-move-prediction(c-correct-player-move-prediction),
+    c-crafting-data(c-crafting-data),
+    c-creative-content(c-creative-content),
+    c-disconnect(c-disconnect),
+    c-gamerules-changed(c-gamerules-changed),
+    c-inventory-content(c-inventory-content),
+    c-inventory-slot(c-inventory-slot),
+    c-item-registry(c-item-registry),
+    c-item-stack-response(c-item-stack-response),
+    c-level-chunk(c-level-chunk),
+    c-level-event(c-level-event),
+    c-level-sound-event(c-level-sound-event),
+    c-mob-effect(c-mob-effect),
+    c-mob-equipment(c-mob-equipment),
+    c-modal-form-request(c-modal-form-request),
+    c-move-actor-absolute(c-move-actor-absolute),
+    c-move-actor-delta(c-move-actor-delta),
+    c-move-player(c-move-player),
+    c-network-chunk-publisher-update(c-network-chunk-publisher-update),
+    c-network-settings(c-network-settings),
+    c-play-status(c-play-status),
+    c-player-hotbar(c-player-hotbar),
+    c-player-list(c-player-list),
+    c-remove-actor(c-remove-actor),
+    c-remove-objective(c-remove-objective),
+    c-resource-pack-stack-packet(c-resource-pack-stack-packet),
+    c-resource-packs-info(c-resource-packs-info),
+    c-set-actor-data(c-set-actor-data),
+    c-set-actor-link(c-set-actor-link),
+    c-set-actor-motion(c-set-actor-motion),
+    c-set-difficulty(c-set-difficulty),
+    c-set-display-objective(c-set-display-objective),
+    c-set-health(c-set-health),
+    c-set-player-game-type(c-set-player-game-type),
+    c-set-score(c-set-score),
+    c-set-spawn-position(c-set-spawn-position),
+    c-set-time(c-set-time),
+    c-set-title(c-set-title),
+    c-show-credits(c-show-credits),
+    c-start-game(c-start-game),
+    c-take-item-actor(c-take-item-actor),
+    c-transfer(c-transfer),
+    c-update-abilities(c-update-abilities),
+    c-update-attributes(c-update-attributes),
+    c-update-block(c-update-block),
+    c-update-trade(c-update-trade),
+    unknown,
+  }
+}

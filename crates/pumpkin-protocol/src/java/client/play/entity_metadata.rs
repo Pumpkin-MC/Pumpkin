@@ -2,7 +2,6 @@ use std::io::{Cursor, Write};
 
 use pumpkin_data::{
     block_state_remap::remap_block_state_for_version,
-    item_id_remap::remap_item_id_for_version,
     meta_data_type::MetaDataType,
     packet::clientbound::play::SET_ENTITY_DATA,
     tracked_data::{TrackedData, TrackedId},
@@ -12,6 +11,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 
 use crate::{
     ClientPacket, VarInt,
+    codec::var_long::VarLong,
     ser::{NetworkWriteExt, WritingError},
 };
 
@@ -65,8 +65,7 @@ impl ClientPacket for CSetEntityMetadata {
         mut write: impl Write,
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        // 1. Entity ID
-        if *version <= JavaMinecraftVersion::V_1_7_6 {
+        if *version < JavaMinecraftVersion::V_1_8 {
             write.write_i32_be(self.entity_id.0)?;
         } else {
             write.write_var_int(&self.entity_id)?;
@@ -141,7 +140,9 @@ impl<T> Metadata<T> {
         writer.write_u8(resolved_index)?;
         writer.write_var_int(&VarInt(remapped_type_id))?;
 
-        if self.r#type == MetaDataType::BLOCK_STATE {
+        if self.r#type == MetaDataType::BLOCK_STATE
+            || self.r#type == MetaDataType::OPTIONAL_BLOCK_STATE
+        {
             let mut serialized_value = Vec::new();
             self.value.write_metadata(&mut serialized_value, version)?;
 
@@ -152,32 +153,16 @@ impl<T> Metadata<T> {
             let remapped_state = u16::try_from(decoded_state.0).map_or(decoded_state, |state_id| {
                 VarInt(i32::from(remap_block_state_for_version(state_id, *version)))
             });
-            writer.write_var_int(&remapped_state)?;
+            if *version >= JavaMinecraftVersion::V_1_9 {
+                writer.write_var_int(&remapped_state)?;
+            } else {
+                writer.write_i32(remapped_state.0)?;
+            }
             return Ok(());
         }
 
         if self.r#type == MetaDataType::ITEM_STACK {
-            let mut serialized_value = Vec::new();
-            self.value.write_metadata(&mut serialized_value, version)?;
-
-            let mut cursor = Cursor::new(serialized_value);
-            let item_count = VarInt::decode(&mut cursor).map_err(|e| {
-                WritingError::Message(format!("Failed to decodeitem stack count: {e}"))
-            })?;
-
-            if item_count.0 <= 0 {
-                writer.write_var_int(&item_count)?;
-            } else {
-                let item_id = VarInt::decode(&mut cursor)
-                    .map_err(|e| WritingError::Message(format!("Failed to decode item id: {e}")))?;
-                let remapped_id = u16::try_from(item_id.0)
-                    .map_or(0, |id| remap_item_id_for_version(id, *version));
-                writer.write_var_int(&item_count)?;
-                writer.write_var_int(&VarInt(i32::from(remapped_id)))?;
-                let remainder_start = cursor.position() as usize;
-                let inner = cursor.into_inner();
-                writer.write_slice(&inner[remainder_start..])?;
-            }
+            self.value.write_metadata(&mut writer, version)?;
             return Ok(());
         }
 
@@ -194,6 +179,33 @@ impl<T> Metadata<T> {
             let remainder_start = cursor.position() as usize;
             let inner = cursor.into_inner();
             writer.write_slice(&inner[remainder_start..])?;
+            return Ok(());
+        }
+
+        if self.r#type == MetaDataType::PARTICLES {
+            let mut serialized_value = Vec::new();
+            self.value.write_metadata(&mut serialized_value, version)?;
+
+            let mut cursor = Cursor::new(serialized_value);
+            let count = VarInt::decode(&mut cursor).map_err(|e| {
+                WritingError::Message(format!("Failed to decode effect particle count: {e}"))
+            })?;
+            writer.write_var_int(&count)?;
+            for _ in 0..count.0 {
+                let particle_id = VarInt::decode(&mut cursor).map_err(|e| {
+                    WritingError::Message(format!("Failed to decode effect particle id: {e}"))
+                })?;
+                writer.write_var_int(&particle_id_for_version(particle_id, *version))?;
+                let remainder_start = cursor.position() as usize;
+                let inner = cursor.get_ref();
+                if remainder_start + 4 > inner.len() {
+                    return Err(WritingError::Message(
+                        "Truncated effect particle color".into(),
+                    ));
+                }
+                writer.write_slice(&inner[remainder_start..remainder_start + 4])?;
+                cursor.set_position((remainder_start + 4) as u64);
+            }
             return Ok(());
         }
 
@@ -257,9 +269,13 @@ impl MetadataSerializer for i32 {
     fn write_metadata(
         &self,
         writer: &mut impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        writer.write_i32(*self)
+        if *version >= JavaMinecraftVersion::V_1_9 {
+            writer.write_var_int(&VarInt(*self))
+        } else {
+            writer.write_i32(*self)
+        }
     }
 }
 
@@ -267,9 +283,55 @@ impl MetadataSerializer for u32 {
     fn write_metadata(
         &self,
         writer: &mut impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        writer.write_u32(*self)
+        if *version >= JavaMinecraftVersion::V_1_9 {
+            writer.write_var_int(&VarInt(*self as i32))
+        } else {
+            writer.write_u32(*self)
+        }
+    }
+}
+
+impl MetadataSerializer for i64 {
+    fn write_metadata(
+        &self,
+        writer: &mut impl std::io::Write,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
+        if *version >= JavaMinecraftVersion::V_1_9 {
+            writer.write_var_long(&VarLong(*self))
+        } else {
+            writer.write_i64_be(*self)
+        }
+    }
+}
+
+impl MetadataSerializer for u64 {
+    fn write_metadata(
+        &self,
+        writer: &mut impl std::io::Write,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
+        if *version >= JavaMinecraftVersion::V_1_9 {
+            writer.write_var_long(&VarLong(*self as i64))
+        } else {
+            writer.write_u64_be(*self)
+        }
+    }
+}
+
+impl MetadataSerializer for VarLong {
+    fn write_metadata(
+        &self,
+        writer: &mut impl std::io::Write,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
+        if *version >= JavaMinecraftVersion::V_1_9 {
+            writer.write_var_long(self)
+        } else {
+            writer.write_i64_be(self.0)
+        }
     }
 }
 
@@ -360,13 +422,44 @@ impl MetadataSerializer for Option<String> {
     }
 }
 
+impl MetadataSerializer for pumpkin_util::math::vector3::Vector3<f32> {
+    fn write_metadata(
+        &self,
+        writer: &mut impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
+        writer.write_f32(self.x)?;
+        writer.write_f32(self.y)?;
+        writer.write_f32(self.z)
+    }
+}
+
+impl MetadataSerializer for [f32; 4] {
+    fn write_metadata(
+        &self,
+        writer: &mut impl std::io::Write,
+        _version: &JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
+        writer.write_f32(self[0])?;
+        writer.write_f32(self[1])?;
+        writer.write_f32(self[2])?;
+        writer.write_f32(self[3])
+    }
+}
+
 impl MetadataSerializer for pumpkin_util::math::position::BlockPos {
     fn write_metadata(
         &self,
         writer: &mut impl std::io::Write,
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        writer.write_block_pos(self, version)
+        if *version >= JavaMinecraftVersion::V_1_9 {
+            writer.write_block_pos(self, version)
+        } else {
+            writer.write_i32(self.0.x)?;
+            writer.write_i32(self.0.y)?;
+            writer.write_i32(self.0.z)
+        }
     }
 }
 
@@ -378,7 +471,7 @@ impl MetadataSerializer for Option<pumpkin_util::math::position::BlockPos> {
     ) -> Result<(), WritingError> {
         if let Some(pos) = self {
             writer.write_bool(true)?;
-            writer.write_block_pos(pos, version)?;
+            pos.write_metadata(writer, version)?;
         } else {
             writer.write_bool(false)?;
         }
@@ -390,10 +483,14 @@ impl MetadataSerializer for crate::codec::optional_int::OptionalInt {
     fn write_metadata(
         &self,
         writer: &mut impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         let val = self.0.map_or(0, |id| id + 1);
-        writer.write_var_int(&VarInt(val))
+        if *version >= JavaMinecraftVersion::V_1_9 {
+            writer.write_var_int(&VarInt(val))
+        } else {
+            writer.write_i32(val)
+        }
     }
 }
 
@@ -434,6 +531,7 @@ mod tests {
 
     use super::{Metadata, MetadataSerializer};
 
+    #[derive(Clone, Copy)]
     struct ParticleMetadata {
         particle_id: VarInt,
         data: [u8; 4],
@@ -452,15 +550,17 @@ mod tests {
 
     fn encoded_particle(version: JavaMinecraftVersion) -> (VarInt, Vec<u8>) {
         let particle_data = [0x12, 0x34, 0x56, 0x78];
-        let metadata = Metadata::new(
-            pumpkin_data::tracked_data::area_effect_cloud::DATA_PARTICLE,
-            ParticleMetadata {
-                particle_id: VarInt(Particle::ExplosionEmitter as i32),
-                data: particle_data,
-            },
-        );
+        let particle = ParticleMetadata {
+            particle_id: VarInt(Particle::ExplosionEmitter as i32),
+            data: particle_data,
+        };
         let mut bytes = Vec::new();
-        metadata.write(&mut bytes, &version).unwrap();
+        Metadata::new(
+            pumpkin_data::tracked_data::area_effect_cloud::DATA_PARTICLE,
+            particle,
+        )
+        .write(&mut bytes, &version)
+        .unwrap();
 
         assert_eq!(
             bytes[0],
@@ -489,5 +589,132 @@ mod tests {
 
         assert_eq!(particle_id, VarInt(29));
         assert_eq!(data, [0x12, 0x34, 0x56, 0x78]);
+    }
+
+    fn encoded_item_stack_id(version: JavaMinecraftVersion) -> i32 {
+        use crate::codec::item_stack_seralizer::ItemStackSerializer;
+        use pumpkin_data::{
+            item::Item, item_id_remap::remap_item_id_for_version, item_stack::ItemStack,
+        };
+
+        let stack = ItemStackSerializer::from(ItemStack::new(1, &Item::WHEAT_SEEDS));
+        let mut bytes = Vec::new();
+        Metadata::new(pumpkin_data::tracked_data::item::DATA_ITEM, stack)
+            .write(&mut bytes, &version)
+            .unwrap();
+
+        assert_eq!(
+            bytes[0],
+            pumpkin_data::tracked_data::item::DATA_ITEM.get(&version)
+        );
+        assert_eq!(bytes[1], MetaDataType::ITEM_STACK.id(version) as u8);
+
+        let mut cursor = Cursor::new(&bytes[2..]);
+        let count = VarInt::decode(&mut cursor).unwrap();
+        assert_eq!(count, VarInt(1));
+        let item_id = VarInt::decode(&mut cursor).unwrap();
+
+        let expected = i32::from(remap_item_id_for_version(Item::WHEAT_SEEDS.id, version));
+        assert_eq!(item_id, VarInt(expected));
+        item_id.0
+    }
+
+    #[test]
+    fn item_stack_metadata_does_not_double_remap_for_1_21() {
+        use pumpkin_data::{item::Item, item_id_remap::remap_item_id_for_version};
+
+        let version = JavaMinecraftVersion::V_1_21;
+        let once = remap_item_id_for_version(Item::WHEAT_SEEDS.id, version);
+        let twice = remap_item_id_for_version(once, version);
+        assert_ne!(
+            once, twice,
+            "wheat seeds must change IDs so this catches double remapping"
+        );
+        assert_eq!(encoded_item_stack_id(version), i32::from(once));
+    }
+
+    #[test]
+    fn item_stack_metadata_keeps_latest_id_for_26_2() {
+        encoded_item_stack_id(JavaMinecraftVersion::V_26_2);
+    }
+
+    #[test]
+    fn existing_items_keep_identity_through_1_21_6_remap() {
+        use pumpkin_data::{item::Item, item_id_remap::remap_item_id_for_version};
+
+        let version = JavaMinecraftVersion::V_1_21_6;
+        for item in [
+            &Item::AIR,
+            &Item::STONE,
+            &Item::DIAMOND_SWORD,
+            &Item::WHEAT_SEEDS,
+            &Item::TRIDENT,
+        ] {
+            let remapped = remap_item_id_for_version(item.id, version);
+            let round_trip =
+                pumpkin_data::item_id_remap::remap_item_id_from_version(remapped, version);
+            assert_eq!(
+                round_trip, item.id,
+                "{} id {} remapped to {remapped} and back to {round_trip}",
+                item.registry_key, item.id
+            );
+        }
+    }
+
+    #[test]
+    fn spears_do_not_leak_latest_ids_to_1_21_6() {
+        use pumpkin_data::{item::Item, item_id_remap::remap_item_id_for_version};
+
+        let version = JavaMinecraftVersion::V_1_21_6;
+        for item in [
+            &Item::WOODEN_SPEAR,
+            &Item::STONE_SPEAR,
+            &Item::COPPER_SPEAR,
+            &Item::IRON_SPEAR,
+            &Item::GOLDEN_SPEAR,
+            &Item::DIAMOND_SPEAR,
+            &Item::NETHERITE_SPEAR,
+        ] {
+            let remapped = remap_item_id_for_version(item.id, version);
+            assert_ne!(
+                remapped, item.id,
+                "{} leaked latest id {} to 1.21.6 (client would show whatever item has that id)",
+                item.registry_key, item.id
+            );
+        }
+    }
+
+    #[test]
+    fn int_metadata_encodes_varint_for_1_9_plus_and_i32_for_legacy() {
+        let mut buf_modern = Vec::new();
+        (-1i32)
+            .write_metadata(&mut buf_modern, &JavaMinecraftVersion::V_1_21)
+            .unwrap();
+        // -1 as VarInt is 5 bytes: 0xFF, 0xFF, 0xFF, 0xFF, 0x0F
+        assert_eq!(buf_modern, vec![0xFF, 0xFF, 0xFF, 0xFF, 0x0F]);
+
+        let mut buf_legacy = Vec::new();
+        (-1i32)
+            .write_metadata(&mut buf_legacy, &JavaMinecraftVersion::V_1_8)
+            .unwrap();
+        // -1 as i32 BE is 4 bytes: 0xFF, 0xFF, 0xFF, 0xFF
+        assert_eq!(buf_legacy, vec![0xFF, 0xFF, 0xFF, 0xFF]);
+    }
+
+    #[test]
+    fn block_pos_metadata_encodes_packed_for_1_9_plus_and_three_ints_for_legacy() {
+        let pos = pumpkin_util::math::position::BlockPos(
+            pumpkin_util::math::vector3::Vector3::new(10, 20, 30),
+        );
+
+        let mut buf_modern = Vec::new();
+        pos.write_metadata(&mut buf_modern, &JavaMinecraftVersion::V_1_21)
+            .unwrap();
+        assert_eq!(buf_modern.len(), 8); // packed i64
+
+        let mut buf_legacy = Vec::new();
+        pos.write_metadata(&mut buf_legacy, &JavaMinecraftVersion::V_1_8)
+            .unwrap();
+        assert_eq!(buf_legacy.len(), 12); // 3 * i32 (12 bytes)
     }
 }

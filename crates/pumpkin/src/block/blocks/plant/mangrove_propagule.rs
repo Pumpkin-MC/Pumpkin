@@ -1,15 +1,14 @@
 use std::sync::Arc;
 
 use pumpkin_data::{
-    Block, BlockStateId,
-    block_properties::{BlockProperties, MangrovePropaguleLikeProperties},
-    tag,
-    tag::Taggable,
+    Block, BlockStateId, block_properties::MangrovePropaguleLikeProperties, tag, tag::Taggable,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::random::{RandomGenerator, xoroshiro128::Xoroshiro};
 use pumpkin_world::world::{BlockAccessor, BlockFlags};
 
+use crate::block::blocks::plant::tree_grower::TreeGrower;
 use crate::block::{
     BlockBehaviour, BonemealArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
     RandomTickArgs,
@@ -71,20 +70,31 @@ impl MangrovePropaguleBlock {
             let mut event = StructureGrowEvent::new(*pos, TreeType::Mangrove, false);
             if let Some(server) = world.server.upgrade() {
                 server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return;
+                }
             }
+            let mut random =
+                RandomGenerator::Xoroshiro(Xoroshiro::from_seed(rand::random::<u64>()));
+            TreeGrower::MANGROVE.grow_tree(
+                world,
+                pos,
+                block,
+                props.to_state_id(block),
+                &mut random,
+            );
         }
     }
 }
 
 impl BlockBehaviour for MangrovePropaguleBlock {
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
-        let props = MangrovePropaguleLikeProperties::from_state_id(args.state.id, args.block);
+        let props = MangrovePropaguleLikeProperties::from_state_id(args.state.id);
         Self::can_survive(args.block_accessor, args.position, &props)
     }
 
     fn on_place(&self, args: OnPlaceArgs<'_>) -> BlockStateId {
-        let mut props =
-            MangrovePropaguleLikeProperties::from_state_id(args.block.default_state.id, args.block);
+        let mut props = MangrovePropaguleLikeProperties::from_state_id(args.block.default_state.id);
         props.hanging = false;
         props.age = MAX_AGE;
         props.stage = 0;
@@ -96,7 +106,7 @@ impl BlockBehaviour for MangrovePropaguleBlock {
         &self,
         args: GetStateForNeighborUpdateArgs<'_>,
     ) -> BlockStateId {
-        let props = MangrovePropaguleLikeProperties::from_state_id(args.state_id, args.block);
+        let props = MangrovePropaguleLikeProperties::from_state_id(args.state_id);
         if !Self::can_survive(args.world, args.position, &props) {
             return Block::AIR.default_state.id;
         }
@@ -105,7 +115,7 @@ impl BlockBehaviour for MangrovePropaguleBlock {
 
     fn random_tick(&self, args: RandomTickArgs<'_>) {
         let state_id = args.world.get_block_state_id(args.position);
-        let mut props = MangrovePropaguleLikeProperties::from_state_id(state_id, args.block);
+        let mut props = MangrovePropaguleLikeProperties::from_state_id(state_id);
         if !props.hanging {
             if rand::random::<u8>().is_multiple_of(7) {
                 Self::advance_tree(args.world, args.position, args.block, props);
@@ -121,12 +131,12 @@ impl BlockBehaviour for MangrovePropaguleBlock {
     }
 
     fn is_valid_bonemeal_target(&self, args: BonemealArgs<'_>) -> bool {
-        let props = MangrovePropaguleLikeProperties::from_state_id(args.state_id, args.block);
+        let props = MangrovePropaguleLikeProperties::from_state_id(args.state_id);
         !props.hanging || props.age < MAX_AGE
     }
 
     fn is_bonemeal_success(&self, args: BonemealArgs<'_>) -> bool {
-        let props = MangrovePropaguleLikeProperties::from_state_id(args.state_id, args.block);
+        let props = MangrovePropaguleLikeProperties::from_state_id(args.state_id);
         if props.hanging {
             props.age < MAX_AGE
         } else {
@@ -136,8 +146,7 @@ impl BlockBehaviour for MangrovePropaguleBlock {
 
     fn perform_bonemeal(&self, args: BonemealArgs<'_>) {
         {
-            let mut props =
-                MangrovePropaguleLikeProperties::from_state_id(args.state_id, args.block);
+            let mut props = MangrovePropaguleLikeProperties::from_state_id(args.state_id);
             if props.hanging && props.age < MAX_AGE {
                 props.age += 1;
                 args.world.set_block_state(

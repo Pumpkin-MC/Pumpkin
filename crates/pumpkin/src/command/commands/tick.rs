@@ -148,6 +148,7 @@ impl TickExecutor {
                     TextComponent::text(nanos_to_millis_string(p50)),
                     TextComponent::text(nanos_to_millis_string(p95)),
                     TextComponent::text(nanos_to_millis_string(p99)),
+                    TextComponent::text(slice.len().to_string()),
                 ],
             ),
             false,

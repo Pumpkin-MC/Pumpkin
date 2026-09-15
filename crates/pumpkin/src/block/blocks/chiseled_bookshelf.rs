@@ -13,7 +13,7 @@ use crate::{
 };
 use pumpkin_data::{
     BlockStateId,
-    block_properties::{BlockProperties, ChiseledBookshelfLikeProperties, HorizontalFacing},
+    block_properties::{ChiseledBookshelfLikeProperties, HorizontalFacing},
     item::Item,
     item_stack::ItemStack,
     sound::{Sound, SoundCategory},
@@ -38,7 +38,7 @@ impl BlockBehaviour for ChiseledBookshelfBlock {
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         let state = args.world.get_block_state(args.position);
-        let properties = ChiseledBookshelfLikeProperties::from_state_id(state.id, args.block);
+        let properties = ChiseledBookshelfLikeProperties::from_state_id(state.id);
 
         if let Some(slot) = Self::get_slot_for_hit(args.hit, properties.facing) {
             if Self::is_slot_used(properties, slot) {
@@ -66,7 +66,7 @@ impl BlockBehaviour for ChiseledBookshelfBlock {
 
     fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         let state = args.world.get_block_state(args.position);
-        let properties = ChiseledBookshelfLikeProperties::from_state_id(state.id, args.block);
+        let properties = ChiseledBookshelfLikeProperties::from_state_id(state.id);
 
         if !args
             .item_stack

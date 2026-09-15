@@ -73,7 +73,10 @@ use crate::{
     scheduler::TASK_HANDLERS,
     text::TextComponent,
 };
+use std::sync::OnceLock;
 
+/// Block definitions and block type helpers.
+pub mod block;
 /// Plugin command registration and handling utilities.
 pub mod commands;
 /// Datapack management and query utilities.
@@ -87,8 +90,11 @@ pub mod events;
 mod ext;
 /// Bedrock UI form builders.
 pub mod forms;
+pub(crate) mod generated;
 /// Unified inventory and container management utilities.
 pub mod inventory;
+/// Typed item definitions and `ItemStack` construction helpers.
+pub mod item;
 /// Specialized mob entity wrappers and helpers.
 pub mod mobs;
 /// Constants for plugin permissions.
@@ -118,15 +124,18 @@ pub use wit::pumpkin::plugin::{
     context::{self, Context, MarketplaceMetadata, Server},
     damage_types as damage_types_wit, data_components, datapack as datapack_wit,
     display as display_wit, enchantments as enchantments_wit, entity,
+    entity_statuses as entity_statuses_wit,
     entity_types::EntityType,
     event::{self as events_wit, EventType},
-    gui, i18n, inventory as inventory_wit, ipc, item_stack, java_dialogs, java_packets, particles,
-    permission, player, recipe as recipe_wit, scoreboard, screens as screens_wit, server,
-    statistics as statistics_wit, text, uuid, world,
+    game_events as game_events_wit, gui, i18n, inventory as inventory_wit, ipc, item_stack,
+    java_dialogs, java_packets, particles, permission, player, potions as potions_wit,
+    recipe as recipe_wit, scoreboard, screens as screens_wit, server, statistics as statistics_wit,
+    text, uuid, world,
 };
 
 // Convenience re-exports of commonly-used plugin types so plugin authors can
 // name them directly (e.g. build an `ItemStack` for a GUI or `/give`).
+pub use block::{BlockStateTypeExt, BlockType, BlockTypeExt, IntoBlockKey};
 pub use damage_types_wit::DamageType;
 pub use datapack::{DatapackInfo, DatapackManager, EnablePosition};
 pub use display::{
@@ -139,15 +148,19 @@ pub use enchantment::{
     AttributeModifierSlot, CustomEnchantment, CustomEnchantmentValue, Enchantment,
     EnchantmentBuilder, EnchantmentError, EnchantmentManager, RegistrableEnchantment,
 };
+pub use entity_statuses_wit::EntityStatus;
 pub use events::{EventHandler, FromIntoEvent};
-pub use ext::player::PlayerEnderChestExt;
+pub use ext::player::{PlayerCooldownExt, PlayerEnderChestExt};
+pub use game_events_wit::GameEvent;
 pub use inventory::{Inventory, PlayerInventory};
+pub use item::{IntoItemKey, Item, ItemStackExt};
 pub use mobs::{
     Ageable, AgeableData, Cat, CatData, Creeper, CreeperData, DyeColor, Enderman, EndermanData,
     EntityCastExt, Fox, FoxData, IronGolem, IronGolemData, MobCast, MobData, Sheep, SheepData,
     Shulker, ShulkerData, Slime, SlimeData, Villager, VillagerData, VillagerProfession, Wolf,
     WolfData, Zombie, ZombieData,
 };
+pub use potions_wit::PotionType;
 pub use recipe::{
     CookingRecipeBuilder, Ingredient, RecipeCategory, RecipeError, RecipeManager,
     RegistrableRecipe, ShapedRecipeBuilder, ShapelessRecipeBuilder,
@@ -155,7 +168,8 @@ pub use recipe::{
 pub use screens_wit::Screen;
 pub use statistics_wit::{CustomStatistic, StatisticCategory};
 pub use team::{PlayerTeamExt, ScoreboardTeamExt, Team, TeamSettingsBuilder};
-pub use wit::pumpkin::plugin::item_stack::ItemStack;
+pub use wit::pumpkin::plugin::attributes::{Attribute, AttributeModifier, ModifierOperation};
+pub use wit::pumpkin::plugin::item_stack::{ItemAttributeModifier, ItemStack};
 pub use wit::pumpkin::plugin::player::Player;
 pub use wit::pumpkin::plugin::scoreboard::{CollisionRule, NametagVisibility, TeamSettings};
 pub use wit::pumpkin::plugin::server::Dimension;
@@ -249,8 +263,12 @@ impl wit::Guest for Component {
     ///
     /// Returns the event unchanged if no handler is registered for the given id.
     fn handle_event(event_id: u32, server: Server, event: events::Event) -> events::Event {
-        let handlers = EVENT_HANDLERS.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(handler) = handlers.get(&event_id) {
+        let handler = EVENT_HANDLERS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&event_id)
+            .cloned();
+        if let Some(handler) = handler {
             handler.handle_erased(server, event)
         } else {
             event
@@ -266,8 +284,12 @@ impl wit::Guest for Component {
         server: Server,
         args: command::ConsumedArgs,
     ) -> Result<i32, command::CommandError> {
-        let handlers = COMMAND_HANDLERS.lock().unwrap_or_else(|e| e.into_inner());
-        handlers.get(&command_id).map_or_else(
+        let handler = COMMAND_HANDLERS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&command_id)
+            .cloned();
+        handler.map_or_else(
             || {
                 Err(command::CommandError::CommandFailed(TextComponent::text(
                     &format!("no handler registered for command id {command_id}"),
@@ -284,10 +306,12 @@ impl wit::Guest for Component {
         server: Server,
         request: command::SuggestionRequest,
     ) -> command::CommandSuggestions {
-        let handlers = COMMAND_SUGGESTION_HANDLERS
+        let handler = COMMAND_SUGGESTION_HANDLERS
             .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        if let Some(handler) = handlers.get(&handler_id) {
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&handler_id)
+            .cloned();
+        if let Some(handler) = handler {
             handler.suggest(sender, server, request)
         } else {
             command::CommandSuggestions {
@@ -300,15 +324,21 @@ impl wit::Guest for Component {
 
     /// WIT entry point — dispatches a scheduled task invocation to the registered handler for `handler_id`.
     fn handle_task(handler_id: u32, server: Server) {
-        let mut handlers = TASK_HANDLERS.lock().unwrap_or_else(|e| e.into_inner());
-        handlers.handle(handler_id, server);
+        let handler = TASK_HANDLERS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(handler_id);
+        if let Some(handler) = handler {
+            handler(server);
+        }
     }
 
     fn handle_ai_goal_can_start(goal_id: u32, server: Server, entity: entity::Entity) -> bool {
-        let mut handlers = crate::ai::AI_GOAL_HANDLERS
+        let goal = crate::ai::AI_GOAL_HANDLERS
             .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        if let Some(goal) = handlers.handlers.get_mut(&goal_id) {
+            .unwrap_or_else(|e| e.into_inner())
+            .get(goal_id);
+        if let Some(goal) = goal {
             goal.can_start(server, entity)
         } else {
             false
@@ -320,10 +350,11 @@ impl wit::Guest for Component {
         server: Server,
         entity: entity::Entity,
     ) -> bool {
-        let mut handlers = crate::ai::AI_GOAL_HANDLERS
+        let goal = crate::ai::AI_GOAL_HANDLERS
             .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        if let Some(goal) = handlers.handlers.get_mut(&goal_id) {
+            .unwrap_or_else(|e| e.into_inner())
+            .get(goal_id);
+        if let Some(goal) = goal {
             goal.should_continue(server, entity)
         } else {
             false
@@ -331,28 +362,31 @@ impl wit::Guest for Component {
     }
 
     fn handle_ai_goal_start(goal_id: u32, server: Server, entity: entity::Entity) {
-        let mut handlers = crate::ai::AI_GOAL_HANDLERS
+        let goal = crate::ai::AI_GOAL_HANDLERS
             .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        if let Some(goal) = handlers.handlers.get_mut(&goal_id) {
+            .unwrap_or_else(|e| e.into_inner())
+            .get(goal_id);
+        if let Some(goal) = goal {
             goal.start(server, entity);
         }
     }
 
     fn handle_ai_goal_tick(goal_id: u32, server: Server, entity: entity::Entity) {
-        let mut handlers = crate::ai::AI_GOAL_HANDLERS
+        let goal = crate::ai::AI_GOAL_HANDLERS
             .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        if let Some(goal) = handlers.handlers.get_mut(&goal_id) {
+            .unwrap_or_else(|e| e.into_inner())
+            .get(goal_id);
+        if let Some(goal) = goal {
             goal.tick(server, entity);
         }
     }
 
     fn handle_ai_goal_stop(goal_id: u32, server: Server, entity: entity::Entity) {
-        let mut handlers = crate::ai::AI_GOAL_HANDLERS
+        let goal = crate::ai::AI_GOAL_HANDLERS
             .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        if let Some(goal) = handlers.handlers.get_mut(&goal_id) {
+            .unwrap_or_else(|e| e.into_inner())
+            .get(goal_id);
+        if let Some(goal) = goal {
             goal.stop(server, entity);
         }
     }
@@ -369,10 +403,12 @@ impl wit::Guest for Component {
         phase: wit::pumpkin::plugin::world::GenerationPhase,
         chunk: wit::pumpkin::plugin::world::ChunkBuffer,
     ) {
-        let handlers = crate::worldgen::GENERATOR_HANDLERS
+        let generator = crate::worldgen::GENERATOR_HANDLERS
             .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        if let Some(generator) = handlers.get(&generator_id) {
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&generator_id)
+            .cloned();
+        if let Some(generator) = generator {
             let mut buffer = crate::worldgen::ChunkBuffer::new(chunk);
             match phase {
                 wit::pumpkin::plugin::world::GenerationPhase::Biomes => {
@@ -398,6 +434,10 @@ pub type Result<T, E = String> = core::result::Result<T, E>;
 /// The trait that every Pumpkin plugin must implement.
 ///
 /// Use the [`register_plugin!`] macro to register your implementation with the runtime.
+/// Lifecycle and IPC callbacks use shared references so the runtime can safely re-enter a
+/// plugin. Implementations that mutate plugin state must use thread-safe interior mutability.
+/// Do not hold a non-reentrant lock across a host API call: that call may synchronously deliver
+/// an event or IPC callback back into the same plugin before the original call returns.
 pub trait Plugin: Send + Sync {
     /// Creates a new instance of the plugin.
     ///
@@ -412,20 +452,20 @@ pub trait Plugin: Send + Sync {
     /// Called when the plugin is loaded by the server.
     ///
     /// Use this to register event handlers, commands, and perform any setup work.
-    fn on_load(&mut self, _context: Context) -> Result<()> {
+    fn on_load(&self, _context: Context) -> Result<()> {
         Ok(())
     }
 
     /// Called when the plugin is unloaded by the server.
     ///
     /// Use this to clean up any resources acquired during [`on_load`](Plugin::on_load).
-    fn on_unload(&mut self, _context: Context) -> Result<()> {
+    fn on_unload(&self, _context: Context) -> Result<()> {
         Ok(())
     }
 
     /// Called when the plugin receives a message from another plugin.
     fn handle_ipc_message(
-        &mut self,
+        &self,
         _sender: wit::PluginId,
         _message: wit::IpcMessage,
     ) -> Result<wit::IpcMessage, String> {
@@ -436,25 +476,26 @@ pub trait Plugin: Send + Sync {
 #[doc(hidden)]
 pub fn register_plugin(build_plugin: fn() -> Box<dyn Plugin>) {
     let _ = tracing::subscriber::set_global_default(WitSubscriber::new());
-    unsafe { PLUGIN = Some(build_plugin()) }
+    assert!(
+        PLUGIN.set(build_plugin()).is_ok(),
+        "register_plugin must only be called once"
+    );
 }
 
-/// Returns a mutable reference to the currently loaded plugin instance.
+/// Returns a reference to the currently loaded plugin instance.
 ///
 /// # Panics
 /// If called before [`register_plugin`] has initialized `PLUGIN`.
-fn plugin() -> &'static mut dyn Plugin {
-    #[expect(static_mut_refs)]
+fn plugin() -> &'static dyn Plugin {
     #[allow(clippy::expect_used)]
-    unsafe {
-        PLUGIN
-            .as_deref_mut()
-            .expect("PLUGIN must be initialized with register_plugin before use")
-    }
+    PLUGIN
+        .get()
+        .map(Box::as_ref)
+        .expect("PLUGIN must be initialized with register_plugin before use")
 }
 
 /// The singleton plugin instance, initialised by [`register_plugin`].
-static mut PLUGIN: Option<Box<dyn Plugin>> = None;
+static PLUGIN: OnceLock<Box<dyn Plugin>> = OnceLock::new();
 
 /// Registers the provided type as a Pumpkin plugin.
 ///

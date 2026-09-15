@@ -15,14 +15,20 @@ pub mod destroy_egg;
 pub mod door_interact;
 pub mod eat_grass;
 pub mod escape_danger;
+pub mod flee_sun;
+pub mod follow_mob;
 pub mod follow_owner;
 pub mod follow_parent;
 pub mod goal_selector;
+pub mod interact;
+pub mod leap_at_target;
 pub mod look_around;
 pub mod look_at_entity;
 pub mod melee_attack;
 pub mod move_to_target_pos;
+pub mod move_towards_restriction;
 pub mod move_towards_target;
+pub mod ocelot_attack;
 pub mod offer_flower;
 pub mod open_door;
 pub mod owner_hurt_by_target;
@@ -32,7 +38,10 @@ pub mod pick_up_block;
 pub mod place_block;
 pub mod ranged_attack;
 pub mod ranged_crossbow_attack;
+pub mod restrict_sun;
 pub mod revenge;
+pub mod run_around_like_crazy;
+pub mod sit_when_ordered_to;
 pub mod step_and_destroy_block;
 pub mod swim;
 pub mod teleport_towards_player;
@@ -40,7 +49,9 @@ pub mod tempt;
 pub(crate) mod track_target;
 pub mod trade_with_player;
 pub mod try_find_water;
+pub mod use_item;
 pub mod wander_around;
+pub mod water_avoiding_random_flying;
 pub mod work_at_job_site;
 pub mod zombie_attack;
 
@@ -56,8 +67,8 @@ pub trait Goal: Send + Sync {
     }
 
     /// When it's started, how should it continue to run?
-    fn should_continue(&self, _mob: &dyn Mob) -> bool {
-        false
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        self.can_start(mob)
     }
 
     /// Call when goal start
@@ -139,6 +150,11 @@ impl Controls {
     }
 
     #[must_use]
+    pub const fn union(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+
+    #[must_use]
     pub const fn idx(&self) -> usize {
         self.0.trailing_zeros() as usize
     }
@@ -181,7 +197,7 @@ impl Goal for PrioritizedGoal {
         self.goal.can_start(mob)
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         self.goal.should_continue(mob)
     }
 
@@ -205,6 +221,10 @@ impl Goal for PrioritizedGoal {
 
     fn should_run_every_tick(&self) -> bool {
         self.goal.should_run_every_tick()
+    }
+
+    fn can_stop(&self) -> bool {
+        self.goal.can_stop()
     }
 
     fn get_tick_count(&self, ticks: i32) -> i32 {

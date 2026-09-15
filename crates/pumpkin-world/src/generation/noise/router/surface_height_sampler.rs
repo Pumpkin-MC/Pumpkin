@@ -5,10 +5,7 @@ use rustc_hash::FxHashMap;
 use crate::generation::{biome_coords, positions::chunk_pos};
 
 use super::{
-    chunk_density_function::{
-        Cache2D, ChunkNoiseFunctionSampleOptions, ChunkSpecificNoiseFunctionComponent, FlatCache,
-        SampleAction,
-    },
+    chunk_density_function::{Cache, ChunkSpecificNoiseFunctionComponent},
     chunk_noise_router::ChunkNoiseFunctionComponent,
     density_function::{NoiseFunctionComponentRange, PassThrough},
     proto_noise_router::{
@@ -17,13 +14,6 @@ use super::{
 };
 
 pub struct SurfaceHeightSamplerBuilderOptions {
-    // The biome coords of this chunk
-    start_biome_x: i32,
-    start_biome_z: i32,
-
-    // Number of biome regions per chunk per axis
-    horizontal_biome_end: usize,
-
     // Minimum y level to check
     minimum_y: i32,
     // Maximum y level to check
@@ -33,18 +23,8 @@ pub struct SurfaceHeightSamplerBuilderOptions {
 
 impl SurfaceHeightSamplerBuilderOptions {
     #[must_use]
-    pub const fn new(
-        start_biome_x: i32,
-        start_biome_z: i32,
-        horizontal_biome_end: usize,
-        minimum_y: i32,
-        maximum_y: i32,
-        y_level_step_count: usize,
-    ) -> Self {
+    pub const fn new(minimum_y: i32, maximum_y: i32, y_level_step_count: usize) -> Self {
         Self {
-            start_biome_x,
-            start_biome_z,
-            horizontal_biome_end,
             minimum_y,
             maximum_y,
             y_level_step_count,
@@ -79,8 +59,6 @@ impl<'a> SurfaceHeightEstimateSampler<'a> {
     }
 
     fn calculate_height_estimate(&mut self, aligned_x: i32, aligned_z: i32) -> i32 {
-        let sample_options =
-            ChunkNoiseFunctionSampleOptions::new(false, SampleAction::SkipCellCaches, 0, 0, 0);
         let pos = Vector3::new(aligned_x, 0, aligned_z);
 
         // If the top-most component is FindTopSurface, we want to perform a precise search
@@ -92,17 +70,15 @@ impl<'a> SurfaceHeightEstimateSampler<'a> {
             let upper = ChunkNoiseFunctionComponent::sample_from_stack(
                 &mut self.component_stack[..=fts.upper_bound_index()],
                 &pos,
-                &sample_options,
             );
 
             // First find the coarse cell that contains the surface
             let cell_height = fts.cell_height();
-            let mut y = (upper / cell_height as f64).floor() as i32 * cell_height;
+            let mut y = (upper / cell_height as f32).floor() as i32 * cell_height;
             while y >= self.minimum_y {
                 let density = ChunkNoiseFunctionComponent::sample_from_stack(
                     &mut self.component_stack[..=fts.density_index()],
                     &Vector3::new(aligned_x, y, aligned_z),
-                    &sample_options,
                 );
                 if density > 0.0 {
                     return y;
@@ -113,11 +89,8 @@ impl<'a> SurfaceHeightEstimateSampler<'a> {
             return self.minimum_y;
         }
 
-        let surface_y = ChunkNoiseFunctionComponent::sample_from_stack(
-            &mut self.component_stack,
-            &pos,
-            &sample_options,
-        );
+        let surface_y =
+            ChunkNoiseFunctionComponent::sample_from_stack(&mut self.component_stack, &pos);
         surface_y.floor() as i32
     }
 
@@ -152,69 +125,20 @@ impl<'a> SurfaceHeightEstimateSampler<'a> {
                     let max_value = component_stack[wrapper.input_index].max();
 
                     match wrapper.wrapper_type {
-                        WrapperType::Cache2D => ChunkNoiseFunctionComponent::Chunk(
-                            ChunkSpecificNoiseFunctionComponent::Cache2D(Cache2D::new(
+                        WrapperType::Cache => ChunkNoiseFunctionComponent::Chunk(
+                            ChunkSpecificNoiseFunctionComponent::Cache(Cache::new(
                                 wrapper.input_index,
                                 min_value,
                                 max_value,
                             )),
                         ),
-                        WrapperType::CacheFlat => {
-                            let mut flat_cache = FlatCache::new(
+                        WrapperType::Interpolated { .. } => {
+                            ChunkNoiseFunctionComponent::PassThrough(PassThrough::new(
                                 wrapper.input_index,
                                 min_value,
                                 max_value,
-                                build_options.start_biome_x,
-                                build_options.start_biome_z,
-                                build_options.horizontal_biome_end,
-                            );
-                            let sample_options = ChunkNoiseFunctionSampleOptions::new(
-                                false,
-                                SampleAction::SkipCellCaches,
-                                0,
-                                0,
-                                0,
-                            );
-
-                            for biome_x_position in 0..=build_options.horizontal_biome_end {
-                                let absolute_biome_x_position =
-                                    build_options.start_biome_x + biome_x_position as i32;
-                                let block_x_position =
-                                    biome_coords::to_block(absolute_biome_x_position);
-
-                                for biome_z_position in 0..=build_options.horizontal_biome_end {
-                                    let absolute_biome_z_position =
-                                        build_options.start_biome_z + biome_z_position as i32;
-                                    let block_z_position =
-                                        biome_coords::to_block(absolute_biome_z_position);
-
-                                    let pos = Vector3::new(block_x_position, 0, block_z_position);
-
-                                    //NOTE: Due to our stack invariant, what is on the stack is a
-                                    // valid density function
-                                    let sample = ChunkNoiseFunctionComponent::sample_from_stack(
-                                        &mut component_stack[..=wrapper.input_index],
-                                        &pos,
-                                        &sample_options,
-                                    );
-
-                                    let cache_index = flat_cache
-                                        .xz_to_index_const(biome_x_position, biome_z_position);
-                                    flat_cache.cache[cache_index] = sample;
-                                }
-                            }
-
-                            ChunkNoiseFunctionComponent::Chunk(
-                                ChunkSpecificNoiseFunctionComponent::FlatCache(flat_cache),
-                            )
+                            ))
                         }
-                        // Java passes thru if the noise pos is not the chunk itself, which it is
-                        // never for the Height estimator
-                        _ => ChunkNoiseFunctionComponent::PassThrough(PassThrough::new(
-                            wrapper.input_index,
-                            min_value,
-                            max_value,
-                        )),
                     }
                 }
             };

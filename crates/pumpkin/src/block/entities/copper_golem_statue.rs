@@ -1,10 +1,12 @@
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
+use std::sync::Mutex;
 
 use super::BlockEntity;
 
 pub struct CopperGolemStatueBlockEntity {
     pub position: BlockPos,
+    pub custom_name: Mutex<Option<String>>,
 }
 
 impl BlockEntity for CopperGolemStatueBlockEntity {
@@ -16,14 +18,37 @@ impl BlockEntity for CopperGolemStatueBlockEntity {
         self.position
     }
 
-    fn from_nbt(_nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
+    fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
     where
         Self: Sized,
     {
-        Self { position }
+        let custom_name = nbt
+            .get_string("custom_name")
+            .or_else(|| nbt.get_string("CustomName"))
+            .map(ToString::to_string);
+        Self {
+            position,
+            custom_name: Mutex::new(custom_name),
+        }
     }
 
-    fn write_nbt(&self, _nbt: &mut NbtCompound) {}
+    fn write_nbt(&self, nbt: &mut NbtCompound) {
+        if let Ok(name) = self.custom_name.lock()
+            && let Some(name) = name.as_ref()
+        {
+            nbt.put_string("custom_name", name.clone());
+        }
+    }
+
+    fn chunk_data_nbt(&self) -> Option<NbtCompound> {
+        let mut nbt = NbtCompound::new();
+        if let Ok(name) = self.custom_name.try_lock()
+            && let Some(ref name) = *name
+        {
+            nbt.put_string("custom_name", name.clone());
+        }
+        Some(nbt)
+    }
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
@@ -34,6 +59,9 @@ impl CopperGolemStatueBlockEntity {
     pub const ID: &'static str = "minecraft:copper_golem_statue";
     #[must_use]
     pub const fn new(position: BlockPos) -> Self {
-        Self { position }
+        Self {
+            position,
+            custom_name: Mutex::new(None),
+        }
     }
 }

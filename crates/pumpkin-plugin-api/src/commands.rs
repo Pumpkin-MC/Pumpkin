@@ -1,7 +1,7 @@
 use std::{
     collections::BTreeMap,
     sync::{
-        Mutex,
+        Arc, Mutex,
         atomic::{AtomicU32, Ordering},
     },
 };
@@ -14,10 +14,10 @@ use crate::{
 };
 
 pub(crate) static NEXT_COMMAND_ID: AtomicU32 = AtomicU32::new(0);
-pub(crate) static COMMAND_HANDLERS: Mutex<BTreeMap<u32, Box<dyn CommandHandler>>> =
+pub(crate) static COMMAND_HANDLERS: Mutex<BTreeMap<u32, Arc<dyn CommandHandler>>> =
     Mutex::new(BTreeMap::new());
 pub(crate) static COMMAND_SUGGESTION_HANDLERS: Mutex<
-    BTreeMap<u32, Box<dyn CommandSuggestionHandler>>,
+    BTreeMap<u32, Arc<dyn CommandSuggestionHandler>>,
 > = Mutex::new(BTreeMap::new());
 
 /// Handles the execution of a registered command.
@@ -107,7 +107,7 @@ impl Command {
         COMMAND_HANDLERS
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .insert(id, Box::new(handler));
+            .insert(id, Arc::new(handler));
 
         self.execute_with_handler_id(id)
     }
@@ -125,7 +125,7 @@ impl CommandNode {
         COMMAND_HANDLERS
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .insert(id, Box::new(handler));
+            .insert(id, Arc::new(handler));
 
         self.execute_with_handler_id(id)
     }
@@ -141,7 +141,7 @@ impl CommandNode {
         COMMAND_SUGGESTION_HANDLERS
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .insert(id, Box::new(handler));
+            .insert(id, Arc::new(handler));
 
         self.suggest_with_handler_id(id)
     }
