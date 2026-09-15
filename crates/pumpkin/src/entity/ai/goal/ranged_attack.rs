@@ -73,7 +73,7 @@ impl Goal for RangedAttackGoal {
         }
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         if let Some(target) = &self.target {
             if !target.get_entity().is_alive() {
                 return false;
@@ -117,7 +117,7 @@ impl Goal for RangedAttackGoal {
         let target_pos = target.get_entity().pos.load();
         let target_dist_sq = mob_pos.squared_distance_to_vec(&target_pos);
 
-        let has_line_of_sight = true;
+        let has_line_of_sight = mob.has_line_of_sight(target.get_entity());
         if has_line_of_sight {
             self.see_time += 1;
         } else {

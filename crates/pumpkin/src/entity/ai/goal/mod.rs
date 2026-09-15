@@ -67,8 +67,8 @@ pub trait Goal: Send + Sync {
     }
 
     /// When it's started, how should it continue to run?
-    fn should_continue(&self, _mob: &dyn Mob) -> bool {
-        false
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        self.can_start(mob)
     }
 
     /// Call when goal start
@@ -197,7 +197,7 @@ impl Goal for PrioritizedGoal {
         self.goal.can_start(mob)
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         self.goal.should_continue(mob)
     }
 
@@ -221,6 +221,10 @@ impl Goal for PrioritizedGoal {
 
     fn should_run_every_tick(&self) -> bool {
         self.goal.should_run_every_tick()
+    }
+
+    fn can_stop(&self) -> bool {
+        self.goal.can_stop()
     }
 
     fn get_tick_count(&self, ticks: i32) -> i32 {

@@ -1012,4 +1012,44 @@ mod tests {
             "collapsing the repeats changed the result"
         );
     }
+
+    /// Upstream #3279: sky decrease read 15 below `min_y` and queued downward forever.
+    /// The chunk's own section range bounds the flood, at both ends and one past them.
+    #[tokio::test]
+    async fn propagation_stops_at_the_world_edges() {
+        let (level, _dir) = level_with(&[(0, 0)]);
+        let chunk = level
+            .loaded_chunks
+            .get(&Vector2::new(0, 0))
+            .expect("loaded")
+            .clone();
+        let bottom = chunk.section.min_y;
+        let top = bottom + (chunk.section.count * 16) as i32 - 1;
+        let engine = DynamicLightEngine::new();
+
+        for y in [bottom - 1, bottom, top, top + 1] {
+            let pos = BlockPos::new(8, y, 8);
+            chunk.set_block_absolute_y(8, y, 8, Block::GLOWSTONE.default_state.id);
+            engine.update_lighting_at(&level, pos);
+            engine.queue_sky_light_decrease(pos, 15);
+            engine.queue_sky_light_increase(pos, 15);
+        }
+
+        assert!(
+            (0..64).any(|_| !engine.drain_queued(&level).leftover),
+            "light updates at the world edges did not converge"
+        );
+        for y in [bottom, top] {
+            assert_eq!(
+                engine.get_block_light_level(&level, &BlockPos::new(8, y, 8)),
+                Some(Block::GLOWSTONE.default_state.luminance),
+                "the glowstone at y={y} must light its own cell"
+            );
+        }
+        assert_eq!(
+            engine.get_block_light_level(&level, &BlockPos::new(8, bottom - 1, 8)),
+            None,
+            "below the world there is nothing to light"
+        );
+    }
 }

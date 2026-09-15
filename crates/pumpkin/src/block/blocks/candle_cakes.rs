@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use pumpkin_data::{Block, BlockState, BlockStateId, item::Item, item_stack::ItemStack};
 use pumpkin_macros::pumpkin_block_from_tag;
-use pumpkin_util::{GameMode, math::position::BlockPos};
+use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::{
     tick::TickPriority,
     world::{BlockAccessor, BlockFlags},
@@ -10,8 +10,10 @@ use pumpkin_world::{
 
 use crate::{
     block::{
-        BlockBehaviour, GetStateForNeighborUpdateArgs, NormalUseArgs, OnScheduledTickArgs,
-        PathComputationType, UseWithItemArgs, blocks::cake::CakeBlock, registry::BlockActionResult,
+        BlockBehaviour, GetComparatorOutputArgs, GetStateForNeighborUpdateArgs, NormalUseArgs,
+        OnScheduledTickArgs, PathComputationType, UseWithItemArgs,
+        blocks::cake::{CakeBlock, FULL_CAKE_SIGNAL},
+        registry::BlockActionResult,
     },
     entity::player::Player,
     world::World,
@@ -61,14 +63,8 @@ impl CandleCakeBlock {
         location: &BlockPos,
         world: &Arc<World>,
     ) -> BlockActionResult {
-        match player.gamemode.load() {
-            GameMode::Survival | GameMode::Adventure => {
-                if player.hunger_manager.level.load() >= 20 {
-                    return BlockActionResult::Pass;
-                }
-            }
-            GameMode::Creative => {}
-            GameMode::Spectator => return BlockActionResult::Pass,
+        if !player.can_eat(false) {
+            return BlockActionResult::Pass;
         }
 
         let candle_item = candle_from_cake(block);
@@ -120,6 +116,11 @@ impl BlockBehaviour for CandleCakeBlock {
                 .schedule_block_tick(args.block, *args.position, 1, TickPriority::Normal);
         }
         args.state_id
+    }
+
+    /// A candle cake is always uneaten, so it reads a full cake.
+    fn get_comparator_output(&self, _args: GetComparatorOutputArgs<'_>) -> Option<u8> {
+        Some(FULL_CAKE_SIGNAL)
     }
 
     fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
