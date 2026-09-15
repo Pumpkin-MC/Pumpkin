@@ -359,6 +359,13 @@ fn existing_level_dat_root(path: &Path) -> Result<NbtCompound, WorldInfoError> {
 }
 
 impl WorldInfoReader for AnvilLevelInfo {
+    /// Loads level metadata and overlays separate settings files, including Paper overworld data.
+    ///
+    /// Existing root gamerule and weather files take precedence over their Paper copies.
+    ///
+    /// # Errors
+    /// Returns an error for unreadable or malformed level metadata, unsupported versions,
+    /// or a missing world seed. Optional settings readers retain their defaulting behavior.
     fn read_world_info(&self, level_folder: &Path) -> Result<LevelData, WorldInfoError> {
         let path = level_folder.join(LEVEL_DAT_FILE_NAME);
 
@@ -599,6 +606,10 @@ mod test {
         read_gzip_compound_tag(file).unwrap()
     }
 
+    /// Builds a disposable world with non-default Paper settings and no competing root copies.
+    ///
+    /// Constructs the imported NBT independently of the settings writers under test.
+    /// Propagates temporary-directory, world-writing, and fixture I/O errors.
     fn paper_settings_fixture() -> Result<TempDir, Box<dyn std::error::Error>> {
         let directory = TempDir::new()?;
         AnvilLevelInfo.write_world_info(&LevelData::default(Seed(3367)), directory.path())?;
@@ -634,6 +645,7 @@ mod test {
         Ok(directory)
     }
 
+    /// Checks that imported settings survive a save and reload without altering Paper's files.
     #[test]
     fn paper_overworld_settings_survive_load_and_save() -> Result<(), Box<dyn std::error::Error>> {
         let directory = paper_settings_fixture()?;
@@ -668,6 +680,7 @@ mod test {
         Ok(())
     }
 
+    /// Checks that conflicting root settings remain authoritative across repeated saves.
     #[test]
     fn root_settings_take_precedence_over_paper() -> Result<(), Box<dyn std::error::Error>> {
         let directory = paper_settings_fixture()?;
@@ -711,6 +724,7 @@ mod test {
         Ok(())
     }
 
+    /// Checks that saving preserves imported scheduled events without creating a root stub.
     #[test]
     fn paper_scheduled_events_are_not_shadowed_on_save() -> Result<(), Box<dyn std::error::Error>> {
         let directory = paper_settings_fixture()?;
