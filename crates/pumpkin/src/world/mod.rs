@@ -4723,8 +4723,6 @@ impl World {
                             .lock()
                             .unwrap_or_else(std::sync::PoisonError::into_inner),
                     );
-                    let mut entities_to_add: Vec<Arc<dyn EntityBase>> =
-                        Vec::with_capacity(entity_nbts.len());
                     for entity_nbt in &entity_nbts {
                         let Some(id) = entity_nbt.get_string("id") else {
                             debug!("Entity has no ID");
@@ -4753,30 +4751,11 @@ impl World {
                         // stale data.
                         base_entity.velocity.store(Vector3::default());
 
-                        player.client.enqueue_spawn_packet(&entity);
-                        player.try_restore_vehicle(&entity);
-                        entities_to_add.push(entity);
-                    }
-
-                    if !entities_to_add.is_empty() {
-                        world.entities.rcu(|current_entities| {
-                            let mut new_entities = (**current_entities).clone();
-                            new_entities.extend(entities_to_add.iter().cloned());
-                            new_entities
-                        });
-                    }
-                } else {
-                    // The chunk's entities are already live (another watcher loaded
-                    // them). Just send this player the spawn packets for the live
-                    // entities currently in this chunk.
-                    for entity in world.entities.load().iter() {
-                        let base_entity = entity.get_entity();
-                        if base_entity.chunk_pos.load() == position {
-                            player.client.enqueue_spawn_packet(entity);
-                            player.try_restore_vehicle(entity);
-                        }
+                        // Tracker owns pairing: spawn packets for every watcher.
+                        world.add_entity_silent(entity);
                     }
                 }
+                // Already-live chunk: tracker pairs on its next pass.
             }
 
             #[cfg(debug_assertions)]
@@ -4958,10 +4937,17 @@ impl World {
             .collect()
     }
 
-    pub fn get_closest_player(&self, pos: Vector3<f64>, radius: f64) -> Option<Arc<Player>> {
-        let players = self.get_nearby_players(pos, radius);
-        players
-            .iter()
+    /// Closest player that satisfies `predicate`. Unlike [`Self::get_closest_player`], a nearer
+    /// player failing the predicate does not hide a farther one that passes it.
+    pub fn get_nearest_player(
+        &self,
+        pos: Vector3<f64>,
+        radius: f64,
+        predicate: impl Fn(&Arc<Player>) -> bool,
+    ) -> Option<Arc<Player>> {
+        self.get_nearby_players(pos, radius)
+            .into_iter()
+            .filter(|player| predicate(player))
             .min_by(|a, b| {
                 a.get_entity()
                     .pos
@@ -4969,7 +4955,34 @@ impl World {
                     .squared_distance_to_vec(&pos)
                     .total_cmp(&b.get_entity().pos.load().squared_distance_to_vec(&pos))
             })
-            .cloned()
+    }
+
+    /// Closest entity that satisfies `predicate`. See [`Self::get_nearest_player`] for why this is
+    /// not [`Self::get_closest_entity`] followed by a check.
+    pub fn get_nearest_entity(
+        &self,
+        pos: Vector3<f64>,
+        radius: f64,
+        entity_types: Option<&[&'static EntityType]>,
+        predicate: impl Fn(&Arc<dyn EntityBase>) -> bool,
+    ) -> Option<Arc<dyn EntityBase>> {
+        self.get_nearby_entities(pos, radius)
+            .into_values()
+            .filter(|entity| {
+                entity_types.is_none_or(|types| types.contains(&entity.get_entity().entity_type))
+                    && predicate(entity)
+            })
+            .min_by(|a, b| {
+                a.get_entity()
+                    .pos
+                    .load()
+                    .squared_distance_to_vec(&pos)
+                    .total_cmp(&b.get_entity().pos.load().squared_distance_to_vec(&pos))
+            })
+    }
+
+    pub fn get_closest_player(&self, pos: Vector3<f64>, radius: f64) -> Option<Arc<Player>> {
+        self.get_nearest_player(pos, radius, |_| true)
     }
 
     /// Gets the closest entity to a position, with optional filtering by entity type.
@@ -4989,33 +5002,7 @@ impl World {
         radius: f64,
         entity_types: Option<&[&'static EntityType]>,
     ) -> Option<Arc<dyn EntityBase>> {
-        // Get regular entities
-        let entities = self.get_nearby_entities(pos, radius);
-
-        // Filter by entity type if specified
-        let filtered_entities = if let Some(types) = entity_types {
-            entities
-                .into_iter()
-                .filter(|(_, entity)| {
-                    let entity_type = entity.get_entity().entity_type;
-                    types.contains(&entity_type)
-                })
-                .collect::<HashMap<_, _>>()
-        } else {
-            entities
-        };
-
-        // Find the closest entity
-        filtered_entities
-            .iter()
-            .min_by(|a, b| {
-                a.1.get_entity()
-                    .pos
-                    .load()
-                    .squared_distance_to_vec(&pos)
-                    .total_cmp(&b.1.get_entity().pos.load().squared_distance_to_vec(&pos))
-            })
-            .map(|p| p.1.clone())
+        self.get_nearest_entity(pos, radius, entity_types, |_| true)
     }
 
     /// Adds entities to the provided [`Vec`] that satisfy a particular condition and are
@@ -5228,22 +5215,6 @@ impl World {
 
         entity.init_data_tracker();
         self.add_entity_silent(entity);
-    }
-
-    pub fn broadcast_entity_spawn(&self, entity: &Arc<dyn EntityBase>) {
-        let base_entity = entity.get_entity();
-        let chunk_pos = base_entity.chunk_pos.load();
-
-        let players = self.players.load();
-        for player in players.iter() {
-            if player
-                .watched_section
-                .load()
-                .is_within_distance(chunk_pos.x, chunk_pos.y)
-            {
-                player.client.try_enqueue_spawn_packet(entity);
-            }
-        }
     }
 
     #[expect(clippy::needless_pass_by_value)]
@@ -6726,25 +6697,17 @@ impl World {
         Some((t_hit, direction, hit_pos))
     }
 
-    pub fn ray_outline_check_detailed(
-        &self,
+    /// Clips the segment against the outline shapes of `state`. A shapeless block,
+    /// air above all, cannot be hit.
+    fn clip_outline_shapes(
+        state: &BlockState,
         block_pos: &BlockPos,
         from: Vector3<f64>,
         to: Vector3<f64>,
     ) -> Option<(BlockDirection, Vector3<f64>)> {
-        let state = self.get_block_state(block_pos);
-
-        if state.outline_shapes.is_empty() {
-            let block_min = block_pos.0.to_f64();
-            let block_max = block_min.add_raw(1.0, 1.0, 1.0);
-            return Self::intersects_aabb_with_hit(from, to, block_min, block_max)
-                .map(|(_, dir, hit_pos)| (dir, hit_pos));
-        }
-
-        let bounding_boxes = state.get_block_outline_shapes_at(block_pos);
         let mut closest_hit: Option<(f64, BlockDirection, Vector3<f64>)> = None;
 
-        for shape in bounding_boxes {
+        for shape in state.get_block_outline_shapes_at(block_pos) {
             let world_min = shape.min.add(&block_pos.0.to_f64());
             let world_max = shape.max.add(&block_pos.0.to_f64());
 
@@ -6759,6 +6722,15 @@ impl World {
         }
 
         closest_hit.map(|(_, dir, hit_pos)| (dir, hit_pos))
+    }
+
+    pub fn ray_outline_check_detailed(
+        &self,
+        block_pos: &BlockPos,
+        from: Vector3<f64>,
+        to: Vector3<f64>,
+    ) -> Option<(BlockDirection, Vector3<f64>)> {
+        Self::clip_outline_shapes(self.get_block_state(block_pos), block_pos, from, to)
     }
 
     fn ray_outline_check(
@@ -6956,6 +6928,8 @@ impl World {
             .collect()
     }
 
+    /// Returns the closest entity the segment from `start` to `end` hits, or
+    /// `None`. Convenience wrapper over [`Self::ray_trace_entities`].
     pub fn ray_trace_entity(
         &self,
         start: Vector3<f64>,
@@ -6964,6 +6938,14 @@ impl World {
         self.ray_trace_entities(start, end).into_iter().next()
     }
 
+    /// Traces the block grid from `start_pos` to `end_pos` (vanilla
+    /// `Block.clip` semantics) and returns the first block the ray actually
+    /// passes through whose outline collides and whose `hit_check` returns
+    /// true, together with the direction reported for that hit. The start
+    /// block is tested like any other; since the ray begins inside it, the
+    /// reported direction there is a fallback rather than a true entry face.
+    /// Returns `None` when nothing is hit or the ray starts and ends in the
+    /// same block.
     pub fn raycast(
         self: &Arc<Self>,
         start_pos: Vector3<f64>,
@@ -7756,6 +7738,22 @@ mod tests {
             assert!(state.is_empty);
             assert_eq!(state.height, 0.0);
         }
+    }
+
+    #[test]
+    fn a_shapeless_block_never_stops_a_ray() {
+        // The ray always starts inside a block, usually air, and that block must not
+        // count as a hit or every raycast would stop where it began.
+        let pos = BlockPos::new(10, 64, 10);
+        let from = pumpkin_util::math::vector3::Vector3::new(10.5, 64.5, 10.5);
+        let to = pumpkin_util::math::vector3::Vector3::new(20.5, 64.5, 10.5);
+
+        assert!(
+            super::World::clip_outline_shapes(Block::AIR.default_state, &pos, from, to).is_none()
+        );
+        assert!(
+            super::World::clip_outline_shapes(Block::STONE.default_state, &pos, from, to).is_some()
+        );
     }
 
     #[test]

@@ -4,6 +4,7 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_nbt::compound::NbtCompound;
 use uuid::Uuid;
 
+use crate::entity::EntityBase;
 use crate::entity::passive::animal::Animal;
 
 pub const SITTING_FLAG: u8 = 1;
@@ -81,6 +82,20 @@ pub trait TamableAnimal: Animal {
 
     fn get_owner(&self) -> Option<Uuid> {
         self.get_tamable_data().owner.load()
+    }
+
+    /// Returns `None` when the plain team rule should apply instead.
+    fn tamable_considers_entity_as_ally(&self, other: &dyn EntityBase) -> Option<bool> {
+        if !self.is_tame() {
+            return None;
+        }
+        let owner_uuid = self.get_owner()?;
+        if other.get_entity().entity_uuid == owner_uuid {
+            return Some(true);
+        }
+        let world = self.get_mob_entity().living_entity.entity.world.load();
+        let owner = world.get_player_by_uuid(owner_uuid)?;
+        Some(owner.considers_entity_as_ally(other))
     }
 
     fn set_owner(&self, owner: Option<Uuid>) {
