@@ -144,6 +144,10 @@ pub fn ensure_minecraft_data_dir(level_folder: &Path) -> Result<PathBuf, WorldIn
     Ok(dir)
 }
 
+/// Reads weather from the root data directory, falling back to Paper's overworld directory.
+///
+/// Returns defaults if neither file exists or the selected file cannot be opened or decoded.
+/// An unreadable root file remains authoritative; it does not trigger the Paper fallback.
 pub fn read_weather(level_folder: &Path) -> WeatherData {
     let Some(path) = find_overworld_data_file(level_folder, "weather.dat") else {
         return WeatherData::default();
@@ -471,6 +475,10 @@ pub fn game_rules_from_nbt(root: &NbtCompound) -> GameRuleRegistry {
     registry
 }
 
+/// Reads gamerules from the root data directory, falling back to Paper's overworld directory.
+///
+/// Missing or invalid rules retain their defaults. File access or decoding failures also
+/// return defaults rather than falling back from an unreadable root file to a Paper copy.
 pub fn read_game_rules(level_folder: &Path) -> GameRuleRegistry {
     let Some(path) = find_overworld_data_file(level_folder, "game_rules.dat") else {
         return GameRuleRegistry::default();
@@ -575,6 +583,10 @@ pub fn write_world_clocks(
         .map_err(|e| WorldInfoError::SerializationError(e.to_string()))
 }
 
+/// Reads trader spawn settings, preferring root data over Paper's overworld copy.
+///
+/// Accepts current and legacy field names in wrapped or unwrapped payloads. Missing data
+/// and file access or decoding failures use defaults without bypassing an existing root file.
 pub fn read_wandering_trader(level_folder: &Path) -> WanderingTraderData {
     let Some(path) = find_overworld_data_file(level_folder, "wandering_trader.dat") else {
         return WanderingTraderData::default();
@@ -648,6 +660,13 @@ pub fn write_custom_boss_events_stub(
         .map_err(|e| WorldInfoError::SerializationError(e.to_string()))
 }
 
+/// Creates an empty root scheduled-events file only when neither supported layout has one.
+///
+/// Preserves imported events without loading or executing them. A path inspection error
+/// also prevents stub creation so potentially existing events are not shadowed.
+///
+/// # Errors
+/// Returns an error if directory creation, file creation, or NBT serialization fails.
 pub fn write_scheduled_events_stub(
     level_folder: &Path,
     data_version: i32,
