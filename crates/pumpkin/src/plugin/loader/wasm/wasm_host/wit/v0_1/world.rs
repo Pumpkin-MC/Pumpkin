@@ -949,6 +949,35 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         Self::get_wit_biome(biome)
     }
 
+    async fn set_biome(
+        &mut self,
+        world: Resource<World>,
+        pos: WitBlockPos,
+        biome: pumpkin::plugin::biomes::Biome,
+    ) -> wasmtime::Result<()> {
+        let world_ref = self.get_world_res(&world)?.provider.clone();
+        let Some(data) = pumpkin_data::biome::Biome::ALL.get(biome as usize) else {
+            return Err(wasmtime::Error::msg("Unknown biome"));
+        };
+        let chunk_pos = pumpkin_util::math::vector2::Vector2::new(pos.x >> 4, pos.z >> 4);
+        let Some(chunk) = world_ref
+            .level
+            .loaded_chunks
+            .get(&chunk_pos)
+            .map(|c| c.value().clone())
+        else {
+            return Ok(());
+        };
+        chunk.section.set_biome_absolute_y(
+            (pos.x & 15) as usize,
+            pos.y,
+            (pos.z & 15) as usize,
+            data.id,
+        );
+        chunk.mark_dirty(true);
+        Ok(())
+    }
+
     async fn get_entities(
         &mut self,
         world: Resource<World>,
@@ -1421,6 +1450,40 @@ impl pumpkin::plugin::world::HostChunk for PluginHostState {
             .get_block_absolute_y(pos.x as usize, pos.y, pos.z as usize)
             .unwrap_or(BlockStateId::AIR)
             .as_u16())
+    }
+
+    async fn read_section(
+        &mut self,
+        chunk: Resource<WitChunk>,
+        section_y: i32,
+    ) -> wasmtime::Result<Option<Vec<u16>>> {
+        const SECTION_SIZE: usize = 16;
+
+        let chunk_res = self.get_chunk_res(&chunk)?;
+        let (_, chunk_data) = &chunk_res.provider;
+        let Some(chunk_data) = chunk_data.upgrade() else {
+            return Err(wasmtime::Error::msg("Chunk unloaded"));
+        };
+
+        let Some(base_y) = section_y.checked_mul(SECTION_SIZE as i32) else {
+            return Ok(None);
+        };
+        let mut states = Vec::with_capacity(SECTION_SIZE * SECTION_SIZE * SECTION_SIZE);
+        for y in 0..SECTION_SIZE {
+            for z in 0..SECTION_SIZE {
+                for x in 0..SECTION_SIZE {
+                    let Some(state) =
+                        chunk_data
+                            .section
+                            .get_block_absolute_y(x, base_y + y as i32, z)
+                    else {
+                        return Ok(None);
+                    };
+                    states.push(state.as_u16());
+                }
+            }
+        }
+        Ok(Some(states))
     }
 
     async fn get_block_state(

@@ -650,6 +650,14 @@ interface %world {
         /// X and Z must be in the range [0, 15].
         get-block-state-id: func(pos: block-pos) -> u16;
 
+        /// Reads a whole 16x16x16 section at once, ordered as
+        /// `(y << 8) | (z << 4) | x`, the same order chunk sections use on the wire.
+        /// Returns none when the section lies outside the world's height.
+        ///
+        /// Reading a section one block at a time costs a host call per block, which
+        /// dominates any bulk world operation; this is the bulk form.
+        read-section: func(section-y: s32) -> option<list<u16>>;
+
         /// Gets detailed block state information at the specified position relative to the chunk.
         /// X and Z must be in the range [0, 15].
         get-block-state: func(pos: block-pos) -> block-state;
@@ -896,6 +904,12 @@ interface %world {
 
         /// Returns the biome at the specified position.
         get-biome: func(pos: block-pos) -> biome;
+
+        /// Sets the biome at the specified position.
+        ///
+        /// Biomes are stored per 4x4x4 cell, so this changes the whole cell that
+        /// contains the position. Does nothing if the chunk is not loaded.
+        set-biome: func(pos: block-pos, biome: biome);
 
         /// Spawns an entity of the specified type at the given position.
         spawn-entity: func(entity-type: entity-type, pos: position) -> entity;
