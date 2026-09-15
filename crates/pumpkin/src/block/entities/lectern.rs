@@ -19,6 +19,7 @@ pub struct LecternBlockEntity {
     pub book: Arc<Mutex<ItemStack>>,
     pub page: AtomicUsize,
     pub dirty: AtomicBool,
+    pub comparator_dirty: AtomicBool,
 }
 
 impl BlockEntity for LecternBlockEntity {
@@ -51,6 +52,7 @@ impl BlockEntity for LecternBlockEntity {
             book,
             page: AtomicUsize::new(page),
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
         }
     }
 
@@ -69,6 +71,14 @@ impl BlockEntity for LecternBlockEntity {
 
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
         Some(self)
+    }
+
+    fn is_comparator_dirty(&self) -> bool {
+        self.comparator_dirty.load(Ordering::Relaxed)
+    }
+
+    fn clear_comparator_dirty(&self) {
+        self.comparator_dirty.store(false, Ordering::Relaxed);
     }
 
     fn is_dirty(&self) -> bool {
@@ -107,6 +117,7 @@ impl LecternBlockEntity {
             book: Arc::new(Mutex::new(ItemStack::EMPTY.clone())),
             page: AtomicUsize::new(0),
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
         }
     }
 
@@ -133,9 +144,8 @@ impl LecternBlockEntity {
         )
     }
 
-    /// Vanilla comparator output: `floor(page / (page_count - 1) * 14) + 1`,
-    /// or `0` without a book. Single-page books emit `1` (`0 / 0` is `NaN`,
-    /// which vanilla's `MathHelper.floor` turns into `0`).
+    /// Vanilla `LecternBlockEntity.getRedstoneSignal`: `floor(progress * 14) + 1`,
+    /// or `0` without a book. A single-page book counts as fully read and emits 15.
     pub fn comparator_output(&self) -> u8 {
         let book = self
             .book
@@ -145,11 +155,13 @@ impl LecternBlockEntity {
             return 0;
         }
 
-        let page = self.page.load(Ordering::Relaxed) as f32;
-        let page_count = Self::page_count_of(&book) as f32;
-        let fraction = page / (page_count - 1.0) * 14.0;
-        // `NaN as u8` is 0, matching vanilla's cast of NaN to int.
-        fraction.floor() as u8 + 1
+        let page_count = Self::page_count_of(&book);
+        let progress = if page_count > 1 {
+            self.page.load(Ordering::Relaxed) as f32 / (page_count - 1) as f32
+        } else {
+            1.0
+        };
+        (progress * 14.0).floor() as u8 + 1
     }
 }
 
@@ -208,6 +220,7 @@ impl Inventory for LecternBlockEntity {
 
     fn mark_dirty(&self) {
         self.dirty.store(true, Ordering::Relaxed);
+        self.comparator_dirty.store(true, Ordering::Relaxed);
     }
 
     fn as_any(&self) -> &dyn Any {

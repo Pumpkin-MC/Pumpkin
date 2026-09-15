@@ -247,7 +247,7 @@ impl Goal for GhastShootFireballGoal {
         target.is_some_and(|t| t.get_entity().is_alive())
     }
 
-    fn should_continue(&self, _mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
         let Some(ghast) = self.ghast.upgrade() else {
             return false;
         };
@@ -378,7 +378,7 @@ impl Goal for RandomFloatAroundGoal {
         wanted.is_none_or(|target| {
             let pos = ghast.mob_entity.living_entity.entity.pos.load();
             let dist_sq = pos.squared_distance_to_vec(&target);
-            dist_sq < 1.0 || dist_sq > 3600.0
+            !dist_sq.is_nan() && !(1.0..=3600.0).contains(&dist_sq)
         })
     }
 
@@ -400,7 +400,7 @@ impl Goal for RandomFloatAroundGoal {
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(new_target);
     }
 
-    fn should_continue(&self, _mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, _mob: &dyn Mob) -> bool {
         let Some(ghast) = self.ghast.upgrade() else {
             return false;
         };
