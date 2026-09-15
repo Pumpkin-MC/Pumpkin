@@ -17,9 +17,6 @@ pub struct ActiveTargetGoal {
     track_target_goal: TrackTargetGoal,
     target: Option<Arc<dyn EntityBase>>,
     reciprocal_chance: i32,
-    /// `None` targets the closest entity of any type passing the predicate,
-    /// matching vanilla's class-agnostic `NearestAttackableTargetGoal`;
-    /// `Some` restricts the search to a single type.
     target_type: Option<&'static EntityType>,
     target_predicate: TargetPredicate,
 }
@@ -78,7 +75,7 @@ impl ActiveTargetGoal {
 
     /// Targets the closest entity of any type passing `predicate`, like vanilla's
     /// class-agnostic `NearestAttackableTargetGoal` (e.g. iron golems targeting
-    /// every `Enemy` but creepers). Candidates are all tested, so an invalid
+    /// every `Enemy` but creepers). All candidates are tested, so an invalid
     /// entity nearest to the mob cannot block a valid one farther away.
     pub fn predicated(
         mob: &MobEntity,
@@ -106,88 +103,45 @@ impl ActiveTargetGoal {
         self.target = target;
     }
 
-    fn find_closest_target(&mut self, mob: &MobEntity) {
-        let follow_range = mob
+    fn find_closest_target(&mut self, mob: &dyn Mob) {
+        let mob_entity = mob.get_mob_entity();
+        let follow_range = mob_entity
             .living_entity
             .get_attribute_value(&Attributes::FOLLOW_RANGE);
 
         // Vanilla updates the target conditions with the current follow distance on every search
         self.target_predicate.base_max_distance = follow_range;
 
-        let world = mob.living_entity.entity.world.load();
+        let world = mob_entity.living_entity.entity.world.load();
 
         // Vanilla searches using getEyeY(), so we offset the position by the eye height
-        let mut search_pos = mob.living_entity.entity.pos.load();
-        search_pos.y += mob.living_entity.entity.entity_dimension.load().eye_height as f64;
+        let mut search_pos = mob_entity.living_entity.entity.pos.load();
+        search_pos.y += mob_entity
+            .living_entity
+            .entity
+            .entity_dimension
+            .load()
+            .eye_height as f64;
 
-        if self.target_type == Some(&EntityType::PLAYER) {
-            let potential_player = world
-                .get_closest_player(search_pos, follow_range)
-                .map(|p: Arc<Player>| p as Arc<dyn EntityBase>);
-
-            if let Some(potential_entity) = potential_player
-                && let Some(living) = potential_entity.get_living_entity()
-                && self
-                    .target_predicate
-                    .test(&world, Some(&mob.living_entity), living)
-            {
-                self.target = Some(potential_entity);
-                return;
-            }
-        } else if let Some(target_type) = self.target_type {
-            let potential_entity =
-                world.get_closest_entity(search_pos, follow_range, Some(&[target_type]));
-
-            if let Some(potential_entity) = potential_entity
-                && let Some(living) = potential_entity.get_living_entity()
-                && self
-                    .target_predicate
-                    .test(&world, Some(&mob.living_entity), living)
-            {
-                self.target = Some(potential_entity);
-                return;
-            }
+        // Pick the nearest candidate that passes the conditions, not the nearest overall.
+        let predicate = &self.target_predicate;
+        let found = if self.target_type == Some(&EntityType::PLAYER) {
+            world
+                .get_nearest_player(search_pos, follow_range, |player| {
+                    predicate.test(&world, Some(mob), player.as_ref())
+                })
+                .map(|p: Arc<Player>| p as Arc<dyn EntityBase>)
         } else {
-            // Class-agnostic search: test every candidate and keep the closest
-            // passing one, like vanilla's `getNearestEntity` with conditions.
-            // Players are registered in `World::players`, not `World::entities`,
-            // so they have to be scanned separately.
-            let entities = world
-                .get_nearby_entities(search_pos, follow_range)
-                .into_values()
-                .map(|entity| (entity.get_entity().pos.load(), entity));
-            let players = world
-                .get_nearby_players(search_pos, follow_range)
-                .into_iter()
-                .map(|player: Arc<Player>| {
-                    (
-                        player.get_entity().pos.load(),
-                        player as Arc<dyn EntityBase>,
-                    )
-                });
-            let mut best: Option<(f64, Arc<dyn EntityBase>)> = None;
-            for (entity_pos, entity) in entities.chain(players) {
-                let Some(living) = entity.get_living_entity() else {
-                    continue;
-                };
-                if !self
-                    .target_predicate
-                    .test(&world, Some(&mob.living_entity), living)
-                {
-                    continue;
-                }
-                let dist_sq = search_pos.squared_distance_to_vec(&entity_pos);
-                if best
-                    .as_ref()
-                    .is_none_or(|(best_dist, _)| dist_sq < *best_dist)
-                {
-                    best = Some((dist_sq, entity));
-                }
-            }
-            self.target = best.map(|(_, entity)| entity);
-            return;
-        }
-        self.target = None;
+            let entity_types = self.target_type.map(|t| [t]);
+            world.get_nearest_entity(
+                search_pos,
+                follow_range,
+                entity_types.as_ref().map(<[&EntityType; 1]>::as_slice),
+                |entity| predicate.test(&world, Some(mob), entity.as_ref()),
+            )
+        };
+
+        self.target = found;
     }
 }
 
@@ -198,11 +152,11 @@ impl Goal for ActiveTargetGoal {
         {
             return false;
         }
-        self.find_closest_target(mob.get_mob_entity());
+        self.find_closest_target(mob);
         self.target.is_some()
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         self.track_target_goal.should_continue(mob)
     }
 

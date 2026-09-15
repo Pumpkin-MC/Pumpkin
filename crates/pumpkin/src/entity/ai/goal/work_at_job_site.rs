@@ -47,7 +47,7 @@ impl Goal for WorkAtJobSiteGoal {
         true
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let Some(target) = self.target else {
             return false;
         };
@@ -59,12 +59,7 @@ impl Goal for WorkAtJobSiteGoal {
             .to_centered_f64()
             .squared_distance_to_vec(&entity.pos.load())
             >= 1.73f64.powi(2)
-            && !mob
-                .get_mob_entity()
-                .navigator
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .is_idle()
+            && !mob.is_navigator_idle()
     }
 
     fn start(&mut self, mob: &dyn Mob) {

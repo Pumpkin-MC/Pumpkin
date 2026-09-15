@@ -434,6 +434,8 @@ pub struct GetComparatorOutputArgs<'a> {
     pub block: &'a Block,
     pub state: &'a BlockState,
     pub position: &'a BlockPos,
+    /// Face of this block that the reading comparator sits against.
+    pub direction: BlockDirection,
 }
 
 pub struct GetInsideCollisionShapeArgs<'a> {
@@ -541,6 +543,17 @@ impl BlockIsReplacing {
             _ => false,
         }
     }
+}
+
+/// Vanilla `AbstractContainerMenu.getRedstoneSignalFromBlockEntity`: read a block
+/// entity's own inventory as a comparator would.
+#[must_use]
+pub fn container_comparator_output(args: &GetComparatorOutputArgs<'_>) -> Option<u8> {
+    let inventory = args
+        .world
+        .get_block_entity(args.position)?
+        .get_inventory()?;
+    Some(calculate_comparator_output(inventory.as_ref()))
 }
 
 pub fn calculate_comparator_output(inventory: &dyn pumpkin_inventory::Inventory) -> u8 {
