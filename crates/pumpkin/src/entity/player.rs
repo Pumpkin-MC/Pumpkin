@@ -452,8 +452,8 @@ pub struct Player {
     pub last_input: AtomicI8,
     /// A counter for teleport IDs used to track pending teleports.
     pub teleport_id_count: AtomicI32,
-    /// The pending teleport information, including the teleport ID and target location.
-    pub awaiting_teleport: Mutex<Option<(VarInt, Vector3<f64>)>>,
+    /// Pending teleports, in the order they were sent to the client.
+    pub awaiting_teleports: Mutex<VecDeque<(VarInt, Vector3<f64>)>>,
     /// The coordinates of the chunk section the player is currently watching.
     pub watched_section: AtomicCell<Cylindrical>,
     /// The last time the player performed an action (for idle timeout).
@@ -723,7 +723,7 @@ impl Player {
             )),
             gameprofile,
             client,
-            awaiting_teleport: Mutex::new(None),
+            awaiting_teleports: Mutex::new(VecDeque::new()),
             breath_manager: BreathManager::default(),
             // TODO: Load this from previous instance
             hunger_manager: HungerManager::default(),
@@ -4014,11 +4014,10 @@ impl Player {
         entity.set_rotation(yaw, pitch);
         match self.client.as_ref() {
             ClientPlatform::Java(client) => {
-                *self
-                    .awaiting_teleport
+                self.awaiting_teleports
                     .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner) =
-                    Some((teleport_id.into(), position));
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push_back((teleport_id.into(), position));
                 let packet = CPlayerPosition::new(
                     teleport_id.into(),
                     position,

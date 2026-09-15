@@ -3851,11 +3851,11 @@ impl Entity {
                 // Use fallback position as placeholder — updated below with real position
                 let placeholder =
                     Vector3::new(self.pos.load().x, vehicle_box.max.y, self.pos.load().z);
-                *player
-                    .awaiting_teleport
+                player
+                    .awaiting_teleports
                     .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner) =
-                    Some((id.into(), placeholder));
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push_back((id.into(), placeholder));
                 Some(id)
             } else {
                 None
@@ -4061,12 +4061,16 @@ impl Entity {
             if let Some(player) = passenger.get_player() {
                 if let Some(id) = teleport_id {
                     player.get_entity().set_pos(dismount_pos);
-                    // Update awaiting_teleport with the real dismount position
-                    *player
-                        .awaiting_teleport
+                    // Update the pre-allocated teleport with the real dismount position.
+                    if let Some((_, position)) = player
+                        .awaiting_teleports
                         .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner) =
-                        Some((id.into(), dismount_pos));
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .iter_mut()
+                        .find(|(pending_id, _)| *pending_id == id.into())
+                    {
+                        *position = dismount_pos;
+                    }
                     // Use send_client_packet so the teleport goes through
                     // the same packet queue as CSetPassengers, preserving send order.
                     // Vanilla uses DELTA | ROT flags: position absolute, delta/rotation relative.
