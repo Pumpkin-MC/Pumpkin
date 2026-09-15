@@ -796,6 +796,7 @@ impl BlockRegistry {
         );
 
         if let Ok(hand) = pumpkin_util::Hand::from_packet_id(use_item_on.hand.0)
+            && placed_block.default_state.block_entity_type != u16::MAX
             && let Some(block_entity) = world.get_block_entity(&final_block_pos)
         {
             block_entity.apply_item_components(&player.inventory().get_stack_in_hand(hand));
