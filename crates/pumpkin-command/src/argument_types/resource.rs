@@ -1,9 +1,10 @@
 use crate::argument_types::FromStringReader;
 use crate::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
-use crate::context::command_context::CommandContext;
+use crate::context::command_context::{CommandContext, ParsedNode};
 use crate::errors::command_syntax_error::CommandSyntaxError;
 use crate::errors::error_types::{CommandErrorType, DISPATCHER_PARSE_EXCEPTION};
-use crate::node::attached::AttachedNode;
+use crate::node::attached::{ArgumentAttachedNode, AttachedNode};
+use crate::node::tree::Tree;
 use crate::string_reader::StringReader;
 use crate::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
 use pumpkin_data::entity::EntityType;
@@ -224,6 +225,22 @@ impl<S: crate::source::CommandSource> ArgumentType<S> for ResourceArgument {
     }
 }
 
+fn find_parsed_argument_node<'a, S: crate::source::CommandSource>(
+    tree: &'a Tree<S>,
+    nodes: &[ParsedNode],
+    name: &str,
+) -> Option<&'a ArgumentAttachedNode<S>> {
+    nodes.iter().rev().find_map(|parsed| {
+        if let AttachedNode::Argument(node) = &tree[parsed.node]
+            && node.meta.name == name
+        {
+            Some(node)
+        } else {
+            None
+        }
+    })
+}
+
 impl ResourceArgument {
     pub fn get_resource<T: 'static, S: crate::source::CommandSource>(
         context: &CommandContext<S>,
@@ -233,30 +250,7 @@ impl ResourceArgument {
         let missing_argument = DISPATCHER_PARSE_EXCEPTION.create_without_context(
             TextComponent::text(format!("Could not find argument with name '{name}'")),
         );
-        let node = context
-            .nodes
-            .iter()
-            .rev()
-            .find_map(|parsed| {
-                if let AttachedNode::Argument(cur) = &context.tree[parsed.node]
-                    && cur.meta.name == name
-                {
-                    Some(cur)
-                } else {
-                    None
-                }
-            })
-            .or_else(|| {
-                context.tree.iter().find_map(|node| {
-                    if let AttachedNode::Argument(cur) = node
-                        && cur.meta.name == name
-                    {
-                        Some(cur)
-                    } else {
-                        None
-                    }
-                })
-            })
+        let node = find_parsed_argument_node(context.tree, &context.nodes, name)
             .ok_or(missing_argument.clone())?;
         let invalid_argument =
             DISPATCHER_PARSE_EXCEPTION.create_without_context(TextComponent::text(format!(
@@ -330,5 +324,74 @@ impl ResourceArgument {
             Err(ERROR_NOT_SUMMONABLE_ENTITY
                 .create_without_context(TextComponent::text(val.resource_name)))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ENTITY_TYPE_ARGUMENT, ResourceArgument, find_parsed_argument_node};
+    use crate::argument_builder::{ArgumentBuilder, argument, command};
+    use crate::argument_types::core::string::StringArgumentType;
+    use crate::context::command_context::ParsedNode;
+    use crate::context::string_range::StringRange;
+    use crate::node::attached::AttachedNode;
+    use crate::node::tree::Tree;
+    use crate::source::DummySource;
+
+    #[test]
+    fn resource_lookup_uses_the_parsed_path_when_argument_names_collide() {
+        // 使用通用命令来源和字符串参数，独立命令 crate 无需依赖服务端实体类型。
+        let mut tree = Tree::<DummySource>::new();
+        tree.add_child_to_root(
+            command("other", "test command")
+                .then(argument("entity", StringArgumentType::SingleWord)),
+        );
+        let summon = tree.add_child_to_root(
+            command("summon", "test command")
+                .then(argument("entity", ENTITY_TYPE_ARGUMENT.clone())),
+        );
+
+        let global_match = tree
+            .iter()
+            .find_map(|node| {
+                if let AttachedNode::Argument(node) = node
+                    && node.meta.name == "entity"
+                {
+                    Some(node)
+                } else {
+                    None
+                }
+            })
+            .expect("the test tree should contain an entity argument");
+        assert!(
+            global_match
+                .meta
+                .argument_type
+                .as_any()
+                .downcast_ref::<ResourceArgument>()
+                .is_none(),
+            "the first global name match should reproduce the collision"
+        );
+
+        let parsed_entity = tree
+            .get_children(summon.into())
+            .into_iter()
+            .next()
+            .expect("summon should contain an entity argument");
+        let parsed_nodes = [ParsedNode {
+            node: parsed_entity,
+            range: StringRange::at(0),
+        }];
+        let parsed_match = find_parsed_argument_node(&tree, &parsed_nodes, "entity")
+            .expect("the parsed entity argument should be found");
+
+        assert!(
+            parsed_match
+                .meta
+                .argument_type
+                .as_any()
+                .downcast_ref::<ResourceArgument>()
+                .is_some()
+        );
     }
 }

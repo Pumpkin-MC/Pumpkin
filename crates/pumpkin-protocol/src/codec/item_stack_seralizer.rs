@@ -96,9 +96,14 @@ fn serialize_item_stack_with_id(
         if stack.is_empty() {
             write.write_i16_be(-1)
         } else {
-            write.write_i16_be(item_id as i16)?;
+            // ViaBackwards/ViaRewind represent pre-flattening items as
+            // `(numeric_id << 4) | damage`. The wire format keeps those fields
+            // separate, so writing the packed value as the item id changes the item.
+            let numeric_id = item_id >> 4;
+            let damage = item_id & 0x0F;
+            write.write_i16_be(numeric_id as i16)?;
             write.write_i8(stack.item_count as i8)?;
-            write.write_i16_be(0)?; // damage / metadata
+            write.write_i16_be(damage as i16)?;
             write.write_u8(0)?; // TAG_End (no NBT)
             Ok(())
         }
@@ -908,5 +913,29 @@ impl From<Option<ItemStack>> for ItemStackOptionalTemplateSerializer<'_> {
             || ItemStackOptionalTemplateSerializer(Cow::Borrowed(ItemStack::EMPTY)),
             ItemStackOptionalTemplateSerializer::from,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ItemStackSerializer;
+    use pumpkin_data::{item::Item, item_stack::ItemStack};
+    use pumpkin_util::version::JavaMinecraftVersion;
+
+    #[test]
+    fn legacy_item_stack_splits_packed_id_and_damage() {
+        let stone = ItemStackSerializer::from(ItemStack::new(1, &Item::STONE));
+        let mut stone_bytes = Vec::new();
+        stone
+            .write_with_version(&mut stone_bytes, &JavaMinecraftVersion::V_1_7_2)
+            .unwrap();
+        assert_eq!(stone_bytes, [0x00, 0x01, 0x01, 0x00, 0x00, 0x00]);
+
+        let granite = ItemStackSerializer::from(ItemStack::new(1, &Item::GRANITE));
+        let mut granite_bytes = Vec::new();
+        granite
+            .write_with_version(&mut granite_bytes, &JavaMinecraftVersion::V_1_7_2)
+            .unwrap();
+        assert_eq!(granite_bytes, [0x00, 0x01, 0x01, 0x00, 0x01, 0x00]);
     }
 }
