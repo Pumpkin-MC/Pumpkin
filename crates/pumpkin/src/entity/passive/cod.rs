@@ -5,9 +5,10 @@ use pumpkin_data::entity::EntityType;
 use crate::entity::{
     Entity,
     ai::goal::{
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
+        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
+        random_swimming::RandomSwimmingGoal, swim::SwimGoal,
     },
+    ai::pathfinder::Navigator,
     mob::{Mob, MobEntity},
 };
 
@@ -28,6 +29,13 @@ impl CodEntity {
             Arc::downgrade(&mob_arc)
         };
 
+        // Vanilla `AbstractFish#createNavigation`: fish navigate through water.
+        *mob_arc
+            .mob_entity
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Navigator::water_bound(false);
+
         {
             let mut goal_selector = mob_arc
                 .mob_entity
@@ -36,7 +44,7 @@ impl CodEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
 
             goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(WanderAroundGoal::new(1.0)));
+            goal_selector.add_goal(1, Box::new(RandomSwimmingGoal::new(1.0, 40)));
             goal_selector.add_goal(
                 2,
                 LookAtEntityGoal::with_default(mob_weak, &EntityType::PLAYER, 6.0),
