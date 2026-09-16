@@ -155,10 +155,20 @@ impl Worldborder {
         // below `min`. `Ord::clamp` panics on an inverted range, so collapse the
         // range onto the single block that holds the centre instead.
         let min_x = (self.center_x - half).floor() as i32;
-        let max_x = ((self.center_x + half).floor() as i32 - 1).max(min_x);
+        let max_x = (self.center_x + half).floor() as i32 - 1;
         let min_z = (self.center_z - half).floor() as i32;
-        let max_z = ((self.center_z + half).floor() as i32 - 1).max(min_z);
-        (x.clamp(min_x, max_x), z.clamp(min_z, max_z))
+        let max_z = (self.center_z + half).floor() as i32 - 1;
+        let clamped_x = if max_x <= min_x {
+            self.center_x.floor() as i32
+        } else {
+            x.clamp(min_x, max_x)
+        };
+        let clamped_z = if max_z <= min_z {
+            self.center_z.floor() as i32
+        } else {
+            z.clamp(min_z, max_z)
+        };
+        (clamped_x, clamped_z)
     }
 }
 
@@ -201,6 +211,15 @@ mod tests {
         let border = Worldborder::new(0.5, 0.5, 0.5, 0, 5, 300);
 
         assert_eq!(border.clamp_block(100, -100), (0, 0));
+    }
+
+    #[test]
+    fn clamp_block_uses_the_centre_for_collapsed_off_grid_ranges() {
+        let narrow = Worldborder::new(0.1, 0.1, 0.5, 0, 5, 300);
+        let wide = Worldborder::new(0.1, 0.1, 1.2, 0, 5, 300);
+
+        assert_eq!(narrow.clamp_block(100, -100), (0, 0));
+        assert_eq!(wide.clamp_block(100, -100), (0, 0));
     }
 
     #[test]
