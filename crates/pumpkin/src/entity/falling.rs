@@ -79,7 +79,7 @@ impl EntityBase for FallingEntity {
             } else if world.level_info.load().game_rules.entity_drops
                 && let Some(item) = Item::from_registry_key(block.name)
             {
-                world.drop_stack(&landing_pos, ItemStack::new(1, &item));
+                world.drop_stack(&landing_pos, ItemStack::new(1, item));
             }
             self.entity.remove();
         }
