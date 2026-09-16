@@ -1279,6 +1279,33 @@ impl Entity {
         );
     }
 
+    pub fn send_velocity_to_tracking(&self) {
+        let velocity = self.velocity.load();
+        self.world.load().send_to_tracking_players_editioned(
+            self,
+            &CEntityVelocity::new(self.entity_id.into(), velocity),
+            &CSetActorMotion {
+                target_runtime_id: VarULong(self.entity_id as u64),
+                motion: Vector3::new(velocity.x as f32, velocity.y as f32, velocity.z as f32),
+                tick: VarULong(0),
+            },
+        );
+    }
+
+    pub fn send_velocity_to_self(&self) {
+        let velocity = self.velocity.load();
+        if let Some(player) = self.world.load().get_player_by_id(self.entity_id) {
+            player.try_enqueue_packet_editioned(
+                &CEntityVelocity::new(self.entity_id.into(), velocity),
+                &CSetActorMotion {
+                    target_runtime_id: VarULong(self.entity_id as u64),
+                    motion: Vector3::new(velocity.x as f32, velocity.y as f32, velocity.z as f32),
+                    tick: VarULong(0),
+                },
+            );
+        }
+    }
+
     #[must_use]
     pub const fn get_entity_dimensions(pose: EntityPose) -> EntityDimensions {
         match pose {

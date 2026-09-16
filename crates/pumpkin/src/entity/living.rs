@@ -3202,6 +3202,7 @@ impl LivingEntity {
                 let resistance = self.get_attribute_value(&Attributes::KNOCKBACK_RESISTANCE);
                 self.entity
                     .apply_knockback(knockback_after_resistance(0.4, resistance), dx, dz);
+                self.entity.send_velocity_to_self();
             }
         }
 
@@ -3383,7 +3384,11 @@ impl EntityBase for LivingEntity {
 
         // Coalesce velocity sends to once per tick.
         if self.entity.velocity_dirty.swap(false, Ordering::SeqCst) {
-            self.entity.send_velocity();
+            if is_player {
+                self.entity.send_velocity_to_tracking();
+            } else {
+                self.entity.send_velocity();
+            }
         }
 
         // TODO
