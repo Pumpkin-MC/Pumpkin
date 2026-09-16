@@ -1,5 +1,7 @@
 use crate::VarInt;
-use crate::codec::data_component::{DataComponentCodec, deserialize, serialize};
+use crate::codec::data_component::{
+    DataComponentCodec, deserialize_for_version, serialize_for_version,
+};
 use crate::ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError};
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::{
@@ -19,7 +21,7 @@ use std::io::Cursor;
 pub struct ItemStackSerializer<'a>(pub Cow<'a, ItemStack>);
 
 /// Whether `version` knows the component. 26.3 removed `map_color` without a successor.
-fn is_component_sent(id: DataComponent, version: JavaMinecraftVersion) -> bool {
+pub(crate) fn is_component_sent(id: DataComponent, version: JavaMinecraftVersion) -> bool {
     !(version >= JavaMinecraftVersion::V_26_3 && id == DataComponent::MapColor)
 }
 
@@ -71,7 +73,7 @@ fn serialize_item_stack_with_id(
                     let remapped_comp_id =
                         remap_data_component_type_id_for_version(u32::from(id.to_id()), version);
                     write.put_var_int(&VarInt(remapped_comp_id as i32))?;
-                    serialize(*id, data.as_ref(), write)?;
+                    serialize_for_version(*id, data.as_ref(), write, version)?;
                 }
             }
 
@@ -149,7 +151,7 @@ fn serialize_length_prefixed_item_stack_with_id(
                         remap_data_component_type_id_for_version(u32::from(id.to_id()), version);
                     write.put_var_int(&VarInt(remapped_comp_id as i32))?;
                     let mut comp_buf = Vec::new();
-                    serialize(*id, data.as_ref(), &mut comp_buf)?;
+                    serialize_for_version(*id, data.as_ref(), &mut comp_buf, version)?;
                     write.put_var_int(&VarInt::from(comp_buf.len() as i32))?;
                     write.write_slice(&comp_buf)?;
                 }
@@ -200,7 +202,7 @@ fn serialize_item_cost_with_id(
             let remapped_comp_id =
                 remap_data_component_type_id_for_version(u32::from(id.to_id()), version);
             write.put_var_int(&VarInt(remapped_comp_id as i32))?;
-            serialize(*id, data.as_ref(), write)?;
+            serialize_for_version(*id, data.as_ref(), write, version)?;
         }
     }
     Ok(())
@@ -210,7 +212,7 @@ type PatchEntry = (DataComponent, Box<dyn DataComponentImpl>);
 
 /// Reads a component ID in `version`'s numbering. `None` for components a client newer than the
 /// server data knows but the server doesn't: they remap to 0 or past the server's last ID.
-fn read_component_id(
+pub(crate) fn read_component_id(
     read: &mut impl NetworkReadExt,
     version: JavaMinecraftVersion,
 ) -> Result<Option<DataComponent>, ReadingError> {
@@ -276,6 +278,7 @@ fn decode_custom_data(component_data: &[u8]) -> Result<Box<dyn DataComponentImpl
 fn decode_component(
     id: DataComponent,
     component_data: &[u8],
+    version: JavaMinecraftVersion,
 ) -> Result<Box<dyn DataComponentImpl>, ReadingError> {
     match id {
         DataComponent::CustomName => decode_custom_name(component_data),
@@ -283,7 +286,7 @@ fn decode_component(
         DataComponent::CustomData => decode_custom_data(component_data),
         _ => {
             let mut cursor = Cursor::new(component_data);
-            deserialize(id, &mut cursor)
+            deserialize_for_version(id, &mut cursor, version)
         }
     }
 }
@@ -309,11 +312,11 @@ fn read_length_prefixed_component(
         let mut stack_buf = [0u8; 256];
         let slice = &mut stack_buf[..byte_len];
         read.read_bytes_to_buf(slice)?;
-        decode_component(id, slice)?
+        decode_component(id, slice, version)?
     } else {
         let mut component_data = vec![0u8; byte_len];
         read.read_bytes_to_buf(&mut component_data)?;
-        decode_component(id, &component_data)?
+        decode_component(id, &component_data, version)?
     };
 
     Ok(Some((id, component_impl)))
@@ -368,7 +371,7 @@ impl ItemStackSerializer<'_> {
             let component_impl = if id == DataComponent::CustomData {
                 CustomDataImpl::deserialize(read)?.to_dyn()
             } else {
-                deserialize(id, read)?
+                deserialize_for_version(id, read, *version)?
             };
             patch.push((id, Some(component_impl)));
         }
@@ -545,7 +548,7 @@ impl ItemStackSerializer<'_> {
             let component_impl = if id == DataComponent::CustomData {
                 CustomDataImpl::deserialize(read)?.to_dyn()
             } else {
-                deserialize(id, read)?
+                deserialize_for_version(id, read, *version)?
             };
             patch.push((id, Some(component_impl)));
         }
@@ -745,7 +748,7 @@ impl ItemStackSerializer<'_> {
                 let remapped_comp_id =
                     remap_data_component_type_id_for_version(u32::from(id.to_id()), *version);
                 write.put_var_int(&VarInt(remapped_comp_id as i32))?;
-                serialize(*id, data.as_ref(), write)?;
+                serialize_for_version(*id, data.as_ref(), write, *version)?;
             }
         }
 

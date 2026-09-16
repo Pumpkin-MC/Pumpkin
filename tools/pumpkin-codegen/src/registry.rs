@@ -278,14 +278,28 @@ pub(crate) fn build() -> TokenStream {
 
         impl Registry {
             #[must_use]
-            pub fn get_synced(version: JavaMinecraftVersion) -> Vec<Self> {
+            pub const fn get_static(version: JavaMinecraftVersion) -> &'static [StaticRegistry] {
                 #[allow(clippy::match_same_arms)]
-                let static_regs = match version {
+                match version {
                     #match_arms
                     _ => #latest_registry,
-                };
+                }
+            }
 
-                static_regs.iter().map(|static_reg| {
+            /// Network ID of `name` (without namespace) in the synced registry `registry_id`.
+            #[must_use]
+            pub fn entry_index(version: JavaMinecraftVersion, registry_id: &str, name: &str) -> Option<usize> {
+                Self::get_static(version)
+                    .iter()
+                    .find(|registry| registry.registry_id == registry_id)?
+                    .entries
+                    .iter()
+                    .position(|entry| entry.name == name)
+            }
+
+            #[must_use]
+            pub fn get_synced(version: JavaMinecraftVersion) -> Vec<Self> {
+                Self::get_static(version).iter().map(|static_reg| {
                     let registry_id = if static_reg.registry_id.contains(':') {
                         static_reg.registry_id.to_string()
                     } else {
