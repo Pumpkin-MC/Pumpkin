@@ -387,7 +387,7 @@ impl StructurePiece {
     }
 
     #[must_use]
-    pub const fn is_under_sea_level(
+    pub fn is_under_sea_level(
         &self,
         chunk: &ProtoChunk,
         x: i32,

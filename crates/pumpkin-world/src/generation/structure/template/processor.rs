@@ -109,6 +109,19 @@ pub enum HeightmapType {
     MotionBlockingNoLeaves,
 }
 
+impl From<HeightmapType> for pumpkin_util::HeightMap {
+    fn from(heightmap: HeightmapType) -> Self {
+        match heightmap {
+            HeightmapType::WorldSurfaceWg => Self::WorldSurfaceWg,
+            HeightmapType::WorldSurface => Self::WorldSurface,
+            HeightmapType::OceanFloorWg => Self::OceanFloorWg,
+            HeightmapType::OceanFloor => Self::OceanFloor,
+            HeightmapType::MotionBlocking => Self::MotionBlocking,
+            HeightmapType::MotionBlockingNoLeaves => Self::MotionBlockingNoLeaves,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ProcessorRule {
     pub position_predicate: PosRuleTest,
@@ -374,7 +387,8 @@ impl StructureProcessor {
     pub fn process(
         &self,
         placer: &impl BlockPlacer,
-        world_pos: Vector3<i32>,
+        world_pos: &mut Vector3<i32>,
+        template_y: i32,
         state: &'static BlockState,
     ) -> Option<&'static BlockState> {
         let mut nbt = None;
@@ -385,6 +399,7 @@ impl StructureProcessor {
         self.process_with_context(
             placer,
             world_pos,
+            template_y,
             state,
             &mut nbt,
             &mut context,
@@ -398,7 +413,8 @@ impl StructureProcessor {
     pub fn process_with_context(
         &self,
         placer: &impl BlockPlacer,
-        world_pos: Vector3<i32>,
+        world_pos: &mut Vector3<i32>,
+        template_y: i32,
         state: &'static BlockState,
         nbt: &mut Option<NbtCompound>,
         context: &mut ProcessorContext,
@@ -407,17 +423,17 @@ impl StructureProcessor {
     ) -> Option<&'static BlockState> {
         match self {
             Self::Rule(rules) => {
-                let world_state_id = placer.get_block_state(&world_pos);
+                let world_state_id = placer.get_block_state(world_pos);
                 let world_state = BlockState::from_id(world_state_id);
                 for rule in rules {
                     if rule
                         .position_predicate
-                        .test(world_pos, context.structure_start, rng)
+                        .test(*world_pos, context.structure_start, rng)
                         && rule.input_predicate.test(state, rng)
                         && rule.location_predicate.test(world_state, rng)
                     {
                         if let Some(modifier) = &rule.block_entity_modifier {
-                            modifier.apply(nbt, world_pos, rng);
+                            modifier.apply(nbt, *world_pos, rng);
                         }
                         return Some(rule.output_state);
                     }
@@ -444,9 +460,15 @@ impl StructureProcessor {
                     Some(state)
                 }
             }
-            Self::Gravity { .. } | Self::Nop => Some(state),
+            Self::Gravity { heightmap, offset } => {
+                world_pos.y = placer.column_height(*heightmap, world_pos.x, world_pos.z)
+                    + offset
+                    + template_y;
+                Some(state)
+            }
+            Self::Nop => Some(state),
             Self::ProtectedBlocks(tag) => {
-                let world_state_id = placer.get_block_state(&world_pos);
+                let world_state_id = placer.get_block_state(world_pos);
                 if check_block_has_tag(world_state_id.to_block_id(), tag) {
                     None
                 } else {
@@ -454,23 +476,9 @@ impl StructureProcessor {
                 }
             }
             Self::BlackstoneReplace => Some(process_blackstone_replace(state)),
-            Self::JigsawReplacement => {
-                if state.id.to_block_id() == BlockId::JIGSAW {
-                    let final_state_str = nbt
-                        .as_ref()
-                        .and_then(|n| n.get_string("final_state"))
-                        .map(str::to_string);
-                    *nbt = None;
-                    let final_str = final_state_str.as_deref().unwrap_or("minecraft:air");
-                    let palette_entry = PaletteEntry::from_string(final_str);
-                    BlockStateResolver::resolve_simple(&palette_entry)
-                        .or(Some(Block::AIR.default_state))
-                } else {
-                    Some(state)
-                }
-            }
+            Self::JigsawReplacement => Some(process_jigsaw_replacement(state, nbt)),
             Self::LavaSubmergedBlock => {
-                let world_state_id = placer.get_block_state(&world_pos);
+                let world_state_id = placer.get_block_state(world_pos);
                 if world_state_id.to_block_id() == BlockId::LAVA && !state.is_solid_render() {
                     return None;
                 }
@@ -485,10 +493,11 @@ impl StructureProcessor {
                     if count < limit {
                         let prev_state = state;
                         let prev_nbt = nbt.clone();
+                        let prev_pos = *world_pos;
                         let res = delegate.process_with_context(
-                            placer, world_pos, state, nbt, context, capped_idx, rng,
+                            placer, world_pos, template_y, state, nbt, context, capped_idx, rng,
                         );
-                        if res != Some(prev_state) || *nbt != prev_nbt {
+                        if res != Some(prev_state) || *nbt != prev_nbt || *world_pos != prev_pos {
                             context.capped_counts[idx] += 1;
                         }
                         return res;
@@ -496,12 +505,28 @@ impl StructureProcessor {
                     Some(state)
                 } else {
                     delegate.process_with_context(
-                        placer, world_pos, state, nbt, context, capped_idx, rng,
+                        placer, world_pos, template_y, state, nbt, context, capped_idx, rng,
                     )
                 }
             }
         }
     }
+}
+
+fn process_jigsaw_replacement(
+    state: &'static BlockState,
+    nbt: &mut Option<NbtCompound>,
+) -> &'static BlockState {
+    if state.id.to_block_id() != BlockId::JIGSAW {
+        return state;
+    }
+    let palette_entry = PaletteEntry::from_string(
+        nbt.as_ref()
+            .and_then(|n| n.get_string("final_state"))
+            .unwrap_or("minecraft:air"),
+    );
+    *nbt = None;
+    BlockStateResolver::resolve_simple(&palette_entry).unwrap_or(Block::AIR.default_state)
 }
 
 fn replace_preserving_properties(

@@ -321,6 +321,13 @@ impl GenerationCache for Cache {
     }
 
     fn get_top_y(&self, heightmap: &HeightMap, x: i32, z: i32) -> i32 {
+        if matches!(
+            heightmap,
+            HeightMap::WorldSurfaceWg | HeightMap::OceanFloorWg
+        ) && let Some(chunk) = self.try_get_proto_chunk(x >> 4, z >> 4)
+        {
+            return chunk.get_top_y(heightmap, x, z);
+        }
         match heightmap {
             HeightMap::WorldSurfaceWg | HeightMap::WorldSurface => {
                 self.top_block_height_exclusive(x, z)
@@ -713,6 +720,39 @@ mod tests {
     use super::{Chunk, SurfaceBiomeNeighborhood};
     use crate::chunk::ChunkData;
     use pumpkin_data::biome::Biome;
+
+    #[test]
+    fn neighboring_features_preserve_generation_heights() {
+        use super::{Cache, GenerationCache, StagedChunkEnum};
+        use crate::generation::{get_world_gen, proto_chunk::ProtoChunk};
+        use pumpkin_data::{Block, dimension::Dimension};
+        use pumpkin_util::{HeightMap, math::vector3::Vector3, world_seed::Seed};
+
+        let generator = get_world_gen(
+            Seed(0),
+            Dimension::OVERWORLD,
+            true,
+            Vec::new(),
+            String::new(),
+        );
+        let mut cache = Cache::new(-24, 37, 3);
+        for x in -24..=-22 {
+            for z in 37..=39 {
+                let mut chunk = ProtoChunk::new(x, z, &generator);
+                chunk.set_block_state(2, 60, 3, Block::STONE.default_state);
+                chunk.stage = StagedChunkEnum::Carvers;
+                cache.chunks.push(Chunk::Proto(Box::new(chunk)));
+            }
+        }
+        let pos = Vector3::new(-22 * 16 + 2, 70, 39 * 16 + 3);
+        cache.set_block_state(&pos, Block::OAK_LEAVES.default_state);
+        assert_eq!(
+            cache.get_top_y(&HeightMap::WorldSurfaceWg, pos.x, pos.z),
+            61
+        );
+        assert_eq!(cache.get_top_y(&HeightMap::OceanFloorWg, pos.x, pos.z), 61);
+        assert_eq!(cache.get_top_y(&HeightMap::WorldSurface, pos.x, pos.z), 71);
+    }
 
     #[test]
     fn surface_biome_snapshot_copies_level_chunk_palettes() {
