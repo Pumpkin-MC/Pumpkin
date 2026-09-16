@@ -1529,7 +1529,7 @@ fn skip_sign_text(seq: &mut impl NetworkReadExt) -> Result<(), ReadingError> {
     Ok(())
 }
 
-fn skip_unknown_26_3_component(
+pub(crate) fn skip_unknown_26_3_component(
     raw_id: i32,
     seq: &mut impl NetworkReadExt,
 ) -> Result<(), ReadingError> {
@@ -1560,7 +1560,7 @@ fn skip_unknown_26_3_component(
         V263_SIGN_TEXT_FRONT | V263_SIGN_TEXT_BACK => skip_sign_text(seq),
         V263_WAXED => Ok(()),
         _ => Err(ReadingError::Message(
-            "Unsupported component in template".into(),
+            "Unsupported component in unprefixed patch".into(),
         )),
     }
 }
