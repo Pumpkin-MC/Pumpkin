@@ -70,6 +70,19 @@ impl Dirtiable for ChunkData {
     }
 }
 
+fn lowest_section_y(root_tag: &NbtCompound) -> Option<i32> {
+    let sections = root_tag.get_list("sections")?;
+    sections
+        .iter()
+        .filter_map(|tag| match tag {
+            pumpkin_nbt::tag::NbtTag::Compound(compound) => {
+                compound.get_byte("Y").map(i32::from)
+            }
+            _ => None,
+        })
+        .min()
+}
+
 fn extract_u16_array(tag: &pumpkin_nbt::tag::NbtTag) -> Option<Box<[BlockStateId]>> {
     match tag {
         pumpkin_nbt::tag::NbtTag::IntArray(arr) => Some(
@@ -198,9 +211,14 @@ impl ChunkData {
             )));
         }
 
-        let min_y_section = root_tag.get_int("yPos").ok_or_else(|| {
-            ChunkParsingError::ErrorDeserializingChunk("Missing yPos".to_string())
-        })?;
+        // Vanilla omits yPos when it upgrades a world in place, and it reads such a
+        // chunk from its lowest section. Do the same instead of rejecting the chunk.
+        let min_y_section = match root_tag.get_int("yPos") {
+            Some(y_pos) => y_pos,
+            None => lowest_section_y(&root_tag).ok_or_else(|| {
+                ChunkParsingError::ErrorDeserializingChunk("Missing yPos".to_string())
+            })?,
+        };
 
         let mut max_y_section = min_y_section as i8;
         if let Some(sections_list) = root_tag.get_list("sections") {
@@ -930,6 +948,52 @@ mod tests {
     use pumpkin_data::Block;
     use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_nbt::tag::NbtTag;
+
+    #[test]
+    fn chunk_without_y_pos_parses_from_the_lowest_section() {
+        use crate::chunk::ChunkData;
+        use bytes::Bytes;
+        use pumpkin_util::math::vector2::Vector2;
+
+        let mut root = NbtCompound::new();
+        root.put_int("DataVersion", 4903);
+        root.put_int("xPos", 0);
+        root.put_int("zPos", 0);
+        root.put_string("Status", "minecraft:full".to_string());
+
+        let mut block_states = NbtCompound::new();
+        let mut air = NbtCompound::new();
+        air.put_string("Name", "minecraft:air".to_string());
+        let mut stone = NbtCompound::new();
+        stone.put_string("Name", "minecraft:stone".to_string());
+        block_states.put(
+            "palette",
+            NbtTag::List(vec![NbtTag::Compound(air), NbtTag::Compound(stone)]),
+        );
+        block_states.put("data", NbtTag::LongArray(vec![1; 256]));
+
+        let mut biomes = NbtCompound::new();
+        biomes.put(
+            "palette",
+            NbtTag::List(vec![NbtTag::String("minecraft:plains".into())]),
+        );
+
+        let mut section = NbtCompound::new();
+        section.put_byte("Y", -4);
+        section.put("block_states", NbtTag::Compound(block_states));
+        section.put("biomes", NbtTag::Compound(biomes));
+
+        root.put("sections", NbtTag::List(vec![NbtTag::Compound(section)]));
+
+        let bytes = pumpkin_nbt::Nbt::new(String::new(), root).write();
+        let chunk = ChunkData::from_bytes(&Bytes::from(bytes), Vector2::new(0, 0))
+            .expect("chunk without yPos parses");
+        let state = chunk
+            .section
+            .get_block_absolute_y(0, -64, 0)
+            .expect("block at the lowest section");
+        assert_eq!(state, Block::STONE.default_state.id);
+    }
 
     #[test]
     fn extract_u16_array_from_vanilla_compound_palette() {
