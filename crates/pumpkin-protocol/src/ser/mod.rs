@@ -1032,7 +1032,11 @@ pub trait NetworkWriteExt {
         self.write_u64_be(second)
     }
 
-    fn write_bitset(&mut self, bitset: &BitSet) -> Result<(), WritingError>;
+    fn write_bitset(
+        &mut self,
+        bitset: &BitSet,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), WritingError>;
 
     fn write_option<G>(
         &mut self,
@@ -1179,8 +1183,12 @@ impl<W: Write> NetworkWriteExt for W {
         self.write_i64_be(pos.as_long_for_version(version))
     }
 
-    fn write_bitset(&mut self, data: &BitSet) -> Result<(), WritingError> {
-        data.encode(self)
+    fn write_bitset(
+        &mut self,
+        data: &BitSet,
+        version: &JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
+        data.encode(self, version)
     }
 
     fn write_option<G>(
