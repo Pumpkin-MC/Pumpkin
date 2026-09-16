@@ -1704,6 +1704,11 @@ impl LivingEntity {
         }
     }
 
+    /// Run the death routine for this entity: death stats and sound, loot and equipment
+    /// drops, the experience reward, the death message and effect cleanup.
+    ///
+    /// `source` is the direct damage source and `cause` the entity credited with the kill.
+    /// The body runs only once, on the first call that flips the entity to dead.
     pub fn on_death(
         &self,
         damage_type: DamageType,

@@ -26,6 +26,11 @@ use pumpkin_data::sound::Sound;
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::WHEAT];
 
+/// Loot-context key holding the sheep's wool color, matched by the `entities/sheep` predicates.
+const COLOR_LOOT_PROPERTY: &str = "minecraft:components/minecraft:sheep/color";
+/// Loot-context key holding the sheep's sheared state, matched by the same predicates.
+const SHEARED_LOOT_PROPERTY: &str = "minecraft:type_specific/sheep/sheared";
+
 pub struct SheepEntity {
     pub mob_entity: MobEntity,
     color_and_sheared: AtomicU8,
@@ -122,18 +127,20 @@ impl Animal for SheepEntity {
 }
 
 impl Mob for SheepEntity {
+    /// Publishes the wool color and sheared state that `entities/sheep` predicates match on,
+    /// so only the entry for this sheep's color is eligible and a sheared sheep drops none.
     fn populate_loot_context(&self, params: &mut crate::world::loot::LootContextParameters) {
         use pumpkin_data::dye_color::DyeColor;
         use pumpkin_util::loot_table::{LootEntityPropertyValue, LootEntityTarget};
 
         params.add_entity_property(
             LootEntityTarget::This,
-            "minecraft:components/minecraft:sheep/color",
+            COLOR_LOOT_PROPERTY,
             LootEntityPropertyValue::String(DyeColor::from(self.get_color()).name()),
         );
         params.add_entity_property(
             LootEntityTarget::This,
-            "minecraft:type_specific/sheep/sheared",
+            SHEARED_LOOT_PROPERTY,
             LootEntityPropertyValue::Bool(self.is_sheared()),
         );
     }
@@ -216,6 +223,8 @@ mod tests {
         LootEntityTarget,
     };
 
+    use crate::world::loot::{LootContextParameters, generate_loot_with_context};
+
     const COLORS: [&str; 16] = [
         "white",
         "orange",
@@ -235,21 +244,70 @@ mod tests {
         "black",
     ];
 
+    /// Builds the property snapshot a sheep of the given color and sheared state publishes.
     fn properties(color: &'static str, sheared: bool) -> LootEntityProperties {
         LootEntityProperties {
             values: vec![
                 LootEntityProperty {
-                    key: "minecraft:components/minecraft:sheep/color",
+                    key: super::COLOR_LOOT_PROPERTY,
                     value: LootEntityPropertyValue::String(color),
                 },
                 LootEntityProperty {
-                    key: "minecraft:type_specific/sheep/sheared",
+                    key: super::SHEARED_LOOT_PROPERTY,
                     value: LootEntityPropertyValue::Bool(sheared),
                 },
             ],
         }
     }
 
+    /// Builds the loot context a sheep of the given color and sheared state would publish.
+    fn context(color: &'static str, sheared: bool) -> LootContextParameters {
+        let mut params = LootContextParameters::default();
+        params.add_entity_property(
+            LootEntityTarget::This,
+            super::COLOR_LOOT_PROPERTY,
+            LootEntityPropertyValue::String(color),
+        );
+        params.add_entity_property(
+            LootEntityTarget::This,
+            super::SHEARED_LOOT_PROPERTY,
+            LootEntityPropertyValue::Bool(sheared),
+        );
+        params
+    }
+
+    /// Returns the wool items the generated sheep table drops for the given context.
+    fn dropped_wool(params: &LootContextParameters, seed: i64) -> Vec<String> {
+        generate_loot_with_context(&pumpkin_data::loot_table::ENTITIES_SHEEP, seed, params)
+            .iter()
+            .map(|stack| {
+                let key = stack.item.registry_key;
+                key.strip_prefix("minecraft:").unwrap_or(key).to_owned()
+            })
+            .filter(|key| key.ends_with("_wool"))
+            .collect()
+    }
+
+    /// Rolling the real table must drop exactly the wool matching the sheep's color, and a
+    /// sheared sheep must drop no wool at all. This is the behavior #3225 reported broken.
+    #[test]
+    fn sheep_loot_drops_only_the_wool_matching_its_color() {
+        for (seed, color) in COLORS.iter().enumerate() {
+            let seed = seed as i64;
+            assert_eq!(
+                dropped_wool(&context(color, false), seed),
+                vec![format!("{color}_wool")],
+                "unsheared {color} sheep must drop {color} wool"
+            );
+            assert!(
+                dropped_wool(&context(color, true), seed).is_empty(),
+                "sheared {color} sheep must not drop wool"
+            );
+        }
+    }
+
+    /// Every generated wool entry must accept exactly its own color on an unsheared sheep,
+    /// and reject both a different color and the sheared state.
     #[test]
     fn generated_loot_matches_only_unsheared_sheep_of_the_right_color() {
         let wool_entries = pumpkin_data::loot_table::ENTITIES_SHEEP.pools[1].entries;

@@ -134,6 +134,8 @@ mod tests {
         LootEntityPredicate, LootEntityProperties, LootEntityProperty, LootEntityPropertyValue,
     };
 
+    /// A predicate matches only when every property it requires is published with an equal
+    /// value; a differing or missing property must not match.
     #[test]
     fn entity_properties_match_all_predicate_values() {
         let properties = LootEntityProperties {

@@ -121,6 +121,10 @@ struct ConditionStruct {
     terms: Option<Vec<ConditionStruct>>,
 }
 
+/// Translate one vanilla loot condition into its generated [`LootCondition`].
+///
+/// Conditions the runtime cannot evaluate are mapped to [`LootCondition::None`], which keeps
+/// the owning entry unconditional rather than dropping it.
 fn parse_condition(cond: &ConditionStruct) -> LootCondition {
     match cond.condition.as_str() {
         "minecraft:survives_explosion" => LootCondition::SurvivesExplosion,
@@ -251,6 +255,12 @@ fn parse_condition(cond: &ConditionStruct) -> LootCondition {
     }
 }
 
+/// Flatten a nested entity predicate into `path/to/key` and primitive value pairs.
+///
+/// `path` is the prefix accumulated so far; nested objects recurse with their key appended.
+/// Values the runtime has no representation for (arrays, floats, `null`) are skipped, so a
+/// predicate that only contains those ends up empty and its condition becomes
+/// [`LootCondition::None`].
 fn flatten_entity_properties(
     path: &str,
     value: &serde_json::Value,
@@ -282,6 +292,10 @@ fn flatten_entity_properties(
     }
 }
 
+/// Combine every condition on a pool or entry into a single [`LootCondition`].
+///
+/// Unrepresentable conditions drop out, a single condition is returned as-is, and two or more
+/// are wrapped in [`LootCondition::AllOf`].
 fn combine_conditions(conditions: &[ConditionStruct]) -> LootCondition {
     let mut parsed_list: Vec<LootCondition> = Vec::new();
     for c in conditions {
@@ -382,6 +396,7 @@ struct ParsedEntry {
     bonus_formula: Option<LootBonusFormula>,
 }
 
+/// Flatten one pool entry into the concrete item entries it can produce.
 fn extract_entries(
     entry: &PoolEntryStruct,
     inherited_condition: LootCondition,
@@ -391,6 +406,11 @@ fn extract_entries(
     extract_entries_with_depth(entry, inherited_condition, out, empty_weight, 0);
 }
 
+/// Recursive worker behind [`extract_entries`], bounded to five levels of nesting.
+///
+/// `inherited_condition` carries the conditions of every enclosing pool and entry; it is
+/// combined with the entry's own conditions so a child can never drop loot while one of its
+/// parents' conditions is false.
 fn extract_entries_with_depth(
     entry: &PoolEntryStruct,
     inherited_condition: LootCondition,
@@ -600,8 +620,6 @@ fn extract_entries_with_depth(
                     LootCondition::NoSilkTouch
                 } else if saw_shears {
                     LootCondition::NoSilkTouchOrShears
-                } else if child_cond != LootCondition::None {
-                    child_cond
                 } else {
                     entry_cond
                 };
@@ -618,6 +636,7 @@ fn extract_entries_with_depth(
     }
 }
 
+/// Emit the `const`-compatible token stream that rebuilds `cond` in the generated data.
 fn condition_to_tokens(cond: LootCondition) -> TokenStream {
     match cond {
         LootCondition::None => quote! { LootCondition::None },
@@ -864,5 +883,65 @@ pub fn build() -> TokenStream {
     quote! {
         pub use pumpkin_util::loot_table::*;
         #all_tokens
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pumpkin_util::loot_table::{
+        LootEntityPredicate, LootEntityProperty, LootEntityPropertyValue, LootEntityTarget,
+    };
+
+    use super::{LootCondition, PoolEntryStruct, extract_entries};
+
+    /// Children of `minecraft:alternatives` must keep the condition inherited from the
+    /// alternatives entry itself. Dropping it would let an entity-property child drop loot
+    /// while its parent condition is false.
+    #[test]
+    fn alternatives_child_keeps_inherited_condition() {
+        let entry: PoolEntryStruct = serde_json::from_str(
+            r#"{
+                "type": "minecraft:alternatives",
+                "conditions": [{ "condition": "minecraft:killed_by_player" }],
+                "children": [
+                    {
+                        "type": "minecraft:item",
+                        "name": "minecraft:white_wool",
+                        "conditions": [
+                            {
+                                "condition": "minecraft:entity_properties",
+                                "entity": "this",
+                                "predicate": {
+                                    "minecraft:components": { "minecraft:sheep/color": "white" }
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }"#,
+        )
+        .expect("alternatives entry should deserialize");
+
+        let mut entries = Vec::new();
+        let mut empty_weight = 0;
+        extract_entries(&entry, LootCondition::None, &mut entries, &mut empty_weight);
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].item, "minecraft:white_wool");
+        assert_eq!(
+            entries[0].condition,
+            LootCondition::AllOf(&[
+                LootCondition::KilledByPlayer,
+                LootCondition::EntityProperties {
+                    target: LootEntityTarget::This,
+                    predicate: LootEntityPredicate {
+                        properties: &[LootEntityProperty {
+                            key: "minecraft:components/minecraft:sheep/color",
+                            value: LootEntityPropertyValue::String("white"),
+                        }],
+                    },
+                },
+            ])
+        );
     }
 }

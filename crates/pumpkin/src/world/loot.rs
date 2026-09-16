@@ -27,6 +27,8 @@ pub struct LootContextParameters {
     /// Whether the killed entity was on fire at death time.
     /// Computed from `Entity.fire_ticks > 0`.
     pub is_on_fire: Option<bool>,
+    /// Property snapshots published per entity target, matched by entity-property conditions.
+    /// A target with no snapshot is treated as matching, so entities opt in incrementally.
     pub entity_properties: Vec<(LootEntityTarget, LootEntityProperties)>,
 }
 
@@ -58,6 +60,10 @@ impl LootContextParameters {
     }
 }
 
+/// Evaluate one loot condition against the current loot context.
+///
+/// `rng` is only consumed by the random conditions, so callers must pass the same generator
+/// used for the surrounding roll to stay in sync with vanilla sequences.
 fn check_condition(
     cond: LootCondition,
     has_silk_touch: bool,
