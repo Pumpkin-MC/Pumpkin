@@ -106,6 +106,8 @@ impl LevelTime {
         self.world_age = world_age;
     }
 
+    /// Vanilla `ServerLevel.tickTime`. Callers that emit periodic `CUpdateTime`
+    /// (`forceGameTimeSynchronization`) must do so before this increment.
     pub fn tick(&mut self, advance_time: bool) {
         self.world_age += 1;
         if advance_time && !self.paused {
@@ -128,6 +130,30 @@ impl LevelTime {
             &CUpdateTime::new_clock(self.world_age, 0, total_ticks, partial_tick, rate),
             &CSetTime::new(self.time_of_day as _), // TODO do we need to tell bedrock that time is frozen?
         );
+    }
+
+    /// Vanilla `ClientboundSetTimePacket(overworld.getGameTime(), Map.of())`.
+    /// Clock entries would rewind `clockManager` and can freeze client
+    /// `getGameTime()` across two piston animation ticks.
+    ///
+    /// Vanilla `PlayerList.broadcastAll`: every player, not only this world's.
+    /// Per-player serialize is intentional; version grouping is world-scoped
+    /// `broadcast_editioned`.
+    /// `CUpdateTime.game_time` is global, Bedrock's `CSetTime` is a day time:
+    /// the overworld's would snap a Nether or End client back to it. Runs before
+    /// any world ticks, so every `time_of_day` read here is this tick's.
+    pub fn send_game_time_sync(&self, server: &crate::server::Server) {
+        let java = CUpdateTime {
+            game_time: self.world_age,
+            clock_updates: Vec::new(),
+        };
+        for world in server.worlds.load().iter() {
+            let time_of_day = world.get_time_of_day();
+            for player in world.players.load().iter() {
+                let bedrock = CSetTime::new(player.client_time_of_day(time_of_day) as _);
+                player.client.try_enqueue_packet_editioned(&java, &bedrock);
+            }
+        }
     }
 
     pub fn add_time(&mut self, time: i64) {
@@ -178,6 +204,7 @@ impl LevelTime {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::world::time::ClockInstance;
 
     #[test]
     fn clock_instance_ticking() {
