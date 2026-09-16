@@ -142,7 +142,7 @@ impl Mob for SheepEntity {
             .unwrap_or(false);
         let color = nbt.get_byte("Color").unwrap_or(0) as u8;
         let byte = (color & 0x0F) | if sheared { 0x10 } else { 0 };
-        self.color_and_sheared.store(byte, Ordering::Relaxed);
+        self.set_packed_and_sync(byte);
     }
 
     fn get_mob_entity(&self) -> &MobEntity {
