@@ -210,13 +210,12 @@ fn serialize_item_cost_with_id(
 
 type PatchEntry = (DataComponent, Box<dyn DataComponentImpl>);
 
-/// Reads a component ID in `version`'s numbering. `None` for components a client newer than the
+/// Maps a component ID in `version`'s numbering. `None` for components a client newer than the
 /// server data knows but the server doesn't: they remap to 0 or past the server's last ID.
-pub(crate) fn read_component_id(
-    read: &mut impl NetworkReadExt,
+pub(crate) fn map_component_id(
+    id_val: i32,
     version: JavaMinecraftVersion,
 ) -> Result<Option<DataComponent>, ReadingError> {
-    let id_val = read.get_var_int()?.0;
     let remapped = remap_data_component_type_id_from_version(id_val as u32, version);
     let newer_client = version > CURRENT_MC_VERSION;
     if newer_client && remapped == 0 && id_val != 0 {
@@ -232,6 +231,15 @@ pub(crate) fn read_component_id(
             "Unknown component ID: {id_val}"
         ))),
     }
+}
+
+/// Reads a component ID in `version`'s numbering. `None` for unknown newer-client types.
+pub(crate) fn read_component_id(
+    read: &mut impl NetworkReadExt,
+    version: JavaMinecraftVersion,
+) -> Result<Option<DataComponent>, ReadingError> {
+    let id_val = read.get_var_int()?.0;
+    map_component_id(id_val, version)
 }
 
 fn decode_custom_name(component_data: &[u8]) -> Result<Box<dyn DataComponentImpl>, ReadingError> {

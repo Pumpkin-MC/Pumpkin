@@ -8,7 +8,7 @@ use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::*;
 
-use crate::codec::item_stack_seralizer::{is_component_sent, read_component_id};
+use crate::codec::item_stack_seralizer::{is_component_sent, map_component_id, read_component_id};
 use pumpkin_data::data_component_type_id_remap::remap_data_component_type_id_for_version;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
@@ -1467,6 +1467,104 @@ impl DataComponentCodec<Self> for UseCooldownImpl {
     }
 }
 
+/// 26.3-only data component type IDs (protocol 777). Payloads match vanilla STREAM_CODECs.
+const V263_INTERACT_ANIMATION: i32 = 41;
+const V263_BLOCK_TRANSFORMER: i32 = 43;
+const V263_VILLAGER_FOOD: i32 = 44;
+const V263_COMPOSTABLE: i32 = 84;
+const V263_COOKING_FUEL: i32 = 85;
+const V263_BREWING_FUEL: i32 = 86;
+const V263_MOB_VISIBILITY: i32 = 87;
+const V263_PROVIDES_POTTERY_PATTERN: i32 = 117;
+const V263_SIGN_TEXT_FRONT: i32 = 118;
+const V263_SIGN_TEXT_BACK: i32 = 119;
+const V263_WAXED: i32 = 120;
+const V263_CUSHION_COLOR: i32 = 121;
+
+fn skip_resolvable_int(seq: &mut impl NetworkReadExt) -> Result<(), ReadingError> {
+    if seq.get_bool()? {
+        let _ = seq.get_i32_be()?;
+    } else {
+        let _ = seq.get_str()?;
+    }
+    Ok(())
+}
+
+fn skip_resolvable_float(seq: &mut impl NetworkReadExt) -> Result<(), ReadingError> {
+    if seq.get_bool()? {
+        let _ = seq.get_f32()?;
+    } else {
+        let _ = seq.get_str()?;
+    }
+    Ok(())
+}
+
+fn skip_holder_set(seq: &mut impl NetworkReadExt) -> Result<(), ReadingError> {
+    const MAX_HOLDERS: i32 = 256;
+    let count = seq.get_var_int()?.0 - 1;
+    if count == -1 {
+        let _ = seq.get_str()?;
+        return Ok(());
+    }
+    if count < 0 || count > MAX_HOLDERS {
+        return Err(ReadingError::Message("Invalid holder set size".into()));
+    }
+    for _ in 0..count {
+        let _ = seq.get_var_int()?;
+    }
+    Ok(())
+}
+
+fn skip_sign_text(seq: &mut impl NetworkReadExt) -> Result<(), ReadingError> {
+    for _ in 0..4 {
+        let _ = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_3)?;
+    }
+    if seq.get_bool()? {
+        for _ in 0..4 {
+            let _ = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_3)?;
+        }
+    }
+    let _ = seq.get_var_int()?;
+    let _ = seq.get_bool()?;
+    Ok(())
+}
+
+fn skip_unknown_26_3_component(
+    raw_id: i32,
+    seq: &mut impl NetworkReadExt,
+) -> Result<(), ReadingError> {
+    match raw_id {
+        V263_INTERACT_ANIMATION => {
+            let _ = seq.get_var_int()?;
+            let _ = seq.get_var_int()?;
+            Ok(())
+        }
+        V263_BLOCK_TRANSFORMER | V263_PROVIDES_POTTERY_PATTERN | V263_CUSHION_COLOR => {
+            let _ = seq.get_var_int()?;
+            Ok(())
+        }
+        V263_VILLAGER_FOOD => {
+            let _ = seq.get_var_int()?;
+            Ok(())
+        }
+        V263_COMPOSTABLE => skip_resolvable_int(seq),
+        V263_COOKING_FUEL | V263_BREWING_FUEL => {
+            skip_resolvable_int(seq)?;
+            skip_resolvable_float(seq)
+        }
+        V263_MOB_VISIBILITY => {
+            skip_holder_set(seq)?;
+            let _ = seq.get_f32()?;
+            Ok(())
+        }
+        V263_SIGN_TEXT_FRONT | V263_SIGN_TEXT_BACK => skip_sign_text(seq),
+        V263_WAXED => Ok(()),
+        _ => Err(ReadingError::Message(
+            "Unsupported component in template".into(),
+        )),
+    }
+}
+
 fn deserialize_item_stack_template(
     seq: &mut impl NetworkReadExt,
     version: JavaMinecraftVersion,
@@ -1497,12 +1595,15 @@ fn deserialize_item_stack_template(
 
     let mut patch = Vec::with_capacity((num_to_add + num_to_remove) as usize);
 
-    // Template components carry no length prefix, so unknown ones can't be skipped
+    // Templates have no per-component length. Unknown 26.3 types are skipped by codec size.
     for _ in 0..num_to_add {
-        let id = read_component_id(seq, version)?
-            .ok_or_else(|| ReadingError::Message("Unsupported component in template".into()))?;
-        let component_impl = deserialize_for_version(id, seq, version)?;
-        patch.push((id, Some(component_impl)));
+        let id_val = seq.get_var_int()?.0;
+        if let Some(id) = map_component_id(id_val, version)? {
+            let component_impl = deserialize_for_version(id, seq, version)?;
+            patch.push((id, Some(component_impl)));
+        } else {
+            skip_unknown_26_3_component(id_val, seq)?;
+        }
     }
 
     for _ in 0..num_to_remove {
@@ -3211,6 +3312,31 @@ mod tests {
         let stack = &read.items[0].1;
         assert_eq!(stack.item.id, Item::DIAMOND_PICKAXE.id);
         assert_eq!(stack.get_damage(), 5);
+    }
+
+    #[test]
+    fn nested_template_skips_26_3_only_components() {
+        let version = JavaMinecraftVersion::V_26_3;
+        let mut buf = Vec::new();
+        buf.write_var_int(&VarInt(1)).unwrap();
+        buf.write_bool(true).unwrap();
+        buf.write_var_int(&VarInt::from(remap_item_id_for_version(
+            Item::DIAMOND_PICKAXE.id,
+            version,
+        )))
+        .unwrap();
+        buf.write_var_int(&VarInt(1)).unwrap();
+        buf.write_var_int(&VarInt(2)).unwrap();
+        buf.write_var_int(&VarInt(0)).unwrap();
+        buf.write_var_int(&VarInt(3)).unwrap();
+        buf.write_var_int(&VarInt(17)).unwrap();
+        buf.write_var_int(&VarInt(V263_WAXED)).unwrap();
+
+        let read = ContainerImpl::deserialize_for(&mut buf.as_slice(), version).unwrap();
+        let stack = &read.items[0].1;
+        assert_eq!(stack.item.id, Item::DIAMOND_PICKAXE.id);
+        assert_eq!(stack.get_damage(), 17);
+        assert_eq!(stack.patch.len(), 1);
     }
 
     #[test]
