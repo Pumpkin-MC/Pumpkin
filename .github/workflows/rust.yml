@@ -119,7 +119,7 @@ jobs:
 
   test:
     name: Test (${{ matrix.name }})
-    needs: [prepare, format, machete, clippy]
+    needs: [prepare, format, machete, clippy, check_wit]
     if: needs.prepare.outputs.has_code == 'true'
     runs-on: ${{ matrix.os }} 
     strategy:
@@ -150,10 +150,9 @@ jobs:
 
   test_android:
     name: Test on Android AArch64
-    needs: [prepare, format, machete, clippy]
+    needs: [prepare, format, machete, clippy, check_wit]
     if: needs.prepare.outputs.run_full == 'true'
     runs-on: ubuntu-latest
-    needs: [format, machete, clippy_debug, clippy_release, check_wit]
     steps:
       - uses: actions/checkout@v7
         with:
