@@ -1,0 +1,13 @@
+{
+  "replace": true,
+  "values": [
+    "minecraft:armorer/2/emerald_iron_boots_group_1",
+    "minecraft:armorer/2/emerald_iron_chestplate_group_1",
+    "minecraft:armorer/2/emerald_iron_leggings_group_1",
+    "minecraft:armorer/2/emerald_iron_helmet_group_1",
+    "minecraft:armorer/2/emerald_chainmail_helmet_group_2",
+    "minecraft:armorer/2/emerald_chainmail_boots_group_2",
+    "minecraft:armorer/2/emerald_chainmail_chainmail_group_2",
+    "minecraft:armorer/2/emerald_chainmail_leggings_group_2"
+  ]
+}

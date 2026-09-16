@@ -1,0 +1,10 @@
+{
+  "gives": {
+    "count": 3,
+    "id": "minecraft:brown_mushroom"
+  },
+  "reputation_discount": 0.05,
+  "wants": {
+    "id": "minecraft:emerald"
+  }
+}

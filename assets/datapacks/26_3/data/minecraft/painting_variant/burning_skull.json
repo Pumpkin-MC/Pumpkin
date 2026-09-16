@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:burning_skull",
+  "author": {
+    "color": "gray",
+    "translate": "painting.minecraft.burning_skull.author"
+  },
+  "height": 4,
+  "title": {
+    "color": "yellow",
+    "translate": "painting.minecraft.burning_skull.title"
+  },
+  "width": 4
+}

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:crafting_special_firework_star_fade",
+  "dye": "#minecraft:dyes",
+  "result": {
+    "id": "minecraft:firework_star"
+  },
+  "target": "minecraft:firework_star"
+}
