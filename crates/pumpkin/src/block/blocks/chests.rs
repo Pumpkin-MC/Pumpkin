@@ -7,6 +7,7 @@ use pumpkin_data::block_properties::{ChestLikeProperties, ChestType, HorizontalF
 use pumpkin_data::entity::EntityPose;
 use pumpkin_data::loot_table::get_loot_table;
 use pumpkin_data::{Block, BlockDirection, translation};
+use pumpkin_inventory::Inventory;
 use pumpkin_inventory::double::DoubleInventory;
 use pumpkin_inventory::generic_container_screen_handler::{create_generic_9x3, create_generic_9x6};
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
@@ -17,14 +18,13 @@ use pumpkin_macros::{pumpkin_block, pumpkin_block_from_tag};
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::inventory::Inventory;
 use pumpkin_world::world::BlockFlags;
 use std::sync::Mutex;
 
 use crate::block::{
     BlockBehaviour, BrokenArgs, EmitsRedstonePowerArgs, GetComparatorOutputArgs,
     GetRedstonePowerArgs, GetScreenHandlerFactoryArgs, NormalUseArgs, OnPlaceArgs,
-    OnSyncedBlockEventArgs, PathComputationType, PlacedArgs, PlayerPlacedArgs, RandomTickArgs,
+    OnSyncedBlockEventArgs, PathComputationType, PlacedArgs, RandomTickArgs,
     registry::BlockActionResult,
 };
 use crate::entity::EntityBase;
@@ -120,19 +120,6 @@ fn placed_chest_impl<E: BlockEntity + 'static>(
     }
 }
 
-fn player_placed_chest_impl(args: &PlayerPlacedArgs<'_>) {
-    let position = pumpkin_util::math::vector3::Vector3::new(
-        args.position.0.x as f64 + 0.5,
-        args.position.0.y as f64 + 0.5,
-        args.position.0.z as f64 + 0.5,
-    );
-    args.world.play_bedrock_level_sound(
-        "place",
-        &position,
-        i32::from(pumpkin_data::BlockState::to_be_network_id(args.state_id)),
-    );
-}
-
 /// Computes the comparator output for a chest, combining both halves for double chests.
 fn get_chest_comparator_output(args: &GetComparatorOutputArgs<'_>) -> Option<u8> {
     let state = args.world.get_block_state_id(args.position);
@@ -145,6 +132,17 @@ fn get_chest_comparator_output(args: &GetComparatorOutputArgs<'_>) -> Option<u8>
         ChestType::Left => Some(chest_props.facing.rotate_clockwise()),
         ChestType::Right => Some(chest_props.facing.rotate_counter_clockwise()),
     };
+
+    // Vanilla passes `ignoreBeingBlocked = false`, so a blocked half reads zero.
+    if is_chest_blocked(args.world, args.position) {
+        return Some(0);
+    }
+
+    if let Some(direction) = connected_towards
+        && is_chest_blocked(args.world, &args.position.offset(direction.to_offset()))
+    {
+        return Some(0);
+    }
 
     if let Some(direction) = connected_towards
         && let Some(second_inventory) = args
@@ -311,10 +309,6 @@ impl BlockBehaviour for ChestBlock {
         placed_chest_impl(&args, ChestBlockEntity::new);
     }
 
-    fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
-        player_placed_chest_impl(&args);
-    }
-
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         normal_use_chest_impl(&args)
     }
@@ -390,10 +384,6 @@ impl BlockBehaviour for CopperChestBlock {
         placed_chest_impl(&args, ChestBlockEntity::new);
     }
 
-    fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
-        player_placed_chest_impl(&args);
-    }
-
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         normal_use_chest_impl(&args)
     }
@@ -458,10 +448,6 @@ impl BlockBehaviour for TrappedChestBlock {
     fn placed(&self, args: PlacedArgs<'_>) {
         use crate::block::entities::trapped_chest::TrappedChestBlockEntity;
         placed_chest_impl(&args, TrappedChestBlockEntity::new);
-    }
-
-    fn player_placed(&self, args: PlayerPlacedArgs<'_>) {
-        player_placed_chest_impl(&args);
     }
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {

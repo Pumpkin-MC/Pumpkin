@@ -12,10 +12,10 @@ use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
     InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
 };
+use pumpkin_inventory::{Inventory, SimpleInventory};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::inventory::{Inventory, SimpleInventory};
 
 #[pumpkin_block("minecraft:enchanting_table")]
 pub struct EnchantingTableBlock;

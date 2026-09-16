@@ -1,6 +1,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use crate::inventory::Inventory;
 use pumpkin_data::Enchantment;
 use pumpkin_data::data_component_impl::EnchantableImpl;
 use pumpkin_data::item::Item;
@@ -10,7 +11,6 @@ use pumpkin_data::sound::Sound;
 use pumpkin_data::statistic::{CustomStatistic, StatisticCategory};
 use pumpkin_data::tag::{Enchantment as EnchantmentTag, Taggable};
 use pumpkin_util::random::{RandomImpl, legacy_rand::LegacyRand};
-use pumpkin_world::inventory::Inventory;
 
 use crate::{
     player::player_inventory::PlayerInventory,

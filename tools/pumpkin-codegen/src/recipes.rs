@@ -174,11 +174,8 @@ impl CookingRecipeStruct {
     /// Generate a recipe ID based on result, ingredient, and cooking type
     /// Format: minecraft:{result}_from_{`cooking_type`}_{ingredient}
     fn generate_recipe_id(&self, cooking_type: &str) -> String {
-        let result_name = self
-            .result
-            .id
-            .strip_prefix("minecraft:")
-            .unwrap_or(&self.result.id);
+        let result_id = self.result.id.as_deref().unwrap_or("air");
+        let result_name = result_id.strip_prefix("minecraft:").unwrap_or(result_id);
         let ingredient_name = match &self.ingredient {
             RecipeIngredientTypes::Simple(s) => {
                 if s.starts_with('#') {
@@ -435,7 +432,7 @@ impl ToTokens for CraftingDecoratedPotStruct {
 #[derive(Deserialize)]
 pub struct RecipeResultStruct {
     /// Registry key of the result item.
-    id: String,
+    id: Option<String>,
     /// Number of result items produced (defaults to 1).
     count: Option<u8>,
     // TODO: components: Option<RecipeResultComponentsStruct>,
@@ -443,7 +440,7 @@ pub struct RecipeResultStruct {
 
 impl ToTokens for RecipeResultStruct {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let id = self.id.to_token_stream();
+        let id = self.id.as_deref().unwrap_or("minecraft:air");
         let count = self.count.unwrap_or(1).to_token_stream();
 
         tokens.extend(quote! {
@@ -911,5 +908,15 @@ pub fn build() -> TokenStream {
                 (cooking_recipe.recipe_id == recipe_id).then_some(cooking_recipe.experience)
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_recipes() {
+        let _ = build();
     }
 }

@@ -8,7 +8,6 @@ use pumpkin_data::entity::EntityType;
 use rand::RngExt;
 use std::sync::{Arc, Weak};
 
-#[expect(dead_code)]
 pub struct LookAtEntityGoal {
     goal_control: Controls,
     target: Option<Arc<dyn EntityBase>>,
@@ -91,19 +90,27 @@ impl Goal for LookAtEntityGoal {
         let world = mob_entity.living_entity.entity.world.load();
         let mob_pos = mob_entity.living_entity.entity.pos.load();
 
-        if *self.target_type == EntityType::PLAYER {
-            self.target = world
-                .get_closest_player(mob_pos, self.range.into())
-                .map(|p: Arc<Player>| p as Arc<dyn EntityBase>);
+        // The conditions filter the candidates instead of being applied to the nearest one.
+        let predicate = &self.target_predicate;
+        self.target = if *self.target_type == EntityType::PLAYER {
+            world
+                .get_nearest_player(mob_pos, self.range.into(), |player| {
+                    predicate.test(&world, Some(mob), player.as_ref())
+                })
+                .map(|p: Arc<Player>| p as Arc<dyn EntityBase>)
         } else {
-            self.target =
-                world.get_closest_entity(mob_pos, self.range.into(), Some(&[self.target_type]));
-        }
+            world.get_nearest_entity(
+                mob_pos,
+                self.range.into(),
+                Some(&[self.target_type]),
+                |entity| predicate.test(&world, Some(mob), entity.as_ref()),
+            )
+        };
 
         self.target.is_some()
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let mob_entity = mob.get_mob_entity();
         if let Some(target) = &self.target {
             if !target.get_entity().is_alive() {

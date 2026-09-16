@@ -210,13 +210,13 @@ impl gui::HostGui for PluginHostState {
     }
 
     async fn get_size(&mut self, res: Resource<Gui>) -> wasmtime::Result<u32> {
-        use pumpkin_world::inventory::Inventory;
+        use pumpkin_inventory::Inventory;
         let gui = self.get_gui_res(&res)?.provider.lock().await;
         Ok(gui.inventory.size() as u32)
     }
 
     async fn clear_items(&mut self, res: Resource<Gui>) -> wasmtime::Result<()> {
-        use pumpkin_world::inventory::Clearable;
+        use pumpkin_inventory::Clearable;
         let gui = self.get_gui_res(&res)?.provider.lock().await;
         gui.inventory.clear();
         Ok(())

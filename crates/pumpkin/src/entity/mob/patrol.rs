@@ -171,7 +171,7 @@ impl Goal for LongDistancePatrolGoal {
         patrol.is_patrolling() && target.is_none() && patrol.has_patrol_target() && !is_on_cooldown
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         let Some(patrol) = mob.as_patrolling_monster() else {
             return false;
         };

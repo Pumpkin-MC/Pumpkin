@@ -170,6 +170,28 @@ pub fn get_carver_seed(world_seed: u64, chunk_x: i32, chunk_z: i32) -> u64 {
         ^ world_seed
 }
 
+/// Generates a large feature seed for structure selection and placement.
+///
+/// Matches vanilla Minecraft's `WorldgenRandom.setLargeFeatureSeed`.
+///
+/// # Arguments
+/// - `world_seed` – The base world seed.
+/// - `chunk_x` – The X chunk coordinate.
+/// - `chunk_z` – The Z chunk coordinate.
+///
+/// # Returns
+/// A large feature seed for the given chunk.
+#[inline]
+#[must_use]
+pub fn get_large_feature_seed(world_seed: u64, chunk_x: i32, chunk_z: i32) -> u64 {
+    let mut random = LegacyRand::from_seed(world_seed);
+    let x_scale = random.next_i64();
+    let z_scale = random.next_i64();
+    ((chunk_x as i64).wrapping_mul(x_scale)
+        ^ (chunk_z as i64).wrapping_mul(z_scale)
+        ^ (world_seed as i64)) as u64
+}
+
 #[expect(clippy::return_self_not_must_use)]
 pub trait RandomImpl {
     fn split(&mut self) -> Self;

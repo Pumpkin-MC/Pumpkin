@@ -14,6 +14,7 @@ use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::potion::Effect;
 use pumpkin_data::tag::{Enchantment as EnchantmentTag, Taggable};
 use pumpkin_data::tracked_data;
+use pumpkin_inventory::SimpleInventory;
 use pumpkin_inventory::merchant::merchant_screen_handler::MerchantScreenHandler;
 use pumpkin_inventory::screen_handler::{
     InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
@@ -29,7 +30,6 @@ use pumpkin_protocol::java::client::play::{CMerchantOffers, Metadata};
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::version::JavaMinecraftVersion;
-use pumpkin_world::inventory::SimpleInventory;
 
 use crate::entity::player::Player;
 use crate::entity::{
@@ -414,7 +414,7 @@ impl VillagerEntity {
                 Box::new(AvoidEntityGoal::new(&EntityType::VEX, 12.0, 0.5, 0.5)),
             );
 
-            goal_selector.add_goal(2, Box::new(TradeWithPlayerGoal::new(0.5)));
+            goal_selector.add_goal(2, Box::new(TradeWithPlayerGoal::new()));
             // Basic movement and looking (Vanilla uses 0.5 speed)
             goal_selector.add_goal(3, Box::new(WorkAtJobSiteGoal::new(0.5)));
             goal_selector.add_goal(4, Box::new(WanderAroundGoal::new(0.5)));
@@ -2197,6 +2197,13 @@ impl Mob for VillagerEntity {
                 .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
             self.job_site_pending.store(false, Ordering::Relaxed);
         }
+    }
+
+    fn clear_trading_player(&self) {
+        *self
+            .trading_player
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
     }
 
     fn get_trading_player(&self) -> Option<Arc<Player>> {

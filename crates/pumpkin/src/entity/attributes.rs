@@ -138,16 +138,14 @@ pub fn send_attribute_updates_for_living(
             id if id == Attributes::MAX_HEALTH.id => "minecraft:health".to_string(),
             id if id == Attributes::MAX_ABSORPTION.id => "minecraft:absorption".to_string(),
             id if id == Attributes::ATTACK_DAMAGE.id => "minecraft:attack_damage".to_string(),
-            id if id == Attributes::ATTACK_SPEED.id => "minecraft:attack_speed".to_string(),
-            id if id == Attributes::ARMOR.id => "minecraft:armor".to_string(),
             id if id == Attributes::KNOCKBACK_RESISTANCE.id => {
                 "minecraft:knockback_resistance".to_string()
             }
             id if id == Attributes::LUCK.id => "minecraft:luck".to_string(),
             id if id == Attributes::FOLLOW_RANGE.id => "minecraft:follow_range".to_string(),
             id if id == Attributes::JUMP_STRENGTH.id => "minecraft:horse.jump_strength".to_string(),
-            // Fallback for others
-            _ => format!("minecraft:attribute.{}", attribute.id),
+            // Java-only attributes must not be sent under unsupported Bedrock names.
+            _ => continue,
         };
 
         let be_attribute = BeAttribute {
@@ -167,6 +165,11 @@ pub fn send_attribute_updates_for_living(
     }
 
     let je_packet = JePacket::new(living.entity.entity_id.into(), je_properties);
+    let world = living.entity.world.load();
+    if be_attributes.is_empty() {
+        world.broadcast_packet_all(&je_packet);
+        return;
+    }
 
     let runtime_id = living.entity.entity_id as u64;
     let be_packet = BePacket {
@@ -175,11 +178,7 @@ pub fn send_attribute_updates_for_living(
         tick: VarULong(0),
     };
 
-    living
-        .entity
-        .world
-        .load()
-        .broadcast_editioned(&je_packet, &be_packet);
+    world.broadcast_editioned(&je_packet, &be_packet);
 }
 
 impl Clone for AttributeInstance {
