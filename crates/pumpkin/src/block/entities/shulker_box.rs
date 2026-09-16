@@ -1,3 +1,4 @@
+use pumpkin_data::data_component_impl::ContainerImpl;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
@@ -69,6 +70,46 @@ impl BlockEntity for ShulkerBoxBlockEntity {
 
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
         Some(self)
+    }
+
+    fn collect_item_components(&self, stack: &mut ItemStack) {
+        let items = self
+            .items
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let contents: Vec<(u8, ItemStack)> = items
+            .iter()
+            .enumerate()
+            .filter(|(_, item)| !item.is_empty())
+            .map(|(slot, item)| (slot as u8, item.clone()))
+            .collect();
+
+        if !contents.is_empty() {
+            stack.set_data_component(ContainerImpl { items: contents });
+        }
+    }
+
+    fn apply_item_components(&self, stack: &ItemStack) {
+        let Some(container) = stack.get_data_component::<ContainerImpl>() else {
+            return;
+        };
+
+        let mut items = self
+            .items
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        for (slot, item) in &container.items {
+            if let Some(target) = items.get_mut(*slot as usize) {
+                *target = item.clone();
+            }
+        }
+
+        self.mark_dirty();
+    }
+
+    fn drops_for_creative_player(&self) -> bool {
+        !self.is_empty()
     }
 
     fn is_comparator_dirty(&self) -> bool {

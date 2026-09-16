@@ -361,15 +361,10 @@ impl BedrockClient {
                                 && (held.get_data_component::<ConsumableImpl>().is_some()
                                     || held.get_data_component::<BlocksAttacksImpl>().is_some())
                             {
-                                if held.get_data_component::<FoodImpl>().is_none_or(|food| {
-                                    player
-                                        .abilities
-                                        .lock()
-                                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                                        .invulnerable
-                                        || food.can_always_eat
-                                        || player.hunger_manager.level.load() < 20
-                                }) {
+                                if held
+                                    .get_data_component::<FoodImpl>()
+                                    .is_none_or(|food| player.can_eat(food.can_always_eat))
+                                {
                                     player.living_entity.set_active_hand(
                                         Hand::Right,
                                         held.clone(),
@@ -428,62 +423,78 @@ impl BedrockClient {
                 }
             }
             TransactionData::UseItemOnEntity(data) => {
-                let target_runtime_id = data.target_entity_runtime_id.0 as i32;
-                // TODO: replace with consts, i'm too lazy
-                match data.action_type.0 {
-                    // Interact / Item Interact
-                    0 | 2 => {
-                        let world = player.world();
-                        if let Some(target) = world.get_entity_by_id(target_runtime_id) {
-                            let mut stack = player.inventory().held_item();
-                            let item_id = stack.item.id;
-                            let before = stack.clone();
-                            if !target.interact(player, &mut stack) {
-                                let Some(server) = world.server.upgrade() else {
-                                    return;
-                                };
-                                server
-                                    .item_registry
-                                    .use_on_entity(&mut stack, player, target);
-                            }
-                            if !stack.are_equal(&before) {
+                let action = match data.action_type.0 {
+                    // Bedrock does not distinguish an entity hit position here. ItemInteract is
+                    // therefore exposed as the general Interact action rather than InteractAt.
+                    0 | 2 => ActionType::Interact,
+                    1 => ActionType::Attack,
+                    action => {
+                        tracing::warn!("invalid UseItemOnEntity action type {action}");
+                        return;
+                    }
+                };
+                let Ok(target_runtime_id) = i32::try_from(data.target_entity_runtime_id.0) else {
+                    tracing::warn!(
+                        "invalid UseItemOnEntity target runtime ID {}",
+                        data.target_entity_runtime_id.0
+                    );
+                    return;
+                };
+
+                let world = player.world();
+                let Some(target) = world.get_entity_by_id(target_runtime_id) else {
+                    return;
+                };
+                let Some(server) = world.server.upgrade() else {
+                    return;
+                };
+
+                let mut event = PlayerInteractEntityEvent::new(
+                    player,
+                    target.clone(),
+                    action,
+                    None,
+                    player.get_entity().is_sneaking(),
+                );
+                server.plugin_manager.fire_blocking(&server, &mut event);
+                if event.cancelled {
+                    return;
+                }
+
+                match event.action {
+                    ActionType::Interact | ActionType::InteractAt => {
+                        let mut stack = player.inventory().held_item();
+                        let item_id = stack.item.id;
+                        let before = stack.clone();
+                        if !event.target.interact(player, &mut stack) {
+                            server
+                                .item_registry
+                                .use_on_entity(&mut stack, player, event.target);
+                        }
+                        if !stack.are_equal(&before) {
+                            player.increment_stat(
+                                pumpkin_data::statistic::StatisticCategory::Used,
+                                item_id as i32,
+                                1,
+                            );
+                            if before.is_damageable() && stack.is_empty() {
                                 player.increment_stat(
-                                    pumpkin_data::statistic::StatisticCategory::Used,
+                                    pumpkin_data::statistic::StatisticCategory::Broken,
                                     item_id as i32,
                                     1,
                                 );
-                                if before.is_damageable() && stack.is_empty() {
-                                    player.increment_stat(
-                                        pumpkin_data::statistic::StatisticCategory::Broken,
-                                        item_id as i32,
-                                        1,
-                                    );
-                                    player.world().send_entity_status(
-                                        player.get_entity(),
-                                        crate::entity::equipment_break_status(
-                                            &EquipmentSlot::MAIN_HAND,
-                                        ),
-                                        None,
-                                    );
-                                }
+                                player.world().send_entity_status(
+                                    player.get_entity(),
+                                    crate::entity::equipment_break_status(
+                                        &EquipmentSlot::MAIN_HAND,
+                                    ),
+                                    None,
+                                );
                             }
-                            player.inventory().set_held_item(stack);
                         }
+                        player.inventory().set_held_item(stack);
                     }
-                    // Attack
-                    1 => {
-                        let world = player.world();
-                        if let Some(target) = world.get_entity_by_id(target_runtime_id) {
-                            player.attack(&target);
-                        }
-                    }
-                    _ => {
-                        tracing::warn!(
-                            "invalid UseItemOnEntity action type {}",
-                            data.action_type.0
-                        );
-                        // Kick?
-                    }
+                    ActionType::Attack => player.attack(&event.target),
                 }
             }
             TransactionData::ReleaseItem(_data) => {
