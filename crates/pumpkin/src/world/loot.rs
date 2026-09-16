@@ -3,7 +3,10 @@ use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_util::loot_table::{LootBonusFormula, LootCondition, LootEntry, LootTable};
+use pumpkin_util::loot_table::{
+    LootBonusFormula, LootCondition, LootEntityProperties, LootEntityProperty,
+    LootEntityPropertyValue, LootEntityTarget, LootEntry, LootTable,
+};
 use pumpkin_util::random::{RandomImpl, xoroshiro128::Xoroshiro};
 
 #[derive(Default, Clone)]
@@ -24,6 +27,35 @@ pub struct LootContextParameters {
     /// Whether the killed entity was on fire at death time.
     /// Computed from `Entity.fire_ticks > 0`.
     pub is_on_fire: Option<bool>,
+    pub entity_properties: Vec<(LootEntityTarget, LootEntityProperties)>,
+}
+
+impl LootContextParameters {
+    /// Adds or replaces a property for an entity target in this loot context.
+    pub fn add_entity_property(
+        &mut self,
+        target: LootEntityTarget,
+        key: &'static str,
+        value: LootEntityPropertyValue,
+    ) {
+        let index = self
+            .entity_properties
+            .iter()
+            .position(|(candidate, _)| *candidate == target)
+            .unwrap_or_else(|| {
+                let index = self.entity_properties.len();
+                self.entity_properties
+                    .push((target, LootEntityProperties::default()));
+                index
+            });
+        let properties = &mut self.entity_properties[index].1;
+
+        if let Some(property) = properties.values.iter_mut().find(|entry| entry.key == key) {
+            property.value = value;
+        } else {
+            properties.values.push(LootEntityProperty { key, value });
+        }
+    }
 }
 
 fn check_condition(
@@ -59,6 +91,12 @@ fn check_condition(
             };
             rng.next_f32() < chance
         }
+        LootCondition::EntityProperties { target, predicate } => params
+            .entity_properties
+            .iter()
+            .find(|(candidate, _)| *candidate == target)
+            // Entities opt into property predicates by publishing a snapshot.
+            .is_none_or(|(_, properties)| properties.matches(predicate)),
         LootCondition::TableBonus { chances } => {
             let index = (fortune_level.max(0) as usize).min(chances.len().saturating_sub(1));
             chances
