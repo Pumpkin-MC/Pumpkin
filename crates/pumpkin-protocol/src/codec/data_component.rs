@@ -1672,8 +1672,10 @@ impl DataComponentCodec<Self> for BundleContentsImpl {
         seq: &mut impl NetworkWriteExt,
         version: JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt::from(self.items.len() as i32))?;
-        for item in &self.items {
+        // Clients reject empty templates, e.g. items the server has no equivalent for
+        let items = || self.items.iter().filter(|item| !item.is_empty());
+        seq.write_var_int(&VarInt(items().count() as i32))?;
+        for item in items() {
             serialize_item_stack_template(item, seq, version)?;
         }
         Ok(())
@@ -1695,7 +1697,10 @@ impl DataComponentCodec<Self> for BundleContentsImpl {
 
         let mut items = Vec::with_capacity(len);
         for _ in 0..len {
-            items.push(deserialize_item_stack_template(seq, version)?);
+            let stack = deserialize_item_stack_template(seq, version)?;
+            if !stack.is_empty() {
+                items.push(stack);
+            }
         }
         Ok(Self { items })
     }
@@ -3153,8 +3158,11 @@ impl DataComponentCodec<Self> for ContainerImpl {
     ) -> Result<(), WritingError> {
         seq.write_var_int(&VarInt::from(self.items.len() as i32))?;
         for (_slot, stack) in &self.items {
-            seq.write_bool(true)?;
-            serialize_item_stack_template(stack, seq, version)?;
+            // Clients reject empty templates, so send them as empty slots
+            seq.write_bool(!stack.is_empty())?;
+            if !stack.is_empty() {
+                serialize_item_stack_template(stack, seq, version)?;
+            }
         }
         Ok(())
     }
@@ -3168,7 +3176,9 @@ impl DataComponentCodec<Self> for ContainerImpl {
         for slot in 0..len {
             if seq.get_bool()? {
                 let stack = deserialize_item_stack_template(seq, version)?;
-                items.push((slot as u8, stack));
+                if !stack.is_empty() {
+                    items.push((slot as u8, stack));
+                }
             }
         }
         Ok(Self { items })
