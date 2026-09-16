@@ -5,7 +5,8 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{
     damage::DamageType,
-    data_component_impl::{EquipmentSlot, EquipmentType},
+    data_component::DataComponent,
+    data_component_impl::{CustomNameImpl, DataComponentImpl, EquipmentSlot, EquipmentType},
     entity::EntityStatus,
     item::Item,
     particle::Particle,
@@ -187,10 +188,14 @@ impl ArmorStandEntity {
 
     fn break_and_drop_items(&self) {
         let entity = self.get_entity();
-        //let name = entity.custom_name.unwrap_or(entity.get_name());
 
-        //TODO: i am stupid! let armor_stand_item = ItemStack::new_with_component(1, &Item::ARMOR_STAND, vec![(DataComponent::CustomName, self.get_custom_name())]);
-        let armor_stand_item = ItemStack::new(1, &Item::ARMOR_STAND);
+        let mut armor_stand_item = ItemStack::new(1, &Item::ARMOR_STAND);
+        if let Some(name) = &**entity.custom_name.load() {
+            armor_stand_item.patch.push((
+                DataComponent::CustomName,
+                Some(CustomNameImpl { name: name.clone() }.to_dyn()),
+            ));
+        }
         entity
             .world
             .load()
@@ -328,7 +333,12 @@ impl EntityBase for ArmorStandEntity {
             game_rules.mob_griefing
         };
 
-        if !mob_griefing_gamerule && source.is_some_and(|source| source.get_player().is_none()) {
+        // Like vanilla, only block damage caused by a mob (the shooter, not the projectile).
+        if !mob_griefing_gamerule
+            && cause
+                .or(source)
+                .is_some_and(|attacker| attacker.get_mob().is_some())
+        {
             return false;
         }
 
