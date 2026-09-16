@@ -32,7 +32,7 @@ impl Goal for UseItemGoal {
         (self.can_use_fn)(mob)
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         mob.get_mob_entity()
             .living_entity
             .active_hand

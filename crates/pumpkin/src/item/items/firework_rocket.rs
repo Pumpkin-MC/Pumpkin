@@ -1,3 +1,4 @@
+use crate::block::registry::BlockActionResult;
 use std::sync::Arc;
 
 use crate::entity::player::Player;
@@ -31,7 +32,7 @@ impl ItemBehaviour for FireworkRocketItem {
         cursor_pos: Vector3<f32>,
         _block: &Block,
         _server: &Server,
-    ) {
+    ) -> BlockActionResult {
         let world = player.world();
         let entity = Entity::new(
             world.clone(),
@@ -45,6 +46,7 @@ impl ItemBehaviour for FireworkRocketItem {
         let entity = FireworkRocketEntity::new(entity);
         world.spawn_entity(Arc::new(entity));
         item.decrement_unless_creative(player.gamemode.load(), 1);
+        BlockActionResult::Success
     }
 
     fn normal_use(&self, _item: &Item, player: &Player) {

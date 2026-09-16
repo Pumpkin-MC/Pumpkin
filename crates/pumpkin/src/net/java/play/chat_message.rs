@@ -36,7 +36,7 @@ impl JavaClient {
             return;
         }
 
-        if player.check_chat_spam(server) {
+        if player.check_chat_spam(server, crate::entity::player::SpamType::Chat) {
             return;
         }
 

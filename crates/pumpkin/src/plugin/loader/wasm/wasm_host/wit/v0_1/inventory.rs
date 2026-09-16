@@ -15,9 +15,9 @@ use crate::plugin::loader::wasm::wasm_host::{
     },
 };
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
+use pumpkin_inventory::{Clearable, Inventory};
 use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::java::client::play::CSetContainerSlot;
-use pumpkin_world::inventory::{Clearable, Inventory};
 
 const fn from_wasm_hand(hand: WitHand) -> pumpkin_util::Hand {
     match hand {

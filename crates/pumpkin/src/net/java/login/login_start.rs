@@ -28,7 +28,18 @@ impl PendingConnection {
 
         let proxy = &server.advanced_config.networking.proxy;
         if proxy.enabled {
-            if proxy.velocity.enabled {
+            if proxy.vine.enabled {
+                if self.version.load().is_modern() {
+                    vine::vine_login(self).await;
+                    None
+                } else {
+                    self.kick(TextComponent::text(
+                        "Modern forwarding is not supported for client versions older than 1.13",
+                    ))
+                    .await;
+                    Some(PacketHandlerResult::Stop)
+                }
+            } else if proxy.velocity.enabled {
                 if self.version.load().is_modern() {
                     velocity::velocity_login(self).await;
                     None
