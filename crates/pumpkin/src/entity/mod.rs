@@ -959,6 +959,10 @@ pub struct Entity {
     pub movement_multiplier: AtomicCell<Vector3<f64>>,
     /// Determines whether the entity's velocity needs to be sent
     pub velocity_dirty: AtomicBool,
+    /// Set on damage so the entity's own client gets its motion once, mirroring
+    /// vanilla `Entity.hurtMarked`. Consumed by `LivingEntity::tick`; it must stay a
+    /// one-shot per hit, otherwise it degrades into a per-tick self-sync.
+    pub hurt_marked: AtomicBool,
     /// Set when an Entity is to be removed but could still be referenced
     pub removed: AtomicBool,
     /// The last sent yaw value (encoded as u8) for change detection
@@ -1093,6 +1097,7 @@ impl Entity {
             synched_data: synched_entity_data::SynchedEntityData::new(),
             movement_multiplier: AtomicCell::new(Vector3::default()),
             velocity_dirty: AtomicBool::new(true),
+            hurt_marked: AtomicBool::new(false),
             removed: AtomicBool::new(false),
             last_sent_yaw: AtomicU8::new(0),
             last_sent_pitch: AtomicU8::new(0),
@@ -1265,18 +1270,47 @@ impl Entity {
         self.set_synced_data(tracked_data::entity::DATA_NO_GRAVITY, no_gravity);
     }
 
+    /// Sends the entity's current velocity to the players tracking it.
+    ///
+    /// Tracking players only. Vanilla `ServerEntity` never sends an entity its own
+    /// motion on this path: `EntityType.trackDeltas()` is false for players and the
+    /// recipient set excludes the entity itself. Neither may we — a player pressed
+    /// against a mob has `velocity_dirty` set every tick, and echoing that motion
+    /// back to it keeps re-applying its stale knockback `y`, lifting it off the
+    /// ground. Use [`Self::send_velocity_and_self`] for the one-shot damage sync.
     pub fn send_velocity(&self) {
+        let (je_packet, be_packet) = self.velocity_packets();
+        self.world
+            .load()
+            .send_to_tracking_players_editioned(self, &je_packet, &be_packet);
+    }
+
+    /// Sends the entity's current velocity to the players tracking it *and* to the
+    /// entity's own client, mirroring vanilla `ServerEntity`'s one-shot `hurtMarked`
+    /// branch (`sendToTrackingPlayersAndSelf`).
+    ///
+    /// Call this from the damage path only. Vanilla sets `hurtMarked` in
+    /// `LivingEntity.hurtServer` for every hit that lands — never on push or
+    /// knockback — which is what keeps it a one-shot per hit instead of a per-tick
+    /// self-sync.
+    pub fn send_velocity_and_self(&self) {
+        let (je_packet, be_packet) = self.velocity_packets();
+        self.world
+            .load()
+            .send_to_tracking_players_and_self_editioned(self, &je_packet, &be_packet);
+    }
+
+    /// Builds the Java and Bedrock velocity-sync packets for the current velocity.
+    fn velocity_packets(&self) -> (CEntityVelocity, CSetActorMotion) {
         let velocity = self.velocity.load();
-        let chunk_pos = self.chunk_pos.load();
-        self.world.load().broadcast_to_chunk_editioned(
-            chunk_pos,
-            &CEntityVelocity::new(self.entity_id.into(), velocity),
-            &CSetActorMotion {
+        (
+            CEntityVelocity::new(self.entity_id.into(), velocity),
+            CSetActorMotion {
                 target_runtime_id: VarULong(self.entity_id as u64),
                 motion: Vector3::new(velocity.x as f32, velocity.y as f32, velocity.z as f32),
                 tick: VarULong(0),
             },
-        );
+        )
     }
 
     #[must_use]
