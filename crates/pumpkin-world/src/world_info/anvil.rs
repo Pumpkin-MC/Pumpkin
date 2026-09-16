@@ -18,8 +18,8 @@ use crate::world_info::{
     DataPacks, MAXIMUM_SUPPORTED_LEVEL_VERSION, MAXIMUM_SUPPORTED_WORLD_DATA_VERSION,
     MINIMUM_SUPPORTED_LEVEL_VERSION, MINIMUM_SUPPORTED_WORLD_DATA_VERSION, WorldVersion,
     data_files::{
-        minecraft_data_dir, read_game_rules, read_wandering_trader, read_weather,
-        read_world_clocks, read_world_gen_settings, write_custom_boss_events_stub,
+        find_overworld_data_file, minecraft_data_dir, read_game_rules, read_wandering_trader,
+        read_weather, read_world_clocks, read_world_gen_settings, write_custom_boss_events_stub,
         write_game_rules, write_random_sequences_stub, write_scheduled_events_stub,
         write_scoreboard_stub, write_stopwatches_stub, write_wandering_trader, write_weather,
         write_world_clocks, write_world_gen_settings,
@@ -359,6 +359,13 @@ fn existing_level_dat_root(path: &Path) -> Result<NbtCompound, WorldInfoError> {
 }
 
 impl WorldInfoReader for AnvilLevelInfo {
+    /// Loads level metadata and overlays separate settings files, including Paper overworld data.
+    ///
+    /// Existing root gamerule and weather files take precedence over their Paper copies.
+    ///
+    /// # Errors
+    /// Returns an error for unreadable or malformed level metadata, unsupported versions,
+    /// or a missing world seed. Optional settings readers retain their defaulting behavior.
     fn read_world_info(&self, level_folder: &Path) -> Result<LevelData, WorldInfoError> {
         let path = level_folder.join(LEVEL_DAT_FILE_NAME);
 
@@ -383,10 +390,7 @@ impl WorldInfoReader for AnvilLevelInfo {
         }
 
         // game_rules.dat – prefer the new file; fall back to level.dat values
-        if minecraft_data_dir(level_folder)
-            .join("game_rules.dat")
-            .exists()
-        {
+        if find_overworld_data_file(level_folder, "game_rules.dat").is_some() {
             level_data.game_rules = read_game_rules(level_folder);
         }
 
@@ -401,10 +405,7 @@ impl WorldInfoReader for AnvilLevelInfo {
         }
 
         // weather.dat
-        if minecraft_data_dir(level_folder)
-            .join("weather.dat")
-            .exists()
-        {
+        if find_overworld_data_file(level_folder, "weather.dat").is_some() {
             let weather = read_weather(level_folder);
             level_data.clear_weather_time = weather.clear_weather_time;
         }
@@ -551,7 +552,9 @@ mod test {
             DataPacks, LevelData, MAXIMUM_SUPPORTED_LEVEL_VERSION,
             MAXIMUM_SUPPORTED_WORLD_DATA_VERSION, MINIMUM_SUPPORTED_LEVEL_VERSION,
             MINIMUM_SUPPORTED_WORLD_DATA_VERSION, WorldGenSettings, WorldInfoError, WorldVersion,
-            data_files::{minecraft_data_dir, read_world_gen_settings, write_world_gen_settings},
+            data_files::{
+                self, minecraft_data_dir, read_world_gen_settings, write_world_gen_settings,
+            },
         },
     };
 
@@ -601,6 +604,148 @@ mod test {
     fn read_level_dat(level_folder: &Path) -> NbtCompound {
         let file = File::open(level_folder.join(LEVEL_DAT_FILE_NAME)).unwrap();
         read_gzip_compound_tag(file).unwrap()
+    }
+
+    /// Builds a disposable world with non-default Paper settings and no competing root copies.
+    ///
+    /// Constructs the imported NBT independently of the settings writers under test.
+    /// Propagates temporary-directory, world-writing, and fixture I/O errors.
+    fn paper_settings_fixture() -> Result<TempDir, Box<dyn std::error::Error>> {
+        let directory = TempDir::new()?;
+        AnvilLevelInfo.write_world_info(&LevelData::default(Seed(3367)), directory.path())?;
+        let paper_data = directory
+            .path()
+            .join("dimensions/minecraft/overworld/data/minecraft");
+        fs::create_dir_all(&paper_data)?;
+
+        let mut rules = NbtCompound::new();
+        rules.put_bool("minecraft:keep_inventory", true);
+        rules.put_int("minecraft:random_tick_speed", 19);
+        let mut weather = NbtCompound::new();
+        weather.put_int("clear_weather_time", 4321);
+        weather.put_int("rain_time", 5001);
+        weather.put_int("thunder_time", 6001);
+        weather.put_bool("raining", true);
+        weather.put_bool("thundering", true);
+        let mut trader = NbtCompound::new();
+        trader.put_int("spawn_delay", 1234);
+        trader.put_int("spawn_chance", 65);
+
+        for (name, data) in [
+            ("game_rules.dat", rules),
+            ("weather.dat", weather),
+            ("wandering_trader.dat", trader),
+        ] {
+            let mut root = NbtCompound::new();
+            root.put_int("DataVersion", MAXIMUM_SUPPORTED_WORLD_DATA_VERSION);
+            root.put_compound("data", data);
+            write_gzip_compound_tag(root, File::create(paper_data.join(name))?)?;
+            fs::remove_file(minecraft_data_dir(directory.path()).join(name))?;
+        }
+        Ok(directory)
+    }
+
+    /// Checks that imported settings survive a save and reload without altering Paper's files.
+    #[test]
+    fn paper_overworld_settings_survive_load_and_save() -> Result<(), Box<dyn std::error::Error>> {
+        let directory = paper_settings_fixture()?;
+        let paper_data = directory
+            .path()
+            .join("dimensions/minecraft/overworld/data/minecraft");
+        let mut originals = Vec::new();
+        for name in ["game_rules.dat", "weather.dat", "wandering_trader.dat"] {
+            let path = paper_data.join(name);
+            originals.push((path.clone(), fs::read(path)?));
+        }
+
+        let loaded = AnvilLevelInfo.read_world_info(directory.path())?;
+        assert!(loaded.game_rules.keep_inventory);
+        assert_eq!(loaded.game_rules.random_tick_speed, 19);
+        assert_eq!(loaded.clear_weather_time, 4321);
+        let weather = data_files::read_weather(directory.path());
+        assert_eq!((weather.rain_time, weather.thunder_time), (5001, 6001));
+        assert!(weather.raining && weather.thundering);
+        let trader = data_files::read_wandering_trader(directory.path());
+        assert_eq!((trader.spawn_delay, trader.spawn_chance), (1234, 65));
+
+        AnvilLevelInfo.write_world_info(&loaded, directory.path())?;
+        let reloaded = AnvilLevelInfo.read_world_info(directory.path())?;
+        assert_eq!(reloaded.game_rules, loaded.game_rules);
+        assert_eq!(reloaded.clear_weather_time, 4321);
+        assert_eq!(data_files::read_weather(directory.path()), weather);
+        assert_eq!(data_files::read_wandering_trader(directory.path()), trader);
+        for (path, original) in originals {
+            assert_eq!(fs::read(path)?, original);
+        }
+        Ok(())
+    }
+
+    /// Checks that conflicting root settings remain authoritative across repeated saves.
+    #[test]
+    fn root_settings_take_precedence_over_paper() -> Result<(), Box<dyn std::error::Error>> {
+        let directory = paper_settings_fixture()?;
+        let rules = GameRuleRegistry {
+            keep_inventory: false,
+            random_tick_speed: 7,
+            ..GameRuleRegistry::default()
+        };
+        let weather = data_files::WeatherData {
+            clear_weather_time: 27,
+            rain_time: 28,
+            ..data_files::WeatherData::default()
+        };
+        let trader = data_files::WanderingTraderData {
+            spawn_delay: 73,
+            spawn_chance: 35,
+            ..data_files::WanderingTraderData::default()
+        };
+        data_files::write_game_rules(
+            directory.path(),
+            &rules,
+            MAXIMUM_SUPPORTED_WORLD_DATA_VERSION,
+        )?;
+        data_files::write_weather(directory.path(), &weather)?;
+        data_files::write_wandering_trader(directory.path(), &trader)?;
+
+        for _ in 0..2 {
+            let loaded = AnvilLevelInfo.read_world_info(directory.path())?;
+            assert_eq!(loaded.game_rules, rules);
+            assert_eq!(loaded.clear_weather_time, 27);
+            let actual_weather = data_files::read_weather(directory.path());
+            assert_eq!(actual_weather.rain_time, 28);
+            assert!(!actual_weather.raining && !actual_weather.thundering);
+            let actual_trader = data_files::read_wandering_trader(directory.path());
+            assert_eq!(
+                (actual_trader.spawn_delay, actual_trader.spawn_chance),
+                (73, 35)
+            );
+            AnvilLevelInfo.write_world_info(&loaded, directory.path())?;
+        }
+        Ok(())
+    }
+
+    /// Checks that saving preserves imported scheduled events without creating a root stub.
+    #[test]
+    fn paper_scheduled_events_are_not_shadowed_on_save() -> Result<(), Box<dyn std::error::Error>> {
+        let directory = paper_settings_fixture()?;
+        let path = directory
+            .path()
+            .join("dimensions/minecraft/overworld/data/minecraft/scheduled_events.dat");
+        let mut data = NbtCompound::new();
+        data.put_list("events", Vec::new());
+        let mut root = NbtCompound::new();
+        root.put_int("DataVersion", MAXIMUM_SUPPORTED_WORLD_DATA_VERSION);
+        root.put_compound("data", data);
+        write_gzip_compound_tag(root, File::create(&path)?)?;
+        let original = fs::read(&path)?;
+        let root_path = minecraft_data_dir(directory.path()).join("scheduled_events.dat");
+        fs::remove_file(&root_path)?;
+
+        let loaded = AnvilLevelInfo.read_world_info(directory.path())?;
+        AnvilLevelInfo.write_world_info(&loaded, directory.path())?;
+        assert!(!root_path.exists());
+        assert_eq!(fs::read(path)?, original);
+        Ok(())
     }
 
     #[test]
