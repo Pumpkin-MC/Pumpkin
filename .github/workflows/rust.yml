@@ -106,12 +106,22 @@ jobs:
       - run: rustup component add clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --release --all-targets --all-features
+      
+  check_wit:
+    name: Test `pumpkin-plugin-wit` against `wit-bindgen`
+    runs-on: ubuntu-slim
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: "crates/pumpkin-plugin-wit"
+      - uses: bytecodealliance/actions/wit-bindgen/setup@v1
+      - run: wit-bindgen rust crates/pumpkin-plugin-wit/v0.1
 
   test:
     name: Test (${{ matrix.name }})
     needs: [prepare, format, machete, clippy]
     if: needs.prepare.outputs.has_code == 'true'
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }} 
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.prepare.outputs.test_matrix) }}
@@ -143,6 +153,7 @@ jobs:
     needs: [prepare, format, machete, clippy]
     if: needs.prepare.outputs.run_full == 'true'
     runs-on: ubuntu-latest
+    needs: [format, machete, clippy_debug, clippy_release, check_wit]
     steps:
       - uses: actions/checkout@v7
         with:
