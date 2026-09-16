@@ -12,9 +12,7 @@ impl JavaClient {
         }
         let is_negative = packet.slot < 0;
         let valid_slot = packet.slot >= 1 && packet.slot as usize <= 45;
-        let item_stack = packet
-            .clicked_item
-            .to_stack_for_version(&self.version.load());
+        let item_stack = packet.clicked_item.to_stack();
         let mut creative_event =
             crate::plugin::api::events::inventory::inventory_creative::InventoryCreativeEvent::new(
                 player.clone(),

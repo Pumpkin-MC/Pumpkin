@@ -8,6 +8,7 @@ use pumpkin_data::data_component_impl::{
 use pumpkin_data::item::Item;
 use pumpkin_data::item_id_remap::{remap_item_id_for_version, remap_item_id_from_version};
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::packet::CURRENT_MC_VERSION;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::version::JavaMinecraftVersion;
@@ -205,17 +206,30 @@ fn serialize_item_cost_with_id(
     Ok(())
 }
 
+type PatchEntry = (DataComponent, Box<dyn DataComponentImpl>);
+
+/// Reads a component ID in `version`'s numbering. `None` for components a client newer than the
+/// server data knows but the server doesn't: they remap to 0 or past the server's last ID.
 fn read_component_id(
     read: &mut impl NetworkReadExt,
     version: JavaMinecraftVersion,
-) -> Result<DataComponent, ReadingError> {
+) -> Result<Option<DataComponent>, ReadingError> {
     let id_val = read.get_var_int()?.0;
     let remapped = remap_data_component_type_id_from_version(id_val as u32, version);
+    let newer_client = version > CURRENT_MC_VERSION;
+    if newer_client && remapped == 0 && id_val != 0 {
+        return Ok(None);
+    }
     let id_u8 = remapped
         .try_into()
         .map_err(|_| ReadingError::Message(format!("Invalid component ID: {id_val}")))?;
-    DataComponent::try_from_id(id_u8)
-        .ok_or_else(|| ReadingError::Message(format!("Unknown component ID: {id_val}")))
+    match DataComponent::try_from_id(id_u8) {
+        Some(id) => Ok(Some(id)),
+        None if newer_client => Ok(None),
+        None => Err(ReadingError::Message(format!(
+            "Unknown component ID: {id_val}"
+        ))),
+    }
 }
 
 fn decode_custom_name(component_data: &[u8]) -> Result<Box<dyn DataComponentImpl>, ReadingError> {
@@ -277,7 +291,7 @@ fn decode_component(
 fn read_length_prefixed_component(
     read: &mut impl NetworkReadExt,
     version: JavaMinecraftVersion,
-) -> Result<(DataComponent, Box<dyn DataComponentImpl>), ReadingError> {
+) -> Result<Option<PatchEntry>, ReadingError> {
     let id = read_component_id(read, version)?;
     let byte_len = read.get_var_int()?.0;
     let byte_len: usize = byte_len
@@ -286,6 +300,10 @@ fn read_length_prefixed_component(
     if byte_len > crate::MAX_PACKET_DATA_SIZE {
         return Err(ReadingError::TooLarge("Component data too large".into()));
     }
+    let Some(id) = id else {
+        read.read_bytes_to_buf(&mut vec![0u8; byte_len])?;
+        return Ok(None);
+    };
 
     let component_impl = if byte_len <= 256 {
         let mut stack_buf = [0u8; 256];
@@ -298,7 +316,7 @@ fn read_length_prefixed_component(
         decode_component(id, &component_data)?
     };
 
-    Ok((id, component_impl))
+    Ok(Some((id, component_impl)))
 }
 
 impl ItemStackSerializer<'_> {
@@ -603,12 +621,15 @@ impl ItemStackSerializer<'_> {
         let mut patch = Vec::with_capacity(total_components as usize);
 
         for _ in 0..num_to_add {
-            let (id, component_impl) = read_length_prefixed_component(read, *version)?;
-            patch.push((id, Some(component_impl)));
+            if let Some((id, component_impl)) = read_length_prefixed_component(read, *version)? {
+                patch.push((id, Some(component_impl)));
+            }
         }
 
         for _ in 0..num_to_remove {
-            patch.push((read_component_id(read, *version)?, None));
+            if let Some(id) = read_component_id(read, *version)? {
+                patch.push((id, None));
+            }
         }
 
         let item_id_u16 = item_id
