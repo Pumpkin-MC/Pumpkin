@@ -24,7 +24,8 @@ pub struct BedrockAuthenticationConfig {
 pub struct NetherNetConfig {
     /// Whether clients may connect using `NetherNet`.
     pub enabled: bool,
-    /// TCP signaling and shared UDP status/ICE address.
+    /// TCP signaling/status address. The UDP ICE socket is shared with the `RakNet` listener at
+    /// [`BedrockConfig::address`].
     pub address: SocketAddr,
     /// Optional public IP advertised when the ICE address is behind NAT.
     #[serde(with = "optional_ip")]
@@ -111,12 +112,31 @@ mod tests {
     }
 }
 
+/// Controls which clients receive `RakNet` server-list pings.
+#[derive(Deserialize, Serialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RakNetStatus {
+    /// Remote clients only; LAN clients use `NetherNet` discovery.
+    #[default]
+    Remote,
+    /// Every client, including LAN clients.
+    Always,
+    /// No clients; only `NetherNet` discovery advertises the server.
+    Never,
+}
+
 /// Configuration for Bedrock Edition client connections.
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct BedrockConfig {
     /// Whether Bedrock Edition Clients are Accepted.
     pub enabled: bool,
+    /// UDP bind address shared by `RakNet` and `NetherNet` ICE.
+    pub address: SocketAddr,
+    /// Enables `RakNet` connections and server-list pings for direct IP connections.
+    pub raknet: bool,
+    /// Controls `RakNet` server-list pings; `RakNet` connections are accepted regardless.
+    pub raknet_status: RakNetStatus,
     /// Whether online mode is enabled.
     pub online_mode: bool,
     /// The maximum number of players allowed on the server. Specifying `0` disables the limit.
@@ -151,6 +171,11 @@ impl Default for BedrockConfig {
         let simulation_distance = NonZero::new(10).unwrap_or(NonZero::<u8>::MIN);
         Self {
             enabled: true,
+            address: "0.0.0.0:19132"
+                .parse()
+                .unwrap_or_else(|_| std::net::SocketAddr::from(([0, 0, 0, 0], 19132))),
+            raknet: true,
+            raknet_status: RakNetStatus::default(),
             online_mode: true,
             max_players: 1000,
             view_distance,

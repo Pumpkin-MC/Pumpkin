@@ -108,7 +108,7 @@ struct_excessive_bools = "allow"
 unused_async_trait_impl = "allow"
 
 [workspace.package]
-version = "0.1.0+26.2-26.45"
+version = "0.1.0+26.2-26.51"
 edition = "2024"
 rust-version = "1.96"
 license = "GPL-3.0"
@@ -158,6 +158,7 @@ cfb8 = { version = "0.9", default-features = false }
 colored = { version = "3.1", default-features = false }
 console-subscriber = { version = "0.5.0", default-features = false }
 crc-fast = { version = "1.10.0", default-features = false, features = ["std"] }
+ctr = { version = "0.10.1", default-features = false }
 criterion = { version = "0.8", default-features = false }
 crypto-bigint = { version = "0.7.5", default-features = false }
 dashmap = { version = "6.2", default-features = false }
@@ -175,7 +176,7 @@ md5 = { version = "0.8", default-features = false }
 num-bigint = { version = "0.5", default-features = false, features = ["std"] }
 num-derive = { version = "0.5", default-features = false }
 num-traits = { version = "0.2", default-features = false, features = ["std"] }
-p384 = { version = "0.14.0", default-features = false, features = ["std", "arithmetic", "pkcs8"] }
+p384 = { version = "0.14.0", default-features = false, features = ["std", "arithmetic", "pkcs8", "ecdh"] }
 phf = { version = "0.14.0", default-features = false, features = ["std"] }
 proc-macro2 = { version = "1.0", default-features = false, features = ["proc-macro"] }
 pumpkin-api-macros = { path = "crates/pumpkin-api-macros", default-features = false }
