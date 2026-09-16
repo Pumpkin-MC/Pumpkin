@@ -792,6 +792,13 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     fn kill(&self, caller: &dyn EntityBase) {
         if self.get_living_entity().is_some() {
             caller.damage(caller, f32::MAX, DamageType::GENERIC_KILL);
+
+            // Non-player entities must not depend on ticking to finish /kill.
+            // Chunks outside the simulation distance can keep a dead entity
+            // in the world indefinitely.
+            if self.get_player().is_none() {
+                self.get_entity().remove();
+            }
         } else {
             // TODO this should be removed once all entities are implemented
             self.get_entity().remove();
