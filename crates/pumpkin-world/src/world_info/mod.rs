@@ -12,6 +12,7 @@ pub mod data_files;
 
 // Constraint: disk biome palette serialization changed in 1.21.5
 pub const MINIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4435; // 1.21.9
+// TODO: Not yet updated to 26.3, cannot read a vanilla 26.3 world correctly
 pub const MAXIMUM_SUPPORTED_WORLD_DATA_VERSION: i32 = 4903; // 26.2
 
 pub const MINIMUM_SUPPORTED_LEVEL_VERSION: i32 = 19132; // 1.21.9
