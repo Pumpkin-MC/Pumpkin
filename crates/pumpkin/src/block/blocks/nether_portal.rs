@@ -5,6 +5,7 @@ use pumpkin_data::{
     block_properties::{Axis, HorizontalAxis, NetherPortalLikeProperties},
     dimension::Dimension,
     entity::EntityType,
+    sound::{Sound, SoundCategory},
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::{Difficulty, GameMode, math::vector3::Vector3};
@@ -65,6 +66,12 @@ impl BlockBehaviour for NetherPortalBlock {
         {
             return args.state_id;
         }
+
+        args.world.play_sound(
+            Sound::BlockGlassBreak,
+            SoundCategory::Blocks,
+            &args.position.to_centered_f64(),
+        );
         Block::AIR.default_state.id
     }
 
