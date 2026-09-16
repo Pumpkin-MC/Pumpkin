@@ -983,8 +983,8 @@ mod tests {
         root.put("sections", NbtTag::List(vec![NbtTag::Compound(section)]));
 
         let bytes = pumpkin_nbt::Nbt::new(String::new(), root).write();
-        let chunk = ChunkData::from_bytes(&bytes, Vector2::new(0, 0))
-            .expect("chunk without yPos parses");
+        let chunk =
+            ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).expect("chunk without yPos parses");
         let state = chunk
             .section
             .get_block_absolute_y(0, -64, 0)
