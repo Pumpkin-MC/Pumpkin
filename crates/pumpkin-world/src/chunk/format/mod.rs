@@ -70,12 +70,16 @@ impl Dirtiable for ChunkData {
     }
 }
 
+fn section_y(section: &NbtCompound) -> i32 {
+    i32::from(section.get_byte("Y").unwrap_or(0))
+}
+
 fn lowest_section_y(root_tag: &NbtCompound) -> Option<i32> {
     let sections = root_tag.get_list("sections")?;
     sections
         .iter()
         .filter_map(|tag| match tag {
-            pumpkin_nbt::tag::NbtTag::Compound(compound) => compound.get_byte("Y").map(i32::from),
+            pumpkin_nbt::tag::NbtTag::Compound(compound) => Some(section_y(compound)),
             _ => None,
         })
         .min()
@@ -222,7 +226,7 @@ impl ChunkData {
         if let Some(sections_list) = root_tag.get_list("sections") {
             for section_tag in sections_list {
                 if let pumpkin_nbt::tag::NbtTag::Compound(section_compound) = section_tag {
-                    let y = section_compound.get_byte("Y").unwrap_or(0);
+                    let y = section_y(section_compound) as i8;
                     if y > max_y_section {
                         max_y_section = y;
                     }
@@ -239,8 +243,8 @@ impl ChunkData {
         if let Some(sections_list) = root_tag.get_list("sections") {
             for section_tag in sections_list {
                 if let pumpkin_nbt::tag::NbtTag::Compound(section_compound) = section_tag {
-                    let y = section_compound.get_byte("Y").unwrap_or(0);
-                    let index = (y as i32 - min_y_section) as usize;
+                    let y = section_y(section_compound);
+                    let index = (y - min_y_section) as usize;
                     if index >= section_count {
                         continue;
                     }
