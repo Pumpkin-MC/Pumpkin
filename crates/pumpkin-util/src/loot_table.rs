@@ -37,12 +37,19 @@ impl LootEntityProperties {
     /// Returns whether every property required by `predicate` has an equal value.
     #[must_use]
     pub fn matches(&self, predicate: LootEntityPredicate) -> bool {
-        predicate.properties.iter().all(|expected| {
-            self.values
-                .iter()
-                .find(|actual| actual.key == expected.key)
-                .is_some_and(|actual| actual.value == expected.value)
-        })
+        predicate
+            .properties
+            .iter()
+            .all(|expected| self.matches_property(*expected))
+    }
+
+    /// Returns whether this snapshot publishes `expected`'s key with an equal value.
+    #[must_use]
+    pub fn matches_property(&self, expected: LootEntityProperty) -> bool {
+        self.values
+            .iter()
+            .find(|actual| actual.key == expected.key)
+            .is_some_and(|actual| actual.value == expected.value)
     }
 }
 

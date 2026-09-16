@@ -396,6 +396,15 @@ struct ParsedEntry {
     bonus_formula: Option<LootBonusFormula>,
 }
 
+/// Require both conditions, collapsing the cases where one of them adds nothing.
+fn combine_pair(first: LootCondition, second: LootCondition) -> LootCondition {
+    match (first, second) {
+        (LootCondition::None, cond) | (cond, LootCondition::None) => cond,
+        (first, second) if first == second => first,
+        (first, second) => LootCondition::AllOf(Box::leak(vec![first, second].into_boxed_slice())),
+    }
+}
+
 /// Flatten one pool entry into the concrete item entries it can produce.
 fn extract_entries(
     entry: &PoolEntryStruct,
@@ -422,11 +431,7 @@ fn extract_entries_with_depth(
         return;
     }
 
-    let entry_cond = match (inherited_condition, combine_conditions(&entry.conditions)) {
-        (LootCondition::None, cond) | (cond, LootCondition::None) => cond,
-        (first, second) if first == second => first,
-        (first, second) => LootCondition::AllOf(Box::leak(vec![first, second].into_boxed_slice())),
-    };
+    let entry_cond = combine_pair(inherited_condition, combine_conditions(&entry.conditions));
 
     match entry.entry_type.as_str() {
         "minecraft:empty" => {
@@ -604,16 +609,20 @@ fn extract_entries_with_depth(
             for child in &entry.children {
                 let child_cond = combine_conditions(&child.conditions);
 
-                let effective_cond = if child_cond == LootCondition::SilkTouch {
+                // A child gated on a tool re-derives that condition from its own conditions in
+                // the recursive call, so only the implicit gate for later children is added
+                // here. `entry_cond` always rides along: a child of the alternatives entry can
+                // never drop loot while one of its parents' conditions is false.
+                let tool_gate = if child_cond == LootCondition::SilkTouch {
                     saw_silk = true;
-                    LootCondition::SilkTouch
+                    LootCondition::None
                 } else if child_cond == LootCondition::Shears {
                     saw_shears = true;
-                    LootCondition::Shears
+                    LootCondition::None
                 } else if child_cond == LootCondition::SilkTouchOrShears {
                     saw_silk = true;
                     saw_shears = true;
-                    LootCondition::SilkTouchOrShears
+                    LootCondition::None
                 } else if saw_silk && saw_shears {
                     LootCondition::NoSilkTouchOrShears
                 } else if saw_silk {
@@ -621,10 +630,16 @@ fn extract_entries_with_depth(
                 } else if saw_shears {
                     LootCondition::NoSilkTouchOrShears
                 } else {
-                    entry_cond
+                    LootCondition::None
                 };
 
-                extract_entries_with_depth(child, effective_cond, out, empty_weight, depth + 1);
+                extract_entries_with_depth(
+                    child,
+                    combine_pair(entry_cond, tool_gate),
+                    out,
+                    empty_weight,
+                    depth + 1,
+                );
             }
         }
         "minecraft:sequence" | "minecraft:group" => {
@@ -894,6 +909,85 @@ mod tests {
 
     use super::{LootCondition, PoolEntryStruct, extract_entries};
 
+    /// The condition the `entity_properties` child in these fixtures parses into.
+    const SHEEP_IS_WHITE: LootCondition = LootCondition::EntityProperties {
+        target: LootEntityTarget::This,
+        predicate: LootEntityPredicate {
+            properties: &[LootEntityProperty {
+                key: "minecraft:components/minecraft:sheep/color",
+                value: LootEntityPropertyValue::String("white"),
+            }],
+        },
+    };
+
+    /// The implicit "no silk touch" gate a tool-gated sibling creates must not replace the
+    /// inherited condition either: a later entity-properties child still has to satisfy its
+    /// parent.
+    #[test]
+    fn alternatives_child_after_a_tool_gate_keeps_inherited_condition() {
+        let entry: PoolEntryStruct = serde_json::from_str(
+            r#"{
+                "type": "minecraft:alternatives",
+                "conditions": [{ "condition": "minecraft:killed_by_player" }],
+                "children": [
+                    {
+                        "type": "minecraft:item",
+                        "name": "minecraft:white_wool",
+                        "conditions": [
+                            {
+                                "condition": "minecraft:match_tool",
+                                "predicate": {
+                                    "predicates": {
+                                        "minecraft:enchantments": [
+                                            { "enchantments": "minecraft:silk_touch" }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "type": "minecraft:item",
+                        "name": "minecraft:white_carpet",
+                        "conditions": [
+                            {
+                                "condition": "minecraft:entity_properties",
+                                "entity": "this",
+                                "predicate": {
+                                    "minecraft:components": { "minecraft:sheep/color": "white" }
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }"#,
+        )
+        .expect("alternatives entry should deserialize");
+
+        let mut entries = Vec::new();
+        let mut empty_weight = 0;
+        extract_entries(&entry, LootCondition::None, &mut entries, &mut empty_weight);
+
+        assert_eq!(entries.len(), 2);
+
+        // The silk-touch child keeps both its own gate and the parent condition.
+        assert_eq!(entries[0].item, "minecraft:white_wool");
+        assert_eq!(
+            entries[0].condition,
+            LootCondition::AllOf(&[LootCondition::KilledByPlayer, LootCondition::SilkTouch])
+        );
+
+        // The child after it gets the implicit "no silk touch" gate on top of both.
+        assert_eq!(entries[1].item, "minecraft:white_carpet");
+        assert_eq!(
+            entries[1].condition,
+            LootCondition::AllOf(&[
+                LootCondition::AllOf(&[LootCondition::KilledByPlayer, LootCondition::NoSilkTouch,]),
+                SHEEP_IS_WHITE,
+            ])
+        );
+    }
+
     /// Children of `minecraft:alternatives` must keep the condition inherited from the
     /// alternatives entry itself. Dropping it would let an entity-property child drop loot
     /// while its parent condition is false.
@@ -930,18 +1024,7 @@ mod tests {
         assert_eq!(entries[0].item, "minecraft:white_wool");
         assert_eq!(
             entries[0].condition,
-            LootCondition::AllOf(&[
-                LootCondition::KilledByPlayer,
-                LootCondition::EntityProperties {
-                    target: LootEntityTarget::This,
-                    predicate: LootEntityPredicate {
-                        properties: &[LootEntityProperty {
-                            key: "minecraft:components/minecraft:sheep/color",
-                            value: LootEntityPropertyValue::String("white"),
-                        }],
-                    },
-                },
-            ])
+            LootCondition::AllOf(&[LootCondition::KilledByPlayer, SHEEP_IS_WHITE])
         );
     }
 }
