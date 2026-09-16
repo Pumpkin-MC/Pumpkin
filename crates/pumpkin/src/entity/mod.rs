@@ -3839,59 +3839,27 @@ impl Entity {
             let vehicle_box = self.bounding_box.load();
             let passenger_entity = passenger.get_entity();
 
-            // Keep teleport registration and packet enqueueing together. A death/teleport
-            // callback can otherwise allocate another ID between these operations.
-            let _teleport_send_guard = passenger.get_player().map(|player| {
-                player
-                    .teleport_send_lock
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-            });
-
-            // Pre-allocate teleport ID and block movement packets BEFORE sending
-            // CSetPassengers. This prevents a race condition where the client receives
-            // the dismount packet, sends stale position packets from the old riding
-            // position, and the server processes them before the teleport arrives.
-            let teleport_id = if reposition && let Some(player) = passenger.get_player() {
-                let id = player
-                    .teleport_id_count
-                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-                    + 1;
-                // Use fallback position as placeholder — updated below with real position
-                let placeholder =
-                    Vector3::new(self.pos.load().x, vehicle_box.max.y, self.pos.load().z);
-                player
-                    .awaiting_teleports
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .push_back((id.into(), placeholder));
-                Some(id)
-            } else {
-                None
-            };
-
             // Vanilla: ridingCooldown = 60 (prevents immediate re-mount)
             passenger_entity.riding_cooldown.store(60, Relaxed);
             // TODO: world.emitGameEvent(passenger, GameEvent.ENTITY_DISMOUNT, vehicle.pos)
 
-            // Send CSetPassengers directly to the dismounting player before broadcasting it.
-            let world = self.world.load();
-            let passengers_packet = CSetPassengers::new(VarInt(self.entity_id), &passenger_ids);
-            if let Some(player) = passenger.get_player() {
-                player.try_send_client_packet(&passengers_packet);
-                world.broadcast_to_chunk_except(
-                    chunk_pos,
-                    &[player.get_entity().entity_uuid],
-                    &passengers_packet,
-                );
-            } else {
-                world.broadcast_to_chunk(chunk_pos, &passengers_packet);
-            }
-
             if !reposition {
+                let world = self.world.load();
+                let passengers_packet = CSetPassengers::new(VarInt(self.entity_id), &passenger_ids);
+                if let Some(player) = passenger.get_player() {
+                    player.try_send_client_packet(&passengers_packet);
+                    world.broadcast_to_chunk_except(
+                        chunk_pos,
+                        &[player.get_entity().entity_uuid],
+                        &passengers_packet,
+                    );
+                } else {
+                    world.broadcast_to_chunk(chunk_pos, &passengers_packet);
+                }
                 return;
             }
 
+            let world = self.world.load();
             // Calculate dismount directions and offsets (vanilla DismountHelper)
             let vehicle_yaw = self.yaw.load();
             // Wrap yaw to 0..360 range
@@ -4066,46 +4034,70 @@ impl Entity {
             // Clean up any remaining reference to the dismounted passenger.
             passenger_entity.set_pos(dismount_pos);
 
-            // Phase 2: Teleport to safety (unblocks movement)
-            if let Some(player) = passenger.get_player() {
-                if let Some(id) = teleport_id {
-                    player.get_entity().set_pos(dismount_pos);
-                    // Update the pre-allocated teleport with the real dismount position.
-                    if let Some((_, position)) = player
-                        .awaiting_teleports
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .iter_mut()
-                        .find(|(pending_id, _)| *pending_id == id.into())
-                    {
-                        *position = dismount_pos;
-                    }
-                    // Use send_client_packet so the teleport goes through
-                    // the same packet queue as CSetPassengers, preserving send order.
-                    // Vanilla uses DELTA | ROT flags: position absolute, delta/rotation relative.
-                    // With rotation relative and yaw/pitch=0, the client preserves its current look.
-                    player.try_send_client_packet(&CPlayerPosition::new(
-                        id.into(),
-                        dismount_pos,
-                        Vector3::new(0.0, 0.0, 0.0),
-                        0.0,
-                        0.0,
-                        vec![
-                            PositionFlag::DeltaX,
-                            PositionFlag::DeltaY,
-                            PositionFlag::DeltaZ,
-                            PositionFlag::YRot,
-                            PositionFlag::XRot,
-                        ],
-                    ));
-                }
+            let Some(player) = passenger.get_player() else {
+                self.world.load().broadcast_to_chunk(
+                    chunk_pos,
+                    &CSetPassengers::new(VarInt(self.entity_id), &passenger_ids),
+                );
+                return;
+            };
+            // The pose calculation above can fire plugin callbacks synchronously, so acquire
+            // this guard only after it completes. Hold it through packet registration and send.
+            let _teleport_send_guard = player
+                .teleport_send_lock
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let id = player
+                .teleport_id_count
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                + 1;
+            let placeholder = Vector3::new(self.pos.load().x, vehicle_box.max.y, self.pos.load().z);
+            player
+                .awaiting_teleports
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push_back((id.into(), placeholder));
 
-                // Vanilla: setSneaking(false) after dismount via sneak input
-                if passenger_entity.sneaking.load(Relaxed) {
-                    passenger_entity.set_sneaking(false);
-                }
-            } else {
-                passenger_entity.set_pos(dismount_pos);
+            let world = self.world.load();
+            let passengers_packet = CSetPassengers::new(VarInt(self.entity_id), &passenger_ids);
+            player.try_send_client_packet(&passengers_packet);
+            world.broadcast_to_chunk_except(
+                chunk_pos,
+                &[player.get_entity().entity_uuid],
+                &passengers_packet,
+            );
+
+            // Phase 2: Teleport to safety (unblocks movement)
+            player.get_entity().set_pos(dismount_pos);
+            if let Some((_, position)) = player
+                .awaiting_teleports
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .iter_mut()
+                .find(|(pending_id, _)| *pending_id == id.into())
+            {
+                *position = dismount_pos;
+            }
+            // Use send_client_packet so the teleport goes through the same packet queue as
+            // CSetPassengers, preserving send order.
+            player.try_send_client_packet(&CPlayerPosition::new(
+                id.into(),
+                dismount_pos,
+                Vector3::new(0.0, 0.0, 0.0),
+                0.0,
+                0.0,
+                vec![
+                    PositionFlag::DeltaX,
+                    PositionFlag::DeltaY,
+                    PositionFlag::DeltaZ,
+                    PositionFlag::YRot,
+                    PositionFlag::XRot,
+                ],
+            ));
+
+            // Vanilla: setSneaking(false) after dismount via sneak input
+            if passenger_entity.sneaking.load(Relaxed) {
+                passenger_entity.set_sneaking(false);
             }
         } else {
             // No passenger was removed, still need to broadcast the passenger list
