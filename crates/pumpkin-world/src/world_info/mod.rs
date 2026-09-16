@@ -6,6 +6,7 @@ use pumpkin_data::game_rules::GameRuleRegistry;
 use pumpkin_util::{Difficulty, serde_enum_as_integer, world_seed::Seed};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tracing::warn;
 
 pub mod anvil;
 pub mod data_files;
@@ -202,7 +203,13 @@ impl GeneratorSettings {
             Self::Reference(preset_name) => {
                 FlatLevelGeneratorPreset::from_name(preset_name).map(|p| p.settings)
             }
-            Self::Compound(val) => serde_json::from_value(val.clone()).ok(),
+            Self::Compound(val) => match serde_json::from_value(val.clone()) {
+                Ok(settings) => Some(settings),
+                Err(error) => {
+                    warn!("failed to parse flat generator settings: {error}");
+                    None
+                }
+            },
         }
     }
 }
@@ -302,14 +309,39 @@ const fn default_layer_height() -> i32 {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct FlatPresetSettings {
     pub biome: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_bool_from_byte")]
     pub features: bool,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_bool_from_byte")]
     pub lakes: bool,
     #[serde(default)]
     pub layers: Vec<FlatPresetLayer>,
     #[serde(default)]
     pub structure_overrides: Option<StructureOverrides>,
+}
+
+/// Vanilla has no boolean type in NBT, so it writes booleans as bytes (0 or 1),
+/// and the NBT to JSON conversion turns them into numbers. Accept both forms.
+fn deserialize_bool_from_byte<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error;
+
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum BoolOrNumber {
+        Bool(bool),
+        Number(i64),
+    }
+
+    match BoolOrNumber::deserialize(deserializer)? {
+        BoolOrNumber::Bool(value) => Ok(value),
+        BoolOrNumber::Number(0) => Ok(false),
+        BoolOrNumber::Number(1) => Ok(true),
+        BoolOrNumber::Number(other) => Err(D::Error::custom(format!(
+            "expected a boolean or 0/1, got {other}"
+        ))),
+    }
 }
 
 impl FlatPresetSettings {
@@ -670,6 +702,33 @@ mod tests {
         assert_eq!(flat_settings.biome, "minecraft:plains");
         assert_eq!(flat_settings.layers.len(), 3);
         assert_eq!(flat_settings.to_flat_layers().len(), 3);
+    }
+
+    #[test]
+    fn flat_settings_accept_byte_booleans() {
+        let settings: FlatPresetSettings = serde_json::from_value(serde_json::json!({
+            "biome": "minecraft:the_void",
+            "features": 0,
+            "lakes": 1,
+            "layers": [{"block": "minecraft:air", "height": 1}]
+        }))
+        .unwrap();
+        assert!(!settings.features);
+        assert!(settings.lakes);
+        assert_eq!(settings.to_flat_layers().len(), 1);
+    }
+
+    #[test]
+    fn flat_settings_accept_booleans() {
+        let settings: FlatPresetSettings = serde_json::from_value(serde_json::json!({
+            "biome": "minecraft:plains",
+            "features": true,
+            "lakes": false,
+            "layers": []
+        }))
+        .unwrap();
+        assert!(settings.features);
+        assert!(!settings.lakes);
     }
 
     #[test]
