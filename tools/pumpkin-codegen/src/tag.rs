@@ -170,9 +170,24 @@ fn load_datapack_registry_ids(dir: &std::path::Path) -> BTreeMap<String, u16> {
     id_map
 }
 
-fn load_datapack_tags(
-    data_dir: &std::path::Path,
-) -> BTreeMap<String, BTreeMap<String, Vec<String>>> {
+/// Tags that 26.3 removed, so the 26.2 base layer does not bring them back.
+const REMOVED_TAGS_26_3: &[(&str, &str)] = &[
+    ("block", "minecraft:overworld_carver_replaceables"),
+    ("block", "minecraft:nether_carver_replaceables"),
+    ("block", "minecraft:convertable_to_mud"),
+    ("item", "minecraft:brewing_fuel"),
+    (
+        "worldgen/configured_feature",
+        "minecraft:can_spawn_from_bone_meal",
+    ),
+    ("worldgen/structure", "minecraft:on_trial_chambers_maps"),
+    ("worldgen/structure", "minecraft:on_swamp_explorer_maps"),
+    ("worldgen/structure", "minecraft:on_woodland_explorer_maps"),
+    ("worldgen/structure", "minecraft:on_ocean_explorer_maps"),
+    ("worldgen/structure", "minecraft:on_jungle_explorer_maps"),
+];
+
+fn load_datapack_tags(ver_folder: &str) -> BTreeMap<String, BTreeMap<String, Vec<String>>> {
     let mut raw_categories: BTreeMap<String, BTreeMap<String, Vec<String>>> = BTreeMap::new();
 
     fn walk_namespace_tags(
@@ -248,16 +263,29 @@ fn load_datapack_tags(
         }
     }
 
-    if let Ok(entries) = fs::read_dir(data_dir) {
-        let mut entries: Vec<_> = entries.flatten().collect();
-        entries.sort_by_key(|e| e.path());
-        for entry in entries {
-            let namespace = entry.file_name().to_string_lossy().into_owned();
-            let tags_dir = entry.path().join("tags");
-            if tags_dir.is_dir() {
-                walk_namespace_tags(&tags_dir, &tags_dir, &namespace, &mut raw_categories);
+    for layer in crate::registry::datapack_layers(ver_folder) {
+        let data_dir = std::path::Path::new("../../assets/datapacks")
+            .join(layer)
+            .join("data");
+        if let Ok(entries) = fs::read_dir(data_dir) {
+            let mut entries: Vec<_> = entries.flatten().collect();
+            entries.sort_by_key(|e| e.path());
+            for entry in entries {
+                let namespace = entry.file_name().to_string_lossy().into_owned();
+                let tags_dir = entry.path().join("tags");
+                if tags_dir.is_dir() {
+                    walk_namespace_tags(&tags_dir, &tags_dir, &namespace, &mut raw_categories);
+                }
             }
         }
+    }
+    if ver_folder == "26_3" {
+        for (category, tag) in REMOVED_TAGS_26_3 {
+            if let Some(tags) = raw_categories.get_mut(*category) {
+                tags.remove(*tag);
+            }
+        }
+        raw_categories.retain(|_, tags| !tags.is_empty());
     }
 
     // Recursively resolve references for each category
@@ -481,12 +509,7 @@ pub(crate) fn build() -> TokenStream {
     let mut version_fn_match_arms = Vec::new();
 
     for (ver_folder, ver_ident_str) in versions {
-        let datapack_data_dir = std::path::Path::new("../../assets/datapacks")
-            .join(ver_folder)
-            .join("data");
-        let datapack_base = datapack_data_dir.join("minecraft");
-
-        let tags = load_datapack_tags(&datapack_data_dir);
+        let tags = load_datapack_tags(ver_folder);
         let is_latest = ver_folder == "26_2";
 
         let mut ver_cat_match_arms = Vec::new();

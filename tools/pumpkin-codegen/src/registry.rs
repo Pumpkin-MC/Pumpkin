@@ -9,6 +9,15 @@ use crate::version::JavaMinecraftVersion;
 /// The newest protocol version whose registry data is used as the fallback for unknown versions.
 const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_2;
 
+/// Datapack folders read for a version, base first. Overlay versions only store files that differ
+/// from their base, later folders replace files with the same path.
+pub(crate) fn datapack_layers(ver_folder: &str) -> Vec<&str> {
+    match ver_folder {
+        "26_3" => vec!["26_2", "26_3"],
+        _ => vec![ver_folder],
+    }
+}
+
 /// Generates the `TokenStream` for the `Registry` and `StaticRegistry` structs, version-keyed
 /// static registry data, and the `Registry::get_synced` method.
 pub(crate) fn build() -> TokenStream {
@@ -104,10 +113,6 @@ pub(crate) fn build() -> TokenStream {
     ];
 
     let process_version = |ver_folder: &str| -> TokenStream {
-        let base_path = std::path::Path::new("../../assets/datapacks")
-            .join(ver_folder)
-            .join("data/minecraft");
-
         let mut data: IndexMap<String, IndexMap<String, Value>> = IndexMap::new();
 
         let newer_registries: &[&str] = if ver_folder == "26_3" {
@@ -116,28 +121,26 @@ pub(crate) fn build() -> TokenStream {
             &[]
         };
         for &reg_name in SYNCED_REGISTRIES.iter().chain(newer_registries) {
-            let reg_dir = base_path.join(reg_name);
-            if !reg_dir.is_dir() {
-                continue;
-            }
             let mut entries = IndexMap::new();
-            let mut paths: Vec<_> = fs::read_dir(&reg_dir)
-                .into_iter()
-                .flatten()
-                .filter_map(Result::ok)
-                .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
-                .collect();
-            paths.sort_by_key(|e| e.path());
-
-            for entry in paths {
-                let path = entry.path();
-                let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
-                if let Ok(content) = fs::read_to_string(&path)
-                    && let Ok(val) = serde_json::from_str::<Value>(&content)
-                {
-                    entries.insert(stem, val);
+            for layer in datapack_layers(ver_folder) {
+                let reg_dir = std::path::Path::new("../../assets/datapacks")
+                    .join(layer)
+                    .join("data/minecraft")
+                    .join(reg_name);
+                for entry in fs::read_dir(&reg_dir).into_iter().flatten().flatten() {
+                    let path = entry.path();
+                    if path.extension().is_none_or(|ext| ext != "json") {
+                        continue;
+                    }
+                    let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
+                    if let Ok(content) = fs::read_to_string(&path)
+                        && let Ok(val) = serde_json::from_str::<Value>(&content)
+                    {
+                        entries.insert(stem, val);
+                    }
                 }
             }
+            entries.sort_keys();
 
             if !entries.is_empty() {
                 data.insert(reg_name.to_string(), entries);
