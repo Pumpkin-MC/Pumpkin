@@ -238,7 +238,12 @@ impl Chunk {
     }
 
     fn build_level_heightmaps(proto_chunk: &ProtoChunk, min_y: i32) -> ChunkHeightmaps {
-        let mut heightmaps = ChunkHeightmaps::default();
+        let mut heightmaps =
+            if (StagedChunkEnum::Carvers..StagedChunkEnum::Full).contains(&proto_chunk.stage) {
+                proto_chunk.terrain_heightmaps()
+            } else {
+                ChunkHeightmaps::default()
+            };
         for x in 0..16 {
             for z in 0..16 {
                 let source_index = x * 16 + z;
