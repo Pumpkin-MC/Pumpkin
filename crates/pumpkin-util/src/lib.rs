@@ -55,17 +55,14 @@ pub enum HeightMap {
 
 /// Constructs a global file system path relative to the project root.
 #[macro_export]
-macro_rules! global_path {
+macro_rules! path_wrapper {
     ($path:expr) => {{
-        use std::path::Path;
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .ancestors()
-            .nth(2)
-            .unwrap_or_else(|| Path::new("."))
-            .join(file!())
-            .parent()
-            .unwrap_or_else(|| Path::new("."))
-            .join($path)
+        use std::path::{Path, PathBuf};
+        if cfg!(target_os = "android") {
+            PathBuf::from($path)
+        } else {
+            Path::new(env!("CARGO_MANIFEST_DIR")).join($path)
+        }
     }};
 }
 
@@ -73,9 +70,9 @@ macro_rules! global_path {
 #[macro_export]
 macro_rules! read_data_from_file {
     ($path:expr) => {{
-        use $crate::global_path;
+        use $crate::path_wrapper;
         $crate::serde_json::from_str(
-            &std::fs::read_to_string(global_path!($path)).expect("no data file"),
+            &std::fs::read_to_string(path_wrapper!($path)).expect("no data file"),
         )
         .expect("failed to decode data")
     }};
