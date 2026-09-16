@@ -3632,6 +3632,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pumpkin-scheduler"
+version = "0.1.0+26.2-26.45"
+dependencies = [
+ "futures",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "pumpkin-util"
 version = "0.1.0+26.2-26.45"
 dependencies = [
