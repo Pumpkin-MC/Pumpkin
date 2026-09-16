@@ -74,10 +74,19 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Clippy (release)
         run: cargo clippy --release --all-targets --all-features
+  check_wit:
+    name: Test `pumpkin-plugin-wit` against `wit-bindgen`
+    runs-on: ubuntu-slim
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: "crates/pumpkin-plugin-wit"
+      - uses: bytecodealliance/actions/wit-bindgen/setup@v1
+      - run: wit-bindgen rust crates/pumpkin-plugin-wit/v0.1
   build_and_test:
     name: Build project and test
     runs-on: ${{ matrix.os }}
-    needs: [format, machete, clippy_debug, clippy_release]
+    needs: [format, machete, clippy_debug, clippy_release, check_wit]
     strategy:
       matrix:
         os:
@@ -104,7 +113,7 @@ jobs:
   test_android:
     name: Test on Android AArch64
     runs-on: ubuntu-latest
-    needs: [format, machete, clippy_debug, clippy_release]
+    needs: [format, machete, clippy_debug, clippy_release, check_wit]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -158,7 +167,7 @@ jobs:
 
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
-      
+
       - name: Install musl-tools (Linux only)
         if: runner.os == 'Linux'
         run: |
@@ -178,7 +187,7 @@ jobs:
             rustup target add "$TARGET"
             cargo build --verbose --release --target "$TARGET"
           fi
-          
+
       - name: Prepare artifacts
         shell: bash
         run: |
