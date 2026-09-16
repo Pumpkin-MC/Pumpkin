@@ -325,8 +325,6 @@ fn deserialize_bool_from_byte<'de, D>(deserializer: D) -> Result<bool, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    use serde::de::Error;
-
     #[derive(Deserialize)]
     #[serde(untagged)]
     enum BoolOrNumber {
@@ -336,11 +334,8 @@ where
 
     match BoolOrNumber::deserialize(deserializer)? {
         BoolOrNumber::Bool(value) => Ok(value),
-        BoolOrNumber::Number(0) => Ok(false),
-        BoolOrNumber::Number(1) => Ok(true),
-        BoolOrNumber::Number(other) => Err(D::Error::custom(format!(
-            "expected a boolean or 0/1, got {other}"
-        ))),
+        // Vanilla treats any nonzero number as true.
+        BoolOrNumber::Number(value) => Ok(value != 0),
     }
 }
 
@@ -716,6 +711,45 @@ mod tests {
         assert!(!settings.features);
         assert!(settings.lakes);
         assert_eq!(settings.to_flat_layers().len(), 1);
+    }
+
+    #[test]
+    fn flat_settings_treat_nonzero_numbers_as_true() {
+        let settings: FlatPresetSettings = serde_json::from_value(serde_json::json!({
+            "biome": "minecraft:plains",
+            "features": 2,
+            "lakes": -1,
+            "layers": []
+        }))
+        .unwrap();
+        assert!(settings.features);
+        assert!(settings.lakes);
+    }
+
+    #[test]
+    fn flat_settings_from_nbt_bytes() {
+        use crate::world_info::data_files::nbt_tag_to_json;
+        use pumpkin_nbt::compound::NbtCompound;
+        use pumpkin_nbt::tag::NbtTag;
+
+        // What the game writes for a superflat preset: booleans as NBT bytes.
+        let mut settings = NbtCompound::new();
+        settings.put_string("biome", "minecraft:the_void".to_string());
+        settings.put_byte("features", 0);
+        settings.put_byte("lakes", 1);
+        let mut layer = NbtCompound::new();
+        layer.put_string("block", "minecraft:air".to_string());
+        layer.put_int("height", 1);
+        settings.put_list("layers", vec![NbtTag::Compound(layer)]);
+
+        let value = nbt_tag_to_json(&NbtTag::Compound(settings));
+        assert_eq!(value["features"], serde_json::json!(0));
+
+        let parsed: FlatPresetSettings = serde_json::from_value(value).unwrap();
+        assert!(!parsed.features);
+        assert!(parsed.lakes);
+        assert_eq!(parsed.biome, "minecraft:the_void");
+        assert_eq!(parsed.to_flat_layers().len(), 1);
     }
 
     #[test]
