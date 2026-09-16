@@ -150,6 +150,11 @@ const ARGUMENT_TYPE_ID_REMAP_V_26_2_TO_V_26_1: &[u32] = &[
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 54, 55, 56, 57, 58, 59,
 ];
+const ARGUMENT_TYPE_ID_REMAP_V_26_2_TO_V_26_3: &[u32] = &[
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+    26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
+    50, 51, 52, 53, 54, 58, 61,
+];
 #[must_use]
 pub fn remap_argument_type_id_for_version(
     argument_type_id: u32,
@@ -352,6 +357,12 @@ pub fn remap_argument_type_id_for_version(
         }
         pumpkin_util::version::JavaMinecraftVersion::V_26_1 => {
             ARGUMENT_TYPE_ID_REMAP_V_26_2_TO_V_26_1
+                .get(argument_type_id as usize)
+                .copied()
+                .unwrap_or(5)
+        }
+        pumpkin_util::version::JavaMinecraftVersion::V_26_3 => {
+            ARGUMENT_TYPE_ID_REMAP_V_26_2_TO_V_26_3
                 .get(argument_type_id as usize)
                 .copied()
                 .unwrap_or(5)

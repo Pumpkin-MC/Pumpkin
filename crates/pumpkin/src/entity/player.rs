@@ -6197,14 +6197,9 @@ impl Player {
         let world = self.world();
         let entity_id = self.entity_id();
 
-        let animation = match hand {
-            Hand::Right => Animation::SwingMainArm,
-            Hand::Left => Animation::SwingOffhand,
-        };
-
-        let je_packet = pumpkin_protocol::java::client::play::CEntityAnimation::new(
+        let je_packet = pumpkin_protocol::java::client::play::CSwingAnimation::new(
             VarInt(entity_id),
-            animation,
+            matches!(hand, Hand::Left),
         );
 
         let be_packet = pumpkin_protocol::bedrock::server::animate::SAnimate {

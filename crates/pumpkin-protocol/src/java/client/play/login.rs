@@ -316,8 +316,16 @@ impl ClientPacket for CLogin<'_> {
                 }
                 write.write_string(self.spawn_data.dimension.minecraft_name)?;
                 write.write_i64_be(self.spawn_data.hashed_seed)?;
-                write.write_u8(self.spawn_data.game_mode)?;
-                write.write_i8(self.spawn_data.previous_gamemode)?;
+                if *version >= JavaMinecraftVersion::V_26_3 {
+                    // Vanilla `GameType.OPTIONAL_STREAM_CODEC`: 0 for none, otherwise the ID + 1
+                    write.write_var_int(&VarInt(i32::from(self.spawn_data.game_mode)))?;
+                    write.write_var_int(&VarInt(
+                        i32::from(self.spawn_data.previous_gamemode.max(-1)) + 1,
+                    ))?;
+                } else {
+                    write.write_u8(self.spawn_data.game_mode)?;
+                    write.write_i8(self.spawn_data.previous_gamemode)?;
+                }
             }
             write.write_bool(self.spawn_data.debug)?;
             write.write_bool(self.spawn_data.is_flat)?;

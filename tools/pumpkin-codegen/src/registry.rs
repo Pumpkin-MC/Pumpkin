@@ -30,6 +30,7 @@ pub(crate) fn build() -> TokenStream {
         ("1_21_11", "V_1_21_11"),
         ("26_1", "V_26_1"),
         ("26_2", "V_26_2"),
+        ("26_3", "V_26_3"),
     ];
 
     let version_mapping = [
@@ -60,6 +61,7 @@ pub(crate) fn build() -> TokenStream {
         (JavaMinecraftVersion::V_1_21_11, "V_1_21_11"),
         (JavaMinecraftVersion::V_26_1, "V_26_1"),
         (JavaMinecraftVersion::V_26_2, "V_26_2"),
+        (JavaMinecraftVersion::V_26_3, "V_26_3"),
     ];
 
     const SYNCED_REGISTRIES: &[&str] = &[
@@ -94,6 +96,13 @@ pub(crate) fn build() -> TokenStream {
         "sulfur_cube_archetype",
     ];
 
+    /// Synced registries a client only knows from 26.3 on.
+    const SYNCED_REGISTRIES_26_3: &[&str] = &[
+        "worldgen/block_state_provider",
+        "block_transformer",
+        "decorated_pot_pattern",
+    ];
+
     let process_version = |ver_folder: &str| -> TokenStream {
         let base_path = std::path::Path::new("../../assets/datapacks")
             .join(ver_folder)
@@ -101,7 +110,12 @@ pub(crate) fn build() -> TokenStream {
 
         let mut data: IndexMap<String, IndexMap<String, Value>> = IndexMap::new();
 
-        for &reg_name in SYNCED_REGISTRIES {
+        let newer_registries: &[&str] = if ver_folder == "26_3" {
+            SYNCED_REGISTRIES_26_3
+        } else {
+            &[]
+        };
+        for &reg_name in SYNCED_REGISTRIES.iter().chain(newer_registries) {
             let reg_dir = base_path.join(reg_name);
             if !reg_dir.is_dir() {
                 continue;
@@ -183,7 +197,12 @@ pub(crate) fn build() -> TokenStream {
                         let bytes = if let pumpkin_nbt::tag::NbtTag::Compound(compound) = nbt_tag {
                             pumpkin_nbt::Nbt::from(compound).write_unnamed()
                         } else {
-                            Vec::new().into()
+                            // Non-compound roots (e.g. `block_transformer` lists) keep their own type ID
+                            let mut bytes = Vec::new();
+                            let _ = nbt_tag.serialize(
+                                &mut pumpkin_nbt::serializer::NbtWriteHelperJava::new(&mut bytes),
+                            );
+                            bytes.into()
                         };
                         let byte_literal = Literal::byte_string(&bytes);
 

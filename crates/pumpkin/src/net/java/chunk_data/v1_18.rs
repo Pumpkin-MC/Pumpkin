@@ -12,6 +12,9 @@ use pumpkin_world::chunk::format::LightContainer;
 use pumpkin_world::chunk::palette::NetworkPalette;
 use std::io::Write;
 
+/// `ceil(log2(35723))`: the 26.3 block state count needs one bit more than 26.2's.
+const DIRECT_BLOCK_BITS_26_3: usize = 16;
+
 /// Serializes chunk data for Minecraft 1.18+ through 26.2+.
 #[expect(clippy::too_many_lines)]
 pub fn write_chunk_data(
@@ -96,7 +99,7 @@ pub fn write_chunk_data(
             }
 
             let mut block_network = block_palette.convert_network();
-            if version < &CURRENT_MC_VERSION {
+            if version != &CURRENT_MC_VERSION {
                 match &mut block_network.palette {
                     NetworkPalette::Single(registry_id) => {
                         *registry_id = remap_block_state_for_version(*registry_id, *version);
@@ -110,18 +113,27 @@ pub fn write_chunk_data(
                         let bits_per_entry = usize::from(block_network.bits_per_entry);
                         let values_per_i64 = 64 / bits_per_entry;
                         let id_mask = (1u64 << bits_per_entry) - 1;
+                        // Clients derive the direct width from their own block state count
+                        let target_bits = if version >= &JavaMinecraftVersion::V_26_3 {
+                            DIRECT_BLOCK_BITS_26_3
+                        } else {
+                            bits_per_entry
+                        };
+                        debug_assert_eq!(values_per_i64, 64 / target_bits);
 
                         for packed_word in &mut block_network.packed_data {
                             let mut remapped_word = 0u64;
                             let packed_word_u64 = *packed_word as u64;
                             for index in 0..values_per_i64 {
-                                let shift = index * bits_per_entry;
-                                let state_id = ((packed_word_u64 >> shift) & id_mask) as u16;
+                                let state_id = ((packed_word_u64 >> (index * bits_per_entry))
+                                    & id_mask)
+                                    as u16;
                                 let remapped_id = remap_block_state_for_version(state_id, *version);
-                                remapped_word |= u64::from(remapped_id) << shift;
+                                remapped_word |= u64::from(remapped_id) << (index * target_bits);
                             }
                             *packed_word = remapped_word as i64;
                         }
+                        block_network.bits_per_entry = target_bits as u8;
                     }
                 }
             }

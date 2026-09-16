@@ -19,7 +19,14 @@ pub struct SPlayerAction {
 
 impl<'a> ServerPacket<'a> for SPlayerAction {
     fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
-        let status = if version >= &JavaMinecraftVersion::V_1_9 {
+        let status = if version >= &JavaMinecraftVersion::V_26_3 {
+            // 26.3 inserted CHANGE_DESTROY_DIRECTION at 1 and shifted the rest up by one
+            match bytebuf.get_var_int()?.0 {
+                1 => VarInt(Status::ChangedDiggingDirection as i32),
+                id if id > 1 => VarInt(id - 1),
+                id => VarInt(id),
+            }
+        } else if version >= &JavaMinecraftVersion::V_1_9 {
             bytebuf.get_var_int()?
         } else {
             VarInt(i32::from(bytebuf.get_u8()?))
@@ -48,7 +55,14 @@ impl crate::ClientPacket for SPlayerAction {
         version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
-        if version >= &JavaMinecraftVersion::V_1_9 {
+        if version >= &JavaMinecraftVersion::V_26_3 {
+            let status = match self.status.0 {
+                id if id == Status::ChangedDiggingDirection as i32 => 1,
+                id if id >= 1 => id + 1,
+                id => id,
+            };
+            write.write_var_int(&VarInt(status))?;
+        } else if version >= &JavaMinecraftVersion::V_1_9 {
             write.write_var_int(&self.status)?;
         } else {
             write.write_u8(self.status.0 as u8)?;
@@ -81,6 +95,8 @@ pub enum Status {
     SwapItem,
     /// Sent when a player is holding a spear and performs a jab attack.
     SpearJab,
+    /// Sent when the player keeps digging the same block from another face (26.3+).
+    ChangedDiggingDirection,
 }
 
 pub struct InvalidStatus;
@@ -98,6 +114,7 @@ impl TryFrom<i32> for Status {
             5 => Ok(Self::ReleaseItemInUse),
             6 => Ok(Self::SwapItem),
             7 => Ok(Self::SpearJab),
+            8 => Ok(Self::ChangedDiggingDirection),
             _ => Err(InvalidStatus),
         }
     }

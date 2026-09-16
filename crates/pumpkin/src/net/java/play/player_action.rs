@@ -258,6 +258,10 @@ impl JavaClient {
                 Status::SwapItem => {
                     player.swap_item();
                 }
+                // Pumpkin tracks no digging direction, only the sequence needs acknowledging
+                Status::ChangedDiggingDirection => {
+                    self.update_sequence(player_action.sequence.0);
+                }
                 Status::SpearJab => {
                     if player.gamemode.load() == GameMode::Spectator {
                         return;

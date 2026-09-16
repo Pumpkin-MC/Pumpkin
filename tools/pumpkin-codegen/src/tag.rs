@@ -337,6 +337,7 @@ pub(crate) fn build() -> TokenStream {
         ("1_21_11", "V_1_21_11"),
         ("26_1", "V_26_1"),
         ("26_2", "V_26_2"),
+        ("26_3", "V_26_3"),
     ];
 
     let version_mapping = [
@@ -378,6 +379,7 @@ pub(crate) fn build() -> TokenStream {
         ("V_1_21_11", "V_1_21_11"),
         ("V_26_1", "V_26_1"),
         ("V_26_2", "V_26_2"),
+        ("V_26_3", "V_26_3"),
     ];
 
     // --- Load Global Assets ---

@@ -72,8 +72,14 @@ impl PlayerSpawnData {
         }
         write.write_string(self.dimension.minecraft_name)?;
         write.write_i64_be(self.hashed_seed)?;
-        write.write_u8(self.game_mode)?;
-        write.write_i8(self.previous_gamemode)?;
+        if version >= &JavaMinecraftVersion::V_26_3 {
+            // Vanilla `GameType.OPTIONAL_STREAM_CODEC`: 0 for none, otherwise the ID + 1
+            write.write_var_int(&VarInt(i32::from(self.game_mode)))?;
+            write.write_var_int(&VarInt(i32::from(self.previous_gamemode.max(-1)) + 1))?;
+        } else {
+            write.write_u8(self.game_mode)?;
+            write.write_i8(self.previous_gamemode)?;
+        }
         write.write_bool(self.debug)?;
         write.write_bool(self.is_flat)?;
         if version >= &JavaMinecraftVersion::V_1_19 {
@@ -124,8 +130,14 @@ impl PlayerSpawnData {
 
         let _world_name = read.get_str()?;
         let hashed_seed = read.get_i64_be()?;
-        let game_mode = read.get_u8()?;
-        let previous_gamemode = read.get_i8()?;
+        let (game_mode, previous_gamemode) = if version >= &JavaMinecraftVersion::V_26_3 {
+            (
+                read.get_var_int()?.0 as u8,
+                (read.get_var_int()?.0 - 1) as i8,
+            )
+        } else {
+            (read.get_u8()?, read.get_i8()?)
+        };
         let debug = read.get_bool()?;
         let is_flat = read.get_bool()?;
 

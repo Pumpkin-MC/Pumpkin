@@ -180,7 +180,8 @@ pub fn build() -> TokenStream {
         },
     };
 
-    let all_mappings = remapper.process(&node_26_1);
+    let mut all_mappings = remapper.process(&node_26_1);
+    all_mappings.extend(remapper.process(&crate::remap::forward_node_26_3()));
     let mut static_values = TokenStream::new();
     let mut match_arms = TokenStream::new();
     for (ver, mapping) in &all_mappings {

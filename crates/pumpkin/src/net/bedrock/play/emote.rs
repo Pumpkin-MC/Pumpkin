@@ -22,10 +22,7 @@ impl BedrockClient {
 
         world.broadcast_packet_except_editioned(
             &[player.gameprofile.id],
-            &CEntityAnimation::new(
-                VarInt(entity.entity_id),
-                Animation::SwingMainArm, // Fallback for Java? Or just ignore
-            ),
+            &CSwingAnimation::new(VarInt(entity.entity_id), false),
             &broadcast_packet,
         );
     }

@@ -28,7 +28,9 @@ impl<'a> ServerPacket<'a> for SSetCreativeSlot {
         } else {
             read.get_i16_be()?
         };
-        let clicked_item = if *version >= JavaMinecraftVersion::V_1_21_5 {
+        let clicked_item = if *version >= JavaMinecraftVersion::V_26_3 {
+            ItemStackSerializer::read_length_prefixed_optional_for_version(&mut read, version)?
+        } else if *version >= JavaMinecraftVersion::V_1_21_5 {
             ItemStackSerializer::read_length_prefixed_optional(&mut read)?
         } else {
             ItemStackSerializer::read(&mut read)?

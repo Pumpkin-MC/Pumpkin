@@ -22,6 +22,21 @@ const MAX_LINE_LENGTH: usize = 384;
 impl<'a> ServerPacket<'a> for SUpdateSign<'a> {
     fn read(read: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
         let location = read.get_block_pos(version)?;
+        if *version >= JavaMinecraftVersion::V_26_3 {
+            // 26.3 sends the lines first, then the side as `SignTextSlot` (0 = back, 1 = front)
+            let line_1 = read.get_str_bounded_borrowed(MAX_LINE_LENGTH)?;
+            let line_2 = read.get_str_bounded_borrowed(MAX_LINE_LENGTH)?;
+            let line_3 = read.get_str_bounded_borrowed(MAX_LINE_LENGTH)?;
+            let line_4 = read.get_str_bounded_borrowed(MAX_LINE_LENGTH)?;
+            return Ok(Self {
+                location,
+                is_front_text: read.get_var_int()?.0 == 1,
+                line_1,
+                line_2,
+                line_3,
+                line_4,
+            });
+        }
         let is_front_text = if *version >= JavaMinecraftVersion::V_1_20 {
             read.get_bool()?
         } else {
@@ -51,13 +66,16 @@ impl crate::ClientPacket for SUpdateSign<'_> {
     ) -> Result<(), crate::ser::WritingError> {
         use crate::ser::NetworkWriteExt;
         write.write_block_pos(&self.location, version)?;
-        if *version >= JavaMinecraftVersion::V_1_20 {
+        if *version >= JavaMinecraftVersion::V_1_20 && *version < JavaMinecraftVersion::V_26_3 {
             write.write_bool(self.is_front_text)?;
         }
         write.write_string_bounded(self.line_1, MAX_LINE_LENGTH)?;
         write.write_string_bounded(self.line_2, MAX_LINE_LENGTH)?;
         write.write_string_bounded(self.line_3, MAX_LINE_LENGTH)?;
         write.write_string_bounded(self.line_4, MAX_LINE_LENGTH)?;
+        if *version >= JavaMinecraftVersion::V_26_3 {
+            write.write_var_int(&crate::VarInt(i32::from(self.is_front_text)))?;
+        }
         Ok(())
     }
 }

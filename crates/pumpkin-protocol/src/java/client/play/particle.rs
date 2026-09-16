@@ -179,6 +179,29 @@ impl ClientPacket for CParticle<'_> {
     ) -> Result<(), WritingError> {
         let mut write = write;
 
+        if *version >= JavaMinecraftVersion::V_26_3 {
+            // 26.3 moved the particle to the front, split the speed per axis and made the count a VarInt
+            let remapped_id =
+                remap_particle_id_for_version(self.particle_id.0 as u16, *version) as i32;
+            write.write_var_int(&VarInt(remapped_id))?;
+            write.write_slice(self.data)?;
+            write.write_bool(self.important)?;
+            write.write_bool(self.force_spawn)?;
+            write.write_f64_be(self.position.x)?;
+            write.write_f64_be(self.position.y)?;
+            write.write_f64_be(self.position.z)?;
+            write.write_f32_be(self.offset.x)?;
+            write.write_f32_be(self.offset.y)?;
+            write.write_f32_be(self.offset.z)?;
+            write.write_f32_be(self.max_speed)?;
+            write.write_f32_be(self.max_speed)?;
+            write.write_f32_be(self.max_speed)?;
+            write.write_var_int(&VarInt(self.particle_count))?;
+            // Randomization type: DEFAULT
+            write.write_var_int(&VarInt(0))?;
+            return Ok(());
+        }
+
         if *version <= JavaMinecraftVersion::V_1_7_6 {
             let name = pumpkin_data::particle::Particle::from_id(self.particle_id.0 as u16)
                 .map_or("smoke", particle_name_for_v1_7);
@@ -230,6 +253,11 @@ impl ClientPacket for CParticle<'_> {
 
 impl<'a> ServerPacket<'a> for CParticle<'a> {
     fn read(bytebuf: &mut &'a [u8], version: &JavaMinecraftVersion) -> Result<Self, ReadingError> {
+        if *version >= JavaMinecraftVersion::V_26_3 {
+            return Err(ReadingError::Message(
+                "reading 26.3 particles needs the particle data length".into(),
+            ));
+        }
         let (particle_id, important, force_spawn) = if *version <= JavaMinecraftVersion::V_1_7_6 {
             let name = bytebuf.get_str_bounded_borrowed(64)?;
             let id = particle_id_from_1_7_name(name);

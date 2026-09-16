@@ -68,6 +68,17 @@ impl ClientPacket for CEntityPositionSync {
         version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.entity_id)?;
+        if version >= &JavaMinecraftVersion::V_26_3 {
+            // `PositionPath.Linear`: path type 0, then the end position. No velocity anymore
+            write.write_var_int(&VarInt(0))?;
+            write.write_f64_be(self.position.x)?;
+            write.write_f64_be(self.position.y)?;
+            write.write_f64_be(self.position.z)?;
+            write.write_f32_be(self.yaw)?;
+            write.write_f32_be(self.pitch)?;
+            write.write_bool(self.on_ground)?;
+            return Ok(());
+        }
         write.write_f64_be(self.position.x)?;
         write.write_f64_be(self.position.y)?;
         write.write_f64_be(self.position.z)?;

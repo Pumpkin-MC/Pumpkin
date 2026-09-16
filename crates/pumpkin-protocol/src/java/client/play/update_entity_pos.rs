@@ -38,6 +38,14 @@ impl ClientPacket for CUpdateEntityPos {
         } else {
             write.write_var_int(&self.entity_id)?;
         }
+        if *version >= JavaMinecraftVersion::V_26_3 {
+            // Vanilla packs on_ground and the step count (always 0: one linear delta) together
+            write.write_var_int(&VarInt(i32::from(self.on_ground)))?;
+            write.write_i16_be(self.delta.x)?;
+            write.write_i16_be(self.delta.y)?;
+            write.write_i16_be(self.delta.z)?;
+            return Ok(());
+        }
         if *version >= JavaMinecraftVersion::V_1_9 {
             write.write_i16_be(self.delta.x)?;
             write.write_i16_be(self.delta.y)?;
@@ -61,6 +69,24 @@ impl<'a> ServerPacket<'a> for CUpdateEntityPos {
         } else {
             bytebuf.get_var_int()?
         };
+        if *version >= JavaMinecraftVersion::V_26_3 {
+            let properties = bytebuf.get_var_int()?.0;
+            if properties >> 1 != 0 {
+                return Err(ReadingError::Message(
+                    "stepped entity movement unsupported".into(),
+                ));
+            }
+            let delta = Vector3::new(
+                bytebuf.get_i16_be()?,
+                bytebuf.get_i16_be()?,
+                bytebuf.get_i16_be()?,
+            );
+            return Ok(Self {
+                entity_id,
+                delta,
+                on_ground: properties & 1 != 0,
+            });
+        }
         let delta = if *version >= JavaMinecraftVersion::V_1_9 {
             Vector3::new(
                 bytebuf.get_i16_be()?,
