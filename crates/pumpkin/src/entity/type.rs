@@ -258,7 +258,9 @@ pub fn from_type(
             Arc::new(ShulkerBulletEntity::orphan(entity))
         }
         id if id == EntityType::FALLING_BLOCK.id => {
-            Arc::new(FallingEntity::new(entity, Block::SAND.default_state.id))
+            let falling = FallingEntity::new(entity, Block::SAND.default_state.id);
+            falling.set_block_state(Block::SAND.default_state.id);
+            Arc::new(falling)
         }
         id if id == EntityType::EXPERIENCE_ORB.id => Arc::new(ExperienceOrbEntity::new(entity, 1)),
         id if id == EntityType::TNT.id => Arc::new(TNTEntity::new(entity, 4.0, 80)),

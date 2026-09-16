@@ -5,7 +5,10 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
-use std::sync::{Arc, atomic::Ordering};
+use std::sync::{
+    Arc,
+    atomic::{AtomicU16, Ordering},
+};
 
 use crate::{
     block::blocks::falling::FallingBlock,
@@ -16,15 +19,27 @@ use crate::{
 
 pub struct FallingEntity {
     entity: Entity,
-    block_state_id: BlockStateId,
+    block_state_id: AtomicU16,
 }
 
 impl FallingEntity {
     pub const fn new(entity: Entity, block_state_id: BlockStateId) -> Self {
         Self {
             entity,
-            block_state_id,
+            block_state_id: AtomicU16::new(block_state_id.as_u16()),
         }
+    }
+
+    /// Sets the block state encoded in this entity's spawn packet.
+    ///
+    /// This must be called before the entity is spawned so clients render the
+    /// requested block state when they receive its spawn packet.
+    pub fn set_block_state(&self, block_state_id: BlockStateId) {
+        self.block_state_id
+            .store(block_state_id.as_u16(), Ordering::Relaxed);
+        self.entity
+            .data
+            .store(i32::from(block_state_id.as_u16()), Ordering::Relaxed);
     }
 
     /// Replaced the current Block and Spawns a new Falling one (synchronous)
@@ -38,10 +53,8 @@ impl FallingEntity {
 
         let position = position.0.to_f64().add_raw(0.5, 0.0, 0.5);
         let entity = Entity::new(world.clone(), position, &EntityType::FALLING_BLOCK);
-        entity
-            .data
-            .store(i32::from(block_state.as_u16()), Ordering::Relaxed);
         let entity = Arc::new(Self::new(entity, block_state));
+        entity.set_block_state(block_state);
         world.spawn_entity_non_save(entity);
     }
 }
@@ -60,7 +73,8 @@ impl EntityBase for FallingEntity {
             entity.velocity.store(velo.multiply(0.7, -0.5, 0.7));
             let world = entity.world.load();
             let landing_pos = self.entity.block_pos.load();
-            let mut state_id = self.block_state_id;
+            let mut state_id =
+                BlockStateId::new_or_air(self.block_state_id.load(Ordering::Relaxed));
             let block = Block::from_state_id(state_id);
             if block.has_tag(&tag::Block::MINECRAFT_CONCRETE_POWDERS)
                 && FallingBlock::should_solidify(&**world, &landing_pos)
