@@ -832,8 +832,13 @@ impl ToTokens for ItemComponents {
         if self.glider.is_some() {
             tokens.extend(quote! { (Glider, &GliderImpl), });
         }
-        if self.instrument.is_some() {
-            tokens.extend(quote! { (Instrument, &InstrumentImpl), });
+        if let Some(instrument) = &self.instrument {
+            let name = instrument
+                .as_str()
+                .expect("default instrument registry reference");
+            let name = LitStr::new(name, Span::call_site());
+            tokens
+                .extend(quote! { (Instrument, &InstrumentImpl::Reference(Cow::Borrowed(#name))), });
         }
         if let Some(model) = &self.item_model {
             let model_lit = LitStr::new(model, Span::call_site());

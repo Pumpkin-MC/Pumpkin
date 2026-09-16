@@ -2390,13 +2390,97 @@ impl DataComponentCodec<Self> for BlockEntityDataImpl {
 
 impl DataComponentCodec<Self> for InstrumentImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt(0))
+        match self {
+            Self::Reference(name) => {
+                let name = name.strip_prefix("minecraft:").unwrap_or(name);
+                let id = instrument_entries()
+                    .iter()
+                    .position(|entry| entry.name == name)
+                    .ok_or_else(|| WritingError::Message(format!("Unknown instrument: {name}")))?;
+                seq.write_var_int(&VarInt(i32::try_from(id + 1).map_err(|_| {
+                    WritingError::Message("Instrument registry is too large".into())
+                })?))
+            }
+            Self::Inline {
+                sound_event,
+                use_duration,
+                range,
+                description,
+            } => {
+                seq.write_var_int(&VarInt(0))?;
+                crate::IdOr::write(&data_to_proto_sound(sound_event), seq, |writer, sound| {
+                    writer.write_string(&sound.sound_name)?;
+                    writer.write_option(&sound.range, |writer, range| writer.write_f32(*range))
+                })?;
+                seq.write_f32(*use_duration)?;
+                seq.write_f32(*range)?;
+                seq.write_nbt(description.clone())
+            }
+        }
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let _ = seq.get_var_int()?;
-        Ok(Self)
+        let id = seq.get_var_int()?.0;
+        if id != 0 {
+            let index = usize::try_from(id).ok().and_then(|id| id.checked_sub(1));
+            let entry = index
+                .and_then(|index| instrument_entries().get(index))
+                .ok_or_else(|| {
+                    ReadingError::Message(format!("Invalid instrument registry id: {id}"))
+                })?;
+            return Ok(Self::Reference(Cow::Owned(format!(
+                "minecraft:{}",
+                entry.name
+            ))));
+        }
+        let sound_id = seq.get_var_int()?.0;
+        let sound = if sound_id == 0 {
+            crate::IdOr::Value(crate::SoundEvent {
+                sound_name: seq.get_str()?.into(),
+                range: seq.get_option(NetworkReadExt::get_f32)?,
+            })
+        } else {
+            let id = sound_id
+                .checked_sub(1)
+                .and_then(|id| u16::try_from(id).ok())
+                .ok_or_else(|| ReadingError::Message("Invalid instrument sound event id".into()))?;
+            crate::IdOr::Id(id)
+        };
+        let sound_event = proto_to_data_sound(&sound)
+            .ok_or_else(|| ReadingError::Message("Invalid instrument sound event".into()))?;
+        let use_duration = seq.get_f32()?;
+        let range = seq.get_f32()?;
+        let description = seq
+            .get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?
+            .ok_or_else(|| ReadingError::Message("Missing instrument description".into()))?;
+        // Keep network input within the same bounds as the persistent NBT codec.
+        if !use_duration.is_finite() || use_duration <= 0.0 || !range.is_finite() || range <= 0.0 {
+            return Err(ReadingError::Message(
+                "Instrument duration and range must be finite and positive".into(),
+            ));
+        }
+        if !matches!(
+            description,
+            NbtTag::String(_) | NbtTag::Compound(_) | NbtTag::List(_)
+        ) {
+            return Err(ReadingError::Message(
+                "Invalid instrument description".into(),
+            ));
+        }
+        Ok(Self::Inline {
+            sound_event,
+            use_duration,
+            range,
+            description,
+        })
     }
+}
+
+fn instrument_entries() -> &'static [pumpkin_data::registry::StaticRegistryEntry] {
+    pumpkin_data::registry::REGISTRY_V_26_2
+        .iter()
+        .find(|registry| registry.registry_id == "instrument")
+        .map_or(&[], |registry| registry.entries)
 }
 
 impl DataComponentCodec<Self> for ProvidesTrimMaterialImpl {
@@ -2807,5 +2891,148 @@ impl DataComponentCodec<Self> for BreakSoundImpl {
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let _ = seq.get_var_int()?;
         Ok(Self)
+    }
+}
+
+#[cfg(test)]
+mod instrument_tests {
+    use super::*;
+
+    #[test]
+    fn default_horn_is_ponder() {
+        let stack =
+            pumpkin_data::item_stack::ItemStack::new(1, &pumpkin_data::item::Item::GOAT_HORN);
+        let default = stack
+            .get_data_component::<InstrumentImpl>()
+            .expect("default instrument");
+        assert_eq!(
+            default,
+            &InstrumentImpl::Reference(Cow::Borrowed("minecraft:ponder_goat_horn"))
+        );
+        let other = InstrumentImpl::Reference(Cow::Borrowed("minecraft:seek_goat_horn"));
+        assert!(!default.equal(&other));
+    }
+
+    #[test]
+    fn every_horn_preserves_its_registry_reference() {
+        let names = [
+            "admire", "call", "dream", "feel", "ponder", "seek", "sing", "yearn",
+        ];
+        for (index, name) in names.iter().enumerate() {
+            let tag = NbtTag::String(format!("minecraft:{name}_goat_horn").into());
+            let instrument = InstrumentImpl::read_data(&tag).expect("instrument NBT");
+            assert_eq!(instrument.write_data(), tag);
+            let mut bytes = Vec::new();
+            instrument.serialize(&mut bytes).expect("encode horn");
+            assert_eq!(bytes, [u8::try_from(index + 1).expect("small registry id")]);
+            bytes.push(0x7f);
+            let mut reader = bytes.as_slice();
+            let decoded = InstrumentImpl::deserialize(&mut reader).expect("decode horn");
+            assert_eq!(decoded, instrument);
+            assert_eq!(reader, [0x7f]);
+        }
+    }
+
+    #[test]
+    fn inline_instrument_preserves_sound_floats_and_description() {
+        let instrument = InstrumentImpl::Inline {
+            sound_event: IdOr::Value(SoundEvent::new("custom:horn".into(), Some(20.0))),
+            use_duration: 7.0,
+            range: 256.0,
+            description: NbtTag::String("Custom horn".into()),
+        };
+        assert_eq!(
+            InstrumentImpl::read_data(&instrument.write_data()),
+            Some(instrument.clone())
+        );
+        let mut bytes = Vec::new();
+        instrument
+            .serialize(&mut bytes)
+            .expect("encode inline instrument");
+        // Produced by vanilla 26.2's Instrument.STREAM_CODEC for this instrument.
+        assert_eq!(
+            bytes,
+            b"\x00\x00\x0bcustom:horn\x01\x41\xa0\x00\x00\x40\xe0\x00\x00\x43\x80\x00\x00\x08\x00\x0bCustom horn"
+        );
+        for end in 0..bytes.len() {
+            assert!(InstrumentImpl::deserialize(&mut &bytes[..end]).is_err());
+        }
+        bytes.push(0x7f);
+        let mut reader = bytes.as_slice();
+        assert_eq!(
+            InstrumentImpl::deserialize(&mut reader).expect("decode inline"),
+            instrument
+        );
+        assert_eq!(reader, [0x7f]);
+    }
+
+    #[test]
+    fn invalid_instrument_registry_ids_are_rejected() {
+        for id in [-1, i32::MIN, 9, i32::MAX] {
+            let mut bytes = Vec::new();
+            bytes.write_var_int(&VarInt(id)).expect("registry id");
+            assert!(InstrumentImpl::deserialize(&mut bytes.as_slice()).is_err());
+        }
+        let unknown = InstrumentImpl::Reference(Cow::Borrowed("custom:unknown"));
+        assert!(unknown.serialize(&mut Vec::new()).is_err());
+    }
+
+    #[test]
+    fn inline_instrument_preserves_registered_sound_and_rejects_invalid_ids() {
+        let sound = Sound::from_name("item.goat_horn.sound.0").expect("goat horn sound");
+        let instrument = InstrumentImpl::Inline {
+            sound_event: IdOr::Id(sound),
+            use_duration: 7.0,
+            range: 256.0,
+            description: NbtTag::String("Ponder".into()),
+        };
+        assert_eq!(
+            InstrumentImpl::read_data(&instrument.write_data()),
+            Some(instrument.clone())
+        );
+        let mut bytes = Vec::new();
+        instrument
+            .serialize(&mut bytes)
+            .expect("encode registered sound");
+        assert_eq!(
+            InstrumentImpl::deserialize(&mut bytes.as_slice()).expect("decode registered sound"),
+            instrument
+        );
+
+        for id in [-1, i32::MIN, 65_537, i32::MAX] {
+            let mut bytes = vec![0];
+            bytes.write_var_int(&VarInt(id)).expect("sound id");
+            bytes.write_f32(7.0).expect("duration");
+            bytes.write_f32(256.0).expect("range");
+            bytes
+                .write_nbt(NbtTag::String("Ponder".into()))
+                .expect("description");
+            assert!(InstrumentImpl::deserialize(&mut bytes.as_slice()).is_err());
+        }
+    }
+
+    #[test]
+    fn inline_instrument_rejects_fields_that_cannot_be_saved() {
+        let mut invalid_fields = Vec::new();
+        for value in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, 0.0, -1.0] {
+            invalid_fields.push((value, 256.0, NbtTag::String("Horn".into())));
+            invalid_fields.push((7.0, value, NbtTag::String("Horn".into())));
+        }
+        invalid_fields.push((7.0, 256.0, NbtTag::Int(42)));
+        invalid_fields.push((7.0, 256.0, NbtTag::End));
+        for (use_duration, range, description) in invalid_fields {
+            let instrument = InstrumentImpl::Inline {
+                sound_event: IdOr::Value(SoundEvent::new("custom:horn".into(), None)),
+                use_duration,
+                range,
+                description,
+            };
+            assert!(InstrumentImpl::read_data(&instrument.write_data()).is_none());
+            let mut bytes = Vec::new();
+            instrument
+                .serialize(&mut bytes)
+                .expect("encode invalid fields");
+            assert!(InstrumentImpl::deserialize(&mut bytes.as_slice()).is_err());
+        }
     }
 }
