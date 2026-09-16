@@ -452,6 +452,8 @@ pub struct Player {
     pub last_input: AtomicI8,
     /// A counter for teleport IDs used to track pending teleports.
     pub teleport_id_count: AtomicI32,
+    /// Serializes teleport ID allocation, registration, and packet enqueueing.
+    pub teleport_send_lock: Mutex<()>,
     /// Pending teleports, in the order they were sent to the client.
     pub awaiting_teleports: Mutex<VecDeque<(VarInt, Vector3<f64>)>>,
     /// The coordinates of the chunk section the player is currently watching.
@@ -740,6 +742,7 @@ impl Player {
             carried_item: Mutex::new(None),
             experience_pick_up_delay: Mutex::new(0),
             teleport_id_count: AtomicI32::new(0),
+            teleport_send_lock: Mutex::new(()),
             mining: AtomicBool::new(false),
             mining_pos: Mutex::new(BlockPos::ZERO),
             abilities: std::sync::Mutex::new(abilities),
@@ -4006,6 +4009,10 @@ impl Player {
             }
         }
 
+        let _teleport_send_guard = self
+            .teleport_send_lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let i = self.teleport_id_count.fetch_add(1, Ordering::Relaxed);
         self.chunk_send_epoch.fetch_add(1, Ordering::Relaxed);
         let teleport_id = i + 1;

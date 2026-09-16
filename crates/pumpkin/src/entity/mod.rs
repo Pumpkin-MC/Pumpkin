@@ -3839,6 +3839,15 @@ impl Entity {
             let vehicle_box = self.bounding_box.load();
             let passenger_entity = passenger.get_entity();
 
+            // Keep teleport registration and packet enqueueing together. A death/teleport
+            // callback can otherwise allocate another ID between these operations.
+            let _teleport_send_guard = passenger.get_player().map(|player| {
+                player
+                    .teleport_send_lock
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+            });
+
             // Pre-allocate teleport ID and block movement packets BEFORE sending
             // CSetPassengers. This prevents a race condition where the client receives
             // the dismount packet, sends stale position packets from the old riding

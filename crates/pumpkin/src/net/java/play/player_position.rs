@@ -350,6 +350,10 @@ impl JavaClient {
     }
 
     pub fn force_tp(&self, player: &Arc<Player>, position: Vector3<f64>) {
+        let _teleport_send_guard = player
+            .teleport_send_lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let teleport_id = player.teleport_id_count.fetch_add(1, Ordering::Relaxed) + 1;
         player
             .awaiting_teleports
