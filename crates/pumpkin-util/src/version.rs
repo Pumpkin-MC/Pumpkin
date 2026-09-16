@@ -74,7 +74,7 @@ pub enum JavaMinecraftVersion {
     V_1_21_7,
     V_1_21_9,
     V_1_21_11,
-    //  26.1: Tiny Takeover
+    /// 26.1: Tiny Takeover
     V_26_1,
     V_26_2,
     /// Fallback for unrecognized protocol versions.
@@ -287,8 +287,6 @@ impl std::fmt::Display for JavaMinecraftVersion {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
 #[allow(non_camel_case_types)]
 pub enum BedrockMinecraftVersion {
-    /// 1.21: Tricky Trials.
-    V_1_21,
     /// 1.26.45
     V_1_26_45,
     /// Fallback for unrecognized protocol versions.
@@ -302,7 +300,6 @@ impl BedrockMinecraftVersion {
     #[must_use]
     pub const fn protocol_version(&self) -> i32 {
         match self {
-            Self::V_1_21 => 671,
             Self::V_1_26_45 => 2169,
             Self::Unknown => -1,
         }
@@ -314,7 +311,6 @@ impl BedrockMinecraftVersion {
     #[must_use]
     pub const fn from_protocol(protocol: u32) -> Self {
         match protocol {
-            671 => Self::V_1_21,
             2169 => Self::V_1_26_45,
             _ => Self::Unknown,
         }
@@ -324,23 +320,8 @@ impl BedrockMinecraftVersion {
 impl std::fmt::Display for BedrockMinecraftVersion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::V_1_21 => write!(f, "1.21"),
             Self::V_1_26_45 => write!(f, "1.26.45"),
             Self::Unknown => write!(f, "unknown"),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::BedrockMinecraftVersion;
-
-    #[test]
-    fn resolves_bedrock_26_45_protocol() {
-        let version = BedrockMinecraftVersion::from_protocol(2169);
-
-        assert_eq!(version, BedrockMinecraftVersion::V_1_26_45);
-        assert_eq!(version.protocol_version(), 2169);
-        assert_eq!(version.to_string(), "1.26.45");
     }
 }

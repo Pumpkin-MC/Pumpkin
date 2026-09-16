@@ -173,10 +173,8 @@ const fn to_wasm_bedrock_version(
     version: BedrockMinecraftVersion,
 ) -> pumpkin::plugin::player::BedrockMinecraftVersion {
     match version {
-        BedrockMinecraftVersion::V_1_21 => pumpkin::plugin::player::BedrockMinecraftVersion::V121,
         BedrockMinecraftVersion::V_1_26_45 => {
-            // The v0.1 plugin ABI predates 26.45; do not misreport it as 26.30.
-            pumpkin::plugin::player::BedrockMinecraftVersion::Unknown
+            pumpkin::plugin::player::BedrockMinecraftVersion::V12645
         }
         BedrockMinecraftVersion::Unknown => {
             pumpkin::plugin::player::BedrockMinecraftVersion::Unknown

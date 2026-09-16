@@ -568,6 +568,10 @@ pub fn derive_serialize(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = &input.ident;
 
+    if let syn::Data::Enum(data) = &input.data {
+        return derive_enum_write(&input, data).into();
+    }
+
     let fields = if let syn::Data::Struct(data) = &input.data {
         data.fields.iter().map(|f| {
             let ident = f.ident.as_ref().unwrap();
@@ -638,6 +642,10 @@ pub fn derive_deserialize(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = &input.ident;
 
+    if let syn::Data::Enum(data) = &input.data {
+        return derive_enum_read(&input, data).into();
+    }
+
     let fields = if let syn::Data::Struct(data) = &input.data {
         data.fields.iter().map(|f| {
             let ident = f.ident.as_ref().unwrap();
@@ -700,6 +708,10 @@ pub fn derive_deserialize_from_slice(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = &input.ident;
 
+    if let syn::Data::Enum(data) = &input.data {
+        return derive_enum_read_slice(&input, data).into();
+    }
+
     let fields = if let syn::Data::Struct(data) = &input.data {
         data.fields.iter().map(|f| {
             let ident = f.ident.as_ref().unwrap();
@@ -738,6 +750,171 @@ pub fn derive_deserialize_from_slice(input: TokenStream) -> TokenStream {
     };
 
     expanded.into()
+}
+
+/// How a unit enum's discriminant is laid out on the wire.
+struct EnumRepr {
+    /// The integer type from `#[repr(..)]`.
+    ty: syn::Ident,
+    /// `Some(path)` when the discriminant is variable-length encoded.
+    varint: Option<proc_macro2::TokenStream>,
+    is_big_endian: bool,
+}
+
+impl EnumRepr {
+    fn read_expr(&self, reader: &proc_macro2::TokenStream) -> proc_macro2::TokenStream {
+        let ty = &self.ty;
+        match (&self.varint, self.is_big_endian) {
+            (Some(codec), _) => quote! { #codec::read(#reader)?.0 },
+            (None, true) => quote! { <#ty as PacketRead>::read_be(#reader)? },
+            (None, false) => quote! { <#ty as PacketRead>::read(#reader)? },
+        }
+    }
+
+    fn read_slice_expr(&self) -> proc_macro2::TokenStream {
+        let ty = &self.ty;
+        match (&self.varint, self.is_big_endian) {
+            (Some(codec), _) => quote! { #codec::read_slice(buf)?.0 },
+            (None, true) => syn::Error::new(ty.span(), "Cannot read big-endian enums from a slice")
+                .to_compile_error(),
+            (None, false) => quote! { <#ty as PacketReadSlice>::read_slice(buf)? },
+        }
+    }
+
+    fn write_expr(&self) -> proc_macro2::TokenStream {
+        let ty = &self.ty;
+        match (&self.varint, self.is_big_endian) {
+            (Some(codec), _) => quote! { #codec(*self as #ty).write(writer) },
+            (None, true) => quote! { (*self as #ty).write_be(writer) },
+            (None, false) => quote! { (*self as #ty).write(writer) },
+        }
+    }
+}
+
+/// Reads the discriminant layout from `#[repr(..)]` plus an optional
+/// `#[serial(varint)]` / `#[serial(big_endian)]` on the enum itself.
+fn parse_enum_repr(input: &DeriveInput) -> EnumRepr {
+    let mut ty = None;
+    for attr in &input.attrs {
+        if attr.path().is_ident("repr")
+            && let Ok(ident) = attr.parse_args::<syn::Ident>()
+        {
+            ty = Some(ident);
+        }
+    }
+
+    let Some(ty) = ty else {
+        abort!(
+            input.ident,
+            "Serializable enums need an explicit `#[repr(..)]` integer type"
+        );
+    };
+
+    let (is_big_endian, _) = check_serial_attributes(&input.attrs);
+    let mut is_varint = false;
+    for attr in &input.attrs {
+        if attr.path().is_ident("serial") {
+            let _ = attr.parse_nested_meta(|meta| {
+                if meta.path.is_ident("varint") {
+                    is_varint = true;
+                }
+                Ok(())
+            });
+        }
+    }
+
+    let varint = is_varint.then(|| match ty.to_string().as_str() {
+        "i32" => quote! { crate::codec::var_int::VarInt },
+        "u32" => quote! { crate::codec::var_uint::VarUInt },
+        "i64" => quote! { crate::codec::var_long::VarLong },
+        "u64" => quote! { crate::codec::var_ulong::VarULong },
+        other => abort!(ty, "No variable-length encoding exists for `{}`", other),
+    });
+
+    EnumRepr {
+        ty,
+        varint,
+        is_big_endian,
+    }
+}
+
+/// Collects the variants of a field-less enum, aborting on anything else.
+fn unit_enum_variants(data: &syn::DataEnum) -> Vec<&syn::Ident> {
+    data.variants
+        .iter()
+        .map(|variant| {
+            if !matches!(variant.fields, Fields::Unit) {
+                abort!(variant, "Only field-less enum variants are supported");
+            }
+            &variant.ident
+        })
+        .collect()
+}
+
+/// Emits `TryFrom<repr>` and `PacketRead` for a field-less enum.
+fn derive_enum_read(input: &DeriveInput, data: &syn::DataEnum) -> proc_macro2::TokenStream {
+    let name = &input.ident;
+    let repr = parse_enum_repr(input);
+    let ty = &repr.ty;
+    let variants = unit_enum_variants(data);
+    let read = repr.read_expr(&quote! { reader });
+
+    quote! {
+        impl TryFrom<#ty> for #name {
+            type Error = std::io::Error;
+
+            fn try_from(value: #ty) -> Result<Self, Self::Error> {
+                #(
+                    if value == Self::#variants as #ty {
+                        return Ok(Self::#variants);
+                    }
+                )*
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!(concat!("Invalid ", stringify!(#name), ": {}"), value),
+                ))
+            }
+        }
+
+        impl PacketRead for #name {
+            fn read<R: std::io::Read>(reader: &mut R) -> Result<Self, std::io::Error> {
+                Self::try_from(#read)
+            }
+        }
+    }
+}
+
+/// Emits `PacketReadSlice` for a field-less enum. Pair it with `PacketRead`,
+/// which provides the `TryFrom` conversion this relies on.
+fn derive_enum_read_slice(input: &DeriveInput, data: &syn::DataEnum) -> proc_macro2::TokenStream {
+    let name = &input.ident;
+    let repr = parse_enum_repr(input);
+    let _ = unit_enum_variants(data);
+    let read = repr.read_slice_expr();
+
+    quote! {
+        impl<'a> PacketReadSlice<'a> for #name {
+            fn read_slice(buf: &mut &'a [u8]) -> Result<Self, std::io::Error> {
+                Self::try_from(#read)
+            }
+        }
+    }
+}
+
+/// Emits `PacketWrite` for a field-less enum.
+fn derive_enum_write(input: &DeriveInput, data: &syn::DataEnum) -> proc_macro2::TokenStream {
+    let name = &input.ident;
+    let repr = parse_enum_repr(input);
+    let _ = unit_enum_variants(data);
+    let write = repr.write_expr();
+
+    quote! {
+        impl PacketWrite for #name {
+            fn write<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
+                #write
+            }
+        }
+    }
 }
 
 /// Checks a field's `#[serial(...)]` attributes.

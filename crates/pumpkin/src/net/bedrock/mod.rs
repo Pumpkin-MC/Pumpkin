@@ -32,7 +32,8 @@ use pumpkin_protocol::{
             client_cache_status::SClientCacheStatus, command_request::SCommandRequest,
             container_close::SContainerClose, emote::SEmote, emote_list::SEmoteList,
             interact::SInteract, inventory_transaction::SInventoryTransaction,
-            loading_screen::SLoadingScreen, login::SLogin, mob_equipment::SMobEquipment,
+            item_stack_request::SItemStackRequest, loading_screen::SLoadingScreen, login::SLogin,
+            mob_equipment::SMobEquipment, modal_form_response::SModalFormResponse,
             packet_violation_warning::SPacketViolationWarning, player_action::SPlayerAction,
             player_auth_input::SPlayerAuthInput, request_ability::SRequestAbility,
             request_chunk_radius::SRequestChunkRadius,
@@ -751,7 +752,9 @@ impl BedrockClient {
                 let client = self.clone();
                 let server_c = server.clone();
                 server.spawn_task(async move {
-                    client.handle_resource_pack_response(packet, &server_c).await;
+                    client
+                        .handle_resource_pack_response(packet, &server_c)
+                        .await;
                 });
             }
             SPlayerAuthInput::PACKET_ID => {
@@ -766,8 +769,8 @@ impl BedrockClient {
                 let packet = SInventoryTransaction::read(reader)?;
                 self.handle_inventory_action(player, packet);
             }
-            pumpkin_protocol::bedrock::server::item_stack_request::SItemStackRequest::PACKET_ID => {
-                let packet = pumpkin_protocol::bedrock::server::item_stack_request::SItemStackRequest::read(reader)?;
+            SItemStackRequest::PACKET_ID => {
+                let packet = SItemStackRequest::read(reader)?;
                 self.handle_item_stack_request(player, packet);
             }
             SInteract::PACKET_ID => {
@@ -826,10 +829,8 @@ impl BedrockClient {
             SEmoteList::PACKET_ID => {
                 self.handle_emote_list(player, &SEmoteList::read(reader)?);
             }
-            pumpkin_protocol::bedrock::server::modal_form_response::SModalFormResponse::PACKET_ID => {
-                let form_resp = pumpkin_protocol::bedrock::server::modal_form_response::SModalFormResponse::read(
-                    reader,
-                )?;
+            SModalFormResponse::PACKET_ID => {
+                let form_resp = SModalFormResponse::read(reader)?;
                 self.handle_modal_form_response(player, server, form_resp);
             }
             SLoadingScreen::PACKET_ID => {
