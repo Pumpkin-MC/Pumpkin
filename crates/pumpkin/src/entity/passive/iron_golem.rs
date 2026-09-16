@@ -70,11 +70,8 @@ impl IronGolemEntity {
             goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
 
             target_selector.add_goal(2, Box::new(RevengeGoal::new(true)));
-            // Vanilla gates the player-facing goal on the NeutralMob anger system
-            // (isAngryAt + line of sight), which is not implemented yet, so players
-            // are not targeted at all. The monster goal matches vanilla's
-            // `NearestAttackableTargetGoal<Mob>`: every Enemy but creepers, no
-            // visibility requirement, 1/5-tick sampling.
+            // Players are omitted (vanilla gates that on the unimplemented NeutralMob anger
+            // system). Mirrors NearestAttackableTargetGoal<Mob>: any monster but creepers.
             target_selector.add_goal(
                 3,
                 ActiveTargetGoal::predicated(&mob_arc.mob_entity, 5, false, |living, _world| {
