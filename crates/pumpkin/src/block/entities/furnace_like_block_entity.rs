@@ -504,15 +504,19 @@ macro_rules! impl_block_entity_for_cooking {
                     is_dirty = true;
                     let (furnace_block, furnace_block_state) =
                         world.get_block_and_state(&self.position);
-                    let mut props =
-                        pumpkin_data::block_properties::FurnaceLikeProperties::from_state_id(furnace_block_state.id);
+                    if <pumpkin_data::block_properties::FurnaceLikeProperties as pumpkin_data::block_properties::BlockProperties>::handles_block_id(furnace_block.id) {
+                        let mut props =
+                            pumpkin_data::block_properties::FurnaceLikeProperties::from_state_id(
+                                furnace_block_state.id,
+                            );
 
-                    props.lit = self.is_burning();
-                    world.set_block_state(
-                        &self.position,
-                        props.to_state_id(furnace_block),
-                        $crate::world::BlockFlags::NOTIFY_ALL,
-                    );
+                        props.lit = self.is_burning();
+                        world.set_block_state(
+                            &self.position,
+                            props.to_state_id(furnace_block),
+                            $crate::world::BlockFlags::NOTIFY_ALL,
+                        );
+                    }
                 }
 
                 if is_dirty {
