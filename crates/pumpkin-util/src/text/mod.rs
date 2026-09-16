@@ -20,6 +20,7 @@ pub mod click;
 pub mod color;
 pub mod hover;
 pub mod legacy;
+pub mod sign;
 pub mod style;
 
 /// Represents a Minecraft chat component.
@@ -220,29 +221,33 @@ impl TextComponentBase {
             match click {
                 ClickEvent::OpenUrl { url } => {
                     click_tag.put_string("action", "open_url".to_string());
-                    click_tag.put_string("url", url.to_string());
-                    if *version < JavaMinecraftVersion::V_1_16 {
+                    if *version >= JavaMinecraftVersion::V_1_21_5 {
+                        click_tag.put_string("url", url.to_string());
+                    } else {
                         click_tag.put_string("value", url.to_string());
                     }
                 }
                 ClickEvent::OpenFile { path } => {
                     click_tag.put_string("action", "open_file".to_string());
-                    click_tag.put_string("path", path.to_string());
-                    if *version < JavaMinecraftVersion::V_1_16 {
+                    if *version >= JavaMinecraftVersion::V_1_21_5 {
+                        click_tag.put_string("path", path.to_string());
+                    } else {
                         click_tag.put_string("value", path.to_string());
                     }
                 }
                 ClickEvent::RunCommand { command } => {
                     click_tag.put_string("action", "run_command".to_string());
-                    click_tag.put_string("command", command.to_string());
-                    if *version < JavaMinecraftVersion::V_1_16 {
+                    if *version >= JavaMinecraftVersion::V_1_21_5 {
+                        click_tag.put_string("command", command.to_string());
+                    } else {
                         click_tag.put_string("value", command.to_string());
                     }
                 }
                 ClickEvent::SuggestCommand { command } => {
                     click_tag.put_string("action", "suggest_command".to_string());
-                    click_tag.put_string("command", command.to_string());
-                    if *version < JavaMinecraftVersion::V_1_16 {
+                    if *version >= JavaMinecraftVersion::V_1_21_5 {
+                        click_tag.put_string("command", command.to_string());
+                    } else {
                         click_tag.put_string("value", command.to_string());
                     }
                 }
@@ -250,10 +255,9 @@ impl TextComponentBase {
                     click_tag.put_string("action", "change_page".to_string());
                     if *version >= JavaMinecraftVersion::V_1_21_6 {
                         click_tag.put_int("page", *page as i32);
-                    } else {
+                    } else if *version >= JavaMinecraftVersion::V_1_21_5 {
                         click_tag.put_string("page", page.to_string());
-                    }
-                    if *version < JavaMinecraftVersion::V_1_16 {
+                    } else {
                         click_tag.put_string("value", page.to_string());
                     }
                 }
@@ -587,11 +591,12 @@ impl TextComponentBase {
                         "action".to_string(),
                         serde_json::Value::String("open_url".to_string()),
                     );
-                    click_map.insert(
-                        "url".to_string(),
-                        serde_json::Value::String(url.to_string()),
-                    );
-                    if *version < JavaMinecraftVersion::V_1_16 {
+                    if *version >= JavaMinecraftVersion::V_1_21_5 {
+                        click_map.insert(
+                            "url".to_string(),
+                            serde_json::Value::String(url.to_string()),
+                        );
+                    } else {
                         click_map.insert(
                             "value".to_string(),
                             serde_json::Value::String(url.to_string()),
@@ -603,11 +608,12 @@ impl TextComponentBase {
                         "action".to_string(),
                         serde_json::Value::String("open_file".to_string()),
                     );
-                    click_map.insert(
-                        "path".to_string(),
-                        serde_json::Value::String(path.to_string()),
-                    );
-                    if *version < JavaMinecraftVersion::V_1_16 {
+                    if *version >= JavaMinecraftVersion::V_1_21_5 {
+                        click_map.insert(
+                            "path".to_string(),
+                            serde_json::Value::String(path.to_string()),
+                        );
+                    } else {
                         click_map.insert(
                             "value".to_string(),
                             serde_json::Value::String(path.to_string()),
@@ -619,11 +625,12 @@ impl TextComponentBase {
                         "action".to_string(),
                         serde_json::Value::String("run_command".to_string()),
                     );
-                    click_map.insert(
-                        "command".to_string(),
-                        serde_json::Value::String(command.to_string()),
-                    );
-                    if *version < JavaMinecraftVersion::V_1_16 {
+                    if *version >= JavaMinecraftVersion::V_1_21_5 {
+                        click_map.insert(
+                            "command".to_string(),
+                            serde_json::Value::String(command.to_string()),
+                        );
+                    } else {
                         click_map.insert(
                             "value".to_string(),
                             serde_json::Value::String(command.to_string()),
@@ -635,11 +642,12 @@ impl TextComponentBase {
                         "action".to_string(),
                         serde_json::Value::String("suggest_command".to_string()),
                     );
-                    click_map.insert(
-                        "command".to_string(),
-                        serde_json::Value::String(command.to_string()),
-                    );
-                    if *version < JavaMinecraftVersion::V_1_16 {
+                    if *version >= JavaMinecraftVersion::V_1_21_5 {
+                        click_map.insert(
+                            "command".to_string(),
+                            serde_json::Value::String(command.to_string()),
+                        );
+                    } else {
                         click_map.insert(
                             "value".to_string(),
                             serde_json::Value::String(command.to_string()),
@@ -653,13 +661,12 @@ impl TextComponentBase {
                     );
                     if *version >= JavaMinecraftVersion::V_1_21_6 {
                         click_map.insert("page".to_string(), serde_json::json!(*page as i32));
-                    } else {
+                    } else if *version >= JavaMinecraftVersion::V_1_21_5 {
                         click_map.insert(
                             "page".to_string(),
                             serde_json::Value::String(page.to_string()),
                         );
-                    }
-                    if *version < JavaMinecraftVersion::V_1_16 {
+                    } else {
                         click_map.insert(
                             "value".to_string(),
                             serde_json::Value::String(page.to_string()),
@@ -2063,7 +2070,9 @@ pub enum TextContent {
 /// Tests for the text component implementations.
 #[cfg(test)]
 mod test {
+    use crate::text::click::ClickEvent;
     use crate::text::{TextComponent, color::NamedColor, hover::HoverEvent};
+    use crate::version::JavaMinecraftVersion;
     use std::borrow::Cow;
 
     #[test]
@@ -2135,5 +2144,42 @@ mod test {
             .to_nbt_compound();
         let hover = compound.get_compound("hover_event").unwrap();
         assert!(hover.get_int("count").is_none());
+    }
+
+    #[test]
+    fn click_event_uses_legacy_value_before_1_21_5() {
+        let compound = TextComponent::text("link")
+            .click_event(ClickEvent::OpenUrl {
+                url: Cow::Borrowed("https://example.com"),
+            })
+            .0
+            .to_nbt_compound_for_version(&JavaMinecraftVersion::V_1_21_4);
+        let click = compound.get_compound("clickEvent").unwrap();
+        assert_eq!(click.get_string("action"), Some("open_url"));
+        assert_eq!(click.get_string("value"), Some("https://example.com"));
+        assert!(click.get_string("url").is_none());
+
+        let suggest = TextComponent::text("name")
+            .click_event(ClickEvent::SuggestCommand {
+                command: Cow::Borrowed("/tell name"),
+            })
+            .0
+            .to_nbt_compound_for_version(&JavaMinecraftVersion::V_1_21_4);
+        let click = suggest.get_compound("clickEvent").unwrap();
+        assert_eq!(click.get_string("command"), None);
+        assert_eq!(click.get_string("value"), Some("/tell name"));
+    }
+
+    #[test]
+    fn click_event_uses_modern_keys_from_1_21_5() {
+        let compound = TextComponent::text("link")
+            .click_event(ClickEvent::OpenUrl {
+                url: Cow::Borrowed("https://example.com"),
+            })
+            .0
+            .to_nbt_compound_for_version(&JavaMinecraftVersion::V_1_21_5);
+        let click = compound.get_compound("click_event").unwrap();
+        assert_eq!(click.get_string("url"), Some("https://example.com"));
+        assert!(click.get_string("value").is_none());
     }
 }
