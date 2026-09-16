@@ -455,16 +455,27 @@ impl PluginManager {
                                         .map(|p| p.metadata.name.clone())
                                 };
 
-                                if let Some(name) = plugin_name {
+                                let unload_failed = if let Some(name) = plugin_name {
                                     info!("Hot-reloading plugin: {}", name);
-                                    let _ = manager.unload_plugin(&name).await;
-                                }
+                                    if let Err(e) = manager.unload_plugin(&name).await {
+                                        error!(
+                                            "Failed to unload plugin {} for hot-reload, not reloading: {}",
+                                            name, e
+                                        );
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                } else {
+                                    false
+                                };
 
-                                // For now, we just try to load it. If it's already loaded,
-                                // the loader might handle it or we might get a duplicate.
-                                // Most WASM loaders will just create a new instance.
-                                if let Err(e) =
-                                    manager.start_loading_plugin(&server_clone, &path).await
+                                // Skip the reload when unload failed
+                                // the loader may still hold the old resources, loading would create
+                                // a duplicate instead of a replacement.
+                                if !unload_failed
+                                    && let Err(e) =
+                                        manager.start_loading_plugin(&server_clone, &path).await
                                 {
                                     error!("Failed to hot-reload plugin {:?}: {}", path, e);
                                 }
