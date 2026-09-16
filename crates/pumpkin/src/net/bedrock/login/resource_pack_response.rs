@@ -48,7 +48,7 @@ impl BedrockClient {
                         toggles: Vec::new(),
                         experiments_ever_toggled: false,
                     },
-                    include_editor_packs: false,
+                    use_vanilla_editor_packs: false,
                 })
                 .await;
             }

@@ -15,7 +15,7 @@ use pumpkin_protocol::bedrock::{
     server::{login::SLogin, request_network_settings::SRequestNetworkSettings},
 };
 use pumpkin_protocol::bedrock::{
-    client::{resource_pack_stack::PackInstanceId, resource_packs_info::PackInfoData},
+    client::{resource_pack_stack::PackEntry, resource_packs_info::PackInfoData},
     server::{login::ClientData, resource_pack_client_response::SResourcePackClientResponse},
 };
 use pumpkin_util::version::BedrockMinecraftVersion;
