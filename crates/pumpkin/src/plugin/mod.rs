@@ -8,7 +8,10 @@ use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     pin::Pin,
-    sync::{Arc, RwLock as SyncRwLock, atomic::AtomicBool},
+    sync::{
+        Arc, RwLock as SyncRwLock,
+        atomic::{AtomicBool, AtomicU64},
+    },
     thread::ThreadId,
     time::Duration,
 };
@@ -264,6 +267,7 @@ fn is_plugin_file(path: &Path) -> bool {
 /// Core plugin management system
 pub struct PluginManager {
     plugins: SyncRwLock<Vec<LoadedPlugin>>,
+    next_plugin_token: AtomicU64,
     loaders: RwLock<Vec<Arc<dyn PluginLoader>>>,
     handlers: Arc<ArcSwap<HandlerMap>>,
     unloaded_files: RwLock<HashSet<PathBuf>>,
@@ -287,6 +291,7 @@ pub struct PluginManager {
 /// OS specific issues
 /// - Windows: Plugin cannot be unloaded, it can be only active or not
 struct LoadedPlugin {
+    token: u64,
     metadata: PluginMetadata,
     instance: Option<Arc<dyn Plugin>>,
     loader: Arc<dyn PluginLoader>,
@@ -321,6 +326,7 @@ impl PluginManager {
     pub fn new(verify_plugin_signatures: bool) -> Self {
         Self {
             plugins: SyncRwLock::new(Vec::new()),
+            next_plugin_token: AtomicU64::new(0),
             loaders: RwLock::new(vec![
                 Arc::new(NativePluginLoader),
                 Arc::new(WasmPluginLoader::new(verify_plugin_signatures)),
@@ -689,6 +695,9 @@ impl PluginManager {
 
         // Claiming the name and inserting the record: two loads of
         // the same plugin would otherwise both initialize and register handlers
+        let token = self
+            .next_plugin_token
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let reserved = {
             let mut plugins = self
                 .plugins
@@ -698,6 +707,7 @@ impl PluginManager {
                 Err(loader_data)
             } else {
                 plugins.push(LoadedPlugin {
+                    token,
                     metadata: metadata.clone(),
                     instance: None, // Will be set after successful initialization
                     loader: loader.clone(),
@@ -706,20 +716,17 @@ impl PluginManager {
                     context: context.clone(),
                     path,
                 });
-                Ok(plugins.len() - 1)
+                Ok(())
             }
         };
 
-        let plugin_index = match reserved {
-            Ok(index) => index,
-            Err(loader_data) => {
-                // Nothing owns the runtime this loader just built, so release it again
-                loader.unload(loader_data).await.ok();
-                return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
-                    format!("Plugin \"{}\" is already loaded", metadata.name),
-                )));
-            }
-        };
+        if let Err(loader_data) = reserved {
+            // Nothing owns the runtime the loader built -> release it again
+            loader.unload(loader_data).await.ok();
+            return Err(ManagerError::LoaderError(LoaderError::RuntimeError(
+                format!("Plugin \"{}\" is already loaded", metadata.name),
+            )));
+        }
 
         // Mark plugin as loading, only now that this load owns the name
         self.plugin_states
@@ -738,16 +745,30 @@ impl PluginManager {
             match instance.on_load(context.clone()).await {
                 Ok(()) => {
                     // Update plugin state to loaded
-                    {
+                    let still_reserved = {
                         let mut plugins = self_ref_clone
                             .plugins
                             .write()
                             .unwrap_or_else(std::sync::PoisonError::into_inner);
-                        if let Some(plugin) = plugins.get_mut(plugin_index) {
+                        if let Some(plugin) = plugins.iter_mut().find(|p| p.token == token) {
                             plugin.instance = Some(instance);
                             plugin.is_active = true;
+                            true
+                        } else {
+                            false
                         }
+                    };
+
+                    // Unloaded while it was still initializing, so this load owns nothing
+                    // any more
+                    if !still_reserved {
+                        warn!(
+                            "Plugin {plugin_name} was unloaded while it was initializing, dropping the load"
+                        );
+                        state_notify.notify_waiters();
+                        return;
                     }
+
                     self_ref_clone
                         .plugin_states
                         .write()
@@ -772,6 +793,13 @@ impl PluginManager {
                 Err(e) => {
                     // Handle initialization failure
                     let error_msg = format!("Initialization failed: {e}");
+
+                    if !self_ref_clone.holds_token(token) {
+                        error!("Failed to initialize plugin {plugin_name}: {error_msg}");
+                        state_notify.notify_waiters();
+                        return;
+                    }
+
                     // on_load may have registered handlers, commands or permissions before
                     // failing partway through, leaving them would block every future load
                     self_ref_clone.unregister_handlers(&plugin_name);
@@ -785,11 +813,10 @@ impl PluginManager {
                             .plugins
                             .write()
                             .unwrap_or_else(std::sync::PoisonError::into_inner);
-                        if let Some(plugin) = plugins.get_mut(plugin_index) {
-                            plugin.loader_data.take()
-                        } else {
-                            None
-                        }
+                        plugins
+                            .iter_mut()
+                            .find(|p| p.token == token)
+                            .and_then(|plugin| plugin.loader_data.take())
                     };
 
                     // Try to unload the plugin data
@@ -797,15 +824,25 @@ impl PluginManager {
                         loader_clone.unload(data).await.ok();
                     }
 
-                    {
+                    let removed = {
                         let mut plugins = self_ref_clone
                             .plugins
                             .write()
                             .unwrap_or_else(std::sync::PoisonError::into_inner);
-                        if plugin_index < plugins.len() {
-                            plugins.remove(plugin_index);
-                        }
+                        plugins
+                            .iter()
+                            .position(|p| p.token == token)
+                            .map(|index| plugins.remove(index))
+                            .is_some()
                     };
+
+                    // Unloaded during on_unload
+                    if !removed {
+                        error!("Failed to initialize plugin {plugin_name}: {error_msg}");
+                        state_notify.notify_waiters();
+                        return;
+                    }
+
                     self_ref_clone
                         .plugin_states
                         .write()
@@ -1248,6 +1285,15 @@ impl PluginManager {
             .filter(|p| p.is_active && p.instance.is_some())
             .map(|p| p.metadata.clone())
             .collect()
+    }
+
+    /// Whether the record reserved under this token is still there
+    fn holds_token(&self, token: u64) -> bool {
+        let plugins = self
+            .plugins
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        plugins.iter().any(|p| p.token == token)
     }
 
     /// Checks if plugin loaded
