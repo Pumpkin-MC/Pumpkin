@@ -4,12 +4,16 @@ use crate::{
     world::World,
 };
 use pumpkin_data::entity::EntityStatus;
+use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
+use pumpkin_protocol::codec::item_stack_seralizer::ItemStackSerializer;
 use pumpkin_protocol::codec::optional_int::OptionalInt;
 use pumpkin_util::{
     math::vector3::Vector3,
     random::{RandomGenerator, RandomImpl, get_seed, xoroshiro128::Xoroshiro},
 };
+use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 const GRAVITY: f64 = 0.0;
@@ -18,6 +22,9 @@ pub struct FireworkRocketEntity {
     entity: ThrownItemEntity,
     life: AtomicU32,
     life_time: AtomicU32,
+    // The client renders the rocket's model and particle trail from this - without it the entity
+    // exists (and, when boosting, moves the player correctly) but is completely invisible.
+    item_stack: RwLock<ItemStack>,
 }
 
 impl FireworkRocketEntity {
@@ -40,10 +47,17 @@ impl FireworkRocketEntity {
             life: 0.into(),
             life_time: (10 + random.next_bounded_i32(6) as u32 + random.next_bounded_i32(7) as u32)
                 .into(),
+            item_stack: RwLock::new(ItemStack::new(1, &Item::FIREWORK_ROCKET)),
         }
     }
 
     pub fn new_shot(entity: Entity, shooter: &Entity) -> Self {
+        Self::new_shot_with_item(entity, shooter, ItemStack::new(1, &Item::FIREWORK_ROCKET))
+    }
+
+    /// Same as [`Self::new_shot`], but rendering the specific item stack that was used to fire
+    /// it (so a rocket with custom fireworks data shows the right explosion trail).
+    pub fn new_shot_with_item(entity: Entity, shooter: &Entity, item_stack: ItemStack) -> Self {
         let mut random = RandomGenerator::Xoroshiro(Xoroshiro::from_seed(get_seed()));
 
         let thrown = ThrownItemEntity::new(entity, shooter, GRAVITY);
@@ -58,6 +72,7 @@ impl FireworkRocketEntity {
             life: 0.into(),
             life_time: (10 + random.next_bounded_i32(6) as u32 + random.next_bounded_i32(7) as u32)
                 .into(),
+            item_stack: RwLock::new(item_stack),
         };
 
         rocket.entity.entity.set_synced_data(
@@ -92,6 +107,18 @@ impl FireworkRocketEntity {
 }
 
 impl EntityBase for FireworkRocketEntity {
+    fn init_data_tracker(&self) {
+        let stack = self
+            .item_stack
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        self.get_entity().set_synced_data(
+            pumpkin_data::tracked_data::firework_rocket::ID_FIREWORKS_ITEM,
+            ItemStackSerializer::from(stack.clone()),
+        );
+    }
+
     fn get_owner_id(&self) -> Option<i32> {
         self.entity.owner_id
     }
