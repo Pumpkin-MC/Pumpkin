@@ -72,12 +72,7 @@ impl HostDatapackManager for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<WitDatapackManager>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<crate::plugin::loader::wasm::wasm_host::state::DatapackManagerResource>(
-            Resource::new_own(rep.rep()),
-        );
-        Ok(())
+        self.drop(rep)
     }
 }
 

@@ -2,9 +2,8 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use wasmtime::component::Resource;
 
-use crate::entity::player::Player;
 use crate::plugin::loader::wasm::wasm_host::{
-    state::{InventoryProvider, InventoryResource, PlayerInventoryResource, PluginHostState},
+    state::{InventoryProvider, PluginHostState},
     wit::v0_1::pumpkin::plugin::{
         common::Hand as WitHand,
         inventory::{
@@ -28,33 +27,9 @@ const fn from_wasm_hand(hand: WitHand) -> pumpkin_util::Hand {
 
 impl InventoryHost for PluginHostState {}
 
-impl PluginHostState {
-    fn get_inventory_provider(
-        &self,
-        res: &Resource<WitInventory>,
-    ) -> wasmtime::Result<InventoryProvider> {
-        let r = self
-            .resource_table
-            .get::<InventoryResource>(&Resource::new_own(res.rep()))
-            .map_err(wasmtime::Error::from)?;
-        Ok(r.provider.clone())
-    }
-
-    fn get_player_inventory_player(
-        &self,
-        res: &Resource<WitPlayerInventory>,
-    ) -> wasmtime::Result<Arc<Player>> {
-        let r = self
-            .resource_table
-            .get::<PlayerInventoryResource>(&Resource::new_own(res.rep()))
-            .map_err(wasmtime::Error::from)?;
-        Ok(r.provider.clone())
-    }
-}
-
 impl HostInventory for PluginHostState {
     async fn get_size(&mut self, res: Resource<WitInventory>) -> wasmtime::Result<u32> {
-        let provider = self.get_inventory_provider(&res)?;
+        let provider = self.get(&res)?;
         let size = match provider {
             InventoryProvider::Generic(inv) => inv.size() as u32,
             InventoryProvider::PlayerMain(_) => 36,
@@ -64,7 +39,7 @@ impl HostInventory for PluginHostState {
     }
 
     async fn is_empty(&mut self, res: Resource<WitInventory>) -> wasmtime::Result<bool> {
-        let provider = self.get_inventory_provider(&res)?;
+        let provider = self.get(&res)?;
         let empty = match provider {
             InventoryProvider::Generic(inv) => inv.is_empty(),
             InventoryProvider::PlayerMain(player) => {
@@ -84,7 +59,7 @@ impl HostInventory for PluginHostState {
         res: Resource<WitInventory>,
         slot: u32,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let provider = self.get_inventory_provider(&res)?;
+        let provider = self.get(&res)?;
         let stack = match provider {
             InventoryProvider::Generic(inv) => {
                 let s = inv.get_stack(slot as usize);
@@ -109,7 +84,7 @@ impl HostInventory for PluginHostState {
         };
 
         if let Some(stack) = stack {
-            Ok(Some(self.add_item_stack(Arc::new(Mutex::new(stack)))?))
+            Ok(Some(self.add(Arc::new(Mutex::new(stack)))?))
         } else {
             Ok(None)
         }
@@ -122,12 +97,12 @@ impl HostInventory for PluginHostState {
         item: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
         let stack = if let Some(stack_res) = item {
-            self.get_item_stack(&stack_res)?.lock().await.clone()
+            self.take(stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
 
-        let provider = self.get_inventory_provider(&res)?;
+        let provider = self.get(&res)?;
         match provider {
             InventoryProvider::Generic(inv) => {
                 inv.set_stack(slot as usize, stack);
@@ -156,7 +131,7 @@ impl HostInventory for PluginHostState {
         res: Resource<WitInventory>,
         slot: u32,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let provider = self.get_inventory_provider(&res)?;
+        let provider = self.get(&res)?;
         let old_stack = match provider {
             InventoryProvider::Generic(inv) => {
                 let s = inv.remove_stack(slot as usize);
@@ -194,14 +169,14 @@ impl HostInventory for PluginHostState {
         };
 
         if let Some(stack) = old_stack {
-            Ok(Some(self.add_item_stack(Arc::new(Mutex::new(stack)))?))
+            Ok(Some(self.add(Arc::new(Mutex::new(stack)))?))
         } else {
             Ok(None)
         }
     }
 
     async fn clear(&mut self, res: Resource<WitInventory>) -> wasmtime::Result<()> {
-        let provider = self.get_inventory_provider(&res)?;
+        let provider = self.get(&res)?;
         match provider {
             InventoryProvider::Generic(inv) => {
                 inv.clear();
@@ -225,27 +200,29 @@ impl HostInventory for PluginHostState {
         Ok(())
     }
 
+    // Fixme: this method causes an unnecessary amount of resource table lookups
     async fn get_all_items(
         &mut self,
         res: Resource<WitInventory>,
     ) -> wasmtime::Result<Vec<Option<Resource<WitHostItemStack>>>> {
-        let size = self.get_size(Resource::new_own(res.rep())).await?;
+        let size = self.get_size(Resource::new_borrow(res.rep())).await?;
         let mut items = Vec::with_capacity(size as usize);
         for slot in 0..size {
-            let item = self.get_item(Resource::new_own(res.rep()), slot).await?;
+            let item = self.get_item(Resource::new_borrow(res.rep()), slot).await?;
             items.push(item);
         }
         Ok(items)
     }
 
+    // Fixme: this method causes an unnecessary amount of resource table lookups
     async fn set_all_items(
         &mut self,
         res: Resource<WitInventory>,
         items: Vec<Option<Resource<WitHostItemStack>>>,
     ) -> wasmtime::Result<()> {
-        let size = self.get_size(Resource::new_own(res.rep())).await?;
+        let size = self.get_size(Resource::new_borrow(res.rep())).await?;
         for (slot, item) in items.into_iter().take(size as usize).enumerate() {
-            self.set_item(Resource::new_own(res.rep()), slot as u32, item)
+            self.set_item(Resource::new_borrow(res.rep()), slot as u32, item)
                 .await?;
         }
         Ok(())
@@ -256,7 +233,7 @@ impl HostInventory for PluginHostState {
         res: Resource<WitInventory>,
         item_id: String,
     ) -> wasmtime::Result<u32> {
-        let provider = self.get_inventory_provider(&res)?;
+        let provider = self.get(&res)?;
         let mut total = 0u32;
         let is_matching =
             |key: &str| key == item_id || key.strip_prefix("minecraft:") == Some(&item_id);
@@ -301,10 +278,7 @@ impl HostInventory for PluginHostState {
     }
 
     async fn drop(&mut self, rep: Resource<WitInventory>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<InventoryResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
 
@@ -313,8 +287,8 @@ impl HostPlayerInventory for PluginHostState {
         &mut self,
         res: Resource<WitPlayerInventory>,
     ) -> wasmtime::Result<Resource<WitInventory>> {
-        let player = self.get_player_inventory_player(&res)?;
-        self.add_inventory(InventoryProvider::PlayerMain(player))
+        let player = self.get(&res)?.clone();
+        self.add(InventoryProvider::PlayerMain(player))
     }
 
     async fn get_item_in_hand(
@@ -322,13 +296,13 @@ impl HostPlayerInventory for PluginHostState {
         res: Resource<WitPlayerInventory>,
         hand: WitHand,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let player = self.get_player_inventory_player(&res)?;
+        let player = self.get(&res)?;
         let hand = from_wasm_hand(hand);
         let stack = player.inventory().get_stack_in_hand(hand);
         if stack.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(self.add_item_stack(Arc::new(Mutex::new(stack)))?))
+            Ok(Some(self.add(Arc::new(Mutex::new(stack)))?))
         }
     }
 
@@ -338,12 +312,12 @@ impl HostPlayerInventory for PluginHostState {
         hand: WitHand,
         item: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
-        let player = self.get_player_inventory_player(&res)?;
         let stack = if let Some(stack_res) = item {
-            self.get_item_stack(&stack_res)?.lock().await.clone()
+            self.take(stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
+        let player = self.get(&res)?;
 
         let hand = from_wasm_hand(hand);
         let slot = match hand {
@@ -365,7 +339,7 @@ impl HostPlayerInventory for PluginHostState {
         &mut self,
         res: Resource<WitPlayerInventory>,
     ) -> wasmtime::Result<u8> {
-        let player = self.get_player_inventory_player(&res)?;
+        let player = self.get(&res)?;
         Ok(player.inventory().get_selected_slot())
     }
 
@@ -374,7 +348,7 @@ impl HostPlayerInventory for PluginHostState {
         res: Resource<WitPlayerInventory>,
         slot: u8,
     ) -> wasmtime::Result<()> {
-        let player = self.get_player_inventory_player(&res)?;
+        let player = self.get(&res)?;
         if slot < 9 {
             player.inventory().set_selected_slot(slot);
         }
@@ -385,12 +359,12 @@ impl HostPlayerInventory for PluginHostState {
         &mut self,
         res: Resource<WitPlayerInventory>,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let player = self.get_player_inventory_player(&res)?;
+        let player = self.get(&res)?;
         let stack = player.inventory().get_slot(39);
         if stack.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(self.add_item_stack(Arc::new(Mutex::new(stack)))?))
+            Ok(Some(self.add(Arc::new(Mutex::new(stack)))?))
         }
     }
 
@@ -399,12 +373,12 @@ impl HostPlayerInventory for PluginHostState {
         res: Resource<WitPlayerInventory>,
         item: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
-        let player = self.get_player_inventory_player(&res)?;
         let stack = if let Some(stack_res) = item {
-            self.get_item_stack(&stack_res)?.lock().await.clone()
+            self.take(stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
+        let player = self.get(&res)?;
         player.inventory().set_slot(39, stack.clone());
         let stack_serializer = ItemStackSerializer::from(stack);
         let packet = CSetContainerSlot::new(0, 0, 5, &stack_serializer);
@@ -416,12 +390,12 @@ impl HostPlayerInventory for PluginHostState {
         &mut self,
         res: Resource<WitPlayerInventory>,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let player = self.get_player_inventory_player(&res)?;
+        let player = self.get(&res)?;
         let stack = player.inventory().get_slot(38);
         if stack.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(self.add_item_stack(Arc::new(Mutex::new(stack)))?))
+            Ok(Some(self.add(Arc::new(Mutex::new(stack)))?))
         }
     }
 
@@ -430,12 +404,12 @@ impl HostPlayerInventory for PluginHostState {
         res: Resource<WitPlayerInventory>,
         item: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
-        let player = self.get_player_inventory_player(&res)?;
         let stack = if let Some(stack_res) = item {
-            self.get_item_stack(&stack_res)?.lock().await.clone()
+            self.take(stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
+        let player = self.get(&res)?;
         player.inventory().set_slot(38, stack.clone());
         let stack_serializer = ItemStackSerializer::from(stack);
         let packet = CSetContainerSlot::new(0, 0, 6, &stack_serializer);
@@ -447,12 +421,12 @@ impl HostPlayerInventory for PluginHostState {
         &mut self,
         res: Resource<WitPlayerInventory>,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let player = self.get_player_inventory_player(&res)?;
+        let player = self.get(&res)?;
         let stack = player.inventory().get_slot(37);
         if stack.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(self.add_item_stack(Arc::new(Mutex::new(stack)))?))
+            Ok(Some(self.add(Arc::new(Mutex::new(stack)))?))
         }
     }
 
@@ -461,12 +435,12 @@ impl HostPlayerInventory for PluginHostState {
         res: Resource<WitPlayerInventory>,
         item: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
-        let player = self.get_player_inventory_player(&res)?;
         let stack = if let Some(stack_res) = item {
-            self.get_item_stack(&stack_res)?.lock().await.clone()
+            self.take(stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
+        let player = self.get(&res)?;
         player.inventory().set_slot(37, stack.clone());
         let stack_serializer = ItemStackSerializer::from(stack);
         let packet = CSetContainerSlot::new(0, 0, 7, &stack_serializer);
@@ -478,12 +452,12 @@ impl HostPlayerInventory for PluginHostState {
         &mut self,
         res: Resource<WitPlayerInventory>,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let player = self.get_player_inventory_player(&res)?;
+        let player = self.get(&res)?;
         let stack = player.inventory().get_slot(36);
         if stack.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(self.add_item_stack(Arc::new(Mutex::new(stack)))?))
+            Ok(Some(self.add(Arc::new(Mutex::new(stack)))?))
         }
     }
 
@@ -492,12 +466,12 @@ impl HostPlayerInventory for PluginHostState {
         res: Resource<WitPlayerInventory>,
         item: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
-        let player = self.get_player_inventory_player(&res)?;
         let stack = if let Some(stack_res) = item {
-            self.get_item_stack(&stack_res)?.lock().await.clone()
+            self.take(stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
+        let player = self.get(&res)?;
         player.inventory().set_slot(36, stack.clone());
         let stack_serializer = ItemStackSerializer::from(stack);
         let packet = CSetContainerSlot::new(0, 0, 8, &stack_serializer);
@@ -509,12 +483,12 @@ impl HostPlayerInventory for PluginHostState {
         &mut self,
         res: Resource<WitPlayerInventory>,
     ) -> wasmtime::Result<Option<Resource<WitHostItemStack>>> {
-        let player = self.get_player_inventory_player(&res)?;
+        let player = self.get(&res)?;
         let stack = player.inventory().get_slot(40);
         if stack.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(self.add_item_stack(Arc::new(Mutex::new(stack)))?))
+            Ok(Some(self.add(Arc::new(Mutex::new(stack)))?))
         }
     }
 
@@ -523,12 +497,12 @@ impl HostPlayerInventory for PluginHostState {
         res: Resource<WitPlayerInventory>,
         item: Option<Resource<WitHostItemStack>>,
     ) -> wasmtime::Result<()> {
-        let player = self.get_player_inventory_player(&res)?;
         let stack = if let Some(stack_res) = item {
-            self.get_item_stack(&stack_res)?.lock().await.clone()
+            self.take(stack_res)?.lock().await.clone()
         } else {
             pumpkin_data::item_stack::ItemStack::EMPTY.clone()
         };
+        let player = self.get(&res)?;
         player.inventory().set_slot(40, stack.clone());
         let stack_serializer = ItemStackSerializer::from(stack);
         let packet = CSetContainerSlot::new(0, 0, 45, &stack_serializer);
@@ -536,13 +510,16 @@ impl HostPlayerInventory for PluginHostState {
         Ok(())
     }
 
+    // Fixme: this method causes an unnecessary amount of resource table lookups
     async fn clear_armor(&mut self, res: Resource<WitPlayerInventory>) -> wasmtime::Result<()> {
-        self.set_helmet(Resource::new_own(res.rep()), None).await?;
-        self.set_chestplate(Resource::new_own(res.rep()), None)
+        self.set_helmet(Resource::new_borrow(res.rep()), None)
             .await?;
-        self.set_leggings(Resource::new_own(res.rep()), None)
+        self.set_chestplate(Resource::new_borrow(res.rep()), None)
             .await?;
-        self.set_boots(Resource::new_own(res.rep()), None).await?;
+        self.set_leggings(Resource::new_borrow(res.rep()), None)
+            .await?;
+        self.set_boots(Resource::new_borrow(res.rep()), None)
+            .await?;
         Ok(())
     }
 
@@ -551,18 +528,16 @@ impl HostPlayerInventory for PluginHostState {
         self.clear(inv).await
     }
 
+    // Fixme: this method causes an unnecessary amount of resource table lookups
     async fn clear_all(&mut self, res: Resource<WitPlayerInventory>) -> wasmtime::Result<()> {
-        self.clear_main(Resource::new_own(res.rep())).await?;
-        self.clear_armor(Resource::new_own(res.rep())).await?;
-        self.set_off_hand(Resource::new_own(res.rep()), None)
+        self.clear_main(Resource::new_borrow(res.rep())).await?;
+        self.clear_armor(Resource::new_borrow(res.rep())).await?;
+        self.set_off_hand(Resource::new_borrow(res.rep()), None)
             .await?;
         Ok(())
     }
 
     async fn drop(&mut self, rep: Resource<WitPlayerInventory>) -> wasmtime::Result<()> {
-        let _ = self
-            .resource_table
-            .delete::<PlayerInventoryResource>(Resource::new_own(rep.rep()));
-        Ok(())
+        self.drop(rep)
     }
 }
