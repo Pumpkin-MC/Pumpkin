@@ -60,7 +60,7 @@ pub use explosion::{
     ExplosionInteraction, SimpleExplosionDamageCalculator,
 };
 use pumpkin_config::BasicConfiguration;
-use pumpkin_data::block_properties::{blocks_movement, is_air};
+use pumpkin_data::block_properties::{BLOCK_ENTITY_TYPES, blocks_movement, is_air};
 use pumpkin_data::block_rotation::{Mirror, Rotation};
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::dimension::Dimension;
@@ -218,6 +218,57 @@ fn bedrock_chest_block_actor(state_id: BlockStateId, position: BlockPos) -> Opti
     }
 
     Some(nbt)
+}
+
+fn remove_pending_block_entity(chunk: &ChunkData, position: &BlockPos) -> bool {
+    let removed = chunk
+        .pending_block_entities
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .remove(position)
+        .is_some();
+    if removed {
+        chunk.mark_dirty(true);
+    }
+    removed
+}
+
+fn remove_invalid_pending_block_entities(chunk: &ChunkData) -> Vec<BlockPos> {
+    let mut pending = chunk
+        .pending_block_entities
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let original_len = pending.len();
+    pending.retain(|position, nbt| {
+        let relative = position.chunk_relative_position();
+        let state = chunk
+            .section
+            .get_block_absolute_y(relative.x as usize, relative.y, relative.z as usize)
+            .map(BlockState::from_id);
+        let expected_id = state
+            .and_then(|state| BLOCK_ENTITY_TYPES.get(state.block_entity_type as usize))
+            .copied();
+        let actual_id = nbt
+            .get_string("id")
+            .and_then(|id| id.strip_prefix("minecraft:"));
+        let valid = matches!((expected_id, actual_id), (Some(expected), Some(actual)) if expected == actual);
+        if !valid {
+            debug!(
+                ?position,
+                ?expected_id,
+                block_entity_id = ?nbt.get_string("id"),
+                "Dropping pending block entity that does not match its block"
+            );
+        }
+        valid
+    });
+    let removed = original_len != pending.len();
+    let positions = pending.keys().copied().collect();
+    drop(pending);
+    if removed {
+        chunk.mark_dirty(true);
+    }
+    positions
 }
 
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -5398,11 +5449,10 @@ impl World {
         let is_new_block = old_block != new_block;
         let block_moved = flags.contains(BlockFlags::MOVED);
 
-        if is_new_block
-            && old_block.default_state.block_entity_type != u16::MAX
-            && let Some(entity) = self.get_block_entity(position)
-        {
-            if !flags.contains(BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK) {
+        if is_new_block && old_block.default_state.block_entity_type != u16::MAX {
+            if let Some(entity) = self.get_block_entity(position)
+                && !flags.contains(BlockFlags::SKIP_BLOCK_ENTITY_REPLACED_CALLBACK)
+            {
                 entity.on_block_replaced(self, position);
             }
             self.remove_block_entity(position);
@@ -6553,20 +6603,27 @@ impl World {
 
     pub fn remove_block_entity(&self, block_pos: &BlockPos) {
         let chunk_pos = block_pos.chunk_position();
-        let removed =
+        let removed_live =
             self.block_entities
                 .get_mut(&chunk_pos)
                 .is_some_and(|mut chunk_block_entities| {
                     chunk_block_entities.remove(block_pos).is_some()
                 });
-        if removed {
-            self.custom_block_entity_data.remove(block_pos);
+        let removed_pending = self
+            .level
+            .read_chunk_sync(&chunk_pos, |chunk| {
+                let removed_pending = remove_pending_block_entity(chunk, block_pos);
+                if removed_live {
+                    chunk.mark_dirty(true);
+                }
+                removed_pending
+            })
+            .unwrap_or(false);
+        self.custom_block_entity_data.remove(block_pos);
+        if removed_live || removed_pending {
             // Drop the chunk's map once its last block entity is gone.
             self.block_entities
                 .remove_if(&chunk_pos, |_, entities| entities.is_empty());
-            self.level.read_chunk_sync(&chunk_pos, |chunk| {
-                chunk.mark_dirty(true);
-            });
         }
     }
 
@@ -6574,13 +6631,7 @@ impl World {
         let positions: Vec<BlockPos> = self
             .level
             .read_chunk_sync(&chunk_pos, |chunk| {
-                chunk
-                    .pending_block_entities
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .keys()
-                    .copied()
-                    .collect()
+                remove_invalid_pending_block_entities(chunk)
             })
             .unwrap_or_default();
         for pos in positions {
@@ -7678,9 +7729,82 @@ mod tests {
         block_properties::{ChestLikeProperties, ChestType, HorizontalFacing, WaterLikeProperties},
         fluid::Fluid,
     };
+    use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_util::math::position::BlockPos;
+    use pumpkin_world::chunk::{ChunkData, io::Dirtiable};
 
-    use super::{World, bedrock_block_breaking_rate, bedrock_chest_block_actor};
+    use super::{
+        World, bedrock_block_breaking_rate, bedrock_chest_block_actor,
+        remove_invalid_pending_block_entities, remove_pending_block_entity,
+    };
+
+    fn block_entity_nbt(id: &str, position: BlockPos) -> NbtCompound {
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("id", id.to_string());
+        nbt.put_int("x", position.0.x);
+        nbt.put_int("y", position.0.y);
+        nbt.put_int("z", position.0.z);
+        nbt
+    }
+
+    #[test]
+    fn removing_block_entity_removes_pending_chunk_nbt() {
+        let chunk = ChunkData::empty(0, 0);
+        let position = BlockPos::new(1, 64, 1);
+        chunk
+            .section
+            .set_block_absolute_y(1, 64, 1, Block::CHEST.default_state.id);
+        chunk
+            .pending_block_entities
+            .lock()
+            .unwrap()
+            .insert(position, block_entity_nbt("minecraft:chest", position));
+
+        chunk
+            .section
+            .set_block_absolute_y(1, 64, 1, Block::STONE.default_state.id);
+        assert!(remove_pending_block_entity(&chunk, &position));
+        assert!(chunk.pending_block_entities.lock().unwrap().is_empty());
+        assert!(chunk.is_dirty());
+    }
+
+    #[test]
+    fn migration_drops_pending_block_entities_that_do_not_match_the_block() {
+        let chunk = ChunkData::empty(0, 0);
+        let valid = BlockPos::new(1, 64, 1);
+        let wrong_type = BlockPos::new(2, 64, 2);
+        let plain_block = BlockPos::new(3, 64, 3);
+        for position in [valid, wrong_type] {
+            chunk.section.set_block_absolute_y(
+                position.0.x as usize,
+                position.0.y,
+                position.0.z as usize,
+                Block::CHEST.default_state.id,
+            );
+        }
+        chunk.section.set_block_absolute_y(
+            plain_block.0.x as usize,
+            plain_block.0.y,
+            plain_block.0.z as usize,
+            Block::IRON_BLOCK.default_state.id,
+        );
+        let mut pending = chunk.pending_block_entities.lock().unwrap();
+        pending.insert(valid, block_entity_nbt("minecraft:chest", valid));
+        pending.insert(wrong_type, block_entity_nbt("minecraft:beacon", wrong_type));
+        pending.insert(
+            plain_block,
+            block_entity_nbt("minecraft:beacon", plain_block),
+        );
+        drop(pending);
+
+        let positions = remove_invalid_pending_block_entities(&chunk);
+
+        assert_eq!(positions, [valid]);
+        let pending = chunk.pending_block_entities.lock().unwrap();
+        assert_eq!(pending.len(), 1);
+        assert!(pending.contains_key(&valid));
+        assert!(chunk.is_dirty());
+    }
 
     #[test]
     fn liquid_block_states_preserve_source_flow_and_falling_depths() {
