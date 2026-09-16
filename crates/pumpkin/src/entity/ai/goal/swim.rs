@@ -31,11 +31,13 @@ impl Goal for SwimGoal {
         Self::is_in_fluid(mob)
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         Self::is_in_fluid(mob)
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
+        // No jump control yet; the flag it would set is what the movement tick reads anyway. TODO:
+        // the navigation should also be told it can float.
         if mob.get_random().random::<f32>() < 0.8 {
             mob.get_mob_entity()
                 .living_entity
