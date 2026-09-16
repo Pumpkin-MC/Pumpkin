@@ -245,7 +245,7 @@ pub(crate) fn read_component_id(
 fn read_unprefixed_added_component(
     read: &mut impl NetworkReadExt,
     version: JavaMinecraftVersion,
-) -> Result<Option<(DataComponent, Box<dyn DataComponentImpl>)>, ReadingError> {
+) -> Result<Option<PatchEntry>, ReadingError> {
     let id_val = read.get_var_int()?.0;
     let Some(id) = map_component_id(id_val, version)? else {
         skip_unknown_26_3_component(id_val, read)?;
@@ -997,6 +997,15 @@ impl From<ItemStack> for ItemStackOptionalTemplateSerializer<'_> {
     }
 }
 
+impl From<Option<ItemStack>> for ItemStackOptionalTemplateSerializer<'_> {
+    fn from(item: Option<ItemStack>) -> Self {
+        item.map_or_else(
+            || ItemStackOptionalTemplateSerializer(Cow::Borrowed(ItemStack::EMPTY)),
+            ItemStackOptionalTemplateSerializer::from,
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1050,14 +1059,5 @@ mod tests {
         assert_eq!(stack.item.id, Item::DIAMOND_PICKAXE.id);
         assert_eq!(stack.get_damage(), 17);
         assert_eq!(stack.patch.len(), 1);
-    }
-}
-
-impl From<Option<ItemStack>> for ItemStackOptionalTemplateSerializer<'_> {
-    fn from(item: Option<ItemStack>) -> Self {
-        item.map_or_else(
-            || ItemStackOptionalTemplateSerializer(Cow::Borrowed(ItemStack::EMPTY)),
-            ItemStackOptionalTemplateSerializer::from,
-        )
     }
 }

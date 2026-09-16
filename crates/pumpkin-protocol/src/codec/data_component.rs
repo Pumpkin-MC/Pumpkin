@@ -1467,7 +1467,7 @@ impl DataComponentCodec<Self> for UseCooldownImpl {
     }
 }
 
-/// 26.3-only data component type IDs (protocol 777). Payloads match vanilla STREAM_CODECs.
+/// 26.3-only data component type IDs (protocol 777). Payloads match vanilla `StreamCodec`s.
 const V263_INTERACT_ANIMATION: i32 = 41;
 const V263_BLOCK_TRANSFORMER: i32 = 43;
 const V263_VILLAGER_FOOD: i32 = 44;
@@ -1506,7 +1506,7 @@ fn skip_holder_set(seq: &mut impl NetworkReadExt) -> Result<(), ReadingError> {
         let _ = seq.get_str()?;
         return Ok(());
     }
-    if count < 0 || count > MAX_HOLDERS {
+    if !(0..=MAX_HOLDERS).contains(&count) {
         return Err(ReadingError::Message("Invalid holder set size".into()));
     }
     for _ in 0..count {
@@ -1539,11 +1539,10 @@ pub(crate) fn skip_unknown_26_3_component(
             let _ = seq.get_var_int()?;
             Ok(())
         }
-        V263_BLOCK_TRANSFORMER | V263_PROVIDES_POTTERY_PATTERN | V263_CUSHION_COLOR => {
-            let _ = seq.get_var_int()?;
-            Ok(())
-        }
-        V263_VILLAGER_FOOD => {
+        V263_BLOCK_TRANSFORMER
+        | V263_PROVIDES_POTTERY_PATTERN
+        | V263_CUSHION_COLOR
+        | V263_VILLAGER_FOOD => {
             let _ = seq.get_var_int()?;
             Ok(())
         }
