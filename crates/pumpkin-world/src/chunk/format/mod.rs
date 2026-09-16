@@ -75,9 +75,7 @@ fn lowest_section_y(root_tag: &NbtCompound) -> Option<i32> {
     sections
         .iter()
         .filter_map(|tag| match tag {
-            pumpkin_nbt::tag::NbtTag::Compound(compound) => {
-                compound.get_byte("Y").map(i32::from)
-            }
+            pumpkin_nbt::tag::NbtTag::Compound(compound) => compound.get_byte("Y").map(i32::from),
             _ => None,
         })
         .min()
@@ -952,7 +950,6 @@ mod tests {
     #[test]
     fn chunk_without_y_pos_parses_from_the_lowest_section() {
         use crate::chunk::ChunkData;
-        use bytes::Bytes;
         use pumpkin_util::math::vector2::Vector2;
 
         let mut root = NbtCompound::new();
@@ -986,7 +983,7 @@ mod tests {
         root.put("sections", NbtTag::List(vec![NbtTag::Compound(section)]));
 
         let bytes = pumpkin_nbt::Nbt::new(String::new(), root).write();
-        let chunk = ChunkData::from_bytes(&Bytes::from(bytes), Vector2::new(0, 0))
+        let chunk = ChunkData::from_bytes(&bytes, Vector2::new(0, 0))
             .expect("chunk without yPos parses");
         let state = chunk
             .section
