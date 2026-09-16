@@ -23,6 +23,7 @@ jobs:
       affected_packages: ${{ steps.plan.outputs.affected_packages }}
       has_code: ${{ steps.plan.outputs.has_code }}
       run_full: ${{ steps.plan.outputs.run_full }}
+      should_check_wit: ${{ steps.plan.outputs.should_check_wit }}
       test_matrix: ${{ steps.plan.outputs.test_matrix }}
     steps:
       - uses: actions/checkout@v7
@@ -109,6 +110,8 @@ jobs:
       
   check_wit:
     name: Test `pumpkin-plugin-wit` against `wit-bindgen`
+    needs: prepare
+    if: needs.prepare.outputs.should_check_wit == 'true'
     runs-on: ubuntu-slim
     steps:
       - uses: actions/checkout@v7
@@ -120,7 +123,13 @@ jobs:
   test:
     name: Test (${{ matrix.name }})
     needs: [prepare, format, machete, clippy, check_wit]
-    if: needs.prepare.outputs.has_code == 'true'
+    if: >-
+      always() &&
+      needs.prepare.outputs.has_code == 'true' &&
+      needs.format.result == 'success' &&
+      needs.machete.result == 'success' &&
+      needs.clippy.result == 'success' &&
+      (needs.check_wit.result == 'success' || needs.check_wit.result == 'skipped')
     runs-on: ${{ matrix.os }} 
     strategy:
       fail-fast: false
@@ -151,7 +160,13 @@ jobs:
   test_android:
     name: Test on Android AArch64
     needs: [prepare, format, machete, clippy, check_wit]
-    if: needs.prepare.outputs.run_full == 'true'
+    if: >-
+      always() &&
+      needs.prepare.outputs.run_full == 'true' &&
+      needs.format.result == 'success' &&
+      needs.machete.result == 'success' &&
+      needs.clippy.result == 'success' &&
+      (needs.check_wit.result == 'success' || needs.check_wit.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

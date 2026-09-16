@@ -61,6 +61,8 @@ NON_RUST_FILES = {
     "SECURITY.md",
 }
 
+WIT_ROOT = Path("crates/pumpkin-plugin-wit")
+
 
 def run_command(command: list[str], *, capture: bool = False) -> str:
     result = subprocess.run(
@@ -142,6 +144,10 @@ def changed_paths(base: str, head: str) -> list[Path]:
     return [Path(line) for line in output.splitlines() if line]
 
 
+def has_wit_changes(changed: list[Path]) -> bool:
+    return any(path == WIT_ROOT or WIT_ROOT in path.parents for path in changed)
+
+
 def reverse_dependency_closure(
     directly_affected: set[str], reverse_dependencies: dict[str, set[str]]
 ) -> set[str]:
@@ -206,9 +212,11 @@ def plan(args: argparse.Namespace) -> None:
         selected, run_full, reason = select_packages(
             changed, package_roots, reverse_dependencies
         )
+        should_check_wit = has_wit_changes(changed)
     else:
         selected = all_packages
         run_full = True
+        should_check_wit = True
         reason = {
             "push": "Pushed to master",
             "workflow_dispatch": "Started manually",
@@ -220,6 +228,7 @@ def plan(args: argparse.Namespace) -> None:
         "affected_packages": json.dumps(selected, separators=(",", ":")),
         "has_code": str(has_code).lower(),
         "run_full": str(run_full).lower(),
+        "should_check_wit": str(should_check_wit).lower(),
         "test_matrix": json.dumps(test_matrix, separators=(",", ":")),
     }
     write_outputs(Path(args.output), outputs)
