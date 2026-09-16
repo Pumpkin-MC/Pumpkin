@@ -67,10 +67,12 @@ impl BlockBehaviour for NetherPortalBlock {
             return args.state_id;
         }
 
-        args.world.play_sound(
-            Sound::BlockGlassBreak,
+        args.world.play_sound_raw(
+            Sound::BlockGlassBreak as u16,
             SoundCategory::Blocks,
             &args.position.to_centered_f64(),
+            1.0,
+            0.8,
         );
         Block::AIR.default_state.id
     }
