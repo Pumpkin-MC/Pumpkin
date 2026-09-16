@@ -3202,6 +3202,15 @@ impl LivingEntity {
                 self.entity
                     .apply_knockback(knockback_after_resistance(0.4, resistance), dx, dz);
             }
+
+            // Vanilla parity: `LivingEntity.hurtServer` calls `markHurt()` for every hit
+            // that lands in full, which is the case `play_sound` encodes here (the other
+            // branch is the reduced hit the hurt cooldown produces). Vanilla's
+            // `ServerEntity` then sends the entity its own motion once, on that entity's
+            // next tick. This must stay in the same block as the knockback: the per-tick
+            // velocity flush no longer reaches the entity itself, so a knocked-back player
+            // would otherwise never be told about its own knockback.
+            self.entity.hurt_marked.store(true, Ordering::SeqCst);
         }
 
         // Vanilla parity: actuallyHurt
@@ -3382,6 +3391,12 @@ impl EntityBase for LivingEntity {
 
         // Coalesce velocity sends to once per tick.
         if self.entity.velocity_dirty.swap(false, Ordering::SeqCst) {
+            self.entity.send_velocity_to_watchers();
+        }
+        // Vanilla `ServerEntity.tick` ends with the one-shot `hurtMarked` sync, which is
+        // the only motion packet an entity ever receives about itself. Consumed here (and
+        // so after the whole tick, knockback recoil included) rather than at damage time.
+        if self.entity.hurt_marked.swap(false, Ordering::SeqCst) {
             self.entity.send_velocity();
         }
 
