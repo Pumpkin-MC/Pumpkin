@@ -1,0 +1,21 @@
+{
+  "assets": {
+    "angry": "minecraft:entity/wolf/wolf_woods_angry",
+    "tame": "minecraft:entity/wolf/wolf_woods_tame",
+    "wild": "minecraft:entity/wolf/wolf_woods"
+  },
+  "baby_assets": {
+    "angry": "minecraft:entity/wolf/wolf_woods_angry_baby",
+    "tame": "minecraft:entity/wolf/wolf_woods_tame_baby",
+    "wild": "minecraft:entity/wolf/wolf_woods_baby"
+  },
+  "spawn_conditions": [
+    {
+      "condition": {
+        "type": "minecraft:biome",
+        "biomes": "minecraft:forest"
+      },
+      "priority": 1
+    }
+  ]
+}
