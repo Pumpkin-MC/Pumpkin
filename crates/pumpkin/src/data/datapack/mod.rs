@@ -1016,12 +1016,16 @@ fn load_recipes_recursive(
         return;
     };
     for entry in entries.flatten() {
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
         let path = entry.path();
-        if path.is_dir() {
+        if file_type.is_dir() {
             load_recipes_recursive(namespace, base_dir, &path, all_recipes, count);
-        } else if path
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
+        } else if file_type.is_file()
+            && path
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
         {
             let Ok(relative_path) = path.strip_prefix(base_dir) else {
                 continue;
@@ -1204,5 +1208,89 @@ mod tests {
                 "minecraft:bundle"
             ]
         );
+    }
+
+    fn try_create_dir_symlink(
+        target: &std::path::Path,
+        link: &std::path::Path,
+    ) -> std::io::Result<()> {
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(target, link)
+        }
+        #[cfg(windows)]
+        {
+            std::os::windows::fs::symlink_dir(target, link)
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Unsupported,
+                "symlinks not supported",
+            ))
+        }
+    }
+
+    fn try_create_file_symlink(
+        target: &std::path::Path,
+        link: &std::path::Path,
+    ) -> std::io::Result<()> {
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(target, link)
+        }
+        #[cfg(windows)]
+        {
+            std::os::windows::fs::symlink_file(target, link)
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Unsupported,
+                "symlinks not supported",
+            ))
+        }
+    }
+
+    #[test]
+    fn load_recipes_ignores_symlinks_and_loads_regular_files() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let root = temp.path();
+        let recipes_dir = root.join("recipes");
+        let sub_dir = recipes_dir.join("sub");
+        std::fs::create_dir_all(&sub_dir).expect("create sub dir");
+
+        let valid_recipe_json = r#"{
+            "type": "minecraft:crafting_shapeless",
+            "ingredients": ["minecraft:stick"],
+            "result": {
+                "id": "minecraft:diamond",
+                "count": 1
+            }
+        }"#;
+
+        std::fs::write(sub_dir.join("valid.json"), valid_recipe_json).expect("write valid recipe");
+
+        let external_dir = root.join("external");
+        std::fs::create_dir_all(&external_dir).expect("create external dir");
+        std::fs::write(external_dir.join("sym.json"), valid_recipe_json).expect("write sym recipe");
+
+        let sym_dir = recipes_dir.join("sym_dir");
+        let sym_dir_created = try_create_dir_symlink(&external_dir, &sym_dir).is_ok();
+
+        let sym_file = recipes_dir.join("sym_file.json");
+        let sym_file_created =
+            try_create_file_symlink(&external_dir.join("sym.json"), &sym_file).is_ok();
+
+        let mut all_recipes = Vec::new();
+        let mut count = 0;
+        super::load_recipes_from_dir("test", &recipes_dir, &mut all_recipes, &mut count);
+
+        assert_eq!(count, 1);
+        assert_eq!(all_recipes.len(), 1);
+
+        if sym_dir_created || sym_file_created {
+            assert_eq!(count, 1);
+        }
     }
 }
