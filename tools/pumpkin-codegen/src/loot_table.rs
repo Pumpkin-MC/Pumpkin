@@ -320,7 +320,7 @@ struct CopyComponentsStruct {
     conditions: Vec<ConditionStruct>,
 }
 
-/// Decode an explicitly present filter and normalize registry names; null and malformed names are errors.
+/// Normalizes filter names and validates registry membership, rejecting null filters and asset-loading errors.
 fn deserialize_component_filter<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -328,9 +328,17 @@ where
     Vec::<String>::deserialize(deserializer)?
         .into_iter()
         .map(|name| {
-            Identifier::parse(&name)
-                .map(|identifier| identifier.to_string())
-                .map_err(serde::de::Error::custom)
+            let name = Identifier::parse(&name)
+                .map_err(serde::de::Error::custom)?
+                .to_string();
+            if !crate::data_component::is_registered_component(&name)
+                .map_err(serde::de::Error::custom)?
+            {
+                return Err(serde::de::Error::custom(format!(
+                    "Unknown data component: {name}"
+                )));
+            }
+            Ok(name)
         })
         .collect::<Result<Vec<_>, _>>()
         .map(Some)
@@ -500,7 +508,7 @@ enum LootTableValue {
 }
 
 #[derive(Deserialize, Clone, Debug)]
-struct PoolEntryStruct {
+struct PoolEntryJson {
     #[serde(rename = "type")]
     entry_type: String,
     name: Option<String>,
@@ -517,6 +525,76 @@ struct PoolEntryStruct {
     condition: Option<ConditionValue>,
     #[serde(default)]
     children: Vec<PoolEntryStruct>,
+}
+
+/// An entry whose component functions fit the existing flattened loot representation.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(try_from = "PoolEntryJson")]
+struct PoolEntryStruct {
+    entry_type: String,
+    name: Option<String>,
+    value: Option<LootTableValue>,
+    weight: i32,
+    functions: Vec<EntryFunctionStruct>,
+    conditions: Vec<ConditionStruct>,
+    children: Vec<PoolEntryStruct>,
+}
+
+impl TryFrom<PoolEntryJson> for PoolEntryStruct {
+    type Error = String;
+
+    /// Rejects lost wrapper functions and random copies mixed with separately evaluated count modifiers.
+    fn try_from(entry: PoolEntryJson) -> Result<Self, Self::Error> {
+        let has_count_modifier = entry.functions.iter().any(|function| {
+            matches!(
+                function.function.as_str(),
+                "minecraft:set_count"
+                    | "minecraft:apply_bonus"
+                    | "minecraft:enchanted_count_increase"
+            )
+        });
+        for copy in entry
+            .functions
+            .iter()
+            .filter_map(|function| function.copy_components.as_ref())
+        {
+            if !matches!(
+                entry.entry_type.as_str(),
+                "minecraft:item" | "minecraft:tag"
+            ) {
+                return Err(format!(
+                    "unsupported copy_components on {}: only item and tag entries preserve functions",
+                    entry.entry_type
+                ));
+            }
+            if has_count_modifier && copy.conditions.iter().any(component_condition_uses_random) {
+                return Err(
+                    "unsupported random copy_components conditions with count or bonus functions: their relative order is not represented"
+                        .to_owned(),
+                );
+            }
+        }
+        Ok(Self {
+            entry_type: entry.entry_type,
+            name: entry.name,
+            value: entry.value,
+            weight: entry.weight,
+            functions: entry.functions,
+            conditions: entry.conditions,
+            children: entry.children,
+        })
+    }
+}
+
+/// Detects RNG use in validated copy predicates, including predicates nested in conjunctions.
+fn component_condition_uses_random(condition: &ConditionStruct) -> bool {
+    matches!(
+        condition.condition.as_str(),
+        "minecraft:random_chance" | "minecraft:survives_explosion"
+    ) || condition
+        .terms
+        .as_ref()
+        .is_some_and(|terms| terms.iter().any(component_condition_uses_random))
 }
 
 fn default_weight() -> i32 {
@@ -1182,6 +1260,125 @@ mod tests {
                 "{json}"
             );
         }
+    }
+
+    /// Both filters reject names absent from the authoritative component registry.
+    #[test]
+    fn copy_components_rejects_unknown_component_ids() {
+        for filter in ["include", "exclude"] {
+            for name in ["minecraft:not_a_real_component", "example:custom_name"] {
+                let mut definition = serde_json::json!({
+                    "function": "minecraft:copy_components",
+                    "source": "block_entity"
+                });
+                definition[filter] = serde_json::json!([name]);
+                let error = serde_json::from_value::<EntryFunctionStruct>(definition)
+                    .err()
+                    .map(|error| error.to_string());
+                assert!(
+                    error.is_some_and(|error| error.contains("Unknown data component")),
+                    "{filter} accepted unknown component {name}"
+                );
+            }
+        }
+    }
+
+    /// Wrapper copies are rejected before flattening can discard their scope or ordering.
+    #[test]
+    fn nested_loot_table_wrapper_rejects_component_functions() {
+        for value in [
+            serde_json::json!("minecraft:blocks/chest"),
+            serde_json::json!({"pools": [{"rolls": 1, "entries": [{
+                "type": "minecraft:item", "name": "minecraft:diamond"
+            }]}]}),
+        ] {
+            let definition = serde_json::json!({"pools": [{"rolls": 1, "entries": [{
+                "type": "minecraft:loot_table",
+                "value": value,
+                "functions": [{"function": "minecraft:copy_components", "source": "block_entity"}]
+            }]}]});
+            let error = serde_json::from_value::<ChestLootTableJson>(definition)
+                .err()
+                .map(|error| error.to_string());
+            assert!(
+                error
+                    .is_some_and(|error| error.contains("copy_components on minecraft:loot_table")),
+                "nested wrapper copy must fail before generation"
+            );
+        }
+    }
+
+    /// Random copy predicates cannot be combined with count modifiers whose order is not represented.
+    #[test]
+    fn random_component_copies_reject_count_and_bonus_combinations() {
+        let modifiers = [
+            serde_json::json!({"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 1, "max": 2}}),
+            serde_json::json!({"function": "minecraft:set_count", "count": 0}),
+            serde_json::json!({"function": "minecraft:apply_bonus", "formula": "minecraft:ore_drops"}),
+            serde_json::json!({"function": "minecraft:enchanted_count_increase", "count": 1}),
+        ];
+        let conditions = [
+            serde_json::json!({"condition": "minecraft:random_chance", "chance": 0.5}),
+            serde_json::json!({"condition": "minecraft:survives_explosion"}),
+            serde_json::json!({"condition": "minecraft:all_of", "terms": [
+                {"condition": "minecraft:killed_by_player"},
+                {"condition": "minecraft:random_chance", "chance": 0.5}
+            ]}),
+        ];
+        for modifier in &modifiers {
+            for condition in &conditions {
+                let copy = serde_json::json!({
+                    "function": "minecraft:copy_components", "source": "block_entity", "conditions": [condition]
+                });
+                for functions in [
+                    serde_json::json!([copy, modifier]),
+                    serde_json::json!([modifier, copy]),
+                ] {
+                    let definition = serde_json::json!({
+                        "type": "minecraft:item", "name": "minecraft:chest", "functions": functions
+                    });
+                    let error = serde_json::from_value::<PoolEntryStruct>(definition)
+                        .err()
+                        .map(|error| error.to_string());
+                    assert!(
+                        error.is_some_and(|error| error.contains(
+                            "random copy_components conditions with count or bonus functions"
+                        )),
+                        "count/copy combinations must fail instead of losing function order"
+                    );
+                }
+            }
+        }
+    }
+
+    /// Independent random copies and deterministic copies with count modifiers remain supported.
+    #[test]
+    fn representable_component_function_combinations_remain_supported()
+    -> Result<(), Box<dyn std::error::Error>> {
+        for functions in [
+            serde_json::json!([{"function": "minecraft:copy_components", "source": "block_entity", "conditions": [
+                {"condition": "minecraft:random_chance", "chance": 0.5}
+            ]}]),
+            serde_json::json!([
+                {"function": "minecraft:copy_components", "source": "block_entity", "conditions": [
+                    {"condition": "minecraft:killed_by_player"}
+                ]},
+                {"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 1, "max": 2}}
+            ]),
+        ] {
+            let _: PoolEntryStruct = serde_json::from_value(serde_json::json!({
+                "type": "minecraft:item", "name": "minecraft:chest", "functions": functions
+            }))?;
+        }
+        let _: ChestLootTableJson =
+            serde_json::from_value(serde_json::json!({"pools": [{"rolls": 1, "entries": [{
+                "type": "minecraft:loot_table", "value": {"pools": [{"rolls": 1, "entries": [{
+                    "type": "minecraft:item", "name": "minecraft:chest", "functions": [{
+                        "function": "minecraft:copy_components", "source": "block_entity"
+                    }]
+                }]}]}
+            }]}]}))?;
+        Ok(())
     }
 
     /// Component functions reject predicates whose extra requirements the compact runtime condition would lose.

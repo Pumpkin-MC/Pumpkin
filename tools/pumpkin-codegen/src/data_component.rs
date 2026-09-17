@@ -1,8 +1,32 @@
 use heck::ToPascalCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use std::collections::BTreeMap;
-use std::fs;
+use std::{collections::BTreeMap, fs, sync::LazyLock};
+
+type DataComponentRegistry = BTreeMap<String, u8>;
+
+static DATA_COMPONENT_REGISTRY: LazyLock<Result<DataComponentRegistry, String>> =
+    LazyLock::new(|| {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../assets/data_component.json");
+        let source = fs::read_to_string(path)
+            .map_err(|error| format!("failed to read data_component.json: {error}"))?;
+        serde_json::from_str(&source)
+            .map_err(|error| format!("failed to parse data_component.json: {error}"))
+    });
+
+/// Reports whether `name` is an entry in the generated data-component registry.
+///
+/// The registry is loaded once from the same asset used to generate `DataComponent`,
+/// so unknown and custom-namespace names cannot be accepted by a separate list. The
+/// result preserves I/O and parse failures for the caller to report.
+#[must_use]
+pub(crate) fn is_registered_component(name: &str) -> Result<bool, String> {
+    DATA_COMPONENT_REGISTRY
+        .as_ref()
+        .map(|registry| registry.contains_key(name))
+        .map_err(Clone::clone)
+}
 
 /// Generates the `TokenStream` for the `DataComponent` enum and its ID/name conversion methods.
 pub fn build() -> TokenStream {
@@ -86,5 +110,28 @@ pub fn build() -> TokenStream {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_registered_component;
+
+    /// Canonical Minecraft component names are accepted by the registry lookup.
+    #[test]
+    fn recognizes_registered_components() {
+        assert_eq!(is_registered_component("minecraft:custom_name"), Ok(true));
+        assert_eq!(is_registered_component("minecraft:container"), Ok(true));
+    }
+
+    /// Unknown names and names from another namespace produce successful negative lookups.
+    #[test]
+    fn rejects_unknown_and_custom_namespace_components() {
+        assert_eq!(
+            is_registered_component("minecraft:not_a_component"),
+            Ok(false)
+        );
+        assert_eq!(is_registered_component("example:custom_name"), Ok(false));
+        assert_eq!(is_registered_component("custom_name"), Ok(false));
     }
 }
