@@ -452,6 +452,7 @@ pub struct BlockEvent {
     pub data: u8,
 }
 
+/// Generates block loot before the plugin event and spawns only the event's accepted items.
 pub fn drop_loot(
     world: &Arc<World>,
     block: &Block,
@@ -463,29 +464,7 @@ pub fn drop_loot(
     if let Some(loot_table) = pumpkin_data::loot_table::get_loot_table(&key) {
         let seed: i64 = rand::random();
         let items = crate::world::loot::generate_loot_with_context(loot_table, seed, params);
-        if !items.is_empty() {
-            let mut event = crate::plugin::block::block_drop_item::BlockDropItemEvent {
-                block_pos: *pos,
-                world: world.clone(),
-                player: None,
-                items,
-                cancelled: false,
-            };
-            if let Some(server) = world.server.upgrade() {
-                server.plugin_manager.fire_blocking(&server, &mut event);
-            }
-            if !event.cancelled {
-                let block_entity = world.get_block_entity(pos);
-                for mut stack in event.items {
-                    if let Some(block_entity) = &block_entity
-                        && Block::from_item_id(stack.item.id) == Some(block)
-                    {
-                        block_entity.collect_item_components(&mut stack);
-                    }
-                    world.drop_stack(pos, stack);
-                }
-            }
-        }
+        spawn_block_drops(world, pos, items);
     }
 
     let has_silk_touch = params.tool.as_ref().is_some_and(|tool| {
@@ -511,6 +490,53 @@ pub fn drop_loot(
             if event.exp > 0 {
                 ExperienceOrbEntity::spawn(world, pos.to_f64(), event.exp as u32);
             }
+        }
+    }
+}
+
+/// Drops the block's item with all collected components for a filled creative container.
+/// Logs and skips an invalid block item; plugin cancellation and item edits remain authoritative.
+pub fn drop_block_entity_item(
+    world: &Arc<World>,
+    block: &Block,
+    pos: &BlockPos,
+    block_entity: &dyn entities::BlockEntity,
+) {
+    let Some(item) = pumpkin_data::item::Item::from_id(block.item_id) else {
+        tracing::warn!(
+            "Cannot drop block {} with unknown item ID {}",
+            block.name,
+            block.item_id
+        );
+        return;
+    };
+    let mut stack = ItemStack::new(1, item);
+    stack.patch = block_entity
+        .collect_components()
+        .into_iter()
+        .map(|(kind, value)| (kind, Some(value)))
+        .collect();
+    spawn_block_drops(world, pos, vec![stack]);
+}
+
+/// Dispatches one nonempty block-drop event and spawns exactly its accepted item list.
+fn spawn_block_drops(world: &Arc<World>, pos: &BlockPos, items: Vec<ItemStack>) {
+    if items.is_empty() {
+        return;
+    }
+    let mut event = crate::plugin::block::block_drop_item::BlockDropItemEvent {
+        block_pos: *pos,
+        world: world.clone(),
+        player: None,
+        items,
+        cancelled: false,
+    };
+    if let Some(server) = world.server.upgrade() {
+        server.plugin_manager.fire_blocking(&server, &mut event);
+    }
+    if !event.cancelled {
+        for stack in event.items {
+            world.drop_stack(pos, stack);
         }
     }
 }

@@ -3,13 +3,20 @@ use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_util::loot_table::{LootBonusFormula, LootCondition, LootEntry, LootTable};
+use pumpkin_util::loot_table::{
+    LootBonusFormula, LootCondition, LootEntry, LootFunction, LootTable,
+};
 use pumpkin_util::random::{RandomImpl, xoroshiro128::Xoroshiro};
+use std::sync::Arc;
+
+use crate::block::entities::BlockEntity;
 
 #[derive(Default, Clone)]
 pub struct LootContextParameters {
     pub explosion_radius: Option<f32>,
     pub block_state: Option<&'static BlockState>,
+    /// Original block entity, retained until loot functions finish even if the block is removed.
+    pub block_entity: Option<Arc<dyn BlockEntity>>,
     pub killed_by_player: Option<bool>,
     pub luck: f32,
     pub this_entity: Option<&'static EntityType>,
@@ -114,6 +121,7 @@ pub fn generate_loot(table: &LootTable, seed: i64) -> Vec<ItemStack> {
 }
 
 #[must_use]
+/// Generates stacks and applies entry functions before callers dispatch drop events.
 pub fn generate_loot_with_context(
     table: &LootTable,
     seed: i64,
@@ -136,13 +144,7 @@ pub fn generate_loot_with_context(
         name == "shears"
     });
 
-    let fortune_level = params.tool.as_ref().map_or(0, |tool| {
-        let fortune = pumpkin_data::Enchantment::from_name("fortune")
-            .map_or(0, |e| tool.get_enchantment_level(e));
-        let looting = pumpkin_data::Enchantment::from_name("looting")
-            .map_or(0, |e| tool.get_enchantment_level(e));
-        fortune.max(looting)
-    });
+    let fortune_level = tool_bonus_level(params.tool.as_ref());
 
     for pool in table.pools {
         if !check_condition(
@@ -218,7 +220,17 @@ pub fn generate_loot_with_context(
                         let item_key = entry.item.strip_prefix("minecraft:").unwrap_or(entry.item);
 
                         if let Some(item) = Item::from_registry_key(item_key) {
-                            items_to_place.push(ItemStack::new(final_count as u8, item));
+                            let mut stack = ItemStack::new(final_count as u8, item);
+                            apply_entry_functions(
+                                &mut stack,
+                                entry.functions,
+                                has_silk_touch,
+                                has_shears,
+                                fortune_level,
+                                params,
+                                &mut rng,
+                            );
+                            items_to_place.push(stack);
                         }
                     }
                     break;
@@ -228,6 +240,72 @@ pub fn generate_loot_with_context(
     }
 
     items_to_place
+}
+
+/// Preserves the existing shared bonus level: the higher fortune or looting level, or zero without a tool.
+fn tool_bonus_level(tool: Option<&ItemStack>) -> i32 {
+    tool.map_or(0, |tool| {
+        let fortune = pumpkin_data::Enchantment::from_name("fortune")
+            .map_or(0, |e| tool.get_enchantment_level(e));
+        let looting = pumpkin_data::Enchantment::from_name("looting")
+            .map_or(0, |e| tool.get_enchantment_level(e));
+        fortune.max(looting)
+    })
+}
+
+/// Applies supported entry functions in table order, evaluating conditions with the existing loot RNG.
+fn apply_entry_functions(
+    stack: &mut ItemStack,
+    functions: &[LootFunction],
+    has_silk_touch: bool,
+    has_shears: bool,
+    fortune_level: i32,
+    params: &LootContextParameters,
+    rng: &mut Xoroshiro,
+) {
+    for function in functions {
+        let LootFunction::CopyComponents {
+            source,
+            include,
+            exclude,
+            condition,
+        } = function;
+        if check_condition(
+            *condition,
+            has_silk_touch,
+            has_shears,
+            fortune_level,
+            params,
+            rng,
+        ) && *source == "block_entity"
+            && let Some(block_entity) = &params.block_entity
+        {
+            copy_components(stack, block_entity.as_ref(), *include, *exclude);
+        }
+    }
+}
+
+/// Copies selected source values, leaving absent or excluded destination values unchanged.
+fn copy_components(
+    stack: &mut ItemStack,
+    block_entity: &dyn BlockEntity,
+    include: Option<&[&str]>,
+    exclude: Option<&[&str]>,
+) {
+    for (kind, value) in block_entity.collect_components() {
+        let matches = |name: &&str| {
+            pumpkin_data::data_component::DataComponent::try_from_name(name) == Some(kind)
+        };
+        if include.is_none_or(|names| names.iter().any(matches))
+            && exclude.is_none_or(|names| !names.iter().any(matches))
+        {
+            if let Some((_, current)) = stack.patch.iter_mut().find(|(id, _)| *id == kind) {
+                *current = Some(value);
+            } else {
+                stack.patch.push((kind, Some(value)));
+            }
+        }
+    }
 }
 
 pub use generate_loot as generate_chest_loot;

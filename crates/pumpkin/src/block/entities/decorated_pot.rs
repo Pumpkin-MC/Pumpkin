@@ -158,15 +158,13 @@ impl DecoratedPotBlockEntity {
             .pending_loot
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(loot) = loot.as_ref() {
+        loot.as_ref().is_some_and(|loot| {
             nbt.put_string("LootTable", loot.loot_table.clone());
             if loot.seed != 0 {
                 nbt.put_long("LootTableSeed", loot.seed);
             }
             true
-        } else {
-            false
-        }
+        })
     }
 
     pub fn get_item(&self) -> Option<ItemStack> {
