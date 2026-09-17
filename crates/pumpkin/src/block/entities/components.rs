@@ -159,6 +159,16 @@ impl BlockEntityComponents {
 
     /// Saves mapped implicit fields and unconsumed additions using vanilla's NBT layout.
     pub fn write_nbt(&self, nbt: &mut NbtCompound) {
+        self.write_nbt_with_retained(nbt, true);
+    }
+
+    /// Writes all mapped custom fields, including locks, without retained item additions.
+    pub fn write_custom_nbt(&self, nbt: &mut NbtCompound) {
+        self.write_nbt_with_retained(nbt, false);
+    }
+
+    /// Writes one consistent snapshot of implicit fields and optionally the retained component map.
+    fn write_nbt_with_retained(&self, nbt: &mut NbtCompound, include_retained: bool) {
         let values = self
             .values
             .lock()
@@ -175,7 +185,7 @@ impl BlockEntityComponents {
                 }
             }
         }
-        if !values.retained.is_empty() {
+        if include_retained && !values.retained.is_empty() {
             let mut retained = NbtCompound::new();
             for (id, value) in &values.retained {
                 retained.put(id.to_name(), value.write_data());

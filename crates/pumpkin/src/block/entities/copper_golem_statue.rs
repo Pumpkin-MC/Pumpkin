@@ -40,10 +40,10 @@ impl BlockEntity for CopperGolemStatueBlockEntity {
         Some(&self.components)
     }
 
-    /// Encodes the custom block-entity data used by chunk updates.
+    /// Sends the statue's name without retained item additions.
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
-        self.components.write_nbt(&mut nbt);
+        self.components.write_custom_nbt(&mut nbt);
         Some(nbt)
     }
 

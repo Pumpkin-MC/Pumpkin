@@ -117,10 +117,10 @@ impl BlockEntity for DecoratedPotBlockEntity {
         }
     }
 
-    /// Encodes the visible pot decorations and item state for chunk updates.
+    /// Sends decorations and deferred loot or the contained item, excluding retained additions.
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
-        self.components.write_nbt(&mut nbt);
+        self.components.write_custom_nbt(&mut nbt);
         if !self.write_pending_loot(&mut nbt)
             && let Ok(item) = self.item.try_lock()
             && let Some(ref it) = *item

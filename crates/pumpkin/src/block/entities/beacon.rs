@@ -311,7 +311,7 @@ impl BlockEntity for BeaconBlockEntity {
         }
     }
 
-    /// Sends beacon effects and persistent custom data using its update-tag contract.
+    /// Sends beacon effects, name, and lock without retained item additions.
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
         let primary = self.primary_effect.load(Ordering::Relaxed);
@@ -331,7 +331,7 @@ impl BlockEntity for BeaconBlockEntity {
             }
         }
         nbt.put_int("Levels", self.levels.load(Ordering::Relaxed));
-        self.components.write_nbt(&mut nbt);
+        self.components.write_custom_nbt(&mut nbt);
         Some(nbt)
     }
 
