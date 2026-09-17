@@ -19,9 +19,6 @@ pub(crate) static COMMAND_HANDLERS: Mutex<BTreeMap<u32, Arc<dyn CommandHandler>>
 pub(crate) static COMMAND_SUGGESTION_HANDLERS: Mutex<
     BTreeMap<u32, Arc<dyn CommandSuggestionHandler>>,
 > = Mutex::new(BTreeMap::new());
-pub(crate) static COMMAND_REQUIREMENT_HANDLERS: Mutex<
-    BTreeMap<u32, Arc<dyn CommandRequirementHandler>>,
-> = Mutex::new(BTreeMap::new());
 
 /// Handles the execution of a registered command.
 ///
@@ -175,14 +172,13 @@ impl CommandNode {
     ///
     /// The node is only eligible for parsing and execution when `handler` returns
     /// `true` for the command sender.
-    pub fn requires<H: CommandRequirementHandler + Send + Sync + 'static>(self, handler: H) -> Self {
+    pub fn requires<H: CommandRequirementHandler + Send + Sync + 'static>(
+        self,
+        handler: H,
+    ) -> Self {
         let id = NEXT_COMMAND_ID.fetch_add(1, Ordering::Relaxed);
         let handler: Arc<dyn CommandRequirementHandler> = Arc::new(handler);
 
-        COMMAND_REQUIREMENT_HANDLERS
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .insert(id, handler.clone());
         COMMAND_HANDLERS
             .lock()
             .unwrap_or_else(|e| e.into_inner())
