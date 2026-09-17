@@ -108,6 +108,19 @@ pub trait CommandRequirementHandler: Send + Sync {
     fn check(&self, sender: CommandSender, server: Server) -> bool;
 }
 
+struct CommandRequirementAdapter(Arc<dyn CommandRequirementHandler>);
+
+impl CommandHandler for CommandRequirementAdapter {
+    fn handle(
+        &self,
+        sender: CommandSender,
+        server: Server,
+        _args: ConsumedArgs,
+    ) -> Result<i32, CommandError> {
+        Ok(i32::from(self.0.check(sender, server)))
+    }
+}
+
 impl Command {
     /// Attaches an execution handler to this command.
     ///
@@ -164,11 +177,16 @@ impl CommandNode {
     /// `true` for the command sender.
     pub fn requires<H: CommandRequirementHandler + Send + Sync + 'static>(self, handler: H) -> Self {
         let id = NEXT_COMMAND_ID.fetch_add(1, Ordering::Relaxed);
+        let handler: Arc<dyn CommandRequirementHandler> = Arc::new(handler);
 
         COMMAND_REQUIREMENT_HANDLERS
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .insert(id, Arc::new(handler));
+            .insert(id, handler.clone());
+        COMMAND_HANDLERS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(id, Arc::new(CommandRequirementAdapter(handler)));
 
         self.require_with_handler_id(id)
     }
