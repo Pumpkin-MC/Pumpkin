@@ -179,24 +179,15 @@ fn decode_custom_name(component_data: &[u8]) -> Result<Box<dyn DataComponentImpl
     Ok(CustomNameImpl { name }.to_dyn())
 }
 
+/// Reads a length-delimited item-name NBT payload without losing literal content or formatting.
 fn decode_item_name(component_data: &[u8]) -> Result<Box<dyn DataComponentImpl>, ReadingError> {
     let mut cursor = Cursor::new(component_data);
     let mut nbt_reader = pumpkin_nbt::deserializer::NbtReadHelperJava::new(&mut cursor);
     let tag = NbtTag::deserialize(&mut nbt_reader)
         .map_err(|err| ReadingError::Message(format!("Failed to decode ItemName NBT: {err}")))?;
-    let name = match tag {
-        NbtTag::String(name) => name.to_string(),
-        NbtTag::Compound(compound) => compound
-            .get_string("translate")
-            .or_else(|| compound.get_string("text"))
-            .unwrap_or_default()
-            .to_owned(),
-        _ => String::new(),
-    };
-    Ok(ItemNameImpl {
-        name: Cow::Owned(name),
-    }
-    .to_dyn())
+    ItemNameImpl::read_data(&tag)
+        .map(DataComponentImpl::to_dyn)
+        .ok_or_else(|| ReadingError::Message("Invalid item name text component".into()))
 }
 
 fn decode_custom_data(component_data: &[u8]) -> Result<Box<dyn DataComponentImpl>, ReadingError> {
