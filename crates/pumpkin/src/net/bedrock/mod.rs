@@ -23,7 +23,6 @@ use pumpkin_protocol::{
         client::{
             client_cache_miss_response::{CClientCacheMissResponse, MissingBlobData},
             disconnect::CDisconnect,
-            level_chunk::CLevelChunk,
             network_settings::CNetworkSettings,
             start_game::CStartGame,
         },
