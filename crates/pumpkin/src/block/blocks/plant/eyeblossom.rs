@@ -119,11 +119,7 @@ impl BlockBehaviour for EyeblossomBlock {
 
 impl PlantBlockBase for EyeblossomBlock {}
 
-fn encode_trail_particle_data(
-    target: Vector3<f64>,
-    color: i32,
-    duration: Option<u8>,
-) -> Vec<u8> {
+fn encode_trail_particle_data(target: Vector3<f64>, color: i32, duration: Option<u8>) -> Vec<u8> {
     let mut data = Vec::with_capacity(if duration.is_some() { 29 } else { 28 });
     data.extend_from_slice(&target.x.to_be_bytes());
     data.extend_from_slice(&target.y.to_be_bytes());
@@ -135,6 +131,23 @@ fn encode_trail_particle_data(
         data.push(duration);
     }
     data
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TrailParticleDelivery {
+    LegacyFallback,
+    PreDurationPacket,
+    DurationPacket,
+}
+
+fn trail_particle_delivery_for_version(version: JavaMinecraftVersion) -> TrailParticleDelivery {
+    if version == JavaMinecraftVersion::Unknown || version < JavaMinecraftVersion::V_1_21_2 {
+        TrailParticleDelivery::LegacyFallback
+    } else if version < JavaMinecraftVersion::V_1_21_4 {
+        TrailParticleDelivery::PreDurationPacket
+    } else {
+        TrailParticleDelivery::DurationPacket
+    }
 }
 
 pub fn try_changing_state(world: &Arc<World>, current_block: &Block, pos: &BlockPos) -> bool {
@@ -194,19 +207,16 @@ pub fn try_changing_state(world: &Arc<World>, current_block: &Block, pos: &Block
         let ClientPlatform::Java(client) = player.client.as_ref() else {
             continue;
         };
-        let version = client.version.load();
-        if version == JavaMinecraftVersion::Unknown || version < JavaMinecraftVersion::V_1_21_2 {
-            player.spawn_particle(
-                center,
-                Vector3::new(0.0, 0.0, 0.0),
-                0.0,
-                1,
-                Particle::Trail,
-            );
-        } else if version < JavaMinecraftVersion::V_1_21_4 {
-            player.try_send_client_packet(&particle_1_21_2);
-        } else {
-            player.try_send_client_packet(&particle_1_21_4);
+        match trail_particle_delivery_for_version(client.version.load()) {
+            TrailParticleDelivery::LegacyFallback => {
+                player.spawn_particle(center, Vector3::new(0.0, 0.0, 0.0), 0.0, 1, Particle::Trail);
+            }
+            TrailParticleDelivery::PreDurationPacket => {
+                player.try_send_client_packet(&particle_1_21_2);
+            }
+            TrailParticleDelivery::DurationPacket => {
+                player.try_send_client_packet(&particle_1_21_4);
+            }
         }
     }
 
@@ -244,8 +254,10 @@ pub fn try_changing_state(world: &Arc<World>, current_block: &Block, pos: &Block
 
 #[cfg(test)]
 mod tests {
-    use super::encode_trail_particle_data;
-    use pumpkin_util::math::vector3::Vector3;
+    use super::{
+        TrailParticleDelivery, encode_trail_particle_data, trail_particle_delivery_for_version,
+    };
+    use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
 
     #[test]
     fn trail_particle_data_matches_versioned_protocol_layouts() {
@@ -263,5 +275,25 @@ mod tests {
         assert_eq!(with_duration.len(), 29);
         assert_eq!(&with_duration[..28], &pre_duration);
         assert_eq!(with_duration[28], 20);
+    }
+
+    #[test]
+    fn trail_particle_delivery_matches_protocol_boundaries() {
+        assert_eq!(
+            trail_particle_delivery_for_version(JavaMinecraftVersion::Unknown),
+            TrailParticleDelivery::LegacyFallback
+        );
+        assert_eq!(
+            trail_particle_delivery_for_version(JavaMinecraftVersion::V_1_21),
+            TrailParticleDelivery::LegacyFallback
+        );
+        assert_eq!(
+            trail_particle_delivery_for_version(JavaMinecraftVersion::V_1_21_2),
+            TrailParticleDelivery::PreDurationPacket
+        );
+        assert_eq!(
+            trail_particle_delivery_for_version(JavaMinecraftVersion::V_1_21_4),
+            TrailParticleDelivery::DurationPacket
+        );
     }
 }
