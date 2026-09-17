@@ -1,3 +1,4 @@
+use super::components::{BlockEntityComponents, CONTAINER_FIELDS};
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_inventory::Inventory;
 
@@ -22,6 +23,7 @@ use crate::{
 
 pub struct BlastingFurnaceBlockEntity {
     pub position: BlockPos,
+    pub components: BlockEntityComponents,
     pub dirty: AtomicBool,
     pub comparator_dirty: AtomicBool,
 
@@ -41,10 +43,12 @@ impl BlastingFurnaceBlockEntity {
     pub const INVENTORY_SIZE: usize = 3;
     pub const ID: &'static str = "minecraft:blast_furnace";
 
+    /// Creates an empty container with component storage at the supplied position.
     #[must_use]
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
+            components: BlockEntityComponents::new(CONTAINER_FIELDS),
             dirty: AtomicBool::new(false),
             comparator_dirty: AtomicBool::new(false),
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
