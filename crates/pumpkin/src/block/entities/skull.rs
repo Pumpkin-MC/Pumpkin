@@ -1,80 +1,53 @@
-use super::BlockEntity;
+use super::{
+    BlockEntity,
+    components::{BlockEntityComponents, ComponentFields},
+};
+use pumpkin_data::data_component::DataComponent;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
-use std::sync::Mutex;
 
 pub struct SkullBlockEntity {
     pub position: BlockPos,
-    pub note_block_sound: Mutex<Option<String>>,
-    pub profile: Mutex<Option<NbtCompound>>,
-    pub custom_name: Mutex<Option<String>>,
+    pub components: BlockEntityComponents,
 }
 
 impl BlockEntity for SkullBlockEntity {
+    /// Returns the registry identifier used for persistence and chunk updates.
     fn resource_location(&self) -> &'static str {
         Self::ID
     }
 
+    /// Returns the block position belonging to this entity.
     fn get_position(&self) -> BlockPos {
         self.position
     }
 
-    fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
-    where
-        Self: Sized,
-    {
-        let note_block_sound = nbt.get_string("note_block_sound").map(ToString::to_string);
-        let profile = nbt.get_compound("profile").cloned();
-        let custom_name = nbt
-            .get_string("custom_name")
-            .or_else(|| nbt.get_string("CustomName"))
-            .map(ToString::to_string);
+    /// Loads implicit fields and retained item additions without flattening text.
+    fn from_nbt(nbt: &NbtCompound, position: BlockPos) -> Self {
         Self {
             position,
-            note_block_sound: Mutex::new(note_block_sound),
-            profile: Mutex::new(profile),
-            custom_name: Mutex::new(custom_name),
+            components: BlockEntityComponents::from_nbt(nbt, Self::COMPONENT_FIELDS),
         }
     }
 
+    /// Saves implicit fields and retained additions in their vanilla NBT locations.
     fn write_nbt(&self, nbt: &mut NbtCompound) {
-        if let Ok(sound) = self.note_block_sound.lock()
-            && let Some(sound) = sound.as_ref()
-        {
-            nbt.put_string("note_block_sound", sound.clone());
-        }
-        if let Ok(prof) = self.profile.lock()
-            && let Some(prof) = prof.as_ref()
-        {
-            nbt.put_compound("profile", prof.clone());
-        }
-        if let Ok(name) = self.custom_name.lock()
-            && let Some(name) = name.as_ref()
-        {
-            nbt.put_string("custom_name", name.clone());
-        }
+        self.components.write_nbt(nbt);
     }
 
+    /// Returns the owned component state used by placement and loot collection.
+    fn component_state(&self) -> Option<&BlockEntityComponents> {
+        Some(&self.components)
+    }
+
+    /// Encodes the custom block-entity data used by chunk updates.
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
-        if let Ok(sound) = self.note_block_sound.try_lock()
-            && let Some(ref sound) = *sound
-        {
-            nbt.put_string("note_block_sound", sound.clone());
-        }
-        if let Ok(profile) = self.profile.try_lock()
-            && let Some(ref prof) = *profile
-        {
-            nbt.put_compound("profile", prof.clone());
-        }
-        if let Ok(name) = self.custom_name.try_lock()
-            && let Some(ref name) = *name
-        {
-            nbt.put_string("custom_name", name.clone());
-        }
+        self.components.write_nbt(&mut nbt);
         Some(nbt)
     }
 
+    /// Exposes the concrete entity for existing specialized block behavior.
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -82,13 +55,18 @@ impl BlockEntity for SkullBlockEntity {
 
 impl SkullBlockEntity {
     pub const ID: &'static str = "minecraft:skull";
+    const COMPONENT_FIELDS: ComponentFields = &[
+        (DataComponent::CustomName, "custom_name"),
+        (DataComponent::Profile, "profile"),
+        (DataComponent::NoteBlockSound, "note_block_sound"),
+    ];
+
+    /// Creates an entity with empty component state at the supplied position.
     #[must_use]
     pub const fn new(position: BlockPos) -> Self {
         Self {
             position,
-            note_block_sound: Mutex::new(None),
-            profile: Mutex::new(None),
-            custom_name: Mutex::new(None),
+            components: BlockEntityComponents::new(Self::COMPONENT_FIELDS),
         }
     }
 }

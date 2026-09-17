@@ -1,3 +1,4 @@
+use super::components::{BlockEntityComponents, RANDOMIZABLE_CONTAINER_FIELDS};
 use crate::block::entities::BlockEntity;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_inventory::{Clearable, Inventory, sync_write_items_to_nbt};
@@ -12,35 +13,45 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 pub struct DropperBlockEntity {
     pub position: BlockPos,
+    pub components: BlockEntityComponents,
     pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
     pub dirty: AtomicBool,
     pub comparator_dirty: AtomicBool,
 }
 
 impl BlockEntity for DropperBlockEntity {
+    super::components::impl_container_components!();
+
+    /// Persists the component fields together with current container state.
     fn write_nbt(&self, nbt: &mut NbtCompound) {
-        self.write_inventory_nbt(nbt, true);
+        self.components.write_nbt(nbt);
+        if !self.components.has_loot_table() {
+            self.write_inventory_nbt(nbt, true);
+        }
     }
 
+    /// Loads persistent components and inventory state without generating deferred loot.
     fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
     where
         Self: Sized,
     {
         let mut dropper = Self {
             position,
+            components: BlockEntityComponents::from_nbt(nbt, RANDOMIZABLE_CONTAINER_FIELDS),
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
             comparator_dirty: AtomicBool::new(false),
         };
 
-        pumpkin_inventory::sync_read_items_from_nbt(
-            nbt,
-            dropper
-                .items
-                .get_mut()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-        );
-
+        if !dropper.components.has_loot_table() {
+            pumpkin_inventory::sync_read_items_from_nbt(
+                nbt,
+                dropper
+                    .items
+                    .get_mut()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner),
+            );
+        }
         dropper
     }
 
@@ -72,8 +83,10 @@ impl BlockEntity for DropperBlockEntity {
         self.dirty.store(false, Ordering::Relaxed);
     }
 
+    /// Sends the container fields used by chunk updates without generating deferred loot.
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
+        self.components.write_client_nbt(&mut nbt);
         if let Ok(items) = self.items.try_read() {
             sync_write_items_to_nbt(items.as_slice(), &mut nbt);
         }
@@ -89,10 +102,12 @@ impl DropperBlockEntity {
     pub const INVENTORY_SIZE: usize = 9;
     pub const ID: &'static str = "minecraft:dropper";
 
+    /// Creates an empty container with component storage at the supplied position.
     #[must_use]
     pub fn new(position: BlockPos) -> Self {
         Self {
             position,
+            components: BlockEntityComponents::new(RANDOMIZABLE_CONTAINER_FIELDS),
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
             comparator_dirty: AtomicBool::new(false),

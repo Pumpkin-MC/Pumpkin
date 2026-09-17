@@ -6,40 +6,46 @@
 macro_rules! impl_block_entity_for_chest {
     ($struct_name:ty) => {
         impl $crate::block::entities::BlockEntity for $struct_name {
+            $crate::block::entities::components::impl_container_components!();
+            /// Returns the chest variant's persistent registry identifier.
             fn resource_location(&self) -> &'static str {
-                Self::ID
+                self.id
             }
 
             fn get_position(&self) -> BlockPos {
                 self.position
             }
 
+            /// Loads component metadata and deferred loot without generating contents.
             fn from_nbt(nbt: &pumpkin_nbt::compound::NbtCompound, position: BlockPos) -> Self
             where
                 Self: Sized,
             {
-                // Read deferred loot-table fields first.
-                let loot_table_key = nbt.get_string("LootTable").map(|s| s.to_string());
-                let loot_table_seed = nbt.get_long("LootTableSeed").unwrap_or(0);
-
                 let mut chest = Self {
                     position,
+                    id: if nbt
+                        .get_string("id")
+                        .is_some_and(|id| id == "minecraft:copper_chest")
+                    {
+                        "minecraft:copper_chest"
+                    } else {
+                        Self::ID
+                    },
+                    components:
+                        $crate::block::entities::components::BlockEntityComponents::from_nbt(
+                            nbt,
+                            $crate::block::entities::components::RANDOMIZABLE_CONTAINER_FIELDS,
+                        ),
                     items: std::sync::RwLock::new(std::array::from_fn(|_| {
                         ItemStack::EMPTY.clone()
                     })),
                     dirty: std::sync::atomic::AtomicBool::new(false),
                     comparator_dirty: std::sync::atomic::AtomicBool::new(false),
                     viewers: $crate::block::viewer::ViewerCountTracker::new(),
-                    loot_table: StdMutex::new(loot_table_key),
-                    loot_table_seed,
                 };
 
                 // Only read saved items when there is no pending loot table.
-                let has_loot_table = chest
-                    .loot_table
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .is_some();
+                let has_loot_table = chest.components.has_loot_table();
                 if !has_loot_table {
                     pumpkin_inventory::sync_read_items_from_nbt(
                         nbt,
@@ -53,25 +59,11 @@ macro_rules! impl_block_entity_for_chest {
                 chest
             }
 
+            /// Saves deferred loot or populated slots together with persistent components.
             fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
                 use pumpkin_inventory::Inventory;
-
-                let loot_table_key = {
-                    let guard = self
-                        .loot_table
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    guard.clone()
-                };
-
-                if let Some(key) = loot_table_key {
-                    // Persist deferred loot: write the key and seed; skip items.
-                    nbt.put_string("LootTable", key);
-                    if self.loot_table_seed != 0 {
-                        nbt.put_long("LootTableSeed", self.loot_table_seed);
-                    }
-                } else {
-                    // Loot has already been generated, so persist the actual items.
+                self.components.write_nbt(nbt);
+                if !self.components.has_loot_table() {
                     self.write_inventory_nbt(nbt, true);
                 }
             }
@@ -108,13 +100,11 @@ macro_rules! impl_block_entity_for_chest {
                     .store(false, std::sync::atomic::Ordering::Relaxed);
             }
 
+            /// Sends populated slots and visible metadata without exposing deferred loot or locks.
             fn chunk_data_nbt(&self) -> Option<pumpkin_nbt::compound::NbtCompound> {
                 let mut nbt = pumpkin_nbt::compound::NbtCompound::new();
-                let has_loot_table = self
-                    .loot_table
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .is_some();
+                self.components.write_client_nbt(&mut nbt);
+                let has_loot_table = self.components.has_loot_table();
                 if !has_loot_table {
                     if let Ok(items) = self.items.try_read() {
                         pumpkin_inventory::sync_write_items_to_nbt(&*items, &mut nbt);
@@ -125,21 +115,6 @@ macro_rules! impl_block_entity_for_chest {
 
             fn as_any(&self) -> &dyn std::any::Any {
                 self
-            }
-
-            fn take_loot_table(&self) -> Option<(String, i64)> {
-                let mut guard = self
-                    .loot_table
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                guard.take().map(|key| (key, self.loot_table_seed))
-            }
-
-            fn has_loot_table(&self) -> bool {
-                self.loot_table
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .is_some()
             }
         }
     };
@@ -304,21 +279,23 @@ macro_rules! impl_chest_helper_methods {
                 self.viewers.get_viewer_count()
             }
 
+            /// Creates an empty chest with owned component metadata.
             #[must_use]
             pub fn new(position: pumpkin_util::math::position::BlockPos) -> Self {
                 use std::array::from_fn;
-                use std::sync::Mutex as StdMutex;
                 use std::sync::RwLock;
                 use std::sync::atomic::AtomicBool;
 
                 Self {
                     position,
+                    id: Self::ID,
+                    components: $crate::block::entities::components::BlockEntityComponents::new(
+                        $crate::block::entities::components::RANDOMIZABLE_CONTAINER_FIELDS,
+                    ),
                     items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
                     dirty: AtomicBool::new(false),
                     comparator_dirty: AtomicBool::new(false),
                     viewers: $crate::block::viewer::ViewerCountTracker::new(),
-                    loot_table: StdMutex::new(None),
-                    loot_table_seed: 0,
                 }
             }
 

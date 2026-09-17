@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex as StdMutex, RwLock, atomic::AtomicBool};
+use std::sync::{Arc, RwLock, atomic::AtomicBool};
 
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_util::math::position::BlockPos;
@@ -10,18 +10,14 @@ use crate::{
 
 pub struct ChestBlockEntity {
     pub position: BlockPos,
+    pub id: &'static str,
+    pub components: super::components::BlockEntityComponents,
     pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
     pub dirty: AtomicBool,
     pub comparator_dirty: AtomicBool,
 
     // Viewer
     viewers: ViewerCountTracker,
-
-    /// Pending loot-table key (e.g. `"minecraft:chests/simple_dungeon"`).
-    /// Set during world generation; cleared when items are generated on first open.
-    pub loot_table: StdMutex<Option<String>>,
-    /// Seed used for deterministic loot generation, paired with `loot_table`.
-    pub loot_table_seed: i64,
 }
 
 impl ChestBlockEntity {
@@ -29,6 +25,14 @@ impl ChestBlockEntity {
     pub const LID_ANIMATION_EVENT_TYPE: u8 = 1;
     pub const ID: &'static str = "minecraft:chest";
     pub const EMITS_REDSTONE: bool = false;
+
+    /// Creates a copper chest with the distinct block-entity registry identifier.
+    #[must_use]
+    pub fn new_copper(position: BlockPos) -> Self {
+        let mut chest = Self::new(position);
+        chest.id = "minecraft:copper_chest";
+        chest
+    }
 }
 
 // Apply macros to generate trait implementations
