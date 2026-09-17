@@ -2,10 +2,10 @@ use pumpkin::{
     command::{
         CommandSender,
         argument_builder::{ArgumentBuilder, literal},
+        argument_types::entity_anchor::EntityAnchor,
         context::command_source::{CommandSource, ResultValueTaker},
         node::detached::DetachedNode,
     },
-    entity::ai::goal::entity_anchor::EntityAnchor,
     plugin::loader::wasm::wasm_host::state::WasmCommandNode,
 };
 use pumpkin_util::{
