@@ -38,6 +38,13 @@ impl JavaClient {
             ));
             return;
         };
+        // Vanilla validates the interact packet's range server-side before
+        // dispatching the attack (`ServerboundInteractPacket.isWithinRange`
+        // with a buffer of 3.0); silently ignore out-of-range attacks.
+        let target_bounds = target.get_entity().bounding_box.load();
+        if !player.is_within_entity_interaction_range(&target_bounds, 3.0) {
+            return;
+        }
         if let Some(player_victim) = &player_target {
             if player_victim.living_entity.health.load() <= 0.0 {
                 return;
