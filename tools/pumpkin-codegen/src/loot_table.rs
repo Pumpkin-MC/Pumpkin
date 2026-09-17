@@ -2,7 +2,10 @@ use std::{fs, path::Path};
 
 use heck::ToShoutySnakeCase;
 use proc_macro2::{Span, TokenStream};
-use pumpkin_util::loot_table::{LootBonusFormula, LootCondition};
+use pumpkin_util::{
+    identifier::Identifier,
+    loot_table::{LootBonusFormula, LootCondition},
+};
 use quote::{format_ident, quote};
 use serde::Deserialize;
 use syn::LitStr;
@@ -290,7 +293,7 @@ where
 }
 
 #[derive(Deserialize, Clone, Debug)]
-struct EntryFunctionStruct {
+struct EntryFunctionJson {
     #[serde(rename = "type")]
     function: String,
     #[serde(default)]
@@ -298,6 +301,126 @@ struct EntryFunctionStruct {
     #[serde(default)]
     parameters: Option<BonusParameterStruct>,
     count: Option<CountStruct>,
+    #[serde(flatten)]
+    remaining: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+struct CopyComponentsStruct {
+    source: String,
+    #[serde(default, deserialize_with = "deserialize_component_filter")]
+    include: Option<Vec<String>>,
+    #[serde(default, deserialize_with = "deserialize_component_filter")]
+    exclude: Option<Vec<String>>,
+    #[serde(default)]
+    conditions: Vec<ConditionStruct>,
+}
+
+/// Decode an explicitly present filter and normalize registry names; null and malformed names are errors.
+fn deserialize_component_filter<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Vec::<String>::deserialize(deserializer)?
+        .into_iter()
+        .map(|name| {
+            Identifier::parse(&name)
+                .map(|identifier| identifier.to_string())
+                .map_err(serde::de::Error::custom)
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map(Some)
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(try_from = "EntryFunctionJson")]
+struct EntryFunctionStruct {
+    function: String,
+    formula: Option<String>,
+    parameters: Option<BonusParameterStruct>,
+    count: Option<CountStruct>,
+    copy_components: Option<CopyComponentsStruct>,
+}
+
+impl TryFrom<EntryFunctionJson> for EntryFunctionStruct {
+    type Error = String;
+
+    /// Validate supported component functions while retaining the existing count and bonus fields.
+    fn try_from(raw: EntryFunctionJson) -> Result<Self, Self::Error> {
+        let copy_components = if raw.function == "minecraft:copy_components" {
+            let copy: CopyComponentsStruct =
+                serde_json::from_value(serde_json::Value::Object(raw.remaining))
+                    .map_err(|error| format!("invalid copy_components function: {error}"))?;
+            if copy.source != "block_entity" {
+                return Err(format!(
+                    "unsupported copy_components source: {}",
+                    copy.source
+                ));
+            }
+            validate_component_conditions(&copy.conditions)?;
+            Some(copy)
+        } else {
+            None
+        };
+        Ok(Self {
+            function: raw.function,
+            formula: raw.formula,
+            parameters: raw.parameters,
+            count: raw.count,
+            copy_components,
+        })
+    }
+}
+
+/// Reject predicates that would otherwise silently turn component copying into an unconditional function.
+fn validate_component_conditions(conditions: &[ConditionStruct]) -> Result<(), String> {
+    for condition in conditions {
+        let valid = match condition.condition.as_str() {
+            "minecraft:survives_explosion" | "minecraft:killed_by_player" => true,
+            "minecraft:random_chance" => condition.chance.is_some(),
+            "minecraft:random_chance_with_enchanted_bonus" => {
+                condition.unenchanted_chance.is_some() && condition.enchanted_chance.is_some()
+            }
+            "minecraft:table_bonus" => condition
+                .chances
+                .as_ref()
+                .is_some_and(|list| !list.is_empty()),
+            "minecraft:match_tool" => parse_condition(condition) != LootCondition::None,
+            "minecraft:all_of" | "minecraft:any_of" => {
+                if let Some(terms) = &condition.terms {
+                    validate_component_conditions(terms)?;
+                    condition.condition == "minecraft:all_of"
+                        || (!terms.is_empty()
+                            && terms.iter().all(|term| {
+                                matches!(
+                                    parse_condition(term),
+                                    LootCondition::SilkTouch
+                                        | LootCondition::Shears
+                                        | LootCondition::SilkTouchOrShears
+                                )
+                            }))
+                } else {
+                    false
+                }
+            }
+            "minecraft:inverted" => {
+                if let Some(term) = &condition.term {
+                    validate_component_conditions(std::slice::from_ref(term.as_ref()))?;
+                    parse_condition(condition) != LootCondition::None
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        };
+        if !valid {
+            return Err(format!(
+                "unsupported or malformed copy_components condition: {}",
+                condition.condition
+            ));
+        }
+    }
+    Ok(())
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -366,8 +489,10 @@ struct ParsedEntry {
     max_count: i32,
     condition: LootCondition,
     bonus_formula: Option<LootBonusFormula>,
+    functions: Vec<CopyComponentsStruct>,
 }
 
+/// Flatten supported entries while preserving item functions in their source order.
 fn extract_entries(
     entry: &PoolEntryStruct,
     inherited_condition: LootCondition,
@@ -377,6 +502,7 @@ fn extract_entries(
     extract_entries_with_depth(entry, inherited_condition, out, empty_weight, 0);
 }
 
+/// Flatten nested entries within the existing depth limit without altering count or bonus extraction.
 fn extract_entries_with_depth(
     entry: &PoolEntryStruct,
     inherited_condition: LootCondition,
@@ -450,6 +576,11 @@ fn extract_entries_with_depth(
                     max_count,
                     condition: entry_cond,
                     bonus_formula,
+                    functions: entry
+                        .functions
+                        .iter()
+                        .filter_map(|function| function.copy_components.clone())
+                        .collect(),
                 });
             }
         }
@@ -481,6 +612,11 @@ fn extract_entries_with_depth(
                                 max_count: 1,
                                 condition: entry_cond,
                                 bonus_formula: None,
+                                functions: entry
+                                    .functions
+                                    .iter()
+                                    .filter_map(|function| function.copy_components.clone())
+                                    .collect(),
                             });
                         }
                     }
@@ -652,6 +788,35 @@ fn bonus_to_tokens(bonus: Option<LootBonusFormula>) -> TokenStream {
     }
 }
 
+/// Emit an optional registry-name filter without conflating omission and an empty list.
+fn component_filter_to_tokens(filter: Option<&[String]>) -> TokenStream {
+    match filter {
+        None => quote! { None },
+        Some(names) => {
+            let names = names
+                .iter()
+                .map(|name| LitStr::new(name, Span::call_site()));
+            quote! { Some(&[#(#names),*]) }
+        }
+    }
+}
+
+/// Emit the component source, filters, and conditions for one ordered function.
+fn function_to_tokens(function: &CopyComponentsStruct) -> TokenStream {
+    let source = LitStr::new(&function.source, Span::call_site());
+    let include = component_filter_to_tokens(function.include.as_deref());
+    let exclude = component_filter_to_tokens(function.exclude.as_deref());
+    let condition = condition_to_tokens(combine_conditions(&function.conditions));
+    quote! {
+        LootFunction::CopyComponents {
+            source: #source,
+            include: #include,
+            exclude: #exclude,
+            condition: #condition,
+        }
+    }
+}
+
 /// Emit static entry arrays and pool literals for one table.
 /// Returns the list of `LootPool` literals (one per pool).
 fn emit_table(
@@ -688,6 +853,7 @@ fn emit_table(
                 let max_count = e.max_count;
                 let cond_tokens = condition_to_tokens(e.condition);
                 let bonus_tokens = bonus_to_tokens(e.bonus_formula);
+                let functions = e.functions.iter().map(function_to_tokens);
 
                 quote! {
                     LootEntry {
@@ -697,6 +863,7 @@ fn emit_table(
                         max_count: #max_count,
                         condition: #cond_tokens,
                         bonus_formula: #bonus_tokens,
+                        functions: &[#(#functions),*],
                     }
                 }
             })
@@ -764,9 +931,7 @@ fn collect_json_files(base: &Path, dir: &Path) -> Vec<(String, ChestLootTableJso
     result
 }
 
-/// Read every loot JSON from `../../assets/datapack/data/minecraft/loot_table/` (recursively)
-/// and emit a `pumpkin-data/src/generated/chest_loot.rs` with static constants
-/// and a `get_chest_loot_table(key) -> Option<&'static ChestLootTable>` function.
+/// Generate static loot definitions and registry lookup functions from the bundled tables.
 pub fn build() -> TokenStream {
     let base = Path::new("../../assets/datapack/data/minecraft/loot_table");
 
@@ -801,6 +966,7 @@ pub fn build() -> TokenStream {
 
     // Emit get_loot_table and get_chest_loot_table
     all_tokens.extend(quote! {
+        /// Return a bundled loot table by its namespaced or short registry path.
         #[must_use]
         pub fn get_loot_table(key: &str) -> Option<&'static LootTable> {
             match key {
@@ -809,6 +975,7 @@ pub fn build() -> TokenStream {
             }
         }
 
+        /// Return a bundled loot table through the legacy chest-loot lookup name.
         #[must_use]
         pub fn get_chest_loot_table(key: &str) -> Option<&'static LootTable> {
             get_loot_table(key)
@@ -818,5 +985,225 @@ pub fn build() -> TokenStream {
     quote! {
         pub use pumpkin_util::loot_table::*;
         #all_tokens
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Component copying must survive generation instead of being discarded from the bundled shulker table.
+    #[test]
+    fn bundled_shulker_retains_component_function() -> Result<(), Box<dyn std::error::Error>> {
+        let table: ChestLootTableJson = serde_json::from_str(include_str!(
+            "../../../assets/datapacks/26_2/data/minecraft/loot_table/blocks/shulker_box.json"
+        ))?;
+        let mut tokens = TokenStream::new();
+        emit_table("SHULKER_BOX", &table, &mut tokens);
+        let generated = tokens.to_string();
+        assert!(generated.contains("CopyComponents"), "{generated}");
+        assert!(generated.contains("minecraft:container"), "{generated}");
+        Ok(())
+    }
+
+    /// A supported function with a missing source must fail parsing rather than disappear.
+    #[test]
+    fn copy_components_requires_a_source() {
+        let parsed = serde_json::from_str::<EntryFunctionStruct>(
+            r#"{"function":"minecraft:copy_components","include":["minecraft:custom_name"]}"#,
+        );
+        assert!(parsed.is_err());
+    }
+
+    /// Omitted filters include all values, while an explicit empty list must survive generation.
+    #[test]
+    fn copy_components_distinguishes_absent_and_empty_filters()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let unrestricted: EntryFunctionStruct = serde_json::from_str(
+            r#"{"function":"minecraft:copy_components","source":"block_entity"}"#,
+        )?;
+        let empty: EntryFunctionStruct = serde_json::from_str(
+            r#"{"function":"minecraft:copy_components","source":"block_entity","include":[],"exclude":[]}"#,
+        )?;
+        let unrestricted = unrestricted
+            .copy_components
+            .ok_or("missing unrestricted function")?;
+        let empty = empty.copy_components.ok_or("missing empty function")?;
+        assert_eq!(unrestricted.include, None);
+        assert_eq!(unrestricted.exclude, None);
+        assert_eq!(empty.include, Some(Vec::new()));
+        assert_eq!(empty.exclude, Some(Vec::new()));
+        assert_eq!(
+            component_filter_to_tokens(empty.include.as_deref()).to_string(),
+            "Some (& [])"
+        );
+        assert_eq!(
+            component_filter_to_tokens(unrestricted.include.as_deref()).to_string(),
+            "None"
+        );
+        Ok(())
+    }
+
+    /// Filters may overlap, and their names and conditions must be retained without selecting values during generation.
+    #[test]
+    fn copy_components_retains_filters_and_conditions() -> Result<(), Box<dyn std::error::Error>> {
+        let function: EntryFunctionStruct = serde_json::from_str(
+            r#"{
+                "function":"minecraft:copy_components",
+                "source":"block_entity",
+                "include":["custom_name","minecraft:container"],
+                "exclude":["minecraft:container"],
+                "conditions":[
+                    {"condition":"minecraft:random_chance","chance":0.25},
+                    {"condition":"minecraft:killed_by_player"}
+                ]
+            }"#,
+        )?;
+        let copy = function
+            .copy_components
+            .ok_or("missing component function")?;
+        assert_eq!(
+            copy.include.as_deref(),
+            Some(
+                [
+                    "minecraft:custom_name".to_owned(),
+                    "minecraft:container".to_owned()
+                ]
+                .as_slice()
+            )
+        );
+        assert_eq!(
+            copy.exclude.as_deref(),
+            Some(["minecraft:container".to_owned()].as_slice())
+        );
+        assert_eq!(
+            combine_conditions(&copy.conditions),
+            LootCondition::AllOf(&[
+                LootCondition::RandomChance { chance: 0.25 },
+                LootCondition::KilledByPlayer,
+            ]),
+        );
+        let generated = function_to_tokens(&copy).to_string();
+        assert!(generated.contains("LootCondition :: AllOf"), "{generated}");
+        assert!(generated.contains("0.25f32"), "{generated}");
+        Ok(())
+    }
+
+    /// Invalid sources, filters, and unrepresented predicates must not silently change component-copy semantics.
+    #[test]
+    fn copy_components_rejects_malformed_definitions() {
+        for definition in [
+            r#"{"source":"this"}"#,
+            r#"{"source":false}"#,
+            r#"{"source":"block_entity","include":"minecraft:custom_name"}"#,
+            r#"{"source":"block_entity","include":null}"#,
+            r#"{"source":"block_entity","exclude":[2]}"#,
+            r#"{"source":"block_entity","include":["Minecraft:CustomName"]}"#,
+            r#"{"source":"block_entity","conditions":[{}]}"#,
+            r#"{"source":"block_entity","conditions":[{"condition":"minecraft:random_chance"}]}"#,
+            r#"{"source":"block_entity","conditions":[{"condition":"minecraft:all_of","terms":[{"condition":"unknown"}]}]}"#,
+            r#"{"source":"block_entity","conditions":[{"condition":"minecraft:any_of","terms":[{"condition":"minecraft:random_chance","chance":0.5}]}]}"#,
+        ] {
+            let json = format!(
+                "{{\"function\":\"minecraft:copy_components\",{}",
+                &definition[1..]
+            );
+            assert!(
+                serde_json::from_str::<EntryFunctionStruct>(&json).is_err(),
+                "{json}"
+            );
+        }
+    }
+
+    /// Ordered component copies do not replace the established count, weight, and bonus extraction.
+    #[test]
+    fn copying_preserves_order_and_legacy_count_fields() -> Result<(), Box<dyn std::error::Error>> {
+        let source = r#"{
+            "type":"minecraft:item","name":"minecraft:diamond","weight":3,
+            "functions":[
+                {"function":"minecraft:copy_components","source":"block_entity","include":["minecraft:custom_name"]},
+                {"function":"minecraft:set_count","count":{"type":"minecraft:uniform","min":2,"max":4}},
+                {"function":"minecraft:apply_bonus","formula":"minecraft:uniform_bonus_count","parameters":{"bonusMultiplier":2}},
+                {"function":"minecraft:copy_components","source":"block_entity","include":["minecraft:container"]}
+            ]
+        }"#;
+        let mut entry: PoolEntryStruct = serde_json::from_str(source)?;
+        let mut with_copy = Vec::new();
+        let mut empty_weight = 0;
+        extract_entries(
+            &entry,
+            LootCondition::None,
+            &mut with_copy,
+            &mut empty_weight,
+        );
+        entry
+            .functions
+            .retain(|function| function.copy_components.is_none());
+        let mut without_copy = Vec::new();
+        extract_entries(
+            &entry,
+            LootCondition::None,
+            &mut without_copy,
+            &mut empty_weight,
+        );
+        let ([with_copy], [without_copy]) = (with_copy.as_slice(), without_copy.as_slice()) else {
+            return Err("expected one item from each table".into());
+        };
+        assert_eq!(
+            (with_copy.weight, with_copy.min_count, with_copy.max_count),
+            (3, 2, 4)
+        );
+        assert_eq!(
+            (with_copy.weight, with_copy.min_count, with_copy.max_count),
+            (
+                without_copy.weight,
+                without_copy.min_count,
+                without_copy.max_count
+            )
+        );
+        assert_eq!(
+            with_copy.bonus_formula,
+            Some(LootBonusFormula::UniformBonusCount(2))
+        );
+        assert_eq!(with_copy.bonus_formula, without_copy.bonus_formula);
+        assert!(without_copy.functions.is_empty());
+        let [first, second] = with_copy.functions.as_slice() else {
+            return Err("expected two ordered component functions".into());
+        };
+        assert_eq!(
+            first.include.as_deref(),
+            Some(["minecraft:custom_name".to_owned()].as_slice())
+        );
+        assert_eq!(
+            second.include.as_deref(),
+            Some(["minecraft:container".to_owned()].as_slice())
+        );
+        Ok(())
+    }
+
+    /// Every bundled component-copying block table must retain its supported function after generation.
+    #[test]
+    fn bundled_component_tables_generate_without_loss() -> Result<(), Box<dyn std::error::Error>> {
+        let base = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../assets/datapacks/26_2/data/minecraft/loot_table/blocks");
+        let mut component_tables = 0;
+        for entry in fs::read_dir(base)? {
+            let entry = entry?;
+            let content = fs::read_to_string(entry.path())?;
+            if !content.contains("minecraft:copy_components") {
+                continue;
+            }
+            component_tables += 1;
+            let table: ChestLootTableJson = serde_json::from_str(&content)?;
+            let mut generated = TokenStream::new();
+            emit_table("BLOCK", &table, &mut generated);
+            assert!(
+                generated.to_string().contains("CopyComponents"),
+                "{}",
+                entry.path().display()
+            );
+        }
+        assert_eq!(component_tables, 71);
+        Ok(())
     }
 }
