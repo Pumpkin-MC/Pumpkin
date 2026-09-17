@@ -14,6 +14,8 @@ use crate::block::entities::BlockEntity;
 #[cfg(test)]
 mod lifecycle_tests;
 #[cfg(test)]
+mod persistence_tests;
+#[cfg(test)]
 mod tests;
 
 #[derive(Default, Clone)]
