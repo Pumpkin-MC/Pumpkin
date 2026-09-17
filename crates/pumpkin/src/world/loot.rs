@@ -1,3 +1,4 @@
+use pumpkin_data::Block;
 use pumpkin_data::BlockState;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
@@ -65,6 +66,27 @@ fn check_condition(
                 .get(index)
                 .is_some_and(|chance| rng.next_f32() < *chance)
         }
+        LootCondition::BlockStateProperty { properties } => {
+            params.block_state.is_some_and(|state| {
+                Block::from_state_id(state.id)
+                    .properties(state.id)
+                    .is_some_and(|props| {
+                        let props = props.to_props();
+                        properties.iter().all(|wanted| props.contains(wanted))
+                    })
+            })
+        }
+        LootCondition::Inverted(inner) => !check_condition(
+            *inner,
+            has_silk_touch,
+            has_shears,
+            fortune_level,
+            params,
+            rng,
+        ),
+        LootCondition::AnyOf(conditions) => conditions
+            .iter()
+            .any(|c| check_condition(*c, has_silk_touch, has_shears, fortune_level, params, rng)),
         LootCondition::AllOf(conditions) => conditions
             .iter()
             .all(|c| check_condition(*c, has_silk_touch, has_shears, fortune_level, params, rng)),
@@ -311,5 +333,94 @@ fn shuffle_and_split_items(
     for i in (1..n).rev() {
         let j = rng.next_bounded_i32((i + 1) as i32) as usize;
         result.swap(i, j);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::Block;
+    use pumpkin_data::loot_table::get_loot_table;
+
+    fn state_with(block: &Block, name: &str, value: &str) -> &'static BlockState {
+        block
+            .states
+            .iter()
+            .find(|state| {
+                block.properties(state.id).is_some_and(|props| {
+                    props
+                        .to_props()
+                        .iter()
+                        .any(|(key, val)| *key == name && *val == value)
+                })
+            })
+            .expect("block has a state with this property value")
+    }
+
+    /// Returns `(item id, count)` for every stack the block drops in `state`, over 16 seeds.
+    fn drops(block: &Block, state: &'static BlockState) -> Vec<(u16, u8)> {
+        let table = get_loot_table(&format!("minecraft:blocks/{}", block.name))
+            .expect("block has a loot table");
+        let params = LootContextParameters {
+            block_state: Some(state),
+            ..Default::default()
+        };
+        (0..16)
+            .flat_map(|seed| generate_loot_with_context(table, seed, &params))
+            .map(|stack| (stack.item.id, stack.item_count))
+            .collect()
+    }
+
+    #[test]
+    fn composter_drops_bone_meal_only_when_full() {
+        let composter = &Block::COMPOSTER;
+        let empty = drops(composter, state_with(composter, "level", "0"));
+        assert!(empty.iter().all(|(id, _)| *id == Item::COMPOSTER.id));
+
+        let full = drops(composter, state_with(composter, "level", "8"));
+        let bone_meal = full
+            .iter()
+            .filter(|(id, _)| *id == Item::BONE_MEAL.id)
+            .count();
+        assert_eq!(bone_meal, 16);
+    }
+
+    #[test]
+    fn sweet_berry_bush_drops_depend_on_age() {
+        let bush = &Block::SWEET_BERRY_BUSH;
+        assert!(drops(bush, state_with(bush, "age", "0")).is_empty());
+
+        let ripe = drops(bush, state_with(bush, "age", "3"));
+        assert_eq!(ripe.len(), 16);
+        assert!(
+            ripe.iter()
+                .all(|(id, count)| *id == Item::SWEET_BERRIES.id && (2..=3).contains(count))
+        );
+    }
+
+    #[test]
+    fn only_double_slabs_drop_two() {
+        let slab = &Block::OAK_SLAB;
+        let single = drops(slab, state_with(slab, "type", "bottom"));
+        assert_eq!(single.len(), 16);
+        assert!(single.iter().all(|(_, count)| *count == 1));
+
+        let double = drops(slab, state_with(slab, "type", "double"));
+        assert_eq!(double.len(), 16);
+        assert!(double.iter().all(|(_, count)| *count == 2));
+    }
+
+    #[test]
+    fn wheat_drops_wheat_only_when_mature() {
+        let wheat = &Block::WHEAT;
+        let young = drops(wheat, state_with(wheat, "age", "0"));
+        assert!(young.iter().all(|(id, _)| *id != Item::WHEAT.id));
+
+        let mature = drops(wheat, state_with(wheat, "age", "7"));
+        let wheat_drops = mature
+            .iter()
+            .filter(|(id, _)| *id == Item::WHEAT.id)
+            .count();
+        assert_eq!(wheat_drops, 16);
     }
 }
