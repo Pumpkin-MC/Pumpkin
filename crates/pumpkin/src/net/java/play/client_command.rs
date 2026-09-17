@@ -16,12 +16,35 @@ impl JavaClient {
                 let Some(server) = player.world().server.upgrade() else {
                     return;
                 };
+                let is_hardcore = server.basic_config.hardcore;
                 server.spawn_task(async move {
+                    // Hardcore's "Spectate World" ignores the player's bed/anchor and uses the
+                    // overworld spawn. Preserve the saved respawn point so spectating does not
+                    // mutate persistent player data just to choose this one respawn location.
+                    let saved_respawn_point = if is_hardcore {
+                        player_c
+                            .respawn_point
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            .take()
+                    } else {
+                        None
+                    };
+
                     player_c
                         .world()
                         .clone()
                         .respawn_player(&player_c, false)
                         .await;
+
+                    if is_hardcore {
+                        *player_c
+                            .respawn_point
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                            saved_respawn_point;
+                        player_c.set_gamemode(GameMode::Spectator);
+                    }
 
                     {
                         let screen_handler = player_c
