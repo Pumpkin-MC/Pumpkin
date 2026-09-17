@@ -269,6 +269,7 @@ impl pumpkin::plugin::command::HostConsumedArgs for PluginHostState {
                     pumpkin::plugin::command::EntityAnchor::Feet
                 }
             }),
+            // These types don't have direct WIT resource mappings yet
             OwnedArg::Entities(_) | OwnedArg::Entity(_) | OwnedArg::GameProfiles(_) => {
                 Arg::Simple(String::new())
             }
