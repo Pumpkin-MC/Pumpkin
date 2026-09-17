@@ -92,7 +92,11 @@ impl BlockBehaviour for StemBlock {
     }
 
     fn random_tick(&self, args: RandomTickArgs<'_>) {
-        // TODO add light level check
+        // Vanilla `StemBlock.randomTick` requires a raw brightness of at
+        // least 9 at the stem for natural growth.
+        if args.world.get_raw_brightness(args.position, 0) < 9 {
+            return;
+        }
         let f: f32 = get_available_moisture(args.world, args.position, args.block);
         if rand::rng().random_range(0..=(25.0 / f).floor() as i32) == 0 {
             let (block, state) = args.world.get_block_and_state_id(args.position);
