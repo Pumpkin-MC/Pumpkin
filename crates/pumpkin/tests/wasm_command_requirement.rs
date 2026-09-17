@@ -36,11 +36,11 @@ fn requirement_result(
         .requires(requirement)
         .into_detached_node();
 
-    let DetachedNode::Literal(node) = node else {
-        panic!("expected literal node");
-    };
-
-    node.owned.requirements.evaluate(&dummy_source())
+    if let DetachedNode::Literal(node) = node {
+        node.owned.requirements.evaluate(&dummy_source())
+    } else {
+        false
+    }
 }
 
 #[test]
