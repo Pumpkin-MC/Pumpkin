@@ -1142,10 +1142,12 @@ impl DispenserBlock {
             Facing::Up
         };
 
-        // TODO: Carry over the contents of the box
-        let _ = item.split(1);
+        let placed = item.split(1);
         ctx.world
             .set_block_state(&target, props.to_state_id(block), BlockFlags::NOTIFY_ALL);
+        if let Some(block_entity) = ctx.world.get_block_entity(&target) {
+            block_entity.apply_item_components(&placed);
+        }
         Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
 
         true
