@@ -2,7 +2,7 @@ use wasmtime::component::bindgen;
 
 bindgen!({
     path: "../pumpkin-plugin-wit/v0.1",
-    world: "legacy-plugin",
+    world: "plugin",
     imports: {
         "pumpkin:plugin/command@0.1.0.[method]command-sender.has-permission": async | store | trappable,
         "pumpkin:plugin/datapack@0.1.0.[method]datapack-manager.disable-pack": async | store | trappable,
@@ -68,6 +68,3 @@ bindgen!({
     },
     exports: { default: async | store | trappable },
 });
-
-pub use LegacyPlugin as Plugin;
-pub type PluginPre<T> = LegacyPluginPre<T>;

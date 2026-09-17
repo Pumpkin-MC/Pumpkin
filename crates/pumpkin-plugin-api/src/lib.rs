@@ -67,9 +67,7 @@
 //! ```
 
 use crate::{
-    commands::{
-        COMMAND_HANDLERS, COMMAND_REQUIREMENT_HANDLERS, COMMAND_SUGGESTION_HANDLERS,
-    },
+    commands::{COMMAND_HANDLERS, COMMAND_SUGGESTION_HANDLERS},
     events::EVENT_HANDLERS,
     logging::WitSubscriber,
     scheduler::TASK_HANDLERS,
@@ -322,20 +320,6 @@ impl wit::Guest for Component {
                 values: Vec::new(),
             }
         }
-    }
-
-    /// WIT entry point — checks a registered command-node requirement.
-    fn handle_command_requirement(
-        handler_id: u32,
-        sender: command::CommandSender,
-        server: Server,
-    ) -> bool {
-        let handler = COMMAND_REQUIREMENT_HANDLERS
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .get(&handler_id)
-            .cloned();
-        handler.is_some_and(|handler| handler.check(sender, server))
     }
 
     /// WIT entry point — dispatches a scheduled task invocation to the registered handler for `handler_id`.
