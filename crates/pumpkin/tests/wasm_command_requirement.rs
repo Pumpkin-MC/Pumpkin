@@ -29,7 +29,9 @@ fn dummy_source() -> CommandSource {
     }
 }
 
-fn requirement_result(requirement: impl for<'a> Fn(&'a CommandSource) -> bool + Send + Sync + 'static) -> bool {
+fn requirement_result(
+    requirement: impl for<'a> Fn(&'a CommandSource) -> bool + Send + Sync + 'static,
+) -> bool {
     let node = WasmCommandNode::Literal(literal("restricted"))
         .requires(requirement)
         .into_detached_node();
