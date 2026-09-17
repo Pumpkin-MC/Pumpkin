@@ -128,21 +128,21 @@ impl JavaClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use uuid::Uuid;
 
     #[test]
     fn respawn_claim_allows_only_one_in_flight_respawn() {
-        let in_progress = AtomicBool::new(false);
+        let player_id = Uuid::from_u128(1);
+        let claim = try_claim_respawn(player_id).expect("first respawn should be claimed");
 
-        assert!(try_claim_respawn(&in_progress));
-        assert!(!try_claim_respawn(&in_progress));
+        assert!(try_claim_respawn(player_id).is_none());
 
-        in_progress.store(false, Ordering::Release);
-        assert!(try_claim_respawn(&in_progress));
+        drop(claim);
+        assert!(try_claim_respawn(player_id).is_some());
     }
 
     #[test]
-    fn mandatory_gamemode_transition_has_internal_api() {
-        let _: fn(&Player, GameMode) -> bool = Player::force_gamemode;
+    fn mandatory_hardcore_spectator_transition_has_internal_api() {
+        let _: fn(&Player) = force_hardcore_spectator;
     }
 }
