@@ -108,15 +108,19 @@ pub struct CustomNameImpl {
     pub name: TextComponent,
 }
 impl CustomNameImpl {
+    /// Reads a structured text component without flattening its styles or children.
     pub fn read_data(data: &NbtTag) -> Option<Self> {
-        data.extract_string().map(|name| Self {
-            name: TextComponent::text(name.to_string()),
-        })
+        TextComponent::try_from_nbt(data)
+            .ok()
+            .map(|name| Self { name })
     }
 }
 impl DataComponentImpl for CustomNameImpl {
+    /// Persists the untranslated text tree, including styles and child components.
     fn write_data(&self) -> NbtTag {
-        NbtTag::String(self.name.clone().get_text().into())
+        self.name
+            .0
+            .to_nbt_tag_for_version(&pumpkin_util::version::JavaMinecraftVersion::V_26_2)
     }
     fn get_hash(&self) -> i32 {
         get_str_hash(self.name.clone().get_text().as_str()) as i32
@@ -125,32 +129,57 @@ impl DataComponentImpl for CustomNameImpl {
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct ItemNameImpl {
-    pub name: Cow<'static, str>,
+pub enum ItemNameImpl {
+    /// A generated item's constant translation key.
+    Translation(Cow<'static, str>),
+    /// A stored name with arbitrary text content, styles, and children.
+    Component(TextComponent),
 }
 impl ItemNameImpl {
+    /// Reads item names without flattening structured or literal text into a translation key.
     pub fn read_data(data: &NbtTag) -> Option<Self> {
-        let name = match data {
-            NbtTag::String(name) => name.to_string(),
-            NbtTag::Compound(component) => component
-                .get_string("translate")
-                .or_else(|| component.get_string("text"))?
-                .to_owned(),
-            _ => return None,
-        };
-        Some(Self {
-            name: Cow::Owned(name),
-        })
+        if let NbtTag::Compound(component) = data
+            && component.child_tags.len() == 1
+            && let Some(key) = component.get_string("translate")
+        {
+            return Some(Self::Translation(Cow::Owned(key.to_owned())));
+        }
+        TextComponent::try_from_nbt(data).ok().map(Self::Component)
+    }
+
+    /// Returns a display component while retaining translation and formatting semantics.
+    #[must_use]
+    #[allow(
+        deprecated,
+        reason = "Stored translation keys are supplied at runtime."
+    )]
+    pub fn to_text_component(&self) -> TextComponent {
+        match self {
+            Self::Translation(key) => TextComponent::translate(key.clone(), &[]),
+            Self::Component(component) => component.clone(),
+        }
     }
 }
 impl DataComponentImpl for ItemNameImpl {
+    /// Persists generated translation keys and stored text trees in the same NBT component format.
     fn write_data(&self) -> NbtTag {
-        let mut component = NbtCompound::new();
-        component.put_string("translate", self.name.to_string());
-        NbtTag::Compound(component)
+        match self {
+            Self::Translation(key) => {
+                let mut component = NbtCompound::new();
+                component.put_string("translate", key.to_string());
+                NbtTag::Compound(component)
+            }
+            Self::Component(component) => component
+                .0
+                .to_nbt_tag_for_version(&pumpkin_util::version::JavaMinecraftVersion::V_26_2),
+        }
     }
+    /// Hashes the translation key or displayed literal text using the existing string component hash.
     fn get_hash(&self) -> i32 {
-        get_str_hash(&self.name) as i32
+        match self {
+            Self::Translation(key) => get_str_hash(key) as i32,
+            Self::Component(component) => get_str_hash(&component.clone().get_text()) as i32,
+        }
     }
     default_impl!(ItemName);
 }
@@ -351,13 +380,57 @@ impl DataComponentImpl for CustomModelDataImpl {
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct TooltipDisplayImpl;
+pub struct TooltipDisplayImpl {
+    pub hide_tooltip: bool,
+    pub hidden_components: Vec<crate::data_component::DataComponent>,
+}
 impl TooltipDisplayImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
+    pub const DEFAULT: Self = Self {
+        hide_tooltip: false,
+        hidden_components: Vec::new(),
+    };
+
+    /// Reads tooltip visibility and its ordered set of hidden component registry names.
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let compound = data.extract_compound()?;
+        let hide_tooltip = match compound.get("hide_tooltip") {
+            None => false,
+            Some(NbtTag::Byte(value)) => *value != 0,
+            _ => return None,
+        };
+        let mut hidden_components = Vec::new();
+        if let Some(tag) = compound.get("hidden_components") {
+            let NbtTag::List(list) = tag else {
+                return None;
+            };
+            for tag in list {
+                let component =
+                    crate::data_component::DataComponent::try_from_name(tag.extract_string()?)?;
+                if !hidden_components.contains(&component) {
+                    hidden_components.push(component);
+                }
+            }
+        }
+        Some(Self {
+            hide_tooltip,
+            hidden_components,
+        })
     }
 }
 impl DataComponentImpl for TooltipDisplayImpl {
+    /// Persists visibility and hidden registry names without coupling them to protocol IDs.
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        compound.put_bool("hide_tooltip", self.hide_tooltip);
+        compound.put_list(
+            "hidden_components",
+            self.hidden_components
+                .iter()
+                .map(|component| NbtTag::String(component.to_name().into()))
+                .collect(),
+        );
+        NbtTag::Compound(compound)
+    }
     default_impl!(TooltipDisplay);
 }
 
@@ -523,14 +596,41 @@ impl DataComponentImpl for BannerPatternsImpl {
     default_impl!(BannerPatterns);
 }
 
+/// The four decorated-pot faces, ordered back, left, right, then front.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct PotDecorationsImpl;
+pub struct PotDecorationsImpl {
+    pub decorations: [&'static crate::item::Item; 4],
+}
 impl PotDecorationsImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
+    pub const EMPTY: Self = Self {
+        decorations: [&crate::item::Item::BRICK; 4],
+    };
+
+    /// Reads up to four item names, filling unspecified faces with plain bricks.
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let NbtTag::List(list) = data else {
+            return None;
+        };
+        if list.len() > 4 {
+            return None;
+        }
+        let mut decorations = Self::EMPTY.decorations;
+        for (face, tag) in decorations.iter_mut().zip(list) {
+            *face = crate::item::Item::from_registry_key(tag.extract_string()?)?;
+        }
+        Some(Self { decorations })
     }
 }
 impl DataComponentImpl for PotDecorationsImpl {
+    /// Persists all four faces as registry names in their placement order.
+    fn write_data(&self) -> NbtTag {
+        NbtTag::List(
+            self.decorations
+                .iter()
+                .map(|item| NbtTag::String(format!("minecraft:{}", item.registry_key).into()))
+                .collect(),
+        )
+    }
     default_impl!(PotDecorations);
 }
 
@@ -564,6 +664,92 @@ impl BreakSoundImpl {
 }
 impl DataComponentImpl for BreakSoundImpl {
     default_impl!(BreakSound);
+}
+
+#[cfg(test)]
+mod copy_component_tests {
+    use super::*;
+
+    /// Custom names retain formatting when persisted as item components.
+    #[test]
+    fn custom_name_preserves_style() {
+        let original = CustomNameImpl {
+            name: TextComponent::text("Stored name").bold(),
+        };
+        assert_eq!(
+            CustomNameImpl::read_data(&original.write_data()),
+            Some(original)
+        );
+    }
+
+    /// Vanilla colored names retain named colors and explicitly enabled or disabled styles.
+    #[test]
+    fn custom_name_reads_vanilla_colored_text() -> Result<(), Box<dyn std::error::Error>> {
+        for (text, color, style) in [
+            ("Archive", "gold", Some(("bold", true))),
+            ("Alex fixture", "green", None),
+            ("Stored shulker", "aqua", Some(("italic", false))),
+        ] {
+            let mut compound = NbtCompound::new();
+            compound.put_string("text", text.into());
+            compound.put_string("color", color.into());
+            if let Some((style, enabled)) = style {
+                compound.put_bool(style, enabled);
+            }
+            let original = NbtTag::Compound(compound);
+            let name = TextComponent::try_from_nbt(&original)?;
+            assert_eq!(CustomNameImpl { name }.write_data(), original);
+        }
+        Ok(())
+    }
+
+    /// Pot decorations preserve all four faces in back, left, right, front order.
+    #[test]
+    fn pot_decorations_preserve_faces() {
+        let expected = NbtTag::List(
+            ["angler", "archer", "arms_up", "blade"]
+                .into_iter()
+                .map(|name| NbtTag::String(format!("minecraft:{name}_pottery_sherd").into()))
+                .collect(),
+        );
+        assert_eq!(
+            PotDecorationsImpl::read_data(&expected).map(|value| value.write_data()),
+            Some(expected)
+        );
+    }
+
+    /// Banner tooltip visibility persists alongside the selected hidden component types.
+    #[test]
+    fn tooltip_display_preserves_hidden_components() {
+        let mut compound = NbtCompound::new();
+        compound.put_bool("hide_tooltip", true);
+        compound.put_list(
+            "hidden_components",
+            vec![
+                NbtTag::String("minecraft:banner_patterns".into()),
+                NbtTag::String("minecraft:rarity".into()),
+            ],
+        );
+        let expected = NbtTag::Compound(compound);
+        assert_eq!(
+            TooltipDisplayImpl::read_data(&expected).map(|value| value.write_data()),
+            Some(expected)
+        );
+    }
+
+    /// Stored item names retain styles and literal text independently of generated translation keys.
+    #[test]
+    fn item_name_preserves_structured_text() {
+        let original = ItemNameImpl::Component(TextComponent::text("Named banner").bold());
+        assert_eq!(
+            ItemNameImpl::read_data(&original.write_data()),
+            Some(original)
+        );
+        assert_eq!(
+            ItemNameImpl::read_data(&NbtTag::String("Literal name".into())),
+            Some(ItemNameImpl::Component(TextComponent::text("Literal name")))
+        );
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

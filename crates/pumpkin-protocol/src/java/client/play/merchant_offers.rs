@@ -297,6 +297,7 @@ mod tests {
         assert!(!offer.needs_restock());
     }
 
+    /// Dynamic dyed armor, stew effects, and translated map names use valid item component codecs.
     #[test]
     fn dynamic_villager_results_have_network_codecs() {
         let mut dyed = ItemStack::new(1, &Item::LEATHER_CHESTPLATE);
@@ -322,12 +323,7 @@ mod tests {
             .push((DataComponent::MapId, Some(MapIdImpl { id: 1 }.to_dyn())));
         map.patch.push((
             DataComponent::ItemName,
-            Some(
-                ItemNameImpl {
-                    name: Cow::Borrowed("filled_map.mansion"),
-                }
-                .to_dyn(),
-            ),
+            Some(ItemNameImpl::Translation(Cow::Borrowed("filled_map.mansion")).to_dyn()),
         ));
 
         for output in [dyed, stew, map] {
