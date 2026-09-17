@@ -5365,6 +5365,8 @@ impl World {
         replaced_block_state_id
     }
 
+    /// Breaks a block after plugin approval, retaining its entity for loot or a filled creative container's full component copy.
+    /// Returns the removed state, or `None` when protected, empty, or cancelled.
     pub fn break_block(
         self: &Arc<Self>,
         position: &BlockPos,
@@ -5387,13 +5389,17 @@ impl World {
             return None;
         }
 
+        let block_entity = (broken_block_state.block_entity_type != u16::MAX)
+            .then(|| self.get_block_entity(position))
+            .flatten();
+
+        let creative_drop = cause
+            .is_some_and(|p| p.gamemode.load() == pumpkin_util::GameMode::Creative)
+            && block_entity
+                .as_ref()
+                .is_some_and(|entity| entity.drops_for_creative_player());
         let mut flags = flags;
-        if flags.contains(BlockFlags::SKIP_DROPS)
-            && cause.is_some_and(|p| p.gamemode.load() == pumpkin_util::GameMode::Creative)
-            && self
-                .get_block_entity(position)
-                .is_some_and(|entity| entity.drops_for_creative_player())
-        {
+        if creative_drop {
             flags.remove(BlockFlags::SKIP_DROPS);
         }
 
@@ -5418,18 +5424,13 @@ impl World {
         }
 
         if !flags.contains(BlockFlags::SKIP_DROPS) {
-            let tool = cause.as_ref().and_then(|p| {
-                let item = p.inventory().held_item();
-                if item.is_empty() { None } else { Some(item) }
-            });
-            let params = crate::world::loot::LootContextParameters {
-                tool,
-                block_state: Some(broken_block_state),
-                position: Some(position.to_f64()),
-                killed_by_player: Some(cause.is_some()),
-                ..Default::default()
-            };
-            crate::block::drop_loot(self, broken_block, position, true, &params);
+            self.drop_broken_block(
+                position,
+                cause,
+                broken_block_state,
+                block_entity,
+                creative_drop,
+            );
         }
 
         let new_state_id = if broken_block.is_waterlogged(broken_block_state.id) {
@@ -5474,6 +5475,35 @@ impl World {
         }
 
         Some(broken_state_id)
+    }
+
+    /// Generates drops from the captured source; filled creative containers copy all components before the drop event.
+    fn drop_broken_block(
+        self: &Arc<Self>,
+        position: &BlockPos,
+        cause: Option<&Arc<Player>>,
+        state: &'static BlockState,
+        block_entity: Option<Arc<dyn BlockEntity>>,
+        creative_drop: bool,
+    ) {
+        let block = Block::from_state_id(state.id);
+        if let (true, Some(block_entity)) = (creative_drop, block_entity.as_ref()) {
+            crate::block::drop_block_entity_item(self, block, position, block_entity.as_ref());
+            return;
+        }
+        let tool = cause.and_then(|player| {
+            let item = player.inventory().held_item();
+            if item.is_empty() { None } else { Some(item) }
+        });
+        let params = crate::world::loot::LootContextParameters {
+            tool,
+            block_state: Some(state),
+            block_entity,
+            position: Some(position.to_f64()),
+            killed_by_player: Some(cause.is_some()),
+            ..Default::default()
+        };
+        crate::block::drop_loot(self, block, position, true, &params);
     }
 
     #[must_use]
