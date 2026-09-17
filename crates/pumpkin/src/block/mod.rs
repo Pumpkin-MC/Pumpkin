@@ -475,7 +475,13 @@ pub fn drop_loot(
                 server.plugin_manager.fire_blocking(&server, &mut event);
             }
             if !event.cancelled {
-                for stack in event.items {
+                let block_entity = world.get_block_entity(pos);
+                for mut stack in event.items {
+                    if let Some(block_entity) = &block_entity
+                        && Block::from_item_id(stack.item.id) == Some(block)
+                    {
+                        block_entity.collect_item_components(&mut stack);
+                    }
                     world.drop_stack(pos, stack);
                 }
             }

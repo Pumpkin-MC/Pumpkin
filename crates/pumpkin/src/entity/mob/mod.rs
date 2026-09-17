@@ -105,6 +105,7 @@ impl MobEntity {
     pub const MAX_PICKUP_LOOT_CHANCE: f32 = 0.55;
     pub const MAX_ENCHANTED_ARMOR_CHANCE: f32 = 0.5;
     pub const MAX_ENCHANTED_WEAPON_CHANCE: f32 = 0.25;
+    pub const GUARANTEED_DROP_CHANCE: f32 = 2.0;
     pub const EQUIPMENT_POPULATION_ORDER: [EquipmentSlot; 4] = [
         EquipmentSlot::HEAD,
         EquipmentSlot::CHEST,
@@ -252,7 +253,93 @@ impl MobEntity {
         }
     }
 
+    pub fn spawn_at_location(&self, stack: ItemStack) {
+        if stack.is_empty() {
+            return;
+        }
+        let entity = &self.living_entity.entity;
+        let world = entity.world.load();
+        let item_entity = crate::entity::item::ItemEntity::new(
+            Entity::new(world.clone(), entity.pos.load(), &EntityType::ITEM),
+            stack,
+        );
+        world.spawn_entity(Arc::new(item_entity));
+    }
+
+    #[must_use]
+    pub fn drop_chance(&self, slot: &EquipmentSlot) -> f32 {
+        self.living_entity
+            .equipment_drop_chances
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(slot)
+            .copied()
+            .unwrap_or(crate::entity::mob::equipment::DEFAULT_EQUIPMENT_DROP_CHANCE)
+    }
+
+    pub fn set_guaranteed_drop(&self, slot: &EquipmentSlot) {
+        self.living_entity
+            .equipment_drop_chances
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(slot.clone(), Self::GUARANTEED_DROP_CHANCE);
+    }
+
+    /// Equips `stack` and tells tracking clients, returning what was in the slot.
+    pub fn set_item_slot(&self, slot: &EquipmentSlot, stack: ItemStack) -> ItemStack {
+        let previous = self
+            .living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .put(slot, stack.clone());
+        self.living_entity
+            .send_equipment_changes(&[(slot.clone(), stack)]);
+        previous
+    }
+
+    pub fn set_item_slot_and_drop_when_killed(&self, slot: &EquipmentSlot, stack: ItemStack) {
+        self.set_item_slot(slot, stack);
+        self.set_guaranteed_drop(slot);
+    }
+
+    fn write_drop_chances(&self, nbt: &mut NbtCompound) {
+        let chances = self
+            .living_entity
+            .equipment_drop_chances
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut compound = NbtCompound::new();
+        for (slot, chance) in chances.iter() {
+            if *chance != crate::entity::mob::equipment::DEFAULT_EQUIPMENT_DROP_CHANCE {
+                compound.put_float(slot.to_name(), *chance);
+            }
+        }
+        if !compound.child_tags.is_empty() {
+            nbt.put("drop_chances", pumpkin_nbt::tag::NbtTag::Compound(compound));
+        }
+    }
+
+    fn read_drop_chances(&self, nbt: &NbtCompound) {
+        let Some(compound) = nbt.get_compound("drop_chances") else {
+            return;
+        };
+        let mut chances = self
+            .living_entity
+            .equipment_drop_chances
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for (name, tag) in &compound.child_tags {
+            if let Some(slot) = EquipmentSlot::get_from_name(name)
+                && let Some(chance) = tag.extract_float()
+            {
+                chances.insert(slot.clone(), chance);
+            }
+        }
+    }
+
     pub fn write_mob_nbt(&self, nbt: &mut NbtCompound) {
+        self.write_drop_chances(nbt);
         if self.is_no_ai() {
             nbt.put_bool("NoAI", true);
         }
@@ -268,6 +355,7 @@ impl MobEntity {
     }
 
     pub fn read_mob_nbt(&self, nbt: &NbtCompound) {
+        self.read_drop_chances(nbt);
         if let Some(no_ai) = nbt.get_bool("NoAI") {
             self.set_no_ai(no_ai);
         }
@@ -771,6 +859,25 @@ pub trait Mob: EntityBase + Send + Sync {
     fn mob_tick(&self, _caller: &dyn EntityBase) {}
 
     fn post_tick(&self) {}
+
+    fn get_preferred_weapon_type(&self) -> Option<&'static pumpkin_data::tag::Tag> {
+        None
+    }
+
+    fn can_replace_current_item(
+        &self,
+        new_item: &ItemStack,
+        current_item: &ItemStack,
+        slot: &EquipmentSlot,
+    ) -> bool {
+        equipment::can_replace_current_item(
+            self.get_mob_entity(),
+            self.get_preferred_weapon_type(),
+            new_item,
+            current_item,
+            slot,
+        )
+    }
 
     /// Called before damage is applied. Return `false` to cancel the damage entirely.
     /// Used by endermen to dodge projectiles via teleportation.
