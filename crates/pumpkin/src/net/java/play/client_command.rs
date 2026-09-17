@@ -124,3 +124,20 @@ impl JavaClient {
         self.try_send_packet(&CGameRuleValues::new(&rules_ref));
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    #[test]
+    fn respawn_claim_allows_only_one_in_flight_respawn() {
+        let in_progress = AtomicBool::new(false);
+
+        assert!(try_claim_respawn(&in_progress));
+        assert!(!try_claim_respawn(&in_progress));
+
+        in_progress.store(false, Ordering::Release);
+        assert!(try_claim_respawn(&in_progress));
+    }
+}
