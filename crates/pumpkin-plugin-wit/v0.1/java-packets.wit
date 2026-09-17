@@ -49,11 +49,17 @@ interface java-packets {
     uuid: uuid,
     %result: s32,
   }
+  record handshake-s-hand-shake {
+    protocol-version: s32,
+    server-address: string,
+    server-port: u16,
+    next-state: s32,
+  }
   record login-s-login-cookie-response {
     key: string,
     payload: option<list<u8>>,
   }
-  record s-encryption-response {
+  record login-s-encryption-response {
     shared-secret: list<u8>,
     verify-token: list<u8>,
   }
@@ -505,6 +511,9 @@ interface java-packets {
   record config-c-feature-flags {
     features: list<string>,
   }
+  record config-c-config-keep-alive {
+    keep-alive-id: s64,
+  }
   record config-c-known-packs {
     known-packs: list<string>,
   }
@@ -536,13 +545,10 @@ interface java-packets {
     host: string,
     port: s32,
   }
-  record config-c-update-tags {
-    tags: list<string>,
-  }
   record login-c-login-cookie-request {
     key: string,
   }
-  record c-encryption-request {
+  record login-c-encryption-request {
     server-id: string,
     public-key: list<u8>,
     verify-token: list<u8>,
@@ -551,7 +557,7 @@ interface java-packets {
   record login-c-login-disconnect {
     json-reason: string,
   }
-  record c-login-success {
+  record login-c-login-success {
     uuid: uuid,
     username: string,
     properties: list<property>,
@@ -1532,9 +1538,6 @@ interface java-packets {
     display-name: option<string>,
     number-format: option<string>,
   }
-  record c-update-tags-play {
-    tags: list<string>,
-  }
   record c-use-bed {
     entity-id: s32,
     location: tuple<s32, s32, s32>,
@@ -1590,7 +1593,9 @@ interface java-packets {
     config-s-plugin-message(config-s-plugin-message),
     config-s-config-pong(config-s-config-pong),
     config-s-config-resource-pack(config-s-config-resource-pack),
+    handshake-s-hand-shake(handshake-s-hand-shake),
     login-s-login-cookie-response(login-s-login-cookie-response),
+    login-s-encryption-response(login-s-encryption-response),
     login-s-login-acknowledged,
     login-s-login-start(login-s-login-start),
     login-s-login-plugin-response(login-s-login-plugin-response),
@@ -1611,6 +1616,7 @@ interface java-packets {
     s-close-container(s-close-container),
     s-command-suggestion(s-command-suggestion),
     s-configuration-acknowledged,
+    s-confirm-teleport(s-confirm-teleport),
     s-container-button-click(s-container-button-click),
     s-container-slot-state-changed(s-container-slot-state-changed),
     s-cookie-response(s-cookie-response),
@@ -1676,6 +1682,7 @@ interface java-packets {
     config-c-config-custom-report-details(config-c-config-custom-report-details),
     config-c-feature-flags(config-c-feature-flags),
     config-c-finish-config,
+    config-c-config-keep-alive(config-c-config-keep-alive),
     config-c-known-packs(config-c-known-packs),
     config-c-config-ping(config-c-config-ping),
     config-c-plugin-message(config-c-plugin-message),
@@ -1686,9 +1693,10 @@ interface java-packets {
     config-c-config-show-dialog(config-c-config-show-dialog),
     config-c-store-cookie(config-c-store-cookie),
     config-c-transfer(config-c-transfer),
-    config-c-update-tags(config-c-update-tags),
     login-c-login-cookie-request(login-c-login-cookie-request),
+    login-c-encryption-request(login-c-encryption-request),
     login-c-login-disconnect(login-c-login-disconnect),
+    login-c-login-success(login-c-login-success),
     login-c-login-plugin-request(login-c-login-plugin-request),
     login-c-set-compression(login-c-set-compression),
     c-acknowledge-block-change(c-acknowledge-block-change),
@@ -1730,6 +1738,7 @@ interface java-packets {
     c-display-objective(c-display-objective),
     c-entity-animation(c-entity-animation),
     c-set-entity-metadata(c-set-entity-metadata),
+    c-entity-position-sync(c-entity-position-sync),
     c-entity-sound-effect(c-entity-sound-effect),
     c-entity-status(c-entity-status),
     c-entity-velocity(c-entity-velocity),
@@ -1794,6 +1803,7 @@ interface java-packets {
     c-set-equipment(c-set-equipment),
     c-set-experience(c-set-experience),
     c-set-health(c-set-health),
+    c-set-selected-slot(c-set-selected-slot),
     c-set-passengers(c-set-passengers),
     c-set-player-inventory(c-set-player-inventory),
     c-set-player-team(c-set-player-team),
@@ -1810,6 +1820,7 @@ interface java-packets {
     c-stop-sound(c-stop-sound),
     c-store-cookie(c-store-cookie),
     c-subtitle(c-subtitle),
+    c-system-chat-message(c-system-chat-message),
     c-tab-list(c-tab-list),
     c-tag-query-response(c-tag-query-response),
     c-take-item-entity(c-take-item-entity),

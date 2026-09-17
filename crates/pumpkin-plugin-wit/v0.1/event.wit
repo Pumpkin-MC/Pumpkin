@@ -5,6 +5,7 @@ interface event {
     use damage-types.{damage-type};
     use screens.{screen};
     use player.{player};
+    use user.{user, connection-state};
     use text.{text-component};
     use %world.{%world};
     use java-packets.{serverbound-packet as java-serverbound-packet, clientbound-packet as java-clientbound-packet};
@@ -356,16 +357,26 @@ interface event {
     }
 
     record packet-received-event-data {
-        player: player,
+        user: user,
+        state: connection-state,
+        protocol-version: option<s32>,
         packet: serverbound-packet,
+        /// An explicit typed replacement takes precedence over packet-id/raw-payload.
+        /// Invalid or unsupported replacements cancel the packet; raw bytes support every packet.
+        replacement: option<serverbound-packet>,
         packet-id: s32,
         raw-payload: list<u8>,
         cancelled: bool
     }
 
     record packet-sent-event-data {
-        player: player,
+        user: user,
+        state: connection-state,
+        protocol-version: option<s32>,
         packet: clientbound-packet,
+        /// An explicit typed replacement takes precedence over packet-id/raw-payload.
+        /// Invalid or unsupported replacements cancel the packet; raw bytes support every packet.
+        replacement: option<clientbound-packet>,
         packet-id: s32,
         raw-payload: list<u8>,
         cancelled: bool
