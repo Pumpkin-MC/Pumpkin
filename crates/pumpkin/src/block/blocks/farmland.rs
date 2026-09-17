@@ -58,8 +58,8 @@ impl BlockBehaviour for FarmlandBlock {
         // when it is raining on the block above the farmland.
         let hydrated = is_water_nearby(args.world, args.position)
             || args.world.is_raining_at(&args.position.up());
+        let state_id = args.world.get_block_state_id(args.position);
         if hydrated {
-            let state_id = args.world.get_block_state_id(args.position);
             let current_moisture = FarmlandProperties::from_state_id(state_id).moisture;
             // Vanilla only updates the block when it is not fully hydrated.
             if current_moisture >= 7 {
@@ -87,7 +87,6 @@ impl BlockBehaviour for FarmlandBlock {
                 BlockFlags::NOTIFY_NEIGHBORS,
             );
         } else {
-            let state_id = args.world.get_block_state_id(args.position);
             let mut props = FarmlandProperties::from_state_id(state_id);
             if props.moisture == 0 {
                 if !args
