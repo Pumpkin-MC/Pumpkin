@@ -13,7 +13,7 @@ base64.workspace = true
 uuid.workspace = true
 md5.workspace = true
 
-p384 = { workspace = true, features = ["ecdsa", "ecdh"] }
+p384 = { workspace = true, features = ["ecdsa"] }
 ecdsa.workspace = true
 rsa.workspace = true
 sha2.workspace = true

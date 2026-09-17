@@ -69,37 +69,27 @@ impl NetherNetListener {
             .layer(DefaultBodyLimit::max(MAX_SDP_SIZE))
             .with_state(state.clone());
 
-        // Avoid advertising the server twice on LAN when RakNet handles discovery.
-        if server.advanced_config.networking.bedrock.raknet_status
-            == pumpkin_config::networking::bedrock::RakNetStatus::Always
-        {
-            info!(
-                "Bedrock NetherNet LAN discovery is off because RakNet advertises the server on the \
-                 game port"
-            );
-        } else {
-            match NetherNetDiscovery::bind(local_addr, server.server_guid).await {
-                Ok(discovery) => {
-                    if let Ok(address) = discovery.local_addr() {
-                        info!("Bedrock NetherNet LAN discovery is listening on {address}");
-                    }
-                    let state = state.clone();
-                    tokio::spawn(async move {
-                        let mut buffer = vec![0; 65_535];
-                        loop {
-                            tokio::select! {
-                                () = STOP_INTERRUPT.cancelled() => break,
-                                result = discovery.receive(&state, &mut buffer) => {
-                                    if let Err(error) = result {
-                                        debug!("NetherNet LAN discovery packet failed: {error}");
-                                    }
+        match NetherNetDiscovery::bind(local_addr, server.server_guid).await {
+            Ok(discovery) => {
+                if let Ok(address) = discovery.local_addr() {
+                    info!("Bedrock NetherNet LAN discovery is listening on {address}");
+                }
+                let state = state.clone();
+                tokio::spawn(async move {
+                    let mut buffer = vec![0; 65_535];
+                    loop {
+                        tokio::select! {
+                            () = STOP_INTERRUPT.cancelled() => break,
+                            result = discovery.receive(&state, &mut buffer) => {
+                                if let Err(error) = result {
+                                    debug!("NetherNet LAN discovery packet failed: {error}");
                                 }
                             }
                         }
-                    });
-                }
-                Err(error) => warn!("Failed to bind NetherNet LAN discovery: {error}"),
+                    }
+                });
             }
+            Err(error) => warn!("Failed to bind NetherNet LAN discovery: {error}"),
         }
 
         tokio::spawn(async move {

@@ -1,25 +1,19 @@
-use std::{
-    io::{Error, Write},
-    sync::Mutex,
-};
+use std::io::{Error, Write};
 
 use flate2::{Compression, write::DeflateEncoder};
 
 use crate::{
     CompressionLevel, CompressionThreshold,
-    bedrock::{BEDROCK_GAME_PACKET, SubClient, crypto::BedrockEncryptor},
+    bedrock::{BEDROCK_GAME_PACKET, SubClient},
     codec::var_uint::VarUInt,
     ser::NetworkWriteExt,
 };
 
 /// Encoder: Server -> Client
-/// Supports Zlib compression and AES-256 CTR encryption.
+/// Supports Zlib compression.
 pub struct BedrockBatchEncoder {
     // compression and compression threshold
     compression: Option<(CompressionThreshold, CompressionLevel)>,
-    // The cipher advances once per sent batch, so the counters stay in step with the write order.
-    // Only the transport's outgoing task encrypts, which makes the lock uncontended in practice.
-    encryptor: Mutex<Option<BedrockEncryptor>>,
 }
 
 impl Default for BedrockBatchEncoder {
@@ -31,10 +25,7 @@ impl Default for BedrockBatchEncoder {
 impl BedrockBatchEncoder {
     #[must_use]
     pub const fn new() -> Self {
-        Self {
-            compression: None,
-            encryptor: Mutex::new(None),
-        }
+        Self { compression: None }
     }
 
     pub const fn set_compression(
@@ -42,39 +33,6 @@ impl BedrockBatchEncoder {
         compression_info: (CompressionThreshold, CompressionLevel),
     ) {
         self.compression = Some(compression_info);
-    }
-
-    /// Enables Bedrock encryption for every following packet.
-    ///
-    /// Only the `RakNet` transport encrypts game traffic; `NetherNet` is already protected by
-    /// `DTLS`.
-    pub fn set_encryption(
-        &self,
-        key: &[u8; 32],
-    ) -> Result<(), crate::bedrock::packet_decoder::EncryptionAlreadyEnabledError> {
-        let mut encryptor = self
-            .encryptor
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if encryptor.is_some() {
-            return Err(crate::bedrock::packet_decoder::EncryptionAlreadyEnabledError);
-        }
-        *encryptor = Some(BedrockEncryptor::new(key));
-        Ok(())
-    }
-
-    /// Encrypts one batch payload in place, in the order the transport sends it.
-    ///
-    /// The leading game-packet marker is not part of the payload and stays readable on the wire.
-    pub fn encrypt(&self, payload: &mut Vec<u8>) {
-        if let Some(encryptor) = self
-            .encryptor
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .as_mut()
-        {
-            encryptor.encrypt(payload);
-        }
     }
 
     pub fn write_game_packet(

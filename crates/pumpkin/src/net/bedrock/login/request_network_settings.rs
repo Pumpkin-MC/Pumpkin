@@ -21,6 +21,7 @@ impl BedrockClient {
         if let Some(status) = status {
             self.send_packet(&status).await;
             if let Err(error) = self
+                .session
                 .flush_reliable(INCOMPATIBLE_PROTOCOL_FLUSH_TIMEOUT)
                 .await
             {

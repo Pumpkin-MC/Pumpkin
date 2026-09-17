@@ -5,22 +5,13 @@ use tokio::io::BufReader;
 
 use crate::{
     CompressionThreshold, MAX_PACKET_DATA_SIZE, PacketDecodeError, RawPacket,
-    bedrock::{BEDROCK_GAME_PACKET, crypto::BedrockDecryptor},
-    codec::var_uint::VarUInt,
-    ser::ReadingError,
+    bedrock::BEDROCK_GAME_PACKET, codec::var_uint::VarUInt, ser::ReadingError,
 };
 
-use thiserror::Error;
-
-#[derive(Debug, Error)]
-#[error("Encryption already enabled")]
-pub struct EncryptionAlreadyEnabledError;
-
 /// Decoder: Client -> Server
-/// Supports Zlib decompression and AES-256 CTR decryption.
+/// Supports Zlib decompression.
 pub struct BedrockBatchDecoder {
     compression: Option<CompressionThreshold>,
-    decryptor: Option<BedrockDecryptor>,
 }
 
 impl Default for BedrockBatchDecoder {
@@ -32,26 +23,11 @@ impl Default for BedrockBatchDecoder {
 impl BedrockBatchDecoder {
     #[must_use]
     pub const fn new() -> Self {
-        Self {
-            compression: None,
-            decryptor: None,
-        }
+        Self { compression: None }
     }
 
     pub const fn set_compression(&mut self, threshold: CompressionThreshold) {
         self.compression = Some(threshold);
-    }
-
-    /// Enables Bedrock encryption for every following packet.
-    ///
-    /// Only the `RakNet` transport encrypts game traffic; `NetherNet` is already protected by
-    /// `DTLS`.
-    pub fn set_encryption(&mut self, key: &[u8; 32]) -> Result<(), EncryptionAlreadyEnabledError> {
-        if self.decryptor.is_some() {
-            return Err(EncryptionAlreadyEnabledError);
-        }
-        self.decryptor = Some(BedrockDecryptor::new(key));
-        Ok(())
     }
 
     pub async fn get_packet_payload(
@@ -71,13 +47,7 @@ impl BedrockBatchDecoder {
             )));
         }
 
-        let mut decrypted = full_packet[1..].to_vec();
-        if let Some(decryptor) = &mut self.decryptor {
-            decryptor
-                .decrypt(&mut decrypted)
-                .map_err(PacketDecodeError::Message)?;
-        }
-        let full_packet_payload: &[u8] = &decrypted;
+        let full_packet_payload = &full_packet[1..];
 
         // If compression is NOT enabled yet, the payload starts at index 0 of full_packet_payload
         if self.compression.is_none() {

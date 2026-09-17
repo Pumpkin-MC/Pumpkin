@@ -125,6 +125,26 @@ pub struct NormalTransactionData;
 #[derive(Debug, PacketRead)]
 pub struct MismatchTransactionData;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum HandSlot {
+    Mainhand,
+    Offhand,
+}
+
+impl PacketRead for HandSlot {
+    fn read<R: Read>(reader: &mut R) -> Result<Self, Error> {
+        match u8::read(reader)? {
+            0 => Ok(Self::Mainhand),
+            1 => Ok(Self::Offhand),
+            value => Err(Error::new(
+                ErrorKind::InvalidData,
+                format!("Invalid hand slot: {value}"),
+            )),
+        }
+    }
+}
+
 #[derive(Debug, PacketRead)]
 pub struct UseItemTransactionData {
     pub action_type: VarInt,
@@ -132,7 +152,7 @@ pub struct UseItemTransactionData {
     pub block_position: BlockPos,
     pub block_face: u8,
     pub hot_bar_slot: VarInt,
-    pub hand: u8,
+    pub hand: HandSlot,
     pub item_in_hand: NetworkItemDescriptor,
     pub player_position: Vector3<f32>,
     pub click_position: Vector3<f32>,
@@ -238,7 +258,7 @@ mod tests {
         };
 
         assert_eq!(data.action_type.0, 0);
-        assert_eq!(data.hand, 1);
+        assert_eq!(data.hand, HandSlot::Offhand);
         assert_eq!(data.item_in_hand.id.0, 0);
         assert_eq!(data.block_face, 3);
         assert!(reader.is_empty());
@@ -267,7 +287,7 @@ mod tests {
         assert_eq!(data.action_type.0, 0);
         assert_eq!(data.block_face, 1);
         assert_eq!(data.hot_bar_slot.0, 2);
-        assert_eq!(data.hand, 0);
+        assert_eq!(data.hand, HandSlot::Mainhand);
         assert_eq!(data.item_in_hand.id.0, 58);
         assert_eq!(data.item_in_hand.stack_size, 1);
         assert_eq!(data.item_in_hand.block_runtime_id.0, 11_517);

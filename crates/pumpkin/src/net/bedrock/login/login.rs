@@ -2,9 +2,6 @@ use pumpkin_protocol::bedrock::client::PackIdVersion;
 
 #[allow(clippy::wildcard_imports)]
 use super::*;
-use pumpkin_protocol::bedrock::client::handshake::CHandshake;
-use rand::RngExt;
-use sha2::{Digest, Sha256};
 
 /// Builds the name a Bedrock player is known by on the server.
 ///
@@ -23,56 +20,12 @@ fn build_username(display_name: &str, prefix: &str, replace_spaces: bool) -> Str
     name
 }
 
-/// Starts the encryption handshake required by `RakNet`; `NetherNet` uses DTLS instead.
-async fn begin_encryption(
-    client: &BedrockClient,
-    server: &Server,
-    client_public_key: &pumpkin_auth::p384::PublicKey,
-) -> Result<(), LoginError> {
-    let server_key = server
-        .bedrock_private_key
-        .get_or_init(|| async {
-            let mut rng = rand::rng();
-            loop {
-                let mut private_key_bytes = [0u8; 48];
-                rng.fill(&mut private_key_bytes);
-                if let Ok(key) =
-                    pumpkin_auth::p384::ecdsa::SigningKey::from_slice(&private_key_bytes)
-                {
-                    break Arc::new(key);
-                }
-            }
-        })
-        .await
-        .clone();
-
-    let mut salt = [0u8; 16];
-    rand::rng().fill(&mut salt);
-
-    let handshake_jwt = pumpkin_auth::jwt::generate_handshake_jwt(&server_key, &salt)
-        .map_err(LoginError::ChainValidationFailed)?;
-    client.send_packet(&CHandshake::new(handshake_jwt)).await;
-
-    let shared_secret = pumpkin_auth::jwt::compute_shared_secret(&server_key, client_public_key);
-    let mut hasher = Sha256::new();
-    hasher.update(salt);
-    hasher.update(shared_secret);
-    let key_bytes: [u8; 32] = hasher.finalize().into();
-
-    client
-        .enable_encryption(&key_bytes)
-        .await
-        .map_err(|error| AuthError::PublicKeyBuild(error.to_string()))?;
-
-    Ok(())
-}
-
 impl BedrockClient {
     pub async fn handle_login(
         self: &Arc<Self>,
         packet: SLogin,
         server: &Server,
-    ) -> Result<Option<PacketHandlerResult>, LoginError> {
+    ) -> Result<PacketHandlerResult, LoginError> {
         self.try_handle_login(packet, server).await
     }
 
@@ -80,7 +33,7 @@ impl BedrockClient {
         self: &Arc<Self>,
         packet: SLogin,
         server: &Server,
-    ) -> Result<Option<PacketHandlerResult>, LoginError> {
+    ) -> Result<PacketHandlerResult, LoginError> {
         let auth_payload: AuthPayload = serde_json::from_slice(&packet.jwt)?;
         let player_data = if server.advanced_config.networking.bedrock.online_mode {
             match auth_payload.authentication_type {
@@ -149,31 +102,6 @@ impl BedrockClient {
             ));
         }
 
-        let new_config = PlayerConfig {
-            locale: client_data.language_code.clone(),
-            ..Default::default()
-        };
-
-        if !self.is_nethernet() {
-            begin_encryption(self, server, &login_public_key).await?;
-
-            self.client_data
-                .store(std::sync::Arc::new(Some(std::sync::Arc::new(client_data))));
-            self.pending_profile
-                .store(std::sync::Arc::new(Some(std::sync::Arc::new((
-                    profile, new_config,
-                )))));
-            return Ok(None);
-        }
-
-        self.send_login_success(server).await;
-        self.client_data
-            .store(Arc::new(Some(Arc::new(client_data))));
-
-        Ok(Some(PacketHandlerResult::ReadyToPlay(profile, new_config)))
-    }
-
-    pub async fn send_login_success(&self, server: &Server) {
         self.enqueue_client_packet(&CPlayStatus::LoginSuccess).await;
         let br_config = &server.advanced_config.resource_pack.bedrock;
 
@@ -203,6 +131,16 @@ impl BedrockClient {
             resource_packs: entries,
         };
         self.enqueue_client_packet(&packs_info).await;
+
+        let new_config = PlayerConfig {
+            locale: client_data.language_code.clone(),
+            ..Default::default()
+        };
+
+        self.client_data
+            .store(std::sync::Arc::new(Some(std::sync::Arc::new(client_data))));
+
+        Ok(PacketHandlerResult::ReadyToPlay(profile, new_config))
     }
 }
 
