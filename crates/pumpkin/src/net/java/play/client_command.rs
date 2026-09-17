@@ -140,4 +140,9 @@ mod tests {
         in_progress.store(false, Ordering::Release);
         assert!(try_claim_respawn(&in_progress));
     }
+
+    #[test]
+    fn mandatory_gamemode_transition_has_internal_api() {
+        let _: fn(&Player, GameMode) -> bool = Player::force_gamemode;
+    }
 }
