@@ -11,6 +11,11 @@ use std::sync::Arc;
 
 use crate::block::entities::BlockEntity;
 
+#[cfg(test)]
+mod lifecycle_tests;
+#[cfg(test)]
+mod tests;
+
 #[derive(Default, Clone)]
 pub struct LootContextParameters {
     pub explosion_radius: Option<f32>,
