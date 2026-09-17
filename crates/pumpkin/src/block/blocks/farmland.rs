@@ -54,8 +54,17 @@ impl BlockBehaviour for FarmlandBlock {
     }
 
     fn random_tick(&self, args: RandomTickArgs<'_>) {
-        // TODO: add rain check. Remember to check which one is most optimized.
-        if is_water_nearby(args.world, args.position) {
+        // Vanilla `FarmBlock.randomTick` hydrates when water is nearby or
+        // when it is raining on the block above the farmland.
+        let hydrated = is_water_nearby(args.world, args.position)
+            || args.world.is_raining_at(&args.position.up());
+        if hydrated {
+            let state_id = args.world.get_block_state_id(args.position);
+            let current_moisture = FarmlandProperties::from_state_id(state_id).moisture;
+            // Vanilla only updates the block when it is not fully hydrated.
+            if current_moisture >= 7 {
+                return;
+            }
             let mut props = FarmlandProperties::default(args.block);
             let mut new_moisture = 7;
             if let Some(server) = args.world.server.upgrade() {
