@@ -29,15 +29,24 @@ fn dummy_source() -> CommandSource {
     }
 }
 
-#[test]
-fn wasm_command_node_attaches_requirement() {
+fn requirement_result(requirement: impl for<'a> Fn(&'a CommandSource) -> bool + Send + Sync + 'static) -> bool {
     let node = WasmCommandNode::Literal(literal("restricted"))
-        .requires(|_source: &CommandSource| false)
+        .requires(requirement)
         .into_detached_node();
 
     let DetachedNode::Literal(node) = node else {
         panic!("expected literal node");
     };
 
-    assert!(!node.owned.requirements.evaluate(&dummy_source()));
+    node.owned.requirements.evaluate(&dummy_source())
+}
+
+#[test]
+fn wasm_command_node_rejects_failed_requirement() {
+    assert!(!requirement_result(|_source: &CommandSource| false));
+}
+
+#[test]
+fn wasm_command_node_allows_satisfied_requirement() {
+    assert!(requirement_result(|_source: &CommandSource| true));
 }
