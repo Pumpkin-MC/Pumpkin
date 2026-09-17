@@ -104,6 +104,9 @@ world plugin {
     /// Dispatches a command suggestion request to the plugin.
     export handle-command-suggestion: func(handler-id: u32, sender: command-sender, server: server-instance, request: suggestion-request) -> command-suggestions;
 
+    /// Checks whether a command sender satisfies a registered command-node requirement.
+    export handle-command-requirement: func(handler-id: u32, sender: command-sender, server: server-instance) -> bool;
+
     /// Dispatches a scheduled task execution to the plugin.
     export handle-task: func(handler-id: u32, server: server-instance);
 
