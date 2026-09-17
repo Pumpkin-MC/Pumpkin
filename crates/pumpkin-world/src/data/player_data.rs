@@ -137,12 +137,22 @@ impl PlayerDataStorage {
             return Err(PlayerDataError::Io(e));
         }
 
-        // Create the file and write directly with GZip compression
-        match File::create(&path) {
+        // Serialize to a temporary file first, then atomically replace the
+        // player's .dat file. Writing directly to the live file with
+        // `File::create` would truncate the last good save before the new one
+        // is complete, so any failure or interruption mid-write would destroy
+        // the only copy of the player's data.
+        let temp_path = path.with_extension("dat_new");
+        match File::create(&temp_path) {
             Ok(file) => {
                 if let Err(e) = pumpkin_nbt::nbt_compress::write_gzip_compound_tag(data, file) {
                     error!("Failed to write compressed player data for {uuid}: {e}");
+                    let _ = std::fs::remove_file(&temp_path);
                     Err(PlayerDataError::Nbt(e.to_string()))
+                } else if let Err(e) = std::fs::rename(&temp_path, &path) {
+                    error!("Failed to install player data file for {uuid}: {e}");
+                    let _ = std::fs::remove_file(&temp_path);
+                    Err(PlayerDataError::Io(e))
                 } else {
                     debug!("Saved player data for {uuid} to disk");
                     Ok(())
