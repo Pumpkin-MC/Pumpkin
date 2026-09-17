@@ -228,9 +228,7 @@ impl ToTokens for ItemComponents {
         };
         let item_name = LitStr::new(&text, Span::call_site());
         tokens.extend(quote! {
-            (ItemName, &ItemNameImpl {
-                name: Cow::Borrowed(#item_name),
-            }),
+            (ItemName, &ItemNameImpl::Translation(Cow::Borrowed(#item_name))),
         });
 
         if let Some(d) = self.damage {
@@ -737,7 +735,7 @@ impl ToTokens for ItemComponents {
             tokens.extend(quote! { (BannerPatterns, &BannerPatternsImpl::EMPTY), });
         }
         if self.bees.is_some() {
-            tokens.extend(quote! { (Bees, &BeesImpl), });
+            tokens.extend(quote! { (Bees, &BeesImpl::EMPTY), });
         }
         if let Some(block_state) = &self.block_state {
             let mut entries = TokenStream::new();
@@ -905,7 +903,7 @@ impl ToTokens for ItemComponents {
             });
         }
         if self.pot_decorations.is_some() {
-            tokens.extend(quote! { (PotDecorations, &PotDecorationsImpl), });
+            tokens.extend(quote! { (PotDecorations, &PotDecorationsImpl::EMPTY), });
         }
         if self.potion_contents.is_some() {
             tokens.extend(quote! {
@@ -999,7 +997,7 @@ impl ToTokens for ItemComponents {
             });
         }
         if self.tooltip_display.is_some() {
-            tokens.extend(quote! { (TooltipDisplay, &TooltipDisplayImpl), });
+            tokens.extend(quote! { (TooltipDisplay, &TooltipDisplayImpl::DEFAULT), });
         }
         if self.use_effects.is_some() {
             tokens.extend(quote! { (UseEffects, &UseEffectsImpl), });
@@ -1859,23 +1857,23 @@ pub fn build() -> TokenStream {
         impl Item {
             #constants
 
+            /// Returns the generated display name, retaining a stored component's text semantics.
             #[must_use]
             #[allow(deprecated)]
             pub fn translated_name(&self) -> TextComponent {
-                let name = self
+                self
                     .components
                     .iter()
                     .find_map(|(id, data)| {
                         if id == &ItemName {
                             data.as_any()
                                 .downcast_ref::<ItemNameImpl>()
-                                .map(|name| name.name.as_ref())
+                                .map(ItemNameImpl::to_text_component)
                         } else {
                             None
                         }
                     })
-                    .unwrap_or(self.registry_key);
-                TextComponent::translate(name, &[])
+                    .unwrap_or_else(|| TextComponent::translate(self.registry_key, &[]))
             }
 
             #[doc = "Try to parse an item from a resource location string."]

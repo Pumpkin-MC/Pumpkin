@@ -1,3 +1,4 @@
+use super::components::{BlockEntityComponents, CONTAINER_FIELDS};
 use std::any::Any;
 use std::sync::{
     Arc, Mutex as StdMutex, RwLock,
@@ -20,6 +21,7 @@ use pumpkin_util::math::vector3::Vector3;
 
 pub struct BrewingStandBlockEntity {
     pub position: BlockPos,
+    pub components: BlockEntityComponents,
     pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
     pub dirty: AtomicBool,
     pub comparator_dirty: AtomicBool,
@@ -33,11 +35,13 @@ impl BrewingStandBlockEntity {
     pub const INVENTORY_SIZE: usize = 5; // 3 potion slots + 1 ingredient + 1 fuel
     pub const ID: &'static str = "minecraft:brewing_stand";
 
+    /// Creates an empty container with component storage at the supplied position.
     #[must_use]
     pub fn new(position: BlockPos) -> Self {
         use std::array::from_fn;
         Self {
             position,
+            components: BlockEntityComponents::new(CONTAINER_FIELDS),
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
             comparator_dirty: AtomicBool::new(false),
@@ -460,6 +464,8 @@ impl pumpkin_inventory::Clearable for BrewingStandBlockEntity {
 }
 
 impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
+    super::components::impl_container_components!();
+
     fn resource_location(&self) -> &'static str {
         Self::ID
     }
@@ -468,11 +474,13 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
         self.position
     }
 
+    /// Loads persistent components and inventory state without generating deferred loot.
     fn from_nbt(nbt: &NbtCompound, position: BlockPos) -> Self
     where
         Self: Sized,
     {
         let mut entity = Self::new(position);
+        entity.components = BlockEntityComponents::from_nbt(nbt, CONTAINER_FIELDS);
 
         // Load brew time / fuel if present in NBT
         if let Some(bt) = nbt
@@ -525,7 +533,9 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
         entity
     }
 
+    /// Persists the component fields together with current container state.
     fn write_nbt(&self, nbt: &mut NbtCompound) {
+        self.components.write_nbt(nbt);
         // Persist brew state
         nbt.put_short("BrewTime", self.brew_time.load(Ordering::Relaxed) as i16);
         nbt.put_byte("Fuel", self.fuel.load(Ordering::Relaxed) as i8);
@@ -538,8 +548,10 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
         Some(self)
     }
 
+    /// Sends the container fields used by chunk updates.
     fn chunk_data_nbt(&self) -> Option<NbtCompound> {
         let mut nbt = NbtCompound::new();
+        self.components.write_client_nbt(&mut nbt);
         nbt.put_short("BrewTime", self.brew_time.load(Ordering::Relaxed) as i16);
         nbt.put_byte("Fuel", self.fuel.load(Ordering::Relaxed) as i8);
         if let Ok(items) = self.items.try_read() {

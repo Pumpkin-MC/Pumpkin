@@ -77,6 +77,9 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 
+#[cfg(test)]
+mod tests;
+
 struct DispenserScreenFactory(Arc<dyn Inventory>);
 
 impl ScreenHandlerFactory for DispenserScreenFactory {
@@ -1125,6 +1128,8 @@ impl DispenserBlock {
         }
     }
 
+    /// Places one shulker with its item components and synchronizes the restored block entity.
+    /// Leaves the stack unchanged and returns false when the target cannot be replaced.
     fn dispense_shulker_box(ctx: &DispenseContext<'_>, item: &mut ItemStack) -> bool {
         let Some(block) = Block::from_item_id(item.item.id) else {
             return false;
@@ -1147,6 +1152,7 @@ impl DispenserBlock {
             .set_block_state(&target, props.to_state_id(block), BlockFlags::NOTIFY_ALL);
         if let Some(block_entity) = ctx.world.get_block_entity(&target) {
             block_entity.apply_item_components(&placed);
+            ctx.world.update_block_entity(&block_entity);
         }
         Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
 

@@ -32,6 +32,22 @@ pub enum LootBonusFormula {
     BinomialWithBonusCount { extra: i32, probability: f32 },
 }
 
+/// An ordered item transformation applied after an entry produces a stack.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum LootFunction {
+    /// Copy present source values selected by registry name; exclusions take precedence.
+    CopyComponents {
+        /// Loot-context source, currently `block_entity`.
+        source: &'static str,
+        /// An omitted list includes every component; an empty list includes none.
+        include: Option<&'static [&'static str]>,
+        /// Components to omit even when included explicitly.
+        exclude: Option<&'static [&'static str]>,
+        /// Condition evaluated immediately before this function runs.
+        condition: LootCondition,
+    },
+}
+
 /// A single item entry inside a loot pool.
 #[derive(Clone, Copy, Debug)]
 pub struct LootEntry {
@@ -47,6 +63,8 @@ pub struct LootEntry {
     pub condition: LootCondition,
     /// Bonus formula to apply with fortune / looting (if any).
     pub bonus_formula: Option<LootBonusFormula>,
+    /// Supported item transformations in their original table order.
+    pub functions: &'static [LootFunction],
 }
 
 /// One roll pool inside a loot table.

@@ -490,7 +490,8 @@ impl Explosion {
         visible_points as f32 / total_points as f32
     }
 
-    /// Returns the removed block count
+    /// Applies explosion effects and generates loot from each original block entity before removal.
+    /// Returns the removed block count, or zero when the block explosion event is cancelled.
     pub fn explode(&self, world: &Arc<World>) -> u32 {
         self.damage_entities(world);
 
@@ -540,6 +541,9 @@ impl Explosion {
                         let is_thundering = world.is_thundering();
                         let params = LootContextParameters {
                             block_state: Some(state),
+                            block_entity: (state.block_entity_type != u16::MAX)
+                                .then(|| world.get_block_entity(pos))
+                                .flatten(),
                             explosion_radius,
                             position: Some(pumpkin_util::math::vector3::Vector3::new(
                                 pos.0.x as f64,

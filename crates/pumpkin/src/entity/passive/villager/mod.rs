@@ -517,6 +517,7 @@ impl VillagerEntity {
         }
     }
 
+    /// Builds a translated explorer map for a supported destination, returning none when unavailable.
     #[expect(clippy::too_many_lines)]
     fn create_explorer_map(&self, destination: &str) -> Option<ItemStack> {
         use pumpkin_data::data_component::DataComponent;
@@ -624,7 +625,7 @@ impl VillagerEntity {
         ));
         stack.patch.push((
             DataComponent::ItemName,
-            Some(ItemNameImpl { name: name.into() }.to_dyn()),
+            Some(ItemNameImpl::Translation(name.into()).to_dyn()),
         ));
         Some(stack)
     }

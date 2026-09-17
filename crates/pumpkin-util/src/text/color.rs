@@ -1,5 +1,6 @@
 use colored::{ColoredString, Colorize};
 use serde::{Deserialize, Deserializer, Serialize};
+use std::borrow::Cow;
 
 /// Text color for chat components.
 ///
@@ -52,8 +53,9 @@ pub fn hsv_to_rgb(h: f32, s: f32, v: f32) -> (u8, u8, u8) {
 }
 
 impl<'de> Deserialize<'de> for Color {
+    /// Reads named or hexadecimal colors from borrowed JSON strings and owned NBT conversions.
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let s = <&str>::deserialize(deserializer)?;
+        let s = Cow::<'de, str>::deserialize(deserializer)?;
 
         if s == "reset" {
             Ok(Self::Reset)
@@ -64,18 +66,15 @@ impl<'de> Deserialize<'de> for Color {
                 ));
             }
 
-            let r = u8::from_str_radix(&hex[0..2], 16)
-                .map_err(|_| serde::de::Error::custom("Invalid red component in hex color"))?;
-            let g = u8::from_str_radix(&hex[2..4], 16)
-                .map_err(|_| serde::de::Error::custom("Invalid green component in hex color"))?;
-            let b = u8::from_str_radix(&hex[4..6], 16)
-                .map_err(|_| serde::de::Error::custom("Invalid blue component in hex color"))?;
+            let rgb = u32::from_str_radix(hex, 16)
+                .map_err(|_| serde::de::Error::custom("Invalid hexadecimal text color"))?;
+            let [_, r, g, b] = rgb.to_be_bytes();
 
             Ok(Self::Rgb(RGBColor::new(r, g, b)))
         } else {
-            Ok(Self::Named(NamedColor::try_from(s).map_err(|()| {
-                serde::de::Error::custom("Invalid named color")
-            })?))
+            Ok(Self::Named(NamedColor::try_from(s.as_ref()).map_err(
+                |()| serde::de::Error::custom("Invalid named color"),
+            )?))
         }
     }
 }
