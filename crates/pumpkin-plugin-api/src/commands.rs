@@ -100,6 +100,7 @@ pub trait CommandSuggestionHandler: Send + Sync {
 ///
 /// Return `true` when the sender should be allowed to use the node and `false`
 /// when the node should be rejected during command parsing.
+/// Requirement callbacks reuse the existing command export to preserve WIT 0.1 compatibility.
 pub trait CommandRequirementHandler: Send + Sync {
     /// Checks whether `sender` satisfies this requirement.
     fn check(&self, sender: CommandSender, server: Server) -> bool;
