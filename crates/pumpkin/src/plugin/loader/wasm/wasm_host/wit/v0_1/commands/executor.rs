@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use pumpkin_util::text::{
     TextComponent,
@@ -62,7 +62,7 @@ impl WasmCommandNode {
     {
         let requirement = Requirement::from(requirement);
         match self {
-            Self::Literal(builder) => Self::Literal(builder.requires(requirement.clone())),
+            Self::Literal(builder) => Self::Literal(builder.requires(requirement)),
             Self::Argument(builder) => Self::Argument(builder.requires(requirement)),
         }
     }
@@ -110,7 +110,7 @@ impl WasmCommandRequirement {
                                     let server_rep = server_resource.rep();
                                     let args_resource = match store
                                         .data_mut()
-                                        .add_consumed_args(Default::default())
+                                        .add_consumed_args(HashMap::default())
                                     {
                                         Ok(resource) => resource,
                                         Err(error) => {
