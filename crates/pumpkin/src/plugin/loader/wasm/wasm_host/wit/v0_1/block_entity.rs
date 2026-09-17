@@ -1,3 +1,4 @@
+use pumpkin_data::data_component_impl::{BeesImpl, CustomNameImpl, NoteBlockSoundImpl};
 use std::sync::Arc;
 use wasmtime::component::Resource;
 
@@ -1376,6 +1377,7 @@ impl HostBannerBlockEntity for PluginHostState {
         self.add_block_entity(provider)
     }
 
+    /// Returns the banner name as text through the existing plugin string interface.
     async fn get_custom_name(
         &mut self,
         res: Resource<BannerBlockEntity>,
@@ -1384,7 +1386,10 @@ impl HostBannerBlockEntity for PluginHostState {
         Ok(entity
             .as_any()
             .downcast_ref::<InternalBannerBlockEntity>()
-            .and_then(|b| b.custom_name.try_lock().ok().and_then(|g| g.clone())))
+            .and_then(|b| {
+                b.components
+                    .with_component::<CustomNameImpl, _>(|name| name.name.clone().get_text())
+            }))
     }
 
     async fn drop(&mut self, rep: Resource<BannerBlockEntity>) -> wasmtime::Result<()> {
@@ -1503,16 +1508,15 @@ impl HostBeehiveBlockEntity for PluginHostState {
         self.add_block_entity(provider)
     }
 
+    /// Counts stored bee payloads without cloning entity data or advancing their timers.
     async fn get_bee_count(&mut self, res: Resource<BeehiveBlockEntity>) -> wasmtime::Result<u32> {
         let entity = block_entity_from_resource(self, &Resource::new_own(res.rep()))?;
         Ok(entity
             .as_any()
             .downcast_ref::<InternalBeehiveBlockEntity>()
             .map_or(0, |b| {
-                b.bees
-                    .try_lock()
-                    .ok()
-                    .and_then(|g| g.as_ref().map(|v| v.len() as u32))
+                b.components
+                    .with_component::<BeesImpl, _>(|bees| bees.bees.len() as u32)
                     .unwrap_or(0)
             }))
     }
@@ -2156,6 +2160,7 @@ impl HostSkullBlockEntity for PluginHostState {
         self.add_block_entity(provider)
     }
 
+    /// Returns the persisted note-block sound identifier associated with this skull.
     async fn get_note_block_sound(
         &mut self,
         res: Resource<SkullBlockEntity>,
@@ -2164,7 +2169,10 @@ impl HostSkullBlockEntity for PluginHostState {
         Ok(entity
             .as_any()
             .downcast_ref::<InternalSkullBlockEntity>()
-            .and_then(|b| b.note_block_sound.try_lock().ok().and_then(|g| g.clone())))
+            .and_then(|b| {
+                b.components
+                    .with_component::<NoteBlockSoundImpl, _>(|sound| sound.sound.clone())
+            }))
     }
 
     async fn drop(&mut self, rep: Resource<SkullBlockEntity>) -> wasmtime::Result<()> {

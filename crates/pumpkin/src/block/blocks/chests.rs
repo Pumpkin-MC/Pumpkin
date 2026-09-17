@@ -380,8 +380,9 @@ impl BlockBehaviour for CopperChestBlock {
         args.r#type == LID_ANIMATION_EVENT_TYPE
     }
 
+    /// Creates a copper chest entity so saved metadata retains its registered block-entity type.
     fn placed(&self, args: PlacedArgs<'_>) {
-        placed_chest_impl(&args, ChestBlockEntity::new);
+        placed_chest_impl(&args, ChestBlockEntity::new_copper);
     }
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
