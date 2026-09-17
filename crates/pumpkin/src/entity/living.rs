@@ -603,7 +603,7 @@ impl LivingEntity {
     }
 
     /// Picks up an Item entity or XP Orb
-    pub fn pickup(&self, item: &Entity, stack_amount: u32) {
+    pub fn pickup(&self, item: &Entity, stack_amount: u32) -> bool {
         let mut pickup_event =
             crate::plugin::api::events::entity::entity_pickup_item::EntityPickupItemEvent::new(
                 self.entity.entity_id,
@@ -615,7 +615,7 @@ impl LivingEntity {
                 .plugin_manager
                 .fire_blocking(&server, &mut pickup_event);
             if pickup_event.cancelled {
-                return;
+                return false;
             }
         }
 
@@ -632,6 +632,7 @@ impl LivingEntity {
                 actor_runtime_id: VarULong(self.entity.entity_id as u64),
             },
         );
+        true
     }
 
     /// Sends the Hand animation to all others, used when Eating for example
@@ -1303,6 +1304,24 @@ impl LivingEntity {
         let je_packet = pumpkin_protocol::java::client::play::CEntityAnimation::new(
             entity_id.into(),
             pumpkin_protocol::java::client::play::Animation::SwingMainArm,
+        );
+        let be_packet = pumpkin_protocol::bedrock::server::animate::SAnimate {
+            action: pumpkin_protocol::bedrock::server::animate::AnimateAction::SwingArm,
+            target_actor_runtime_id: pumpkin_protocol::codec::var_ulong::VarULong(entity_id as u64),
+            data: 0.0,
+            swing_source: None,
+        };
+
+        world.broadcast_editioned(&je_packet, &be_packet);
+    }
+
+    pub fn swing_off_hand(&self) {
+        let world = self.entity.world.load();
+        let entity_id = self.entity_id();
+
+        let je_packet = pumpkin_protocol::java::client::play::CEntityAnimation::new(
+            entity_id.into(),
+            pumpkin_protocol::java::client::play::Animation::SwingOffhand,
         );
         let be_packet = pumpkin_protocol::bedrock::server::animate::SAnimate {
             action: pumpkin_protocol::bedrock::server::animate::AnimateAction::SwingArm,
@@ -2101,11 +2120,13 @@ impl LivingEntity {
                 .get(slot)
                 .copied()
                 .unwrap_or(DEFAULT_EQUIPMENT_DROP_CHANCE);
+            // A chance above 1.0 marks a guaranteed, undamaged drop.
+            let preserved = chance > 1.0;
             // Vanilla approximation: EnchantmentHelper.processEquipmentDropChance
             // adds lootingLevel * 0.01 to the per-slot equipment drop chance.
             chance += looting_level as f32 * 0.01;
             chance = chance.min(1.0);
-            if rand::random::<f32>() >= chance {
+            if !preserved && rand::random::<f32>() >= chance {
                 continue;
             }
             let mut item = self
@@ -2121,7 +2142,7 @@ impl LivingEntity {
             // Vanilla approximation: Mob.dropCustomDeathLoot applies random
             // damage to dropped equipment using two chained random calls:
             // setDamageValue(maxDamage - random.nextInt(1 + random.nextInt(max(maxDamage - 3, 1))))
-            if let Some(max_damage) = item.get_max_damage() {
+            if !preserved && let Some(max_damage) = item.get_max_damage() {
                 let mut rng = rand::rng();
                 let inner = rng.random_range(0..(max_damage - 3).max(1));
                 let outer = rng.random_range(0..=inner);
@@ -2643,12 +2664,43 @@ impl LivingEntity {
                 nbt.put("active_effects", NbtTag::List(effects_list));
             }
         }
-        //TODO: write equipment
-        // todo more...
+        let equipment = {
+            let guard = self
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut compound = NbtCompound::new();
+            for (slot, stack) in &guard.equipment {
+                if !stack.is_empty() {
+                    let mut item_nbt = NbtCompound::new();
+                    stack.write_item_stack(&mut item_nbt);
+                    compound.put(slot.to_name(), NbtTag::Compound(item_nbt));
+                }
+            }
+            compound
+        };
+        if !equipment.child_tags.is_empty() {
+            nbt.put("equipment", NbtTag::Compound(equipment));
+        }
     }
 
     pub fn read_living_nbt_non_mut(&self, nbt: &NbtCompound) {
         self.health.store(nbt.get_float("Health").unwrap_or(20.0));
+
+        if let Some(equipment) = nbt.get_compound("equipment") {
+            let mut guard = self
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for (name, tag) in &equipment.child_tags {
+                if let Some(slot) = EquipmentSlot::get_from_name(name)
+                    && let Some(compound) = tag.extract_compound()
+                    && let Some(stack) = ItemStack::read_item_stack(compound)
+                {
+                    guard.put(slot, stack);
+                }
+            }
+        }
 
         // Clamp any persisted absorption to the entity's configured max
         let raw_abs = nbt.get_float("AbsorptionAmount").unwrap_or(0.0);
