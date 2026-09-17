@@ -503,8 +503,11 @@ impl PathNavigation {
     pub fn set_progress(&mut self, goal: NavigatorGoal) {
         self.is_idle.store(false, Ordering::Relaxed);
         self.speed_modifier = goal.speed;
+        self.last_stuck_check = self.tick_count;
+        self.last_stuck_check_pos = goal.current_progress;
         self.current_goal = Some(goal);
         self.path = None;
+        self.reset_stuck_timeout();
     }
 
     pub const fn set_speed(&mut self, speed: f64) {
@@ -521,7 +524,6 @@ impl PathNavigation {
         self.ticks_on_current_node = 0;
         self.total_ticks = 0;
         self.path_start_pos = None;
-        self.reset_stuck_timeout();
     }
 
     pub fn finish_navigation(&mut self, entity: &LivingEntity) {
@@ -570,7 +572,7 @@ impl PathNavigation {
         reach_range: i32,
     ) -> Option<Path> {
         let start_pos_f = entity.entity.pos.load();
-        let start_block_vec = start_pos_f.to_i32();
+        let start_block_vec = BlockPos::floored_v(start_pos_f).0;
         let mob_position = Vector3::new(start_block_vec.x, start_block_vec.y, start_block_vec.z);
 
         let context = PathfindingContext::new(mob_position, entity.entity.world.load_full());
@@ -596,7 +598,7 @@ impl PathNavigation {
         self.evaluator.prepare(context, mob_data);
 
         let mut start_node = self.evaluator.get_start()?;
-        let mut target = self.evaluator.get_target(destination.to_block_pos());
+        let mut target = self.evaluator.get_target(BlockPos::floored_v(destination));
 
         start_node.g = 0.0;
         let start_dist = start_node.distance(&target);
@@ -728,7 +730,7 @@ impl PathNavigation {
         }
         self.path.as_ref().is_some_and(|p| {
             let path_target = p.get_target();
-            let goal_target = goal.destination.to_i32();
+            let goal_target = BlockPos::floored_v(goal.destination).0;
             let dx = f64::from(path_target.0.x - goal_target.x);
             let dy = f64::from(path_target.0.y - goal_target.y);
             let dz = f64::from(path_target.0.z - goal_target.z);
@@ -1006,7 +1008,7 @@ impl PathNavigation {
         }
 
         if self.needs_new_path(&goal) {
-            let mut dest_pos = goal.destination.to_block_pos();
+            let mut dest_pos = BlockPos::floored_v(goal.destination);
             if !self.can_path_to_targets_below_surface {
                 let world = entity.entity.world.load();
                 dest_pos = Self::find_surface_position(&world, dest_pos);
@@ -1291,6 +1293,7 @@ impl PathNavigationTrait for GroundPathNavigation {
             );
             self.inner.last_stuck_check = self.inner.tick_count;
             self.inner.last_stuck_check_pos = mob_pos;
+            self.inner.reset_stuck_timeout();
             self.inner.is_idle.store(false, Ordering::Relaxed);
             true
         } else {
@@ -1306,7 +1309,7 @@ impl PathNavigationTrait for GroundPathNavigation {
         destination: Vector3<f64>,
         reach_range: i32,
     ) -> Option<Path> {
-        let mut dest_pos = destination.to_block_pos();
+        let mut dest_pos = BlockPos::floored_v(destination);
         if !self.inner.can_path_to_targets_below_surface {
             let world = entity.entity.world.load();
             dest_pos = PathNavigation::find_surface_position(&world, dest_pos);
@@ -1597,6 +1600,7 @@ impl PathNavigationTrait for FlyingPathNavigation {
             let mob_pos = entity.entity.pos.load();
             self.inner.last_stuck_check = self.inner.tick_count;
             self.inner.last_stuck_check_pos = mob_pos;
+            self.inner.reset_stuck_timeout();
             self.inner.is_idle.store(false, Ordering::Relaxed);
             true
         } else {
@@ -1899,6 +1903,7 @@ impl PathNavigationTrait for WaterBoundPathNavigation {
             );
             self.inner.last_stuck_check = self.inner.tick_count;
             self.inner.last_stuck_check_pos = mob_pos;
+            self.inner.reset_stuck_timeout();
             self.inner.is_idle.store(false, Ordering::Relaxed);
             true
         } else {
@@ -2009,7 +2014,7 @@ impl WallClimberNavigation {
 
 impl PathNavigationTrait for WallClimberNavigation {
     fn set_progress(&mut self, goal: NavigatorGoal) {
-        self.path_to_position = Some(goal.destination.to_block_pos());
+        self.path_to_position = Some(BlockPos::floored_v(goal.destination));
         self.inner.set_progress(goal);
     }
 
@@ -2152,7 +2157,7 @@ impl PathNavigationTrait for WallClimberNavigation {
         destination: Vector3<f64>,
         reach_range: i32,
     ) -> Option<Path> {
-        self.path_to_position = Some(destination.to_block_pos());
+        self.path_to_position = Some(BlockPos::floored_v(destination));
         self.inner.create_path(entity, destination, reach_range)
     }
 
@@ -2428,6 +2433,7 @@ impl PathNavigationTrait for AmphibiousPathNavigation {
             );
             self.inner.last_stuck_check = self.inner.tick_count;
             self.inner.last_stuck_check_pos = mob_pos;
+            self.inner.reset_stuck_timeout();
             self.inner.is_idle.store(false, Ordering::Relaxed);
             true
         } else {

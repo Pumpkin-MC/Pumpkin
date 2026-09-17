@@ -17,7 +17,7 @@ pub struct ActiveTargetGoal {
     track_target_goal: TrackTargetGoal,
     target: Option<Arc<dyn EntityBase>>,
     reciprocal_chance: i32,
-    target_type: &'static EntityType,
+    target_type: Option<&'static EntityType>,
     target_predicate: TargetPredicate,
 }
 
@@ -47,7 +47,7 @@ impl ActiveTargetGoal {
             track_target_goal,
             target: None,
             reciprocal_chance: to_goal_ticks(reciprocal_chance),
-            target_type,
+            target_type: Some(target_type),
             target_predicate,
         }
     }
@@ -68,7 +68,33 @@ impl ActiveTargetGoal {
             track_target_goal,
             target: None,
             reciprocal_chance: to_goal_ticks(DEFAULT_RECIPROCAL_CHANCE),
-            target_type,
+            target_type: Some(target_type),
+            target_predicate,
+        })
+    }
+
+    /// Targets the closest entity of any type passing `predicate`, like vanilla's
+    /// class-agnostic `NearestAttackableTargetGoal` (e.g. iron golems targeting
+    /// every `Enemy` but creepers). All candidates are tested, so an invalid
+    /// entity nearest to the mob cannot block a valid one farther away.
+    pub fn predicated(
+        mob: &MobEntity,
+        reciprocal_chance: i32,
+        check_visibility: bool,
+        predicate: impl Fn(&LivingEntity, &World) -> bool + Send + Sync + 'static,
+    ) -> Box<Self> {
+        let track_target_goal = TrackTargetGoal::new(check_visibility, false);
+        let mut target_predicate = TargetPredicate::create_attackable();
+        target_predicate.base_max_distance = mob
+            .living_entity
+            .get_attribute_value(&Attributes::FOLLOW_RANGE);
+        target_predicate.set_predicate(predicate);
+
+        Box::new(Self {
+            track_target_goal,
+            target: None,
+            reciprocal_chance: to_goal_ticks(reciprocal_chance),
+            target_type: None,
             target_predicate,
         })
     }
@@ -99,17 +125,18 @@ impl ActiveTargetGoal {
 
         // Pick the nearest candidate that passes the conditions, not the nearest overall.
         let predicate = &self.target_predicate;
-        let found = if self.target_type == &EntityType::PLAYER {
+        let found = if self.target_type == Some(&EntityType::PLAYER) {
             world
                 .get_nearest_player(search_pos, follow_range, |player| {
                     predicate.test(&world, Some(mob), player.as_ref())
                 })
                 .map(|p: Arc<Player>| p as Arc<dyn EntityBase>)
         } else {
+            let entity_types = self.target_type.map(|t| [t]);
             world.get_nearest_entity(
                 search_pos,
                 follow_range,
-                Some(&[self.target_type]),
+                entity_types.as_ref().map(<[&EntityType; 1]>::as_slice),
                 |entity| predicate.test(&world, Some(mob), entity.as_ref()),
             )
         };
