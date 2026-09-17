@@ -1,7 +1,7 @@
 use pumpkin::{
     command::{
         CommandSender,
-        argument_builder::{ArgumentBuilder, literal},
+        argument_builder::literal,
         argument_types::entity_anchor::EntityAnchor,
         context::command_source::{CommandSource, ResultValueTaker},
         node::detached::DetachedNode,
@@ -32,7 +32,7 @@ fn dummy_source() -> CommandSource {
 #[test]
 fn wasm_command_node_attaches_requirement() {
     let node = WasmCommandNode::Literal(literal("restricted"))
-        .requires(|_| false)
+        .requires(|_source: &CommandSource| false)
         .into_detached_node();
 
     let DetachedNode::Literal(node) = node else {
