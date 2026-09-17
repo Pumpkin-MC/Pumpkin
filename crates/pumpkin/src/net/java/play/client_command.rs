@@ -60,10 +60,7 @@ fn force_hardcore_spectator(player: &Player) {
     ));
 
     player.client.try_enqueue_packet_editioned(
-        &CGameEvent::new(
-            GameEvent::ChangeGameMode,
-            GameMode::Spectator as i32 as f32,
-        ),
+        &CGameEvent::new(GameEvent::ChangeGameMode, GameMode::Spectator as i32 as f32),
         &pumpkin_protocol::bedrock::client::set_player_gamemode::CSetPlayerGameType {
             player_game_type: GameMode::Spectator.into(),
         },
