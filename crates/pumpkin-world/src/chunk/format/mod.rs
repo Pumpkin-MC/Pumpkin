@@ -1085,7 +1085,7 @@ mod tests {
         light_section.put_byte("Y", -1);
         light_section.put(
             "BlockLight",
-            NbtTag::ByteArray(vec![0x0F_i8; 2048].into_boxed_slice()),
+            NbtTag::ByteArray(vec![0x0Fi8; 2048].into_boxed_slice()),
         );
 
         let bytes = test_chunk(vec![
@@ -1124,13 +1124,12 @@ mod tests {
         light_section.put_byte("Y", -1);
         light_section.put(
             "BlockLight",
-            NbtTag::ByteArray(vec![0x0F_i8; 2048].into_boxed_slice()),
+            NbtTag::ByteArray(vec![0x0Fi8; 2048].into_boxed_slice()),
         );
 
         let bytes = test_chunk(vec![light_section]).write();
-        let error = match ChunkData::from_bytes(&bytes, Vector2::new(0, 0)) {
-            Ok(_) => panic!("chunk without yPos and without biomes must fail"),
-            Err(error) => error,
+        let Err(error) = ChunkData::from_bytes(&bytes, Vector2::new(0, 0)) else {
+            panic!("chunk without yPos and without biomes must fail");
         };
         assert!(format!("{error:?}").contains("Missing yPos"));
     }
