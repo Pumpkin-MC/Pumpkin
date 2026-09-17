@@ -372,9 +372,9 @@ impl ChunkData {
             "minecraft:structure_starts" => ChunkStatus::StructureStarts,
             "minecraft:structure_references" => ChunkStatus::StructureReferences,
             "minecraft:biomes" => ChunkStatus::Biomes,
-            "minecraft:noise" => ChunkStatus::Noise,
-            "minecraft:surface" => ChunkStatus::Surface,
-            "minecraft:carvers" => ChunkStatus::Carvers,
+            "minecraft:terrain" | "minecraft:noise" | "minecraft:surface" | "minecraft:carvers" => {
+                ChunkStatus::Terrain
+            }
             "minecraft:features" => ChunkStatus::Features,
             "minecraft:initialize_light" => ChunkStatus::InitializeLight,
             "minecraft:light" => ChunkStatus::Light,
@@ -463,9 +463,7 @@ impl ChunkData {
             ChunkStatus::StructureStarts => "minecraft:structure_starts",
             ChunkStatus::StructureReferences => "minecraft:structure_references",
             ChunkStatus::Biomes => "minecraft:biomes",
-            ChunkStatus::Noise => "minecraft:noise",
-            ChunkStatus::Surface => "minecraft:surface",
-            ChunkStatus::Carvers => "minecraft:carvers",
+            ChunkStatus::Terrain => "minecraft:terrain",
             ChunkStatus::Features => "minecraft:features",
             ChunkStatus::InitializeLight => "minecraft:initialize_light",
             ChunkStatus::Light => "minecraft:light",

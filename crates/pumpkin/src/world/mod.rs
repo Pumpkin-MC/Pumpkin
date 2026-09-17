@@ -4753,8 +4753,6 @@ impl World {
                         // stale data.
                         base_entity.velocity.store(Vector3::default());
 
-                        player.client.enqueue_spawn_packet(&entity);
-                        player.try_restore_vehicle(&entity);
                         entities_to_add.push(entity);
                     }
 
@@ -4764,6 +4762,15 @@ impl World {
                             new_entities.extend(entities_to_add.iter().cloned());
                             new_entities
                         });
+
+                        // The tracker sends the spawn packets, and it is also what
+                        // lets `remove_entity` broadcast the removal later on.
+                        let spawn_state = world.spawn_state.load();
+                        for entity in &entities_to_add {
+                            spawn_state.add_entity(&world, entity.as_ref());
+                            world.entity_tracker.add_entity(entity, &world);
+                            player.try_restore_vehicle(entity);
+                        }
                     }
                 } else {
                     // The chunk's entities are already live (another watcher loaded

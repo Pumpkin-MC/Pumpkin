@@ -76,7 +76,10 @@ pub enum JavaMinecraftVersion {
     V_1_21_11,
     //  26.1: Tiny Takeover
     V_26_1,
+    // 26.2: Chaos Cubed
     V_26_2,
+    /// 26.3: Wilderness Bound
+    V_26_3,
     /// Fallback for unrecognized protocol versions.
     Unknown,
 }
@@ -139,6 +142,7 @@ impl JavaMinecraftVersion {
             Self::V_1_21_11 => 774,
             Self::V_26_1 => 775,
             Self::V_26_2 => 776,
+            Self::V_26_3 => 777,
             Self::Unknown => -1,
         }
     }
@@ -200,6 +204,7 @@ impl JavaMinecraftVersion {
             774 => Self::V_1_21_11,
             775 => Self::V_26_1,
             776 => Self::V_26_2,
+            777 => Self::V_26_3,
             _ => Self::Unknown,
         }
     }
@@ -277,7 +282,7 @@ impl std::fmt::Display for JavaMinecraftVersion {
             Self::V_1_21_11 => write!(f, "1.21.11"),
             Self::V_26_1 => write!(f, "26.1"),
             Self::V_26_2 => write!(f, "26.2"),
-
+            Self::V_26_3 => write!(f, "26.3"),
             Self::Unknown => write!(f, "unknown"),
         }
     }

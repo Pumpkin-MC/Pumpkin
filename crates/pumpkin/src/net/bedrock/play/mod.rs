@@ -44,7 +44,9 @@ use pumpkin_protocol::{
         },
     },
     codec::{var_int::VarInt, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong},
-    java::client::play::{Animation, CEntityAnimation, CSetSelectedSlot, CSystemChatMessage},
+    java::client::play::{
+        Animation, CEntityAnimation, CSetSelectedSlot, CSwingArm, CSystemChatMessage,
+    },
 };
 use pumpkin_util::{GameMode, Hand, math::position::BlockPos, text::TextComponent};
 

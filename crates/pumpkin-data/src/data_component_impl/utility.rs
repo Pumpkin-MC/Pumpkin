@@ -15,6 +15,18 @@ impl DataComponentImpl for DyeImpl {
     default_impl!(Dye);
 }
 
+/// 26.3 `minecraft:brewing_fuel` marker. Presence identifies brewing-stand fuel.
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct BrewingFuelImpl;
+impl BrewingFuelImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
+impl DataComponentImpl for BrewingFuelImpl {
+    default_impl!(BrewingFuel);
+}
+
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct DyedColorImpl {
     pub rgb: i32,
@@ -32,17 +44,6 @@ impl DataComponentImpl for DyedColorImpl {
         get_i32_hash(self.rgb) as i32
     }
     default_impl!(DyedColor);
-}
-
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct MapColorImpl;
-impl MapColorImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
-    }
-}
-impl DataComponentImpl for MapColorImpl {
-    default_impl!(MapColor);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

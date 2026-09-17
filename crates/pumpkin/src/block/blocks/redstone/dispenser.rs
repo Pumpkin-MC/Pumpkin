@@ -1046,7 +1046,7 @@ impl DispenserBlock {
         if !ctx
             .world
             .get_block(&target)
-            .has_tag(&tag::Block::MINECRAFT_CONVERTABLE_TO_MUD)
+            .has_tag(&tag::Block::MINECRAFT_CONVERTIBLE_TO_MUD)
         {
             return false;
         }
