@@ -79,6 +79,8 @@ struct PredicateStruct {
     items: Option<serde_json::Value>,
     #[serde(default)]
     predicates: Option<serde_json::Value>,
+    #[serde(flatten)]
+    remaining: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -115,6 +117,8 @@ struct ConditionStruct {
     term: Option<Box<ConditionStruct>>,
     #[serde(default)]
     terms: Option<Vec<ConditionStruct>>,
+    #[serde(flatten)]
+    remaining: serde_json::Map<String, serde_json::Value>,
 }
 
 fn parse_condition(cond: &ConditionStruct) -> LootCondition {
@@ -324,47 +328,66 @@ impl TryFrom<EntryFunctionJson> for EntryFunctionStruct {
     }
 }
 
-/// Reject predicates that would otherwise silently turn component copying into an unconditional function.
+/// Reject condition details that the existing compact runtime representation cannot preserve.
 fn validate_component_conditions(conditions: &[ConditionStruct]) -> Result<(), String> {
     for condition in conditions {
-        let valid = match condition.condition.as_str() {
-            "minecraft:survives_explosion" | "minecraft:killed_by_player" => true,
-            "minecraft:random_chance" => condition.chance.is_some(),
-            "minecraft:random_chance_with_enchanted_bonus" => {
-                condition.unenchanted_chance.is_some() && condition.enchanted_chance.is_some()
-            }
-            "minecraft:table_bonus" => condition
-                .chances
-                .as_ref()
-                .is_some_and(|list| !list.is_empty()),
-            "minecraft:match_tool" => parse_condition(condition) != LootCondition::None,
-            "minecraft:all_of" | "minecraft:any_of" => {
-                if let Some(terms) = &condition.terms {
-                    validate_component_conditions(terms)?;
-                    condition.condition == "minecraft:all_of"
-                        || (!terms.is_empty()
-                            && terms.iter().all(|term| {
-                                matches!(
-                                    parse_condition(term),
-                                    LootCondition::SilkTouch
-                                        | LootCondition::Shears
-                                        | LootCondition::SilkTouchOrShears
-                                )
-                            }))
-                } else {
-                    false
+        let parameters = [
+            condition.enchantment.is_some(),
+            condition.chance.is_some(),
+            condition.unenchanted_chance.is_some(),
+            condition.enchanted_chance.is_some(),
+            condition.chances.is_some(),
+            condition.predicate.is_some(),
+            condition.term.is_some(),
+            condition.terms.is_some(),
+        ]
+        .into_iter()
+        .filter(|present| *present)
+        .count();
+        let valid = condition.remaining.is_empty()
+            && match condition.condition.as_str() {
+                "minecraft:survives_explosion" | "minecraft:killed_by_player" => parameters == 0,
+                "minecraft:random_chance" => parameters == 1 && condition.chance.is_some(),
+                "minecraft:match_tool" => {
+                    parameters == 1
+                        && condition
+                            .predicate
+                            .as_ref()
+                            .is_some_and(component_tool_predicate_is_supported)
                 }
-            }
-            "minecraft:inverted" => {
-                if let Some(term) = &condition.term {
-                    validate_component_conditions(std::slice::from_ref(term.as_ref()))?;
-                    parse_condition(condition) != LootCondition::None
-                } else {
-                    false
+                "minecraft:all_of" | "minecraft:any_of" => {
+                    if parameters == 1
+                        && let Some(terms) = &condition.terms
+                    {
+                        validate_component_conditions(terms)?;
+                        condition.condition == "minecraft:all_of"
+                            || (!terms.is_empty()
+                                && terms.iter().all(|term| {
+                                    matches!(
+                                        parse_condition(term),
+                                        LootCondition::SilkTouch | LootCondition::Shears
+                                    )
+                                }))
+                    } else {
+                        false
+                    }
                 }
-            }
-            _ => false,
-        };
+                "minecraft:inverted" => {
+                    if parameters == 1
+                        && let Some(term) = &condition.term
+                    {
+                        validate_component_conditions(std::slice::from_ref(term.as_ref()))?;
+                        matches!(
+                            parse_condition(term),
+                            LootCondition::SilkTouch | LootCondition::SilkTouchOrShears
+                        )
+                    } else {
+                        false
+                    }
+                }
+                // Enchantment-dependent conditions discard the selected enchantment in the existing representation.
+                _ => false,
+            };
         if !valid {
             return Err(format!(
                 "unsupported or malformed copy_components condition: {}",
@@ -373,6 +396,52 @@ fn validate_component_conditions(conditions: &[ConditionStruct]) -> Result<(), S
         }
     }
     Ok(())
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SilkTouchToolPredicate {
+    #[serde(rename = "minecraft:enchantments")]
+    enchantments: [ToolEnchantmentRequirement; 1],
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ToolEnchantmentRequirement {
+    enchantments: String,
+    levels: MinimumToolEnchantmentLevel,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MinimumToolEnchantmentLevel {
+    min: i32,
+}
+
+/// Accept only exact shears or positive silk-touch predicates represented by the existing runtime flags.
+fn component_tool_predicate_is_supported(predicate: &PredicateStruct) -> bool {
+    if !predicate.remaining.is_empty() {
+        return false;
+    }
+    match (&predicate.items, &predicate.predicates) {
+        (Some(serde_json::Value::String(item)), None) => {
+            matches!(item.as_str(), "shears" | "minecraft:shears")
+        }
+        (Some(serde_json::Value::Array(items)), None) => {
+            matches!(items.as_slice(), [serde_json::Value::String(item)] if matches!(item.as_str(), "shears" | "minecraft:shears"))
+        }
+        (None, Some(predicates)) => serde_json::from_value::<SilkTouchToolPredicate>(
+            predicates.clone(),
+        )
+        .is_ok_and(|predicate| {
+            let [requirement] = predicate.enchantments;
+            matches!(
+                requirement.enchantments.as_str(),
+                "silk_touch" | "minecraft:silk_touch"
+            ) && requirement.levels.min == 1
+        }),
+        _ => false,
+    }
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -1062,6 +1131,86 @@ mod tests {
                 "{json}"
             );
         }
+    }
+
+    /// Component functions reject predicates whose extra requirements the compact runtime condition would lose.
+    #[test]
+    fn copy_components_rejects_unrepresented_condition_details()
+    -> Result<(), Box<dyn std::error::Error>> {
+        for condition in [
+            r#"{"condition":"minecraft:match_tool","predicate":{"items":"minecraft:shears","count":2}}"#,
+            r#"{"condition":"minecraft:match_tool","predicate":{"items":["minecraft:shears","minecraft:stick"]}}"#,
+            r#"{"condition":"minecraft:match_tool","predicate":{"items":"minecraft:not_shears"}}"#,
+            r#"{"condition":"minecraft:match_tool","predicate":{"predicates":{"minecraft:enchantments":[{"enchantments":"minecraft:silk_touch","levels":{"min":2}}]}}}"#,
+            r#"{"condition":"minecraft:match_tool","predicate":{"predicates":{"minecraft:enchantments":[{"enchantments":"minecraft:silk_touch","levels":{"min":1,"max":1}}]}}}"#,
+            r#"{"condition":"minecraft:match_tool","predicate":{"predicates":{"unsupported":"minecraft:silk_touch"}}}"#,
+            r#"{"condition":"minecraft:inverted","term":{"condition":"minecraft:match_tool","predicate":{"items":"minecraft:shears"}}}"#,
+            r#"{"condition":"minecraft:any_of","terms":[{"condition":"minecraft:any_of","terms":[{"condition":"minecraft:match_tool","predicate":{"items":"minecraft:shears"}},{"condition":"minecraft:match_tool","predicate":{"predicates":{"minecraft:enchantments":[{"enchantments":"minecraft:silk_touch","levels":{"min":1}}]}}}]},{"condition":"minecraft:match_tool","predicate":{"predicates":{"minecraft:enchantments":[{"enchantments":"minecraft:silk_touch","levels":{"min":1}}]}}}]}"#,
+            r#"{"condition":"minecraft:table_bonus","enchantment":"minecraft:silk_touch","chances":[0.0,1.0]}"#,
+            r#"{"condition":"minecraft:random_chance_with_enchanted_bonus","enchantment":"minecraft:fortune","unenchanted_chance":0.0,"enchanted_chance":1.0}"#,
+            r#"{"condition":"minecraft:random_chance","chance":0.5,"predicate":{"items":"minecraft:shears"}}"#,
+            r#"{"condition":"minecraft:killed_by_player","unsupported":true}"#,
+        ] {
+            let function = serde_json::json!({
+                "function": "minecraft:copy_components",
+                "source": "block_entity",
+                "conditions": [serde_json::from_str::<serde_json::Value>(condition)?],
+            });
+            assert!(
+                serde_json::from_value::<EntryFunctionStruct>(function).is_err(),
+                "{condition}"
+            );
+        }
+        Ok(())
+    }
+
+    /// Exact supported predicates retain their meaning when combined, repeated, or inverted.
+    #[test]
+    fn copy_components_retains_supported_tool_conditions() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let silk = serde_json::json!({
+            "condition": "minecraft:match_tool",
+            "predicate": { "predicates": { "minecraft:enchantments": [{
+                "enchantments": "minecraft:silk_touch", "levels": { "min": 1 }
+            }] } },
+        });
+        let shears = serde_json::json!({
+            "condition": "minecraft:match_tool",
+            "predicate": { "items": "minecraft:shears" },
+        });
+        let either = serde_json::json!({
+            "condition": "minecraft:any_of", "terms": [silk.clone(), shears.clone()],
+        });
+        for (condition, expected) in [
+            (silk.clone(), LootCondition::SilkTouch),
+            (shears.clone(), LootCondition::Shears),
+            (either.clone(), LootCondition::SilkTouchOrShears),
+            (
+                serde_json::json!({ "condition": "minecraft:any_of", "terms": [silk.clone(), silk.clone()] }),
+                LootCondition::SilkTouch,
+            ),
+            (
+                serde_json::json!({ "condition": "minecraft:any_of", "terms": [shears.clone(), shears] }),
+                LootCondition::Shears,
+            ),
+            (
+                serde_json::json!({ "condition": "minecraft:inverted", "term": silk }),
+                LootCondition::NoSilkTouch,
+            ),
+            (
+                serde_json::json!({ "condition": "minecraft:inverted", "term": either }),
+                LootCondition::NoSilkTouchOrShears,
+            ),
+        ] {
+            let function: EntryFunctionStruct = serde_json::from_value(serde_json::json!({
+                "function": "minecraft:copy_components", "source": "block_entity", "conditions": [condition],
+            }))?;
+            let copy = function
+                .copy_components
+                .ok_or("missing component function")?;
+            assert_eq!(combine_conditions(&copy.conditions), expected);
+        }
+        Ok(())
     }
 
     /// Ordered component copies do not replace the established count, weight, and bonus extraction.
