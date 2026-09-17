@@ -76,8 +76,10 @@ impl ClientPacket for CUpdateAdvancements {
                 if let Some(bg) = display.background_texture {
                     write.write_string(bg)?;
                 }
-                write.write_f32_be(display.x)?;
-                write.write_f32_be(display.y)?;
+                if *version < JavaMinecraftVersion::V_26_3 {
+                    write.write_f32_be(display.x)?;
+                    write.write_f32_be(display.y)?;
+                }
             }
 
             if *version < JavaMinecraftVersion::V_1_20_2 {
@@ -97,6 +99,15 @@ impl ClientPacket for CUpdateAdvancements {
 
             if *version >= JavaMinecraftVersion::V_1_20 {
                 write.write_bool(adv.send_telemetry)?;
+            }
+
+            if *version >= JavaMinecraftVersion::V_26_3 {
+                // 26.3 moved the tree position out of the display info, next to every entry
+                let (x, y) = adv
+                    .display
+                    .map_or((0.0, 0.0), |display| (display.x, display.y));
+                write.write_f32_be(x)?;
+                write.write_f32_be(y)?;
             }
         }
 

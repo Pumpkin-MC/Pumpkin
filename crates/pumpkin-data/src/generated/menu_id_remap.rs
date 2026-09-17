@@ -90,6 +90,9 @@ const MENU_ID_REMAP_V_26_2_TO_V_1_21_11: &[u8] = &[
 const MENU_ID_REMAP_V_26_2_TO_V_26_1: &[u8] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
 ];
+const MENU_ID_REMAP_V_26_2_TO_V_26_3: &[u8] = &[
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+];
 #[must_use]
 pub fn remap_menu_id_for_version(menu_id: u8, version: JavaMinecraftVersion) -> u8 {
     match version {
@@ -230,6 +233,10 @@ pub fn remap_menu_id_for_version(menu_id: u8, version: JavaMinecraftVersion) -> 
             .copied()
             .unwrap_or(menu_id),
         pumpkin_util::version::JavaMinecraftVersion::V_26_1 => MENU_ID_REMAP_V_26_2_TO_V_26_1
+            .get(usize::from(menu_id))
+            .copied()
+            .unwrap_or(menu_id),
+        pumpkin_util::version::JavaMinecraftVersion::V_26_3 => MENU_ID_REMAP_V_26_2_TO_V_26_3
             .get(usize::from(menu_id))
             .copied()
             .unwrap_or(menu_id),

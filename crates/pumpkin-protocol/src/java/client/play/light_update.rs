@@ -78,10 +78,10 @@ impl LightData {
 
         // Chunk bitmasks
         if *version >= JavaMinecraftVersion::V_1_17 {
-            write.write_bitset(&self.sky_light_mask)?;
-            write.write_bitset(&self.block_light_mask)?;
-            write.write_bitset(&self.empty_sky_light_mask)?;
-            write.write_bitset(&self.empty_block_light_mask)?;
+            write.write_bitset(&self.sky_light_mask, version)?;
+            write.write_bitset(&self.block_light_mask, version)?;
+            write.write_bitset(&self.empty_sky_light_mask, version)?;
+            write.write_bitset(&self.empty_block_light_mask, version)?;
         } else {
             write.write_var_int(&VarInt(self.sky_light_mask.as_u64() as i32))?;
             write.write_var_int(&VarInt(self.block_light_mask.as_u64() as i32))?;
@@ -144,10 +144,10 @@ impl LightData {
         let (sky_light_mask, block_light_mask, empty_sky_light_mask, empty_block_light_mask) =
             if *version >= JavaMinecraftVersion::V_1_17 {
                 (
-                    BitSet::decode(bytebuf)?,
-                    BitSet::decode(bytebuf)?,
-                    BitSet::decode(bytebuf)?,
-                    BitSet::decode(bytebuf)?,
+                    BitSet::decode(bytebuf, version)?,
+                    BitSet::decode(bytebuf, version)?,
+                    BitSet::decode(bytebuf, version)?,
+                    BitSet::decode(bytebuf, version)?,
                 )
             } else {
                 (

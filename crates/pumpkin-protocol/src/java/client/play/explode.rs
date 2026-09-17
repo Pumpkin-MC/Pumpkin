@@ -101,6 +101,10 @@ impl ClientPacket for CExplosion {
             if *version >= JavaMinecraftVersion::V_1_21_9 {
                 write.write_var_int(&self.block_particles_pool_size)?;
             }
+            if *version >= JavaMinecraftVersion::V_26_3 {
+                // play_sound
+                write.write_bool(true)?;
+            }
         } else {
             write.write_f32_be(self.radius)?;
 

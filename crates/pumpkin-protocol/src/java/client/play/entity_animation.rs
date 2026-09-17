@@ -32,10 +32,21 @@ impl ClientPacket for CEntityAnimation {
     fn write_packet_data(
         &self,
         mut write: impl std::io::Write,
-        _version: &JavaMinecraftVersion,
+        version: &JavaMinecraftVersion,
     ) -> Result<(), crate::ser::WritingError> {
         write.write_var_int(&self.entity_id)?;
-        write.write_u8(self.animation)?;
+        if *version >= JavaMinecraftVersion::V_26_3 {
+            // 26.3 moved swings to `CSwingAnimation` and renumbered the remaining actions
+            let animation = match self.animation {
+                2 => 0,
+                4 => 1,
+                5 => 2,
+                other => other,
+            };
+            write.write_u8(animation)?;
+        } else {
+            write.write_u8(self.animation)?;
+        }
         Ok(())
     }
 }

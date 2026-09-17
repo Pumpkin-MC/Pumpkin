@@ -12,7 +12,17 @@ impl BedrockClient {
 
         let java_animation = match packet.action {
             AnimateAction::NoAction => None,
-            AnimateAction::SwingArm => Some(Animation::SwingMainArm),
+            AnimateAction::SwingArm => {
+                let je_packet = CSwingAnimation::new(VarInt(entity.entity_id), false);
+                let be_packet = SAnimate {
+                    action: packet.action,
+                    target_actor_runtime_id: VarULong(entity.entity_id as u64),
+                    data: 0.0,
+                    swing_source: None,
+                };
+                world.broadcast_editioned(&je_packet, &be_packet);
+                None
+            }
             AnimateAction::WakeUp => Some(Animation::LeaveBed),
             AnimateAction::CriticalHit => Some(Animation::CriticalEffect),
             AnimateAction::MagicCriticalHit => Some(Animation::MagicCriticaleffect),

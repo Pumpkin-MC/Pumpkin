@@ -202,8 +202,24 @@ macro_rules! remap_nodes {
             value: "../../assets/viabackwards/data/mappings-26.2to26.1.nbt",
             child: Some(&node_1_21_11),
         };
-        $remapper.process(&node_26_1)
+        let mut mappings = $remapper.process(&node_26_1);
+        mappings.extend($remapper.process(&$crate::remap::forward_node_26_3()));
+        mappings
     }};
+}
+
+/// Mapping file from the server data version (26.2) up to the newer 26.3 client, built from the
+/// vanilla data reports. Replace with ViaBackwards' `mappings-26.3to26.2.nbt` once it is released.
+pub const FORWARD_26_3_MAPPINGS: &str = "../../assets/forward/mappings-26.2to26.3.nbt";
+
+/// Root node for clients newer than the server data. It has no child: the chain toward older
+/// versions starts from 26.2 separately.
+pub const fn forward_node_26_3() -> MappingNode<'static, &'static str> {
+    MappingNode {
+        version: JavaMinecraftVersion::V_26_3,
+        value: FORWARD_26_3_MAPPINGS,
+        child: None,
+    }
 }
 
 /// A node in a linked chain of ViaVersion mapping files, each describing how IDs changed
@@ -613,6 +629,7 @@ pub fn version_patterns(ver: JavaMinecraftVersion) -> Vec<JavaMinecraftVersion> 
         JavaMinecraftVersion::V_1_21_11 => vec![JavaMinecraftVersion::V_1_21_11],
         JavaMinecraftVersion::V_26_1 => vec![JavaMinecraftVersion::V_26_1],
         JavaMinecraftVersion::V_26_2 => vec![JavaMinecraftVersion::V_26_2],
+        JavaMinecraftVersion::V_26_3 => vec![JavaMinecraftVersion::V_26_3],
         _ => vec![ver],
     }
 }

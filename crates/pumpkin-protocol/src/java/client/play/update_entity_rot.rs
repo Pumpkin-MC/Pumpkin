@@ -39,9 +39,12 @@ impl ClientPacket for CUpdateEntityRot {
         } else {
             write.write_var_int(&self.entity_id)?;
         }
+        if *version >= JavaMinecraftVersion::V_26_3 {
+            write.write_bool(self.on_ground)?;
+        }
         write.write_u8(self.yaw)?;
         write.write_u8(self.pitch)?;
-        if *version >= JavaMinecraftVersion::V_1_8 {
+        if *version >= JavaMinecraftVersion::V_1_8 && *version < JavaMinecraftVersion::V_26_3 {
             write.write_bool(self.on_ground)?;
         }
         Ok(())
@@ -55,9 +58,16 @@ impl<'a> ServerPacket<'a> for CUpdateEntityRot {
         } else {
             bytebuf.get_var_int()?
         };
+        let leading_on_ground = if *version >= JavaMinecraftVersion::V_26_3 {
+            Some(bytebuf.get_bool()?)
+        } else {
+            None
+        };
         let yaw = bytebuf.get_u8()?;
         let pitch = bytebuf.get_u8()?;
-        let on_ground = if *version >= JavaMinecraftVersion::V_1_8 {
+        let on_ground = if let Some(on_ground) = leading_on_ground {
+            on_ground
+        } else if *version >= JavaMinecraftVersion::V_1_8 {
             bytebuf.get_bool()?
         } else {
             false

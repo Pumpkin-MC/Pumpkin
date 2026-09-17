@@ -90,6 +90,9 @@ const RECIPE_SERIALIZER_ID_REMAP_V_26_2_TO_V_1_21_11: &[u16] = &[
 const RECIPE_SERIALIZER_ID_REMAP_V_26_2_TO_V_26_1: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
 ];
+const RECIPE_SERIALIZER_ID_REMAP_V_26_2_TO_V_26_3: &[u16] = &[
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 21,
+];
 #[must_use]
 pub fn remap_recipe_serializer_id_for_version(
     recipe_serializer_id: u16,
@@ -292,6 +295,12 @@ pub fn remap_recipe_serializer_id_for_version(
         }
         pumpkin_util::version::JavaMinecraftVersion::V_26_1 => {
             RECIPE_SERIALIZER_ID_REMAP_V_26_2_TO_V_26_1
+                .get(usize::from(recipe_serializer_id))
+                .copied()
+                .unwrap_or(recipe_serializer_id)
+        }
+        pumpkin_util::version::JavaMinecraftVersion::V_26_3 => {
+            RECIPE_SERIALIZER_ID_REMAP_V_26_2_TO_V_26_3
                 .get(usize::from(recipe_serializer_id))
                 .copied()
                 .unwrap_or(recipe_serializer_id)

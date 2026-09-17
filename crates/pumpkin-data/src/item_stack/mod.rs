@@ -842,6 +842,7 @@ impl ItemStack {
         let mut item_stack = Self::new(count, item);
 
         // Process any additional data in the components compound
+        // TODO: Not yet updated to 26.3, cannot read a vanilla 26.3 world correctly
         if let Some(tag) = compound.get_compound("components") {
             for (name, data) in &tag.child_tags {
                 if let Some(name) = name.strip_prefix("!") {

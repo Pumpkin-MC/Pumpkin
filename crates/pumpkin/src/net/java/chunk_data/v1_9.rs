@@ -52,7 +52,7 @@ pub fn write_chunk_data(
     }
 
     if version >= &JavaMinecraftVersion::V_1_17 {
-        write.write_bitset(&BitSet(Box::new([chunk_mask as i64])))?;
+        write.write_bitset(&BitSet(Box::new([chunk_mask as i64])), version)?;
     } else {
         write.write_var_int(&VarInt(chunk_mask as i32))?;
     }

@@ -9,6 +9,15 @@ use crate::version::JavaMinecraftVersion;
 /// The newest protocol version whose registry data is used as the fallback for unknown versions.
 const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_2;
 
+/// Datapack folders read for a version, base first. Overlay versions only store files that differ
+/// from their base, later folders replace files with the same path.
+pub(crate) fn datapack_layers(ver_folder: &str) -> Vec<&str> {
+    match ver_folder {
+        "26_3" => vec!["26_2", "26_3"],
+        _ => vec![ver_folder],
+    }
+}
+
 /// Generates the `TokenStream` for the `Registry` and `StaticRegistry` structs, version-keyed
 /// static registry data, and the `Registry::get_synced` method.
 pub(crate) fn build() -> TokenStream {
@@ -30,6 +39,7 @@ pub(crate) fn build() -> TokenStream {
         ("1_21_11", "V_1_21_11"),
         ("26_1", "V_26_1"),
         ("26_2", "V_26_2"),
+        ("26_3", "V_26_3"),
     ];
 
     let version_mapping = [
@@ -60,6 +70,7 @@ pub(crate) fn build() -> TokenStream {
         (JavaMinecraftVersion::V_1_21_11, "V_1_21_11"),
         (JavaMinecraftVersion::V_26_1, "V_26_1"),
         (JavaMinecraftVersion::V_26_2, "V_26_2"),
+        (JavaMinecraftVersion::V_26_3, "V_26_3"),
     ];
 
     const SYNCED_REGISTRIES: &[&str] = &[
@@ -94,36 +105,42 @@ pub(crate) fn build() -> TokenStream {
         "sulfur_cube_archetype",
     ];
 
-    let process_version = |ver_folder: &str| -> TokenStream {
-        let base_path = std::path::Path::new("../../assets/datapacks")
-            .join(ver_folder)
-            .join("data/minecraft");
+    /// Synced registries a client only knows from 26.3 on.
+    const SYNCED_REGISTRIES_26_3: &[&str] = &[
+        "worldgen/block_state_provider",
+        "block_transformer",
+        "decorated_pot_pattern",
+    ];
 
+    let process_version = |ver_folder: &str| -> TokenStream {
         let mut data: IndexMap<String, IndexMap<String, Value>> = IndexMap::new();
 
-        for &reg_name in SYNCED_REGISTRIES {
-            let reg_dir = base_path.join(reg_name);
-            if !reg_dir.is_dir() {
-                continue;
-            }
+        let newer_registries: &[&str] = if ver_folder == "26_3" {
+            SYNCED_REGISTRIES_26_3
+        } else {
+            &[]
+        };
+        for &reg_name in SYNCED_REGISTRIES.iter().chain(newer_registries) {
             let mut entries = IndexMap::new();
-            let mut paths: Vec<_> = fs::read_dir(&reg_dir)
-                .into_iter()
-                .flatten()
-                .filter_map(Result::ok)
-                .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
-                .collect();
-            paths.sort_by_key(|e| e.path());
-
-            for entry in paths {
-                let path = entry.path();
-                let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
-                if let Ok(content) = fs::read_to_string(&path)
-                    && let Ok(val) = serde_json::from_str::<Value>(&content)
-                {
-                    entries.insert(stem, val);
+            for layer in datapack_layers(ver_folder) {
+                let reg_dir = std::path::Path::new("../../assets/datapacks")
+                    .join(layer)
+                    .join("data/minecraft")
+                    .join(reg_name);
+                for entry in fs::read_dir(&reg_dir).into_iter().flatten().flatten() {
+                    let path = entry.path();
+                    if path.extension().is_none_or(|ext| ext != "json") {
+                        continue;
+                    }
+                    let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
+                    if let Ok(content) = fs::read_to_string(&path)
+                        && let Ok(val) = serde_json::from_str::<Value>(&content)
+                    {
+                        entries.insert(stem, val);
+                    }
                 }
             }
+            entries.sort_keys();
 
             if !entries.is_empty() {
                 data.insert(reg_name.to_string(), entries);
@@ -183,7 +200,12 @@ pub(crate) fn build() -> TokenStream {
                         let bytes = if let pumpkin_nbt::tag::NbtTag::Compound(compound) = nbt_tag {
                             pumpkin_nbt::Nbt::from(compound).write_unnamed()
                         } else {
-                            Vec::new().into()
+                            // Non-compound roots (e.g. `block_transformer` lists) keep their own type ID
+                            let mut bytes = Vec::new();
+                            let _ = nbt_tag.serialize(
+                                &mut pumpkin_nbt::serializer::NbtWriteHelperJava::new(&mut bytes),
+                            );
+                            bytes.into()
                         };
                         let byte_literal = Literal::byte_string(&bytes);
 
@@ -256,14 +278,28 @@ pub(crate) fn build() -> TokenStream {
 
         impl Registry {
             #[must_use]
-            pub fn get_synced(version: JavaMinecraftVersion) -> Vec<Self> {
+            pub const fn get_static(version: JavaMinecraftVersion) -> &'static [StaticRegistry] {
                 #[allow(clippy::match_same_arms)]
-                let static_regs = match version {
+                match version {
                     #match_arms
                     _ => #latest_registry,
-                };
+                }
+            }
 
-                static_regs.iter().map(|static_reg| {
+            /// Network ID of `name` (without namespace) in the synced registry `registry_id`.
+            #[must_use]
+            pub fn entry_index(version: JavaMinecraftVersion, registry_id: &str, name: &str) -> Option<usize> {
+                Self::get_static(version)
+                    .iter()
+                    .find(|registry| registry.registry_id == registry_id)?
+                    .entries
+                    .iter()
+                    .position(|entry| entry.name == name)
+            }
+
+            #[must_use]
+            pub fn get_synced(version: JavaMinecraftVersion) -> Vec<Self> {
+                Self::get_static(version).iter().map(|static_reg| {
                     let registry_id = if static_reg.registry_id.contains(':') {
                         static_reg.registry_id.to_string()
                     } else {

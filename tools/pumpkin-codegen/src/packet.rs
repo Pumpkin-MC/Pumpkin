@@ -7,6 +7,9 @@ use crate::version::JavaMinecraftVersion;
 
 /// The newest protocol version used as the fallback for unknown versions in `PacketId::to_id`.
 const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_2;
+/// The newest protocol version clients may connect with. Newer than `LATEST_VERSION` when the
+/// server data is still on `LATEST_VERSION` and newer clients get remapped IDs.
+const HIGHEST_SUPPORTED_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_3;
 
 /// Represents the protocol_id object within the JSON.
 #[derive(Deserialize)]
@@ -82,6 +85,7 @@ pub(crate) fn build() -> TokenStream {
         (JavaMinecraftVersion::V_1_21_11, "1_21_11_packets.json"),
         (JavaMinecraftVersion::V_26_1, "26_1_packets.json"),
         (JavaMinecraftVersion::V_26_2, "26_2_packets.json"),
+        (JavaMinecraftVersion::V_26_3, "26_3_packets.json"),
     ];
 
     // Parse available packet files into a BTreeMap keyed by JavaMinecraftVersion
@@ -107,6 +111,7 @@ pub(crate) fn build() -> TokenStream {
 
         pub const CURRENT_MC_VERSION: JavaMinecraftVersion = #LATEST_VERSION;
         pub const LOWEST_SUPPORTED_MC_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_1_7_2;
+        pub const HIGHEST_SUPPORTED_MC_VERSION: JavaMinecraftVersion = #HIGHEST_SUPPORTED_VERSION;
 
         #packet_id_struct
 

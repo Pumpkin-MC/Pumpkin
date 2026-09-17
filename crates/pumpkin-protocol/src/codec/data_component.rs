@@ -8,8 +8,13 @@ use pumpkin_data::Enchantment;
 use pumpkin_data::data_component::DataComponent;
 use pumpkin_data::data_component_impl::*;
 
+use crate::codec::item_stack_seralizer::{is_component_sent, map_component_id, read_component_id};
+use pumpkin_data::data_component_type_id_remap::remap_data_component_type_id_for_version;
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item_id_remap::{remap_item_id_for_version, remap_item_id_from_version};
+use pumpkin_data::packet::CURRENT_MC_VERSION;
+use pumpkin_data::registry::Registry;
 use pumpkin_data::sound::Sound;
 use pumpkin_nbt::{serializer::NbtWriteHelperJava, tag::NbtTag};
 use pumpkin_util::version::JavaMinecraftVersion;
@@ -229,6 +234,22 @@ fn serialize_consume_effect(
 pub(crate) trait DataComponentCodec<Impl: DataComponentImpl> {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError>;
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Impl, ReadingError>;
+
+    /// Components embedding version-dependent IDs or layouts override these.
+    fn serialize_for(
+        &self,
+        seq: &mut impl NetworkWriteExt,
+        _version: JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
+        self.serialize(seq)
+    }
+
+    fn deserialize_for(
+        seq: &mut impl NetworkReadExt,
+        _version: JavaMinecraftVersion,
+    ) -> Result<Impl, ReadingError> {
+        Self::deserialize(seq)
+    }
 }
 
 impl DataComponentCodec<Self> for MaxStackSizeImpl {
@@ -931,292 +952,483 @@ impl DataComponentCodec<Self> for RarityImpl {
     }
 }
 
-#[allow(clippy::too_many_lines)]
 pub fn deserialize(
     id: DataComponent,
     seq: &mut impl NetworkReadExt,
 ) -> Result<Box<dyn DataComponentImpl>, ReadingError> {
+    deserialize_for_version(id, seq, CURRENT_MC_VERSION)
+}
+
+/// Reads a component value in `version`'s layout.
+#[allow(clippy::too_many_lines)]
+pub fn deserialize_for_version(
+    id: DataComponent,
+    seq: &mut impl NetworkReadExt,
+    version: JavaMinecraftVersion,
+) -> Result<Box<dyn DataComponentImpl>, ReadingError> {
     match id {
-        DataComponent::CustomData => Ok(CustomDataImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::MaxStackSize => Ok(MaxStackSizeImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::MaxDamage => Ok(MaxDamageImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::Damage => Ok(DamageImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::Unbreakable => Ok(UnbreakableImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::UseEffects => Ok(UseEffectsImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::CustomName => Ok(CustomNameImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::MinimumAttackCharge => {
-            Ok(MinimumAttackChargeImpl::deserialize(seq)?.to_dyn())
+        DataComponent::CustomData => Ok(CustomDataImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::MaxStackSize => {
+            Ok(MaxStackSizeImpl::deserialize_for(seq, version)?.to_dyn())
         }
-        DataComponent::DamageType => Ok(DamageTypeImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::ItemName => Ok(ItemNameImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::ItemModel => Ok(ItemModelImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::Lore => Ok(LoreImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::Rarity => Ok(RarityImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::Enchantments => Ok(EnchantmentsImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::CanPlaceOn => Ok(CanPlaceOnImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::CanBreak => Ok(CanBreakImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::AttributeModifiers => Ok(AttributeModifiersImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::CustomModelData => Ok(CustomModelDataImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::TooltipDisplay => Ok(TooltipDisplayImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::RepairCost => Ok(RepairCostImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::CreativeSlotLock => Ok(CreativeSlotLockImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::MaxDamage => Ok(MaxDamageImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::Damage => Ok(DamageImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::Unbreakable => Ok(UnbreakableImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::UseEffects => Ok(UseEffectsImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::CustomName => Ok(CustomNameImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::MinimumAttackCharge => {
+            Ok(MinimumAttackChargeImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::DamageType => Ok(DamageTypeImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::ItemName => Ok(ItemNameImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::ItemModel => Ok(ItemModelImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::Lore => Ok(LoreImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::Rarity => Ok(RarityImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::Enchantments => {
+            Ok(EnchantmentsImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::CanPlaceOn => Ok(CanPlaceOnImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::CanBreak => Ok(CanBreakImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::AttributeModifiers => {
+            Ok(AttributeModifiersImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::CustomModelData => {
+            Ok(CustomModelDataImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::TooltipDisplay => {
+            Ok(TooltipDisplayImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::RepairCost => Ok(RepairCostImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::CreativeSlotLock => {
+            Ok(CreativeSlotLockImpl::deserialize_for(seq, version)?.to_dyn())
+        }
         DataComponent::EnchantmentGlintOverride => {
-            Ok(EnchantmentGlintOverrideImpl::deserialize(seq)?.to_dyn())
+            Ok(EnchantmentGlintOverrideImpl::deserialize_for(seq, version)?.to_dyn())
         }
         DataComponent::IntangibleProjectile => {
-            Ok(IntangibleProjectileImpl::deserialize(seq)?.to_dyn())
+            Ok(IntangibleProjectileImpl::deserialize_for(seq, version)?.to_dyn())
         }
-        DataComponent::Food => Ok(FoodImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::Consumable => Ok(ConsumableImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::UseRemainder => Ok(UseRemainderImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::UseCooldown => Ok(UseCooldownImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::DamageResistant => Ok(DamageResistantImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::Tool => Ok(ToolImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::Weapon => Ok(WeaponImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::AttackRange => Ok(AttackRangeImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::Enchantable => Ok(EnchantableImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::Equippable => Ok(EquippableImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::Repairable => Ok(RepairableImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::Glider => Ok(GliderImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::TooltipStyle => Ok(TooltipStyleImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::DeathProtection => Ok(DeathProtectionImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::BlocksAttacks => Ok(BlocksAttacksImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::PiercingWeapon => Ok(PiercingWeaponImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::KineticWeapon => Ok(KineticWeaponImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::SwingAnimation => Ok(SwingAnimationImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::Food => Ok(FoodImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::Consumable => Ok(ConsumableImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::UseRemainder => {
+            Ok(UseRemainderImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::UseCooldown => Ok(UseCooldownImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::DamageResistant => {
+            Ok(DamageResistantImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::Tool => Ok(ToolImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::Weapon => Ok(WeaponImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::AttackRange => Ok(AttackRangeImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::Enchantable => Ok(EnchantableImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::Equippable => Ok(EquippableImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::Repairable => Ok(RepairableImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::Glider => Ok(GliderImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::TooltipStyle => {
+            Ok(TooltipStyleImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::DeathProtection => {
+            Ok(DeathProtectionImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::BlocksAttacks => {
+            Ok(BlocksAttacksImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::PiercingWeapon => {
+            Ok(PiercingWeaponImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::KineticWeapon => {
+            Ok(KineticWeaponImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::SwingAnimation => {
+            Ok(SwingAnimationImpl::deserialize_for(seq, version)?.to_dyn())
+        }
         DataComponent::AdditionalTradeCost => {
-            Ok(AdditionalTradeCostImpl::deserialize(seq)?.to_dyn())
+            Ok(AdditionalTradeCostImpl::deserialize_for(seq, version)?.to_dyn())
         }
-        DataComponent::StoredEnchantments => Ok(StoredEnchantmentsImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::Dye => Ok(DyeImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::DyedColor => Ok(DyedColorImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::MapColor => Ok(MapColorImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::MapId => Ok(MapIdImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::MapDecorations => Ok(MapDecorationsImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::MapPostProcessing => Ok(MapPostProcessingImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::ChargedProjectiles => Ok(ChargedProjectilesImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::BundleContents => Ok(BundleContentsImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::PotionContents => Ok(PotionContentsImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::StoredEnchantments => {
+            Ok(StoredEnchantmentsImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::Dye => Ok(DyeImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::DyedColor => Ok(DyedColorImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::MapColor => Ok(MapColorImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::MapId => Ok(MapIdImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::MapDecorations => {
+            Ok(MapDecorationsImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::MapPostProcessing => {
+            Ok(MapPostProcessingImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::ChargedProjectiles => {
+            Ok(ChargedProjectilesImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::BundleContents => {
+            Ok(BundleContentsImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::PotionContents => {
+            Ok(PotionContentsImpl::deserialize_for(seq, version)?.to_dyn())
+        }
         DataComponent::PotionDurationScale => {
-            Ok(PotionDurationScaleImpl::deserialize(seq)?.to_dyn())
+            Ok(PotionDurationScaleImpl::deserialize_for(seq, version)?.to_dyn())
         }
         DataComponent::SuspiciousStewEffects => {
-            Ok(SuspiciousStewEffectsImpl::deserialize(seq)?.to_dyn())
+            Ok(SuspiciousStewEffectsImpl::deserialize_for(seq, version)?.to_dyn())
         }
         DataComponent::WritableBookContent => {
-            Ok(WritableBookContentImpl::deserialize(seq)?.to_dyn())
+            Ok(WritableBookContentImpl::deserialize_for(seq, version)?.to_dyn())
         }
-        DataComponent::WrittenBookContent => Ok(WrittenBookContentImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::Trim => Ok(TrimImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::DebugStickState => Ok(DebugStickStateImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::EntityData => Ok(EntityDataImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::BucketEntityData => Ok(BucketEntityDataImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::BlockEntityData => Ok(BlockEntityDataImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::Instrument => Ok(InstrumentImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::WrittenBookContent => {
+            Ok(WrittenBookContentImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::Trim => Ok(TrimImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::DebugStickState => {
+            Ok(DebugStickStateImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::EntityData => Ok(EntityDataImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::BucketEntityData => {
+            Ok(BucketEntityDataImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::BlockEntityData => {
+            Ok(BlockEntityDataImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::Instrument => Ok(InstrumentImpl::deserialize_for(seq, version)?.to_dyn()),
         DataComponent::ProvidesTrimMaterial => {
-            Ok(ProvidesTrimMaterialImpl::deserialize(seq)?.to_dyn())
+            Ok(ProvidesTrimMaterialImpl::deserialize_for(seq, version)?.to_dyn())
         }
         DataComponent::OminousBottleAmplifier => {
-            Ok(OminousBottleAmplifierImpl::deserialize(seq)?.to_dyn())
+            Ok(OminousBottleAmplifierImpl::deserialize_for(seq, version)?.to_dyn())
         }
-        DataComponent::JukeboxPlayable => Ok(JukeboxPlayableImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::JukeboxPlayable => {
+            Ok(JukeboxPlayableImpl::deserialize_for(seq, version)?.to_dyn())
+        }
         DataComponent::ProvidesBannerPatterns => {
-            Ok(ProvidesBannerPatternsImpl::deserialize(seq)?.to_dyn())
+            Ok(ProvidesBannerPatternsImpl::deserialize_for(seq, version)?.to_dyn())
         }
-        DataComponent::Recipes => Ok(RecipesImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::LodestoneTracker => Ok(LodestoneTrackerImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::FireworkExplosion => Ok(FireworkExplosionImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::Fireworks => Ok(FireworksImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::Profile => Ok(ProfileImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::NoteBlockSound => Ok(NoteBlockSoundImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::BannerPatterns => Ok(BannerPatternsImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::BaseColor => Ok(BaseColorImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::PotDecorations => Ok(PotDecorationsImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::Container => Ok(ContainerImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::BlockState => Ok(BlockStateImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::Bees => Ok(BeesImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::SulfurCubeContent => Ok(SulfurCubeContentImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::Lock => Ok(LockImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::ContainerLoot => Ok(ContainerLootImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::BreakSound => Ok(BreakSoundImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::VillagerVariant => Ok(VillagerVariantImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::WolfVariant => Ok(WolfVariantImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::WolfSoundVariant => Ok(WolfSoundVariantImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::WolfCollar => Ok(WolfCollarImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::FoxVariant => Ok(FoxVariantImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::SalmonSize => Ok(SalmonSizeImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::ParrotVariant => Ok(ParrotVariantImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::Recipes => Ok(RecipesImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::LodestoneTracker => {
+            Ok(LodestoneTrackerImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::FireworkExplosion => {
+            Ok(FireworkExplosionImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::Fireworks => Ok(FireworksImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::Profile => Ok(ProfileImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::NoteBlockSound => {
+            Ok(NoteBlockSoundImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::BannerPatterns => {
+            Ok(BannerPatternsImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::BaseColor => Ok(BaseColorImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::PotDecorations => {
+            Ok(PotDecorationsImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::Container => Ok(ContainerImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::BlockState => Ok(BlockStateImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::Bees => Ok(BeesImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::SulfurCubeContent => {
+            Ok(SulfurCubeContentImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::Lock => Ok(LockImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::ContainerLoot => {
+            Ok(ContainerLootImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::BreakSound => Ok(BreakSoundImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::VillagerVariant => {
+            Ok(VillagerVariantImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::WolfVariant => Ok(WolfVariantImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::WolfSoundVariant => {
+            Ok(WolfSoundVariantImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::WolfCollar => Ok(WolfCollarImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::FoxVariant => Ok(FoxVariantImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::SalmonSize => Ok(SalmonSizeImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::ParrotVariant => {
+            Ok(ParrotVariantImpl::deserialize_for(seq, version)?.to_dyn())
+        }
         DataComponent::TropicalFishPattern => {
-            Ok(TropicalFishPatternImpl::deserialize(seq)?.to_dyn())
+            Ok(TropicalFishPatternImpl::deserialize_for(seq, version)?.to_dyn())
         }
         DataComponent::TropicalFishBaseColor => {
-            Ok(TropicalFishBaseColorImpl::deserialize(seq)?.to_dyn())
+            Ok(TropicalFishBaseColorImpl::deserialize_for(seq, version)?.to_dyn())
         }
         DataComponent::TropicalFishPatternColor => {
-            Ok(TropicalFishPatternColorImpl::deserialize(seq)?.to_dyn())
+            Ok(TropicalFishPatternColorImpl::deserialize_for(seq, version)?.to_dyn())
         }
-        DataComponent::MooshroomVariant => Ok(MooshroomVariantImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::RabbitVariant => Ok(RabbitVariantImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::PigVariant => Ok(PigVariantImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::PigSoundVariant => Ok(PigSoundVariantImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::CowVariant => Ok(CowVariantImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::CowSoundVariant => Ok(CowSoundVariantImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::ChickenVariant => Ok(ChickenVariantImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::MooshroomVariant => {
+            Ok(MooshroomVariantImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::RabbitVariant => {
+            Ok(RabbitVariantImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::PigVariant => Ok(PigVariantImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::PigSoundVariant => {
+            Ok(PigSoundVariantImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::CowVariant => Ok(CowVariantImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::CowSoundVariant => {
+            Ok(CowSoundVariantImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::ChickenVariant => {
+            Ok(ChickenVariantImpl::deserialize_for(seq, version)?.to_dyn())
+        }
         DataComponent::ChickenSoundVariant => {
-            Ok(ChickenSoundVariantImpl::deserialize(seq)?.to_dyn())
+            Ok(ChickenSoundVariantImpl::deserialize_for(seq, version)?.to_dyn())
         }
         DataComponent::ZombieNautilusVariant => {
-            Ok(ZombieNautilusVariantImpl::deserialize(seq)?.to_dyn())
+            Ok(ZombieNautilusVariantImpl::deserialize_for(seq, version)?.to_dyn())
         }
-        DataComponent::FrogVariant => Ok(FrogVariantImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::HorseVariant => Ok(HorseVariantImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::PaintingVariant => Ok(PaintingVariantImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::LlamaVariant => Ok(LlamaVariantImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::AxolotlVariant => Ok(AxolotlVariantImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::CatVariant => Ok(CatVariantImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::CatSoundVariant => Ok(CatSoundVariantImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::CatCollar => Ok(CatCollarImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::SheepColor => Ok(SheepColorImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::ShulkerColor => Ok(ShulkerColorImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::FrogVariant => Ok(FrogVariantImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::HorseVariant => {
+            Ok(HorseVariantImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::PaintingVariant => {
+            Ok(PaintingVariantImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::LlamaVariant => {
+            Ok(LlamaVariantImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::AxolotlVariant => {
+            Ok(AxolotlVariantImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::CatVariant => Ok(CatVariantImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::CatSoundVariant => {
+            Ok(CatSoundVariantImpl::deserialize_for(seq, version)?.to_dyn())
+        }
+        DataComponent::CatCollar => Ok(CatCollarImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::SheepColor => Ok(SheepColorImpl::deserialize_for(seq, version)?.to_dyn()),
+        DataComponent::ShulkerColor => {
+            Ok(ShulkerColorImpl::deserialize_for(seq, version)?.to_dyn())
+        }
     }
 }
 
-#[allow(clippy::too_many_lines)]
 pub fn serialize(
     id: DataComponent,
     value: &dyn DataComponentImpl,
     seq: &mut impl NetworkWriteExt,
 ) -> Result<(), WritingError> {
+    serialize_for_version(id, value, seq, CURRENT_MC_VERSION)
+}
+
+/// Writes a component value in `version`'s layout.
+#[allow(clippy::too_many_lines)]
+pub fn serialize_for_version(
+    id: DataComponent,
+    value: &dyn DataComponentImpl,
+    seq: &mut impl NetworkWriteExt,
+    version: JavaMinecraftVersion,
+) -> Result<(), WritingError> {
     match id {
-        DataComponent::CustomData => get::<CustomDataImpl>(value).serialize(seq),
-        DataComponent::MaxStackSize => get::<MaxStackSizeImpl>(value).serialize(seq),
-        DataComponent::MaxDamage => get::<MaxDamageImpl>(value).serialize(seq),
-        DataComponent::Damage => get::<DamageImpl>(value).serialize(seq),
-        DataComponent::Unbreakable => get::<UnbreakableImpl>(value).serialize(seq),
-        DataComponent::UseEffects => get::<UseEffectsImpl>(value).serialize(seq),
-        DataComponent::CustomName => get::<CustomNameImpl>(value).serialize(seq),
-        DataComponent::MinimumAttackCharge => get::<MinimumAttackChargeImpl>(value).serialize(seq),
-        DataComponent::DamageType => get::<DamageTypeImpl>(value).serialize(seq),
-        DataComponent::ItemName => get::<ItemNameImpl>(value).serialize(seq),
-        DataComponent::ItemModel => get::<ItemModelImpl>(value).serialize(seq),
-        DataComponent::Lore => get::<LoreImpl>(value).serialize(seq),
-        DataComponent::Rarity => get::<RarityImpl>(value).serialize(seq),
-        DataComponent::Enchantments => get::<EnchantmentsImpl>(value).serialize(seq),
-        DataComponent::CanPlaceOn => get::<CanPlaceOnImpl>(value).serialize(seq),
-        DataComponent::CanBreak => get::<CanBreakImpl>(value).serialize(seq),
-        DataComponent::AttributeModifiers => get::<AttributeModifiersImpl>(value).serialize(seq),
-        DataComponent::CustomModelData => get::<CustomModelDataImpl>(value).serialize(seq),
-        DataComponent::TooltipDisplay => get::<TooltipDisplayImpl>(value).serialize(seq),
-        DataComponent::RepairCost => get::<RepairCostImpl>(value).serialize(seq),
-        DataComponent::CreativeSlotLock => get::<CreativeSlotLockImpl>(value).serialize(seq),
+        DataComponent::CustomData => get::<CustomDataImpl>(value).serialize_for(seq, version),
+        DataComponent::MaxStackSize => get::<MaxStackSizeImpl>(value).serialize_for(seq, version),
+        DataComponent::MaxDamage => get::<MaxDamageImpl>(value).serialize_for(seq, version),
+        DataComponent::Damage => get::<DamageImpl>(value).serialize_for(seq, version),
+        DataComponent::Unbreakable => get::<UnbreakableImpl>(value).serialize_for(seq, version),
+        DataComponent::UseEffects => get::<UseEffectsImpl>(value).serialize_for(seq, version),
+        DataComponent::CustomName => get::<CustomNameImpl>(value).serialize_for(seq, version),
+        DataComponent::MinimumAttackCharge => {
+            get::<MinimumAttackChargeImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::DamageType => get::<DamageTypeImpl>(value).serialize_for(seq, version),
+        DataComponent::ItemName => get::<ItemNameImpl>(value).serialize_for(seq, version),
+        DataComponent::ItemModel => get::<ItemModelImpl>(value).serialize_for(seq, version),
+        DataComponent::Lore => get::<LoreImpl>(value).serialize_for(seq, version),
+        DataComponent::Rarity => get::<RarityImpl>(value).serialize_for(seq, version),
+        DataComponent::Enchantments => get::<EnchantmentsImpl>(value).serialize_for(seq, version),
+        DataComponent::CanPlaceOn => get::<CanPlaceOnImpl>(value).serialize_for(seq, version),
+        DataComponent::CanBreak => get::<CanBreakImpl>(value).serialize_for(seq, version),
+        DataComponent::AttributeModifiers => {
+            get::<AttributeModifiersImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::CustomModelData => {
+            get::<CustomModelDataImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::TooltipDisplay => {
+            get::<TooltipDisplayImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::RepairCost => get::<RepairCostImpl>(value).serialize_for(seq, version),
+        DataComponent::CreativeSlotLock => {
+            get::<CreativeSlotLockImpl>(value).serialize_for(seq, version)
+        }
         DataComponent::EnchantmentGlintOverride => {
-            get::<EnchantmentGlintOverrideImpl>(value).serialize(seq)
+            get::<EnchantmentGlintOverrideImpl>(value).serialize_for(seq, version)
         }
         DataComponent::IntangibleProjectile => {
-            get::<IntangibleProjectileImpl>(value).serialize(seq)
+            get::<IntangibleProjectileImpl>(value).serialize_for(seq, version)
         }
-        DataComponent::Food => get::<FoodImpl>(value).serialize(seq),
-        DataComponent::Consumable => get::<ConsumableImpl>(value).serialize(seq),
-        DataComponent::UseRemainder => get::<UseRemainderImpl>(value).serialize(seq),
-        DataComponent::UseCooldown => get::<UseCooldownImpl>(value).serialize(seq),
-        DataComponent::DamageResistant => get::<DamageResistantImpl>(value).serialize(seq),
-        DataComponent::Tool => get::<ToolImpl>(value).serialize(seq),
-        DataComponent::Weapon => get::<WeaponImpl>(value).serialize(seq),
-        DataComponent::AttackRange => get::<AttackRangeImpl>(value).serialize(seq),
-        DataComponent::Enchantable => get::<EnchantableImpl>(value).serialize(seq),
-        DataComponent::Equippable => get::<EquippableImpl>(value).serialize(seq),
-        DataComponent::Repairable => get::<RepairableImpl>(value).serialize(seq),
-        DataComponent::Glider => get::<GliderImpl>(value).serialize(seq),
-        DataComponent::TooltipStyle => get::<TooltipStyleImpl>(value).serialize(seq),
-        DataComponent::DeathProtection => get::<DeathProtectionImpl>(value).serialize(seq),
-        DataComponent::BlocksAttacks => get::<BlocksAttacksImpl>(value).serialize(seq),
-        DataComponent::PiercingWeapon => get::<PiercingWeaponImpl>(value).serialize(seq),
-        DataComponent::KineticWeapon => get::<KineticWeaponImpl>(value).serialize(seq),
-        DataComponent::SwingAnimation => get::<SwingAnimationImpl>(value).serialize(seq),
-        DataComponent::AdditionalTradeCost => get::<AdditionalTradeCostImpl>(value).serialize(seq),
-        DataComponent::StoredEnchantments => get::<StoredEnchantmentsImpl>(value).serialize(seq),
-        DataComponent::Dye => get::<DyeImpl>(value).serialize(seq),
-        DataComponent::DyedColor => get::<DyedColorImpl>(value).serialize(seq),
-        DataComponent::MapColor => get::<MapColorImpl>(value).serialize(seq),
-        DataComponent::MapId => get::<MapIdImpl>(value).serialize(seq),
-        DataComponent::MapDecorations => get::<MapDecorationsImpl>(value).serialize(seq),
-        DataComponent::MapPostProcessing => get::<MapPostProcessingImpl>(value).serialize(seq),
-        DataComponent::ChargedProjectiles => get::<ChargedProjectilesImpl>(value).serialize(seq),
-        DataComponent::BundleContents => get::<BundleContentsImpl>(value).serialize(seq),
-        DataComponent::PotionContents => get::<PotionContentsImpl>(value).serialize(seq),
-        DataComponent::PotionDurationScale => get::<PotionDurationScaleImpl>(value).serialize(seq),
+        DataComponent::Food => get::<FoodImpl>(value).serialize_for(seq, version),
+        DataComponent::Consumable => get::<ConsumableImpl>(value).serialize_for(seq, version),
+        DataComponent::UseRemainder => get::<UseRemainderImpl>(value).serialize_for(seq, version),
+        DataComponent::UseCooldown => get::<UseCooldownImpl>(value).serialize_for(seq, version),
+        DataComponent::DamageResistant => {
+            get::<DamageResistantImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::Tool => get::<ToolImpl>(value).serialize_for(seq, version),
+        DataComponent::Weapon => get::<WeaponImpl>(value).serialize_for(seq, version),
+        DataComponent::AttackRange => get::<AttackRangeImpl>(value).serialize_for(seq, version),
+        DataComponent::Enchantable => get::<EnchantableImpl>(value).serialize_for(seq, version),
+        DataComponent::Equippable => get::<EquippableImpl>(value).serialize_for(seq, version),
+        DataComponent::Repairable => get::<RepairableImpl>(value).serialize_for(seq, version),
+        DataComponent::Glider => get::<GliderImpl>(value).serialize_for(seq, version),
+        DataComponent::TooltipStyle => get::<TooltipStyleImpl>(value).serialize_for(seq, version),
+        DataComponent::DeathProtection => {
+            get::<DeathProtectionImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::BlocksAttacks => get::<BlocksAttacksImpl>(value).serialize_for(seq, version),
+        DataComponent::PiercingWeapon => {
+            get::<PiercingWeaponImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::KineticWeapon => get::<KineticWeaponImpl>(value).serialize_for(seq, version),
+        DataComponent::SwingAnimation => {
+            get::<SwingAnimationImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::AdditionalTradeCost => {
+            get::<AdditionalTradeCostImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::StoredEnchantments => {
+            get::<StoredEnchantmentsImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::Dye => get::<DyeImpl>(value).serialize_for(seq, version),
+        DataComponent::DyedColor => get::<DyedColorImpl>(value).serialize_for(seq, version),
+        DataComponent::MapColor => get::<MapColorImpl>(value).serialize_for(seq, version),
+        DataComponent::MapId => get::<MapIdImpl>(value).serialize_for(seq, version),
+        DataComponent::MapDecorations => {
+            get::<MapDecorationsImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::MapPostProcessing => {
+            get::<MapPostProcessingImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::ChargedProjectiles => {
+            get::<ChargedProjectilesImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::BundleContents => {
+            get::<BundleContentsImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::PotionContents => {
+            get::<PotionContentsImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::PotionDurationScale => {
+            get::<PotionDurationScaleImpl>(value).serialize_for(seq, version)
+        }
         DataComponent::SuspiciousStewEffects => {
-            get::<SuspiciousStewEffectsImpl>(value).serialize(seq)
+            get::<SuspiciousStewEffectsImpl>(value).serialize_for(seq, version)
         }
-        DataComponent::WritableBookContent => get::<WritableBookContentImpl>(value).serialize(seq),
-        DataComponent::WrittenBookContent => get::<WrittenBookContentImpl>(value).serialize(seq),
-        DataComponent::Trim => get::<TrimImpl>(value).serialize(seq),
-        DataComponent::DebugStickState => get::<DebugStickStateImpl>(value).serialize(seq),
-        DataComponent::EntityData => get::<EntityDataImpl>(value).serialize(seq),
-        DataComponent::BucketEntityData => get::<BucketEntityDataImpl>(value).serialize(seq),
-        DataComponent::BlockEntityData => get::<BlockEntityDataImpl>(value).serialize(seq),
-        DataComponent::Instrument => get::<InstrumentImpl>(value).serialize(seq),
+        DataComponent::WritableBookContent => {
+            get::<WritableBookContentImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::WrittenBookContent => {
+            get::<WrittenBookContentImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::Trim => get::<TrimImpl>(value).serialize_for(seq, version),
+        DataComponent::DebugStickState => {
+            get::<DebugStickStateImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::EntityData => get::<EntityDataImpl>(value).serialize_for(seq, version),
+        DataComponent::BucketEntityData => {
+            get::<BucketEntityDataImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::BlockEntityData => {
+            get::<BlockEntityDataImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::Instrument => get::<InstrumentImpl>(value).serialize_for(seq, version),
         DataComponent::ProvidesTrimMaterial => {
-            get::<ProvidesTrimMaterialImpl>(value).serialize(seq)
+            get::<ProvidesTrimMaterialImpl>(value).serialize_for(seq, version)
         }
         DataComponent::OminousBottleAmplifier => {
-            get::<OminousBottleAmplifierImpl>(value).serialize(seq)
+            get::<OminousBottleAmplifierImpl>(value).serialize_for(seq, version)
         }
-        DataComponent::JukeboxPlayable => get::<JukeboxPlayableImpl>(value).serialize(seq),
+        DataComponent::JukeboxPlayable => {
+            get::<JukeboxPlayableImpl>(value).serialize_for(seq, version)
+        }
         DataComponent::ProvidesBannerPatterns => {
-            get::<ProvidesBannerPatternsImpl>(value).serialize(seq)
+            get::<ProvidesBannerPatternsImpl>(value).serialize_for(seq, version)
         }
-        DataComponent::Recipes => get::<RecipesImpl>(value).serialize(seq),
-        DataComponent::LodestoneTracker => get::<LodestoneTrackerImpl>(value).serialize(seq),
-        DataComponent::FireworkExplosion => get::<FireworkExplosionImpl>(value).serialize(seq),
-        DataComponent::Fireworks => get::<FireworksImpl>(value).serialize(seq),
-        DataComponent::Profile => get::<ProfileImpl>(value).serialize(seq),
-        DataComponent::NoteBlockSound => get::<NoteBlockSoundImpl>(value).serialize(seq),
-        DataComponent::BannerPatterns => get::<BannerPatternsImpl>(value).serialize(seq),
-        DataComponent::BaseColor => get::<BaseColorImpl>(value).serialize(seq),
-        DataComponent::PotDecorations => get::<PotDecorationsImpl>(value).serialize(seq),
-        DataComponent::Container => get::<ContainerImpl>(value).serialize(seq),
-        DataComponent::BlockState => get::<BlockStateImpl>(value).serialize(seq),
-        DataComponent::Bees => get::<BeesImpl>(value).serialize(seq),
-        DataComponent::SulfurCubeContent => get::<SulfurCubeContentImpl>(value).serialize(seq),
-        DataComponent::Lock => get::<LockImpl>(value).serialize(seq),
-        DataComponent::ContainerLoot => get::<ContainerLootImpl>(value).serialize(seq),
-        DataComponent::BreakSound => get::<BreakSoundImpl>(value).serialize(seq),
-        DataComponent::VillagerVariant => get::<VillagerVariantImpl>(value).serialize(seq),
-        DataComponent::WolfVariant => get::<WolfVariantImpl>(value).serialize(seq),
-        DataComponent::WolfSoundVariant => get::<WolfSoundVariantImpl>(value).serialize(seq),
-        DataComponent::WolfCollar => get::<WolfCollarImpl>(value).serialize(seq),
-        DataComponent::FoxVariant => get::<FoxVariantImpl>(value).serialize(seq),
-        DataComponent::SalmonSize => get::<SalmonSizeImpl>(value).serialize(seq),
-        DataComponent::ParrotVariant => get::<ParrotVariantImpl>(value).serialize(seq),
-        DataComponent::TropicalFishPattern => get::<TropicalFishPatternImpl>(value).serialize(seq),
+        DataComponent::Recipes => get::<RecipesImpl>(value).serialize_for(seq, version),
+        DataComponent::LodestoneTracker => {
+            get::<LodestoneTrackerImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::FireworkExplosion => {
+            get::<FireworkExplosionImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::Fireworks => get::<FireworksImpl>(value).serialize_for(seq, version),
+        DataComponent::Profile => get::<ProfileImpl>(value).serialize_for(seq, version),
+        DataComponent::NoteBlockSound => {
+            get::<NoteBlockSoundImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::BannerPatterns => {
+            get::<BannerPatternsImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::BaseColor => get::<BaseColorImpl>(value).serialize_for(seq, version),
+        DataComponent::PotDecorations => {
+            get::<PotDecorationsImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::Container => get::<ContainerImpl>(value).serialize_for(seq, version),
+        DataComponent::BlockState => get::<BlockStateImpl>(value).serialize_for(seq, version),
+        DataComponent::Bees => get::<BeesImpl>(value).serialize_for(seq, version),
+        DataComponent::SulfurCubeContent => {
+            get::<SulfurCubeContentImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::Lock => get::<LockImpl>(value).serialize_for(seq, version),
+        DataComponent::ContainerLoot => get::<ContainerLootImpl>(value).serialize_for(seq, version),
+        DataComponent::BreakSound => get::<BreakSoundImpl>(value).serialize_for(seq, version),
+        DataComponent::VillagerVariant => {
+            get::<VillagerVariantImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::WolfVariant => get::<WolfVariantImpl>(value).serialize_for(seq, version),
+        DataComponent::WolfSoundVariant => {
+            get::<WolfSoundVariantImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::WolfCollar => get::<WolfCollarImpl>(value).serialize_for(seq, version),
+        DataComponent::FoxVariant => get::<FoxVariantImpl>(value).serialize_for(seq, version),
+        DataComponent::SalmonSize => get::<SalmonSizeImpl>(value).serialize_for(seq, version),
+        DataComponent::ParrotVariant => get::<ParrotVariantImpl>(value).serialize_for(seq, version),
+        DataComponent::TropicalFishPattern => {
+            get::<TropicalFishPatternImpl>(value).serialize_for(seq, version)
+        }
         DataComponent::TropicalFishBaseColor => {
-            get::<TropicalFishBaseColorImpl>(value).serialize(seq)
+            get::<TropicalFishBaseColorImpl>(value).serialize_for(seq, version)
         }
         DataComponent::TropicalFishPatternColor => {
-            get::<TropicalFishPatternColorImpl>(value).serialize(seq)
+            get::<TropicalFishPatternColorImpl>(value).serialize_for(seq, version)
         }
-        DataComponent::MooshroomVariant => get::<MooshroomVariantImpl>(value).serialize(seq),
-        DataComponent::RabbitVariant => get::<RabbitVariantImpl>(value).serialize(seq),
-        DataComponent::PigVariant => get::<PigVariantImpl>(value).serialize(seq),
-        DataComponent::PigSoundVariant => get::<PigSoundVariantImpl>(value).serialize(seq),
-        DataComponent::CowVariant => get::<CowVariantImpl>(value).serialize(seq),
-        DataComponent::CowSoundVariant => get::<CowSoundVariantImpl>(value).serialize(seq),
-        DataComponent::ChickenVariant => get::<ChickenVariantImpl>(value).serialize(seq),
-        DataComponent::ChickenSoundVariant => get::<ChickenSoundVariantImpl>(value).serialize(seq),
+        DataComponent::MooshroomVariant => {
+            get::<MooshroomVariantImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::RabbitVariant => get::<RabbitVariantImpl>(value).serialize_for(seq, version),
+        DataComponent::PigVariant => get::<PigVariantImpl>(value).serialize_for(seq, version),
+        DataComponent::PigSoundVariant => {
+            get::<PigSoundVariantImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::CowVariant => get::<CowVariantImpl>(value).serialize_for(seq, version),
+        DataComponent::CowSoundVariant => {
+            get::<CowSoundVariantImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::ChickenVariant => {
+            get::<ChickenVariantImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::ChickenSoundVariant => {
+            get::<ChickenSoundVariantImpl>(value).serialize_for(seq, version)
+        }
         DataComponent::ZombieNautilusVariant => {
-            get::<ZombieNautilusVariantImpl>(value).serialize(seq)
+            get::<ZombieNautilusVariantImpl>(value).serialize_for(seq, version)
         }
-        DataComponent::FrogVariant => get::<FrogVariantImpl>(value).serialize(seq),
-        DataComponent::HorseVariant => get::<HorseVariantImpl>(value).serialize(seq),
-        DataComponent::PaintingVariant => get::<PaintingVariantImpl>(value).serialize(seq),
-        DataComponent::LlamaVariant => get::<LlamaVariantImpl>(value).serialize(seq),
-        DataComponent::AxolotlVariant => get::<AxolotlVariantImpl>(value).serialize(seq),
-        DataComponent::CatVariant => get::<CatVariantImpl>(value).serialize(seq),
-        DataComponent::CatSoundVariant => get::<CatSoundVariantImpl>(value).serialize(seq),
-        DataComponent::CatCollar => get::<CatCollarImpl>(value).serialize(seq),
-        DataComponent::SheepColor => get::<SheepColorImpl>(value).serialize(seq),
-        DataComponent::ShulkerColor => get::<ShulkerColorImpl>(value).serialize(seq),
+        DataComponent::FrogVariant => get::<FrogVariantImpl>(value).serialize_for(seq, version),
+        DataComponent::HorseVariant => get::<HorseVariantImpl>(value).serialize_for(seq, version),
+        DataComponent::PaintingVariant => {
+            get::<PaintingVariantImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::LlamaVariant => get::<LlamaVariantImpl>(value).serialize_for(seq, version),
+        DataComponent::AxolotlVariant => {
+            get::<AxolotlVariantImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::CatVariant => get::<CatVariantImpl>(value).serialize_for(seq, version),
+        DataComponent::CatSoundVariant => {
+            get::<CatSoundVariantImpl>(value).serialize_for(seq, version)
+        }
+        DataComponent::CatCollar => get::<CatCollarImpl>(value).serialize_for(seq, version),
+        DataComponent::SheepColor => get::<SheepColorImpl>(value).serialize_for(seq, version),
+        DataComponent::ShulkerColor => get::<ShulkerColorImpl>(value).serialize_for(seq, version),
     }
 }
 
@@ -1255,12 +1467,111 @@ impl DataComponentCodec<Self> for UseCooldownImpl {
     }
 }
 
+/// 26.3-only data component type IDs (protocol 777). Payloads match vanilla `StreamCodec`s.
+const V263_INTERACT_ANIMATION: i32 = 41;
+const V263_BLOCK_TRANSFORMER: i32 = 43;
+const V263_VILLAGER_FOOD: i32 = 44;
+const V263_COMPOSTABLE: i32 = 84;
+const V263_COOKING_FUEL: i32 = 85;
+const V263_BREWING_FUEL: i32 = 86;
+const V263_MOB_VISIBILITY: i32 = 87;
+const V263_PROVIDES_POTTERY_PATTERN: i32 = 117;
+const V263_SIGN_TEXT_FRONT: i32 = 118;
+const V263_SIGN_TEXT_BACK: i32 = 119;
+const V263_WAXED: i32 = 120;
+const V263_CUSHION_COLOR: i32 = 121;
+
+fn skip_resolvable_int(seq: &mut impl NetworkReadExt) -> Result<(), ReadingError> {
+    if seq.get_bool()? {
+        let _ = seq.get_i32_be()?;
+    } else {
+        let _ = seq.get_str()?;
+    }
+    Ok(())
+}
+
+fn skip_resolvable_float(seq: &mut impl NetworkReadExt) -> Result<(), ReadingError> {
+    if seq.get_bool()? {
+        let _ = seq.get_f32()?;
+    } else {
+        let _ = seq.get_str()?;
+    }
+    Ok(())
+}
+
+fn skip_holder_set(seq: &mut impl NetworkReadExt) -> Result<(), ReadingError> {
+    const MAX_HOLDERS: i32 = 256;
+    let count = seq.get_var_int()?.0 - 1;
+    if count == -1 {
+        let _ = seq.get_str()?;
+        return Ok(());
+    }
+    if !(0..=MAX_HOLDERS).contains(&count) {
+        return Err(ReadingError::Message("Invalid holder set size".into()));
+    }
+    for _ in 0..count {
+        let _ = seq.get_var_int()?;
+    }
+    Ok(())
+}
+
+fn skip_sign_text(seq: &mut impl NetworkReadExt) -> Result<(), ReadingError> {
+    for _ in 0..4 {
+        let _ = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_3)?;
+    }
+    if seq.get_bool()? {
+        for _ in 0..4 {
+            let _ = seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_3)?;
+        }
+    }
+    let _ = seq.get_var_int()?;
+    let _ = seq.get_bool()?;
+    Ok(())
+}
+
+pub(crate) fn skip_unknown_26_3_component(
+    raw_id: i32,
+    seq: &mut impl NetworkReadExt,
+) -> Result<(), ReadingError> {
+    match raw_id {
+        V263_INTERACT_ANIMATION => {
+            let _ = seq.get_var_int()?;
+            let _ = seq.get_var_int()?;
+            Ok(())
+        }
+        V263_BLOCK_TRANSFORMER
+        | V263_PROVIDES_POTTERY_PATTERN
+        | V263_CUSHION_COLOR
+        | V263_VILLAGER_FOOD => {
+            let _ = seq.get_var_int()?;
+            Ok(())
+        }
+        V263_COMPOSTABLE => skip_resolvable_int(seq),
+        V263_COOKING_FUEL | V263_BREWING_FUEL => {
+            skip_resolvable_int(seq)?;
+            skip_resolvable_float(seq)
+        }
+        V263_MOB_VISIBILITY => {
+            skip_holder_set(seq)?;
+            let _ = seq.get_f32()?;
+            Ok(())
+        }
+        V263_SIGN_TEXT_FRONT | V263_SIGN_TEXT_BACK => skip_sign_text(seq),
+        V263_WAXED => Ok(()),
+        _ => Err(ReadingError::Message(
+            "Unsupported component in unprefixed patch".into(),
+        )),
+    }
+}
+
 fn deserialize_item_stack_template(
     seq: &mut impl NetworkReadExt,
+    version: JavaMinecraftVersion,
 ) -> Result<pumpkin_data::item_stack::ItemStack, ReadingError> {
     const MAX_COMPONENTS: i32 = 256;
 
     let item_id = seq.get_var_int()?.0 as u16;
+    let item_id = remap_item_id_from_version(item_id, version);
 
     let count = seq.get_var_int()?.0 as u8;
 
@@ -1283,22 +1594,21 @@ fn deserialize_item_stack_template(
 
     let mut patch = Vec::with_capacity((num_to_add + num_to_remove) as usize);
 
+    // Templates have no per-component length. Unknown 26.3 types are skipped by codec size.
     for _ in 0..num_to_add {
         let id_val = seq.get_var_int()?.0;
-        let id = DataComponent::try_from_id(id_val as u8)
-            .ok_or_else(|| ReadingError::Message(format!("Unknown component ID: {id_val}")))?;
-
-        let _byte_len = seq.get_var_int()?;
-
-        let component_impl = deserialize(id, seq)?;
-        patch.push((id, Some(component_impl)));
+        if let Some(id) = map_component_id(id_val, version)? {
+            let component_impl = deserialize_for_version(id, seq, version)?;
+            patch.push((id, Some(component_impl)));
+        } else {
+            skip_unknown_26_3_component(id_val, seq)?;
+        }
     }
 
     for _ in 0..num_to_remove {
-        let id_val = seq.get_var_int()?.0;
-        let id = DataComponent::try_from_id(id_val as u8)
-            .ok_or_else(|| ReadingError::Message("Unknown component ID".into()))?;
-        patch.push((id, None));
+        if let Some(id) = read_component_id(seq, version)? {
+            patch.push((id, None));
+        }
     }
 
     Ok(pumpkin_data::item_stack::ItemStack::new_with_component(
@@ -1311,33 +1621,37 @@ fn deserialize_item_stack_template(
 fn serialize_item_stack_template(
     stack: &pumpkin_data::item_stack::ItemStack,
     seq: &mut impl NetworkWriteExt,
+    version: JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
-    seq.write_var_int(&VarInt::from(stack.item.id))?;
+    seq.write_var_int(&VarInt::from(remap_item_id_for_version(
+        stack.item.id,
+        version,
+    )))?;
     seq.write_var_int(&VarInt::from(stack.item_count))?;
 
-    let mut to_add = 0u8;
-    let mut to_remove = 0u8;
-    for (_id, data) in &stack.patch {
-        if data.is_none() {
-            to_remove += 1;
-        } else {
-            to_add += 1;
-        }
-    }
+    let sent = || {
+        stack
+            .patch
+            .iter()
+            .filter(move |(id, _)| is_component_sent(*id, version))
+    };
+    let to_add = sent().filter(|(_, data)| data.is_some()).count();
+    let to_remove = sent().filter(|(_, data)| data.is_none()).count();
+    seq.write_var_int(&VarInt(to_add as i32))?;
+    seq.write_var_int(&VarInt(to_remove as i32))?;
 
-    seq.write_var_int(&VarInt::from(to_add))?;
-    seq.write_var_int(&VarInt::from(to_remove))?;
-
-    for (id, data) in &stack.patch {
+    for (id, data) in sent() {
         if let Some(data) = data {
-            seq.write_var_int(&VarInt::from(id.to_id()))?;
-            serialize(*id, data.as_ref(), seq)?;
+            let remapped = remap_data_component_type_id_for_version(u32::from(id.to_id()), version);
+            seq.write_var_int(&VarInt(remapped as i32))?;
+            serialize_for_version(*id, data.as_ref(), seq, version)?;
         }
     }
 
-    for (id, data) in &stack.patch {
+    for (id, data) in sent() {
         if data.is_none() {
-            seq.write_var_int(&VarInt::from(id.to_id()))?;
+            let remapped = remap_data_component_type_id_for_version(u32::from(id.to_id()), version);
+            seq.write_var_int(&VarInt(remapped as i32))?;
         }
     }
 
@@ -1346,14 +1660,31 @@ fn serialize_item_stack_template(
 
 impl DataComponentCodec<Self> for BundleContentsImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt::from(self.items.len() as i32))?;
-        for item in &self.items {
-            serialize_item_stack_template(item, seq)?;
+        self.serialize_for(seq, CURRENT_MC_VERSION)
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        Self::deserialize_for(seq, CURRENT_MC_VERSION)
+    }
+
+    fn serialize_for(
+        &self,
+        seq: &mut impl NetworkWriteExt,
+        version: JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
+        // Clients reject empty templates, e.g. items the server has no equivalent for
+        let items = || self.items.iter().filter(|item| !item.is_empty());
+        seq.write_var_int(&VarInt(items().count() as i32))?;
+        for item in items() {
+            serialize_item_stack_template(item, seq, version)?;
         }
         Ok(())
     }
 
-    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+    fn deserialize_for(
+        seq: &mut impl NetworkReadExt,
+        version: JavaMinecraftVersion,
+    ) -> Result<Self, ReadingError> {
         const MAX_BUNDLE_ITEMS: usize = 64;
 
         let len = seq.get_var_int()?.0 as usize;
@@ -1366,7 +1697,10 @@ impl DataComponentCodec<Self> for BundleContentsImpl {
 
         let mut items = Vec::with_capacity(len);
         for _ in 0..len {
-            items.push(deserialize_item_stack_template(seq)?);
+            let stack = deserialize_item_stack_template(seq, version)?;
+            if !stack.is_empty() {
+                items.push(stack);
+            }
         }
         Ok(Self { items })
     }
@@ -1758,7 +2092,14 @@ impl DataComponentCodec<Self> for UseRemainderImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let _ = deserialize_item_stack_template(seq)?;
+        Self::deserialize_for(seq, CURRENT_MC_VERSION)
+    }
+
+    fn deserialize_for(
+        seq: &mut impl NetworkReadExt,
+        version: JavaMinecraftVersion,
+    ) -> Result<Self, ReadingError> {
+        let _ = deserialize_item_stack_template(seq, version)?;
         Ok(Self)
     }
 }
@@ -2230,10 +2571,17 @@ impl DataComponentCodec<Self> for ChargedProjectilesImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        Self::deserialize_for(seq, CURRENT_MC_VERSION)
+    }
+
+    fn deserialize_for(
+        seq: &mut impl NetworkReadExt,
+        version: JavaMinecraftVersion,
+    ) -> Result<Self, ReadingError> {
         let len = seq.get_var_int()?.0 as usize;
         let mut projectiles = Vec::with_capacity(len);
         for _ in 0..len {
-            let _ = deserialize_item_stack_template(seq)?;
+            let _ = deserialize_item_stack_template(seq, version)?;
             projectiles.push(pumpkin_nbt::compound::NbtCompound::new());
         }
         Ok(Self { projectiles })
@@ -2320,18 +2668,86 @@ impl DataComponentCodec<Self> for WrittenBookContentImpl {
     }
 }
 
+/// Writes a registry holder by reference (`index + 1`). Unknown or inline values fall back to
+/// the first entry, since the server can't encode inline trim data.
+fn write_trim_holder(
+    seq: &mut impl NetworkWriteExt,
+    registry_id: &str,
+    value: &NbtTag,
+    version: JavaMinecraftVersion,
+) -> Result<(), WritingError> {
+    let index = value
+        .extract_string()
+        .map(|name| name.strip_prefix("minecraft:").unwrap_or(name))
+        .and_then(|name| Registry::entry_index(version, registry_id, name))
+        .unwrap_or(0);
+    seq.write_var_int(&VarInt(index as i32 + 1))
+}
+
+/// Reads a registry holder reference. `None` means an inline value follows.
+fn read_registry_holder(
+    seq: &mut impl NetworkReadExt,
+    registry_id: &str,
+    version: JavaMinecraftVersion,
+) -> Result<Option<String>, ReadingError> {
+    let id = seq.get_var_int()?.0;
+    if id == 0 {
+        return Ok(None);
+    }
+    Ok(Registry::get_static(version)
+        .iter()
+        .find(|registry| registry.registry_id == registry_id)
+        .and_then(|registry| registry.entries.get(id as usize - 1))
+        .map(|entry| format!("minecraft:{}", entry.name)))
+}
+
 impl DataComponentCodec<Self> for TrimImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt(0))?;
-        seq.write_var_int(&VarInt(0))
+        self.serialize_for(seq, CURRENT_MC_VERSION)
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let _material = seq.get_var_int()?;
-        let _pattern = seq.get_var_int()?;
+        Self::deserialize_for(seq, CURRENT_MC_VERSION)
+    }
+
+    fn serialize_for(
+        &self,
+        seq: &mut impl NetworkWriteExt,
+        version: JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
+        write_trim_holder(seq, "trim_material", &self.material, version)?;
+        write_trim_holder(seq, "trim_pattern", &self.pattern, version)
+    }
+
+    fn deserialize_for(
+        seq: &mut impl NetworkReadExt,
+        version: JavaMinecraftVersion,
+    ) -> Result<Self, ReadingError> {
+        let material = if let Some(name) = read_registry_holder(seq, "trim_material", version)? {
+            name
+        } else {
+            // Inline material: 26.3 sends a palette ID, before that an asset group with overrides
+            seq.get_str()?;
+            if version < JavaMinecraftVersion::V_26_3 {
+                for _ in 0..seq.get_var_int()?.0 {
+                    seq.get_str()?;
+                    seq.get_str()?;
+                }
+            }
+            seq.get_nbt_with_version(&version)?;
+            "minecraft:quartz".to_string()
+        };
+        let pattern = if let Some(name) = read_registry_holder(seq, "trim_pattern", version)? {
+            name
+        } else {
+            seq.get_str()?;
+            seq.get_nbt_with_version(&version)?;
+            seq.get_bool()?;
+            "minecraft:coast".to_string()
+        };
         Ok(Self {
-            material: NbtTag::String("minecraft:quartz".into()),
-            pattern: NbtTag::String("minecraft:coast".into()),
+            material: NbtTag::String(material.into()),
+            pattern: NbtTag::String(pattern.into()),
         })
     }
 }
@@ -2684,10 +3100,40 @@ impl DataComponentCodec<Self> for BaseColorImpl {
 
 impl DataComponentCodec<Self> for PotDecorationsImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt(0))
+        self.serialize_for(seq, CURRENT_MC_VERSION)
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        Self::deserialize_for(seq, CURRENT_MC_VERSION)
+    }
+
+    fn serialize_for(
+        &self,
+        seq: &mut impl NetworkWriteExt,
+        version: JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
+        if version >= JavaMinecraftVersion::V_26_3 {
+            // Four optional sides (back, left, right, front), all empty
+            for _ in 0..4 {
+                seq.write_bool(false)?;
+            }
+            return Ok(());
+        }
+        seq.write_var_int(&VarInt(0))
+    }
+
+    fn deserialize_for(
+        seq: &mut impl NetworkReadExt,
+        version: JavaMinecraftVersion,
+    ) -> Result<Self, ReadingError> {
+        if version >= JavaMinecraftVersion::V_26_3 {
+            for _ in 0..4 {
+                if seq.get_bool()? {
+                    let _ = deserialize_item_stack_template(seq, version)?;
+                }
+            }
+            return Ok(Self);
+        }
         let len = seq.get_var_int()?.0 as usize;
         for _ in 0..len {
             let _ = seq.get_var_int()?;
@@ -2698,21 +3144,41 @@ impl DataComponentCodec<Self> for PotDecorationsImpl {
 
 impl DataComponentCodec<Self> for ContainerImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        self.serialize_for(seq, CURRENT_MC_VERSION)
+    }
+
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        Self::deserialize_for(seq, CURRENT_MC_VERSION)
+    }
+
+    fn serialize_for(
+        &self,
+        seq: &mut impl NetworkWriteExt,
+        version: JavaMinecraftVersion,
+    ) -> Result<(), WritingError> {
         seq.write_var_int(&VarInt::from(self.items.len() as i32))?;
         for (_slot, stack) in &self.items {
-            seq.write_bool(true)?;
-            serialize_item_stack_template(stack, seq)?;
+            // Clients reject empty templates, so send them as empty slots
+            seq.write_bool(!stack.is_empty())?;
+            if !stack.is_empty() {
+                serialize_item_stack_template(stack, seq, version)?;
+            }
         }
         Ok(())
     }
 
-    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+    fn deserialize_for(
+        seq: &mut impl NetworkReadExt,
+        version: JavaMinecraftVersion,
+    ) -> Result<Self, ReadingError> {
         let len = seq.get_var_int()?.0 as usize;
         let mut items = Vec::with_capacity(len);
         for slot in 0..len {
             if seq.get_bool()? {
-                let stack = deserialize_item_stack_template(seq)?;
-                items.push((slot as u8, stack));
+                let stack = deserialize_item_stack_template(seq, version)?;
+                if !stack.is_empty() {
+                    items.push((slot as u8, stack));
+                }
             }
         }
         Ok(Self { items })
@@ -2769,7 +3235,14 @@ impl DataComponentCodec<Self> for SulfurCubeContentImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let _ = deserialize_item_stack_template(seq)?;
+        Self::deserialize_for(seq, CURRENT_MC_VERSION)
+    }
+
+    fn deserialize_for(
+        seq: &mut impl NetworkReadExt,
+        version: JavaMinecraftVersion,
+    ) -> Result<Self, ReadingError> {
+        let _ = deserialize_item_stack_template(seq, version)?;
         Ok(Self)
     }
 }
@@ -2807,5 +3280,104 @@ impl DataComponentCodec<Self> for BreakSoundImpl {
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let _ = seq.get_var_int()?;
         Ok(Self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::item::Item;
+    use pumpkin_data::item_stack::ItemStack;
+
+    #[test]
+    fn container_items_use_client_ids() {
+        let version = JavaMinecraftVersion::V_26_3;
+        let pickaxe = ItemStack::new_with_component(
+            1,
+            &Item::DIAMOND_PICKAXE,
+            vec![(
+                DataComponent::Damage,
+                Some(DamageImpl { damage: 5 }.to_dyn()),
+            )],
+        );
+        let container = ContainerImpl {
+            items: vec![(0, pickaxe)],
+        };
+
+        let mut buf = Vec::new();
+        container.serialize_for(&mut buf, version).unwrap();
+        let mut expected = Vec::new();
+        expected.write_var_int(&VarInt(1)).unwrap();
+        expected.write_bool(true).unwrap();
+        expected
+            .write_var_int(&VarInt::from(remap_item_id_for_version(
+                Item::DIAMOND_PICKAXE.id,
+                version,
+            )))
+            .unwrap();
+        assert!(buf.starts_with(&expected));
+
+        let read = ContainerImpl::deserialize_for(&mut buf.as_slice(), version).unwrap();
+        let stack = &read.items[0].1;
+        assert_eq!(stack.item.id, Item::DIAMOND_PICKAXE.id);
+        assert_eq!(stack.get_damage(), 5);
+    }
+
+    #[test]
+    fn nested_template_skips_26_3_only_components() {
+        let version = JavaMinecraftVersion::V_26_3;
+        let mut buf = Vec::new();
+        buf.write_var_int(&VarInt(1)).unwrap();
+        buf.write_bool(true).unwrap();
+        buf.write_var_int(&VarInt::from(remap_item_id_for_version(
+            Item::DIAMOND_PICKAXE.id,
+            version,
+        )))
+        .unwrap();
+        buf.write_var_int(&VarInt(1)).unwrap();
+        buf.write_var_int(&VarInt(2)).unwrap();
+        buf.write_var_int(&VarInt(0)).unwrap();
+        buf.write_var_int(&VarInt(3)).unwrap();
+        buf.write_var_int(&VarInt(17)).unwrap();
+        buf.write_var_int(&VarInt(V263_WAXED)).unwrap();
+
+        let read = ContainerImpl::deserialize_for(&mut buf.as_slice(), version).unwrap();
+        let stack = &read.items[0].1;
+        assert_eq!(stack.item.id, Item::DIAMOND_PICKAXE.id);
+        assert_eq!(stack.get_damage(), 17);
+        assert_eq!(stack.patch.len(), 1);
+    }
+
+    #[test]
+    fn pot_decorations_layout() {
+        let mut new = Vec::new();
+        PotDecorationsImpl
+            .serialize_for(&mut new, JavaMinecraftVersion::V_26_3)
+            .unwrap();
+        assert_eq!(new, [0, 0, 0, 0]);
+
+        let mut old = Vec::new();
+        PotDecorationsImpl
+            .serialize_for(&mut old, JavaMinecraftVersion::V_26_2)
+            .unwrap();
+        assert_eq!(old, [0]);
+    }
+
+    #[test]
+    fn trim_uses_registry_references() {
+        let version = JavaMinecraftVersion::V_26_3;
+        let trim = TrimImpl {
+            material: NbtTag::String("minecraft:iron".into()),
+            pattern: NbtTag::String("minecraft:wild".into()),
+        };
+        let mut buf = Vec::new();
+        trim.serialize_for(&mut buf, version).unwrap();
+        let material = Registry::entry_index(version, "trim_material", "iron").unwrap();
+        let pattern = Registry::entry_index(version, "trim_pattern", "wild").unwrap();
+        assert_eq!(buf, [material as u8 + 1, pattern as u8 + 1]);
+
+        let read = TrimImpl::deserialize_for(&mut buf.as_slice(), version).unwrap();
+        assert_eq!(read.material.extract_string(), Some("minecraft:iron"));
+        assert_eq!(read.pattern.extract_string(), Some("minecraft:wild"));
     }
 }
