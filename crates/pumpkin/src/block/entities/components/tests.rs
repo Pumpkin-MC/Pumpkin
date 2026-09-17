@@ -439,3 +439,100 @@ fn pot_deferred_loot_is_persistent_without_becoming_an_item_component() {
     );
     assert_eq!(saved.get_long("LootTableSeed"), Some(901));
 }
+
+/// Custom update tags retain their mapped fields while stored additions survive only in saved NBT.
+#[test]
+fn custom_chunk_tags_omit_retained_additions() -> Result<(), Box<dyn std::error::Error>> {
+    let name = CustomNameImpl {
+        name: TextComponent::text("Archive").bold(),
+    };
+    let mut retained = NbtCompound::new();
+    retained.put_int("minecraft:repair_cost", 7);
+    let mut lock = NbtCompound::new();
+    lock.put_string("items", "minecraft:tripwire_hook".to_owned());
+    retained.put_compound("minecraft:lock", lock);
+    retained.put(
+        "minecraft:container_loot",
+        ContainerLootImpl {
+            loot_table: "minecraft:chests/simple_dungeon".to_owned(),
+            seed: 42,
+        }
+        .write_data(),
+    );
+    let pot_decorations = NbtTag::List(
+        ["angler", "archer", "arms_up", "blade"]
+            .map(|name| NbtTag::String(format!("minecraft:{name}_pottery_sherd").into()))
+            .into(),
+    );
+    for (id, field, expected) in [
+        ("beacon", "CustomName", name.write_data()),
+        ("skull", "custom_name", name.write_data()),
+        ("enchanting_table", "CustomName", name.write_data()),
+        ("copper_golem_statue", "custom_name", name.write_data()),
+        ("decorated_pot", "sherds", pot_decorations),
+    ] {
+        let mut input = NbtCompound::new();
+        input.put_string("id", format!("minecraft:{id}"));
+        input.put_int("x", 0);
+        input.put_int("y", 64);
+        input.put_int("z", 0);
+        input.put(field, expected.clone());
+        input.put_compound("components", retained.clone());
+        let entity = block_entity_from_nbt(&input).ok_or("Cannot load update-tag fixture")?;
+        let visible = entity.chunk_data_nbt().ok_or("Missing chunk update tag")?;
+        assert_eq!(visible.get(field), Some(&expected), "{id}");
+        assert!(visible.get("components").is_none(), "{id}");
+        let mut saved = NbtCompound::new();
+        entity.write_nbt(&mut saved);
+        assert_eq!(saved.get_compound("components"), Some(&retained), "{id}");
+        let reloaded = reload(entity.as_ref())?;
+        assert_eq!(
+            encoded(reloaded.as_ref(), DataComponent::RepairCost),
+            Some(NbtTag::Int(7)),
+            "{id}"
+        );
+    }
+    Ok(())
+}
+
+/// Beacon locks and pending pot loot remain in their custom update tags without unpacking the pot.
+#[test]
+fn custom_chunk_tags_preserve_family_specific_fields() -> Result<(), Box<dyn std::error::Error>> {
+    use crate::block::entities::{
+        beacon::BeaconBlockEntity, decorated_pot::DecoratedPotBlockEntity,
+    };
+    let mut input = NbtCompound::new();
+    let mut lock = NbtCompound::new();
+    lock.put_string("items", "minecraft:tripwire_hook".to_owned());
+    input.put_compound("lock", lock.clone());
+    let beacon = BeaconBlockEntity::from_nbt(&input, BlockPos::new(0, 64, 0));
+    let visible = beacon.chunk_data_nbt().ok_or("Missing beacon update tag")?;
+    assert_eq!(visible.get_compound("lock"), Some(&lock));
+
+    input.put_string("LootTable", "minecraft:chests/simple_dungeon".to_owned());
+    input.put_long("LootTableSeed", 901);
+    let pot = DecoratedPotBlockEntity::from_nbt(&input, BlockPos::new(1, 64, 0));
+    let visible = pot.chunk_data_nbt().ok_or("Missing pot update tag")?;
+    assert_eq!(
+        visible.get_string("LootTable"),
+        input.get_string("LootTable")
+    );
+    assert_eq!(visible.get_long("LootTableSeed"), Some(901));
+    assert!(visible.get("item").is_none());
+    assert!(pot.has_loot_table());
+    Ok(())
+}
+
+/// Banner updates use the full component-bearing tag rather than the custom-only tag of skulls and pots.
+#[test]
+fn banner_chunk_tags_include_retained_additions() -> Result<(), Box<dyn std::error::Error>> {
+    use crate::block::entities::banner::BannerBlockEntity;
+    let mut input = NbtCompound::new();
+    let mut retained = NbtCompound::new();
+    retained.put_int("minecraft:repair_cost", 7);
+    input.put_compound("components", retained.clone());
+    let banner = BannerBlockEntity::from_nbt(&input, BlockPos::new(0, 64, 0));
+    let visible = banner.chunk_data_nbt().ok_or("Missing banner update tag")?;
+    assert_eq!(visible.get_compound("components"), Some(&retained));
+    Ok(())
+}
