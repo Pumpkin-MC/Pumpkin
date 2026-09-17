@@ -442,9 +442,11 @@ impl WorldInfoWriter for AnvilLevelInfo {
             .map_err(|e| WorldInfoError::SerializationError(e.to_string()))?;
 
         if path.exists() {
-            let _ = std::fs::copy(&path, &path_old);
+            std::fs::copy(&path, &path_old)?;
         }
-        let _ = std::fs::rename(&path_new, &path);
+        // The save is only complete once the new level.dat has been installed;
+        // a failed rename must surface as an error instead of a silent success.
+        std::fs::rename(&path_new, &path)?;
 
         let data_version = level_data.data_version;
 
