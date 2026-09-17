@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use pumpkin_data::{
     Block, BlockState, BlockStateId,
+    attributes::Attributes,
     damage::DamageType,
     entity::EntityType,
     fluid::Fluid,
@@ -422,8 +423,11 @@ impl Explosion {
                 entity.get_eye_pos()
             };
             let direction = (dir_pos - self.pos).normalize();
-            // TODO: entity explosion knockback resistance attribute
-            let knockback_resistance = 0.0;
+            // Vanilla reads the living entity's `explosion_knockback_resistance`
+            // attribute here (which also carries Blast Protection's effect).
+            let knockback_resistance = entity_base.get_living_entity().map_or(0.0, |living| {
+                living.get_attribute_value(&Attributes::EXPLOSION_KNOCKBACK_RESISTANCE)
+            });
 
             let knockback_power =
                 (1.0 - distance) * exposure * knockback_multiplier * (1.0 - knockback_resistance);
