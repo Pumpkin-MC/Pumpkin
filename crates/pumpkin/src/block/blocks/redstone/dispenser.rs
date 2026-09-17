@@ -77,6 +77,9 @@ use pumpkin_util::text::TextComponent;
 use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 
+#[cfg(test)]
+mod tests;
+
 struct DispenserScreenFactory(Arc<dyn Inventory>);
 
 impl ScreenHandlerFactory for DispenserScreenFactory {
