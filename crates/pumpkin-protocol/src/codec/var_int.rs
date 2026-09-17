@@ -53,12 +53,14 @@ impl VarInt {
         Ok(())
     }
 
-    // TODO: Validate that the first byte will not overflow a i32
     #[inline]
     pub fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
             let byte = read.get_u8()?;
+            if i == Self::MAX_SIZE.get() - 1 && (byte & 0x7F) > 0x0F {
+                return Err(ReadingError::TooLarge("VarInt".to_string()));
+            }
             val |= (i32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
                 return Ok(Self(val));
@@ -87,6 +89,9 @@ impl VarInt {
                     ReadingError::Incomplete(err.to_string())
                 }
             })?;
+            if i == Self::MAX_SIZE.get() - 1 && (byte & 0x7F) > 0x0F {
+                return Err(ReadingError::TooLarge("VarInt".to_string()));
+            }
             val |= (i32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
                 return Ok(Self(val));
@@ -183,6 +188,12 @@ impl PacketRead for VarInt {
         let mut val = 0u32;
         for i in 0..Self::MAX_SIZE.get() {
             let byte = u8::read(read)?;
+            if i == Self::MAX_SIZE.get() - 1 && (byte & 0x7F) > 0x0F {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    "VarInt is too big (overflow)",
+                ));
+            }
             val |= u32::from(byte & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
                 return Ok(Self(((val >> 1) as i32) ^ -((val & 1) as i32)));
@@ -196,6 +207,21 @@ impl PacketRead for VarInt {
 mod tests {
     use super::*;
 
+    fn decode(bytes: &[u8]) -> Result<VarInt, ReadingError> {
+        let mut reader = bytes;
+        VarInt::decode(&mut reader)
+    }
+
+    async fn decode_async(bytes: &[u8]) -> Result<VarInt, ReadingError> {
+        let mut reader = bytes;
+        VarInt::decode_async(&mut reader).await
+    }
+
+    fn packet_read(bytes: &[u8]) -> Result<VarInt, Error> {
+        let mut reader = bytes;
+        VarInt::read(&mut reader)
+    }
+
     #[test]
     fn bedrock_zig_zag_round_trip() {
         for value in [i32::MIN, -2, -1, 0, 1, 2, i32::MAX] {
@@ -206,5 +232,61 @@ mod tests {
                 VarInt(value)
             );
         }
+    }
+
+    #[test]
+    fn decodes_largest_valid_values() {
+        assert_eq!(decode(&[0xff, 0xff, 0xff, 0xff, 0x0f]).unwrap().0, -1);
+        assert_eq!(decode(&[0xff, 0xff, 0xff, 0xff, 0x07]).unwrap().0, i32::MAX);
+        assert_eq!(decode(&[0x80, 0x80, 0x80, 0x80, 0x08]).unwrap().0, i32::MIN);
+    }
+
+    #[test]
+    fn rejects_overflowing_final_byte() {
+        // The fifth byte only has four payload bits left, so 0x10 sets bit 32
+        // and 0x7f sets every bit above it.
+        assert!(decode(&[0x80, 0x80, 0x80, 0x80, 0x10]).is_err());
+        assert!(decode(&[0xff, 0xff, 0xff, 0xff, 0x7f]).is_err());
+    }
+
+    #[test]
+    fn packet_read_rejects_overflowing_final_byte() {
+        assert!(packet_read(&[0x80, 0x80, 0x80, 0x80, 0x10]).is_err());
+        assert!(packet_read(&[0xff, 0xff, 0xff, 0xff, 0x7f]).is_err());
+        assert_eq!(
+            packet_read(&[0xff, 0xff, 0xff, 0xff, 0x0f]).unwrap().0,
+            i32::MIN
+        );
+    }
+
+    #[tokio::test]
+    async fn decodes_largest_valid_values_async() {
+        assert_eq!(
+            decode_async(&[0xff, 0xff, 0xff, 0xff, 0x0f])
+                .await
+                .unwrap()
+                .0,
+            -1
+        );
+        assert_eq!(
+            decode_async(&[0xff, 0xff, 0xff, 0xff, 0x07])
+                .await
+                .unwrap()
+                .0,
+            i32::MAX
+        );
+        assert_eq!(
+            decode_async(&[0x80, 0x80, 0x80, 0x80, 0x08])
+                .await
+                .unwrap()
+                .0,
+            i32::MIN
+        );
+    }
+
+    #[tokio::test]
+    async fn rejects_overflowing_final_byte_async() {
+        assert!(decode_async(&[0x80, 0x80, 0x80, 0x80, 0x10]).await.is_err());
+        assert!(decode_async(&[0xff, 0xff, 0xff, 0xff, 0x7f]).await.is_err());
     }
 }
