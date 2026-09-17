@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used, clippy::unwrap_used)]
+
 use std::fs;
 
 use pumpkin_util::world_seed::Seed;
