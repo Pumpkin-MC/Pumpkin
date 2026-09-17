@@ -7,7 +7,7 @@ use std::{
     io::{Cursor, Error, Write},
     net::SocketAddr,
     sync::{
-        Arc,
+        Arc, Weak,
         atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering},
     },
 };
@@ -17,12 +17,14 @@ use tracing::{debug, error, warn};
 use bytes::Bytes;
 use pumpkin_config::networking::compression::CompressionInfo;
 use pumpkin_protocol::{
-    BClientPacket, PacketDecodeError, RawPacket,
+    BClientPacket, ConnectionState, PacketDecodeError, RawPacket,
     bedrock::{
         BEDROCK_GAME_PACKET, SubClient,
         client::{
             client_cache_miss_response::{CClientCacheMissResponse, MissingBlobData},
             disconnect::CDisconnect,
+            network_settings::CNetworkSettings,
+            start_game::CStartGame,
         },
         packet_decoder::BedrockBatchDecoder,
         packet_encoder::BedrockBatchEncoder,
@@ -46,7 +48,7 @@ use pumpkin_protocol::{
     serial::{PacketRead, PacketReadSlice},
 };
 use tokio::{
-    sync::mpsc::{Receiver, Sender, UnboundedReceiver, UnboundedSender, error::TryRecvError},
+    sync::mpsc::{Receiver, Sender},
     sync::{Mutex, RwLock, oneshot},
     task::JoinHandle,
 };
@@ -60,10 +62,13 @@ use self::nethernet::NetherNetSession;
 use crate::{
     entity::player::Player,
     net::{
-        DisconnectReason, MAX_PENDING_BYTES, PacketHandlerResult, PacketRateLimiter,
-        decrement_pending_bytes,
+        DisconnectReason, PacketHandlerResult, PacketRateLimiter, decrement_pending_bytes,
+        user::{Edition, OutgoingPacket, User},
     },
-    plugin::api::events::world::chunk_send::ChunkSend,
+    plugin::{
+        api::events::world::chunk_send::ChunkSend,
+        server::packet::{PacketReceivedEvent, PacketSentEvent, in_packet_callback},
+    },
     server::Server,
 };
 use arc_swap::ArcSwap;
@@ -71,33 +76,13 @@ use pumpkin_protocol::bedrock::server::login::ClientData;
 use pumpkin_util::version::BedrockMinecraftVersion;
 use pumpkin_world::level::SyncChunk;
 
-pub struct OutgoingPacket {
-    pub data: Bytes,
-    pub completion: Option<oneshot::Sender<()>>,
-}
-
-impl OutgoingPacket {
-    pub const fn normal(data: Bytes) -> Self {
-        Self {
-            data,
-            completion: None,
-        }
-    }
-
-    pub const fn priority(data: Bytes, completion: oneshot::Sender<()>) -> Self {
-        Self {
-            data,
-            completion: Some(completion),
-        }
-    }
-}
-
 pub struct BedrockClient {
     session: Arc<NetherNetSession>,
+    pub user: Arc<User>,
     /// The client's IP address.
     pub address: SocketAddr,
     pub player: ArcSwap<Option<Arc<Player>>>,
-    pub version: AtomicCell<BedrockMinecraftVersion>,
+    pub version: Arc<AtomicCell<BedrockMinecraftVersion>>,
     pub client_data: ArcSwap<Option<Arc<ClientData>>>,
     /// All Bedrock clients
     /// This list is used to remove the client if the connection gets closed
@@ -105,13 +90,6 @@ pub struct BedrockClient {
 
     tasks: TaskTracker,
     rt_handle: tokio::runtime::Handle,
-    outgoing_packet_queue_send: UnboundedSender<OutgoingPacket>,
-    /// A queue of serialized packets to send to the network
-    outgoing_packet_queue_recv: Mutex<Option<UnboundedReceiver<OutgoingPacket>>>,
-
-    outgoing_packet_priority_send: UnboundedSender<OutgoingPacket>,
-    outgoing_packet_priority_recv: Mutex<Option<UnboundedReceiver<OutgoingPacket>>>,
-
     /// Tracks total buffered payload bytes in the outgoing queues.
     pub pending_bytes: Arc<AtomicUsize>,
 
@@ -143,61 +121,61 @@ impl BedrockClient {
         address: SocketAddr,
         be_clients: Arc<Mutex<HashMap<SocketAddr, Arc<Self>>>>,
         packet_limiter: PacketRateLimiter,
+        server: Weak<Server>,
     ) -> Self {
-        let (send, recv) = tokio::sync::mpsc::unbounded_channel();
-        let (priority_send, priority_recv) = tokio::sync::mpsc::unbounded_channel();
+        let user = User::new(address, Edition::Bedrock, server);
         let (incoming_send, incoming_recv) = tokio::sync::mpsc::channel(4096);
         let rt_handle = tokio::runtime::Handle::current();
         Self {
             session,
             player: ArcSwap::new(Arc::new(None)),
             address,
-            version: AtomicCell::new(BedrockMinecraftVersion::Unknown),
+            version: user.bedrock_version.clone(),
             client_data: ArcSwap::new(Arc::new(None)),
             be_clients,
             network_writer: Arc::new(RwLock::new(BedrockBatchEncoder::new())),
             network_reader: Mutex::new(BedrockBatchDecoder::new()),
             tasks: TaskTracker::new(),
             rt_handle,
-            outgoing_packet_queue_send: send,
-            outgoing_packet_queue_recv: Mutex::new(Some(recv)),
-            outgoing_packet_priority_send: priority_send,
-            outgoing_packet_priority_recv: Mutex::new(Some(priority_recv)),
-            pending_bytes: Arc::new(AtomicUsize::new(0)),
+            pending_bytes: user.pending_bytes.clone(),
             next_form_id: AtomicU32::new(0),
             inventory_opened: AtomicBool::new(false),
             last_food_rejection_tick: AtomicCell::new(None),
             client_cache_supported: AtomicBool::new(false),
             blob_cache: std::sync::Mutex::new(HashMap::new()),
-            close_token: CancellationToken::new(),
+            close_token: user.close_token.clone(),
             last_seen: Arc::new(AtomicCell::new(std::time::Instant::now())),
             incoming_game_packet_send: incoming_send,
             incoming_game_packet_recv: Mutex::new(Some(incoming_recv)),
             packet_limiter,
+            user,
         }
     }
 
     pub async fn get_packet(&self) -> Option<RawPacket> {
-        let mut guard = self.incoming_game_packet_recv.lock().await;
-        let recv = guard.as_mut()?;
-        tokio::select! {
-            () = self.await_close_interrupt() => None,
-            packet = recv.recv() => packet,
+        loop {
+            let packet = {
+                let mut guard = self.incoming_game_packet_recv.lock().await;
+                let recv = guard.as_mut()?;
+                tokio::select! {
+                    () = self.await_close_interrupt() => return None,
+                    packet = recv.recv() => packet?,
+                }
+            };
+            if let Some(packet) = PacketReceivedEvent::filter(&self.user, packet).await {
+                if packet.id > 0x3ff {
+                    self.close().await;
+                    return None;
+                }
+                return Some(packet);
+            }
         }
     }
 
     pub fn start_outgoing_packet_task(self: &Arc<Self>) {
-        const MAX_BATCH_SIZE: usize = 64;
-
         let client = self.clone();
         self.spawn_task(async move {
-            let Some(mut packet_receiver) = client.outgoing_packet_queue_recv.lock().await.take()
-            else {
-                return;
-            };
-            let Some(mut priority_packet_receiver) =
-                client.outgoing_packet_priority_recv.lock().await.take()
-            else {
+            let Some(mut packet_receiver) = client.user.take_outgoing() else {
                 return;
             };
             let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
@@ -205,7 +183,6 @@ impl BedrockClient {
             loop {
                 let recv_result = tokio::select! {
                     biased;
-                    res = priority_packet_receiver.recv() => res,
                     res = packet_receiver.recv() => res,
                     _ = interval.tick() => {
                         if !client.tick_connection().await {
@@ -214,10 +191,7 @@ impl BedrockClient {
                         continue;
                     }
                     () = client.close_token.cancelled() => {
-                        priority_packet_receiver
-                            .try_recv()
-                            .ok()
-                            .or_else(|| packet_receiver.try_recv().ok())
+                        packet_receiver.try_recv().ok()
                     }
                 };
 
@@ -225,50 +199,121 @@ impl BedrockClient {
                     break;
                 };
 
-                let mut packet_batch = Vec::with_capacity(MAX_BATCH_SIZE);
-                packet_batch.push(packet);
-
-                while packet_batch.len() < MAX_BATCH_SIZE {
-                    match priority_packet_receiver.try_recv() {
-                        Ok(packet) => {
-                            packet_batch.push(packet);
-                            continue;
-                        }
-                        Err(TryRecvError::Disconnected | TryRecvError::Empty) => {}
-                    }
-
-                    match packet_receiver.try_recv() {
-                        Ok(packet) => packet_batch.push(packet),
-                        Err(TryRecvError::Disconnected | TryRecvError::Empty) => break,
-                    }
+                let packet_len = packet.data.len();
+                let result = client
+                    .write_outgoing_packet(packet.data, packet.silent)
+                    .await;
+                decrement_pending_bytes(&client.pending_bytes, packet_len);
+                if let Err(error) = result {
+                    warn!(
+                        "Failed to send NetherNet packet to {}: {error}",
+                        client.address
+                    );
+                    client.close().await;
+                    break;
                 }
-
-                for packet in packet_batch {
-                    let packet_len = packet.data.len();
-                    let data = packet.data.strip_prefix(&[BEDROCK_GAME_PACKET]);
-                    let Some(data) = data else {
-                        warn!("Refusing to send a non-game packet over NetherNet");
-                        decrement_pending_bytes(&client.pending_bytes, packet_len);
-                        continue;
-                    };
-                    if let Err(error) = client.session.send(Bytes::copy_from_slice(data)).await {
-                        warn!(
-                            "Failed to send NetherNet packet to {}: {error}",
-                            client.address
-                        );
-                        decrement_pending_bytes(&client.pending_bytes, packet_len);
-                        client.close().await;
-                        return;
-                    }
-
-                    decrement_pending_bytes(&client.pending_bytes, packet_len);
-
-                    if let Some(completion) = packet.completion {
-                        let _ = completion.send(());
-                    }
+                if let Some(completion) = packet.completion {
+                    let _ = completion.send(());
                 }
             }
+            while let Ok(packet) = packet_receiver.try_recv() {
+                decrement_pending_bytes(&client.pending_bytes, packet.data.len());
+            }
         });
+    }
+
+    async fn write_outgoing_packet(&self, data: Bytes, silent: bool) -> Result<(), Error> {
+        let batch = data
+            .strip_prefix(&[BEDROCK_GAME_PACKET])
+            .ok_or_else(|| Error::other("Missing Bedrock game-packet marker"))?;
+        let has_handlers = !silent
+            && self
+                .user
+                .server
+                .upgrade()
+                .is_some_and(|server| server.plugin_manager.has_handlers::<PacketSentEvent>());
+        if !has_handlers && self.user.encoder_state.load() == ConnectionState::Play {
+            return self.write_batch(batch, None).await;
+        }
+
+        let mut cursor = Cursor::new(batch.to_vec());
+        let mut decoder = BedrockBatchDecoder::new();
+        while (cursor.position() as usize) < cursor.get_ref().len() {
+            let (header, packet) = decoder
+                .get_game_packet_with_header(&mut cursor)
+                .map_err(|error| Error::other(error.to_string()))?;
+            let Some(packet) = PacketSentEvent::filter(&self.user, packet, silent).await else {
+                continue;
+            };
+            if packet.id > 0x3ff {
+                return Err(Error::other("Bedrock packet ID exceeds 10 bits"));
+            }
+            let compression = if packet.id == CNetworkSettings::PACKET_ID {
+                let mut payload = packet.payload.as_ref();
+                let threshold = u16::read(&mut payload)?;
+                if u16::read(&mut payload)? != 0 {
+                    return Err(Error::other("Unsupported Bedrock compression algorithm"));
+                }
+                let _ = bool::read(&mut payload)?;
+                let _ = u8::read(&mut payload)?;
+                let _ = f32::read(&mut payload)?;
+                if !payload.is_empty() {
+                    return Err(Error::other("Trailing Bedrock network settings data"));
+                }
+                Some(CompressionInfo {
+                    threshold: u32::from(threshold),
+                    level: self.user.server.upgrade().map_or(4, |server| {
+                        server
+                            .advanced_config
+                            .networking
+                            .bedrock
+                            .compression
+                            .info
+                            .level
+                    }),
+                })
+            } else {
+                None
+            };
+            let mut body = Vec::new();
+            BedrockBatchEncoder::write_game_packet_data(
+                (header & !0x3ff) | packet.id as u16,
+                &packet.payload,
+                &mut body,
+            )?;
+            self.write_batch(&body, compression).await?;
+            if packet.id == CStartGame::PACKET_ID {
+                self.user.encoder_state.store(ConnectionState::Play);
+            }
+        }
+        Ok(())
+    }
+
+    async fn write_batch(
+        &self,
+        batch: &[u8],
+        compression: Option<CompressionInfo>,
+    ) -> Result<(), Error> {
+        let mut framed = Vec::new();
+        self.network_writer
+            .read()
+            .await
+            .write_batch(batch, &mut framed)?;
+        let framed = Bytes::from(framed).slice(1..);
+        if let Some(compression) = compression {
+            let mut reader = self.network_reader.lock().await;
+            self.session.send(framed).await.map_err(Error::other)?;
+            reader.set_compression(compression.threshold as usize);
+            self.network_writer
+                .write()
+                .await
+                .set_compression((compression.threshold as usize, compression.level));
+            self.user.decoder_state.store(ConnectionState::Login);
+            self.user.encoder_state.store(ConnectionState::Login);
+        } else {
+            self.session.send(framed).await.map_err(Error::other)?;
+        }
+        Ok(())
     }
 
     async fn tick_connection(&self) -> bool {
@@ -299,27 +344,11 @@ impl BedrockClient {
         self.session.client_public_key()
     }
 
-    pub async fn set_compression(&self, compression: CompressionInfo) {
-        self.network_reader
-            .lock()
-            .await
-            .set_compression(compression.threshold as usize);
-
-        self.network_writer
-            .write()
-            .await
-            .set_compression((compression.threshold as usize, compression.level));
-    }
-
     pub fn try_kick(&self, reason: DisconnectReason, message: String) {
         warn!("Closing connection for {}: {message}", self.address);
         let packet = CDisconnect::new(reason as i32, message);
         if let Ok(data) = self.serialize_packet(&packet) {
-            let packet_len = data.len();
-            let _ = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
-            let _ = self
-                .outgoing_packet_priority_send
-                .send(OutgoingPacket::normal(data));
+            self.try_enqueue_packet(data);
         }
         if !self.close_token.is_cancelled() {
             self.close_token.cancel();
@@ -431,7 +460,7 @@ impl BedrockClient {
 
         let mut packets_to_enqueue = Vec::with_capacity(encoded_payloads.len());
         {
-            let encoder = self.network_writer.read().await;
+            let encoder = BedrockBatchEncoder::new();
             for payload in encoded_payloads {
                 let mut packet_buf = Vec::new();
                 match encoder.write_game_packet(
@@ -452,6 +481,8 @@ impl BedrockClient {
     }
 
     pub fn set_player(&self, player: Arc<Player>) {
+        self.user.set_player(&player);
+        self.user.decoder_state.store(ConnectionState::Play);
         self.player.store(Arc::new(Some(player)));
     }
 
@@ -476,35 +507,10 @@ impl BedrockClient {
     }
 
     pub fn try_enqueue_packet_data(&self, packet_data: Bytes) {
-        if self.is_closed() {
-            return;
-        }
-
-        let packet_len = packet_data.len();
-        let prev_bytes = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
-        let new_bytes = prev_bytes.saturating_add(packet_len);
-
-        if new_bytes > MAX_PENDING_BYTES {
-            decrement_pending_bytes(&self.pending_bytes, packet_len);
-            if !self.is_closed() {
-                warn!(
-                    "Bedrock client {} outbound packet buffer overflow ({} bytes > {} bytes). Closing connection.",
-                    self.address, new_bytes, MAX_PENDING_BYTES
-                );
-                self.close_token.cancel();
-            }
-            return;
-        }
-
-        if let Err(err) = self
-            .outgoing_packet_queue_send
-            .send(OutgoingPacket::normal(packet_data))
+        if let Err(err) = self.user.enqueue(OutgoingPacket::normal(packet_data))
+            && !self.is_closed()
         {
-            decrement_pending_bytes(&self.pending_bytes, packet_len);
-            // This is expected to fail if we are closed
-            if !self.is_closed() {
-                error!("Failed to add packet to the outgoing packet queue for client: {err}");
-            }
+            error!("Failed to add packet to the outgoing packet queue for client: {err}");
         }
     }
 
@@ -512,10 +518,16 @@ impl BedrockClient {
         packet: &P,
         mut writer: impl Write,
     ) -> Result<(), Error> {
-        writer.write_all(&[P::PACKET_ID as u8])?;
+        if !(0..=0x3ff).contains(&P::PACKET_ID) {
+            return Err(Error::other("Bedrock packet ID exceeds 10 bits"));
+        }
+        pumpkin_protocol::codec::var_uint::VarUInt(P::PACKET_ID as u32)
+            .encode(&mut writer)
+            .map_err(Error::other)?;
         packet.write_packet(writer)
     }
 
+    #[allow(clippy::unused_async)]
     pub async fn write_game_packet<P: BClientPacket>(
         &self,
         packet: &P,
@@ -524,7 +536,7 @@ impl BedrockClient {
         let mut packet_payload = Vec::new();
         packet.write_packet(&mut packet_payload)?;
 
-        let encoder = self.network_writer.read().await;
+        let encoder = BedrockBatchEncoder::new();
         encoder.write_game_packet(
             P::PACKET_ID as u16,
             SubClient::Main,
@@ -535,10 +547,7 @@ impl BedrockClient {
     }
 
     pub fn serialize_packet<P: BClientPacket>(&self, packet: &P) -> Result<Bytes, Error> {
-        self.network_writer
-            .try_read()
-            .map_err(|_| Error::other("Bedrock packet encoder is busy"))?
-            .serialize_packet(packet)
+        BedrockBatchEncoder::new().serialize_packet(packet)
     }
 
     pub async fn send_packet<P: BClientPacket>(&self, packet: &P) {
@@ -565,44 +574,29 @@ impl BedrockClient {
     }
 
     pub async fn send_game_packet(&self, packet_data: Bytes) {
-        if self.is_closed() {
+        if in_packet_callback() {
+            self.try_enqueue_packet_data(packet_data);
             return;
         }
-
-        let packet_len = packet_data.len();
-        let prev_bytes = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
-        let new_bytes = prev_bytes.saturating_add(packet_len);
-
-        if new_bytes > MAX_PENDING_BYTES {
-            decrement_pending_bytes(&self.pending_bytes, packet_len);
-            if !self.is_closed() {
-                warn!(
-                    "Bedrock client {} outbound packet buffer overflow ({} bytes > {} bytes). Closing connection.",
-                    self.address, new_bytes, MAX_PENDING_BYTES
-                );
-                self.close_token.cancel();
-            }
-            return;
-        }
-
         let (tx, rx) = oneshot::channel();
-        if let Err(err) = self
-            .outgoing_packet_priority_send
-            .send(OutgoingPacket::priority(packet_data, tx))
-        {
-            decrement_pending_bytes(&self.pending_bytes, packet_len);
+        if let Err(err) = self.user.enqueue(OutgoingPacket {
+            data: packet_data,
+            state: None,
+            silent: false,
+            completion: Some(tx),
+        }) {
             if !self.is_closed() {
-                error!("Failed to add priority packet to the outgoing packet queue: {err}");
+                error!("Failed to add packet to the outgoing packet queue: {err}");
             }
         } else {
-            let _ = rx.await;
+            tokio::select! {
+                _ = rx => {},
+                () = self.close_token.cancelled() => {},
+            }
         }
     }
 
     pub async fn close(&self) {
-        if self.close_token.is_cancelled() {
-            return;
-        }
         self.close_token.cancel();
         self.session.close().await;
         self.be_clients.lock().await.remove(&self.address);
