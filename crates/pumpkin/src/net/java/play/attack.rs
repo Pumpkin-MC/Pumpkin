@@ -1,5 +1,8 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use pumpkin_data::attributes::Attributes;
+use pumpkin_util::math::boundingbox::BoundingBox;
+use pumpkin_util::math::vector3::Vector3;
 
 impl JavaClient {
     pub fn handle_attack(&self, player: &Arc<Player>, attack: &SAttack, server: &Arc<Server>) {
@@ -42,7 +45,7 @@ impl JavaClient {
         // dispatching the attack (`ServerboundInteractPacket.isWithinRange`
         // with a buffer of 3.0); silently ignore out-of-range attacks.
         let target_bounds = target.get_entity().bounding_box.load();
-        if !player.is_within_entity_interaction_range(&target_bounds, 3.0) {
+        if !is_within_entity_interaction_range(player, &target_bounds, 3.0) {
             return;
         }
         if let Some(player_victim) = &player_target {
@@ -60,4 +63,26 @@ impl JavaClient {
         }
         player.attack(&target);
     }
+}
+
+/// Mirrors vanilla `Player.isWithinEntityInteractionRange(AABB, double)`: the
+/// squared distance from the eye position to the target's bounding box must be
+/// less than the squared range plus buffer. Vanilla calls this from the
+/// interact-packet handler with a buffer of 3.0.
+fn is_within_entity_interaction_range(
+    player: &Player,
+    bounding_box: &BoundingBox,
+    buffer: f64,
+) -> bool {
+    let max_range = player
+        .living_entity
+        .get_attribute_value(&Attributes::ENTITY_INTERACTION_RANGE)
+        + buffer;
+    let entity_pos = player.living_entity.entity.pos.load();
+    let eye_height = player.living_entity.entity.get_eye_height();
+    bounding_box.squared_magnitude(Vector3 {
+        x: entity_pos.x,
+        y: entity_pos.y + eye_height,
+        z: entity_pos.z,
+    }) < max_range * max_range
 }
