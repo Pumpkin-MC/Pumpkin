@@ -274,6 +274,17 @@ impl ProtoChunk {
             .blending_data
             .clone_from(&chunk_data.blending_data);
 
+        // Chunks loaded from disk carry their block entities in the chunk data.
+        // Keep them so the world can create the block entities when the chunk
+        // becomes active, and so saving the chunk again does not drop them.
+        proto_chunk.pending_block_entities = chunk_data
+            .pending_block_entities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .values()
+            .cloned()
+            .collect();
+
         let section_data = &chunk_data.section;
         let heightmap_data = chunk_data
             .heightmap

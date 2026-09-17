@@ -5535,6 +5535,16 @@ impl World {
             return None;
         }
 
+        let mut flags = flags;
+        if flags.contains(BlockFlags::SKIP_DROPS)
+            && cause.is_some_and(|p| p.gamemode.load() == pumpkin_util::GameMode::Creative)
+            && self
+                .get_block_entity(position)
+                .is_some_and(|entity| entity.drops_for_creative_player())
+        {
+            flags.remove(BlockFlags::SKIP_DROPS);
+        }
+
         let mut event = BlockBreakEvent::new(
             cause.cloned(),
             broken_block,
@@ -5549,7 +5559,6 @@ impl World {
             return None;
         }
 
-        let mut flags = flags;
         if event.drop {
             flags.remove(BlockFlags::SKIP_DROPS);
         } else {

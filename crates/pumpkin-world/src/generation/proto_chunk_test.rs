@@ -182,6 +182,44 @@ mod test {
         assert!(resumed.has_structure(StructureKeys::Monument));
     }
 
+    #[test]
+    fn block_entities_survive_chunk_data_resume() {
+        use crate::chunk_system::chunk_state::Chunk;
+        use pumpkin_config::lighting::LightingEngineConfig;
+        use pumpkin_nbt::compound::NbtCompound;
+
+        let seed = Seed(4242);
+        let world_gen = get_world_gen(seed, Dimension::OVERWORLD, false, Vec::new(), String::new());
+
+        let mut proto = ProtoChunk::new(3, -2, &world_gen);
+        let mut chest = NbtCompound::new();
+        chest.put_string("id", "minecraft:chest".to_string());
+        chest.put_int("x", 49);
+        chest.put_int("y", 64);
+        chest.put_int("z", -31);
+        proto.add_block_entity(chest);
+
+        let mut staged = Chunk::Proto(Box::new(proto));
+        staged.upgrade_to_level_chunk(&Dimension::OVERWORLD, &LightingEngineConfig::Default);
+        let Chunk::Level(chunk_data) = staged else {
+            unreachable!()
+        };
+
+        let resumed = ProtoChunk::from_chunk_data(&chunk_data, &world_gen);
+        assert_eq!(resumed.pending_block_entities.len(), 1);
+        assert_eq!(
+            resumed.pending_block_entities[0].get_string("id"),
+            Some("minecraft:chest")
+        );
+
+        let mut staged_again = Chunk::Proto(Box::new(resumed));
+        staged_again.upgrade_to_level_chunk(&Dimension::OVERWORLD, &LightingEngineConfig::Default);
+        let Chunk::Level(chunk_again) = staged_again else {
+            unreachable!()
+        };
+        assert_eq!(chunk_again.pending_block_entities.lock().unwrap().len(), 1);
+    }
+
     // Regression test for transposed heightmaps during Noise-stage chunk resume.
     // Flat terrain cannot expose this bug, so use a sloped chunk.
     #[test]
