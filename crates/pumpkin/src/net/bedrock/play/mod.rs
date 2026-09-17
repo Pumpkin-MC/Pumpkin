@@ -44,8 +44,11 @@ use pumpkin_protocol::{
         },
     },
     codec::{var_int::VarInt, var_long::VarLong, var_uint::VarUInt, var_ulong::VarULong},
-    java::client::play::{
-        Animation, CEntityAnimation, CSetSelectedSlot, CSwingArm, CSystemChatMessage,
+    java::{
+        client::play::{
+            Animation, CEntityAnimation, CSetSelectedSlot, CSwingArm, CSystemChatMessage,
+        },
+        server::play::ActionType,
     },
 };
 use pumpkin_util::{GameMode, Hand, math::position::BlockPos, text::TextComponent};
@@ -64,6 +67,7 @@ use crate::{
         item_held::PlayerItemHeldEvent,
         player_chat::PlayerChatEvent,
         player_command_send::PlayerCommandSendEvent,
+        player_interact_entity_event::PlayerInteractEntityEvent,
         player_interact_event::{InteractAction, PlayerInteractEvent},
         player_toggle_flight_event::PlayerToggleFlightEvent,
     },

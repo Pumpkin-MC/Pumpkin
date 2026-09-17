@@ -1,5 +1,6 @@
 use std::{any::Any, sync::Arc};
 
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{Block, block_properties::BLOCK_ENTITY_TYPES};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::position::BlockPos;
@@ -124,6 +125,17 @@ pub trait BlockEntity: Any + Send + Sync {
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
         None
     }
+
+    /// Copies the block entity's state on the item stack dropped for it.
+    fn collect_item_components(&self, _stack: &mut ItemStack) {}
+
+    /// Restores the state from the item stack the block was placed from.
+    fn apply_item_components(&self, _stack: &ItemStack) {}
+
+    fn drops_for_creative_player(&self) -> bool {
+        false
+    }
+
     fn set_block_state(&mut self, _block_state: BlockStateId) {}
     fn on_block_replaced(self: Arc<Self>, world: &Arc<World>, position: &BlockPos) {
         if let Some(inventory) = self.get_inventory() {
