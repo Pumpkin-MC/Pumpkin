@@ -19,6 +19,9 @@ pub(crate) static COMMAND_HANDLERS: Mutex<BTreeMap<u32, Arc<dyn CommandHandler>>
 pub(crate) static COMMAND_SUGGESTION_HANDLERS: Mutex<
     BTreeMap<u32, Arc<dyn CommandSuggestionHandler>>,
 > = Mutex::new(BTreeMap::new());
+pub(crate) static COMMAND_REQUIREMENT_HANDLERS: Mutex<
+    BTreeMap<u32, Arc<dyn CommandRequirementHandler>>,
+> = Mutex::new(BTreeMap::new());
 
 /// Handles the execution of a registered command.
 ///
@@ -96,6 +99,15 @@ pub trait CommandSuggestionHandler: Send + Sync {
     ) -> CommandSuggestions;
 }
 
+/// Handles a command-node requirement check.
+///
+/// Return `true` when the sender should be allowed to use the node and `false`
+/// when the node should be rejected during command parsing.
+pub trait CommandRequirementHandler: Send + Sync {
+    /// Checks whether `sender` satisfies this requirement.
+    fn check(&self, sender: CommandSender, server: Server) -> bool;
+}
+
 impl Command {
     /// Attaches an execution handler to this command.
     ///
@@ -144,6 +156,21 @@ impl CommandNode {
             .insert(id, Arc::new(handler));
 
         self.suggest_with_handler_id(id)
+    }
+
+    /// Attaches a requirement handler to this command node.
+    ///
+    /// The node is only eligible for parsing and execution when `handler` returns
+    /// `true` for the command sender.
+    pub fn requires<H: CommandRequirementHandler + Send + Sync + 'static>(self, handler: H) -> Self {
+        let id = NEXT_COMMAND_ID.fetch_add(1, Ordering::Relaxed);
+
+        COMMAND_REQUIREMENT_HANDLERS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(id, Arc::new(handler));
+
+        self.require_with_handler_id(id)
     }
 }
 
