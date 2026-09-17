@@ -69,6 +69,21 @@ impl EntityBase for FallingEntity {
             {
                 state_id = concrete.default_state.id;
             }
+
+            let block = Block::from_state_id(state_id);
+            let mut event = crate::plugin::api::events::entity::entity_change_block::EntityChangeBlockEvent::new(
+                entity.entity_id,
+                landing_pos,
+                format!("minecraft:{}", block.name),
+            );
+            if let Some(server) = world.server.upgrade() {
+                server.plugin_manager.fire_blocking(&server, &mut event);
+            }
+            if event.cancelled {
+                self.entity.remove();
+                return;
+            }
+
             world.set_block_state(&landing_pos, state_id, BlockFlags::NOTIFY_ALL);
             self.entity.remove();
         }
