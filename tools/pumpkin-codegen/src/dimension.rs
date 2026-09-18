@@ -55,7 +55,7 @@ pub struct Dimension {
 
 /// Generates the `TokenStream` for the `Dimension` struct, its constants, and `from_name` lookup.
 pub fn build() -> TokenStream {
-    let dir = std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/dimension_type");
+    let dir = std::path::Path::new("../../assets/datapacks/26_3/data/minecraft/dimension_type");
     let mut dimensions: BTreeMap<String, Dimension> = BTreeMap::new();
     let mut entries: Vec<_> = fs::read_dir(dir)
         .expect("Missing dimension_type directory")

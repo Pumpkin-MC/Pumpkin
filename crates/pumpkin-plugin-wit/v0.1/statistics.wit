@@ -74,6 +74,7 @@ interface statistics {
     interact-with-crafting-table,
     open-chest,
     sleep-in-bed,
+    sleep-in-straw-bed,
     open-shulker-box,
     open-barrel,
     interact-with-blast-furnace,

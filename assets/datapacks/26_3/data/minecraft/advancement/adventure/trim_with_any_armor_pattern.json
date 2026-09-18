@@ -1,0 +1,147 @@
+{
+  "parent": "minecraft:adventure/root",
+  "criteria": {
+    "armor_trimmed_minecraft:bolt_armor_trim_smithing_template_smithing_trim": {
+      "conditions": {
+        "recipes": "minecraft:bolt_armor_trim_smithing_template_smithing_trim"
+      },
+      "trigger": "minecraft:recipe_crafted"
+    },
+    "armor_trimmed_minecraft:coast_armor_trim_smithing_template_smithing_trim": {
+      "conditions": {
+        "recipes": "minecraft:coast_armor_trim_smithing_template_smithing_trim"
+      },
+      "trigger": "minecraft:recipe_crafted"
+    },
+    "armor_trimmed_minecraft:dune_armor_trim_smithing_template_smithing_trim": {
+      "conditions": {
+        "recipes": "minecraft:dune_armor_trim_smithing_template_smithing_trim"
+      },
+      "trigger": "minecraft:recipe_crafted"
+    },
+    "armor_trimmed_minecraft:eye_armor_trim_smithing_template_smithing_trim": {
+      "conditions": {
+        "recipes": "minecraft:eye_armor_trim_smithing_template_smithing_trim"
+      },
+      "trigger": "minecraft:recipe_crafted"
+    },
+    "armor_trimmed_minecraft:flow_armor_trim_smithing_template_smithing_trim": {
+      "conditions": {
+        "recipes": "minecraft:flow_armor_trim_smithing_template_smithing_trim"
+      },
+      "trigger": "minecraft:recipe_crafted"
+    },
+    "armor_trimmed_minecraft:host_armor_trim_smithing_template_smithing_trim": {
+      "conditions": {
+        "recipes": "minecraft:host_armor_trim_smithing_template_smithing_trim"
+      },
+      "trigger": "minecraft:recipe_crafted"
+    },
+    "armor_trimmed_minecraft:raiser_armor_trim_smithing_template_smithing_trim": {
+      "conditions": {
+        "recipes": "minecraft:raiser_armor_trim_smithing_template_smithing_trim"
+      },
+      "trigger": "minecraft:recipe_crafted"
+    },
+    "armor_trimmed_minecraft:rib_armor_trim_smithing_template_smithing_trim": {
+      "conditions": {
+        "recipes": "minecraft:rib_armor_trim_smithing_template_smithing_trim"
+      },
+      "trigger": "minecraft:recipe_crafted"
+    },
+    "armor_trimmed_minecraft:sentry_armor_trim_smithing_template_smithing_trim": {
+      "conditions": {
+        "recipes": "minecraft:sentry_armor_trim_smithing_template_smithing_trim"
+      },
+      "trigger": "minecraft:recipe_crafted"
+    },
+    "armor_trimmed_minecraft:shaper_armor_trim_smithing_template_smithing_trim": {
+      "conditions": {
+        "recipes": "minecraft:shaper_armor_trim_smithing_template_smithing_trim"
+      },
+      "trigger": "minecraft:recipe_crafted"
+    },
+    "armor_trimmed_minecraft:silence_armor_trim_smithing_template_smithing_trim": {
+      "conditions": {
+        "recipes": "minecraft:silence_armor_trim_smithing_template_smithing_trim"
+      },
+      "trigger": "minecraft:recipe_crafted"
+    },
+    "armor_trimmed_minecraft:snout_armor_trim_smithing_template_smithing_trim": {
+      "conditions": {
+        "recipes": "minecraft:snout_armor_trim_smithing_template_smithing_trim"
+      },
+      "trigger": "minecraft:recipe_crafted"
+    },
+    "armor_trimmed_minecraft:spire_armor_trim_smithing_template_smithing_trim": {
+      "conditions": {
+        "recipes": "minecraft:spire_armor_trim_smithing_template_smithing_trim"
+      },
+      "trigger": "minecraft:recipe_crafted"
+    },
+    "armor_trimmed_minecraft:tide_armor_trim_smithing_template_smithing_trim": {
+      "conditions": {
+        "recipes": "minecraft:tide_armor_trim_smithing_template_smithing_trim"
+      },
+      "trigger": "minecraft:recipe_crafted"
+    },
+    "armor_trimmed_minecraft:vex_armor_trim_smithing_template_smithing_trim": {
+      "conditions": {
+        "recipes": "minecraft:vex_armor_trim_smithing_template_smithing_trim"
+      },
+      "trigger": "minecraft:recipe_crafted"
+    },
+    "armor_trimmed_minecraft:ward_armor_trim_smithing_template_smithing_trim": {
+      "conditions": {
+        "recipes": "minecraft:ward_armor_trim_smithing_template_smithing_trim"
+      },
+      "trigger": "minecraft:recipe_crafted"
+    },
+    "armor_trimmed_minecraft:wayfinder_armor_trim_smithing_template_smithing_trim": {
+      "conditions": {
+        "recipes": "minecraft:wayfinder_armor_trim_smithing_template_smithing_trim"
+      },
+      "trigger": "minecraft:recipe_crafted"
+    },
+    "armor_trimmed_minecraft:wild_armor_trim_smithing_template_smithing_trim": {
+      "conditions": {
+        "recipes": "minecraft:wild_armor_trim_smithing_template_smithing_trim"
+      },
+      "trigger": "minecraft:recipe_crafted"
+    }
+  },
+  "display": {
+    "description": {
+      "translate": "advancements.adventure.trim_with_any_armor_pattern.description"
+    },
+    "icon": {
+      "id": "minecraft:dune_armor_trim_smithing_template"
+    },
+    "title": {
+      "translate": "advancements.adventure.trim_with_any_armor_pattern.title"
+    }
+  },
+  "requirements": [
+    [
+      "armor_trimmed_minecraft:bolt_armor_trim_smithing_template_smithing_trim",
+      "armor_trimmed_minecraft:coast_armor_trim_smithing_template_smithing_trim",
+      "armor_trimmed_minecraft:dune_armor_trim_smithing_template_smithing_trim",
+      "armor_trimmed_minecraft:eye_armor_trim_smithing_template_smithing_trim",
+      "armor_trimmed_minecraft:flow_armor_trim_smithing_template_smithing_trim",
+      "armor_trimmed_minecraft:host_armor_trim_smithing_template_smithing_trim",
+      "armor_trimmed_minecraft:raiser_armor_trim_smithing_template_smithing_trim",
+      "armor_trimmed_minecraft:rib_armor_trim_smithing_template_smithing_trim",
+      "armor_trimmed_minecraft:sentry_armor_trim_smithing_template_smithing_trim",
+      "armor_trimmed_minecraft:shaper_armor_trim_smithing_template_smithing_trim",
+      "armor_trimmed_minecraft:silence_armor_trim_smithing_template_smithing_trim",
+      "armor_trimmed_minecraft:snout_armor_trim_smithing_template_smithing_trim",
+      "armor_trimmed_minecraft:spire_armor_trim_smithing_template_smithing_trim",
+      "armor_trimmed_minecraft:tide_armor_trim_smithing_template_smithing_trim",
+      "armor_trimmed_minecraft:vex_armor_trim_smithing_template_smithing_trim",
+      "armor_trimmed_minecraft:ward_armor_trim_smithing_template_smithing_trim",
+      "armor_trimmed_minecraft:wayfinder_armor_trim_smithing_template_smithing_trim",
+      "armor_trimmed_minecraft:wild_armor_trim_smithing_template_smithing_trim"
+    ]
+  ],
+  "sends_telemetry_event": true
+}

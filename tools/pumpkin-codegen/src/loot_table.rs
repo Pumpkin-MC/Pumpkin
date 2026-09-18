@@ -96,9 +96,17 @@ enum EnchantedChanceStruct {
     },
 }
 
+/// A condition is either an inline definition or a reference to a `predicate` file.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(untagged)]
+enum ConditionValue {
+    Reference(String),
+    Inline(Box<ConditionStruct>),
+}
+
 #[derive(Deserialize, Clone, Debug)]
 struct ConditionStruct {
-    #[serde(default)]
+    #[serde(rename = "type", default)]
     condition: String,
     #[allow(dead_code)]
     #[serde(default)]
@@ -116,9 +124,24 @@ struct ConditionStruct {
     #[serde(default)]
     entity: Option<String>,
     #[serde(default)]
-    term: Option<Box<ConditionStruct>>,
+    term: Option<ConditionValue>,
     #[serde(default)]
-    terms: Option<Vec<ConditionStruct>>,
+    terms: Option<Vec<ConditionValue>>,
+}
+
+fn resolve_condition(value: &ConditionValue) -> LootCondition {
+    match value {
+        ConditionValue::Inline(cond) => parse_condition(cond),
+        ConditionValue::Reference(name) => {
+            let relative = name.strip_prefix("minecraft:").unwrap_or(name);
+            let path = Path::new("../../assets/datapacks/26_3/data/minecraft/predicate")
+                .join(format!("{relative}.json"));
+            fs::read_to_string(&path)
+                .ok()
+                .and_then(|content| serde_json::from_str::<ConditionStruct>(&content).ok())
+                .map_or(LootCondition::None, |cond| parse_condition(&cond))
+        }
+    }
 }
 
 /// Translate one vanilla loot condition into its generated [`LootCondition`].
@@ -225,10 +248,10 @@ fn parse_condition(cond: &ConditionStruct) -> LootCondition {
             if let Some(terms) = &cond.terms {
                 let has_silk = terms
                     .iter()
-                    .any(|t| parse_condition(t) == LootCondition::SilkTouch);
+                    .any(|t| resolve_condition(t) == LootCondition::SilkTouch);
                 let has_shears = terms
                     .iter()
-                    .any(|t| parse_condition(t) == LootCondition::Shears);
+                    .any(|t| resolve_condition(t) == LootCondition::Shears);
                 if has_silk && has_shears {
                     return LootCondition::SilkTouchOrShears;
                 } else if has_silk {
@@ -241,7 +264,7 @@ fn parse_condition(cond: &ConditionStruct) -> LootCondition {
         }
         "minecraft:inverted" => {
             if let Some(term) = &cond.term {
-                match parse_condition(term) {
+                match resolve_condition(term) {
                     LootCondition::SilkTouch => LootCondition::NoSilkTouch,
                     LootCondition::Shears => LootCondition::NoSilkTouchOrShears,
                     LootCondition::SilkTouchOrShears => LootCondition::NoSilkTouchOrShears,
@@ -292,14 +315,19 @@ fn flatten_entity_properties(
     }
 }
 
+/// Resolve an optional condition, treating a missing one as [`LootCondition::None`].
+fn condition_of(value: Option<&ConditionValue>) -> LootCondition {
+    value.map_or(LootCondition::None, resolve_condition)
+}
+
 /// Combine every condition on a pool or entry into a single [`LootCondition`].
 ///
 /// Unrepresentable conditions drop out, a single condition is returned as-is, and two or more
 /// are wrapped in [`LootCondition::AllOf`].
-fn combine_conditions(conditions: &[ConditionStruct]) -> LootCondition {
+fn combine_conditions(conditions: &[ConditionValue]) -> LootCondition {
     let mut parsed_list: Vec<LootCondition> = Vec::new();
     for c in conditions {
-        let parsed = parse_condition(c);
+        let parsed = resolve_condition(c);
         if parsed != LootCondition::None {
             parsed_list.push(parsed);
         }
@@ -321,8 +349,29 @@ struct BonusParameterStruct {
     probability: Option<f32>,
 }
 
+/// Item modifiers hold either a single entry or a list of them.
+pub fn one_or_many<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    // `Many` is tried first because `serde_json::Value` would also match `One`.
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum OneOrMany<T> {
+        Many(Vec<T>),
+        One(T),
+    }
+
+    Ok(match OneOrMany::deserialize(deserializer)? {
+        OneOrMany::Many(values) => values,
+        OneOrMany::One(value) => vec![value],
+    })
+}
+
 #[derive(Deserialize, Clone, Debug)]
 struct EntryFunctionStruct {
+    #[serde(rename = "type")]
     function: String,
     #[serde(default)]
     formula: Option<String>,
@@ -343,14 +392,17 @@ struct PoolEntryStruct {
     #[serde(rename = "type")]
     entry_type: String,
     name: Option<String>,
+    /// Tag entries name their tag here.
+    #[serde(default)]
+    items: Option<String>,
     #[serde(default)]
     value: Option<LootTableValue>,
     #[serde(default = "default_weight")]
     weight: i32,
-    #[serde(default)]
+    #[serde(rename = "modifier", default, deserialize_with = "one_or_many")]
     functions: Vec<EntryFunctionStruct>,
     #[serde(default)]
-    conditions: Vec<ConditionStruct>,
+    condition: Option<ConditionValue>,
     #[serde(default)]
     children: Vec<PoolEntryStruct>,
 }
@@ -366,7 +418,7 @@ struct PoolStruct {
     #[serde(default = "default_rolls")]
     rolls: RollsStruct,
     #[serde(default)]
-    conditions: Vec<ConditionStruct>,
+    condition: Option<ConditionValue>,
 }
 
 fn default_rolls() -> RollsStruct {
@@ -431,7 +483,7 @@ fn extract_entries_with_depth(
         return;
     }
 
-    let entry_cond = combine_pair(inherited_condition, combine_conditions(&entry.conditions));
+    let entry_cond = combine_pair(inherited_condition, condition_of(entry.condition.as_ref()));
 
     match entry.entry_type.as_str() {
         "minecraft:empty" => {
@@ -493,13 +545,18 @@ fn extract_entries_with_depth(
             }
         }
         "minecraft:tag" => {
-            let tag_name_opt = entry.name.as_deref().or_else(|| match &entry.value {
-                Some(LootTableValue::Reference(r)) => Some(r.as_str()),
-                _ => None,
-            });
+            let tag_name_opt = entry
+                .items
+                .as_deref()
+                .or(entry.name.as_deref())
+                .or_else(|| match &entry.value {
+                    Some(LootTableValue::Reference(r)) => Some(r.as_str()),
+                    _ => None,
+                });
             if let Some(tag_name) = tag_name_opt {
+                let tag_name = tag_name.strip_prefix('#').unwrap_or(tag_name);
                 let tag_rel = tag_name.strip_prefix("minecraft:").unwrap_or(tag_name);
-                let tag_path = Path::new("../../assets/datapacks/26_2/data/minecraft/tags/item")
+                let tag_path = Path::new("../../assets/datapacks/26_3/data/minecraft/tags/item")
                     .join(format!("{tag_rel}.json"));
                 if let Ok(content) = fs::read_to_string(&tag_path) {
                     #[derive(Deserialize)]
@@ -524,17 +581,15 @@ fn extract_entries_with_depth(
         "minecraft:loot_table" => match &entry.value {
             Some(LootTableValue::Reference(table_name)) => {
                 let table_rel = table_name.strip_prefix("minecraft:").unwrap_or(table_name);
-                let table_path = Path::new("../../assets/datapacks/26_2/data/minecraft/loot_table")
+                let table_path = Path::new("../../assets/datapacks/26_3/data/minecraft/loot_table")
                     .join(format!("{table_rel}.json"));
                 if let Ok(content) = fs::read_to_string(&table_path) {
                     if let Ok(nested_table) = serde_json::from_str::<ChestLootTableJson>(&content) {
                         for pool in &nested_table.pools {
                             let mut pool_cond = entry_cond;
-                            for c in &pool.conditions {
-                                let parsed = parse_condition(c);
-                                if parsed != LootCondition::None {
-                                    pool_cond = parsed;
-                                }
+                            let parsed = condition_of(pool.condition.as_ref());
+                            if parsed != LootCondition::None {
+                                pool_cond = parsed;
                             }
                             for child_entry in &pool.entries {
                                 extract_entries_with_depth(
@@ -552,11 +607,9 @@ fn extract_entries_with_depth(
             Some(LootTableValue::Inline(nested_table)) => {
                 for pool in &nested_table.pools {
                     let mut pool_cond = entry_cond;
-                    for c in &pool.conditions {
-                        let parsed = parse_condition(c);
-                        if parsed != LootCondition::None {
-                            pool_cond = parsed;
-                        }
+                    let parsed = condition_of(pool.condition.as_ref());
+                    if parsed != LootCondition::None {
+                        pool_cond = parsed;
                     }
                     for child_entry in &pool.entries {
                         extract_entries_with_depth(
@@ -573,7 +626,7 @@ fn extract_entries_with_depth(
                 if let Some(name) = &entry.name {
                     let table_rel = name.strip_prefix("minecraft:").unwrap_or(name);
                     let table_path =
-                        Path::new("../../assets/datapacks/26_2/data/minecraft/loot_table")
+                        Path::new("../../assets/datapacks/26_3/data/minecraft/loot_table")
                             .join(format!("{table_rel}.json"));
                     if let Ok(content) = fs::read_to_string(&table_path) {
                         if let Ok(nested_table) =
@@ -581,11 +634,9 @@ fn extract_entries_with_depth(
                         {
                             for pool in &nested_table.pools {
                                 let mut pool_cond = entry_cond;
-                                for c in &pool.conditions {
-                                    let parsed = parse_condition(c);
-                                    if parsed != LootCondition::None {
-                                        pool_cond = parsed;
-                                    }
+                                let parsed = condition_of(pool.condition.as_ref());
+                                if parsed != LootCondition::None {
+                                    pool_cond = parsed;
                                 }
                                 for child_entry in &pool.entries {
                                     extract_entries_with_depth(
@@ -607,7 +658,7 @@ fn extract_entries_with_depth(
             let mut saw_shears = false;
 
             for child in &entry.children {
-                let child_cond = combine_conditions(&child.conditions);
+                let child_cond = condition_of(child.condition.as_ref());
 
                 // A child gated on a tool re-derives that condition from its own conditions in
                 // the recursive call, so only the implicit gate for later children is added
@@ -747,7 +798,8 @@ fn emit_table(
     for (pool_idx, pool) in table.pools.iter().enumerate() {
         let min_rolls = pool.rolls.min();
         let max_rolls = pool.rolls.max();
-        let pool_cond = combine_conditions(&pool.conditions);
+
+        let pool_cond = condition_of(pool.condition.as_ref());
 
         let mut parsed_entries = Vec::new();
         let mut empty_weight: i32 = 0;
@@ -824,8 +876,10 @@ fn collect_json_files(base: &Path, dir: &Path) -> Vec<(String, ChestLootTableJso
                 .strip_prefix(base)
                 .unwrap()
                 .with_extension("")
-                .to_string_lossy()
-                .to_string();
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+                .join("/");
 
             let content = match fs::read_to_string(&path) {
                 Ok(c) => c,
@@ -844,11 +898,11 @@ fn collect_json_files(base: &Path, dir: &Path) -> Vec<(String, ChestLootTableJso
     result
 }
 
-/// Read every loot JSON from `../../assets/datapacks/26_2/data/minecraft/loot_table/` (recursively)
+/// Read every loot JSON from `../../assets/datapacks/26_3/data/minecraft/loot_table/` (recursively)
 /// and emit a `pumpkin-data/src/generated/chest_loot.rs` with static constants
 /// and a `get_chest_loot_table(key) -> Option<&'static ChestLootTable>` function.
 pub fn build() -> TokenStream {
-    let base = Path::new("../../assets/datapacks/26_2/data/minecraft/loot_table");
+    let base = Path::new("../../assets/datapacks/26_3/data/minecraft/loot_table");
 
     // Collect all JSON files recursively, sorted for deterministic output.
     let mut files: Vec<(String, ChestLootTableJson)> = collect_json_files(base, base);
@@ -928,36 +982,32 @@ mod tests {
         let entry: PoolEntryStruct = serde_json::from_str(
             r#"{
                 "type": "minecraft:alternatives",
-                "conditions": [{ "condition": "minecraft:killed_by_player" }],
+                "condition": { "type": "minecraft:killed_by_player" },
                 "children": [
                     {
                         "type": "minecraft:item",
                         "name": "minecraft:white_wool",
-                        "conditions": [
-                            {
-                                "condition": "minecraft:match_tool",
-                                "predicate": {
-                                    "predicates": {
-                                        "minecraft:enchantments": [
-                                            { "enchantments": "minecraft:silk_touch" }
-                                        ]
-                                    }
+                        "condition": {
+                            "type": "minecraft:match_tool",
+                            "predicate": {
+                                "predicates": {
+                                    "minecraft:enchantments": [
+                                        { "enchantments": "minecraft:silk_touch" }
+                                    ]
                                 }
                             }
-                        ]
+                        }
                     },
                     {
                         "type": "minecraft:item",
                         "name": "minecraft:white_carpet",
-                        "conditions": [
-                            {
-                                "condition": "minecraft:entity_properties",
-                                "entity": "this",
-                                "predicate": {
-                                    "minecraft:components": { "minecraft:sheep/color": "white" }
-                                }
+                        "condition": {
+                            "type": "minecraft:entity_properties",
+                            "entity": "this",
+                            "predicate": {
+                                "minecraft:components": { "minecraft:sheep/color": "white" }
                             }
-                        ]
+                        }
                     }
                 ]
             }"#,
@@ -996,20 +1046,18 @@ mod tests {
         let entry: PoolEntryStruct = serde_json::from_str(
             r#"{
                 "type": "minecraft:alternatives",
-                "conditions": [{ "condition": "minecraft:killed_by_player" }],
+                "condition": { "type": "minecraft:killed_by_player" },
                 "children": [
                     {
                         "type": "minecraft:item",
                         "name": "minecraft:white_wool",
-                        "conditions": [
-                            {
-                                "condition": "minecraft:entity_properties",
-                                "entity": "this",
-                                "predicate": {
-                                    "minecraft:components": { "minecraft:sheep/color": "white" }
-                                }
+                        "condition": {
+                            "type": "minecraft:entity_properties",
+                            "entity": "this",
+                            "predicate": {
+                                "minecraft:components": { "minecraft:sheep/color": "white" }
                             }
-                        ]
+                        }
                     }
                 ]
             }"#,

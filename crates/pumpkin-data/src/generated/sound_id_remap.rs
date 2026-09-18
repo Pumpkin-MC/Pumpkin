@@ -1,6 +1,6 @@
 /* This file is generated. Do not edit manually. */
 use pumpkin_util::version::JavaMinecraftVersion;
-const SOUND_ID_REMAP_V_26_2_TO_V_1_7_6: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_1_7_6: &[u16] = &[
     0, 0, 64, 64, 213, 213, 213, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 40, 40, 0, 40, 56,
     56, 215, 0, 215, 215, 20, 215, 215, 215, 215, 215, 20, 215, 20, 235, 20, 235, 235, 20, 190,
     235, 235, 191, 191, 235, 192, 0, 99, 58, 0, 110, 166, 0, 4, 69, 233, 0, 0, 69, 0, 0, 0, 0, 0,
@@ -89,7 +89,7 @@ const SOUND_ID_REMAP_V_26_2_TO_V_1_7_6: &[u16] = &[
     231, 230, 231, 230, 231, 235, 235, 231, 231, 235, 16, 231, 231, 231, 236, 0, 0, 233, 18, 231,
     231, 230, 231, 141, 40, 0, 0, 0, 0, 196,
 ];
-const SOUND_ID_REMAP_V_26_2_TO_V_1_8: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_1_8: &[u16] = &[
     0, 0, 64, 64, 213, 213, 213, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 40, 40, 0, 40, 56,
     56, 215, 0, 215, 215, 20, 215, 215, 215, 215, 215, 20, 215, 20, 235, 20, 235, 235, 20, 190,
     235, 235, 191, 191, 235, 192, 0, 99, 58, 0, 110, 166, 0, 4, 69, 233, 0, 0, 69, 0, 0, 0, 0, 0,
@@ -178,7 +178,7 @@ const SOUND_ID_REMAP_V_26_2_TO_V_1_8: &[u16] = &[
     231, 230, 231, 230, 231, 235, 235, 231, 231, 235, 16, 231, 231, 231, 236, 0, 0, 233, 18, 231,
     231, 230, 231, 141, 40, 0, 0, 0, 0, 196,
 ];
-const SOUND_ID_REMAP_V_26_2_TO_V_1_9: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_1_9: &[u16] = &[
     0, 0, 143, 145, 253, 253, 253, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 107, 107, 0,
     107, 170, 170, 128, 0, 128, 128, 97, 128, 128, 128, 128, 128, 97, 128, 60, 64, 63, 62, 61, 1,
     2, 3, 4, 5, 6, 7, 8, 234, 165, 168, 0, 240, 385, 283, 293, 150, 83, 0, 0, 150, 402, 403, 404,
@@ -270,7 +270,7 @@ const SOUND_ID_REMAP_V_26_2_TO_V_1_9: &[u16] = &[
     330, 331, 111, 44, 39, 44, 39, 44, 62, 64, 44, 44, 62, 37, 44, 44, 44, 111, 0, 0, 81, 79, 46,
     44, 39, 44, 332, 107, 0, 0, 0, 0, 289,
 ];
-const SOUND_ID_REMAP_V_26_2_TO_V_1_10: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_1_10: &[u16] = &[
     0, 0, 144, 146, 258, 258, 258, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 108, 108, 0,
     108, 171, 171, 129, 0, 129, 129, 98, 129, 129, 129, 129, 129, 98, 129, 61, 65, 64, 63, 62, 1,
     2, 3, 4, 5, 6, 7, 8, 235, 166, 169, 0, 241, 404, 288, 298, 151, 84, 0, 0, 151, 421, 422, 423,
@@ -362,7 +362,7 @@ const SOUND_ID_REMAP_V_26_2_TO_V_1_10: &[u16] = &[
     341, 342, 112, 45, 40, 45, 40, 45, 63, 65, 45, 45, 63, 38, 45, 45, 45, 112, 0, 0, 82, 80, 47,
     45, 40, 45, 343, 108, 0, 0, 0, 0, 294,
 ];
-const SOUND_ID_REMAP_V_26_2_TO_V_1_11: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_1_11: &[u16] = &[
     0, 0, 392, 393, 268, 268, 268, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 110, 110, 0,
     110, 173, 173, 131, 0, 131, 131, 100, 131, 131, 131, 131, 131, 100, 131, 61, 65, 64, 63, 62, 1,
     2, 3, 4, 5, 6, 7, 8, 245, 284, 171, 0, 251, 431, 308, 318, 153, 84, 0, 0, 153, 448, 449, 450,
@@ -454,7 +454,7 @@ const SOUND_ID_REMAP_V_26_2_TO_V_1_11: &[u16] = &[
     115, 360, 0, 361, 362, 114, 45, 40, 45, 40, 45, 63, 65, 45, 45, 63, 38, 45, 45, 45, 114, 0, 0,
     82, 80, 47, 45, 40, 45, 363, 110, 0, 0, 0, 0, 314,
 ];
-const SOUND_ID_REMAP_V_26_2_TO_V_1_12: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_1_12: &[u16] = &[
     0, 0, 445, 446, 286, 286, 286, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 117, 117, 151,
     117, 183, 183, 138, 0, 138, 138, 107, 138, 138, 138, 138, 138, 107, 138, 63, 67, 66, 65, 64, 1,
     2, 3, 4, 5, 6, 7, 8, 256, 302, 181, 375, 262, 484, 359, 371, 163, 91, 0, 0, 163, 501, 502, 503,
@@ -552,7 +552,7 @@ const SOUND_ID_REMAP_V_26_2_TO_V_1_12: &[u16] = &[
     47, 65, 67, 47, 47, 65, 40, 47, 47, 47, 121, 96, 94, 89, 87, 49, 47, 42, 47, 416, 117, 420,
     421, 422, 423, 365,
 ];
-const SOUND_ID_REMAP_V_26_2_TO_V_1_13: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_1_13: &[u16] = &[
     0, 0, 543, 544, 342, 342, 342, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5,
     6, 169, 0, 169, 169, 138, 169, 169, 169, 169, 169, 138, 169, 93, 97, 96, 95, 94, 7, 8, 9, 10,
     11, 12, 13, 14, 311, 358, 235, 440, 317, 226, 423, 435, 194, 538, 0, 0, 194, 601, 602, 603,
@@ -650,7 +650,7 @@ const SOUND_ID_REMAP_V_26_2_TO_V_1_13: &[u16] = &[
     60, 79, 78, 72, 61, 484, 153, 494, 501, 495, 496, 152, 77, 62, 77, 62, 77, 95, 97, 77, 77, 95,
     60, 77, 77, 77, 152, 127, 125, 120, 118, 79, 77, 62, 77, 497, 4, 501, 502, 503, 504, 429,
 ];
-const SOUND_ID_REMAP_V_26_2_TO_V_1_13_2: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_1_13_2: &[u16] = &[
     0, 0, 543, 544, 342, 342, 342, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5,
     6, 169, 0, 169, 169, 138, 169, 169, 169, 169, 169, 138, 169, 93, 97, 96, 95, 94, 7, 8, 9, 10,
     11, 12, 13, 14, 311, 358, 235, 440, 317, 226, 423, 435, 194, 538, 0, 0, 194, 601, 602, 603,
@@ -748,7 +748,7 @@ const SOUND_ID_REMAP_V_26_2_TO_V_1_13_2: &[u16] = &[
     60, 79, 78, 72, 61, 484, 153, 494, 501, 495, 496, 152, 77, 62, 77, 62, 77, 95, 97, 77, 77, 95,
     60, 77, 77, 77, 152, 127, 125, 120, 118, 79, 77, 62, 77, 497, 4, 501, 502, 503, 504, 429,
 ];
-const SOUND_ID_REMAP_V_26_2_TO_V_1_14: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_1_14: &[u16] = &[
     0, 0, 694, 695, 343, 343, 343, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5,
     6, 28, 0, 28, 28, 641, 28, 28, 28, 28, 28, 641, 28, 376, 382, 379, 378, 377, 7, 8, 9, 10, 11,
     12, 13, 14, 295, 368, 167, 431, 301, 158, 494, 507, 95, 430, 0, 0, 95, 15, 16, 17, 18, 19, 20,
@@ -850,7 +850,7 @@ const SOUND_ID_REMAP_V_26_2_TO_V_1_14: &[u16] = &[
     382, 277, 277, 378, 260, 277, 277, 277, 767, 605, 603, 553, 551, 279, 277, 33, 277, 602, 4,
     611, 612, 613, 614, 500,
 ];
-const SOUND_ID_REMAP_V_26_2_TO_V_1_15: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_1_15: &[u16] = &[
     0, 0, 709, 710, 363, 363, 363, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5,
     6, 28, 0, 28, 28, 656, 28, 28, 28, 28, 28, 656, 28, 396, 402, 399, 398, 397, 7, 8, 9, 10, 11,
     12, 13, 14, 313, 388, 178, 451, 319, 169, 509, 522, 106, 450, 0, 0, 106, 15, 16, 17, 18, 19,
@@ -952,7 +952,7 @@ const SOUND_ID_REMAP_V_26_2_TO_V_1_15: &[u16] = &[
     33, 288, 33, 288, 398, 402, 288, 288, 398, 271, 288, 288, 288, 782, 620, 301, 568, 566, 290,
     288, 33, 288, 617, 4, 626, 627, 628, 629, 515,
 ];
-const SOUND_ID_REMAP_V_26_2_TO_V_1_16: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_1_16: &[u16] = &[
     0, 0, 867, 868, 401, 401, 401, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
     18, 19, 20, 21, 49, 0, 49, 49, 814, 49, 49, 49, 49, 49, 814, 49, 22, 23, 24, 25, 26, 27, 28,
     29, 30, 31, 32, 33, 34, 359, 426, 212, 562, 365, 776, 633, 646, 139, 561, 0, 0, 139, 35, 36,
@@ -1054,7 +1054,7 @@ const SOUND_ID_REMAP_V_26_2_TO_V_1_16: &[u16] = &[
     755, 707, 65, 54, 65, 54, 65, 528, 526, 65, 65, 528, 319, 65, 65, 65, 946, 759, 347, 770, 762,
     63, 65, 54, 65, 756, 19, 782, 783, 784, 785, 639,
 ];
-const SOUND_ID_REMAP_V_26_2_TO_V_1_16_2: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_1_16_2: &[u16] = &[
     0, 0, 874, 875, 401, 401, 401, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
     18, 19, 20, 21, 49, 0, 49, 49, 821, 49, 49, 49, 49, 49, 821, 49, 22, 23, 24, 25, 26, 27, 28,
     29, 30, 31, 32, 33, 34, 359, 426, 212, 562, 365, 783, 640, 653, 139, 561, 0, 0, 139, 35, 36,
@@ -1156,7 +1156,7 @@ const SOUND_ID_REMAP_V_26_2_TO_V_1_16_2: &[u16] = &[
     762, 714, 65, 54, 65, 54, 65, 528, 526, 65, 65, 528, 319, 65, 65, 65, 953, 766, 347, 777, 769,
     63, 65, 54, 65, 763, 19, 789, 790, 791, 792, 646,
 ];
-const SOUND_ID_REMAP_V_26_2_TO_V_1_17: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_1_17: &[u16] = &[
     23, 23, 1068, 1069, 537, 537, 537, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
     17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
     40, 41, 42, 43, 44, 45, 494, 564, 68, 713, 500, 970, 791, 805, 198, 712, 23, 23, 198, 46, 47,
@@ -1264,7 +1264,7 @@ const SOUND_ID_REMAP_V_26_2_TO_V_1_17: &[u16] = &[
     163, 84, 163, 84, 258, 221, 219, 283, 283, 221, 372, 253, 95, 95, 1151, 941, 481, 959, 951, 93,
     163, 84, 258, 938, 19, 976, 977, 978, 979, 797,
 ];
-const SOUND_ID_REMAP_V_26_2_TO_V_1_18: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_1_18: &[u16] = &[
     23, 23, 1081, 1082, 541, 541, 541, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
     17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
     40, 41, 42, 43, 44, 45, 498, 568, 68, 726, 504, 983, 804, 818, 201, 725, 23, 23, 201, 46, 47,
@@ -1372,7 +1372,7 @@ const SOUND_ID_REMAP_V_26_2_TO_V_1_18: &[u16] = &[
     949, 950, 894, 166, 84, 166, 84, 261, 224, 222, 286, 286, 224, 375, 256, 95, 95, 1164, 954,
     485, 972, 964, 93, 166, 84, 261, 951, 19, 989, 990, 991, 992, 810,
 ];
-const SOUND_ID_REMAP_V_26_2_TO_V_1_19: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_1_19: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
     49, 50, 51, 52, 537, 607, 75, 795, 543, 1077, 874, 888, 210, 794, 0, 0, 210, 53, 54, 55, 56,
@@ -1480,7 +1480,7 @@ const SOUND_ID_REMAP_V_26_2_TO_V_1_19: &[u16] = &[
     1043, 1044, 964, 175, 91, 175, 91, 270, 233, 231, 295, 295, 233, 384, 265, 102, 102, 1282,
     1048, 516, 1066, 1058, 100, 175, 91, 270, 1045, 26, 1083, 1084, 1085, 1086, 413,
 ];
-const SOUND_ID_REMAP_V_26_2_TO_V_1_19_3: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_1_19_3: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
     49, 50, 51, 52, 587, 657, 75, 866, 593, 1148, 945, 959, 236, 865, 0, 0, 236, 53, 54, 55, 56,
@@ -1588,7 +1588,7 @@ const SOUND_ID_REMAP_V_26_2_TO_V_1_19_3: &[u16] = &[
     1354, 1113, 136, 1114, 1115, 1035, 190, 91, 190, 91, 305, 268, 266, 330, 330, 268, 419, 300,
     117, 117, 545, 1119, 566, 1137, 1129, 115, 190, 91, 305, 1116, 26, 1154, 1155, 1156, 1157, 448,
 ];
-const SOUND_ID_REMAP_V_26_2_TO_V_1_19_4: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_1_19_4: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
     49, 50, 51, 52, 1211, 700, 75, 1212, 636, 1198, 995, 1009, 268, 1210, 0, 0, 268, 53, 54, 55,
@@ -1697,7 +1697,7 @@ const SOUND_ID_REMAP_V_26_2_TO_V_1_19_4: &[u16] = &[
     192, 91, 343, 300, 298, 368, 368, 300, 457, 338, 117, 117, 588, 1169, 609, 1187, 1179, 115,
     192, 91, 343, 1166, 26, 1204, 1205, 1206, 1207, 491,
 ];
-const SOUND_ID_REMAP_V_26_2_TO_V_1_20: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_1_20: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 1227, 709, 76, 1228, 645, 1214, 1011, 1025, 272, 1226, 0, 0, 272, 54, 55, 56,
@@ -1806,7 +1806,7 @@ const SOUND_ID_REMAP_V_26_2_TO_V_1_20: &[u16] = &[
     1181, 1101, 196, 92, 196, 92, 347, 304, 302, 372, 372, 304, 461, 342, 118, 118, 597, 1185, 618,
     1203, 1195, 116, 196, 92, 347, 1182, 26, 1220, 1221, 1222, 1223, 500,
 ];
-const SOUND_ID_REMAP_V_26_2_TO_V_1_20_2: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_1_20_2: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 1227, 709, 76, 1228, 645, 1214, 1011, 1025, 272, 1226, 0, 0, 272, 54, 55, 56,
@@ -1916,7 +1916,7 @@ const SOUND_ID_REMAP_V_26_2_TO_V_1_20_2: &[u16] = &[
     347, 304, 302, 372, 372, 304, 461, 342, 118, 118, 597, 1185, 618, 1203, 1195, 116, 196, 92,
     347, 1182, 26, 1220, 1221, 1222, 1223, 500,
 ];
-const SOUND_ID_REMAP_V_26_2_TO_V_1_20_3: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_1_20_3: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 1269, 749, 76, 1270, 685, 1256, 1052, 1066, 281, 1268, 0, 0, 281, 54, 55, 56,
@@ -2027,7 +2027,7 @@ const SOUND_ID_REMAP_V_26_2_TO_V_1_20_3: &[u16] = &[
     376, 327, 325, 401, 401, 320, 490, 371, 118, 118, 626, 1227, 658, 1245, 1237, 116, 205, 92,
     376, 1224, 26, 1262, 1263, 1264, 1265, 529,
 ];
-const SOUND_ID_REMAP_V_26_2_TO_V_1_20_5: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_1_20_5: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
@@ -2139,7 +2139,7 @@ const SOUND_ID_REMAP_V_26_2_TO_V_1_20_5: &[u16] = &[
     431, 349, 520, 400, 133, 133, 656, 1273, 698, 1291, 1283, 131, 229, 107, 405, 1270, 26, 1308,
     1309, 1310, 1311, 559,
 ];
-const SOUND_ID_REMAP_V_26_2_TO_V_1_21: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_1_21: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
@@ -2251,7 +2251,7 @@ const SOUND_ID_REMAP_V_26_2_TO_V_1_21: &[u16] = &[
     431, 349, 520, 400, 133, 133, 656, 1276, 698, 1294, 1286, 131, 229, 107, 405, 1273, 26, 1311,
     1312, 1313, 1314, 559,
 ];
-const SOUND_ID_REMAP_V_26_2_TO_V_1_21_2: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_1_21_2: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
@@ -2363,7 +2363,7 @@ const SOUND_ID_REMAP_V_26_2_TO_V_1_21_2: &[u16] = &[
     107, 231, 107, 425, 1319, 1321, 451, 451, 351, 540, 420, 133, 133, 674, 1296, 716, 1314, 1306,
     131, 231, 107, 425, 1293, 26, 1336, 1337, 1338, 1339, 579,
 ];
-const SOUND_ID_REMAP_V_26_2_TO_V_1_21_4: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_1_21_4: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
@@ -2475,7 +2475,7 @@ const SOUND_ID_REMAP_V_26_2_TO_V_1_21_4: &[u16] = &[
     1297, 1298, 1218, 231, 107, 231, 107, 426, 1325, 1327, 452, 452, 351, 546, 421, 133, 133, 680,
     1302, 722, 1320, 1312, 131, 231, 107, 426, 1299, 26, 1351, 1352, 1353, 1354, 585,
 ];
-const SOUND_ID_REMAP_V_26_2_TO_V_1_21_5: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_1_21_5: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
@@ -2588,7 +2588,7 @@ const SOUND_ID_REMAP_V_26_2_TO_V_1_21_5: &[u16] = &[
     424, 133, 133, 684, 1318, 726, 1336, 1328, 131, 233, 107, 429, 1315, 26, 1367, 1368, 1369,
     1370, 589,
 ];
-const SOUND_ID_REMAP_V_26_2_TO_V_1_21_6: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_1_21_6: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
@@ -2701,7 +2701,7 @@ const SOUND_ID_REMAP_V_26_2_TO_V_1_21_6: &[u16] = &[
     463, 463, 353, 559, 424, 133, 133, 697, 1342, 747, 1360, 1352, 131, 233, 107, 429, 1339, 26,
     1391, 1392, 1393, 1394, 598,
 ];
-const SOUND_ID_REMAP_V_26_2_TO_V_1_21_7: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_1_21_7: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
@@ -2814,7 +2814,7 @@ const SOUND_ID_REMAP_V_26_2_TO_V_1_21_7: &[u16] = &[
     463, 463, 353, 559, 424, 133, 133, 697, 1343, 747, 1361, 1353, 131, 233, 107, 429, 1340, 26,
     1392, 1393, 1394, 1395, 598,
 ];
-const SOUND_ID_REMAP_V_26_2_TO_V_1_21_9: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_1_21_9: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
@@ -2927,7 +2927,7 @@ const SOUND_ID_REMAP_V_26_2_TO_V_1_21_9: &[u16] = &[
     1289, 234, 108, 234, 108, 460, 1408, 1410, 494, 494, 383, 590, 455, 134, 134, 728, 1385, 778,
     1403, 1395, 132, 234, 108, 460, 1382, 26, 1434, 1435, 1436, 1437, 629,
 ];
-const SOUND_ID_REMAP_V_26_2_TO_V_1_21_11: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_1_21_11: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
@@ -3041,7 +3041,7 @@ const SOUND_ID_REMAP_V_26_2_TO_V_1_21_11: &[u16] = &[
     1464, 516, 516, 405, 612, 477, 145, 145, 750, 1439, 800, 1457, 1449, 143, 245, 119, 482, 1436,
     26, 1485, 1486, 1487, 1488, 112,
 ];
-const SOUND_ID_REMAP_V_26_2_TO_V_26_1: &[u16] = &[
+const SOUND_ID_REMAP_V_26_3_TO_V_26_1: &[u16] = &[
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
     26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
     50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
@@ -3159,42 +3159,42 @@ const SOUND_ID_REMAP_V_26_2_TO_V_26_1: &[u16] = &[
 pub fn remap_sound_id_for_version(sound_id: u16, version: JavaMinecraftVersion) -> u16 {
     match version {
         pumpkin_util::version::JavaMinecraftVersion::V_1_7_2
-        | pumpkin_util::version::JavaMinecraftVersion::V_1_7_6 => SOUND_ID_REMAP_V_26_2_TO_V_1_7_6
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_7_6 => SOUND_ID_REMAP_V_26_3_TO_V_1_7_6
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_8 => SOUND_ID_REMAP_V_26_2_TO_V_1_8
+        pumpkin_util::version::JavaMinecraftVersion::V_1_8 => SOUND_ID_REMAP_V_26_3_TO_V_1_8
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
         pumpkin_util::version::JavaMinecraftVersion::V_1_9
         | pumpkin_util::version::JavaMinecraftVersion::V_1_9_1
         | pumpkin_util::version::JavaMinecraftVersion::V_1_9_2
-        | pumpkin_util::version::JavaMinecraftVersion::V_1_9_3 => SOUND_ID_REMAP_V_26_2_TO_V_1_9
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_9_3 => SOUND_ID_REMAP_V_26_3_TO_V_1_9
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_10 => SOUND_ID_REMAP_V_26_2_TO_V_1_10
+        pumpkin_util::version::JavaMinecraftVersion::V_1_10 => SOUND_ID_REMAP_V_26_3_TO_V_1_10
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
         pumpkin_util::version::JavaMinecraftVersion::V_1_11
-        | pumpkin_util::version::JavaMinecraftVersion::V_1_11_1 => SOUND_ID_REMAP_V_26_2_TO_V_1_11
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_11_1 => SOUND_ID_REMAP_V_26_3_TO_V_1_11
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
         pumpkin_util::version::JavaMinecraftVersion::V_1_12
         | pumpkin_util::version::JavaMinecraftVersion::V_1_12_1
-        | pumpkin_util::version::JavaMinecraftVersion::V_1_12_2 => SOUND_ID_REMAP_V_26_2_TO_V_1_12
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_12_2 => SOUND_ID_REMAP_V_26_3_TO_V_1_12
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
         pumpkin_util::version::JavaMinecraftVersion::V_1_13
-        | pumpkin_util::version::JavaMinecraftVersion::V_1_13_1 => SOUND_ID_REMAP_V_26_2_TO_V_1_13
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_13_1 => SOUND_ID_REMAP_V_26_3_TO_V_1_13
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_13_2 => SOUND_ID_REMAP_V_26_2_TO_V_1_13_2
+        pumpkin_util::version::JavaMinecraftVersion::V_1_13_2 => SOUND_ID_REMAP_V_26_3_TO_V_1_13_2
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
@@ -3202,103 +3202,103 @@ pub fn remap_sound_id_for_version(sound_id: u16, version: JavaMinecraftVersion) 
         | pumpkin_util::version::JavaMinecraftVersion::V_1_14_1
         | pumpkin_util::version::JavaMinecraftVersion::V_1_14_2
         | pumpkin_util::version::JavaMinecraftVersion::V_1_14_3
-        | pumpkin_util::version::JavaMinecraftVersion::V_1_14_4 => SOUND_ID_REMAP_V_26_2_TO_V_1_14
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_14_4 => SOUND_ID_REMAP_V_26_3_TO_V_1_14
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
         pumpkin_util::version::JavaMinecraftVersion::V_1_15
         | pumpkin_util::version::JavaMinecraftVersion::V_1_15_1
-        | pumpkin_util::version::JavaMinecraftVersion::V_1_15_2 => SOUND_ID_REMAP_V_26_2_TO_V_1_15
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_15_2 => SOUND_ID_REMAP_V_26_3_TO_V_1_15
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
         pumpkin_util::version::JavaMinecraftVersion::V_1_16
-        | pumpkin_util::version::JavaMinecraftVersion::V_1_16_1 => SOUND_ID_REMAP_V_26_2_TO_V_1_16
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_16_1 => SOUND_ID_REMAP_V_26_3_TO_V_1_16
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
         pumpkin_util::version::JavaMinecraftVersion::V_1_16_2
         | pumpkin_util::version::JavaMinecraftVersion::V_1_16_3
         | pumpkin_util::version::JavaMinecraftVersion::V_1_16_4 => {
-            SOUND_ID_REMAP_V_26_2_TO_V_1_16_2
+            SOUND_ID_REMAP_V_26_3_TO_V_1_16_2
                 .get(usize::from(sound_id))
                 .copied()
                 .unwrap_or(sound_id)
         }
         pumpkin_util::version::JavaMinecraftVersion::V_1_17
-        | pumpkin_util::version::JavaMinecraftVersion::V_1_17_1 => SOUND_ID_REMAP_V_26_2_TO_V_1_17
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_17_1 => SOUND_ID_REMAP_V_26_3_TO_V_1_17
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
         pumpkin_util::version::JavaMinecraftVersion::V_1_18
-        | pumpkin_util::version::JavaMinecraftVersion::V_1_18_2 => SOUND_ID_REMAP_V_26_2_TO_V_1_18
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_18_2 => SOUND_ID_REMAP_V_26_3_TO_V_1_18
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
         pumpkin_util::version::JavaMinecraftVersion::V_1_19
-        | pumpkin_util::version::JavaMinecraftVersion::V_1_19_1 => SOUND_ID_REMAP_V_26_2_TO_V_1_19
+        | pumpkin_util::version::JavaMinecraftVersion::V_1_19_1 => SOUND_ID_REMAP_V_26_3_TO_V_1_19
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_19_3 => SOUND_ID_REMAP_V_26_2_TO_V_1_19_3
+        pumpkin_util::version::JavaMinecraftVersion::V_1_19_3 => SOUND_ID_REMAP_V_26_3_TO_V_1_19_3
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_19_4 => SOUND_ID_REMAP_V_26_2_TO_V_1_19_4
+        pumpkin_util::version::JavaMinecraftVersion::V_1_19_4 => SOUND_ID_REMAP_V_26_3_TO_V_1_19_4
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_20 => SOUND_ID_REMAP_V_26_2_TO_V_1_20
+        pumpkin_util::version::JavaMinecraftVersion::V_1_20 => SOUND_ID_REMAP_V_26_3_TO_V_1_20
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_20_2 => SOUND_ID_REMAP_V_26_2_TO_V_1_20_2
+        pumpkin_util::version::JavaMinecraftVersion::V_1_20_2 => SOUND_ID_REMAP_V_26_3_TO_V_1_20_2
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_20_3 => SOUND_ID_REMAP_V_26_2_TO_V_1_20_3
+        pumpkin_util::version::JavaMinecraftVersion::V_1_20_3 => SOUND_ID_REMAP_V_26_3_TO_V_1_20_3
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_20_5 => SOUND_ID_REMAP_V_26_2_TO_V_1_20_5
+        pumpkin_util::version::JavaMinecraftVersion::V_1_20_5 => SOUND_ID_REMAP_V_26_3_TO_V_1_20_5
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_21 => SOUND_ID_REMAP_V_26_2_TO_V_1_21
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21 => SOUND_ID_REMAP_V_26_3_TO_V_1_21
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_21_2 => SOUND_ID_REMAP_V_26_2_TO_V_1_21_2
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21_2 => SOUND_ID_REMAP_V_26_3_TO_V_1_21_2
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_21_4 => SOUND_ID_REMAP_V_26_2_TO_V_1_21_4
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21_4 => SOUND_ID_REMAP_V_26_3_TO_V_1_21_4
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_21_5 => SOUND_ID_REMAP_V_26_2_TO_V_1_21_5
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21_5 => SOUND_ID_REMAP_V_26_3_TO_V_1_21_5
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_21_6 => SOUND_ID_REMAP_V_26_2_TO_V_1_21_6
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21_6 => SOUND_ID_REMAP_V_26_3_TO_V_1_21_6
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_21_7 => SOUND_ID_REMAP_V_26_2_TO_V_1_21_7
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21_7 => SOUND_ID_REMAP_V_26_3_TO_V_1_21_7
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
-        pumpkin_util::version::JavaMinecraftVersion::V_1_21_9 => SOUND_ID_REMAP_V_26_2_TO_V_1_21_9
+        pumpkin_util::version::JavaMinecraftVersion::V_1_21_9 => SOUND_ID_REMAP_V_26_3_TO_V_1_21_9
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),
         pumpkin_util::version::JavaMinecraftVersion::V_1_21_11 => {
-            SOUND_ID_REMAP_V_26_2_TO_V_1_21_11
+            SOUND_ID_REMAP_V_26_3_TO_V_1_21_11
                 .get(usize::from(sound_id))
                 .copied()
                 .unwrap_or(sound_id)
         }
-        pumpkin_util::version::JavaMinecraftVersion::V_26_1 => SOUND_ID_REMAP_V_26_2_TO_V_26_1
+        pumpkin_util::version::JavaMinecraftVersion::V_26_1 => SOUND_ID_REMAP_V_26_3_TO_V_26_1
             .get(usize::from(sound_id))
             .copied()
             .unwrap_or(sound_id),

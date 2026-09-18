@@ -1,0 +1,14 @@
+{
+  "features": {
+    "enabled": [
+      "minecraft:redstone_experiments"
+    ]
+  },
+  "pack": {
+    "description": {
+      "translate": "dataPack.redstone_experiments.description"
+    },
+    "max_format": 121,
+    "min_format": 121
+  }
+}

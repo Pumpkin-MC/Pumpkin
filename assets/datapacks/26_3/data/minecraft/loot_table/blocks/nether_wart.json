@@ -1,0 +1,50 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "modifier": [
+            {
+              "type": "minecraft:set_count",
+              "condition": {
+                "type": "minecraft:match_block",
+                "blocks": "minecraft:nether_wart",
+                "state": {
+                  "age": "3"
+                }
+              },
+              "count": {
+                "type": "minecraft:uniform",
+                "max": 4,
+                "min": 2
+              }
+            },
+            {
+              "type": "minecraft:apply_bonus",
+              "condition": {
+                "type": "minecraft:match_block",
+                "blocks": "minecraft:nether_wart",
+                "state": {
+                  "age": "3"
+                }
+              },
+              "enchantment": "minecraft:fortune",
+              "formula": "minecraft:uniform_bonus_count",
+              "parameters": {
+                "bonusMultiplier": 1
+              }
+            }
+          ],
+          "name": "minecraft:nether_wart"
+        }
+      ],
+      "modifier": {
+        "type": "minecraft:explosion_decay"
+      },
+      "rolls": 1
+    }
+  ],
+  "random_sequence": "minecraft:blocks/nether_wart"
+}

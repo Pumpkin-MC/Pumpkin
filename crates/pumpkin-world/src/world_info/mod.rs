@@ -240,25 +240,25 @@ pub struct WorldPreset {
 
 impl WorldPreset {
     pub const NORMAL_RAW: &'static str = include_str!(
-        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/world_preset/normal.json"
+        "../../../../assets/datapacks/26_3/data/minecraft/worldgen/world_preset/normal.json"
     );
     pub const AMPLIFIED_RAW: &'static str = include_str!(
-        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/world_preset/amplified.json"
+        "../../../../assets/datapacks/26_3/data/minecraft/worldgen/world_preset/amplified.json"
     );
     pub const LARGE_BIOMES_RAW: &'static str = include_str!(
-        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/world_preset/large_biomes.json"
+        "../../../../assets/datapacks/26_3/data/minecraft/worldgen/world_preset/large_biomes.json"
     );
     pub const FLAT_RAW: &'static str = include_str!(
-        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/world_preset/flat.json"
+        "../../../../assets/datapacks/26_3/data/minecraft/worldgen/world_preset/flat.json"
     );
     pub const FLAT_ALL_DIMENSIONS_RAW: &'static str = include_str!(
-        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/world_preset/flat_all_dimensions.json"
+        "../../../../assets/datapacks/26_3/data/minecraft/worldgen/world_preset/flat_all_dimensions.json"
     );
     pub const SINGLE_BIOME_SURFACE_RAW: &'static str = include_str!(
-        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/world_preset/single_biome_surface.json"
+        "../../../../assets/datapacks/26_3/data/minecraft/worldgen/world_preset/single_biome_surface.json"
     );
     pub const DEBUG_ALL_BLOCK_STATES_RAW: &'static str = include_str!(
-        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/world_preset/debug_all_block_states.json"
+        "../../../../assets/datapacks/26_3/data/minecraft/worldgen/world_preset/debug_all_block_states.json"
     );
 
     #[must_use]
@@ -367,31 +367,31 @@ pub struct FlatLevelGeneratorPreset {
 
 impl FlatLevelGeneratorPreset {
     pub const BOTTOMLESS_PIT_RAW: &'static str = include_str!(
-        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/flat_level_generator_preset/bottomless_pit.json"
+        "../../../../assets/datapacks/26_3/data/minecraft/worldgen/flat_level_generator_preset/bottomless_pit.json"
     );
     pub const CLASSIC_FLAT_RAW: &'static str = include_str!(
-        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/flat_level_generator_preset/classic_flat.json"
+        "../../../../assets/datapacks/26_3/data/minecraft/worldgen/flat_level_generator_preset/classic_flat.json"
     );
     pub const DESERT_RAW: &'static str = include_str!(
-        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/flat_level_generator_preset/desert.json"
+        "../../../../assets/datapacks/26_3/data/minecraft/worldgen/flat_level_generator_preset/desert.json"
     );
     pub const OVERWORLD_RAW: &'static str = include_str!(
-        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/flat_level_generator_preset/overworld.json"
+        "../../../../assets/datapacks/26_3/data/minecraft/worldgen/flat_level_generator_preset/overworld.json"
     );
     pub const REDSTONE_READY_RAW: &'static str = include_str!(
-        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/flat_level_generator_preset/redstone_ready.json"
+        "../../../../assets/datapacks/26_3/data/minecraft/worldgen/flat_level_generator_preset/redstone_ready.json"
     );
     pub const SNOWY_KINGDOM_RAW: &'static str = include_str!(
-        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/flat_level_generator_preset/snowy_kingdom.json"
+        "../../../../assets/datapacks/26_3/data/minecraft/worldgen/flat_level_generator_preset/snowy_kingdom.json"
     );
     pub const THE_VOID_RAW: &'static str = include_str!(
-        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/flat_level_generator_preset/the_void.json"
+        "../../../../assets/datapacks/26_3/data/minecraft/worldgen/flat_level_generator_preset/the_void.json"
     );
     pub const TUNNELERS_DREAM_RAW: &'static str = include_str!(
-        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/flat_level_generator_preset/tunnelers_dream.json"
+        "../../../../assets/datapacks/26_3/data/minecraft/worldgen/flat_level_generator_preset/tunnelers_dream.json"
     );
     pub const WATER_WORLD_RAW: &'static str = include_str!(
-        "../../../../assets/datapacks/26_2/data/minecraft/worldgen/flat_level_generator_preset/water_world.json"
+        "../../../../assets/datapacks/26_3/data/minecraft/worldgen/flat_level_generator_preset/water_world.json"
     );
 
     #[must_use]
