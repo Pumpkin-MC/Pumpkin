@@ -217,3 +217,32 @@ impl SynchedEntityData {
         Some(buf.into_boxed_slice())
     }
 }
+
+#[cfg(test)]
+mod test {
+    use pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMISATION;
+
+    use super::*;
+
+    /// Versions the metadata mapping does not cover serialize to nothing, so the
+    /// senders do not need a version check of their own to leave them alone.
+    #[test]
+    fn values_are_only_serialized_for_mapped_versions() {
+        let data = SynchedEntityData::new();
+        data.define(PLAYER_MODE_CUSTOMISATION, 0u8);
+        assert!(data.set(PLAYER_MODE_CUSTOMISATION, 0x7Fu8));
+
+        assert!(
+            data.get_non_default_values_for_version(&JavaMinecraftVersion::V_26_3)
+                .is_some()
+        );
+        assert!(
+            data.get_non_default_values_for_version(&JavaMinecraftVersion::V_1_20_5)
+                .is_none()
+        );
+        assert!(
+            data.pack_dirty_for_version(&JavaMinecraftVersion::V_1_20_5)
+                .is_none()
+        );
+    }
+}

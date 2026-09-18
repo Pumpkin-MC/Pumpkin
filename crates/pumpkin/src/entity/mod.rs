@@ -3278,10 +3278,6 @@ impl Entity {
             World::collect_java_recipients_by_version(java_recipients.into_iter());
 
         for (version, recipients) in recipients_by_version {
-            // TODO: Support older versions (same limitation as `EntityTracker::add_pairing`).
-            if version < JavaMinecraftVersion::V_1_21 {
-                continue;
-            }
             if let Some(buf) = self
                 .synched_data
                 .get_non_default_values_for_version(&version)
