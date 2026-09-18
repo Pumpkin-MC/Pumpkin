@@ -6,6 +6,12 @@ on:
       - master
   pull_request:
   workflow_dispatch:
+    inputs:
+      rust_toolchain_version:
+        description: Rust toolchain version to use
+        required: false
+        default: stable
+        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -13,6 +19,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  CI_RUST_TOOLCHAIN_VER: ${{ inputs.rust_toolchain_version || 'stable' }}
   RUSTFLAGS: "-Dwarnings"
 
 jobs:
@@ -54,7 +61,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - run: rustup update stable && rustup default stable
+      - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
       - run: rustup component add rustfmt
       - run: cargo fmt --check
 
@@ -67,7 +74,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - run: rustup update stable && rustup default stable
+      - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
       - uses: bnjbvr/cargo-machete@main
 
   clippy:
@@ -84,7 +91,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.x"
-      - run: rustup update stable && rustup default stable
+      - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
       - run: rustup component add clippy
       - uses: Swatinem/rust-cache@v2
         with:
@@ -103,7 +110,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - run: rustup update stable && rustup default stable
+      - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
       - run: rustup component add clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --release --all-targets --all-features
@@ -143,7 +150,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.x"
-      - run: rustup update stable && rustup default stable
+      - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
       - uses: taiki-e/install-action@nextest
       - uses: Swatinem/rust-cache@v2
         with:
@@ -172,9 +179,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-linux-android
+      - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
+      - run: rustup target add aarch64-linux-android
       - uses: nttld/setup-ndk@v1
         with:
           ndk-version: r27c
@@ -228,7 +234,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.x"
-      - run: rustup update stable && rustup default stable
+      - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: debug-${{ runner.os }}-${{ runner.arch }}
@@ -256,9 +262,8 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.x"
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-linux-android
+      - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
+      - run: rustup target add aarch64-linux-android
       - uses: nttld/setup-ndk@v1
         with:
           ndk-version: r27c
@@ -296,7 +301,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - run: rustup update stable && rustup default stable
+      - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
       - uses: Swatinem/rust-cache@v2
       - name: Install musl-tools (Linux only)
         if: runner.os == 'Linux'
@@ -347,9 +352,8 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-linux-android
+      - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
+      - run: rustup target add aarch64-linux-android
       - uses: nttld/setup-ndk@v1
         with:
           ndk-version: r27c

@@ -42,23 +42,41 @@ FULL_REBUILD_PATHS = {
     "rust-toolchain.toml",
 }
 
-NON_RUST_ROOTS = {
+RUST_CI_IGNORED_ROOTS = {
     ".github/ISSUE_TEMPLATE",
+    ".devcontainer",
     "docs",
 }
 
-NON_RUST_FILES = {
+RUST_CI_IGNORED_FILES = {
     ".github/dependabot.yml",
     ".github/FUNDING.yml",
     ".github/PULL_REQUEST_TEMPLATE.md",
     ".github/workflows/nix.yml",
+    ".github/workflows/docker.yml",
+    ".github/workflows/release.yml",
     ".github/workflows/reviewers.yml",
+    ".github/workflows/sync-wit.yml",
     ".github/workflows/typos.yml",
+    ".dockerignore",
+    ".editorconfig",
+    ".envrc",
+    ".gitignore",
     "CODE_OF_CONDUCT.md",
     "CONTRIBUTING.md",
+    "Dockerfile",
     "LICENSE",
     "README.md",
     "SECURITY.md",
+    "assets/NOTICE.md",
+    "assets/bedrock/README.md",
+    "default.nix",
+    "docker-compose.yml",
+    "egg-pumpkin.json",
+    "flake.lock",
+    "flake.nix",
+    "shell.nix",
+    "typos.toml",
 }
 
 WIT_ROOT = Path("crates/pumpkin-plugin-wit")
@@ -116,13 +134,13 @@ def package_graph(
     return relative_roots, reverse_dependencies
 
 
-def is_non_rust_change(path: Path) -> bool:
+def is_rust_ci_ignored_change(path: Path) -> bool:
     path_text = path.as_posix()
-    if path_text in NON_RUST_FILES:
+    if path_text in RUST_CI_IGNORED_FILES:
         return True
     return any(
         path_text == root or path_text.startswith(f"{root}/")
-        for root in NON_RUST_ROOTS
+        for root in RUST_CI_IGNORED_ROOTS
     )
 
 
@@ -183,7 +201,7 @@ def select_packages(
             directly_affected.add(package_roots[package_root])
             continue
 
-        if is_non_rust_change(path):
+        if is_rust_ci_ignored_change(path):
             continue
 
         # Unknown repository-level inputs may be consumed by build scripts or
