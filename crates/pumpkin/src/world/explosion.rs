@@ -574,8 +574,30 @@ impl Explosion {
 
 #[cfg(test)]
 mod tests {
-    use super::Explosion;
+    use super::{BlockInteraction, Explosion};
     use pumpkin_data::Block;
+    use pumpkin_util::math::vector3::Vector3;
+
+    #[test]
+    fn explosions_are_non_incendiary_by_default() {
+        let explosion = Explosion::new(
+            5.0,
+            Vector3::new(0.0, 0.0, 0.0),
+            BlockInteraction::Destroy,
+        );
+        assert!(!explosion.create_fire);
+    }
+
+    #[test]
+    fn explosions_can_opt_in_to_fire() {
+        let explosion = Explosion::new(
+            5.0,
+            Vector3::new(0.0, 0.0, 0.0),
+            BlockInteraction::Destroy,
+        )
+        .with_fire();
+        assert!(explosion.create_fire);
+    }
 
     #[test]
     fn tnt_minecart_rail_protection_covers_every_rail_type() {
