@@ -34,8 +34,8 @@ use crate::entity::{Entity, EntityBase};
 use crate::item::ItemMetadata;
 use crate::item::items::boat::BoatItem;
 use crate::item::items::bucket::{
-    FilledBucketItem, get_mob_for_bucket, play_bucket_evaporation, should_evaporate_in_nether,
-    try_pickup_fluid_at, try_place_filled_bucket,
+    FilledBucketItem, get_empty_sound, get_mob_for_bucket, play_bucket_evaporation,
+    should_evaporate_in_nether, try_pickup_fluid_at, try_place_filled_bucket,
 };
 use crate::item::items::honeycomb::try_wax_block;
 use crate::item::items::ignite::ignition::Ignition;
@@ -846,7 +846,13 @@ impl DispenserBlock {
                 let mob = from_type(entity_type, spawn_pos, ctx.world, Uuid::new_v4());
                 ctx.world.spawn_entity(mob);
             }
+            // The player bucket path plays the bucket-specific empty sound
+            // after placing; the dispenser must do the same, not just the
+            // generic dispense sound.
+            let empty_sound = get_empty_sound(item.item);
             *item = ItemStack::new(1, &Item::BUCKET);
+            ctx.world
+                .play_sound(empty_sound, SoundCategory::Blocks, &front.to_f64());
             Self::play_dispense_effects(ctx, WorldEvent::SoundDispenserDispense);
         } else {
             Self::drop_item(ctx, item);

@@ -87,7 +87,7 @@ pub(crate) const fn get_mob_for_bucket(item: &Item) -> Option<(&'static EntityTy
     }
 }
 
-const fn get_empty_sound(item: &Item) -> Sound {
+pub(crate) const fn get_empty_sound(item: &Item) -> Sound {
     if let Some((_, sound)) = get_mob_for_bucket(item) {
         sound
     } else if item.id == Item::LAVA_BUCKET.id {
