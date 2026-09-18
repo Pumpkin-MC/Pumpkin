@@ -183,6 +183,7 @@ pub fn build() -> TokenStream {
                     forking::ForkingTrunkPlacer,
                     giant::GiantTrunkPlacer,
                     mega_jungle::MegaJungleTrunkPlacer,
+                    poplar::PoplarTrunkPlacer,
                     straight::StraightTrunkPlacer,
                     upwards_branching::UpwardsBranchingTrunkPlacer,
                 },
@@ -196,6 +197,7 @@ pub fn build() -> TokenStream {
                     jungle::JungleFoliagePlacer,
                     mega_pine::MegaPineFoliagePlacer,
                     pine::PineFoliagePlacer,
+                    poplar::PoplarFoliagePlacer,
                     random_spread::RandomSpreadFoliagePlacer,
                     spruce::SpruceFoliagePlacer,
                 },
@@ -1516,6 +1518,16 @@ fn value_to_trunk_placer(v: &Value) -> TokenStream {
                 })
             }
         }
+        "minecraft:poplar_trunk_placer" => {
+            let above = value_to_int_provider(&v["trunk_height_above_branches"]);
+            let branches = value_to_int_provider(&v["branch_amount"]);
+            quote! {
+                TrunkType::Poplar(PoplarTrunkPlacer {
+                    trunk_height_above_branches: #above,
+                    branch_amount: #branches,
+                })
+            }
+        }
         _ => quote! { TrunkType::Straight(StraightTrunkPlacer) },
     };
     quote! {
@@ -1594,6 +1606,16 @@ fn value_to_foliage_placer(v: &Value) -> TokenStream {
                     corner_hole_chance: #ch,
                     hanging_leaves_chance: #hlc,
                     hanging_leaves_extension_chance: #hlec,
+                })
+            }
+        }
+        "minecraft:poplar_foliage_placer" => {
+            let height = value_to_int_provider(&v["height"]);
+            let side_hole_chance = v["side_hole_chance"].as_f64().unwrap_or(0.0) as f32;
+            quote! {
+                FoliageType::Poplar(PoplarFoliagePlacer {
+                    height: #height,
+                    side_hole_chance: #side_hole_chance,
                 })
             }
         }

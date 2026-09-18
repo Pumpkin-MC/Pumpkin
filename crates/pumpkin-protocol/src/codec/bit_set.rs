@@ -11,6 +11,8 @@ use pumpkin_util::version::JavaMinecraftVersion;
 pub struct BitSet(pub Box<[i64]>);
 
 impl BitSet {
+    const MAX_LENGTH: i32 = 1024;
+
     #[must_use]
     pub fn from_u64(val: u64) -> Self {
         Self(Box::new([val as i64]))
@@ -65,6 +67,13 @@ impl BitSet {
         self.0.iter().map(|&w| (w as u64).count_ones()).sum()
     }
 
+    fn checked_len(length: i32) -> Result<usize, ReadingError> {
+        if !(0..=Self::MAX_LENGTH).contains(&length) {
+            return Err(ReadingError::TooLarge("BitSet".to_string()));
+        }
+        Ok(length as usize)
+    }
+
     pub fn encode(&self, write: &mut impl Write) -> Result<(), WritingError> {
         write.write_var_int(&self.0.len().try_into().map_err(|_| {
             WritingError::Message(format!("{} isn't representable as a VarInt", self.0.len()))
@@ -79,9 +88,9 @@ impl BitSet {
 
     pub fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
         // Read length
-        let length = read.get_var_int()?;
-        let mut array: Vec<i64> = Vec::with_capacity(length.0 as usize);
-        for _ in 0..length.0 {
+        let length = Self::checked_len(read.get_var_int()?.0)?;
+        let mut array: Vec<i64> = Vec::with_capacity(length);
+        for _ in 0..length {
             let long = read.get_i64_be()?;
             array.push(long);
         }
@@ -121,7 +130,7 @@ impl BitSet {
             return Self::decode(read);
         }
 
-        let length = read.get_var_int()?.0 as usize;
+        let length = Self::checked_len(read.get_var_int()?.0)?;
         let mut bytes = vec![0u8; length];
         read.read_bytes_to_buf(&mut bytes)?;
 
@@ -164,6 +173,21 @@ mod tests {
     }
 
     #[test]
+    fn bitset_26_3_empty_encodes_as_an_empty_byte_array() {
+        let mut bytes = Vec::new();
+        BitSet::default()
+            .encode_with_version(&mut bytes, &JavaMinecraftVersion::V_26_3)
+            .expect("encoding failed");
+
+        assert_eq!(bytes, vec![0]);
+
+        let decoded =
+            BitSet::decode_with_version(&mut bytes.as_slice(), &JavaMinecraftVersion::V_26_3)
+                .expect("decoding failed");
+        assert!(!decoded.get_bit(0));
+    }
+
+    #[test]
     fn bitset_before_26_3_stays_a_long_array() {
         let bitset = BitSet::from_u64(1);
 
@@ -173,5 +197,17 @@ mod tests {
             .expect("encoding failed");
 
         assert_eq!(bytes, vec![1, 0, 0, 0, 0, 0, 0, 0, 1]);
+    }
+
+    #[test]
+    fn bitset_rejects_an_out_of_range_length() {
+        // Negative when read as a var int
+        let negative = [0xFF, 0xFF, 0xFF, 0xFF, 0x0F];
+
+        for version in [JavaMinecraftVersion::V_26_3, JavaMinecraftVersion::V_26_2] {
+            let err = BitSet::decode_with_version(&mut negative.as_slice(), &version)
+                .expect_err("a negative length should be rejected");
+            assert!(matches!(err, ReadingError::TooLarge(_)), "got {err:?}");
+        }
     }
 }

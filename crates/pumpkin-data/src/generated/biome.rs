@@ -1167,7 +1167,7 @@ impl Biome {
     pub const DAPPLED_FOREST: Biome = Biome {
         id: 8,
         registry_id: "dappled_forest",
-        be_network_id: 1u8,
+        be_network_id: 195u8,
         weather: Weather::new(true, 0.6f32, TemperatureModifier::None, 0.6f32),
         features: &[
             &[],
@@ -7540,7 +7540,7 @@ impl Biome {
     pub const SULFUR_CAVES: Biome = Biome {
         id: 54,
         registry_id: "sulfur_caves",
-        be_network_id: 1u8,
+        be_network_id: 194u8,
         weather: Weather::new(true, 0.8f32, TemperatureModifier::None, 0.4f32),
         features: &[
             &[],

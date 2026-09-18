@@ -54,7 +54,7 @@ fn build_configured_features()
             FoliagePlacer, FoliageType, acacia::AcaciaFoliagePlacer, blob::BlobFoliagePlacer,
             bush::BushFoliagePlacer, cherry::CherryFoliagePlacer, dark_oak::DarkOakFoliagePlacer,
             fancy::LargeOakFoliagePlacer, jungle::JungleFoliagePlacer,
-            mega_pine::MegaPineFoliagePlacer, pine::PineFoliagePlacer,
+            mega_pine::MegaPineFoliagePlacer, pine::PineFoliagePlacer, poplar::PoplarFoliagePlacer,
             random_spread::RandomSpreadFoliagePlacer, spruce::SpruceFoliagePlacer,
         },
         tree::root::{
@@ -64,7 +64,7 @@ fn build_configured_features()
         tree::trunk::{
             TrunkPlacer, TrunkType, bending::BendingTrunkPlacer, cherry::CherryTrunkPlacer,
             dark_oak::DarkOakTrunkPlacer, fancy::FancyTrunkPlacer, forking::ForkingTrunkPlacer,
-            giant::GiantTrunkPlacer, mega_jungle::MegaJungleTrunkPlacer,
+            giant::GiantTrunkPlacer, mega_jungle::MegaJungleTrunkPlacer, poplar::PoplarTrunkPlacer,
             straight::StraightTrunkPlacer, upwards_branching::UpwardsBranchingTrunkPlacer,
         },
         vegetation_patch::VegetationPatchFeature,
@@ -7299,7 +7299,15 @@ fn build_configured_features()
                 base_height: 7u8,
                 height_rand_a: 4u8,
                 height_rand_b: 0u8,
-                r#type: TrunkType::Straight(StraightTrunkPlacer),
+                r#type: TrunkType::Poplar(PoplarTrunkPlacer {
+                    trunk_height_above_branches: IntProvider::Constant(4i32),
+                    branch_amount: IntProvider::Object(NormalIntProvider::Uniform(
+                        UniformIntProvider {
+                            min_inclusive: 1i32,
+                            max_inclusive: 4i32,
+                        },
+                    )),
+                }),
             },
             foliage_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -7338,7 +7346,13 @@ fn build_configured_features()
                     },
                 )),
                 offset: IntProvider::Constant(0i32),
-                r#type: FoliageType::Blob(BlobFoliagePlacer { height: 3i32 }),
+                r#type: FoliageType::Poplar(PoplarFoliagePlacer {
+                    height: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                        min_inclusive: 5i32,
+                        max_inclusive: 6i32,
+                    })),
+                    side_hole_chance: 0.15f32,
+                }),
             },
             minimum_size: FeatureSize {
                 min_clipped_height: None,
@@ -7374,7 +7388,15 @@ fn build_configured_features()
                 base_height: 7u8,
                 height_rand_a: 4u8,
                 height_rand_b: 0u8,
-                r#type: TrunkType::Straight(StraightTrunkPlacer),
+                r#type: TrunkType::Poplar(PoplarTrunkPlacer {
+                    trunk_height_above_branches: IntProvider::Constant(4i32),
+                    branch_amount: IntProvider::Object(NormalIntProvider::Uniform(
+                        UniformIntProvider {
+                            min_inclusive: 1i32,
+                            max_inclusive: 4i32,
+                        },
+                    )),
+                }),
             },
             foliage_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -7413,7 +7435,13 @@ fn build_configured_features()
                     },
                 )),
                 offset: IntProvider::Constant(0i32),
-                r#type: FoliageType::Blob(BlobFoliagePlacer { height: 3i32 }),
+                r#type: FoliageType::Poplar(PoplarFoliagePlacer {
+                    height: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                        min_inclusive: 5i32,
+                        max_inclusive: 6i32,
+                    })),
+                    side_hole_chance: 0.15f32,
+                }),
             },
             minimum_size: FeatureSize {
                 min_clipped_height: None,
@@ -8607,7 +8635,15 @@ fn build_configured_features()
                 base_height: 7u8,
                 height_rand_a: 4u8,
                 height_rand_b: 0u8,
-                r#type: TrunkType::Straight(StraightTrunkPlacer),
+                r#type: TrunkType::Poplar(PoplarTrunkPlacer {
+                    trunk_height_above_branches: IntProvider::Constant(4i32),
+                    branch_amount: IntProvider::Object(NormalIntProvider::Uniform(
+                        UniformIntProvider {
+                            min_inclusive: 1i32,
+                            max_inclusive: 4i32,
+                        },
+                    )),
+                }),
             },
             foliage_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -8646,7 +8682,13 @@ fn build_configured_features()
                     },
                 )),
                 offset: IntProvider::Constant(0i32),
-                r#type: FoliageType::Blob(BlobFoliagePlacer { height: 3i32 }),
+                r#type: FoliageType::Poplar(PoplarFoliagePlacer {
+                    height: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                        min_inclusive: 5i32,
+                        max_inclusive: 6i32,
+                    })),
+                    side_hole_chance: 0.15f32,
+                }),
             },
             minimum_size: FeatureSize {
                 min_clipped_height: None,
@@ -8682,7 +8724,15 @@ fn build_configured_features()
                 base_height: 7u8,
                 height_rand_a: 4u8,
                 height_rand_b: 0u8,
-                r#type: TrunkType::Straight(StraightTrunkPlacer),
+                r#type: TrunkType::Poplar(PoplarTrunkPlacer {
+                    trunk_height_above_branches: IntProvider::Constant(4i32),
+                    branch_amount: IntProvider::Object(NormalIntProvider::Uniform(
+                        UniformIntProvider {
+                            min_inclusive: 1i32,
+                            max_inclusive: 4i32,
+                        },
+                    )),
+                }),
             },
             foliage_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -8721,7 +8771,13 @@ fn build_configured_features()
                     },
                 )),
                 offset: IntProvider::Constant(0i32),
-                r#type: FoliageType::Blob(BlobFoliagePlacer { height: 3i32 }),
+                r#type: FoliageType::Poplar(PoplarFoliagePlacer {
+                    height: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                        min_inclusive: 5i32,
+                        max_inclusive: 6i32,
+                    })),
+                    side_hole_chance: 0.15f32,
+                }),
             },
             minimum_size: FeatureSize {
                 min_clipped_height: None,
@@ -11507,7 +11563,15 @@ fn build_configured_features()
                 base_height: 7u8,
                 height_rand_a: 4u8,
                 height_rand_b: 0u8,
-                r#type: TrunkType::Straight(StraightTrunkPlacer),
+                r#type: TrunkType::Poplar(PoplarTrunkPlacer {
+                    trunk_height_above_branches: IntProvider::Constant(4i32),
+                    branch_amount: IntProvider::Object(NormalIntProvider::Uniform(
+                        UniformIntProvider {
+                            min_inclusive: 1i32,
+                            max_inclusive: 4i32,
+                        },
+                    )),
+                }),
             },
             foliage_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -11546,7 +11610,13 @@ fn build_configured_features()
                     },
                 )),
                 offset: IntProvider::Constant(0i32),
-                r#type: FoliageType::Blob(BlobFoliagePlacer { height: 3i32 }),
+                r#type: FoliageType::Poplar(PoplarFoliagePlacer {
+                    height: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                        min_inclusive: 5i32,
+                        max_inclusive: 6i32,
+                    })),
+                    side_hole_chance: 0.15f32,
+                }),
             },
             minimum_size: FeatureSize {
                 min_clipped_height: None,
@@ -11582,7 +11652,15 @@ fn build_configured_features()
                 base_height: 7u8,
                 height_rand_a: 4u8,
                 height_rand_b: 0u8,
-                r#type: TrunkType::Straight(StraightTrunkPlacer),
+                r#type: TrunkType::Poplar(PoplarTrunkPlacer {
+                    trunk_height_above_branches: IntProvider::Constant(4i32),
+                    branch_amount: IntProvider::Object(NormalIntProvider::Uniform(
+                        UniformIntProvider {
+                            min_inclusive: 1i32,
+                            max_inclusive: 4i32,
+                        },
+                    )),
+                }),
             },
             foliage_provider: BlockStateProvider::Simple(SimpleStateProvider {
                 state: {
@@ -11621,7 +11699,13 @@ fn build_configured_features()
                     },
                 )),
                 offset: IntProvider::Constant(0i32),
-                r#type: FoliageType::Blob(BlobFoliagePlacer { height: 3i32 }),
+                r#type: FoliageType::Poplar(PoplarFoliagePlacer {
+                    height: IntProvider::Object(NormalIntProvider::Uniform(UniformIntProvider {
+                        min_inclusive: 5i32,
+                        max_inclusive: 6i32,
+                    })),
+                    side_hole_chance: 0.15f32,
+                }),
             },
             minimum_size: FeatureSize {
                 min_clipped_height: None,
