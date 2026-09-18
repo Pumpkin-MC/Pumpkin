@@ -585,6 +585,9 @@ impl Level {
             .map(|p| *p)
             .collect();
         for pos in scheduled_chunk_pos {
+            if !active_chunks.contains(&pos) {
+                continue;
+            }
             if let Some(chunk) = self.loaded_chunks.get(&pos) {
                 let chunk = chunk.value();
                 ticks.block_ticks.append(&mut chunk.block_ticks.step_tick());
@@ -1065,5 +1068,28 @@ mod tests {
 
         let end_level = Level::from_root_folder(&config, root.clone(), 0, Dimension::THE_END);
         assert_eq!(end_level.level_folder.dim_folder, root.join("DIM1"));
+    }
+
+    #[tokio::test]
+    async fn scheduled_ticks_wait_for_inactive_chunks() {
+        let temp_dir = TempDir::new().unwrap();
+        let level = Level::from_root_folder(
+            &LevelConfig::default(),
+            temp_dir.path().to_path_buf(),
+            0,
+            Dimension::OVERWORLD,
+        );
+        let chunk_pos = Vector2::new(2, 3);
+        let block_pos = BlockPos::new(32, 64, 48);
+        level
+            .loaded_chunks
+            .insert(chunk_pos, ChunkData::empty_sync(chunk_pos.x, chunk_pos.y));
+        level.schedule_block_tick(&Block::STONE, block_pos, 0, TickPriority::Normal);
+
+        let inactive = FxHashSet::default();
+        assert!(level.get_tick_data(&inactive, 0).block_ticks.is_empty());
+
+        let active = FxHashSet::from_iter([chunk_pos]);
+        assert_eq!(level.get_tick_data(&active, 0).block_ticks.len(), 1);
     }
 }
