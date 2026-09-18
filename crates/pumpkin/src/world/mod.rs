@@ -4115,6 +4115,8 @@ impl World {
         self.send_to_tracking_players_editioned(from.get_entity(), &je_packet, &be_mob_equipment);
     }
 
+    /// Brings a player that just joined this world up to date: world border, spawn
+    /// packet for the other players, entity data, chunks around the given position.
     pub fn send_world_info(
         &self,
         player: &Arc<Player>,

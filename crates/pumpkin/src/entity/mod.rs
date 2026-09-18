@@ -3145,7 +3145,8 @@ impl Entity {
     }
 
     /// The Java players that should receive entity data for this entity: everyone
-    /// tracking it, plus the entity itself when it is a player.
+    /// tracking it, plus the entity itself when it is a player. Until the entity is
+    /// tracked, every player watching its chunk stands in for the tracker.
     fn java_metadata_recipients<'a>(
         &self,
         world: &World,
@@ -3165,10 +3166,14 @@ impl Entity {
         } else {
             let chunk_pos = self.chunk_pos.load();
             for player in players {
-                if player
-                    .watched_section
-                    .load()
-                    .is_within_distance(chunk_pos.x, chunk_pos.y)
+                // A player that just changed world is in the new world's player list but
+                // not in its tracker yet, and its watched section still points at the
+                // world it left, so it has to be matched on its entity id instead.
+                if (player.entity_id() == self.entity_id
+                    || player
+                        .watched_section
+                        .load()
+                        .is_within_distance(chunk_pos.x, chunk_pos.y))
                     && let ClientPlatform::Java(_) = player.client.as_ref()
                 {
                     java_recipients.push(player);
@@ -3179,6 +3184,8 @@ impl Entity {
         java_recipients
     }
 
+    /// Sends the given metadata entries to this entity's viewers, and the matching
+    /// actor data to the Bedrock ones when `bedrock_meta` is given.
     pub fn send_meta_data<T: MetadataSerializer>(
         &self,
         meta: &[Metadata<T>],
@@ -3217,6 +3224,8 @@ impl Entity {
         }
     }
 
+    /// Sends the synced values that changed since the last call to this entity's
+    /// viewers, and does nothing when none did.
     pub fn send_dirty_entity_data(&self) {
         if !self.synched_data.is_dirty() {
             return;
