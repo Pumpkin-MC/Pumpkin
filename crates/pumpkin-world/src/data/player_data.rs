@@ -154,12 +154,17 @@ impl PlayerDataStorage {
         let temp_path =
             path.with_extension(format!("dat_new.{}.{}", std::process::id(), temp_unique));
         match File::create(&temp_path) {
-            Ok(file) => {
-                if let Err(e) = pumpkin_nbt::nbt_compress::write_gzip_compound_tag(data, file) {
+            Ok(mut file) => {
+                // Write through a &mut so the write handle stays alive for the
+                // fsync below: opening a second, read-only handle for sync_all
+                // fails with Access Denied on Windows (FlushFileBuffers needs
+                // write access).
+                let written = pumpkin_nbt::nbt_compress::write_gzip_compound_tag(data, &mut file);
+                if let Err(e) = written {
                     error!("Failed to write compressed player data for {uuid}: {e}");
                     let _ = std::fs::remove_file(&temp_path);
                     Err(PlayerDataError::Nbt(e.to_string()))
-                } else if let Err(e) = File::open(&temp_path).and_then(|f| f.sync_all()) {
+                } else if let Err(e) = file.sync_all() {
                     // Flush the new file to stable storage BEFORE the swap:
                     // without an fsync the rename can become durable while
                     // the data itself is still in the page cache, so a power
@@ -167,21 +172,28 @@ impl PlayerDataStorage {
                     error!("Failed to sync player data file for {uuid}: {e}");
                     let _ = std::fs::remove_file(&temp_path);
                     Err(PlayerDataError::Io(e))
-                } else if let Err(e) = std::fs::rename(&temp_path, &path) {
-                    error!("Failed to install player data file for {uuid}: {e}");
-                    let _ = std::fs::remove_file(&temp_path);
-                    Err(PlayerDataError::Io(e))
                 } else {
-                    // Sync the parent directory so the rename itself is
-                    // durable. Best-effort: the data file is already synced,
-                    // and some filesystems do not support directory fsync.
-                    if let Some(parent) = path.parent()
-                        && let Err(e) = File::open(parent).and_then(|d| d.sync_all())
-                    {
-                        warn!("Failed to sync player data directory for {uuid}: {e}");
+                    // Windows refuses to rename a file while any handle to it
+                    // is open; the write handle must be dropped first.
+                    drop(file);
+                    if let Err(e) = std::fs::rename(&temp_path, &path) {
+                        error!("Failed to install player data file for {uuid}: {e}");
+                        let _ = std::fs::remove_file(&temp_path);
+                        Err(PlayerDataError::Io(e))
+                    } else {
+                        // Sync the parent directory so the rename itself is
+                        // durable. Best-effort: the data file is already synced,
+                        // and some filesystems do not support directory fsync
+                        // (Windows cannot open directories as files at all).
+                        if cfg!(unix)
+                            && let Some(parent) = path.parent()
+                            && let Err(e) = File::open(parent).and_then(|d| d.sync_all())
+                        {
+                            warn!("Failed to sync player data directory for {uuid}: {e}");
+                        }
+                        debug!("Saved player data for {uuid} to disk");
+                        Ok(())
                     }
-                    debug!("Saved player data for {uuid} to disk");
-                    Ok(())
                 }
             }
             Err(e) => {
