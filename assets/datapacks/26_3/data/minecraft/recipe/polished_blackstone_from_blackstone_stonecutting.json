@@ -1,0 +1,7 @@
+{
+  "type": "minecraft:stonecutting",
+  "ingredient": "minecraft:blackstone",
+  "result": {
+    "id": "minecraft:polished_blackstone"
+  }
+}

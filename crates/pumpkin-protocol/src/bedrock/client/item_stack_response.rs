@@ -29,7 +29,6 @@ impl PacketWrite for ItemStackResponseSlotInfo {
         self.requested_slot.write(writer)?;
         self.slot.write(writer)?;
         self.amount.write(writer)?;
-        true.write(writer)?;
         (self.item_stack_net_id.0 > 0).write(writer)?;
         if self.item_stack_net_id.0 > 0 {
             self.item_stack_net_id.write(writer)?;
@@ -58,7 +57,6 @@ impl PacketWrite for ItemStackResponseInfo {
     fn write<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         self.result.write(writer)?;
         self.client_request_id.write(writer)?;
-        true.write(writer)?;
         (!self.containers.is_empty()).write(writer)?;
         if !self.containers.is_empty() {
             VarUInt(self.containers.len() as u32).write(writer)?;

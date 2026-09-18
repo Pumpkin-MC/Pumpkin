@@ -28,6 +28,11 @@ impl SwimGoal {
 
 impl Goal for SwimGoal {
     fn can_start(&mut self, mob: &dyn Mob) -> bool {
+        mob.get_mob_entity()
+            .navigator
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .set_can_float(true);
         Self::is_in_fluid(mob)
     }
 
@@ -36,8 +41,7 @@ impl Goal for SwimGoal {
     }
 
     fn tick(&mut self, mob: &dyn Mob) {
-        // No jump control yet; the flag it would set is what the movement tick reads anyway. TODO:
-        // the navigation should also be told it can float.
+        // No jump control yet; the flag it would set is what the movement tick reads anyway.
         if mob.get_random().random::<f32>() < 0.8 {
             mob.get_mob_entity()
                 .living_entity

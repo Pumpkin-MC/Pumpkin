@@ -4,7 +4,9 @@ use pumpkin_data::chunk::Biome;
 use pumpkin_data::item::{BedrockItem, BedrockItemVersion};
 use pumpkin_protocol::bedrock::client::item_registry::{CItemRegistry, ItemData};
 use pumpkin_protocol::bedrock::client::level_event::{CLevelEvent, LevelEvent};
-use pumpkin_protocol::bedrock::client::{CBiomeDefinitionList, block_actor_data::CBlockActorData};
+use pumpkin_protocol::bedrock::client::{
+    CBiomeDefinitionList, CJigsawStructureData, CVoxelShapes, block_actor_data::CBlockActorData,
+};
 use pumpkin_protocol::bedrock::network_item::{NetworkItemDescriptor, NetworkItemStackDescriptor};
 use pumpkin_protocol::codec::data_component::data_to_proto_sound;
 use pumpkin_world::generation::proto_chunk::GenerationCache;
@@ -1731,10 +1733,7 @@ impl World {
                 self.broadcast_to_chunk_editioned(
                     chunk_pos,
                     &CBlockUpdate::new(block_pos, i32::from(block_state_id.as_u16()).into()),
-                    &pumpkin_protocol::bedrock::client::CUpdateBlock::new(
-                        block_pos,
-                        be_block_id as u32,
-                    ),
+                    &pumpkin_protocol::bedrock::client::CUpdateBlock::new(block_pos, be_block_id),
                 );
                 if let Some(block_entity) = self.get_block_entity(&block_pos)
                     && let Some(nbt) = block_entity.chunk_data_nbt()
@@ -1770,7 +1769,7 @@ impl World {
                     let be_block_id = BlockState::to_be_network_id(*block_state_id);
                     let update_packet = pumpkin_protocol::bedrock::client::CUpdateBlock::new(
                         *block_pos,
-                        be_block_id as u32,
+                        be_block_id,
                     );
                     let actor_packet = self
                         .bedrock_block_entity_data(*block_state_id, *block_pos)
@@ -1830,7 +1829,7 @@ impl World {
                 let water_state = bedrock_water_state(*block_state_id);
                 let packet = pumpkin_protocol::bedrock::client::CUpdateBlock::with_layer(
                     *block_pos,
-                    u32::from(BlockState::to_be_network_id(water_state)),
+                    BlockState::to_be_network_id(water_state),
                     1,
                 );
                 bedrock_water_packets.push(packet);
@@ -2643,10 +2642,6 @@ impl World {
             Vec<CreativeItemEntryPayload>,
         )> = std::sync::OnceLock::new();
 
-        static BEDROCK_CRAFTING_DATA: std::sync::OnceLock<
-            Vec<pumpkin_protocol::bedrock::client::BedrockRecipe>,
-        > = std::sync::OnceLock::new();
-
         let level_info = server.level_info.load();
         let (rain_level, lightning_level) = {
             let weather = self
@@ -2800,7 +2795,7 @@ impl World {
             block_registry_checksum: 0,
             world_template_id: Uuid::nil(),
             enable_clientside_generation: false,
-            blocknetwork_ids_are_hashed: false,
+            blocknetwork_ids_are_hashed: true,
             server_auth_sounds: true,
             server_join_information: None,
             telemetry: ServerTelemetryData {
@@ -2810,6 +2805,8 @@ impl World {
                 owner_id: String::new(),
             },
         };
+        client.send_packet(&CJigsawStructureData).await;
+        client.send_packet(&CVoxelShapes).await;
         if let Ok(data) = client.serialize_packet(&start_game) {
             client.send_game_packet(data).await;
         }
@@ -2899,180 +2896,8 @@ impl World {
             client.send_game_packet(data).await;
         }
 
-        let bedrock_recipes = BEDROCK_CRAFTING_DATA.get_or_init(|| {
-            use pumpkin_data::item::{Item, JavaToBedrockItemMapping};
-            use pumpkin_data::recipes::{CraftingRecipeTypes, RecipeIngredientTypes};
-            use pumpkin_protocol::bedrock::client::{
-                BedrockRecipe, BedrockShapedRecipe, BedrockShapelessRecipe, ItemDescriptorCount,
-                RecipeUnlockRequirement,
-            };
-            use pumpkin_protocol::bedrock::network_item::NetworkItemDescriptor;
-            use pumpkin_protocol::codec::{var_int::VarInt, var_uint::VarUInt};
-
-            let mut mapped_recipes = Vec::new();
-            let mut network_id_counter = 1u32;
-
-            for recipe in pumpkin_data::recipes::RECIPES_CRAFTING {
-                let map_ingredient = |ing: &RecipeIngredientTypes| -> ItemDescriptorCount {
-                    let item_key = match ing {
-                        RecipeIngredientTypes::Simple(name) => Some(*name),
-                        RecipeIngredientTypes::Tagged(tag) => {
-                            let tag_name = tag.strip_prefix('#').unwrap_or(tag);
-                            pumpkin_data::tag::get_tag_ids(
-                                pumpkin_data::tag::RegistryKey::Item,
-                                tag_name,
-                            )
-                            .and_then(|ids| {
-                                ids.first().and_then(|&first_id| {
-                                    Item::from_id(first_id).map(|item| item.registry_key)
-                                })
-                            })
-                        }
-                        RecipeIngredientTypes::OneOf(names) => names.first().copied(),
-                    };
-
-                    if let Some(key) = item_key {
-                        let registry_key = key.strip_prefix("minecraft:").unwrap_or(key);
-                        if let Some(item) = Item::from_registry_key(registry_key)
-                            && let Some(mapping) =
-                                JavaToBedrockItemMapping::from_java_item_id(item.id)
-                        {
-                            return ItemDescriptorCount {
-                                item_identifier: mapping.bedrock_item.registry_key.to_string(),
-                                metadata_value: mapping.bedrock_data as i32,
-                                count: 1,
-                            };
-                        }
-                    }
-
-                    ItemDescriptorCount {
-                        item_identifier: String::new(),
-                        metadata_value: 0,
-                        count: 0,
-                    }
-                };
-
-                match recipe {
-                    CraftingRecipeTypes::CraftingShaped {
-                        category: _,
-                        group: _,
-                        show_notification: _,
-                        key,
-                        pattern,
-                        result,
-                    } => {
-                        let height = pattern.len() as i32;
-                        let width = pattern.iter().map(|s| s.len()).max().unwrap_or(0) as i32;
-
-                        let mut input = Vec::new();
-                        for r in 0..height {
-                            let pattern_row = pattern[r as usize];
-                            for c in 0..width {
-                                let ch = pattern_row.chars().nth(c as usize).unwrap_or(' ');
-                                if ch == ' ' {
-                                    input.push(ItemDescriptorCount {
-                                        item_identifier: String::new(),
-                                        metadata_value: 0,
-                                        count: 0,
-                                    });
-                                } else {
-                                    let mut ingredient = None;
-                                    for &(key_ch, ref ing) in *key {
-                                        if key_ch == ch {
-                                            ingredient = Some(ing);
-                                            break;
-                                        }
-                                    }
-                                    if let Some(ing) = ingredient {
-                                        input.push(map_ingredient(ing));
-                                    } else {
-                                        input.push(ItemDescriptorCount {
-                                            item_identifier: String::new(),
-                                            metadata_value: 0,
-                                            count: 0,
-                                        });
-                                    }
-                                }
-                            }
-                        }
-
-                        let output_item = Item::from_registry_key(result.id);
-                        if let Some(item) = output_item
-                            && let Some(mapping) =
-                                JavaToBedrockItemMapping::from_java_item_id(item.id)
-                        {
-                            let output_descriptor = NetworkItemDescriptor {
-                                id: VarInt::from(mapping.bedrock_item.id),
-                                stack_size: result.count as u16,
-                                aux_value: VarUInt(mapping.bedrock_data),
-                                block_runtime_id: VarInt::from(mapping.bedrock_block_state),
-                                nbt_data: pumpkin_nbt::Nbt::default(),
-                                place_on_blocks: Vec::new(),
-                                destroy_blocks: Vec::new(),
-                                shield_blocking_tick: 0,
-                            };
-
-                            mapped_recipes.push(BedrockRecipe::Shaped(BedrockShapedRecipe {
-                                recipe_id: format!("pumpkin:recipe_{network_id_counter}"),
-                                width: VarInt(width),
-                                height: VarInt(height),
-                                input,
-                                output: vec![output_descriptor],
-                                uuid: Uuid::nil(),
-                                block: "crafting_table".to_string(),
-                                priority: VarInt(1),
-                                assume_symmetry: true,
-                                unlock_requirement: RecipeUnlockRequirement { context: 1 },
-                                recipe_network_id: VarUInt(network_id_counter),
-                            }));
-                            network_id_counter += 1;
-                        }
-                    }
-                    CraftingRecipeTypes::CraftingShapeless {
-                        category: _,
-                        group: _,
-                        ingredients,
-                        result,
-                    } => {
-                        let input = ingredients.iter().map(map_ingredient).collect::<Vec<_>>();
-
-                        let output_item = Item::from_registry_key(result.id);
-                        if let Some(item) = output_item
-                            && let Some(mapping) =
-                                JavaToBedrockItemMapping::from_java_item_id(item.id)
-                        {
-                            let output_descriptor = NetworkItemDescriptor {
-                                id: VarInt::from(mapping.bedrock_item.id),
-                                stack_size: result.count as u16,
-                                aux_value: VarUInt(mapping.bedrock_data),
-                                block_runtime_id: VarInt::from(mapping.bedrock_block_state),
-                                nbt_data: pumpkin_nbt::Nbt::default(),
-                                place_on_blocks: Vec::new(),
-                                destroy_blocks: Vec::new(),
-                                shield_blocking_tick: 0,
-                            };
-
-                            mapped_recipes.push(BedrockRecipe::Shapeless(BedrockShapelessRecipe {
-                                recipe_id: format!("pumpkin:recipe_{network_id_counter}"),
-                                input,
-                                output: vec![output_descriptor],
-                                uuid: Uuid::nil(),
-                                block: "crafting_table".to_string(),
-                                priority: VarInt(1),
-                                unlock_requirement: RecipeUnlockRequirement { context: 1 },
-                                recipe_network_id: VarUInt(network_id_counter),
-                            }));
-                            network_id_counter += 1;
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            mapped_recipes
-        });
-
         let crafting_data = pumpkin_protocol::bedrock::client::CCraftingData {
-            recipes: bedrock_recipes.clone(),
+            recipes: crate::net::bedrock::recipe::crafting_data().to_vec(),
             clean_recipes: false,
         };
         if let Ok(data) = client.serialize_packet(&crafting_data) {
@@ -4778,11 +4603,18 @@ impl World {
                         // stale data.
                         base_entity.velocity.store(Vector3::default());
 
-                        // Tracker owns pairing: spawn packets for every watcher.
-                        world.add_entity_silent(entity);
+                        // UUID-dedupes if another watcher already loaded this entity.
+                        // Tracker owns pairing (spawn packets + vehicle restore).
+                        world.add_entity_silent(entity.clone());
+                        player.try_restore_vehicle(&entity);
                     }
+                } else {
+                    // Already live for other watchers: pair this player now so
+                    // spawn packets and vehicle restore do not wait on a tracker tick.
+                    world
+                        .entity_tracker
+                        .update_player_chunks(&player, &world, &[position]);
                 }
-                // Already-live chunk: tracker pairs on its next pass.
             }
 
             #[cfg(debug_assertions)]
@@ -5627,7 +5459,7 @@ impl World {
             let be_packet = CLevelEvent {
                 event_id: VarInt(LevelEvent::ParticlesDestroyBlock as i32),
                 position: position.to_centered_f64().to_f32_lossy(),
-                data: VarInt(BlockState::to_be_network_id(broken_state_id).into()),
+                data: VarInt(BlockState::to_be_network_id(broken_state_id) as i32),
             };
             let chunk_pos = position.chunk_position();
             if let Some(player) = cause {

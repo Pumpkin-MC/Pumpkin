@@ -20,7 +20,7 @@ const ATTRS: &str = "\
 ///
 /// The first field is the logical datapack id exposed at runtime.
 /// The second field is the path relative to `CARGO_MANIFEST_DIR`.
-const DATAPACK_PACKS: &[(&str, &str)] = &[("vanilla", "../../assets/datapacks/26_2")];
+const DATAPACK_PACKS: &[(&str, &str)] = &[("vanilla", "../../assets/datapacks/26_3")];
 
 /// Container dirs, relative to `CARGO_MANIFEST_DIR`.
 ///
