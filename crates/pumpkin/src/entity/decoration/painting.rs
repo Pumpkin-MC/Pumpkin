@@ -2,7 +2,7 @@ use core::f32;
 use std::sync::atomic::Ordering;
 
 use crate::entity::{Entity, EntityBase, living::LivingEntity};
-use pumpkin_data::block_direction::BlockDirection;
+use pumpkin_data::BlockDirection;
 use pumpkin_data::damage::DamageType;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::vector3::Vector3;
