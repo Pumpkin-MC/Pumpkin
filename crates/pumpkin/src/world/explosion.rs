@@ -615,22 +615,14 @@ mod tests {
 
     #[test]
     fn explosions_are_non_incendiary_by_default() {
-        let explosion = Explosion::new(
-            5.0,
-            Vector3::new(0.0, 0.0, 0.0),
-            BlockInteraction::Destroy,
-        );
+        let explosion = Explosion::new(5.0, Vector3::new(0.0, 0.0, 0.0), BlockInteraction::Destroy);
         assert!(!explosion.create_fire);
     }
 
     #[test]
     fn explosions_can_opt_in_to_fire() {
-        let explosion = Explosion::new(
-            5.0,
-            Vector3::new(0.0, 0.0, 0.0),
-            BlockInteraction::Destroy,
-        )
-        .with_fire();
+        let explosion =
+            Explosion::new(5.0, Vector3::new(0.0, 0.0, 0.0), BlockInteraction::Destroy).with_fire();
         assert!(explosion.create_fire);
     }
 
