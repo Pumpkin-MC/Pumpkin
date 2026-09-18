@@ -2,8 +2,12 @@ use pumpkin_nbt::compound::NbtCompound;
 use std::fs::{File, create_dir_all};
 use std::io;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tracing::{debug, error, warn};
 use uuid::Uuid;
+
+/// Process-wide counter making per-save temp paths unique.
+static TEMP_SAVE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Manages the storage and retrieval of player data from disk and memory cache.
 ///
@@ -142,7 +146,16 @@ impl PlayerDataStorage {
         // `File::create` would truncate the last good save before the new one
         // is complete, so any failure or interruption mid-write would destroy
         // the only copy of the player's data.
-        let temp_path = path.with_extension("dat_new");
+        // Unique temp name per save: a shared <uuid>.dat_new lets two
+        // concurrent saves of the same player open, write, and fsync the
+        // same inode, so the slower writer can rename torn contents over
+        // the good file and the loser's rename can clobber the winner's.
+        let temp_unique = TEMP_SAVE_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let temp_path = path.with_extension(format!(
+            "dat_new.{}.{}",
+            std::process::id(),
+            temp_unique
+        ));
         match File::create(&temp_path) {
             Ok(file) => {
                 if let Err(e) = pumpkin_nbt::nbt_compress::write_gzip_compound_tag(data, file) {
