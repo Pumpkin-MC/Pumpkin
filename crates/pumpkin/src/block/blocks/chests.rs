@@ -631,7 +631,46 @@ impl ChestTypeExt for ChestType {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pumpkin_util::math::vector3::Vector3;
+    use arc_swap::ArcSwap;
+    use pumpkin_config::world::LevelConfig;
+    use pumpkin_data::{dimension::Dimension, entity::EntityType};
+    use pumpkin_util::{
+        math::vector3::Vector3,
+        world_seed::Seed,
+    };
+    use pumpkin_world::{dimension::into_level, world_info::LevelData};
+    use std::sync::{Arc, Weak};
+
+    use crate::{
+        block::registry::default_registry,
+        entity::{Entity, mob::slime::SlimeEntity},
+        server::Server,
+    };
+
+    fn test_world() -> (tempfile::TempDir, Arc<World>) {
+        let temp_dir = tempfile::tempdir().expect("create temporary world directory");
+        let dimension = Dimension::OVERWORLD;
+        let level = into_level(
+            dimension.clone(),
+            &LevelConfig::default(),
+            temp_dir.path().to_path_buf(),
+            0,
+        );
+        let level_info = Arc::new(ArcSwap::new(Arc::new(LevelData::default(Seed(0)))));
+        let world = Arc::new(World::load(
+            level,
+            level_info,
+            dimension,
+            default_registry(),
+            Weak::<Server>::new(),
+        ));
+
+        (temp_dir, world)
+    }
+
+    fn set_entities(world: &World, entities: Vec<Arc<dyn EntityBase>>) {
+        world.entities.store(Arc::new(entities));
+    }
 
     #[test]
     fn sitting_cat_search_box_matches_block_above() {
@@ -639,5 +678,65 @@ mod tests {
 
         assert_eq!(search_box.min, Vector3::new(10.0, 65.0, -5.0));
         assert_eq!(search_box.max, Vector3::new(11.0, 66.0, -4.0));
+    }
+
+    #[test]
+    fn sitting_cat_blocks_chest_but_standing_cat_does_not() {
+        let (_temp_dir, world) = test_world();
+        let chest_pos = BlockPos::new(10, 64, -5);
+        let cat = CatEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(10.5, 65.0, -4.5),
+            &EntityType::CAT,
+        ));
+
+        set_entities(world.as_ref(), vec![cat.clone() as Arc<dyn EntityBase>]);
+        assert!(
+            !is_chest_blocked(world.as_ref(), &chest_pos),
+            "a standing cat must not block the chest"
+        );
+
+        cat.set_sitting(true);
+        assert!(
+            is_chest_blocked(world.as_ref(), &chest_pos),
+            "a sitting cat directly above the chest must block it"
+        );
+    }
+
+    #[test]
+    fn unrelated_entity_does_not_block_chest() {
+        let (_temp_dir, world) = test_world();
+        let chest_pos = BlockPos::new(10, 64, -5);
+        let slime = SlimeEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(10.5, 65.0, -4.5),
+            &EntityType::SLIME,
+        ));
+
+        set_entities(world.as_ref(), vec![slime as Arc<dyn EntityBase>]);
+
+        assert!(
+            !is_chest_blocked(world.as_ref(), &chest_pos),
+            "an unrelated entity above the chest must not block it"
+        );
+    }
+
+    #[test]
+    fn sitting_cat_outside_search_box_does_not_block_chest() {
+        let (_temp_dir, world) = test_world();
+        let chest_pos = BlockPos::new(10, 64, -5);
+        let cat = CatEntity::new(Entity::new(
+            world.clone(),
+            Vector3::new(12.5, 65.0, -4.5),
+            &EntityType::CAT,
+        ));
+        cat.set_sitting(true);
+
+        set_entities(world.as_ref(), vec![cat as Arc<dyn EntityBase>]);
+
+        assert!(
+            !is_chest_blocked(world.as_ref(), &chest_pos),
+            "a sitting cat outside the chest search box must not block it"
+        );
     }
 }
