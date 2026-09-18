@@ -157,7 +157,7 @@ impl PacketRead for VarULong {
         }
         Err(Error::new(
             std::io::ErrorKind::InvalidData,
-            "Invalid VarUInt",
+            "Invalid VarULong",
         ))
     }
 }
