@@ -1,0 +1,6 @@
+{
+  "type": "minecraft:by_cost_with_difficulty",
+  "enchantments": "#minecraft:on_mob_spawn_equipment",
+  "max_cost_span": 17,
+  "min_cost": 5
+}

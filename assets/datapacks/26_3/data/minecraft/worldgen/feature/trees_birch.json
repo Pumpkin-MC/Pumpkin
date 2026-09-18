@@ -1,0 +1,10 @@
+{
+  "type": "minecraft:random_selector",
+  "default": "minecraft:birch_bees_0002",
+  "features": [
+    {
+      "chance": 0.0125,
+      "feature": "minecraft:fallen_birch_tree"
+    }
+  ]
+}

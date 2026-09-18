@@ -539,9 +539,9 @@ pub fn resolve_rule(
 /// Reads material_rule files and resolves conditions from material_condition folder.
 pub fn build() -> TokenStream {
     let rule_dir =
-        std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/worldgen/material_rule");
+        std::path::Path::new("../../assets/datapacks/26_3/data/minecraft/worldgen/material_rule");
     let cond_dir = std::path::Path::new(
-        "../../assets/datapacks/26_2/data/minecraft/worldgen/material_condition",
+        "../../assets/datapacks/26_3/data/minecraft/worldgen/material_condition",
     );
 
     let top_level_rules = [

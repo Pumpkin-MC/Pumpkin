@@ -1,0 +1,20 @@
+{
+  "gives": {
+    "id": "minecraft:emerald"
+  },
+  "max_uses": 12,
+  "merchant_predicate": {
+    "type": "minecraft:entity_properties",
+    "entity": "this",
+    "predicate": {
+      "minecraft:predicates": {
+        "minecraft:villager/variant": "minecraft:plains"
+      }
+    }
+  },
+  "reputation_discount": 0.05,
+  "wants": {
+    "id": "minecraft:oak_boat"
+  },
+  "xp": 30
+}

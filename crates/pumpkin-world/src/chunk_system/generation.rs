@@ -349,7 +349,8 @@ mod tests {
             }
         }
         assert_eq!(non_air, 59);
-        assert_eq!(hash, 0x5af3_06b3_536d_8053);
+        // Depends on block state ids, so it moves whenever the registry is renumbered.
+        assert_eq!(hash, 0x2616_4d4b_ea29_023f);
         assert!(chunk.pending_block_entities.iter().any(|nbt| {
             nbt.get_string("id") == Some("minecraft:skull")
                 && nbt.get_int("x") == Some(-4888)

@@ -10,7 +10,7 @@ use serde::Deserialize;
 use crate::version::JavaMinecraftVersion;
 
 /// The newest protocol version used as the fallback for unknown versions in `TrackedId::get`.
-const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_2;
+const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_3;
 
 #[derive(Deserialize)]
 struct RawTrackedField {
@@ -33,6 +33,7 @@ pub(crate) fn build() -> TokenStream {
         (JavaMinecraftVersion::V_1_21_11, "1_21_11_tracked_data.json"),
         (JavaMinecraftVersion::V_26_1, "26_1_tracked_data.json"),
         (JavaMinecraftVersion::V_26_2, "26_2_tracked_data.json"),
+        (JavaMinecraftVersion::V_26_3, "26_3_tracked_data.json"),
     ];
 
     let mut raw_versions = BTreeMap::new();

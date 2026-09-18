@@ -1,0 +1,98 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "condition": "minecraft:tool/can_shear",
+          "modifier": [
+            {
+              "type": "minecraft:set_count",
+              "add": true,
+              "condition": {
+                "type": "minecraft:match_block",
+                "blocks": "minecraft:glow_lichen",
+                "state": {
+                  "down": "true"
+                }
+              },
+              "count": 1
+            },
+            {
+              "type": "minecraft:set_count",
+              "add": true,
+              "condition": {
+                "type": "minecraft:match_block",
+                "blocks": "minecraft:glow_lichen",
+                "state": {
+                  "up": "true"
+                }
+              },
+              "count": 1
+            },
+            {
+              "type": "minecraft:set_count",
+              "add": true,
+              "condition": {
+                "type": "minecraft:match_block",
+                "blocks": "minecraft:glow_lichen",
+                "state": {
+                  "north": "true"
+                }
+              },
+              "count": 1
+            },
+            {
+              "type": "minecraft:set_count",
+              "add": true,
+              "condition": {
+                "type": "minecraft:match_block",
+                "blocks": "minecraft:glow_lichen",
+                "state": {
+                  "south": "true"
+                }
+              },
+              "count": 1
+            },
+            {
+              "type": "minecraft:set_count",
+              "add": true,
+              "condition": {
+                "type": "minecraft:match_block",
+                "blocks": "minecraft:glow_lichen",
+                "state": {
+                  "west": "true"
+                }
+              },
+              "count": 1
+            },
+            {
+              "type": "minecraft:set_count",
+              "add": true,
+              "condition": {
+                "type": "minecraft:match_block",
+                "blocks": "minecraft:glow_lichen",
+                "state": {
+                  "east": "true"
+                }
+              },
+              "count": 1
+            },
+            {
+              "type": "minecraft:set_count",
+              "add": true,
+              "count": -1
+            },
+            {
+              "type": "minecraft:explosion_decay"
+            }
+          ],
+          "name": "minecraft:glow_lichen"
+        }
+      ],
+      "rolls": 1
+    }
+  ],
+  "random_sequence": "minecraft:blocks/glow_lichen"
+}
