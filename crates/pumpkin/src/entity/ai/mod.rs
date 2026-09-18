@@ -1,3 +1,4 @@
+pub mod behavior;
 pub mod control;
 pub mod goal;
 pub mod pathfinder;

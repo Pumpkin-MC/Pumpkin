@@ -6,16 +6,12 @@ use crate::entity::EntityBase;
 
 use crate::entity::ai::goal::track_target::TrackTargetGoal;
 use crate::entity::ai::target_predicate::TargetPredicate;
+use crate::entity::ai::util::goal_utils;
 use crate::entity::mob::Mob;
-use crate::entity::predicate::EntityPredicate;
-use pumpkin_data::attributes::Attributes;
 use pumpkin_data::entity::EntityType;
-use pumpkin_util::math::boundingbox::BoundingBox;
 
 /// A function pointer also covers whole hierarchies, like every raider.
 pub type EntityTypeFilter = fn(&'static EntityType) -> bool;
-
-const ALERT_RANGE_Y: f64 = 10.0;
 
 pub struct RevengeGoal {
     track_target_goal: TrackTargetGoal,
@@ -65,26 +61,8 @@ impl RevengeGoal {
 
     /// Wake up nearby mobs of the same kind.
     fn alert_others(&self, mob: &dyn Mob, attacker: &Arc<dyn EntityBase>) {
-        let mob_entity = mob.get_mob_entity();
-        let entity = &mob_entity.living_entity.entity;
-        let within = mob_entity
-            .living_entity
-            .get_attribute_value(&Attributes::FOLLOW_RANGE);
-
-        let world = entity.world.load();
-        // Anchored on a unit cube at the mob's feet, so a wide hitbox does not widen the call.
-        let pos = entity.pos.load();
-        let search_box =
-            BoundingBox::new(pos, pos.add_raw(1.0, 1.0, 1.0)).expand(within, ALERT_RANGE_Y, within);
-
-        for other in world.get_entities_at_box(&search_box) {
+        for other in goal_utils::nearby_same_type(mob) {
             let other_entity = other.get_entity();
-            if other_entity.entity_id == entity.entity_id
-                || other_entity.entity_type != entity.entity_type
-                || !EntityPredicate::ExceptSpectator.test(other_entity)
-            {
-                continue;
-            }
             let Some(other_mob) = other.get_mob() else {
                 continue;
             };

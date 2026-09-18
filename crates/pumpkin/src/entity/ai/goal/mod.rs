@@ -39,6 +39,7 @@ pub mod pick_up_block;
 pub mod place_block;
 pub mod ranged_attack;
 pub mod ranged_crossbow_attack;
+pub mod reset_universal_anger;
 pub mod restrict_sun;
 pub mod revenge;
 pub mod run_around_like_crazy;
