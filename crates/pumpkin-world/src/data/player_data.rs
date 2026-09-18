@@ -2,7 +2,7 @@ use pumpkin_nbt::compound::NbtCompound;
 use std::fs::{File, create_dir_all};
 use std::io;
 use std::path::PathBuf;
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 use uuid::Uuid;
 
 /// Manages the storage and retrieval of player data from disk and memory cache.
@@ -149,11 +149,27 @@ impl PlayerDataStorage {
                     error!("Failed to write compressed player data for {uuid}: {e}");
                     let _ = std::fs::remove_file(&temp_path);
                     Err(PlayerDataError::Nbt(e.to_string()))
+                } else if let Err(e) = File::open(&temp_path).and_then(|f| f.sync_all()) {
+                    // Flush the new file to stable storage BEFORE the swap:
+                    // without an fsync the rename can become durable while
+                    // the data itself is still in the page cache, so a power
+                    // loss could leave an empty or truncated .dat behind.
+                    error!("Failed to sync player data file for {uuid}: {e}");
+                    let _ = std::fs::remove_file(&temp_path);
+                    Err(PlayerDataError::Io(e))
                 } else if let Err(e) = std::fs::rename(&temp_path, &path) {
                     error!("Failed to install player data file for {uuid}: {e}");
                     let _ = std::fs::remove_file(&temp_path);
                     Err(PlayerDataError::Io(e))
                 } else {
+                    // Sync the parent directory so the rename itself is
+                    // durable. Best-effort: the data file is already synced,
+                    // and some filesystems do not support directory fsync.
+                    if let Some(parent) = path.parent()
+                        && let Err(e) = File::open(parent).and_then(|d| d.sync_all())
+                    {
+                        warn!("Failed to sync player data directory for {uuid}: {e}");
+                    }
                     debug!("Saved player data for {uuid} to disk");
                     Ok(())
                 }
