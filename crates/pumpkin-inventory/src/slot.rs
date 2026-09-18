@@ -26,7 +26,7 @@ use std::sync::{
 use crate::screen_handler::InventoryPlayer;
 
 use crate::inventory::Inventory;
-use pumpkin_data::data_component_impl::EquipmentSlot;
+use pumpkin_data::{Enchantment, data_component_impl::EquipmentSlot};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 
@@ -316,6 +316,10 @@ impl ArmorSlot {
     }
 }
 
+fn can_take_armor_stack(stack: &ItemStack, is_creative: bool) -> bool {
+    is_creative || stack.get_enchantment_level(&Enchantment::BINDING_CURSE) <= 0
+}
+
 impl Slot for ArmorSlot {
     fn get_inventory(&self) -> Arc<dyn Inventory> {
         self.inventory.clone()
@@ -371,8 +375,29 @@ impl Slot for ArmorSlot {
         1
     }
 
-    /// TODO: Check for curse of binding enchantment.
-    fn can_take_items(&self, _player: &dyn InventoryPlayer) -> bool {
-        true
+    fn can_take_items(&self, player: &dyn InventoryPlayer) -> bool {
+        can_take_armor_stack(&self.get_stack(), player.is_creative())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::can_take_armor_stack;
+    use pumpkin_data::{Enchantment, item::Item, item_stack::ItemStack};
+
+    #[test]
+    fn binding_curse_blocks_non_creative_removal() {
+        let mut stack = ItemStack::new(1, &Item::DIAMOND_HELMET);
+        stack.add_enchantment(&Enchantment::BINDING_CURSE, 1);
+
+        assert!(!can_take_armor_stack(&stack, false));
+        assert!(can_take_armor_stack(&stack, true));
+    }
+
+    #[test]
+    fn unbound_armor_remains_removable() {
+        let stack = ItemStack::new(1, &Item::DIAMOND_HELMET);
+
+        assert!(can_take_armor_stack(&stack, false));
     }
 }
