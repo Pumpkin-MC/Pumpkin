@@ -8,6 +8,8 @@ use pumpkin_util::math::position::BlockPos;
 use std::sync::Arc;
 
 pub struct DynamicLightEngine {
+    min_y: i32,
+    max_y: i32,
     block_decrease: SegQueue<(BlockPos, u8)>,
     block_increase: SegQueue<(BlockPos, u8)>,
     sky_decrease: SegQueue<(BlockPos, u8)>,
@@ -16,8 +18,10 @@ pub struct DynamicLightEngine {
 
 impl DynamicLightEngine {
     #[must_use]
-    pub const fn new() -> Self {
+    pub const fn new(min_y: i32, max_y: i32) -> Self {
         Self {
+            min_y,
+            max_y,
             block_decrease: SegQueue::new(),
             block_increase: SegQueue::new(),
             sky_decrease: SegQueue::new(),
@@ -25,15 +29,11 @@ impl DynamicLightEngine {
         }
     }
 }
-impl Default for DynamicLightEngine {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+
 impl DynamicLightEngine {
     /// Checks if there is an open sky above the given position (no opaque blocks blocking sky light).
-    fn has_open_sky_above(level: &Arc<Level>, pos: &BlockPos) -> bool {
-        let max_y = 319; // Maximum build height in Minecraft, can be adjusted if needed
+    fn has_open_sky_above(&self, level: &Arc<Level>, pos: &BlockPos) -> bool {
+        let max_y = self.max_y - 1;
         let mut current_pos = *pos;
 
         // Scan upward until we hit sky or an opaque block
@@ -123,6 +123,10 @@ impl DynamicLightEngine {
         for dir in BlockDirection::all() {
             let neighbor_pos = pos.offset(dir.to_offset());
 
+            if neighbor_pos.0.y < self.min_y || neighbor_pos.0.y >= self.max_y {
+                continue;
+            }
+
             if let Some(neighbor_light) = self.get_block_light_level(level, &neighbor_pos) {
                 let neighbor_state = level.get_block_state(&neighbor_pos).to_state();
                 let opacity = neighbor_state.opacity.max(1);
@@ -156,6 +160,10 @@ impl DynamicLightEngine {
             // This position was already darkened, so we propagate the darkness to neighbors
             for dir in BlockDirection::all() {
                 let neighbor_pos = pos.offset(dir.to_offset());
+
+                if neighbor_pos.0.y < self.min_y || neighbor_pos.0.y >= self.max_y {
+                    continue;
+                }
 
                 if let Some(neighbor_light) = self.get_block_light_level(level, &neighbor_pos) {
                     if neighbor_light == 0 {
@@ -232,6 +240,10 @@ impl DynamicLightEngine {
     ) {
         for dir in BlockDirection::all() {
             let neighbor_pos = pos.offset(dir.to_offset());
+
+            if neighbor_pos.0.y < self.min_y || neighbor_pos.0.y >= self.max_y {
+                continue;
+            }
             if let Some(neighbor_light) = self.get_block_light_level(level, &neighbor_pos)
                 && neighbor_light > current_light + 1
             {
@@ -276,6 +288,10 @@ impl DynamicLightEngine {
     fn propagate_sky_light_increase(&self, level: &Arc<Level>, pos: &BlockPos, light_level: u8) {
         for dir in BlockDirection::all() {
             let neighbor_pos = pos.offset(dir.to_offset());
+
+            if neighbor_pos.0.y < self.min_y || neighbor_pos.0.y >= self.max_y {
+                continue;
+            }
 
             // Never propagate into an unloaded chunk. Writes to an unloaded
             // chunk are dropped silently, so the "brighter than neighbor" check
@@ -323,6 +339,10 @@ impl DynamicLightEngine {
     fn propagate_sky_light_decrease(&self, level: &Arc<Level>, pos: &BlockPos, removed_light: u8) {
         for dir in BlockDirection::all() {
             let neighbor_pos = pos.offset(dir.to_offset());
+
+            if neighbor_pos.0.y < self.min_y || neighbor_pos.0.y >= self.max_y {
+                continue;
+            }
 
             // See `propagate_sky_light_increase`: skip unloaded chunks so sky
             // light updates never spin at loaded/unloaded chunk borders.
@@ -393,7 +413,7 @@ impl DynamicLightEngine {
             0
         } else {
             // Check if there's open sky above
-            let has_sky = Self::has_open_sky_above(level, &pos);
+            let has_sky = self.has_open_sky_above(level, &pos);
 
             if has_sky {
                 // Direct sunlight, reduced by opacity
@@ -404,6 +424,10 @@ impl DynamicLightEngine {
 
                 for dir in BlockDirection::all() {
                     let neighbor_pos = pos.offset(dir.to_offset());
+
+                    if neighbor_pos.0.y < self.min_y || neighbor_pos.0.y >= self.max_y {
+                        continue;
+                    }
 
                     let neighbor_light = self.get_sky_light_level(level, &neighbor_pos);
                     // Calculate potential light from this neighbor
