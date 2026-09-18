@@ -1,3 +1,4 @@
+use pumpkin_data::HorizontalFacingExt;
 use pumpkin_data::block_properties::AcaciaShelfLikeProperties;
 use pumpkin_data::{BlockState, BlockStateId};
 use pumpkin_inventory::Inventory;
@@ -30,6 +31,12 @@ impl BlockBehaviour for ShelfBlock {
     }
 
     fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
+        // Vanilla reads a shelf only through its back face.
+        let props = AcaciaShelfLikeProperties::from_state_id(args.state.id);
+        if args.direction != props.facing.to_block_direction().opposite() {
+            return Some(0);
+        }
+
         if let Some(block_entity) = args.world.get_block_entity(args.position)
             && let Some(shelf) = block_entity.as_any().downcast_ref::<ShelfBlockEntity>()
         {

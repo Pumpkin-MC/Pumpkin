@@ -202,7 +202,7 @@ impl BlockBehaviour for JukeboxBlock {
             let record = jukebox_entity.get_record();
             // Get the song from the record's jukebox_playable component
             if let Some(playable) = record.get_data_component::<JukeboxPlayableImpl>()
-                && let Some(song_name) = playable.song.split(':').nth(1)
+                && let Some(song_name) = playable.song.rsplit(':').next()
                 && let Some(song) = JukeboxSong::from_name(song_name)
             {
                 return Some(song.comparator_output());

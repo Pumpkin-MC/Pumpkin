@@ -1,0 +1,41 @@
+package pumpkin:plugin@0.1.0;
+
+interface advancement {
+    use text.{text-component};
+
+    /// Frame type for an advancement.
+    enum frame-type {
+        task,
+        challenge,
+        goal,
+    }
+
+    /// Display information for an advancement.
+    record advancement-display {
+        title: text-component,
+        description: text-component,
+        frame: frame-type,
+        show-toast: bool,
+        hidden: bool,
+        announce-to-chat: bool,
+        background: option<string>,
+        x: f32,
+        y: f32,
+    }
+
+    /// Detailed information about an advancement.
+    record advancement-info {
+        id: string,
+        parent-id: option<string>,
+        criteria: list<string>,
+        display: option<advancement-display>,
+    }
+
+    /// Represents progress of an advancement for a player.
+    record advancement-progress {
+        advancement-id: string,
+        done: bool,
+        awarded-criteria: list<string>,
+        remaining-criteria: list<string>,
+    }
+}

@@ -19,6 +19,7 @@ pub mod flee_sun;
 pub mod follow_mob;
 pub mod follow_owner;
 pub mod follow_parent;
+pub mod go_to_wanted_item;
 pub mod goal_selector;
 pub mod interact;
 pub mod leap_at_target;
@@ -67,8 +68,8 @@ pub trait Goal: Send + Sync {
     }
 
     /// When it's started, how should it continue to run?
-    fn should_continue(&self, _mob: &dyn Mob) -> bool {
-        false
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
+        self.can_start(mob)
     }
 
     /// Call when goal start
@@ -197,7 +198,7 @@ impl Goal for PrioritizedGoal {
         self.goal.can_start(mob)
     }
 
-    fn should_continue(&self, mob: &dyn Mob) -> bool {
+    fn should_continue(&mut self, mob: &dyn Mob) -> bool {
         self.goal.should_continue(mob)
     }
 
@@ -221,6 +222,10 @@ impl Goal for PrioritizedGoal {
 
     fn should_run_every_tick(&self) -> bool {
         self.goal.should_run_every_tick()
+    }
+
+    fn can_stop(&self) -> bool {
+        self.goal.can_stop()
     }
 
     fn get_tick_count(&self, ticks: i32) -> i32 {

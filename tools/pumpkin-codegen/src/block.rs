@@ -1008,6 +1008,12 @@ pub fn build() -> TokenStream {
     let mut block_from_name_entries = Vec::new();
     let mut block_from_item_id_arms = Vec::new();
     let mut block_state_to_bedrock = Vec::new();
+    // Unmapped Java states fall back to Bedrock air.
+    let air_be_network_id = *be_blocks
+        .get("air")
+        .and_then(|variants| variants.first())
+        .map(|(id, _)| id)
+        .expect("block_states.nbt is missing minecraft:air");
     let mut spawn_floor_predicate_arms = Vec::new();
 
     let mut raw_id_from_state_id_array = Vec::new();
@@ -1120,7 +1126,7 @@ pub fn build() -> TokenStream {
                 liquid_states.push(state_id);
             }
 
-            let mut matched_be_id = 1;
+            let mut matched_be_id = air_be_network_id;
 
             if let Some(geyser_entry) = bedrock_mappings_list.get(state.id.0 as usize) {
                 let (bedrock_name, bedrock_props) = parse_geyser_entry(geyser_entry, &block.name);
@@ -1134,14 +1140,14 @@ pub fn build() -> TokenStream {
                                 .all(|(k, v)| be_props.get(k).is_some_and(|be_v| be_v == v))
                         })
                         .map_or_else(
-                            || be_variants.first().map_or(1, |(id, _)| *id),
+                            || be_variants.first().map_or(air_be_network_id, |(id, _)| *id),
                             |(id, _)| *id,
                         );
                 } else if let Some(be_variants) = be_blocks.get(&block.name) {
-                    matched_be_id = be_variants.first().map_or(1, |(id, _)| *id);
+                    matched_be_id = be_variants.first().map_or(air_be_network_id, |(id, _)| *id);
                 }
             } else if let Some(be_variants) = be_blocks.get(&block.name) {
-                matched_be_id = be_variants.first().map_or(1, |(id, _)| *id);
+                matched_be_id = be_variants.first().map_or(air_be_network_id, |(id, _)| *id);
             }
 
             block_state_to_bedrock.push((state.id.0, matched_be_id));
@@ -1242,10 +1248,10 @@ pub fn build() -> TokenStream {
         .map(|(idx, _)| *idx)
         .max()
         .unwrap_or(0);
-    let mut state_to_bedrock_tokens = vec![quote! { 1 }; (max_index + 1) as usize];
+    let mut state_to_bedrock_tokens =
+        vec![proc_macro2::Literal::u32_unsuffixed(air_be_network_id); (max_index + 1) as usize];
     for (state_id, id_lit) in block_state_to_bedrock {
-        let lit = LitInt::new(&id_lit.to_string(), Span::call_site());
-        state_to_bedrock_tokens[state_id as usize] = quote! { #lit };
+        state_to_bedrock_tokens[state_id as usize] = proc_macro2::Literal::u32_unsuffixed(id_lit);
     }
     let block_state_to_bedrock_t = quote! { #(#state_to_bedrock_tokens),* };
 
@@ -1344,7 +1350,7 @@ pub fn build() -> TokenStream {
         }
 
         impl BlockState {
-            const STATE_ID_TO_BEDROCK: &[u16] = &[
+            const STATE_ID_TO_BEDROCK: &[u32] = &[
                 #block_state_to_bedrock_t
             ];
 
@@ -1375,7 +1381,7 @@ pub fn build() -> TokenStream {
             }
 
             #[must_use]
-            pub const fn to_be_network_id(id: BlockStateId) -> u16 {
+            pub const fn to_be_network_id(id: BlockStateId) -> u32 {
                 // Safety: We always check this condition when creating a BlockStateId.
                 // the u16 field is private and immutable. BlockStateId::STATE_COUNT is a const u16.
                 // If the condition held once, it will always hold.
@@ -1627,6 +1633,9 @@ pub fn build() -> TokenStream {
 
 /// Parses the Bedrock Edition block palette NBT file into a map of block names to their state variants.
 ///
+/// Bedrock network IDs are hashes of the block state, so they are taken verbatim from the dump
+/// instead of being derived from the palette order.
+///
 /// # Arguments
 /// – `reader` – a readable byte source positioned at the start of the NBT data.
 #[expect(clippy::type_complexity)]
@@ -1634,7 +1643,6 @@ fn get_be_data_from_nbt<R: Read + Seek>(
     reader: &mut R,
 ) -> BTreeMap<String, Vec<(u32, BTreeMap<String, String>)>> {
     let mut block_data: BTreeMap<String, Vec<(u32, BTreeMap<String, String>)>> = BTreeMap::new();
-    let mut current_id = 0;
 
     let data_start = reader.stream_position().unwrap();
     let data_end = reader.seek(SeekFrom::End(0)).unwrap();
@@ -1683,14 +1691,16 @@ fn get_be_data_from_nbt<R: Read + Seek>(
             })
             .collect::<BTreeMap<_, _>>();
 
+        let network_id = nbt
+            .get_int("network_id")
+            .expect("Missing network_id in block_states.nbt entry") as u32;
+
         if !block_name.is_empty() {
             block_data
                 .entry(block_name)
                 .or_default()
-                .push((current_id, properties));
+                .push((network_id, properties));
         }
-
-        current_id += 1;
     }
 
     block_data
