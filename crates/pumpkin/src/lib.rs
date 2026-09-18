@@ -343,7 +343,10 @@ impl PumpkinServer {
             }
         };
 
-        let (bedrock_status, ice_socket) = Self::bind_bedrock_status(&server).await;
+        let (bedrock_status, ice_socket) = match Self::bind_bedrock_status(&server).await {
+            Some((status, ice)) => (Some(status), Some(ice)),
+            None => (None, None),
+        };
         let nethernet_listener = Self::bind_nethernet(&server, ice_socket).await;
 
         Self {
@@ -363,7 +366,7 @@ impl PumpkinServer {
             return None;
         }
         let Some(ice_socket) = ice_socket else {
-            error!("Bedrock UDP should be bound before NetherNet");
+            error!("Bedrock UDP has to be bound before NetherNet can use it for ICE");
             return None;
         };
         let identity_key = match load_or_create_identity_key(&config.nethernet.identity_key) {
@@ -373,45 +376,42 @@ impl PumpkinServer {
                 return None;
             }
         };
-        let _ = server.bedrock_private_key.set(identity_key.clone());
         let oidc_verifier = (config.online_mode && config.authentication.enabled)
             .then(|| server.bedrock_oidc_keys.clone());
-        match NetherNetListener::bind(
-            config.nethernet.address,
-            ice_socket,
-            config.nethernet.external_ip,
-            identity_key,
-            config.online_mode,
-            oidc_verifier,
-            config.nethernet.stun_servers.clone(),
-        )
-        .await
-        {
+        match NetherNetListener::bind(server, identity_key, oidc_verifier, ice_socket).await {
             Ok(l) => Some(l),
             Err(err) => {
-                error!("Failed to bind Bedrock NetherNet signaling endpoint: {err}");
+                error!("Failed to bind Bedrock NetherNet endpoint: {err}");
                 None
             }
         }
     }
 
-    async fn bind_bedrock_status(server: &Server) -> (Option<StatusResponder>, Option<IceSocket>) {
+    /// Binds the UDP port used by Bedrock status and `NetherNet`'s ICE agent.
+    async fn bind_bedrock_status(server: &Arc<Server>) -> Option<(StatusResponder, IceSocket)> {
         let config = &server.advanced_config.networking.bedrock;
         if !config.enabled || !config.nethernet.enabled {
-            return (None, None);
+            return None;
         }
         match StatusResponder::bind(config.nethernet.address).await {
-            Ok((responder, ice_socket)) => {
-                if let Ok((ipv4, ipv6)) = responder.local_addrs() {
+            Ok((status, ice)) => {
+                if let Ok((ipv4, ipv6)) = status.local_addrs() {
                     info!(
                         "Bedrock server-list status is listening on {ipv4} (IPv4) and {ipv6} (IPv6)"
                     );
                 }
-                (Some(responder), Some(ice_socket))
+                Some((status, ice))
             }
             Err(err) => {
-                error!("Failed to bind Bedrock UDP status/ICE endpoint: {err}");
-                (None, None)
+                error!(
+                    "Failed to bind the Bedrock UDP socket on {}: {err}",
+                    config.nethernet.address
+                );
+                error!(
+                    "Bedrock status and NetherNet ICE use this UDP port; make sure nothing else \
+                     is using it and start the server again"
+                );
+                std::process::exit(1);
             }
         }
     }
@@ -644,8 +644,7 @@ impl PumpkinServer {
                 }
             },
 
-            // Remote server-list status remains a RakNet unconnected ping/pong even
-            // when the game connection itself is negotiated over NetherNet.
+            // Branch for Bedrock status and NetherNet ICE packets.
             status_result = resolve_some(
                 self.bedrock_status.as_ref(),
                 |status: &StatusResponder| status.receive(&self.server),

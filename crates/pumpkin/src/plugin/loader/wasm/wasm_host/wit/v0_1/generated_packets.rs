@@ -2736,9 +2736,6 @@ pub fn serialize_bedrock_packet(packet: &BClientboundPacket) -> Option<Bytes> {
                 boss_entity_id: pumpkin_protocol::codec::var_long::VarLong(
                     data.boss_entity_id.try_into().unwrap(),
                 ),
-                player_entity_id: pumpkin_protocol::codec::var_long::VarLong(
-                    data.player_entity_id.try_into().unwrap(),
-                ),
                 event_type: data.event_type.try_into().unwrap(),
                 title: data.title.clone(),
                 filtered_title: data.filtered_title.clone(),
@@ -2859,6 +2856,7 @@ pub fn serialize_bedrock_packet(packet: &BClientboundPacket) -> Option<Bytes> {
                 pitch: data.pitch.try_into().unwrap(),
                 yaw: data.yaw.try_into().unwrap(),
                 head_yaw: data.head_yaw.try_into().unwrap(),
+                tick: pumpkin_protocol::codec::var_ulong::VarULong(data.tick.try_into().unwrap()),
             };
             let mut buf = Vec::new();
             crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();
@@ -3163,7 +3161,6 @@ impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CBossEvent {
     fn to_wit(&self) -> BClientboundPacket {
         BClientboundPacket::CBossEvent(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::bedrock_packets::CBossEvent {
                 boss_entity_id: self.boss_entity_id.0.try_into().unwrap(),
-                player_entity_id: self.player_entity_id.0.try_into().unwrap(),
                 event_type: self.event_type.try_into().unwrap(),
                 title: self.title.to_string(),
                 filtered_title: self.filtered_title.to_string(),
@@ -3262,6 +3259,7 @@ impl ToWitClientboundBedrock for pumpkin_protocol::bedrock::client::CMoveActorDe
                 pitch: self.pitch.try_into().unwrap(),
                 yaw: self.yaw.try_into().unwrap(),
                 head_yaw: self.head_yaw.try_into().unwrap(),
+                tick: self.tick.0.try_into().unwrap(),
         })
     }
 }

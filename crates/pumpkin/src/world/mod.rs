@@ -4,7 +4,9 @@ use pumpkin_data::chunk::Biome;
 use pumpkin_data::item::{BedrockItem, BedrockItemVersion};
 use pumpkin_protocol::bedrock::client::item_registry::{CItemRegistry, ItemData};
 use pumpkin_protocol::bedrock::client::level_event::{CLevelEvent, LevelEvent};
-use pumpkin_protocol::bedrock::client::{CBiomeDefinitionList, block_actor_data::CBlockActorData};
+use pumpkin_protocol::bedrock::client::{
+    CBiomeDefinitionList, CJigsawStructureData, CVoxelShapes, block_actor_data::CBlockActorData,
+};
 use pumpkin_protocol::bedrock::network_item::{NetworkItemDescriptor, NetworkItemStackDescriptor};
 use pumpkin_protocol::codec::data_component::data_to_proto_sound;
 use pumpkin_world::generation::proto_chunk::GenerationCache;
@@ -1705,10 +1707,7 @@ impl World {
                 self.broadcast_to_chunk_editioned(
                     chunk_pos,
                     &CBlockUpdate::new(block_pos, i32::from(block_state_id.as_u16()).into()),
-                    &pumpkin_protocol::bedrock::client::CUpdateBlock::new(
-                        block_pos,
-                        be_block_id as u32,
-                    ),
+                    &pumpkin_protocol::bedrock::client::CUpdateBlock::new(block_pos, be_block_id),
                 );
                 if let Some(block_entity) = self.get_block_entity(&block_pos)
                     && let Some(nbt) = block_entity.chunk_data_nbt()
@@ -1744,7 +1743,7 @@ impl World {
                     let be_block_id = BlockState::to_be_network_id(*block_state_id);
                     let update_packet = pumpkin_protocol::bedrock::client::CUpdateBlock::new(
                         *block_pos,
-                        be_block_id as u32,
+                        be_block_id,
                     );
                     let actor_packet = self
                         .bedrock_block_entity_data(*block_state_id, *block_pos)
@@ -1804,7 +1803,7 @@ impl World {
                 let water_state = bedrock_water_state(*block_state_id);
                 let packet = pumpkin_protocol::bedrock::client::CUpdateBlock::with_layer(
                     *block_pos,
-                    u32::from(BlockState::to_be_network_id(water_state)),
+                    BlockState::to_be_network_id(water_state),
                     1,
                 );
                 bedrock_water_packets.push(packet);
@@ -2774,7 +2773,7 @@ impl World {
             block_registry_checksum: 0,
             world_template_id: Uuid::nil(),
             enable_clientside_generation: false,
-            blocknetwork_ids_are_hashed: false,
+            blocknetwork_ids_are_hashed: true,
             server_auth_sounds: true,
             server_join_information: None,
             telemetry: ServerTelemetryData {
@@ -2784,6 +2783,8 @@ impl World {
                 owner_id: String::new(),
             },
         };
+        client.send_packet(&CJigsawStructureData).await;
+        client.send_packet(&CVoxelShapes).await;
         if let Ok(data) = client.serialize_packet(&start_game) {
             client.send_game_packet(data).await;
         }
@@ -5597,7 +5598,7 @@ impl World {
             let be_packet = CLevelEvent {
                 event_id: VarInt(LevelEvent::ParticlesDestroyBlock as i32),
                 position: position.to_centered_f64().to_f32_lossy(),
-                data: VarInt(BlockState::to_be_network_id(broken_state_id).into()),
+                data: VarInt(BlockState::to_be_network_id(broken_state_id) as i32),
             };
             let chunk_pos = position.chunk_position();
             if let Some(player) = cause {

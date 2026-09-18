@@ -669,7 +669,7 @@ impl BlockPalette {
     /// Bedrock expects mixed secondary storages to use a one-bit, air-first palette. The first
     /// entry is the default for every position not occupied by water.
     #[must_use]
-    pub fn convert_be_water_network(&self) -> Option<BeNetworkSerialization<u16>> {
+    pub fn convert_be_water_network(&self) -> Option<BeNetworkSerialization<u32>> {
         let air = pumpkin_data::Block::AIR.default_state.id;
         let water = pumpkin_data::Block::WATER.default_state.id;
         match self {
@@ -777,7 +777,7 @@ impl BlockPalette {
     }
 
     #[must_use]
-    pub fn convert_be_network(&self) -> BeNetworkSerialization<u16> {
+    pub fn convert_be_network(&self) -> BeNetworkSerialization<u32> {
         match self {
             Self::Homogeneous(registry_id) => BeNetworkSerialization {
                 bits_per_entry: 0,
