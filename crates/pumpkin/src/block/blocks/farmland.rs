@@ -6,6 +6,7 @@ use crate::block::{
 };
 use crate::world::World;
 use pumpkin_data::block_properties::FarmlandLikeProperties;
+use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag;
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
@@ -144,11 +145,11 @@ fn is_water_nearby(world: &Arc<World>, block_pos: &BlockPos) -> bool {
                     y: dy,
                     z: dz,
                 });
-                // Vanilla checks the fluid state, not the block identity:
-                // waterlogged blocks (e.g. waterlogged stairs) hydrate too.
-                let state = world.get_block_state(&check_pos);
-                //TODO this should use tag water. It does not seem to work rn.
-                if state.id.to_block() == &Block::WATER || state.is_waterlogged() {
+                // Vanilla checks the fluid state, not the block identity.
+                // Route through the world's fluid contract so waterlogged
+                // blocks and source-water plants (kelp, kelp plant, seagrass,
+                // tall seagrass, bubble columns) all hydrate farmland too.
+                if world.get_fluid(&check_pos).matches_type(&Fluid::WATER) {
                     return true;
                 }
             }
