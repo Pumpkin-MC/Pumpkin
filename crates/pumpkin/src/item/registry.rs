@@ -6,6 +6,7 @@ use pumpkin_data::Block;
 use pumpkin_data::BlockDirection;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_util::Hand;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use rustc_hash::FxHashMap;
@@ -31,12 +32,19 @@ impl ItemRegistry {
         }
     }
 
-    pub fn on_use(&self, stack: &ItemStack, player: &Player) {
+    pub fn on_use(&self, stack: &ItemStack, player: &Player, hand: Hand) {
         let (yaw, pitch) = player.rotation();
-        self.on_use_with_rotation(stack, player, yaw, pitch);
+        self.on_use_with_rotation(stack, player, yaw, pitch, hand);
     }
 
-    pub fn on_use_with_rotation(&self, stack: &ItemStack, player: &Player, yaw: f32, pitch: f32) {
+    pub fn on_use_with_rotation(
+        &self,
+        stack: &ItemStack,
+        player: &Player,
+        yaw: f32,
+        pitch: f32,
+        hand: Hand,
+    ) {
         let item = stack.item;
         let cooldown = stack.get_use_cooldown();
         let cooldown_group = cooldown
@@ -49,7 +57,7 @@ impl ItemRegistry {
 
         let pumpkin_item = self.get_pumpkin_item(item.id);
         if let Some(pumpkin_item) = pumpkin_item {
-            pumpkin_item.normal_use_with_rotation(item, player, yaw, pitch);
+            pumpkin_item.normal_use_with_hand(item, player, yaw, pitch, hand);
         }
 
         if let Some(cooldown) = cooldown {

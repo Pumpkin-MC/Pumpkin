@@ -417,7 +417,7 @@ impl BedrockClient {
                         &server;
                         event;
                         'after: {
-                            server.item_registry.on_use(&stack_for_use, player);
+                            server.item_registry.on_use(&stack_for_use, player, Hand::Right);
                         }
                     }}
                 }
