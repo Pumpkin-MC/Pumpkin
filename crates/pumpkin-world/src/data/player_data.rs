@@ -151,11 +151,8 @@ impl PlayerDataStorage {
         // same inode, so the slower writer can rename torn contents over
         // the good file and the loser's rename can clobber the winner's.
         let temp_unique = TEMP_SAVE_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let temp_path = path.with_extension(format!(
-            "dat_new.{}.{}",
-            std::process::id(),
-            temp_unique
-        ));
+        let temp_path =
+            path.with_extension(format!("dat_new.{}.{}", std::process::id(), temp_unique));
         match File::create(&temp_path) {
             Ok(file) => {
                 if let Err(e) = pumpkin_nbt::nbt_compress::write_gzip_compound_tag(data, file) {
