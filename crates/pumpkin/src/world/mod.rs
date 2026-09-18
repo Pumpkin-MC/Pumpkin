@@ -4753,11 +4753,18 @@ impl World {
                         // stale data.
                         base_entity.velocity.store(Vector3::default());
 
-                        // Tracker owns pairing: spawn packets for every watcher.
-                        world.add_entity_silent(entity);
+                        // UUID-dedupes if another watcher already loaded this entity.
+                        // Tracker owns pairing (spawn packets + vehicle restore).
+                        world.add_entity_silent(entity.clone());
+                        player.try_restore_vehicle(&entity);
                     }
+                } else {
+                    // Already live for other watchers: pair this player now so
+                    // spawn packets and vehicle restore do not wait on a tracker tick.
+                    world
+                        .entity_tracker
+                        .update_player_chunks(&player, &world, &[position]);
                 }
-                // Already-live chunk: tracker pairs on its next pass.
             }
 
             #[cfg(debug_assertions)]

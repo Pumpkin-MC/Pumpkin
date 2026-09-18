@@ -1,0 +1,37 @@
+{
+  "type": "minecraft:fallen_tree",
+  "log_decorators": [
+    {
+      "type": "minecraft:attached_to_logs",
+      "block_provider": {
+        "type": "minecraft:weighted",
+        "entries": [
+          {
+            "data": "minecraft:red_mushroom",
+            "weight": 2
+          },
+          {
+            "data": "minecraft:brown_mushroom",
+            "weight": 1
+          }
+        ]
+      },
+      "directions": [
+        "up"
+      ],
+      "probability": 0.1
+    }
+  ],
+  "log_length": {
+    "type": "minecraft:uniform",
+    "max_inclusive": 8,
+    "min_inclusive": 5
+  },
+  "stump_decorators": [],
+  "trunk_provider": {
+    "id": "minecraft:birch_log",
+    "properties": {
+      "axis": "y"
+    }
+  }
+}

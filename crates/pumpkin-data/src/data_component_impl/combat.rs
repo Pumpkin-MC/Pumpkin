@@ -1049,7 +1049,7 @@ impl DataComponentImpl for SwingAnimationImpl {
         NbtTag::Compound(compound)
     }
 
-    default_impl!(SwingAnimation);
+    default_impl!(AttackAnimation);
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]

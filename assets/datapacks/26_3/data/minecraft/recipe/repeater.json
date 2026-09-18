@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "redstone",
+  "key": {
+    "#": "minecraft:redstone_torch",
+    "I": "minecraft:stone",
+    "X": "minecraft:redstone"
+  },
+  "pattern": [
+    "#X#",
+    "III"
+  ],
+  "result": {
+    "id": "minecraft:repeater"
+  }
+}

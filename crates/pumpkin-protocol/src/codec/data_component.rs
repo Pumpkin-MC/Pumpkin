@@ -983,14 +983,13 @@ pub fn deserialize(
         DataComponent::BlocksAttacks => Ok(BlocksAttacksImpl::deserialize(seq)?.to_dyn()),
         DataComponent::PiercingWeapon => Ok(PiercingWeaponImpl::deserialize(seq)?.to_dyn()),
         DataComponent::KineticWeapon => Ok(KineticWeaponImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::SwingAnimation => Ok(SwingAnimationImpl::deserialize(seq)?.to_dyn()),
+        DataComponent::AttackAnimation => Ok(SwingAnimationImpl::deserialize(seq)?.to_dyn()),
         DataComponent::AdditionalTradeCost => {
             Ok(AdditionalTradeCostImpl::deserialize(seq)?.to_dyn())
         }
         DataComponent::StoredEnchantments => Ok(StoredEnchantmentsImpl::deserialize(seq)?.to_dyn()),
         DataComponent::Dye => Ok(DyeImpl::deserialize(seq)?.to_dyn()),
         DataComponent::DyedColor => Ok(DyedColorImpl::deserialize(seq)?.to_dyn()),
-        DataComponent::MapColor => Ok(MapColorImpl::deserialize(seq)?.to_dyn()),
         DataComponent::MapId => Ok(MapIdImpl::deserialize(seq)?.to_dyn()),
         DataComponent::MapDecorations => Ok(MapDecorationsImpl::deserialize(seq)?.to_dyn()),
         DataComponent::MapPostProcessing => Ok(MapPostProcessingImpl::deserialize(seq)?.to_dyn()),
@@ -1078,6 +1077,10 @@ pub fn deserialize(
         DataComponent::CatCollar => Ok(CatCollarImpl::deserialize(seq)?.to_dyn()),
         DataComponent::SheepColor => Ok(SheepColorImpl::deserialize(seq)?.to_dyn()),
         DataComponent::ShulkerColor => Ok(ShulkerColorImpl::deserialize(seq)?.to_dyn()),
+        _ => Err(ReadingError::Message(format!(
+            "Unimplemented data component {}",
+            id.to_name()
+        ))),
     }
 }
 
@@ -1132,12 +1135,11 @@ pub fn serialize(
         DataComponent::BlocksAttacks => get::<BlocksAttacksImpl>(value).serialize(seq),
         DataComponent::PiercingWeapon => get::<PiercingWeaponImpl>(value).serialize(seq),
         DataComponent::KineticWeapon => get::<KineticWeaponImpl>(value).serialize(seq),
-        DataComponent::SwingAnimation => get::<SwingAnimationImpl>(value).serialize(seq),
+        DataComponent::AttackAnimation => get::<SwingAnimationImpl>(value).serialize(seq),
         DataComponent::AdditionalTradeCost => get::<AdditionalTradeCostImpl>(value).serialize(seq),
         DataComponent::StoredEnchantments => get::<StoredEnchantmentsImpl>(value).serialize(seq),
         DataComponent::Dye => get::<DyeImpl>(value).serialize(seq),
         DataComponent::DyedColor => get::<DyedColorImpl>(value).serialize(seq),
-        DataComponent::MapColor => get::<MapColorImpl>(value).serialize(seq),
         DataComponent::MapId => get::<MapIdImpl>(value).serialize(seq),
         DataComponent::MapDecorations => get::<MapDecorationsImpl>(value).serialize(seq),
         DataComponent::MapPostProcessing => get::<MapPostProcessingImpl>(value).serialize(seq),
@@ -1217,6 +1219,10 @@ pub fn serialize(
         DataComponent::CatCollar => get::<CatCollarImpl>(value).serialize(seq),
         DataComponent::SheepColor => get::<SheepColorImpl>(value).serialize(seq),
         DataComponent::ShulkerColor => get::<ShulkerColorImpl>(value).serialize(seq),
+        _ => Err(WritingError::Message(format!(
+            "Unimplemented data component {}",
+            id.to_name()
+        ))),
     }
 }
 
@@ -2176,17 +2182,6 @@ impl DataComponentCodec<Self> for DyeImpl {
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let _ = seq.get_var_int()?;
-        Ok(Self)
-    }
-}
-
-impl DataComponentCodec<Self> for MapColorImpl {
-    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_i32(0)
-    }
-
-    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let _ = seq.get_i32()?;
         Ok(Self)
     }
 }

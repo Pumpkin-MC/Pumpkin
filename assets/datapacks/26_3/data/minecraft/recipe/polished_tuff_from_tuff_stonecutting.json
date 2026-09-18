@@ -1,0 +1,7 @@
+{
+  "type": "minecraft:stonecutting",
+  "ingredient": "minecraft:tuff",
+  "result": {
+    "id": "minecraft:polished_tuff"
+  }
+}

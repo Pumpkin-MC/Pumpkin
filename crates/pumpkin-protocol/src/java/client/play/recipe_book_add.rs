@@ -96,11 +96,15 @@ fn write_item_stack_slot_display(
     count: u8,
     version: JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
-    write.write_var_int(&VarInt(slot_display_item_stack_type(version)))?;
     let static_item = Item::from_id(item.id)
         .ok_or_else(|| WritingError::Message(format!("item id {} must exist", item.id)))?;
-    ItemStackTemplateSerializer::from(ItemStack::new(count, static_item))
-        .write_with_version(write, &version)
+    let stack = ItemStack::new(count, static_item);
+    // A result without an `id` lowers to air, which vanilla rejects as an item stack
+    if stack.is_empty() {
+        return write_empty_slot_display(write, version);
+    }
+    write.write_var_int(&VarInt(slot_display_item_stack_type(version)))?;
+    ItemStackTemplateSerializer::from(stack).write_with_version(write, &version)
 }
 
 fn write_empty_slot_display(
@@ -963,4 +967,33 @@ fn write_dynamic_cooking_entry(
     write_dynamic_ingredient_holderset(write, &cooking.ingredient, version)?;
     write.write_u8(flags)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn air_result_writes_the_empty_slot_display() {
+        let result = RecipeResultStruct {
+            id: "minecraft:air",
+            count: 1,
+        };
+        for version in [JavaMinecraftVersion::V_1_21_2, JavaMinecraftVersion::V_26_3] {
+            let mut bytes = Vec::new();
+            write_result_slot_display(&mut bytes, &result, version).unwrap();
+            assert_eq!(
+                bytes,
+                [remap_slot_display_id_for_version(SLOT_DISPLAY_EMPTY, version) as u8]
+            );
+        }
+    }
+
+    #[test]
+    fn vanilla_recipes_serialize_for_every_recipe_book_version() {
+        let packet = CRecipeBookAdd::new(true, &[]);
+        for version in [JavaMinecraftVersion::V_1_21_2, JavaMinecraftVersion::V_26_3] {
+            packet.write_packet_data(Vec::new(), &version).unwrap();
+        }
+    }
 }

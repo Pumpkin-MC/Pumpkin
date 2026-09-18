@@ -204,6 +204,7 @@ fn load_datapack_tags(
                         if components[0] == "worldgen" && components.len() >= 2 {
                             let sub = match components[1].as_str() {
                                 "biomes" => "biome",
+                                "feature" => "configured_feature",
                                 s => s,
                             };
                             let cat = format!("worldgen/{sub}");
@@ -337,6 +338,7 @@ pub(crate) fn build() -> TokenStream {
         ("1_21_11", "V_1_21_11"),
         ("26_1", "V_26_1"),
         ("26_2", "V_26_2"),
+        ("26_3", "V_26_3"),
     ];
 
     let version_mapping = [
@@ -378,6 +380,7 @@ pub(crate) fn build() -> TokenStream {
         ("V_1_21_11", "V_1_21_11"),
         ("V_26_1", "V_26_1"),
         ("V_26_2", "V_26_2"),
+        ("V_26_3", "V_26_3"),
     ];
 
     // --- Load Global Assets ---
@@ -485,7 +488,7 @@ pub(crate) fn build() -> TokenStream {
         let datapack_base = datapack_data_dir.join("minecraft");
 
         let tags = load_datapack_tags(&datapack_data_dir);
-        let is_latest = ver_folder == "26_2";
+        let is_latest = ver_folder == "26_3";
 
         let mut ver_cat_match_arms = Vec::new();
         let fn_name = format_ident!("get_tags_{}", ver_ident_str);
@@ -508,7 +511,7 @@ pub(crate) fn build() -> TokenStream {
 
             if !datapack_id_maps.contains_key(&key) {
                 let dir =
-                    std::path::Path::new("../../assets/datapacks/26_2/data/minecraft").join(&key);
+                    std::path::Path::new("../../assets/datapacks/26_3/data/minecraft").join(&key);
                 if dir.is_dir() {
                     datapack_id_maps.insert(key.clone(), load_datapack_registry_ids(&dir));
                 }
@@ -581,7 +584,7 @@ pub(crate) fn build() -> TokenStream {
 
     for (ver_variant, ver_ident_str) in version_mapping {
         let ver_ident = format_ident!("{ver_variant}");
-        if ver_ident_str == "V_26_2" {
+        if ver_ident_str == "V_26_3" {
             version_fn_match_arms.push(quote! {
                 JavaMinecraftVersion::#ver_ident => get_latest_map(tag_category)
             });
