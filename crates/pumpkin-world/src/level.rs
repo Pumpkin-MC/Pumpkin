@@ -650,11 +650,16 @@ impl Level {
         if let Some(res) = self.read_chunk_sync(&pos, &f) {
             return res;
         }
-        let chunk = self.fetch_chunk(pos).await;
-        if self.loaded_chunks.insert(pos, chunk.clone()).is_none() {
-            self.loaded_chunk_changes
-                .push(LoadedChunkChange::Loaded(pos));
-        }
+        let fetched_chunk = self.fetch_chunk(pos).await;
+        let chunk = match self.loaded_chunks.entry(pos) {
+            Entry::Occupied(entry) => entry.get().clone(),
+            Entry::Vacant(entry) => {
+                entry.insert(fetched_chunk.clone());
+                self.loaded_chunk_changes
+                    .push(LoadedChunkChange::Loaded(pos));
+                fetched_chunk
+            }
+        };
         f(&chunk)
     }
 
