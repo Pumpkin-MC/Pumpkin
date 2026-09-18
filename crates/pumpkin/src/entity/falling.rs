@@ -78,7 +78,7 @@ impl EntityBase for FallingEntity {
             world.send_to_tracking_players_editioned(
                 entity,
                 &CBlockUpdate::new(landing_pos, i32::from(placed.as_u16()).into()),
-                &CUpdateBlock::new(landing_pos, BlockState::to_be_network_id(placed) as u32),
+                &CUpdateBlock::new(landing_pos, BlockState::to_be_network_id(placed)),
             );
             self.entity.remove();
         }

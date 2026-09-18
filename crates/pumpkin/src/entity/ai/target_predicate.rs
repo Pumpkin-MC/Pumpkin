@@ -101,12 +101,6 @@ impl TargetPredicate {
             return false;
         }
 
-        if let Some(predicate) = &self.predicate
-            && !predicate(target_living, world)
-        {
-            return false;
-        }
-
         let Some(tester) = tester else {
             // Without a tester only the plain "can be seen as enemy" rule applies.
             return !(self.attackable
@@ -143,6 +137,14 @@ impl TargetPredicate {
         if self.respects_visibility
             && let Some(mob) = tester.get_mob()
             && !mob.has_line_of_sight(target.get_entity())
+        {
+            return false;
+        }
+
+        // Mirrors vanilla `TargetingConditions.test`, which runs the custom
+        // selector last, after the generic attackability/range/visibility checks.
+        if let Some(predicate) = &self.predicate
+            && !predicate(target_living, world)
         {
             return false;
         }

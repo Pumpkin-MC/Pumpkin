@@ -1,0 +1,18 @@
+{
+  "placement": {
+    "type": "minecraft:random_spread",
+    "salt": 30084232,
+    "separation": 4,
+    "spacing": 27
+  },
+  "structures": [
+    {
+      "structure": "minecraft:fortress",
+      "weight": 2
+    },
+    {
+      "structure": "minecraft:bastion_remnant",
+      "weight": 3
+    }
+  ]
+}

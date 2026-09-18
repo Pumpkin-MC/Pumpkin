@@ -1,0 +1,45 @@
+{
+  "given_item_modifier": [
+    {
+      "type": "minecraft:set_enchantments",
+      "enchantments": {
+        "minecraft:mending": 1
+      }
+    },
+    {
+      "type": "minecraft:filtered",
+      "item_filter": {
+        "items": "minecraft:chainmail_chestplate",
+        "predicates": {
+          "minecraft:enchantments": [
+            {
+              "levels": 1
+            }
+          ]
+        }
+      },
+      "on_fail": {
+        "type": "minecraft:discard"
+      }
+    }
+  ],
+  "gives": {
+    "id": "minecraft:chainmail_chestplate"
+  },
+  "max_uses": 3,
+  "merchant_predicate": {
+    "type": "minecraft:entity_properties",
+    "entity": "this",
+    "predicate": {
+      "minecraft:predicates": {
+        "minecraft:villager/variant": "minecraft:swamp"
+      }
+    }
+  },
+  "reputation_discount": 0.05,
+  "wants": {
+    "count": 13,
+    "id": "minecraft:emerald"
+  },
+  "xp": 15
+}

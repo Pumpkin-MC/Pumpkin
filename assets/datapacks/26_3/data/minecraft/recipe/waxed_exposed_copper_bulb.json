@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "redstone",
+  "group": "waxed_exposed_copper_bulb",
+  "key": {
+    "B": "minecraft:blaze_rod",
+    "C": "minecraft:waxed_exposed_copper",
+    "R": "minecraft:redstone"
+  },
+  "pattern": [
+    " C ",
+    "CBC",
+    " R "
+  ],
+  "result": {
+    "count": 4,
+    "id": "minecraft:waxed_exposed_copper_bulb"
+  }
+}
