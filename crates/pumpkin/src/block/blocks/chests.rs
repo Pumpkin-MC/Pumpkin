@@ -591,8 +591,7 @@ fn get_chest_properties_if_can_connect(
     None
 }
 
-const CAT_BLOCKING_BOX: BoundingBox =
-    BoundingBox::new_array([0.0, 1.0, 0.0], [1.0, 2.0, 1.0]);
+const CAT_BLOCKING_BOX: BoundingBox = BoundingBox::new_array([0.0, 1.0, 0.0], [1.0, 2.0, 1.0]);
 
 pub(crate) fn is_chest_blocked(world: &World, block_pos: &BlockPos) -> bool {
     has_block_on_top(world, block_pos) || has_sitting_cat_on_top(world, block_pos)
@@ -634,10 +633,7 @@ mod tests {
     use arc_swap::ArcSwap;
     use pumpkin_config::world::LevelConfig;
     use pumpkin_data::{dimension::Dimension, entity::EntityType};
-    use pumpkin_util::{
-        math::vector3::Vector3,
-        world_seed::Seed,
-    };
+    use pumpkin_util::{math::vector3::Vector3, world_seed::Seed};
     use pumpkin_world::{dimension::into_level, world_info::LevelData};
     use std::sync::{Arc, Weak};
 
