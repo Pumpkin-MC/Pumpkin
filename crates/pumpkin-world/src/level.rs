@@ -1081,15 +1081,20 @@ mod tests {
         );
         let chunk_pos = Vector2::new(2, 3);
         let block_pos = BlockPos::new(32, 64, 48);
+        let fluid_pos = BlockPos::new(33, 64, 48);
         level
             .loaded_chunks
             .insert(chunk_pos, ChunkData::empty_sync(chunk_pos.x, chunk_pos.y));
         level.schedule_block_tick(&Block::STONE, block_pos, 0, TickPriority::Normal);
+        level.schedule_fluid_tick(&Fluid::WATER, fluid_pos, 0, TickPriority::Normal);
 
         let inactive = FxHashSet::default();
         assert!(level.get_tick_data(&inactive, 0).block_ticks.is_empty());
+        assert!(level.get_tick_data(&inactive, 0).fluid_ticks.is_empty());
 
         let active = FxHashSet::from_iter([chunk_pos]);
-        assert_eq!(level.get_tick_data(&active, 0).block_ticks.len(), 1);
+        let ticks = level.get_tick_data(&active, 0);
+        assert_eq!(ticks.block_ticks.len(), 1);
+        assert_eq!(ticks.fluid_ticks.len(), 1);
     }
 }
