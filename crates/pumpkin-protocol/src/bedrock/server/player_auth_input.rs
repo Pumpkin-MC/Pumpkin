@@ -44,30 +44,28 @@ impl PacketRead for SPlayerAuthInput {
         let move_vec = Vector2::<f32>::read(reader)?;
         let head_yaw = f32::read(reader)?;
         let mut input_data = Bitset::<66>::default();
-        if bool::read(reader)? {
-            let count = VarUInt::read(reader)?.0;
-            if count > 66 {
+        let count = VarUInt::read(reader)?.0;
+        if count > 66 {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                format!("too many player input flags: {count}"),
+            ));
+        }
+        for _ in 0..count {
+            let flag = VarInt::read(reader)?.0;
+            if !(0..66).contains(&flag) {
                 return Err(Error::new(
                     ErrorKind::InvalidData,
-                    format!("too many player input flags: {count}"),
+                    format!("invalid player input flag {flag}"),
                 ));
             }
-            for _ in 0..count {
-                let flag = VarInt::read(reader)?.0;
-                if !(0..66).contains(&flag) {
-                    return Err(Error::new(
-                        ErrorKind::InvalidData,
-                        format!("invalid player input flag {flag}"),
-                    ));
-                }
-                if input_data.get(flag as usize) {
-                    return Err(Error::new(
-                        ErrorKind::InvalidData,
-                        format!("duplicate player input flag {flag}"),
-                    ));
-                }
-                input_data.set(flag as usize, true);
+            if input_data.get(flag as usize) {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    format!("duplicate player input flag {flag}"),
+                ));
             }
+            input_data.set(flag as usize, true);
         }
         let input_mode = VarUInt::read(reader)?;
         let play_mode = VarUInt::read(reader)?;
@@ -78,21 +76,21 @@ impl PacketRead for SPlayerAuthInput {
         let delta = Vector3::<f32>::read(reader)?;
 
         // 1. Perform Item Interaction
-        let item_interaction = if bool::read(reader)? && bool::read(reader)? {
+        let item_interaction = if bool::read(reader)? {
             Some(PlayerInventoryAction::read(reader)?)
         } else {
             None
         };
 
         // 2. Item Stack Request
-        let item_stack_request = if bool::read(reader)? && bool::read(reader)? {
+        let item_stack_request = if bool::read(reader)? {
             Some(crate::bedrock::server::item_stack_request::ItemStackRequest::read(reader)?)
         } else {
             None
         };
 
         // 3. Block Actions
-        let block_actions = if bool::read(reader)? && bool::read(reader)? {
+        let block_actions = if bool::read(reader)? {
             let count = VarUInt::read(reader)?.0 as usize;
             if count > 1024 {
                 return Err(Error::new(
@@ -110,10 +108,10 @@ impl PacketRead for SPlayerAuthInput {
         };
 
         // 4. Vehicle Info (Matches Go logic)
-        let vehicle_rotation = (bool::read(reader)? && bool::read(reader)?)
+        let vehicle_rotation = bool::read(reader)?
             .then(|| Vector2::<f32>::read(reader))
             .transpose()?;
-        let vehicle_unique_id = (bool::read(reader)? && bool::read(reader)?)
+        let vehicle_unique_id = bool::read(reader)?
             .then(|| VarLong::read(reader))
             .transpose()?;
 
@@ -176,20 +174,17 @@ impl PacketRead for PlayerInventoryAction {
             }
         }
         let mut actions = Vec::new();
-        if bool::read(buf)? && bool::read(buf)? {
-            let actions_len = VarUInt::read(buf)?.0 as usize;
-            if actions_len > 1024 {
-                return Err(Error::new(
-                    ErrorKind::InvalidData,
-                    "actions_len exceeds limit",
-                ));
-            }
-            actions.reserve(actions_len.min(64));
-            for _ in 0..actions_len {
-                actions.push(
-                    crate::bedrock::server::inventory_transaction::InventoryAction::read(buf)?,
-                );
-            }
+        let actions_len = VarUInt::read(buf)?.0 as usize;
+        if actions_len > 1024 {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "actions_len exceeds limit",
+            ));
+        }
+        actions.reserve(actions_len.min(64));
+        for _ in 0..actions_len {
+            actions
+                .push(crate::bedrock::server::inventory_transaction::InventoryAction::read(buf)?);
         }
         let transaction = PlayerUseItemTransactionData::read(buf)?;
         Ok(Self {
@@ -352,11 +347,10 @@ mod tests {
     }
 
     #[test]
-    fn auth_input_reads_v2168_flag_list_and_signed_interaction_model() {
+    fn auth_input_reads_flag_list_and_signed_interaction_model() {
         let mut bytes = auth_input_prefix();
-        true.write(&mut bytes).unwrap();
         VarUInt(2).write(&mut bytes).unwrap();
-        VarInt(0).write(&mut bytes).unwrap();
+        VarInt(48).write(&mut bytes).unwrap();
         VarInt(65).write(&mut bytes).unwrap();
         VarUInt(0).write(&mut bytes).unwrap();
         VarUInt(0).write(&mut bytes).unwrap();
@@ -368,15 +362,16 @@ mod tests {
             0.0f32.write(&mut bytes).unwrap();
         }
         for _ in 0..5 {
-            true.write(&mut bytes).unwrap();
             false.write(&mut bytes).unwrap();
         }
         for _ in 0..7 {
             0.0f32.write(&mut bytes).unwrap();
         }
 
-        let packet = SPlayerAuthInput::read(&mut bytes.as_slice()).unwrap();
-        assert!(packet.input_data.get(0usize));
+        let mut reader = bytes.as_slice();
+        let packet = SPlayerAuthInput::read(&mut reader).unwrap();
+        assert!(reader.is_empty());
+        assert!(packet.input_data.get(48usize));
         assert!(packet.input_data.get(65usize));
         assert_eq!(packet.interaction_model, VarInt(-1));
     }
@@ -384,7 +379,6 @@ mod tests {
     #[test]
     fn auth_input_rejects_duplicate_flags() {
         let mut bytes = auth_input_prefix();
-        true.write(&mut bytes).unwrap();
         VarUInt(2).write(&mut bytes).unwrap();
         VarInt(1).write(&mut bytes).unwrap();
         VarInt(1).write(&mut bytes).unwrap();
