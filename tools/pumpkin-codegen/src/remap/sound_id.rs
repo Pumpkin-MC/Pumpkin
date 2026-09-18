@@ -185,7 +185,7 @@ pub fn build() -> TokenStream {
         },
     };
 
-    let all_mappings = remapper.process(&node_26_1);
+    let all_mappings = remapper.process(&node_26_2);
     let mut static_values = TokenStream::new();
     let mut match_arms = TokenStream::new();
     for (ver, mapping) in &all_mappings {
