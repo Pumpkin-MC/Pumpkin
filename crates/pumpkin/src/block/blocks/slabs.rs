@@ -6,7 +6,7 @@ use crate::block::{
     BlockBehaviour, BlockIsReplacing, CanUpdateAtArgs, OnPlaceArgs, PathComputationType,
 };
 
-type SlabProperties = pumpkin_data::block_properties::ResinBrickSlabLikeProperties;
+type SlabProperties = pumpkin_data::block_properties::WhiteWoolSlabLikeProperties;
 
 #[pumpkin_block_from_tag("minecraft:slabs")]
 pub struct SlabBlock;

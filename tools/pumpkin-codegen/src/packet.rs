@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, fs};
 use crate::version::JavaMinecraftVersion;
 
 /// The newest protocol version used as the fallback for unknown versions in `PacketId::to_id`.
-const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_2;
+const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_3;
 
 /// Represents the protocol_id object within the JSON.
 #[derive(Deserialize)]
@@ -15,7 +15,7 @@ pub struct PacketInfo {
 }
 
 /// Represents the mapping from packet direction (serverbound / clientbound) to packets.
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 pub struct PhaseData {
     #[serde(default)]
     pub serverbound: BTreeMap<String, PacketInfo>,
@@ -26,6 +26,70 @@ pub struct PhaseData {
 /// Raw deserialization shape for a single versioned packet mapping file.
 #[derive(Deserialize)]
 pub struct Packets(pub BTreeMap<String, PhaseData>);
+
+/// Compact dump used by `assets/packets.json` / `26_3_packets.json`.
+#[derive(Deserialize)]
+struct CompactPackets {
+    #[serde(default)]
+    serverbound: BTreeMap<String, BTreeMap<String, i32>>,
+    #[serde(default)]
+    clientbound: BTreeMap<String, BTreeMap<String, i32>>,
+}
+
+fn canonicalize_phase(phase: &str) -> String {
+    if phase == "config" {
+        "configuration".to_string()
+    } else {
+        phase.to_string()
+    }
+}
+
+fn canonicalize_packet_name(name: String) -> String {
+    if name.contains(':') {
+        name
+    } else {
+        format!("minecraft:{name}")
+    }
+}
+
+fn parse_packets(path: &str, content: &str) -> Packets {
+    if let Ok(parsed) = serde_json::from_str::<Packets>(content) {
+        return parsed;
+    }
+
+    let compact: CompactPackets =
+        serde_json::from_str(content).unwrap_or_else(|e| panic!("Failed to parse {path}: {e}"));
+
+    let mut phases = BTreeMap::<String, PhaseData>::new();
+    for (phase, packets) in compact.serverbound {
+        let phase = canonicalize_phase(&phase);
+        let entry = phases.entry(phase).or_default();
+        entry.serverbound = packets
+            .into_iter()
+            .map(|(name, id)| {
+                (
+                    canonicalize_packet_name(name),
+                    PacketInfo { protocol_id: id },
+                )
+            })
+            .collect();
+    }
+    for (phase, packets) in compact.clientbound {
+        let phase = canonicalize_phase(&phase);
+        let entry = phases.entry(phase).or_default();
+        entry.clientbound = packets
+            .into_iter()
+            .map(|(name, id)| {
+                (
+                    canonicalize_packet_name(name),
+                    PacketInfo { protocol_id: id },
+                )
+            })
+            .collect();
+    }
+
+    Packets(phases)
+}
 
 /// Generates the `TokenStream` for the `PacketId` struct, `CURRENT_MC_VERSION`, and
 /// all `serverbound`/`clientbound` packet ID constants.
@@ -82,6 +146,7 @@ pub(crate) fn build() -> TokenStream {
         (JavaMinecraftVersion::V_1_21_11, "1_21_11_packets.json"),
         (JavaMinecraftVersion::V_26_1, "26_1_packets.json"),
         (JavaMinecraftVersion::V_26_2, "26_2_packets.json"),
+        (JavaMinecraftVersion::V_26_3, "26_3_packets.json"),
     ];
 
     // Parse available packet files into a BTreeMap keyed by JavaMinecraftVersion
@@ -91,8 +156,7 @@ pub(crate) fn build() -> TokenStream {
 
         let content = fs::read_to_string(&path)
             .unwrap_or_else(|_| panic!("Failed to read packet JSON file: {path}"));
-        let parsed: Packets = serde_json::from_str(&content)
-            .unwrap_or_else(|e| panic!("Failed to parse {path}: {e}"));
+        let parsed = parse_packets(&path, &content);
 
         versions.insert(ver, parsed);
     }

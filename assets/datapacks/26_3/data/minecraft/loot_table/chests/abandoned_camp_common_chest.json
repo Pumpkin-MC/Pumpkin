@@ -1,0 +1,569 @@
+{
+  "type": "minecraft:chest",
+  "pools": [
+    {
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:set_count",
+            "count": 4
+          },
+          "name": "minecraft:arrow"
+        },
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:set_count",
+            "count": 1
+          },
+          "name": "minecraft:map"
+        },
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:set_count",
+            "count": {
+              "type": "minecraft:uniform",
+              "max": 4,
+              "min": 2
+            }
+          },
+          "name": "minecraft:bone"
+        },
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:set_count",
+            "count": 1
+          },
+          "name": "minecraft:cobweb"
+        },
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:set_count",
+            "count": 1
+          },
+          "name": "minecraft:compass"
+        },
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:set_count",
+            "count": {
+              "type": "minecraft:uniform",
+              "max": 2,
+              "min": 1
+            }
+          },
+          "name": "minecraft:map"
+        },
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:set_count",
+            "count": {
+              "type": "minecraft:uniform",
+              "max": 4,
+              "min": 2
+            }
+          },
+          "name": "minecraft:gunpowder"
+        },
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:set_count",
+            "count": 1
+          },
+          "name": "minecraft:fishing_rod"
+        },
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:set_count",
+            "count": 1
+          },
+          "name": "minecraft:flint_and_steel"
+        },
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:set_count",
+            "count": {
+              "type": "minecraft:uniform",
+              "max": 4,
+              "min": 1
+            }
+          },
+          "name": "minecraft:glass_bottle"
+        },
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:set_count",
+            "count": {
+              "type": "minecraft:uniform",
+              "max": 3,
+              "min": 1
+            }
+          },
+          "name": "minecraft:lead"
+        },
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:set_count",
+            "count": {
+              "type": "minecraft:uniform",
+              "max": 4,
+              "min": 1
+            }
+          },
+          "name": "minecraft:leather"
+        },
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:set_count",
+            "count": 1
+          },
+          "name": "minecraft:bundle"
+        },
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:set_count",
+            "count": {
+              "type": "minecraft:uniform",
+              "max": 4,
+              "min": 1
+            }
+          },
+          "name": "minecraft:rabbit_hide"
+        },
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:set_count",
+            "count": 1
+          },
+          "name": "minecraft:saddle"
+        },
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:set_count",
+            "count": {
+              "type": "minecraft:uniform",
+              "max": 3,
+              "min": 1
+            }
+          },
+          "name": "minecraft:white_candle"
+        }
+      ],
+      "rolls": {
+        "type": "minecraft:uniform",
+        "max": 6,
+        "min": 4
+      }
+    },
+    {
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:set_count",
+            "count": 1
+          },
+          "name": "minecraft:bow"
+        },
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:set_count",
+            "count": 1
+          },
+          "name": "minecraft:bucket"
+        },
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:set_count",
+            "count": 1
+          },
+          "name": "minecraft:copper_axe"
+        },
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:set_count",
+            "count": 1
+          },
+          "name": "minecraft:copper_boots"
+        },
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:set_count",
+            "count": 1
+          },
+          "name": "minecraft:copper_chestplate"
+        },
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:set_count",
+            "count": 1
+          },
+          "name": "minecraft:copper_leggings"
+        },
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:set_count",
+            "count": 1
+          },
+          "name": "minecraft:copper_spear"
+        },
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:set_count",
+            "count": 1
+          },
+          "name": "minecraft:copper_sword"
+        },
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:set_count",
+            "count": 1
+          },
+          "name": "minecraft:spyglass"
+        },
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:set_count",
+            "count": 1
+          },
+          "name": "minecraft:shears"
+        }
+      ],
+      "rolls": 2
+    },
+    {
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "condition": {
+            "type": "minecraft:inverted",
+            "term": {
+              "type": "minecraft:location_check",
+              "predicate": {
+                "biomes": "minecraft:bamboo_jungle"
+              }
+            }
+          },
+          "modifier": [
+            {
+              "type": "minecraft:set_name",
+              "name": {
+                "translate": "filled_map.bamboo_camp_map"
+              },
+              "target": "item_name"
+            },
+            {
+              "type": "minecraft:exploration_map",
+              "decoration": "minecraft:abandoned_camp",
+              "destination": "#minecraft:on_abandoned_camp_bamboo_jungle"
+            },
+            {
+              "type": "minecraft:filtered",
+              "item_filter": {
+                "predicates": {
+                  "minecraft:map_id": {}
+                }
+              },
+              "on_fail": {
+                "type": "minecraft:discard"
+              }
+            }
+          ],
+          "name": "minecraft:abandoned_camp_map"
+        },
+        {
+          "type": "minecraft:item",
+          "condition": {
+            "type": "minecraft:inverted",
+            "term": {
+              "type": "minecraft:location_check",
+              "predicate": {
+                "biomes": "minecraft:cherry_grove"
+              }
+            }
+          },
+          "modifier": [
+            {
+              "type": "minecraft:set_name",
+              "name": {
+                "translate": "filled_map.cherry_grove_camp_map"
+              },
+              "target": "item_name"
+            },
+            {
+              "type": "minecraft:exploration_map",
+              "decoration": "minecraft:abandoned_camp",
+              "destination": "#minecraft:on_abandoned_camp_cherry_grove"
+            },
+            {
+              "type": "minecraft:filtered",
+              "item_filter": {
+                "predicates": {
+                  "minecraft:map_id": {}
+                }
+              },
+              "on_fail": {
+                "type": "minecraft:discard"
+              }
+            }
+          ],
+          "name": "minecraft:abandoned_camp_map"
+        },
+        {
+          "type": "minecraft:item",
+          "condition": {
+            "type": "minecraft:inverted",
+            "term": {
+              "type": "minecraft:location_check",
+              "predicate": {
+                "biomes": "minecraft:birch_forest"
+              }
+            }
+          },
+          "modifier": [
+            {
+              "type": "minecraft:set_name",
+              "name": {
+                "translate": "filled_map.birch_forest_camp_map"
+              },
+              "target": "item_name"
+            },
+            {
+              "type": "minecraft:exploration_map",
+              "decoration": "minecraft:abandoned_camp",
+              "destination": "#minecraft:on_abandoned_camp_birch_forest"
+            },
+            {
+              "type": "minecraft:filtered",
+              "item_filter": {
+                "predicates": {
+                  "minecraft:map_id": {}
+                }
+              },
+              "on_fail": {
+                "type": "minecraft:discard"
+              }
+            }
+          ],
+          "name": "minecraft:abandoned_camp_map"
+        },
+        {
+          "type": "minecraft:item",
+          "condition": {
+            "type": "minecraft:inverted",
+            "term": {
+              "type": "minecraft:location_check",
+              "predicate": {
+                "biomes": "minecraft:dappled_forest"
+              }
+            }
+          },
+          "modifier": [
+            {
+              "type": "minecraft:set_name",
+              "name": {
+                "translate": "filled_map.dappled_forest_camp_map"
+              },
+              "target": "item_name"
+            },
+            {
+              "type": "minecraft:exploration_map",
+              "decoration": "minecraft:abandoned_camp",
+              "destination": "#minecraft:on_abandoned_camp_dappled_forest"
+            },
+            {
+              "type": "minecraft:filtered",
+              "item_filter": {
+                "predicates": {
+                  "minecraft:map_id": {}
+                }
+              },
+              "on_fail": {
+                "type": "minecraft:discard"
+              }
+            }
+          ],
+          "name": "minecraft:abandoned_camp_map"
+        },
+        {
+          "type": "minecraft:item",
+          "condition": {
+            "type": "minecraft:inverted",
+            "term": {
+              "type": "minecraft:location_check",
+              "predicate": {
+                "biomes": "minecraft:flower_forest"
+              }
+            }
+          },
+          "modifier": [
+            {
+              "type": "minecraft:set_name",
+              "name": {
+                "translate": "filled_map.flower_forest_camp_map"
+              },
+              "target": "item_name"
+            },
+            {
+              "type": "minecraft:exploration_map",
+              "decoration": "minecraft:abandoned_camp",
+              "destination": "#minecraft:on_abandoned_camp_flower_forest"
+            },
+            {
+              "type": "minecraft:filtered",
+              "item_filter": {
+                "predicates": {
+                  "minecraft:map_id": {}
+                }
+              },
+              "on_fail": {
+                "type": "minecraft:discard"
+              }
+            }
+          ],
+          "name": "minecraft:abandoned_camp_map"
+        },
+        {
+          "type": "minecraft:item",
+          "condition": {
+            "type": "minecraft:inverted",
+            "term": {
+              "type": "minecraft:location_check",
+              "predicate": {
+                "biomes": "minecraft:pale_garden"
+              }
+            }
+          },
+          "modifier": [
+            {
+              "type": "minecraft:set_name",
+              "name": {
+                "translate": "filled_map.pale_garden_camp_map"
+              },
+              "target": "item_name"
+            },
+            {
+              "type": "minecraft:exploration_map",
+              "decoration": "minecraft:abandoned_camp",
+              "destination": "#minecraft:on_abandoned_camp_pale_garden"
+            },
+            {
+              "type": "minecraft:filtered",
+              "item_filter": {
+                "predicates": {
+                  "minecraft:map_id": {}
+                }
+              },
+              "on_fail": {
+                "type": "minecraft:discard"
+              }
+            }
+          ],
+          "name": "minecraft:abandoned_camp_map"
+        },
+        {
+          "type": "minecraft:item",
+          "condition": {
+            "type": "minecraft:inverted",
+            "term": {
+              "type": "minecraft:location_check",
+              "predicate": {
+                "biomes": "minecraft:swamp"
+              }
+            }
+          },
+          "modifier": [
+            {
+              "type": "minecraft:set_name",
+              "name": {
+                "translate": "filled_map.swamp_camp_map"
+              },
+              "target": "item_name"
+            },
+            {
+              "type": "minecraft:exploration_map",
+              "decoration": "minecraft:abandoned_camp",
+              "destination": "#minecraft:on_abandoned_camp_swamp"
+            },
+            {
+              "type": "minecraft:filtered",
+              "item_filter": {
+                "predicates": {
+                  "minecraft:map_id": {}
+                }
+              },
+              "on_fail": {
+                "type": "minecraft:discard"
+              }
+            }
+          ],
+          "name": "minecraft:abandoned_camp_map"
+        },
+        {
+          "type": "minecraft:item",
+          "condition": {
+            "type": "minecraft:inverted",
+            "term": {
+              "type": "minecraft:location_check",
+              "predicate": {
+                "biomes": "minecraft:windswept_forest"
+              }
+            }
+          },
+          "modifier": [
+            {
+              "type": "minecraft:set_name",
+              "name": {
+                "translate": "filled_map.windswept_forest_camp_map"
+              },
+              "target": "item_name"
+            },
+            {
+              "type": "minecraft:exploration_map",
+              "decoration": "minecraft:abandoned_camp",
+              "destination": "#minecraft:on_abandoned_camp_windswept_forest"
+            },
+            {
+              "type": "minecraft:filtered",
+              "item_filter": {
+                "predicates": {
+                  "minecraft:map_id": {}
+                }
+              },
+              "on_fail": {
+                "type": "minecraft:discard"
+              }
+            }
+          ],
+          "name": "minecraft:abandoned_camp_map"
+        }
+      ],
+      "rolls": 1
+    }
+  ],
+  "random_sequence": "minecraft:chests/abandoned_camp_common_chest"
+}

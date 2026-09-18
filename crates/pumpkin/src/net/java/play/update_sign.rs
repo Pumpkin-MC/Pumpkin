@@ -49,15 +49,24 @@ impl JavaClient {
 
         let text = sign_entity.get_text(sign_data.is_front_text);
 
-        *text
-            .messages
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = [
-            sign_data.line_1.into(),
-            sign_data.line_2.into(),
-            sign_data.line_3.into(),
-            sign_data.line_4.into(),
+        let new_messages = [
+            Box::<str>::from(sign_data.line_1),
+            Box::<str>::from(sign_data.line_2),
+            Box::<str>::from(sign_data.line_3),
+            Box::<str>::from(sign_data.line_4),
         ];
+
+        text.messages
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone_from(&new_messages);
+        // We do not filter anything, so the filtered copy has to track the raw one. Leaving it
+        // empty makes it differ, which puts an empty `filtered_messages` on the wire and blanks
+        // the sign for clients that render with text filtering enabled.
+        *text
+            .filtered_messages
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = new_messages;
         *sign_entity
             .currently_editing_player()
             .lock()

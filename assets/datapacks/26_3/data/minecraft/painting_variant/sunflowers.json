@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:sunflowers",
+  "author": {
+    "color": "gray",
+    "translate": "painting.minecraft.sunflowers.author"
+  },
+  "height": 3,
+  "title": {
+    "color": "yellow",
+    "translate": "painting.minecraft.sunflowers.title"
+  },
+  "width": 3
+}

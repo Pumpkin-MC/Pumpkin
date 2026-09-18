@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:dennis",
+  "author": {
+    "color": "gray",
+    "translate": "painting.minecraft.dennis.author"
+  },
+  "height": 3,
+  "title": {
+    "color": "yellow",
+    "translate": "painting.minecraft.dennis.title"
+  },
+  "width": 3
+}

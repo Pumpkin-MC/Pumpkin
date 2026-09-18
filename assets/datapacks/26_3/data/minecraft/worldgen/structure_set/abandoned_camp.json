@@ -1,0 +1,82 @@
+{
+  "placement": {
+    "type": "minecraft:random_spread",
+    "salt": 91231127,
+    "separation": 8,
+    "spacing": 37
+  },
+  "structures": [
+    {
+      "structure": "minecraft:abandoned_camp_bamboo_jungle",
+      "weight": 1
+    },
+    {
+      "structure": "minecraft:abandoned_camp_birch_forest",
+      "weight": 1
+    },
+    {
+      "structure": "minecraft:abandoned_camp_cherry_grove",
+      "weight": 1
+    },
+    {
+      "structure": "minecraft:abandoned_camp_dappled_forest",
+      "weight": 1
+    },
+    {
+      "structure": "minecraft:abandoned_camp_flower_forest",
+      "weight": 1
+    },
+    {
+      "structure": "minecraft:abandoned_camp_forest",
+      "weight": 1
+    },
+    {
+      "structure": "minecraft:abandoned_camp_meadow",
+      "weight": 1
+    },
+    {
+      "structure": "minecraft:abandoned_camp_old_growth_pine_taiga",
+      "weight": 1
+    },
+    {
+      "structure": "minecraft:abandoned_camp_old_growth_birch_forest",
+      "weight": 1
+    },
+    {
+      "structure": "minecraft:abandoned_camp_old_growth_spruce_taiga",
+      "weight": 1
+    },
+    {
+      "structure": "minecraft:abandoned_camp_pale_garden",
+      "weight": 1
+    },
+    {
+      "structure": "minecraft:abandoned_camp_savanna",
+      "weight": 1
+    },
+    {
+      "structure": "minecraft:abandoned_camp_snowy_taiga",
+      "weight": 1
+    },
+    {
+      "structure": "minecraft:abandoned_camp_sparse_jungle",
+      "weight": 1
+    },
+    {
+      "structure": "minecraft:abandoned_camp_swamp",
+      "weight": 1
+    },
+    {
+      "structure": "minecraft:abandoned_camp_taiga",
+      "weight": 1
+    },
+    {
+      "structure": "minecraft:abandoned_camp_windswept_forest",
+      "weight": 1
+    },
+    {
+      "structure": "minecraft:abandoned_camp_wooded_badlands",
+      "weight": 1
+    }
+  ]
+}

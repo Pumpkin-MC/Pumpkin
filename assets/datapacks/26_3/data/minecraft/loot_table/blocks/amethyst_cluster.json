@@ -1,0 +1,60 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "entries": [
+        {
+          "type": "minecraft:alternatives",
+          "children": [
+            {
+              "type": "minecraft:item",
+              "condition": "minecraft:tool/can_silk_touch",
+              "name": "minecraft:amethyst_cluster"
+            },
+            {
+              "type": "minecraft:alternatives",
+              "children": [
+                {
+                  "type": "minecraft:item",
+                  "condition": {
+                    "type": "minecraft:match_tool",
+                    "predicate": {
+                      "items": "#minecraft:cluster_max_harvestables"
+                    }
+                  },
+                  "modifier": [
+                    {
+                      "type": "minecraft:set_count",
+                      "count": 4
+                    },
+                    {
+                      "type": "minecraft:apply_bonus",
+                      "enchantment": "minecraft:fortune",
+                      "formula": "minecraft:ore_drops"
+                    }
+                  ],
+                  "name": "minecraft:amethyst_shard"
+                },
+                {
+                  "type": "minecraft:item",
+                  "modifier": [
+                    {
+                      "type": "minecraft:set_count",
+                      "count": 2
+                    },
+                    {
+                      "type": "minecraft:explosion_decay"
+                    }
+                  ],
+                  "name": "minecraft:amethyst_shard"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "rolls": 1
+    }
+  ],
+  "random_sequence": "minecraft:blocks/amethyst_cluster"
+}

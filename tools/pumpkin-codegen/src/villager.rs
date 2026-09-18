@@ -47,7 +47,11 @@ struct TradeJson {
     xp: Option<f32>,
     #[serde(alias = "price_multiplier")]
     reputation_discount: Option<f32>,
-    #[serde(default)]
+    #[serde(
+        rename = "given_item_modifier",
+        default,
+        deserialize_with = "crate::loot_table::one_or_many"
+    )]
     given_item_modifiers: Vec<Value>,
     merchant_predicate: Option<Value>,
 }
@@ -87,7 +91,7 @@ pub fn build() -> TokenStream {
 
     // Load trade sets from datapack
     let trade_set_dir =
-        std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/trade_set");
+        std::path::Path::new("../../assets/datapacks/26_3/data/minecraft/trade_set");
     let mut trade_sets: IndexMap<String, TradeSetJson> = IndexMap::new();
     walk_json_files(trade_set_dir, trade_set_dir, &mut |key, content| {
         if let Ok(trade_set) = serde_json::from_str::<TradeSetJson>(&content) {
@@ -98,7 +102,7 @@ pub fn build() -> TokenStream {
 
     // Load trade tags from datapack
     let trade_tags_dir =
-        std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/tags/villager_trade");
+        std::path::Path::new("../../assets/datapacks/26_3/data/minecraft/tags/villager_trade");
     let mut raw_trade_tags: IndexMap<String, Vec<String>> = IndexMap::new();
     walk_json_files(trade_tags_dir, trade_tags_dir, &mut |key, content| {
         #[derive(Deserialize)]
@@ -160,7 +164,7 @@ pub fn build() -> TokenStream {
 
     // Load individual villager trades from datapack
     let trades_dir =
-        std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/villager_trade");
+        std::path::Path::new("../../assets/datapacks/26_3/data/minecraft/villager_trade");
     let mut villager_trades: IndexMap<String, TradeJson> = IndexMap::new();
     walk_json_files(trades_dir, trades_dir, &mut |key, content| {
         if let Ok(trade) = serde_json::from_str::<TradeJson>(&content) {
@@ -229,7 +233,7 @@ pub fn build() -> TokenStream {
             .given_item_modifiers
             .iter()
             .find_map(|modifier| {
-                let function = modifier.get("function")?.as_str()?;
+                let function = modifier.get("type")?.as_str()?;
                 Some(match function {
                     "minecraft:enchant_randomly" => quote! { VillagerTradeModifier::EnchantRandomly },
                     "minecraft:enchant_with_levels" => {
