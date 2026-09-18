@@ -274,10 +274,11 @@ impl ScreenHandler for BeaconScreenHandler {
             return ItemStack::EMPTY.clone();
         }
 
+        // `get_stack` hands out a clone, so the remainder has to be written back explicitly.
         if stack.is_empty() {
             slot.set_stack(ItemStack::EMPTY.clone());
         } else {
-            slot.mark_dirty();
+            slot.set_stack(stack.clone());
         }
         if stack.item_count == clicked.item_count {
             return ItemStack::EMPTY.clone();
