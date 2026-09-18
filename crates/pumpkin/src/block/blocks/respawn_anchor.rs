@@ -14,6 +14,7 @@ use crate::entity::EntityBase;
 /// Vanilla `RespawnAnchorBlock.MAX_CHARGES`.
 const MAX_CHARGES: u8 = 4;
 
+/// Returns whether a respawn anchor should explode for the current charge and dimension state.
 const fn should_explode(charges: u8, respawn_anchor_works: bool) -> bool {
     charges > 0 && !respawn_anchor_works
 }
@@ -22,6 +23,7 @@ const fn should_explode(charges: u8, respawn_anchor_works: bool) -> bool {
 pub struct RespawnAnchorBlock;
 
 impl BlockBehaviour for RespawnAnchorBlock {
+    /// Charges the respawn anchor when the player uses glowstone and capacity remains.
     fn use_with_item(&self, args: UseWithItemArgs<'_>) -> BlockActionResult {
         if args.item_stack.item.id != Item::GLOWSTONE.id {
             return BlockActionResult::Pass;
@@ -53,6 +55,7 @@ impl BlockBehaviour for RespawnAnchorBlock {
         BlockActionResult::Success
     }
 
+    /// Uses a charged respawn anchor for respawning or explosion behavior in the current dimension.
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
         let state_id = args.world.get_block_state_id(args.position);
         let props = RespawnAnchorLikeProperties::from_state_id(state_id);
@@ -101,6 +104,7 @@ impl BlockBehaviour for RespawnAnchorBlock {
         Some(props.charges * 15 / MAX_CHARGES)
     }
 
+    /// Respawn anchors are never considered passable for pathfinding.
     fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {
         false
     }
