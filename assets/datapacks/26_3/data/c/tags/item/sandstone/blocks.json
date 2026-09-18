@@ -1,0 +1,12 @@
+{
+  "values": [
+    {
+      "id": "#c:sandstone/uncolored_blocks",
+      "required": false
+    },
+    {
+      "id": "#c:sandstone/red_blocks",
+      "required": false
+    }
+  ]
+}

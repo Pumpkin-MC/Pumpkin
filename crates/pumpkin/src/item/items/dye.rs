@@ -43,6 +43,22 @@ impl ItemBehaviour for DyeItem {
                 &ent.pos.load(),
             );
             item.decrement_unless_creative(player.gamemode.load(), 1);
+        } else if let Some(cushion) = entity
+            .cast_any()
+            .downcast_ref::<crate::entity::decoration::cushion::CushionEntity>(
+        ) && let Some(color) =
+            crate::entity::passive::animal::get_dye_color_from_item(item.get_item())
+            && color != cushion.color()
+        {
+            cushion.set_color(color);
+            let ent = entity.get_entity();
+            let world = ent.world.load();
+            world.play_sound(
+                pumpkin_data::sound::Sound::ItemDyeUse,
+                pumpkin_data::sound::SoundCategory::Players,
+                &ent.pos.load(),
+            );
+            item.decrement_unless_creative(player.gamemode.load(), 1);
         }
     }
 

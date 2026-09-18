@@ -1,0 +1,43 @@
+{
+  "type": "minecraft:block_interact",
+  "pools": [
+    {
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "condition": {
+            "type": "minecraft:match_block",
+            "blocks": "minecraft:sweet_berry_bush",
+            "state": {
+              "age": "3"
+            }
+          },
+          "modifier": {
+            "type": "minecraft:set_count",
+            "count": 1
+          },
+          "name": "minecraft:sweet_berries"
+        }
+      ],
+      "rolls": 1
+    },
+    {
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "modifier": {
+            "type": "minecraft:set_count",
+            "count": {
+              "type": "minecraft:uniform",
+              "max": 2,
+              "min": 1
+            }
+          },
+          "name": "minecraft:sweet_berries"
+        }
+      ],
+      "rolls": 1
+    }
+  ],
+  "random_sequence": "minecraft:harvest/sweet_berry_bush"
+}

@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:ore",
+  "discard_chance_on_air_exposure": 0.0,
+  "size": 12,
+  "targets": [
+    {
+      "state": "minecraft:soul_sand",
+      "target": {
+        "block": "minecraft:netherrack",
+        "predicate_type": "minecraft:block_match"
+      }
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "given_item_modifier": {
+    "type": "minecraft:set_stew_effect",
+    "effects": [
+      {
+        "type": "minecraft:night_vision",
+        "duration": 5
+      },
+      {
+        "type": "minecraft:jump_boost",
+        "duration": 8
+      },
+      {
+        "type": "minecraft:weakness",
+        "duration": 7
+      },
+      {
+        "type": "minecraft:blindness",
+        "duration": 6
+      },
+      {
+        "type": "minecraft:poison",
+        "duration": 14
+      },
+      {
+        "type": "minecraft:saturation",
+        "duration": 7
+      }
+    ]
+  },
+  "gives": {
+    "id": "minecraft:suspicious_stew"
+  },
+  "max_uses": 12,
+  "reputation_discount": 0.05,
+  "wants": {
+    "id": "minecraft:emerald"
+  },
+  "xp": 15
+}

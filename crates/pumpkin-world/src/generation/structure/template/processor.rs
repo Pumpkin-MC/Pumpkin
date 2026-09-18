@@ -719,12 +719,40 @@ struct RawRule {
     block_entity_modifier: Option<RawBlockEntityModifier>,
 }
 
+/// 26.3 renamed the block state keys from Name and Properties to id and properties, and writes a
+/// state without properties as just its name.
 #[derive(Deserialize, Debug)]
+#[serde(untagged)]
+enum RawOutputStateRepr {
+    Name(String),
+    Full {
+        #[serde(alias = "Name")]
+        id: String,
+        #[serde(alias = "Properties", default)]
+        properties: HashMap<String, String>,
+    },
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(from = "RawOutputStateRepr")]
 struct RawOutputState {
-    #[serde(rename = "Name")]
     name: String,
-    #[serde(rename = "Properties", default)]
     properties: HashMap<String, String>,
+}
+
+impl From<RawOutputStateRepr> for RawOutputState {
+    fn from(repr: RawOutputStateRepr) -> Self {
+        match repr {
+            RawOutputStateRepr::Name(name) => Self {
+                name,
+                properties: HashMap::new(),
+            },
+            RawOutputStateRepr::Full { id, properties } => Self {
+                name: id,
+                properties,
+            },
+        }
+    }
 }
 
 #[derive(Deserialize, Debug)]

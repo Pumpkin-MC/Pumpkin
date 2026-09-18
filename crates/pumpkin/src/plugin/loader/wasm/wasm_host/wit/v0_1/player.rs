@@ -165,6 +165,7 @@ const fn to_wasm_java_version(
         JavaMinecraftVersion::V_1_21_11 => pumpkin::plugin::player::JavaMinecraftVersion::V12111,
         JavaMinecraftVersion::V_26_1 => pumpkin::plugin::player::JavaMinecraftVersion::V261,
         JavaMinecraftVersion::V_26_2 => pumpkin::plugin::player::JavaMinecraftVersion::V262,
+        JavaMinecraftVersion::V_26_3 => pumpkin::plugin::player::JavaMinecraftVersion::V263,
         JavaMinecraftVersion::Unknown => pumpkin::plugin::player::JavaMinecraftVersion::Unknown,
     }
 }
