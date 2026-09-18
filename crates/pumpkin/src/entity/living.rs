@@ -1,3 +1,4 @@
+use pumpkin_data::Enchantment;
 use pumpkin_data::item::Item;
 use pumpkin_data::particle::Particle;
 use pumpkin_data::potion::Effect;
@@ -591,6 +592,35 @@ impl LivingEntity {
             });
             applied.push((item_mod.r#type.id, item_mod.id.to_string()));
             push_unique_attribute(touched, item_mod.r#type);
+        }
+
+        // Blast Protection on worn armor contributes explosion knockback
+        // resistance (vanilla: +0.15 per level). Item attribute modifiers do
+        // not carry enchantment effects, so add it here - tracked in
+        // `applied` like any item modifier, which means it is removed and
+        // re-derived from the currently equipped stack on every change.
+        let blast_protection_armor = matches!(
+            slot,
+            EquipmentSlot::Feet(_)
+                | EquipmentSlot::Legs(_)
+                | EquipmentSlot::Chest(_)
+                | EquipmentSlot::Head(_)
+        );
+        let blast_level = stack.get_enchantment_level(&Enchantment::BLAST_PROTECTION);
+        if blast_protection_armor && blast_level > 0 {
+            let modifier_id = format!(
+                "enchantment.blast_protection/{:?}",
+                std::mem::discriminant(slot)
+            );
+            self.update_attribute(&Attributes::EXPLOSION_KNOCKBACK_RESISTANCE, |inst| {
+                inst.add_or_replace_modifier(Modifier {
+                    id: modifier_id.clone(),
+                    amount: 0.15 * f64::from(blast_level),
+                    operation: ModifierOperation::Add,
+                });
+            });
+            applied.push((Attributes::EXPLOSION_KNOCKBACK_RESISTANCE.id, modifier_id));
+            push_unique_attribute(touched, &Attributes::EXPLOSION_KNOCKBACK_RESISTANCE);
         }
 
         if !applied.is_empty() {
