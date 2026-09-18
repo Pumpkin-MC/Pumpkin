@@ -145,14 +145,20 @@ impl PacketRead for VarULong {
             let byte = u8::read(reader)?;
             // Reject encodings that set payload bits beyond bit 63 in the final byte.
             if i == Self::MAX_SIZE.get() - 1 && byte & 0x7E != 0 {
-                return Err(Error::other("VarULong is too big (overflow)"));
+                return Err(Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "VarULong is too big (overflow)",
+                ));
             }
             val |= (u64::from(byte) & 0b0111_1111) << (i * 7);
             if byte & 0b1000_0000 == 0 {
                 return Ok(Self(val));
             }
         }
-        Err(Error::other("Invalid VarUInt"))
+        Err(Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Invalid VarUInt",
+        ))
     }
 }
 
@@ -174,6 +180,7 @@ mod overflow_tests {
     fn packet_read_rejects_overflowing_final_byte() {
         let mut too_big = vec![0x80; 9];
         too_big.push(0x02);
-        assert!(VarULong::read(&mut &too_big[..]).is_err());
+        let err = VarULong::read(&mut &too_big[..]).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
     }
 }
