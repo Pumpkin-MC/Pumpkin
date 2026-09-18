@@ -10,7 +10,7 @@ use pumpkin_data::{
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use pumpkin_world::chunk::ChunkData;
 use rand::RngExt;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     block::{ExplodeArgs, drop_loot},
@@ -243,8 +243,12 @@ impl Explosion {
     fn get_blocks_to_destroy(
         &self,
         world: &World,
-    ) -> FxHashMap<BlockPos, (&'static Block, &'static BlockState)> {
+    ) -> (
+        FxHashMap<BlockPos, (&'static Block, &'static BlockState)>,
+        FxHashSet<BlockPos>,
+    ) {
         let mut map = FxHashMap::default();
+        let mut affected_positions = FxHashSet::default();
 
         let mut chunk_cache: FxHashMap<
             pumpkin_util::math::vector2::Vector2<i32>,
@@ -324,6 +328,10 @@ impl Explosion {
                             },
                         );
 
+                        if h > 0.0 {
+                            affected_positions.insert(block_pos);
+                        }
+
                         if !state.is_air() || !fluid_state.is_empty {
                             let protects_rail = self.protects_rail(world, &block_pos, block);
                             let resistance = if protects_rail {
@@ -358,7 +366,7 @@ impl Explosion {
                 }
             }
         }
-        map
+        (map, affected_positions)
     }
 
     fn damage_entities(&self, world: &Arc<World>) {
@@ -506,7 +514,7 @@ impl Explosion {
         match self.block_interaction {
             BlockInteraction::Keep => 0,
             BlockInteraction::TriggerBlock => {
-                let blocks = self.get_blocks_to_destroy(world);
+                let (blocks, _) = self.get_blocks_to_destroy(world);
                 for (pos, (block, _state)) in &blocks {
                     let pumpkin_block = world.block_registry.get_pumpkin_block(block.id);
                     if let Some(pumpkin_block) = pumpkin_block {
@@ -537,7 +545,7 @@ impl Explosion {
                     return 0;
                 }
 
-                let blocks = self.get_blocks_to_destroy(world);
+                let (blocks, affected_positions) = self.get_blocks_to_destroy(world);
                 let decay_drops = self.block_interaction == BlockInteraction::DestroyWithDecay;
                 let explosion_radius = decay_drops.then_some(self.power);
 
@@ -575,7 +583,7 @@ impl Explosion {
                     }
                 }
                 if self.create_fire {
-                    for pos in blocks.keys() {
+                    for pos in &affected_positions {
                         if rand::rng().random_range(0..3) != 0
                             || !world.get_block_state(pos).is_air()
                             || !world
