@@ -1,4 +1,5 @@
 use pumpkin_data::BlockStateId;
+use pumpkin_data::fluid::Fluid;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -47,11 +48,12 @@ impl BlockBehaviour for LilyPadBlock {
 
 impl PlantBlockBase for LilyPadBlock {
     fn can_plant_on_top(&self, block_accessor: &dyn BlockAccessor, pos: &BlockPos) -> bool {
-        // TODO: get and use fluids not blocks
-        let block = block_accessor.get_block(pos);
-        let above_fluid = block_accessor.get_block(&pos.up());
-        (block.has_tag(&tag::Fluid::MINECRAFT_SUPPORTS_LILY_PAD)
-            || block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_LILY_PAD))
-            && above_fluid.is_air()
+        let (block, state) = block_accessor.get_block_and_state(pos);
+        let supports_water = state.is_waterlogged()
+            || Fluid::from_state_id(state.id)
+                .is_some_and(|fluid| fluid.has_tag(&tag::Fluid::MINECRAFT_SUPPORTS_LILY_PAD));
+        let above_state = block_accessor.get_block_state(&pos.up());
+        (supports_water || block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_LILY_PAD))
+            && above_state.is_air()
     }
 }
