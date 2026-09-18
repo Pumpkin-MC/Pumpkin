@@ -1014,9 +1014,12 @@ impl World {
                 translate,
                 bedrock_translate,
                 with,
+                bedrock_with,
             } => {
                 let key = bedrock_translate.as_deref().unwrap_or(translate.as_ref());
-                let parameters = with
+                let parameters = bedrock_with
+                    .as_ref()
+                    .unwrap_or(with)
                     .iter()
                     .map(pumpkin_util::text::TextComponentBase::to_bedrock_string)
                     .collect();

@@ -270,6 +270,7 @@ impl TextComponent {
                 translate,
                 bedrock_translate: _,
                 with,
+                ..
             } => {
                 text.push_str(&get_translation_text(
                     format!("minecraft:{translate}"),

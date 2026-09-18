@@ -72,10 +72,11 @@ impl CommandExecutor for GamemodeExecutor {
                         ));
                     }
                     context.source.send_feedback(
-                        TextComponent::translate_cross(
+                        TextComponent::translate_cross_with(
                             translation::java::COMMANDS_GAMEMODE_SUCCESS_OTHER,
                             translation::bedrock::COMMANDS_GAMEMODE_SUCCESS_OTHER,
-                            [target.as_ref().get_display_name(), gamemode_comp],
+                            [target.as_ref().get_display_name(), gamemode_comp.clone()],
+                            [gamemode_comp, target.as_ref().get_display_name()],
                         ),
                         true,
                     );

@@ -983,6 +983,7 @@ impl TextComponentBase {
                 translate,
                 bedrock_translate,
                 with,
+                ..
             } => {
                 let key = bedrock_translate.as_ref().unwrap_or(&translate);
                 translation_to_pretty(format!("minecraft:{key}"), Locale::EnUs, with)
@@ -1040,6 +1041,7 @@ impl TextComponentBase {
                 translate,
                 bedrock_translate,
                 with: _,
+                ..
             } => {
                 let key = bedrock_translate.as_deref().unwrap_or(translate.as_ref());
                 let _ = write!(text, "%{key}");
@@ -1105,8 +1107,10 @@ impl TextComponentBase {
                 translate,
                 bedrock_translate,
                 with,
+                bedrock_with,
             } => {
                 let key = bedrock_translate.as_ref().unwrap_or(translate);
+                let with = bedrock_with.as_ref().unwrap_or(with);
                 text.push_str(&get_translation_text(key.to_string(), locale, with.clone()));
             }
             TextContent::EntityNames { selector, .. } => text.push_str(selector),
@@ -1147,8 +1151,10 @@ impl TextComponentBase {
                 translate,
                 bedrock_translate,
                 with,
+                bedrock_with,
             } => {
                 let key = bedrock_translate.as_ref().unwrap_or(&translate);
+                let with = bedrock_with.unwrap_or(with);
                 get_translation_text(format!("minecraft:{key}"), locale, with)
             }
             TextContent::EntityNames {
@@ -1224,16 +1230,23 @@ impl TextComponentBase {
                 translate,
                 bedrock_translate,
                 with,
+                bedrock_with,
             } => {
                 let mut translated_with = vec![];
                 for w in with {
                     translated_with.push(w.to_translated());
                 }
+                let translated_bedrock_with = bedrock_with.map(|with| {
+                    with.into_iter()
+                        .map(TextComponentBase::to_translated)
+                        .collect()
+                });
                 Self {
                     content: Box::new(TextContent::Translate {
                         translate,
                         bedrock_translate,
                         with: translated_with,
+                        bedrock_with: translated_bedrock_with,
                     }),
                     style: self.style,
                     extra: self.extra,
@@ -1359,6 +1372,7 @@ impl TextComponent {
                 translate: key.into(),
                 bedrock_translate: None,
                 with: with.into().into_iter().map(|x| x.0).collect(),
+                bedrock_with: None,
             }),
             style: Box::new(Style::default()),
             extra: vec![],
@@ -1393,8 +1407,35 @@ impl TextComponent {
                 translate: java_key.into(),
                 bedrock_translate: Some(bedrock_key.into()),
                 with: with.into().into_iter().map(|x| x.0).collect(),
+                bedrock_with: None,
             }),
             style: Box::new(Style::default()),
+            extra: vec![],
+        })
+    }
+
+    /// Creates a translation with independent substitution arguments for Bedrock.
+    #[must_use]
+    pub fn translate_cross_with<JK, BK, JW, BW>(
+        java_key: JK,
+        bedrock_key: BK,
+        java_with: JW,
+        bedrock_with: BW,
+    ) -> Self
+    where
+        JK: Into<Cow<'static, str>>,
+        BK: Into<Cow<'static, str>>,
+        JW: Into<Vec<Self>>,
+        BW: Into<Vec<Self>>,
+    {
+        Self(TextComponentBase {
+            content: Box::new(TextContent::Translate {
+                translate: java_key.into(),
+                bedrock_translate: Some(bedrock_key.into()),
+                with: java_with.into().into_iter().map(|x| x.0).collect(),
+                bedrock_with: Some(bedrock_with.into().into_iter().map(|x| x.0).collect()),
+            }),
+            style: Box::default(),
             extra: vec![],
         })
     }
@@ -2019,6 +2060,9 @@ pub enum TextContent {
         /// Bedrock translation key. If specified, Bedrock clients receive an `SText::translation` packet.
         #[serde(skip, default)]
         bedrock_translate: Option<Cow<'static, str>>,
+        /// Bedrock-specific substitution parameters when their order differs from Java.
+        #[serde(skip, default)]
+        bedrock_with: Option<Vec<TextComponentBase>>,
         /// Substitution parameters for the translation.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         with: Vec<TextComponentBase>,
@@ -2063,7 +2107,10 @@ pub enum TextContent {
 /// Tests for the text component implementations.
 #[cfg(test)]
 mod test {
+    use crate::text::click::ClickEvent;
     use crate::text::{TextComponent, color::NamedColor, hover::HoverEvent};
+    use crate::translation::Locale;
+    use crate::version::JavaMinecraftVersion;
     use std::borrow::Cow;
 
     #[test]
@@ -2084,6 +2131,27 @@ mod test {
         );
         let decoded = pumpkin_nbt::Nbt::read_unnamed(&mut reader).unwrap();
         assert_eq!(decoded, expected_compound.into());
+    }
+
+    #[test]
+    fn cross_platform_translation_can_reorder_bedrock_arguments() {
+        let message = TextComponent::translate_cross_with(
+            "commands.gamemode.success.other",
+            "commands.gamemode.success.other",
+            [
+                TextComponent::text("Alex"),
+                TextComponent::text("Creative Mode"),
+            ],
+            [
+                TextComponent::text("Creative Mode"),
+                TextComponent::text("Alex"),
+            ],
+        );
+
+        assert_eq!(
+            message.0.to_bedrock_legacy(Locale::EnUs),
+            "Set Alex's game mode to Creative Mode"
+        );
     }
 
     /// The client expects the hover event payload to be inlined next to `action`.
