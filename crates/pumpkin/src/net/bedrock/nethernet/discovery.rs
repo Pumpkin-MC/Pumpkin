@@ -11,6 +11,11 @@ use aes::{
     cipher::{BlockCipherDecrypt, BlockCipherEncrypt, KeyInit},
 };
 use hmac::{Hmac, Mac};
+use pumpkin_protocol::{
+    codec::{var_int::VarInt, var_uint::VarUInt},
+    serial::PacketWrite,
+};
+use pumpkin_world::{CURRENT_BEDROCK_MC_PROTOCOL, CURRENT_BEDROCK_MC_VERSION};
 use sha2::{Digest, Sha256};
 use tokio::{
     net::UdpSocket,
@@ -19,8 +24,8 @@ use tokio::{
 use tracing::{debug, trace, warn};
 use webrtc::peer_connection::RTCIceCandidateInit;
 
-use super::{NetherNetListener, negotiate};
-use crate::server::Server;
+use super::{peer::negotiate, state::NetherNetState};
+use crate::{STOP_INTERRUPT, server::Server};
 
 const DISCOVERY_PORT: u16 = 7551;
 const CHECKSUM_SIZE: usize = 32;
@@ -28,7 +33,7 @@ const HEADER_SIZE: usize = 18;
 const REQUEST_PACKET: u16 = 0;
 const RESPONSE_PACKET: u16 = 1;
 const MESSAGE_PACKET: u16 = 2;
-const SERVER_DATA_VERSION: u8 = 6;
+const SERVER_DATA_VERSION: u8 = 7;
 
 type ConnectionKey = (u64, u64);
 
@@ -57,17 +62,18 @@ impl NetherNetDiscovery {
         })
     }
 
-    pub async fn receive(
+    pub(super) async fn receive(
         &self,
-        server: &Server,
-        listener: &NetherNetListener,
+        state: &NetherNetState,
         buffer: &mut [u8],
     ) -> Result<(), Error> {
         let (length, address) = self.socket.recv_from(buffer).await?;
         match decode_packet(&buffer[..length]) {
             Some(Packet::Request) => {
                 trace!("Received NetherNet LAN discovery request from {address}");
-                self.advertise(server, address).await?;
+                if let Some(server) = state.server.upgrade() {
+                    self.advertise(&server, address).await?;
+                }
             }
             Some(Packet::Message {
                 sender_id,
@@ -82,7 +88,7 @@ impl NetherNetDiscovery {
                         .map_or(data.as_str(), |(signal, _)| signal),
                     "Received NetherNet LAN signal from {address}"
                 );
-                self.handle_signal(listener, address, sender_id, data).await;
+                self.handle_signal(state, address, sender_id, data).await;
             }
             Some(Packet::Message {
                 sender_id,
@@ -100,19 +106,13 @@ impl NetherNetDiscovery {
     }
 
     async fn advertise(&self, server: &Server, address: SocketAddr) -> Result<(), Error> {
-        let players = server
-            .get_status()
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .status_response
-            .players
-            .as_ref()
-            .map_or(0, |players| players.online);
+        let players = u32::try_from(server.get_player_count()).unwrap_or(u32::MAX);
         let game_mode = server
             .defaultgamemode
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .gamemode as u8;
+        let config = &server.advanced_config.networking.bedrock;
         let response = encode_response(
             self.network_id,
             self.advertisement_id,
@@ -122,7 +122,7 @@ impl NetherNetDiscovery {
             players,
             server.advanced_config.networking.bedrock.max_players,
             server.basic_config.hardcore,
-            server.advanced_config.networking.bedrock.online_mode,
+            !(config.online_mode && config.authentication.enabled),
         )?;
         self.socket.send_to(&response, address).await?;
         trace!(
@@ -140,7 +140,7 @@ impl NetherNetDiscovery {
 
     async fn handle_signal(
         &self,
-        listener: &NetherNetListener,
+        state: &NetherNetState,
         address: SocketAddr,
         sender_id: u64,
         data: String,
@@ -167,7 +167,7 @@ impl NetherNetDiscovery {
                 let (candidate_sender, candidate_receiver) = mpsc::unbounded_channel();
                 self.candidates.lock().await.insert(key, candidate_sender);
 
-                let state = listener.state.clone();
+                let state = state.clone();
                 let socket = self.socket.clone();
                 let candidates = self.candidates.clone();
                 let offer = data.to_owned();
@@ -199,7 +199,10 @@ impl NetherNetDiscovery {
                         }
                         Err(error) => warn!("Failed to encode NetherNet LAN signal: {error}"),
                     }
-                    tokio::time::sleep(Duration::from_secs(30)).await;
+                    tokio::select! {
+                        () = STOP_INTERRUPT.cancelled() => {},
+                        () = tokio::time::sleep(Duration::from_secs(30)) => {},
+                    }
                     candidates.lock().await.remove(&key);
                 });
             }
@@ -297,25 +300,19 @@ fn encode_response(
     player_count: u32,
     max_player_count: u32,
     hardcore: bool,
-    online_mode: bool,
+    accepts_self_signed: bool,
 ) -> Result<Vec<u8>, Error> {
     let mut server_data = vec![SERVER_DATA_VERSION];
     push_string(&mut server_data, server_name)?;
+    VarInt(CURRENT_BEDROCK_MC_PROTOCOL as i32).write(&mut server_data)?;
+    push_string(&mut server_data, CURRENT_BEDROCK_MC_VERSION)?;
     push_string(&mut server_data, level_name)?;
-    server_data.push(game_mode << 1);
-    server_data.extend_from_slice(
-        &i32::try_from(player_count)
-            .unwrap_or(i32::MAX)
-            .to_le_bytes(),
-    );
-    server_data.extend_from_slice(
-        &i32::try_from(max_player_count)
-            .unwrap_or(i32::MAX)
-            .to_le_bytes(),
-    );
-    server_data.extend_from_slice(&[0, u8::from(hardcore), 0, u8::from(!online_mode)]);
+    VarInt(i32::try_from(player_count).unwrap_or(i32::MAX)).write(&mut server_data)?;
+    VarInt(i32::try_from(max_player_count).unwrap_or(i32::MAX)).write(&mut server_data)?;
+    VarInt(i32::from(game_mode)).write(&mut server_data)?;
+    server_data.extend_from_slice(&[0, u8::from(hardcore), 1, u8::from(accepts_self_signed)]);
     push_string(&mut server_data, &format!("{advertisement_id:016x}"))?;
-    server_data.extend_from_slice(&[2 << 1, 4 << 1]);
+    VarInt(4).write(&mut server_data)?;
 
     let application_data = hex::encode(server_data);
     let application_length = u32::try_from(application_data.len())
@@ -362,9 +359,9 @@ fn encode_packet(packet_id: u16, network_id: u64, body: &[u8]) -> Result<Vec<u8>
 }
 
 fn push_string(buffer: &mut Vec<u8>, value: &str) -> Result<(), Error> {
-    let length = u8::try_from(value.len())
+    let length = u32::try_from(value.len())
         .map_err(|_| Error::new(ErrorKind::InvalidInput, "NetherNet MOTD field is too long"))?;
-    buffer.push(length);
+    VarUInt(length).write(buffer)?;
     buffer.extend_from_slice(value.as_bytes());
     Ok(())
 }
@@ -389,6 +386,21 @@ mod tests {
     use super::*;
 
     #[test]
+    fn encodes_multibyte_string_lengths() {
+        for (value, prefix) in [
+            ("a".repeat(127), vec![127]),
+            ("é".repeat(64), vec![128, 1]),
+            ("a".repeat(255), vec![255, 1]),
+            ("é".repeat(128), vec![128, 2]),
+        ] {
+            let mut encoded = Vec::new();
+            push_string(&mut encoded, &value).unwrap();
+            assert_eq!(&encoded[..prefix.len()], prefix);
+            assert_eq!(&encoded[prefix.len()..], value.as_bytes());
+        }
+    }
+
+    #[test]
     fn decodes_reference_discovery_request() {
         let request = hex::decode(
             "b3eca3eb83a6fcb079faf2eae2bf8abbaadb5906bc42bd63a0056274a26e013f\
@@ -410,33 +422,38 @@ mod tests {
 
     #[test]
     fn encodes_current_server_data() {
-        let response = encode_response(
-            99,
-            0x9bb64bcf14727bdb,
-            "Dedicated Server",
-            "Creative level",
-            1,
-            0,
-            10,
-            false,
-            false,
-        )
-        .unwrap();
-        let mut payload = response[CHECKSUM_SIZE..].to_vec();
-        decrypt(&mut payload).unwrap();
-        let padding = usize::from(*payload.last().unwrap());
-        payload.truncate(payload.len() - padding);
-        assert_eq!(
-            usize::from(u16::from_le_bytes(payload[..2].try_into().unwrap())),
-            payload.len()
-        );
-        let application_length = u32::from_le_bytes(payload[20..24].try_into().unwrap()) as usize;
-        let server_data = hex::decode(&payload[24..24 + application_length]).unwrap();
-        assert_eq!(
-            hex::encode(server_data),
-            "0610446564696361746564205365727665720e4372656174697665206c6576656c\
-             02000000000a0000000000000110396262363462636631343732376264620408"
-        );
+        for (accepts_self_signed, authentication_flags) in [(false, "0100"), (true, "0101")] {
+            let response = encode_response(
+                99,
+                0x9bb64bcf14727bdb,
+                "Dedicated Server",
+                "Creative level",
+                1,
+                0,
+                10,
+                false,
+                accepts_self_signed,
+            )
+            .unwrap();
+            let mut payload = response[CHECKSUM_SIZE..].to_vec();
+            decrypt(&mut payload).unwrap();
+            let padding = usize::from(*payload.last().unwrap());
+            payload.truncate(payload.len() - padding);
+            assert_eq!(
+                usize::from(u16::from_le_bytes(payload[..2].try_into().unwrap())),
+                payload.len()
+            );
+            let application_length =
+                u32::from_le_bytes(payload[20..24].try_into().unwrap()) as usize;
+            let server_data = hex::decode(&payload[24..24 + application_length]).unwrap();
+            assert_eq!(
+                hex::encode(server_data),
+                format!(
+                    "071044656469636174656420536572766572a22207312e32362e3531\
+             0e4372656174697665206c6576656c0014020000{authentication_flags}103962623634626366313437323762646208"
+                )
+            );
+        }
     }
 
     #[test]

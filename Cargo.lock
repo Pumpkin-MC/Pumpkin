@@ -135,7 +135,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -146,7 +146,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
 dependencies = [
  "anstyle",
  "once_cell_polyfill",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -502,7 +502,7 @@ dependencies = [
  "maybe-owned",
  "rustix",
  "rustix-linux-procfs",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
  "winx",
 ]
 
@@ -731,7 +731,7 @@ version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "faf9468729b8cbcea668e36183cb69d317348c2e08e994829fb56ebfdfbaac34"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1538,7 +1538,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2733,7 +2733,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3270,7 +3270,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b570b25f7617e43d59005d0990ccb79e950a423952cea19671b7a876da390adf"
 dependencies = [
  "anyhow",
- "itertools 0.13.0",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -3328,7 +3328,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin"
-version = "0.1.0+26.2-26.45"
+version = "0.1.0+26.2-26.51"
 dependencies = [
  "aes 0.9.3",
  "arc-swap",
@@ -3402,7 +3402,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-api-macros"
-version = "0.1.0+26.2-26.45"
+version = "0.1.0+26.2-26.51"
 dependencies = [
  "proc-macro-error2",
  "proc-macro2",
@@ -3412,7 +3412,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-auth"
-version = "0.1.0+26.2-26.45"
+version = "0.1.0+26.2-26.51"
 dependencies = [
  "base64 0.23.1",
  "crypto-bigint 0.7.5",
@@ -3432,7 +3432,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-codecs"
-version = "0.1.0+26.2-26.45"
+version = "0.1.0+26.2-26.51"
 dependencies = [
  "serde_json",
  "tracing",
@@ -3460,7 +3460,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-command"
-version = "0.1.0+26.2-26.45"
+version = "0.1.0+26.2-26.51"
 dependencies = [
  "pumpkin-codecs",
  "pumpkin-data",
@@ -3475,7 +3475,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-config"
-version = "0.1.0+26.2-26.45"
+version = "0.1.0+26.2-26.51"
 dependencies = [
  "pumpkin-util",
  "serde",
@@ -3486,7 +3486,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-data"
-version = "0.1.0+26.2-26.45"
+version = "0.1.0+26.2-26.51"
 dependencies = [
  "crc-fast",
  "criterion",
@@ -3499,7 +3499,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-fuzzer"
-version = "0.1.0+26.2-26.45"
+version = "0.1.0+26.2-26.51"
 dependencies = [
  "clap",
  "colored",
@@ -3509,7 +3509,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-gametest"
-version = "0.1.0+26.2-26.45"
+version = "0.1.0+26.2-26.51"
 dependencies = [
  "async-trait",
  "pumpkin-data",
@@ -3524,14 +3524,14 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-host-bindings"
-version = "0.1.0+26.2-26.45"
+version = "0.1.0+26.2-26.51"
 dependencies = [
  "wasmtime",
 ]
 
 [[package]]
 name = "pumpkin-inventory"
-version = "0.1.0+26.2-26.45"
+version = "0.1.0+26.2-26.51"
 dependencies = [
  "pumpkin-data",
  "pumpkin-nbt",
@@ -3545,7 +3545,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-macros"
-version = "0.1.0+26.2-26.45"
+version = "0.1.0+26.2-26.51"
 dependencies = [
  "heck",
  "proc-macro-error2",
@@ -3556,7 +3556,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-nbt"
-version = "0.1.0+26.2-26.45"
+version = "0.1.0+26.2-26.51"
 dependencies = [
  "bytes",
  "cesu8",
@@ -3571,7 +3571,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-plugin-api"
-version = "0.1.0+26.2-26.45"
+version = "0.1.0+26.2-26.51"
 dependencies = [
  "postcard",
  "serde_json",
@@ -3582,7 +3582,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-plugin-runtime"
-version = "0.1.0+26.2-26.45"
+version = "0.1.0+26.2-26.51"
 dependencies = [
  "futures",
  "thiserror 2.0.20",
@@ -3594,7 +3594,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-plugin-utils"
-version = "0.1.0+26.2-26.45"
+version = "0.1.0+26.2-26.51"
 dependencies = [
  "pumpkin-plugin-api",
  "reqwest",
@@ -3609,7 +3609,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-protocol"
-version = "0.1.0+26.2-26.45"
+version = "0.1.0+26.2-26.51"
 dependencies = [
  "aes 0.9.3",
  "async-compression",
@@ -3633,7 +3633,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-util"
-version = "0.1.0+26.2-26.45"
+version = "0.1.0+26.2-26.51"
 dependencies = [
  "bytes",
  "colored",
@@ -3655,7 +3655,7 @@ dependencies = [
 
 [[package]]
 name = "pumpkin-world"
-version = "0.1.0+26.2-26.45"
+version = "0.1.0+26.2-26.51"
 dependencies = [
  "arc-swap",
  "bitflags 2.13.2",
@@ -3704,7 +3704,7 @@ dependencies = [
  "libc",
  "log",
  "socket2",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4311,7 +4311,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4378,7 +4378,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4742,7 +4742,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4884,7 +4884,7 @@ dependencies = [
  "fastrand",
  "once_cell",
  "rustix",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5841,7 +5841,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

@@ -3,14 +3,14 @@
 This directory contains a number of different data files used to help support connecting via Bedrock Edition clients (including Java => Bedrock remapping).
 
 - `block_states.nbt`
-    - mined from BDS (file hosted at [pmmp/BedrockData](https://github.com/pmmp/BedrockData/blob/master/canonical_block_states.nbt), `canonical_block_states.nbt`)
+    - converted from [CloudburstMC/Data's 26.50 dump](https://github.com/CloudburstMC/Data/tree/a8a4341d7763d6eb8547cff3ca46b4153d60163d) `block_palette.nbt` into concatenated Bedrock network NBT; the same dump supplies `runtime_item_states.json`, `item_components.nbt`, and `creative_items.json`.
     - Provides a listing of all blocks and block states that exist in Bedrock. Used to build a mapping from Java block states to Bedrock ones by matching (string) identifiers and data components.
 - `blocks.nbt`
-    - downloaded from [GeyserMC/mappings](https://github.com/GeyserMC/mappings)
+    - downloaded from [GeyserMC/mappings for Java 26.2 and Bedrock 26.50](https://github.com/GeyserMC/mappings/blob/6f6abba4dd3133b493b2229b59f7087f87b95d89/blocks.nbt)
     - Defines the exact Bedrock block identifier and property mappings for every Java Edition block state ID. Used in code generation to translate Java block states to Bedrock counterparts.
 - `item_components.nbt`
     - mined from BDS (file hosted at [CloudburstMC/Data](https://github.com/CloudburstMC/Data))
-- `runtime_item_states.nbt`
+- `runtime_item_states.json`
     - mined from BDS (file hosted at [CloudburstMC/Data](https://github.com/CloudburstMC/Data))
 - `item_data_overrides.json`
     - adapted from `GeyserMC/mappings` `items.json`.

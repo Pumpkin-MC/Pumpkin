@@ -792,7 +792,7 @@ impl BlockRegistry {
         world.play_bedrock_level_sound(
             "place",
             &final_block_pos.to_centered_f64(),
-            i32::from(BlockState::to_be_network_id(new_state)),
+            BlockState::to_be_network_id(new_state) as i32,
         );
 
         if let Ok(hand) = pumpkin_util::Hand::from_packet_id(use_item_on.hand.0)
