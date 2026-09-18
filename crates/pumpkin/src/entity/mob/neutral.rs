@@ -8,8 +8,8 @@ use pumpkin_util::math::boundingbox::BoundingBox;
 use uuid::Uuid;
 
 use crate::entity::EntityBase;
-use crate::entity::player::Player;
 use crate::entity::mob::Mob;
+use crate::entity::player::Player;
 use crate::entity::predicate::EntityPredicate;
 use crate::world::World;
 
