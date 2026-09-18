@@ -39,9 +39,13 @@ impl ClientPacket for CUpdateEntityRot {
         } else {
             write.write_var_int(&self.entity_id)?;
         }
+        // The on ground flag moved in front of the rotation in 26.3
+        if *version >= JavaMinecraftVersion::V_26_3 {
+            write.write_bool(self.on_ground)?;
+        }
         write.write_u8(self.yaw)?;
         write.write_u8(self.pitch)?;
-        if *version >= JavaMinecraftVersion::V_1_8 {
+        if *version >= JavaMinecraftVersion::V_1_8 && *version < JavaMinecraftVersion::V_26_3 {
             write.write_bool(self.on_ground)?;
         }
         Ok(())

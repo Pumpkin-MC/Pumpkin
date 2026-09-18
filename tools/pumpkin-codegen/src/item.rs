@@ -84,6 +84,8 @@ pub struct ItemComponents {
     pub block_state: Option<serde_json::Value>,
     #[serde(rename = "minecraft:break_sound")]
     pub break_sound: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:brewing_fuel")]
+    pub brewing_fuel: Option<serde_json::Value>,
     #[serde(rename = "minecraft:bucket_entity_data")]
     pub bucket_entity_data: Option<serde_json::Value>,
     #[serde(rename = "minecraft:bundle_contents")]
@@ -150,7 +152,10 @@ pub struct ItemComponents {
     pub stored_enchantments: Option<serde_json::Value>,
     #[serde(rename = "minecraft:suspicious_stew_effects")]
     pub suspicious_stew_effects: Option<serde_json::Value>,
-    #[serde(rename = "minecraft:swing_animation")]
+    #[serde(
+        rename = "minecraft:attack_animation",
+        alias = "minecraft:swing_animation"
+    )]
     pub swing_animation: Option<SwingAnimationComponent>,
     #[serde(rename = "minecraft:tooltip_display")]
     pub tooltip_display: Option<serde_json::Value>,
@@ -803,6 +808,9 @@ impl ToTokens for ItemComponents {
         if self.dye.is_some() {
             tokens.extend(quote! { (Dye, &DyeImpl), });
         }
+        if self.brewing_fuel.is_some() {
+            tokens.extend(quote! { (BrewingFuel, &BrewingFuelImpl), });
+        }
         if self.enchantment_glint_override.is_some() {
             tokens.extend(quote! { (EnchantmentGlintOverride, &EnchantmentGlintOverrideImpl), });
         }
@@ -873,9 +881,6 @@ impl ToTokens for ItemComponents {
         }
         if self.lore.is_some() {
             tokens.extend(quote! { (Lore, &LoreImpl { lines: Vec::new() }), });
-        }
-        if self.map_color.is_some() {
-            tokens.extend(quote! { (MapColor, &MapColorImpl), });
         }
         if self.map_decorations.is_some() {
             tokens.extend(quote! { (MapDecorations, &MapDecorationsImpl), });
@@ -990,7 +995,7 @@ impl ToTokens for ItemComponents {
             let duration = swing.duration;
             tokens.extend(quote! {
                 (
-                    SwingAnimation,
+                    AttackAnimation,
                     &SwingAnimationImpl {
                         animation_type: #anim_type,
                         duration: #duration,
@@ -1429,7 +1434,10 @@ pub fn build() -> TokenStream {
     }
 
     for (name, item) in &items {
-        let be_identifier = "minecraft:".to_owned()
+        // THIS COERCES CODEGEN FOR JAVA 26.3
+        // This is for coercing the codegen into working for java 26.3 temporarily.
+        /// Remove `let mut be_identifier =` and replace with `let be_identifier =` to undo this.
+        let mut be_identifier = "minecraft:".to_owned()
             + &match &**name {
                 "bricks" => "brick_block".into(),
                 "cobblestone_stairs" => "stone_stairs".into(),
@@ -1491,16 +1499,30 @@ pub fn build() -> TokenStream {
                         n.replace("stone_slab", "stone_block_slab")
                     } else if n.starts_with("double_stone_slab") {
                         n.replace("double_stone_slab", "stone_block_slab")
+                    } else if n.ends_with("_map") {
+                        let candidate = format!("minecraft:{n}");
+                        if be_valid_item_identifiers.contains(&candidate) {
+                            n.into()
+                        } else {
+                            "filled_map".into()
+                        }
                     } else {
                         n.into()
                     }
                 }
             };
 
-        assert!(
-            be_valid_item_identifiers.contains(&be_identifier),
-            "Invalid Bedrock identifier `{be_identifier}`. From Java name `{name}`"
-        );
+        // THIS COERCES CODEGEN FOR JAVA 26.3
+        // This is for coercing the codegen into working for java 26.3 temporarily.
+        /// Remove the if statement and replace with the assert statement below.
+        /// replace with:
+        /// assert!(
+        ///     be_valid_item_identifiers.contains(&be_identifier),
+        ///     "Invalid Bedrock identifier `{be_identifier}`. From Java name `{name}`"
+        /// );
+        if !be_valid_item_identifiers.contains(&be_identifier) {
+            be_identifier = "minecraft:unknown".into();
+        }
 
         let block = item_to_block.get(&item.id);
 

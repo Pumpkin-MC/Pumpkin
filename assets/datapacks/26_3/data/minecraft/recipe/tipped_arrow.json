@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:crafting_imbue",
+  "material": "minecraft:arrow",
+  "result": {
+    "count": 8,
+    "id": "minecraft:tipped_arrow"
+  },
+  "source": "minecraft:lingering_potion"
+}

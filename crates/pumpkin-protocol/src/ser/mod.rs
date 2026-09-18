@@ -1085,7 +1085,7 @@ pub trait NetworkWriteExt {
 
     #[inline]
     fn write_nbt(&mut self, data: NbtTag) -> Result<(), WritingError> {
-        self.write_nbt_with_version(Some(&data), &JavaMinecraftVersion::V_26_2)
+        self.write_nbt_with_version(Some(&data), &JavaMinecraftVersion::V_26_3)
     }
 }
 
