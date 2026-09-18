@@ -388,10 +388,10 @@ mod tests {
     use crate::player::player_inventory::PlayerInventory;
     use crate::player::player_screen_handler::PlayerScreenHandler;
     use crate::screen_handler::{InventoryPlayer, ScreenHandler};
+    use pumpkin_data::Enchantment;
     use pumpkin_data::item::Item;
     use pumpkin_data::item_stack::ItemStack;
     use pumpkin_data::screen::WindowType;
-    use pumpkin_data::Enchantment;
     use pumpkin_protocol::java::client::play::{
         CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
         CSetPlayerInventory, CSetSelectedSlot,
