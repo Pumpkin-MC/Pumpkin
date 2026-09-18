@@ -2,6 +2,8 @@ use crate::block::{
     BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
     OnScheduledTickArgs, PathComputationType,
 };
+use pumpkin_data::tag;
+use pumpkin_data::tag::Taggable;
 use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::math::position::BlockPos;
@@ -52,5 +54,9 @@ impl BlockBehaviour for DirtPathBlock {
 
 fn can_place_at(world: &dyn BlockAccessor, block_pos: &BlockPos) -> bool {
     let state = world.get_block_state(&block_pos.up());
-    !state.is_solid() // TODO: add fence gate block
+    !state.is_solid()
+        || state
+            .id
+            .to_block()
+            .has_tag(&tag::Block::MINECRAFT_FENCE_GATES)
 }
