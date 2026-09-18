@@ -1107,6 +1107,13 @@ mod tests {
 
         let bytes = test_chunk(vec![test_section(1, "minecraft:stone", true)]).write();
         let chunk = ChunkData::from_bytes(&bytes, Vector2::new(0, 0)).expect("caps at zero");
+        // The only section sits at Y=1, so the cap has to bring the chunk down
+        // to Y=0. Without the cap the chunk would start at Y=1 and a block at
+        // Y=0 would be out of range.
+        assert_eq!(
+            chunk.section.get_block_absolute_y(0, 0, 0),
+            Some(Block::AIR.default_state.id)
+        );
         assert_eq!(
             chunk.section.get_block_absolute_y(0, 16, 0),
             Some(Block::STONE.default_state.id)
