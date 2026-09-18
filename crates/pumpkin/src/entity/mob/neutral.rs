@@ -4,11 +4,11 @@ use std::sync::atomic::{AtomicBool, AtomicI64, Ordering::Relaxed};
 
 use crossbeam::atomic::AtomicCell;
 use pumpkin_nbt::compound::NbtCompound;
-use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use uuid::Uuid;
 
 use crate::entity::EntityBase;
+use crate::entity::player::Player;
 use crate::entity::mob::Mob;
 use crate::entity::predicate::EntityPredicate;
 use crate::world::World;
@@ -68,13 +68,9 @@ pub fn find_by_uuid(world: &World, uuid: Uuid) -> Option<Arc<dyn EntityBase>> {
         .or_else(|| world.get_entity_by_uuid(uuid))
 }
 
-/// A player the mob may hold a grudge against. Creative, spectator and peaceful are exempt.
-fn is_valid_player_target(target: &dyn EntityBase, world: &World) -> bool {
-    target.get_player().is_some_and(|player| {
-        !player.is_creative()
-            && !player.is_spectator()
-            && world.level_info.load().difficulty != Difficulty::Peaceful
-    })
+/// A player the mob may hold a grudge against.
+fn is_valid_player_target(target: &dyn EntityBase) -> bool {
+    target.get_player().is_some_and(Player::is_valid_mob_target)
 }
 
 /// a timed grudge plus the entity it is held against.
@@ -172,7 +168,7 @@ pub trait NeutralMob: Mob {
         if !self.can_attack(living) {
             return false;
         }
-        if is_valid_player_target(target, world) && self.is_angry_at_all_players(world) {
+        if is_valid_player_target(target) && self.is_angry_at_all_players(world) {
             return true;
         }
         self.get_persistent_anger_target()
@@ -257,7 +253,7 @@ pub trait NeutralMob: Mob {
         let keeps_valid_player_target = stays_angry
             && target
                 .as_ref()
-                .is_some_and(|target| is_valid_player_target(target.as_ref(), &world));
+                .is_some_and(|target| is_valid_player_target(target.as_ref()));
         if anger_target.is_some()
             && should_stop_being_angry(self.is_angry_at_age(now), keeps_valid_player_target)
         {
@@ -265,12 +261,11 @@ pub trait NeutralMob: Mob {
             return;
         }
 
-        // Grudge target switched to creative or spectator
-        if let Some(angry_at) = anger_target
+        // Grudge target switched to creative or spectator.
+        // Re-read: a new target above replaced the grudge, the local is stale.
+        if let Some(angry_at) = self.get_persistent_anger_target()
             && let Some(player) = world.get_player_by_uuid(angry_at)
-            && (player.is_creative()
-                || player.is_spectator()
-                || world.level_info.load().difficulty == Difficulty::Peaceful)
+            && !player.is_valid_mob_target()
         {
             self.stop_being_angry();
         }

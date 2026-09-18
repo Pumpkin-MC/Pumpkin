@@ -6203,6 +6203,18 @@ impl Player {
         self.gamemode.load() == GameMode::Creative
     }
 
+    /// Whether mobs may target this player at all: not creative or spectator, and the world
+    /// is not Peaceful. Alive state is left out on purpose, a grudge may outlives the death.
+    // TODO: vanilla `Player.canBeSeenAsEnemy` also excludes `abilities.invulnerable`. The plugin
+    // `set_invulnerable` sets only that, so such a survival player is still targeted. Check it
+    // here and route `TargetPredicate` through this for players.
+    #[must_use]
+    pub fn is_valid_mob_target(&self) -> bool {
+        !self.is_creative()
+            && !self.is_spectator()
+            && self.world().level_info.load().difficulty != Difficulty::Peaceful
+    }
+
     /// Swing the hand of the player
     pub fn swing_hand(&self, hand: Hand, all: bool) {
         let world = self.world();
