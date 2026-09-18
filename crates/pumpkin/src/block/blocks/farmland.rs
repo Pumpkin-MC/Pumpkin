@@ -144,8 +144,11 @@ fn is_water_nearby(world: &Arc<World>, block_pos: &BlockPos) -> bool {
                     y: dy,
                     z: dz,
                 });
+                // Vanilla checks the fluid state, not the block identity:
+                // waterlogged blocks (e.g. waterlogged stairs) hydrate too.
+                let state = world.get_block_state(&check_pos);
                 //TODO this should use tag water. It does not seem to work rn.
-                if world.get_block(&check_pos) == &Block::WATER {
+                if state.id.to_block() == &Block::WATER || state.is_waterlogged() {
                     return true;
                 }
             }
