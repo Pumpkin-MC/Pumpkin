@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use pumpkin_data::{
-    Block, BlockState, BlockStateId,
+    Block, BlockDirection, BlockState, BlockStateId,
     damage::DamageType,
     entity::EntityType,
     fluid::Fluid,
@@ -9,6 +9,7 @@ use pumpkin_data::{
 };
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos, vector3::Vector3};
 use pumpkin_world::chunk::ChunkData;
+use rand::RngExt;
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -190,6 +191,7 @@ pub struct Explosion {
     block_interaction: BlockInteraction,
     damage_calculator: Option<Arc<dyn ExplosionDamageCalculator>>,
     preserve_rails: bool,
+    create_fire: bool,
 }
 
 impl Explosion {
@@ -201,6 +203,7 @@ impl Explosion {
             block_interaction,
             damage_calculator: None,
             preserve_rails: false,
+            create_fire: false,
         }
     }
 
@@ -216,6 +219,12 @@ impl Explosion {
     #[must_use]
     pub const fn preserving_rails(mut self) -> Self {
         self.preserve_rails = true;
+        self
+    }
+
+    #[must_use]
+    pub const fn with_fire(mut self) -> Self {
+        self.create_fire = true;
         self
     }
 
@@ -565,7 +574,25 @@ impl Explosion {
                         });
                     }
                 }
-                // TODO: fire
+                if self.create_fire {
+                    for pos in blocks.keys() {
+                        if rand::rng().random_range(0..3) != 0
+                            || !world.get_block_state(pos).is_air()
+                            || !world
+                                .get_block_state(&pos.down())
+                                .is_side_solid(BlockDirection::Up)
+                        {
+                            continue;
+                        }
+
+                        world.set_block_state(
+                            pos,
+                            Block::FIRE.default_state.id,
+                            BlockFlags::NOTIFY_ALL,
+                        );
+                    }
+                }
+
                 blocks.len() as u32
             }
         }
