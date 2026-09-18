@@ -797,8 +797,11 @@ interface %world {
         /// Gets the world border associated with this world.
         get-world-border: func() -> world-border;
 
-        /// Gets the chunk at the specified chunk coordinates.
+        /// Gets the chunk at the specified chunk coordinates if it is already loaded.
         get-chunk: func(x: s32, z: s32) -> option<chunk>;
+
+        /// Loads or generates the chunk at the specified chunk coordinates and returns it.
+        load-chunk: func(x: s32, z: s32) -> chunk;
 
         /// Gets the block state ID at the specified position.
         get-block-state-id: func(pos: block-pos) -> u16;
