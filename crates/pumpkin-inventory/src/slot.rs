@@ -26,9 +26,9 @@ use std::sync::{
 use crate::screen_handler::InventoryPlayer;
 
 use crate::inventory::Inventory;
-use pumpkin_data::{Enchantment, data_component_impl::EquipmentSlot};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
+use pumpkin_data::{Enchantment, data_component_impl::EquipmentSlot};
 
 /// A slot in an inventory.
 ///
@@ -383,12 +383,122 @@ impl Slot for ArmorSlot {
 #[cfg(test)]
 mod tests {
     use super::can_take_armor_stack;
-    use pumpkin_data::{Enchantment, item::Item, item_stack::ItemStack};
+    use crate::build_equipment_slots;
+    use crate::entity_equipment::EntityEquipment;
+    use crate::player::player_inventory::PlayerInventory;
+    use crate::player::player_screen_handler::PlayerScreenHandler;
+    use crate::screen_handler::{InventoryPlayer, ScreenHandler};
+    use pumpkin_data::item::Item;
+    use pumpkin_data::item_stack::ItemStack;
+    use pumpkin_data::screen::WindowType;
+    use pumpkin_data::Enchantment;
+    use pumpkin_protocol::java::client::play::{
+        CSetContainerContent, CSetContainerProperty, CSetContainerSlot, CSetCursorItem,
+        CSetPlayerInventory, CSetSelectedSlot,
+    };
+    use pumpkin_protocol::java::server::play::SlotActionType;
+    use std::sync::{Arc, Mutex};
+
+    struct DummyPlayer {
+        creative: bool,
+        inventory: Arc<PlayerInventory>,
+    }
+
+    impl DummyPlayer {
+        fn new(creative: bool) -> Self {
+            Self {
+                creative,
+                inventory: Arc::new(PlayerInventory::new(
+                    Arc::new(Mutex::new(EntityEquipment::new())),
+                    Arc::new(build_equipment_slots()),
+                )),
+            }
+        }
+    }
+
+    impl InventoryPlayer for DummyPlayer {
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+
+        fn drop_item(&self, _item: ItemStack, _retain_ownership: bool) {}
+
+        fn get_inventory(&self) -> Arc<PlayerInventory> {
+            self.inventory.clone()
+        }
+
+        fn has_infinite_materials(&self) -> bool {
+            self.creative
+        }
+
+        fn is_creative(&self) -> bool {
+            self.creative
+        }
+
+        fn experience_level(&self) -> i32 {
+            0
+        }
+
+        fn add_experience_levels(&self, _levels: i32) {}
+
+        fn enchantment_seed(&self) -> i32 {
+            0
+        }
+
+        fn set_enchantment_seed(&self, _seed: i32) {}
+
+        fn enqueue_inventory_packet(
+            &self,
+            _packet: &CSetContainerContent,
+            _window_type: Option<WindowType>,
+        ) {
+        }
+
+        fn enqueue_slot_packet(
+            &self,
+            _packet: &CSetContainerSlot,
+            _window_type: Option<WindowType>,
+            _total_slots: usize,
+        ) {
+        }
+
+        fn enqueue_cursor_packet(&self, _packet: &CSetCursorItem) {}
+
+        fn enqueue_property_packet(&self, _packet: &CSetContainerProperty) {}
+
+        fn enqueue_slot_set_packet(&self, _packet: &CSetPlayerInventory) {}
+
+        fn enqueue_set_held_item_packet(&self, _packet: &CSetSelectedSlot) {}
+
+        fn enqueue_equipment_change(
+            &self,
+            _slot: &pumpkin_data::data_component_impl::EquipmentSlot,
+            _stack: &ItemStack,
+        ) {
+        }
+
+        fn award_experience(&self, _amount: i32) {}
+
+        fn increment_stat(
+            &self,
+            _category: pumpkin_data::statistic::StatisticCategory,
+            _stat_id: i32,
+            _amount: i32,
+        ) {
+        }
+
+        fn play_block_sound(&self, _sound: pumpkin_data::sound::Sound, _pitch: f32) {}
+    }
+
+    fn cursed_helmet() -> ItemStack {
+        let mut stack = ItemStack::new(1, &Item::DIAMOND_HELMET);
+        stack.add_enchantment(&Enchantment::BINDING_CURSE, 1);
+        stack
+    }
 
     #[test]
     fn binding_curse_blocks_non_creative_removal() {
-        let mut stack = ItemStack::new(1, &Item::DIAMOND_HELMET);
-        stack.add_enchantment(&Enchantment::BINDING_CURSE, 1);
+        let stack = cursed_helmet();
 
         assert!(!can_take_armor_stack(&stack, false));
         assert!(can_take_armor_stack(&stack, true));
@@ -399,5 +509,73 @@ mod tests {
         let stack = ItemStack::new(1, &Item::DIAMOND_HELMET);
 
         assert!(can_take_armor_stack(&stack, false));
+    }
+
+    #[test]
+    fn binding_curse_blocks_pickup_and_quick_move() {
+        let player = DummyPlayer::new(false);
+        let stack = cursed_helmet();
+        player.inventory.set_slot(39, stack.clone());
+        let mut handler = PlayerScreenHandler::new(&player.inventory, None, 0, None);
+
+        handler.on_slot_click(5, 0, SlotActionType::Pickup, &player);
+
+        assert!(
+            player
+                .inventory
+                .get_slot(39)
+                .are_items_and_components_equal(&stack)
+        );
+        assert!(
+            handler
+                .get_behaviour()
+                .cursor_stack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .is_empty()
+        );
+
+        handler.on_slot_click(5, 0, SlotActionType::QuickMove, &player);
+
+        assert!(
+            player
+                .inventory
+                .get_slot(39)
+                .are_items_and_components_equal(&stack)
+        );
+    }
+
+    #[test]
+    fn creative_can_pick_up_binding_curse_armor() {
+        let player = DummyPlayer::new(true);
+        let stack = cursed_helmet();
+        player.inventory.set_slot(39, stack.clone());
+        let mut handler = PlayerScreenHandler::new(&player.inventory, None, 0, None);
+
+        handler.on_slot_click(5, 0, SlotActionType::Pickup, &player);
+
+        assert!(player.inventory.get_slot(39).is_empty());
+        assert!(
+            handler
+                .get_behaviour()
+                .cursor_stack
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .are_items_and_components_equal(&stack)
+        );
+    }
+
+    #[test]
+    fn unbound_armor_can_be_quick_moved() {
+        let player = DummyPlayer::new(false);
+        player
+            .inventory
+            .set_slot(39, ItemStack::new(1, &Item::DIAMOND_HELMET));
+        let mut handler = PlayerScreenHandler::new(&player.inventory, None, 0, None);
+
+        handler.on_slot_click(5, 0, SlotActionType::QuickMove, &player);
+
+        assert!(player.inventory.get_slot(39).is_empty());
+        assert!(player.inventory.contains_item(&Item::DIAMOND_HELMET));
     }
 }
