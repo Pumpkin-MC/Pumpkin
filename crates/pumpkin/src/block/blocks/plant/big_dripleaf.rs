@@ -154,6 +154,9 @@ fn set_tilt_and_schedule_tick(
     tilt: Tilt,
     sound_wrapper: Option<Sound>,
 ) {
+    if tilt == Tilt::Full {
+        world.cancel_block_tick(pos, &Block::BIG_DRIPLEAF);
+    }
     set_tilt(state_id, world, pos, tilt);
     if let Some(tilt_sound) = sound_wrapper {
         play_tilt_sound(world, pos, tilt_sound);
