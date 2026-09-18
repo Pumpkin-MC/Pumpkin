@@ -58,7 +58,7 @@ impl BlockBehaviour for RespawnAnchorBlock {
                 .break_block(args.position, None, BlockFlags::SKIP_DROPS);
             let center_pos = args.position.to_centered_f64();
             args.world
-                .explode(center_pos, 5.0, crate::world::ExplosionInteraction::Block);
+                .explode_with_fire(center_pos, 5.0, crate::world::ExplosionInteraction::Block);
             return BlockActionResult::SuccessServer;
         }
 
