@@ -21,6 +21,12 @@ const fn facing_from_horizontal(value: u8) -> BlockDirection {
     }
 }
 
+/// Vanilla reads the field with `getByte`, which yields 0 (south) when it is
+/// absent, so a partial entity file keeps a horizontal default.
+fn facing_from_nbt(nbt: &NbtCompound) -> BlockDirection {
+    facing_from_horizontal(nbt.get_byte("facing").unwrap_or(0) as u8)
+}
+
 const fn facing_to_horizontal(direction: BlockDirection) -> u8 {
     match direction {
         BlockDirection::West => 1,
@@ -48,7 +54,7 @@ impl EntityBase for PaintingEntity {
     }
 
     fn read_custom_nbt(&self, nbt: &NbtCompound) {
-        let facing = facing_from_horizontal(nbt.get_byte("facing").unwrap_or(3) as u8);
+        let facing = facing_from_nbt(nbt);
         self.entity
             .data
             .store(i32::from(facing.to_index()), Ordering::Relaxed);
@@ -100,6 +106,17 @@ mod tests {
         // client reads as down and rejects.
         assert_eq!(facing_from_horizontal(0), BlockDirection::South);
         assert_eq!(facing_from_horizontal(0).to_index(), 3);
+    }
+
+    #[test]
+    fn missing_facing_defaults_to_south() {
+        let nbt = NbtCompound::new();
+        assert_eq!(facing_from_nbt(&nbt), BlockDirection::South);
+        assert_eq!(facing_from_nbt(&nbt).to_index(), 3);
+
+        let mut with_facing = NbtCompound::new();
+        with_facing.put_byte("facing", 1);
+        assert_eq!(facing_from_nbt(&with_facing), BlockDirection::West);
     }
 
     #[test]
