@@ -725,6 +725,11 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     fn cast_any(&self) -> &dyn std::any::Any;
 
+    /// The mob side of this entity, for the behaviors that read another mob's brain.
+    fn as_mob_entity(&self) -> Option<&crate::entity::mob::MobEntity> {
+        None
+    }
+
     fn get_item_entity(&self) -> Option<&ItemEntity> {
         None
     }

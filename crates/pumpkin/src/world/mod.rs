@@ -4722,11 +4722,17 @@ impl World {
     ///
     /// An `Option<Arc<dyn EntityBase>>` containing the player if found, or `None` if not.
     pub fn get_entity_by_uuid(&self, id: uuid::Uuid) -> Option<Arc<dyn EntityBase>> {
-        self.entities
-            .load()
-            .iter()
-            .find(|p| p.get_entity().entity_uuid == id)
-            .cloned()
+        for entity in self.entities.load().iter() {
+            if entity.get_entity().entity_uuid == id {
+                return Some(entity.clone());
+            }
+        }
+        for player in self.players.load().iter() {
+            if player.get_entity().entity_uuid == id {
+                return Some(player.clone() as Arc<dyn EntityBase>);
+            }
+        }
+        None
     }
 
     /// Gets a list of players whose location equals the given position in the world.

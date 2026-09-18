@@ -105,6 +105,11 @@ impl HoglinEntity {
         mob_arc
     }
 
+    #[must_use]
+    pub fn can_be_hunted(&self) -> bool {
+        !self.is_baby.load(Ordering::Relaxed) && !self.cannot_be_hunted.load(Ordering::Relaxed)
+    }
+
     pub fn is_immune_to_zombification(&self) -> bool {
         self.immune_to_zombification.load(Ordering::Relaxed)
     }

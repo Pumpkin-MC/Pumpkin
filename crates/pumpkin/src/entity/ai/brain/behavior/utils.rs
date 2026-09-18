@@ -10,6 +10,32 @@ use super::super::memory::walk_target::WalkTarget;
 use super::super::memory::{MemoryModuleType, types};
 use super::super::{Brain, VisibilityContext};
 
+/// Vanilla `LivingEntity.isAlive`, health aware unlike `Entity::is_alive`.
+#[must_use]
+pub fn is_alive(entity: &dyn EntityBase) -> bool {
+    entity.get_entity().is_alive()
+        && entity
+            .get_living_entity()
+            .is_none_or(|living| living.health.load() > 0.0)
+}
+
+#[must_use]
+pub fn is_dead_or_dying(entity: &dyn EntityBase) -> bool {
+    entity
+        .get_living_entity()
+        .is_some_and(|living| living.health.load() <= 0.0)
+}
+
+#[must_use]
+pub fn has_passenger(body: &crate::entity::Entity, target: &dyn EntityBase) -> bool {
+    let target_id = target.get_entity().entity_id;
+    body.passengers
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .iter()
+        .any(|passenger| passenger.get_entity().entity_id == target_id)
+}
+
 #[must_use]
 pub fn entity_is_visible(ctx: &VisibilityContext<'_>, target: &dyn EntityBase) -> bool {
     ctx.brain
@@ -29,9 +55,7 @@ pub fn target_is_valid(
     predicate: impl Fn(&Arc<dyn EntityBase>) -> bool,
 ) -> bool {
     ctx.brain.get(memory).is_some_and(|target| {
-        predicate(target)
-            && target.get_entity().is_alive()
-            && entity_is_visible(ctx, target.as_ref())
+        predicate(target) && is_alive(target.as_ref()) && entity_is_visible(ctx, target.as_ref())
     })
 }
 
@@ -136,6 +160,36 @@ pub fn is_other_target_much_further_away_than_current_attack_target(
     let dist_to_current = pos.squared_distance_to_vec(&current.get_entity().pos.load());
     let dist_to_other = pos.squared_distance_to_vec(&other_target.get_entity().pos.load());
     dist_to_other > dist_to_current + how_much_further_away * how_much_further_away
+}
+
+/// Vanilla `BehaviorUtils.isWithinAttackRange`.
+#[must_use]
+pub fn is_within_attack_range(
+    mob: &dyn crate::entity::mob::Mob,
+    target: &dyn EntityBase,
+    projectile_attack_range_margin: i32,
+) -> bool {
+    mob.non_melee_weapon_range().map_or_else(
+        || mob.get_mob_entity().is_in_attack_range(target),
+        |range| {
+            let max_allowed = f64::from(range - projectile_attack_range_margin);
+            mob.get_entity()
+                .pos
+                .load()
+                .squared_distance_to_vec(&target.get_entity().pos.load())
+                < max_allowed * max_allowed
+        },
+    )
+}
+
+/// `World::dimension` is owned, so a `GlobalPos` resolves its static `Dimension` by name.
+#[must_use]
+pub fn global_pos_in(
+    world: &World,
+    pos: pumpkin_util::math::position::BlockPos,
+) -> Option<super::super::memory::GlobalPos> {
+    pumpkin_data::dimension::Dimension::from_name(world.dimension.minecraft_name)
+        .map(|dimension| super::super::memory::GlobalPos::new(dimension, pos))
 }
 
 #[must_use]

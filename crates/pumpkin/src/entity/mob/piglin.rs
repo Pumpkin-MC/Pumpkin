@@ -1,14 +1,11 @@
 use std::sync::{
-    Arc, Mutex, Weak,
+    Arc, Mutex,
     atomic::{AtomicBool, AtomicI32, Ordering},
 };
 
-use crossbeam::atomic::AtomicCell;
 use pumpkin_data::Block;
 use pumpkin_data::Enchantment;
-use pumpkin_data::attributes::Attributes;
-use pumpkin_data::block_properties::CampfireLikeProperties;
-use pumpkin_data::data_component_impl::{BlocksAttacksImpl, EquipmentSlot};
+use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
@@ -21,32 +18,14 @@ use pumpkin_util::math::boundingbox::EntityDimensions;
 use pumpkin_util::math::position::BlockPos;
 
 use crate::entity::item::ItemEntity;
-use crate::entity::living::LivingEntity;
 use crate::entity::mob::equipment as mob_equipment;
+use crate::entity::mob::{abstract_piglin, piglin_ai};
 use crate::entity::player::Player;
 use crate::entity::{
     Entity, EntityBase,
-    ai::goal::{
-        active_target::ActiveTargetGoal, go_to_wanted_item::GoToWantedItemGoal,
-        look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
-        melee_attack::MeleeAttackGoal, open_door::OpenDoorGoal,
-        ranged_crossbow_attack::RangedCrossbowAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
-        wander_around::WanderAroundGoal,
-    },
-    mob::{
-        Mob, MobEntity, crossbow_attack_mob::CrossbowAttackMob, equipment::RegionalDifficulty,
-        piglin_ai::PiglinAi,
-    },
+    mob::{Mob, MobEntity, crossbow_attack_mob::CrossbowAttackMob, equipment::RegionalDifficulty},
 };
 use crate::world::World;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PiglinActivity {
-    Idle,
-    AdmireItem,
-    Fight,
-    Celebrate,
-}
 
 pub struct PiglinEntity {
     pub mob_entity: MobEntity,
@@ -57,18 +36,6 @@ pub struct PiglinEntity {
     pub is_charging_crossbow: AtomicBool,
     pub is_dancing: AtomicBool,
     pub inventory: Mutex<Vec<ItemStack>>,
-    pub admire_timer: AtomicI32,
-    pub admiring_disabled_timer: AtomicI32,
-    pub eat_cooldown_timer: AtomicI32,
-    pub celebration_timer: AtomicI32,
-    pub hunt_cooldown_timer: AtomicI32,
-    pub disable_walk_to_admire_timer: AtomicI32,
-    pub time_trying_to_reach_item: AtomicI32,
-    pub admiring_item: Mutex<Option<ItemStack>>,
-    pub nearest_wanted_item: Mutex<Option<Arc<dyn EntityBase>>>,
-    pub nearest_visible_player: Mutex<Option<Arc<Player>>>,
-    pub near_repellent: AtomicBool,
-    pub activity: AtomicCell<PiglinActivity>,
     pub ambient_sound_time: AtomicI32,
 }
 
@@ -77,6 +44,8 @@ impl PiglinEntity {
     pub const INVENTORY_SIZE: usize = 8;
     pub const XP_REWARD: u32 = 5;
     pub const AMBIENT_SOUND_INTERVAL: i32 = 80;
+    /// `CrossbowItem.getDefaultProjectileRange`.
+    const CROSSBOW_PROJECTILE_RANGE: i32 = 8;
 
     pub const ADULT_DIMENSIONS: EntityDimensions = EntityDimensions {
         width: 0.6,
@@ -100,97 +69,16 @@ impl PiglinEntity {
             is_charging_crossbow: AtomicBool::new(false),
             is_dancing: AtomicBool::new(false),
             inventory: Mutex::new(Vec::new()),
-            admire_timer: AtomicI32::new(0),
-            admiring_disabled_timer: AtomicI32::new(0),
-            eat_cooldown_timer: AtomicI32::new(0),
-            celebration_timer: AtomicI32::new(0),
-            hunt_cooldown_timer: AtomicI32::new(0),
-            disable_walk_to_admire_timer: AtomicI32::new(0),
-            time_trying_to_reach_item: AtomicI32::new(-1),
-            admiring_item: Mutex::new(None),
-            nearest_wanted_item: Mutex::new(None),
-            nearest_visible_player: Mutex::new(None),
-            near_repellent: AtomicBool::new(false),
-            activity: AtomicCell::new(PiglinActivity::Idle),
             ambient_sound_time: AtomicI32::new(0),
         };
         let mob_arc = Arc::new(piglin);
         mob_arc.mob_entity.set_can_pick_up_loot(true);
-        let mob_weak: Weak<dyn Mob> = {
-            let mob_arc: Arc<dyn Mob> = mob_arc.clone();
-            Arc::downgrade(&mob_arc)
-        };
-
-        {
-            let mut goal_selector = mob_arc
-                .mob_entity
-                .goals_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-            goal_selector.add_goal(0, Box::new(SwimGoal::default()));
-            goal_selector.add_goal(1, Box::new(OpenDoorGoal::new(true)));
-            goal_selector.add_goal(2, Box::new(GoToWantedItemGoal::new(mob_arc.clone(), 1.0)));
-            goal_selector.add_goal(3, Box::new(MeleeAttackGoal::new(1.0, true)));
-            goal_selector.add_goal(4, Box::new(RangedCrossbowAttackGoal::new(1.0, 8.0)));
-            goal_selector.add_goal(5, Box::new(WanderAroundGoal::new(1.0)));
-            goal_selector.add_goal(
-                6,
-                LookAtEntityGoal::with_default(mob_weak.clone(), &EntityType::PLAYER, 8.0),
-            );
-            goal_selector.add_goal(7, Box::new(RandomLookAroundGoal::default()));
-
-            let mut target_selector = mob_arc
-                .mob_entity
-                .target_selector
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
-
-            target_selector.add_goal(
-                2,
-                Box::new(ActiveTargetGoal::new(
-                    &mob_arc.mob_entity,
-                    &EntityType::PLAYER,
-                    10,
-                    true,
-                    false,
-                    Some(|target: &LivingEntity, _world: &World| {
-                        !PiglinAi::is_wearing_safe_armor(target)
-                    }),
-                )),
-            );
-
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(
-                    &mob_arc.mob_entity,
-                    &EntityType::WITHER_SKELETON,
-                    true,
-                ),
-            );
-            target_selector.add_goal(
-                3,
-                ActiveTargetGoal::with_default(&mob_arc.mob_entity, &EntityType::WITHER, true),
-            );
-
-            let piglin_clone = mob_arc.clone();
-            target_selector.add_goal(
-                4,
-                Box::new(ActiveTargetGoal::new(
-                    &mob_arc.mob_entity,
-                    &EntityType::HOGLIN,
-                    10,
-                    true,
-                    false,
-                    Some(move |_target: &LivingEntity, _world: &World| {
-                        piglin_clone.is_adult() && piglin_clone.can_hunt()
-                    }),
-                )),
-            );
-        };
-
+        mob_arc.mob_entity.init_brain(mob_arc.as_ref());
+        // Vanilla does this in finalizeSpawn; a loaded mob rebuilds its brain after
+        mob_arc.mob_entity.with_brain(mob_arc.as_ref(), |tick| {
+            let mut rng = tick.mob.get_random();
+            piglin_ai::init_memories(tick.brain, &mut rng);
+        });
         mob_arc
     }
 
@@ -266,90 +154,11 @@ impl PiglinEntity {
     #[must_use]
     pub fn can_hunt(&self) -> bool {
         !self.cannot_hunt.load(Ordering::Relaxed)
-            && self.hunt_cooldown_timer.load(Ordering::Relaxed) <= 0
     }
 
     pub fn set_cannot_hunt(&self, cannot_hunt: bool) {
         self.cannot_hunt.store(cannot_hunt, Ordering::Relaxed);
     }
-
-    #[must_use]
-    pub fn is_admiring(&self) -> bool {
-        self.admire_timer.load(Ordering::Relaxed) > 0
-    }
-
-    #[must_use]
-    pub fn is_admiring_disabled(&self) -> bool {
-        self.admiring_disabled_timer.load(Ordering::Relaxed) > 0
-    }
-
-    #[must_use]
-    pub fn has_eaten_recently(&self) -> bool {
-        self.eat_cooldown_timer.load(Ordering::Relaxed) > 0
-    }
-
-    const fn expiring_memories(&self) -> [(&'static str, &AtomicI32); 3] {
-        [
-            ("minecraft:admiring_item", &self.admire_timer),
-            ("minecraft:admiring_disabled", &self.admiring_disabled_timer),
-            ("minecraft:hunted_recently", &self.hunt_cooldown_timer),
-        ]
-    }
-
-    fn write_brain_memories(&self, nbt: &mut NbtCompound) {
-        let mut memories = NbtCompound::new();
-        for (key, timer) in self.expiring_memories() {
-            let ttl = timer.load(Ordering::Relaxed);
-            if ttl > 0 {
-                let mut memory = NbtCompound::new();
-                memory.put_bool("value", true);
-                memory.put_long("ttl", i64::from(ttl));
-                memories.put(key, NbtTag::Compound(memory));
-            }
-        }
-        if !memories.child_tags.is_empty() {
-            let mut brain = NbtCompound::new();
-            brain.put("memories", NbtTag::Compound(memories));
-            nbt.put("Brain", NbtTag::Compound(brain));
-        }
-    }
-
-    fn read_brain_memories(&self, nbt: &NbtCompound) {
-        let Some(memories) = nbt
-            .get_compound("Brain")
-            .and_then(|brain| brain.get_compound("memories"))
-        else {
-            return;
-        };
-        for (key, timer) in self.expiring_memories() {
-            if let Some(ttl) = memories
-                .get_compound(key)
-                .and_then(|memory| memory.get_long("ttl"))
-            {
-                timer.store(ttl.clamp(0, i64::from(i32::MAX)) as i32, Ordering::Relaxed);
-            }
-        }
-    }
-
-    #[must_use]
-    pub fn is_walk_to_admire_disabled(&self) -> bool {
-        self.disable_walk_to_admire_timer.load(Ordering::Relaxed) > 0
-    }
-
-    #[must_use]
-    pub fn has_attack_target(&self) -> bool {
-        self.mob_entity
-            .target
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_some()
-    }
-
-    #[must_use]
-    pub fn is_near_repellent(&self) -> bool {
-        self.near_repellent.load(Ordering::Relaxed)
-    }
-
     #[must_use]
     pub fn off_hand_item(&self) -> ItemStack {
         self.mob_entity
@@ -418,24 +227,11 @@ impl PiglinEntity {
             .get(&slot);
         Mob::can_replace_current_item(self, new_item, &current, &slot)
     }
-
-    fn put_in_inventory(&self, item: ItemStack) {
-        let remainder = self
-            .add_to_inventory(item)
-            .unwrap_or_else(|| ItemStack::EMPTY.clone());
-        // Vanilla swings the off hand here even when nothing was left over.
-        PiglinAi::throw_items_toward_random_pos(self, vec![remainder]);
-    }
-
-    fn hold_in_off_hand(&self, item: ItemStack) {
+    pub fn hold_in_off_hand(&self, item: ItemStack) {
         if self.is_holding_item_in_off_hand() {
             self.mob_entity.spawn_at_location(self.off_hand_item());
         }
-        let keep_loaded = !PiglinAi::is_barter_currency(&item);
-        *self
-            .admiring_item
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(item.clone());
+        let keep_loaded = !piglin_ai::is_barter_currency(&item);
         self.mob_entity
             .set_item_slot_and_drop_when_killed(&EquipmentSlot::OFF_HAND, item);
         if keep_loaded {
@@ -445,7 +241,7 @@ impl PiglinEntity {
         }
     }
 
-    fn hold_in_main_hand(&self, item: ItemStack) {
+    pub fn hold_in_main_hand(&self, item: ItemStack) {
         self.mob_entity
             .set_item_slot_and_drop_when_killed(&EquipmentSlot::MAIN_HAND, item);
         self.mob_entity
@@ -453,7 +249,7 @@ impl PiglinEntity {
             .store(true, Ordering::Relaxed);
     }
 
-    fn main_hand_item(&self) -> ItemStack {
+    pub fn main_hand_item(&self) -> ItemStack {
         self.mob_entity
             .living_entity
             .entity_equipment
@@ -461,196 +257,18 @@ impl PiglinEntity {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .get(&EquipmentSlot::MAIN_HAND)
     }
-
-    fn admire_gold_item(&self) {
-        self.admire_timer
-            .store(PiglinAi::ADMIRE_DURATION, Ordering::Relaxed);
-    }
-
-    fn stop_walking(&self) {
-        self.mob_entity
-            .navigator
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .stop();
-    }
-
-    pub fn start_admiring(&self, item: ItemStack) {
-        self.hold_in_off_hand(item);
-        self.admire_gold_item();
-        self.stop_walking();
-    }
-
     #[must_use]
-    pub fn nearest_wanted_item(&self) -> Option<Arc<dyn EntityBase>> {
-        let item = self
-            .nearest_wanted_item
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
-        item.filter(|item| item.get_entity().is_alive())
-    }
-
-    #[must_use]
-    pub fn nearest_visible_player(&self) -> Option<Arc<Player>> {
-        let player = self
-            .nearest_visible_player
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
-        player.filter(|player| player.get_entity().is_alive())
-    }
-
     fn wants_item_entity(&self, item: &ItemEntity) -> bool {
         let stack = item
             .get_item_stack()
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        !stack.is_empty() && PiglinAi::wants_to_pickup(self, &stack)
+        !stack.is_empty()
+            && self.mob_entity.with_brain(self, |tick| {
+                <Self as Mob>::wants_to_pick_up(self, tick.brain, &stack)
+            })
     }
-
-    fn tick_sensors(&self) {
-        self.refresh_nearest_wanted_item();
-        self.refresh_nearest_visible_player();
-        self.refresh_nearest_repellent();
-    }
-
-    fn refresh_nearest_wanted_item(&self) {
-        let entity = &self.mob_entity.living_entity.entity;
-        let world = entity.world.load();
-        let pos = entity.pos.load();
-        let eye_pos = entity.get_eye_pos();
-        let search_box = entity.bounding_box.load().expand(
-            PiglinAi::ITEM_SCAN_RANGE,
-            PiglinAi::ITEM_SCAN_RANGE_Y,
-            PiglinAi::ITEM_SCAN_RANGE,
-        );
-        let max_distance_sq = PiglinAi::ITEM_SCAN_RANGE * PiglinAi::ITEM_SCAN_RANGE;
-
-        let nearest = if self.mob_entity.can_pick_up_loot()
-            && world.level_info.load().game_rules.mob_griefing
-        {
-            let mut candidates: Vec<(f64, Arc<dyn EntityBase>)> = world
-                .entities
-                .load()
-                .iter()
-                .filter_map(|candidate| {
-                    let item = candidate.get_item_entity()?;
-                    let item_entity = item.get_entity();
-                    let distance_sq = item_entity.pos.load().squared_distance_to_vec(&pos);
-                    (item_entity.is_alive()
-                        && item_entity.bounding_box.load().intersects(&search_box)
-                        && distance_sq < max_distance_sq
-                        && self.wants_item_entity(item))
-                    .then(|| (distance_sq, candidate.clone()))
-                })
-                .collect();
-            candidates.sort_by(|a, b| a.0.total_cmp(&b.0));
-            candidates
-                .into_iter()
-                .map(|(_, candidate)| candidate)
-                .find(|candidate| {
-                    world
-                        .raycast(
-                            eye_pos,
-                            candidate.get_entity().get_eye_pos(),
-                            |block_pos, w| w.get_block_state(block_pos).is_solid(),
-                        )
-                        .is_none()
-                })
-        } else {
-            None
-        };
-
-        *self
-            .nearest_wanted_item
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = nearest;
-    }
-
-    fn refresh_nearest_visible_player(&self) {
-        let living = &self.mob_entity.living_entity;
-        let pos = living.entity.pos.load();
-        let follow_range = living.get_attribute_value(&Attributes::FOLLOW_RANGE);
-
-        let mut players = living
-            .entity
-            .world
-            .load()
-            .get_nearby_players(pos, follow_range);
-        players.retain(|player| {
-            !player.is_spectator()
-                && player.get_entity().pos.load().squared_distance_to_vec(&pos)
-                    < follow_range * follow_range
-        });
-        players.sort_by(|a, b| {
-            a.get_entity()
-                .pos
-                .load()
-                .squared_distance_to_vec(&pos)
-                .total_cmp(&b.get_entity().pos.load().squared_distance_to_vec(&pos))
-        });
-        let nearest = players
-            .into_iter()
-            .find(|player| PiglinAi::is_entity_targetable(self, player));
-
-        *self
-            .nearest_visible_player
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = nearest;
-    }
-
-    fn refresh_nearest_repellent(&self) {
-        let entity = &self.mob_entity.living_entity.entity;
-        let world = entity.world.load();
-        let center = entity.block_pos.load();
-        let horizontal = PiglinAi::REPELLENT_DETECTION_RANGE_HORIZONTAL;
-        let vertical = PiglinAi::REPELLENT_DETECTION_RANGE_VERTICAL;
-
-        let mut found = false;
-        'scan: for dy in -vertical..=vertical {
-            for dx in -horizontal..=horizontal {
-                for dz in -horizontal..=horizontal {
-                    let pos = BlockPos::new(center.0.x + dx, center.0.y + dy, center.0.z + dz);
-                    let (block, state) = world.get_block_and_state(&pos);
-                    if !block.has_tag(&tag::Block::MINECRAFT_PIGLIN_REPELLENTS) {
-                        continue;
-                    }
-                    if block.id == Block::SOUL_CAMPFIRE.id
-                        && !CampfireLikeProperties::from_state_id(state.id).lit
-                    {
-                        continue;
-                    }
-                    found = true;
-                    break 'scan;
-                }
-            }
-        }
-        self.near_repellent.store(found, Ordering::Relaxed);
-    }
-
-    fn current_activity(&self) -> PiglinActivity {
-        if self.is_admiring() {
-            PiglinActivity::AdmireItem
-        } else if self.has_attack_target() {
-            PiglinActivity::Fight
-        } else if self.celebration_timer.load(Ordering::Relaxed) > 0 {
-            PiglinActivity::Celebrate
-        } else {
-            PiglinActivity::Idle
-        }
-    }
-
-    fn update_activity(&self) {
-        let old_activity = self.activity.load();
-        let new_activity = self.current_activity();
-        if old_activity != new_activity {
-            self.activity.store(new_activity);
-            self.make_sound(PiglinAi::get_sound_for_activity(self, new_activity));
-        }
-    }
-
-    fn make_sound(&self, sound: Sound) {
+    pub fn make_sound(&self, sound: Sound) {
         let entity = &self.mob_entity.living_entity.entity;
         let base_pitch = if self.is_baby() { 1.5 } else { 1.0 };
         let pitch = (rand::random::<f32>() - rand::random::<f32>()).mul_add(0.2, base_pitch);
@@ -670,7 +288,13 @@ impl PiglinEntity {
             && rand::random_range(0..1000) < self.ambient_sound_time.fetch_add(1, Ordering::Relaxed)
         {
             self.reset_ambient_sound_time();
-            self.make_sound(PiglinAi::get_sound_for_activity(self, self.activity.load()));
+            let sound = self.mob_entity.with_brain(self, |tick| {
+                let converting = self.is_converting(tick.world);
+                piglin_ai::get_sound_for_current_activity(&tick.visibility(), converting)
+            });
+            if let Some(sound) = sound {
+                self.make_sound(sound);
+            }
         }
     }
 
@@ -678,79 +302,6 @@ impl PiglinEntity {
         self.ambient_sound_time
             .store(-Self::AMBIENT_SOUND_INTERVAL, Ordering::Relaxed);
     }
-
-    fn stop_holding_item_if_no_longer_admiring(&self) {
-        if self.is_admiring() {
-            return;
-        }
-        let off_hand = self.off_hand_item();
-        if off_hand.is_empty() || off_hand.get_data_component::<BlocksAttacksImpl>().is_some() {
-            return;
-        }
-        self.stop_holding_off_hand_item(true);
-    }
-
-    fn start_admiring_if_seen(&self) {
-        if self.is_admiring() || self.is_admiring_disabled() || self.is_walk_to_admire_disabled() {
-            return;
-        }
-        let Some(item) = self.nearest_wanted_item() else {
-            return;
-        };
-        let Some(item) = item.get_item_entity() else {
-            return;
-        };
-        let is_loved = {
-            let stack = item
-                .get_item_stack()
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            PiglinAi::is_loved_item(&stack)
-        };
-        if is_loved {
-            self.admire_gold_item();
-        }
-    }
-
-    fn is_nearest_wanted_item_within(&self, distance: f64) -> bool {
-        let pos = self.mob_entity.living_entity.entity.pos.load();
-        self.nearest_wanted_item().is_some_and(|item| {
-            item.get_entity().pos.load().squared_distance_to_vec(&pos) < distance * distance
-        })
-    }
-
-    pub fn stop_admiring_if_item_too_far_away(&self) {
-        if !self.is_admiring() || self.is_holding_item_in_off_hand() {
-            return;
-        }
-        if self.is_nearest_wanted_item_within(PiglinAi::MAX_DISTANCE_TO_WALK_TO_ITEM) {
-            return;
-        }
-        self.admire_timer.store(0, Ordering::Relaxed);
-    }
-
-    pub fn stop_admiring_if_tired_of_trying_to_reach_item(&self) {
-        if !self.is_admiring()
-            || self.nearest_wanted_item().is_none()
-            || self.is_holding_item_in_off_hand()
-        {
-            return;
-        }
-        // -1 stands in for the brain memory being absent.
-        let time = self.time_trying_to_reach_item.load(Ordering::Relaxed);
-        if time < 0 {
-            self.time_trying_to_reach_item.store(0, Ordering::Relaxed);
-        } else if time > PiglinAi::MAX_TIME_TRYING_TO_REACH_ITEM {
-            self.admire_timer.store(0, Ordering::Relaxed);
-            self.time_trying_to_reach_item.store(-1, Ordering::Relaxed);
-            self.disable_walk_to_admire_timer
-                .store(PiglinAi::DISABLE_WALK_TO_ADMIRE_DURATION, Ordering::Relaxed);
-        } else {
-            self.time_trying_to_reach_item
-                .store(time + 1, Ordering::Relaxed);
-        }
-    }
-
     fn pick_up_nearby_items(&self) {
         let living = &self.mob_entity.living_entity;
         let entity = &living.entity;
@@ -781,7 +332,6 @@ impl PiglinEntity {
     }
 
     fn pick_up_item(&self, item: &ItemEntity) {
-        self.stop_walking();
         let count = {
             let stack = item
                 .get_item_stack()
@@ -819,98 +369,17 @@ impl PiglinEntity {
             item.init_data_tracker();
         }
 
-        if PiglinAi::is_loved_item(&taken) {
-            self.time_trying_to_reach_item.store(-1, Ordering::Relaxed);
-            self.hold_in_off_hand(taken);
-            self.admire_gold_item();
-        } else if PiglinAi::is_food(&taken) && !self.has_eaten_recently() {
-            self.eat_cooldown_timer
-                .store(PiglinAi::EAT_COOLDOWN, Ordering::Relaxed);
-        } else if mob_equipment::equip_item_if_possible(self, taken.clone()).is_empty() {
-            self.put_in_inventory(taken);
-        }
+        self.mob_entity.with_brain(self, |tick| {
+            piglin_ai::pick_up_item(tick, self, taken);
+        });
     }
-
-    pub fn stop_holding_off_hand_item(&self, bartering_enabled: bool) {
-        let item = self
-            .mob_entity
-            .set_item_slot(&EquipmentSlot::OFF_HAND, ItemStack::EMPTY.clone());
-        self.admiring_item
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take();
-
-        if self.is_adult() {
-            let is_barter = PiglinAi::is_barter_currency(&item);
-            if bartering_enabled && is_barter {
-                let outcomes = PiglinAi::get_barter_response_items();
-                let entity = &self.mob_entity.living_entity.entity;
-
-                let mut event =
-                    crate::plugin::api::events::entity::piglin_barter::PiglinBarterEvent::new(
-                        entity.entity_id,
-                        item,
-                        outcomes,
-                    );
-                if let Some(server) = entity.world.load().server.upgrade() {
-                    server.plugin_manager.fire_blocking(&server, &mut event);
-                }
-
-                if !event.cancelled {
-                    PiglinAi::throw_items(self, event.outcome);
-                }
-            } else if !is_barter
-                && mob_equipment::equip_item_if_possible(self, item.clone()).is_empty()
-            {
-                self.put_in_inventory(item);
-            }
-        } else if mob_equipment::equip_item_if_possible(self, item.clone()).is_empty() {
-            let main_hand = self.main_hand_item();
-            if PiglinAi::is_loved_item(&main_hand) {
-                self.put_in_inventory(main_hand);
-            } else {
-                PiglinAi::throw_items(self, vec![main_hand]);
-            }
-            self.hold_in_main_hand(item);
-        }
-    }
-
-    pub fn was_hurt_by(&self, attacker: &dyn EntityBase) {
-        let attacker_entity = attacker.get_entity();
-        if attacker.get_living_entity().is_none()
-            || attacker_entity.entity_type.id == EntityType::PIGLIN.id
-        {
-            return;
-        }
-        if self.is_holding_item_in_off_hand() {
-            self.stop_holding_off_hand_item(false);
-        }
-        self.set_dancing(false);
-        self.celebration_timer.store(0, Ordering::Relaxed);
-        self.admire_timer.store(0, Ordering::Relaxed);
-        if attacker_entity.entity_type.id == EntityType::PLAYER.id {
-            self.admiring_disabled_timer
-                .store(PiglinAi::ADMIRING_DISABLED_DURATION, Ordering::Relaxed);
-        }
-    }
-
-    pub fn cancel_admiring(&self) {
-        if self.is_admiring() && self.is_holding_item_in_off_hand() {
-            self.mob_entity.spawn_at_location(self.off_hand_item());
-            self.mob_entity
-                .set_item_slot(&EquipmentSlot::OFF_HAND, ItemStack::EMPTY.clone());
-            self.admiring_item
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .take();
-        }
-    }
-
     pub fn drop_inventory(&self) {
-        let items = self
-            .inventory
-            .try_lock()
-            .map_or_else(|_| Vec::new(), |mut inv| std::mem::take(&mut *inv));
+        let items = std::mem::take(
+            &mut *self
+                .inventory
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
         let entity = &self.mob_entity.living_entity.entity;
         let world = entity.world.load();
         let pos = entity.pos.load();
@@ -934,14 +403,6 @@ impl PiglinEntity {
         let entity = &self.mob_entity.living_entity.entity;
         let world = entity.world.load();
         let pos = entity.pos.load();
-
-        if world.level_info.load().difficulty != pumpkin_util::Difficulty::Peaceful {
-            world.play_sound(
-                Sound::EntityPiglinConvertedToZombified,
-                SoundCategory::Hostile,
-                &pos,
-            );
-        }
 
         self.drop_inventory();
 
@@ -985,6 +446,63 @@ impl PiglinEntity {
 
         world.spawn_entity(zombified);
         entity.remove();
+    }
+}
+
+impl abstract_piglin::AbstractPiglin for PiglinEntity {
+    fn is_adult(&self) -> bool {
+        Self::is_adult(self)
+    }
+
+    fn can_hunt(&self) -> bool {
+        Self::can_hunt(self)
+    }
+
+    fn is_converting(&self, world: &World) -> bool {
+        Self::is_converting(self, world)
+    }
+
+    fn is_immune_to_zombification(&self) -> bool {
+        Self::is_immune_to_zombification(self)
+    }
+
+    fn arm_pose(&self) -> abstract_piglin::PiglinArmPose {
+        use abstract_piglin::PiglinArmPose;
+
+        if self.is_dancing() {
+            return PiglinArmPose::Dancing;
+        }
+        if piglin_ai::is_loved_item(&self.off_hand_item()) {
+            return PiglinArmPose::AdmiringItem;
+        }
+        let holding_melee_weapon = self
+            .main_hand_item()
+            .get_data_component::<pumpkin_data::data_component_impl::ToolImpl>()
+            .is_some();
+        if self.mob_entity.is_attacking() && holding_melee_weapon {
+            return PiglinArmPose::AttackingWithMeleeWeapon;
+        }
+        if self.is_charging_crossbow() {
+            return PiglinArmPose::CrossbowCharge;
+        }
+        let main_hand = self.main_hand_item();
+        let crossbow_charged = main_hand
+            .get_data_component::<pumpkin_data::data_component_impl::ChargedProjectilesImpl>()
+            .is_some_and(|charged| !charged.projectiles.is_empty());
+        if main_hand.item.id == Item::CROSSBOW.id && crossbow_charged {
+            return PiglinArmPose::CrossbowHold;
+        }
+        PiglinArmPose::Default
+    }
+
+    fn play_converted_sound(&self) {
+        self.make_sound(Sound::EntityPiglinConvertedToZombified);
+    }
+
+    fn finish_conversion(&self) {
+        self.mob_entity
+            .with_brain(self, |tick| piglin_ai::cancel_admiring(tick, self));
+        self.convert_to_zombified();
     }
 }
 
@@ -1055,7 +573,6 @@ impl Mob for PiglinEntity {
     }
 
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        self.write_brain_memories(nbt);
         if self.is_immune_to_zombification() {
             nbt.put_bool("IsImmuneToZombification", true);
         }
@@ -1096,7 +613,6 @@ impl Mob for PiglinEntity {
     }
 
     fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        self.read_brain_memories(nbt);
         if let Some(immune) = nbt.get_bool("IsImmuneToZombification") {
             self.set_immune_to_zombification(immune);
         }
@@ -1132,64 +648,66 @@ impl Mob for PiglinEntity {
     }
 
     fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
-        if PiglinAi::can_admire(self, item_stack) {
+        let can_admire = self.mob_entity.with_brain(self, |tick| {
+            piglin_ai::can_admire(tick.brain, self, item_stack)
+        });
+        if can_admire {
             let taken = item_stack.split_unless_creative(player.gamemode.load(), 1);
-            self.start_admiring(taken);
+            self.mob_entity.with_brain(self, |tick| {
+                piglin_ai::start_admiring(tick, self, taken);
+            });
             return true;
         }
         self.mob_entity.mob_interact(player, item_stack)
     }
 
-    fn mob_tick(&self, _caller: &dyn EntityBase) {
+    fn make_brain(
+        &self,
+        packed: &crate::entity::ai::brain::memory::PackedMemories,
+    ) -> crate::entity::ai::brain::Brain {
+        piglin_ai::PIGLIN_PROVIDER.make_brain(self, packed)
+    }
+
+    fn after_brain_tick(&self, tick: &mut crate::entity::ai::brain::BrainTick<'_>) {
+        piglin_ai::update_activity(tick);
+    }
+
+    fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {
         let entity = &self.mob_entity.living_entity.entity;
-        if !entity.is_alive() {
+        if !crate::entity::ai::brain::behavior::utils::is_alive(self) {
+            // No AI while dying, but still drain the inbox
+            self.mob_entity.apply_brain_inbox(self);
+            return;
+        }
+        self.mob_entity.tick_brain(self);
+        let world = entity.world.load();
+        abstract_piglin::tick_conversion(self, &world, &self.time_in_overworld);
+    }
+
+    fn wants_to_pick_up(&self, brain: &crate::entity::ai::brain::Brain, stack: &ItemStack) -> bool {
+        let entity = &self.mob_entity.living_entity.entity;
+        if !entity
+            .world
+            .load()
+            .level_info
+            .load()
+            .game_rules
+            .mob_griefing
+            || !self.mob_entity.can_pick_up_loot()
+        {
+            return false;
+        }
+        piglin_ai::wants_to_pickup(brain, self, stack)
+    }
+
+    fn mob_tick(&self, _caller: &dyn EntityBase) {
+        if !crate::entity::ai::brain::behavior::utils::is_alive(self) {
             return;
         }
         self.tick_ambient_sound();
-
-        let world = entity.world.load();
-        if self.is_converting(&world) {
-            let time = self.time_in_overworld.fetch_add(1, Ordering::Relaxed) + 1;
-            if time > Self::CONVERSION_TIME {
-                self.convert_to_zombified();
-            }
-        } else {
-            self.time_in_overworld.store(0, Ordering::Relaxed);
-        }
-
-        if self.admiring_disabled_timer.load(Ordering::Relaxed) > 0 {
-            self.admiring_disabled_timer.fetch_sub(1, Ordering::Relaxed);
-        }
-        if self.eat_cooldown_timer.load(Ordering::Relaxed) > 0 {
-            self.eat_cooldown_timer.fetch_sub(1, Ordering::Relaxed);
-        }
-        if self.hunt_cooldown_timer.load(Ordering::Relaxed) > 0 {
-            self.hunt_cooldown_timer.fetch_sub(1, Ordering::Relaxed);
-        }
-        if self.disable_walk_to_admire_timer.load(Ordering::Relaxed) > 0 {
-            self.disable_walk_to_admire_timer
-                .fetch_sub(1, Ordering::Relaxed);
-        }
-        if self.celebration_timer.load(Ordering::Relaxed) > 0 {
-            let remaining = self.celebration_timer.fetch_sub(1, Ordering::Relaxed) - 1;
-            if remaining <= 0 {
-                self.set_dancing(false);
-            }
-        }
-        if self.admire_timer.load(Ordering::Relaxed) > 0 {
-            self.admire_timer.fetch_sub(1, Ordering::Relaxed);
-        }
-
-        let tick = world.get_world_age() + i64::from(entity.entity_id);
-        if tick.rem_euclid(PiglinAi::SENSOR_SCAN_INTERVAL) == 0 {
-            self.tick_sensors();
-        }
-        self.stop_holding_item_if_no_longer_admiring();
-        self.start_admiring_if_seen();
     }
 
     fn post_tick(&self) {
-        self.update_activity();
         self.pick_up_nearby_items();
     }
 
@@ -1201,13 +719,37 @@ impl Mob for PiglinEntity {
         self.reset_ambient_sound_time();
         if self.mob_entity.living_entity.dead.load(Ordering::Relaxed) {
             self.drop_inventory();
-        } else if let Some(attacker) = source {
-            self.was_hurt_by(attacker);
         }
+        let Some(attacker) = source else {
+            return;
+        };
+        let world = self.mob_entity.living_entity.entity.world.load_full();
+        let Some(attacker) = world
+            .get_entity_by_id(attacker.get_entity().entity_id)
+            .filter(|attacker| attacker.get_living_entity().is_some())
+        else {
+            return;
+        };
+        // Queued: taking the victim's brain here deadlocks two mobs fighting
+        self.mob_entity.post_to_brain(Box::new(move |tick| {
+            let Some(piglin) = tick.mob.cast_any().downcast_ref::<Self>() else {
+                return;
+            };
+            piglin_ai::was_hurt_by(tick, piglin, &attacker);
+        }));
     }
 
     fn get_preferred_weapon_type(&self) -> Option<&'static tag::Tag> {
         (!self.is_baby()).then_some(&tag::Item::MINECRAFT_PIGLIN_PREFERRED_WEAPONS)
+    }
+
+    fn can_use_non_melee_weapon(&self, stack: &ItemStack) -> bool {
+        stack.item.id == Item::CROSSBOW.id
+    }
+
+    fn non_melee_weapon_range(&self) -> Option<i32> {
+        (self.main_hand_item().item.id == Item::CROSSBOW.id)
+            .then_some(Self::CROSSBOW_PROJECTILE_RANGE)
     }
 
     fn can_replace_current_item(
@@ -1220,9 +762,9 @@ impl Mob for PiglinEntity {
             return false;
         }
         let preferred = self.get_preferred_weapon_type();
-        let new_wanted = PiglinAi::is_loved_item(new_item)
+        let new_wanted = piglin_ai::is_loved_item(new_item)
             || preferred.is_some_and(|weapons| new_item.item.has_tag(weapons));
-        let current_wanted = PiglinAi::is_loved_item(current_item)
+        let current_wanted = piglin_ai::is_loved_item(current_item)
             || preferred.is_some_and(|weapons| current_item.item.has_tag(weapons));
         new_wanted && !current_wanted
             || (new_wanted || !current_wanted)
