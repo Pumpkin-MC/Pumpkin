@@ -34,7 +34,7 @@ use super::{
 };
 use crate::biome::BiomeSupplier;
 use crate::chunk::format::LightContainer;
-use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkLight};
+use crate::chunk::{ChunkData, ChunkHeightmapType, ChunkHeightmaps, ChunkLight, ChunkSections};
 use crate::chunk_system::{StagedChunkEnum, generation_cache::SurfaceBiomeNeighborhood};
 use crate::generation::height_limit::HeightLimitView;
 use crate::generation::noise::aquifer_sampler::{FluidLevel, FluidLevelSamplerImpl};
@@ -50,6 +50,7 @@ use crate::generation::structure::structures::{
 };
 use crate::generation::structure::try_generate_structure;
 use crate::generation::surface::rule::try_apply_material_rule;
+use crate::lighting::section_flags::SectionMask;
 use crate::{
     chunk::CHUNK_AREA,
     generation::{biome, positions::chunk_pos},
@@ -129,6 +130,9 @@ pub struct ProtoChunk {
     pub default_block: &'static BlockState,
     biome_mixer_seed: i64,
     pub(crate) flat_block_map: Box<[BlockStateId]>,
+    /// Sections holding a light emitting block. Set as blocks are written and never cleared, so
+    /// it can name a section that no longer emits, but never miss one that does.
+    pub(crate) emitter_sections: SectionMask,
     pub flat_biome_map: Box<[u8]>,
     pub flat_surface_height_map: [i16; CHUNK_AREA],
     pub flat_ocean_floor_height_map: [i16; CHUNK_AREA],
@@ -146,6 +150,11 @@ pub struct ProtoChunk {
     pub pending_block_entities: Vec<NbtCompound>,
     pending_structure_entities: Vec<NbtCompound>,
     pub fluid_ticks: Vec<ScheduledTick<&'static Fluid>>,
+    pub sky_light_height: u32,
+    /// `PumpkinCustomData` carried through generation so a chunk that is loaded, demoted
+    /// to a proto chunk and rebuilt does not silently lose it. Plugins own most of what
+    /// lives in here; dropping it is data loss, not a recomputable cache miss.
+    pub custom_data: NbtCompound,
 }
 
 pub struct TerrainCache {
@@ -226,6 +235,7 @@ impl ProtoChunk {
             biome_mixer_seed,
             flat_block_map: vec![BlockStateId::AIR; CHUNK_AREA * height as usize]
                 .into_boxed_slice(),
+            emitter_sections: SectionMask::default(),
             flat_biome_map: vec![
                 Biome::PLAINS.id;
                 biome_coords::from_block(CHUNK_DIM as i32) as usize
@@ -255,6 +265,8 @@ impl ProtoChunk {
             pending_block_entities: Vec::new(),
             pending_structure_entities: Vec::new(),
             fluid_ticks: Vec::new(),
+            sky_light_height: 0,
+            custom_data: NbtCompound::new(),
         }
     }
 
@@ -273,6 +285,11 @@ impl ProtoChunk {
         proto_chunk
             .blending_data
             .clone_from(&chunk_data.blending_data);
+        proto_chunk.custom_data = chunk_data
+            .custom_data
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
 
         // Chunks loaded from disk carry their block entities in the chunk data.
         // Keep them so the world can create the block entities when the chunk
@@ -285,84 +302,8 @@ impl ProtoChunk {
             .cloned()
             .collect();
 
-        let section_data = &chunk_data.section;
-        let heightmap_data = chunk_data
-            .heightmap
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-        let block_sections_guard = section_data
-            .block_sections
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let biome_sections_guard = section_data
-            .biome_sections
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-        for (section_idx, block_palette) in block_sections_guard.iter().enumerate() {
-            let section_base_y = section_idx as i32 * 16;
-
-            if section_base_y >= proto_chunk.height() as i32 {
-                continue;
-            }
-
-            for x in 0..16 {
-                for y in 0..16 {
-                    for z in 0..16 {
-                        let block_state_id = block_palette.get(x, y, z);
-                        let block_state = BlockState::from_id(block_state_id);
-                        let absolute_y = section_base_y + y as i32 + section_data.min_y;
-
-                        proto_chunk.set_block_state(x as i32, absolute_y, z as i32, block_state);
-                    }
-                }
-            }
-
-            if let Some(biome_palette) = biome_sections_guard.get(section_idx) {
-                for x in 0..4 {
-                    for y in 0..4 {
-                        for z in 0..4 {
-                            let biome_id = biome_palette.get(x, y, z);
-                            let biome_y_idx = (section_idx * 4) + y;
-                            let index = proto_chunk.local_biome_pos_to_biome_index(
-                                x as i32,
-                                biome_y_idx as i32,
-                                z as i32,
-                            );
-                            proto_chunk.flat_biome_map[index] = biome_id;
-                        }
-                    }
-                }
-            }
-        }
-        drop(block_sections_guard);
-        drop(biome_sections_guard);
-
-        for z in 0..16 {
-            for x in 0..16 {
-                let index = Self::local_position_to_height_map_index(x, z);
-
-                proto_chunk.flat_motion_blocking_height_map[index] = heightmap_data.get(
-                    ChunkHeightmapType::MotionBlocking,
-                    x,
-                    z,
-                    section_data.min_y,
-                ) as i16;
-
-                proto_chunk.flat_motion_blocking_no_leaves_height_map[index] = heightmap_data.get(
-                    ChunkHeightmapType::MotionBlockingNoLeaves,
-                    x,
-                    z,
-                    section_data.min_y,
-                )
-                    as i16;
-
-                proto_chunk.flat_surface_height_map[index] =
-                    heightmap_data.get(ChunkHeightmapType::WorldSurface, x, z, section_data.min_y)
-                        as i16;
-            }
-        }
+        proto_chunk.copy_sections_from(&chunk_data.section);
+        proto_chunk.copy_heightmaps_from(&chunk_data.heightmap, chunk_data.section.min_y);
 
         let saved_stage = StagedChunkEnum::from(chunk_data.status);
         proto_chunk.stage = saved_stage;
@@ -380,6 +321,76 @@ impl ProtoChunk {
             proto_chunk.stage = saved_stage;
         }
         proto_chunk
+    }
+
+    /// Copies block states and biomes of every section below `height`.
+    fn copy_sections_from(&mut self, section_data: &ChunkSections) {
+        let block_sections_guard = section_data
+            .block_sections
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let biome_sections_guard = section_data
+            .biome_sections
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        for (section_idx, block_palette) in block_sections_guard.iter().enumerate() {
+            let section_base_y = section_idx as i32 * 16;
+
+            if section_base_y >= self.height() as i32 {
+                continue;
+            }
+
+            for x in 0..16 {
+                for y in 0..16 {
+                    for z in 0..16 {
+                        let block_state_id = block_palette.get(x, y, z);
+                        let block_state = BlockState::from_id(block_state_id);
+                        let absolute_y = section_base_y + y as i32 + section_data.min_y;
+
+                        self.set_block_state(x as i32, absolute_y, z as i32, block_state);
+                    }
+                }
+            }
+
+            if let Some(biome_palette) = biome_sections_guard.get(section_idx) {
+                for x in 0..4 {
+                    for y in 0..4 {
+                        for z in 0..4 {
+                            let biome_id = biome_palette.get(x, y, z);
+                            let biome_y_idx = (section_idx * 4) + y;
+                            let index = self.local_biome_pos_to_biome_index(
+                                x as i32,
+                                biome_y_idx as i32,
+                                z as i32,
+                            );
+                            self.flat_biome_map[index] = biome_id;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Copies the stored heightmaps into the flat maps.
+    fn copy_heightmaps_from(&mut self, heightmaps: &std::sync::Mutex<ChunkHeightmaps>, min_y: i32) {
+        let heightmap_data = heightmaps
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        for z in 0..16 {
+            for x in 0..16 {
+                let index = Self::local_position_to_height_map_index(x, z);
+
+                self.flat_motion_blocking_height_map[index] =
+                    heightmap_data.get(ChunkHeightmapType::MotionBlocking, x, z, min_y) as i16;
+                self.flat_motion_blocking_no_leaves_height_map[index] =
+                    heightmap_data.get(ChunkHeightmapType::MotionBlockingNoLeaves, x, z, min_y)
+                        as i16;
+                self.flat_surface_height_map[index] =
+                    heightmap_data.get(ChunkHeightmapType::WorldSurface, x, z, min_y) as i16;
+            }
+        }
     }
 
     #[inline]
@@ -567,6 +578,10 @@ impl ProtoChunk {
                     }
                 }
             }
+        }
+
+        if block_state.luminance > 0 {
+            self.emitter_sections.set((local_y >> 4) as usize);
         }
 
         let index = self.local_pos_to_block_index(local_x, local_y, local_z);

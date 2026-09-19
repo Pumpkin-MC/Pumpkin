@@ -303,3 +303,60 @@ pub fn run_generation(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::chunk::ChunkData;
+
+    /// The shape the light pass leaves : open sky as one value per section,
+    /// a real array only where the surface crosses.
+    fn lit_chunk(light_populated: bool) -> ChunkData {
+        let chunk = ChunkData::empty(0, 0);
+        let count = chunk.section.count;
+        chunk.light_populated.store(light_populated, Relaxed);
+        let mut light = chunk
+            .light_engine
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        light.sky_light = (0..count)
+            .map(|i| match i {
+                5 => LightContainer::new_filled(7),
+                i if i < 5 => LightContainer::Empty(0),
+                _ => LightContainer::Empty(15),
+            })
+            .collect();
+        light.block_light = (0..count).map(|_| LightContainer::Empty(0)).collect();
+        drop(light);
+        chunk
+    }
+
+    #[test]
+    fn a_chunk_that_reports_lit_is_never_relit() {
+        assert!(!needs_relighting(
+            &lit_chunk(true),
+            LightingEngineConfig::Default
+        ));
+    }
+
+    #[test]
+    fn uniform_sections_alone_do_not_decide_relighting() {
+        // Without the flag the scan takes over, and the varied section is what saves the chunk.
+        assert!(!needs_relighting(
+            &lit_chunk(false),
+            LightingEngineConfig::Default
+        ));
+
+        let chunk = ChunkData::empty(0, 0);
+        let count = chunk.section.count;
+        {
+            let mut light = chunk
+                .light_engine
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            light.sky_light = (0..count).map(|_| LightContainer::Empty(15)).collect();
+            light.block_light = (0..count).map(|_| LightContainer::Empty(0)).collect();
+        };
+        assert!(needs_relighting(&chunk, LightingEngineConfig::Default));
+    }
+}
