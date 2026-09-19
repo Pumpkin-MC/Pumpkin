@@ -3965,6 +3965,8 @@ impl World {
         self.send_to_tracking_players_editioned(from.get_entity(), &je_packet, &be_mob_equipment);
     }
 
+    /// Brings a player that just joined this world up to date: world border, spawn
+    /// packet for the other players, entity data, chunks around the given position.
     pub fn send_world_info(
         &self,
         player: &Arc<Player>,
@@ -4006,6 +4008,10 @@ impl World {
         );
 
         player.send_client_information();
+        // The client just re-created the player entity (respawn or dimension change), so
+        // it dropped its entity data; push it again or things like the second skin layer
+        // stay hidden until the next change.
+        entity.refresh_synced_data();
 
         chunker::update_position(player);
         // Update commands
