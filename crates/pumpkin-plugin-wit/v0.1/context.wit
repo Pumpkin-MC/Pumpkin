@@ -4,6 +4,7 @@ interface context {
     use event.{event-type, event-priority};
     use command.{command};
     use permission.{permission};
+    use config.{config};
 
     /// Verified marketplace metadata for signed plugins.
     record marketplace-metadata {
@@ -56,6 +57,9 @@ interface context {
 
         /// Returns verified marketplace metadata if this plugin binary is signed, or none if unsigned.
         get-marketplace-metadata: func() -> option<marketplace-metadata>;
+
+        /// Returns the plugin's config.
+        get-config: func() -> config;
     }
 }
 
