@@ -114,12 +114,16 @@ impl ActiveChunkTracker {
         }
     }
 
+    /// Brings the tracker in line with the current force-load set.
+    ///
+    /// Returns the chunks that entered and left the set, so the caller can hand the loader a
+    /// ticket for the new ones and drop the ticket for the old ones.
     pub fn sync_forced_chunks(
         &mut self,
         forced_chunks: &FxHashSet<Vector2<i32>>,
         active_chunks: &mut FxHashSet<Vector2<i32>>,
         newly_active: &mut Vec<Vector2<i32>>,
-    ) {
+    ) -> (Vec<Vector2<i32>>, Vec<Vector2<i32>>) {
         let removed: Vec<_> = self
             .forced_chunks
             .difference(forced_chunks)
@@ -129,13 +133,14 @@ impl ActiveChunkTracker {
             .difference(&self.forced_chunks)
             .copied()
             .collect();
-        for pos in removed {
-            self.remove_chunk(pos, active_chunks);
+        for pos in &removed {
+            self.remove_chunk(*pos, active_chunks);
         }
-        for pos in added {
-            self.add_chunk(pos, active_chunks, newly_active);
+        for pos in &added {
+            self.add_chunk(*pos, active_chunks, newly_active);
         }
         self.forced_chunks.clone_from(forced_chunks);
+        (added, removed)
     }
 }
 
@@ -167,6 +172,38 @@ mod tests {
         assert_eq!(newly_active.len(), 3);
         assert!(!active.contains(&Vector2::new(-1, 0)));
         assert!(active.contains(&Vector2::new(2, 0)));
+    }
+
+    /// The caller turns this delta into loading tickets, so a chunk entering or leaving the
+    /// force-load set has to be reported exactly once. Without it `/forceload` marked chunks
+    /// that nothing ever asked the loader for, and they stayed out of memory unless a player
+    /// happened to stand near them.
+    #[test]
+    fn reports_which_chunks_entered_and_left_the_force_load_set() {
+        let mut tracker = ActiveChunkTracker::default();
+        let mut active = FxHashSet::default();
+        let mut newly_active = Vec::new();
+
+        let first: FxHashSet<_> = [Vector2::new(0, 0), Vector2::new(1, 0)]
+            .into_iter()
+            .collect();
+        let (added, removed) = tracker.sync_forced_chunks(&first, &mut active, &mut newly_active);
+        assert_eq!(added.len(), 2);
+        assert!(removed.is_empty());
+        assert!(active.contains(&Vector2::new(0, 0)));
+
+        // Unchanged between ticks: nothing to add, nothing to drop.
+        let (added, removed) = tracker.sync_forced_chunks(&first, &mut active, &mut newly_active);
+        assert!(added.is_empty());
+        assert!(removed.is_empty());
+
+        let second: FxHashSet<_> = [Vector2::new(1, 0), Vector2::new(2, 0)]
+            .into_iter()
+            .collect();
+        let (added, removed) = tracker.sync_forced_chunks(&second, &mut active, &mut newly_active);
+        assert_eq!(added, vec![Vector2::new(2, 0)]);
+        assert_eq!(removed, vec![Vector2::new(0, 0)]);
+        assert!(!active.contains(&Vector2::new(0, 0)));
     }
 
     #[test]

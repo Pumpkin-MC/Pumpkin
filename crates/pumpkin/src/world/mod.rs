@@ -475,7 +475,9 @@ impl World {
         for id in removed_players {
             tracker.remove_player(id, &mut active_chunks);
         }
-        tracker.sync_forced_chunks(&forced_chunks, &mut active_chunks, &mut newly_active);
+        let (forced_added, forced_removed) =
+            tracker.sync_forced_chunks(&forced_chunks, &mut active_chunks, &mut newly_active);
+        self.sync_forced_chunk_tickets(&forced_added, &forced_removed);
 
         for pos in newly_active {
             if self.level.is_chunk_loaded(&pos) && tracker.loaded_active_chunks.insert(pos) {
@@ -517,6 +519,30 @@ impl World {
             &self.entities,
             self,
         )));
+    }
+
+    /// Gives the loader a ticket for each chunk that entered the force-load set and drops the
+    /// ticket for each one that left.
+    ///
+    /// Marking a chunk force-loaded only ever told the active-chunk tracker about it. Nothing
+    /// asked the loader for it, so a forced chunk with no player near it was never brought into
+    /// memory and `/forceload` had no effect beyond its own bookkeeping.
+    fn sync_forced_chunk_tickets(&self, added: &[Vector2<i32>], removed: &[Vector2<i32>]) {
+        if added.is_empty() && removed.is_empty() {
+            return;
+        }
+        let mut loading = self
+            .level
+            .chunk_loading
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for pos in added {
+            loading.add_force_ticket(*pos);
+        }
+        for pos in removed {
+            loading.remove_force_ticket(*pos);
+        }
+        loading.send_change();
     }
 
     pub fn get_lighting_config(&self) -> LightingEngineConfig {
