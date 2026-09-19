@@ -1,0 +1,15 @@
+{
+  "type": "minecraft:jigsaw",
+  "biomes": "#minecraft:has_structure/village_savanna",
+  "max_distance_from_center": 80,
+  "project_start_to_heightmap": "WORLD_SURFACE_WG",
+  "size": 6,
+  "spawn_overrides": {},
+  "start_height": {
+    "absolute": 0
+  },
+  "start_pool": "minecraft:village/savanna/town_centers",
+  "step": "surface_structures",
+  "terrain_adaptation": "beard_thin",
+  "use_expansion_hack": true
+}

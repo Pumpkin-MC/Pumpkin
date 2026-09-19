@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:lowmist",
+  "author": {
+    "color": "gray",
+    "translate": "painting.minecraft.lowmist.author"
+  },
+  "height": 2,
+  "title": {
+    "color": "yellow",
+    "translate": "painting.minecraft.lowmist.title"
+  },
+  "width": 4
+}

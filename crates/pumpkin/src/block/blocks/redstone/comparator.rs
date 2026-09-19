@@ -214,6 +214,8 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
 
         let props = ComparatorLikeProperties::from_state_id(state.id);
         let facing = props.facing;
+        // Vanilla passes `direction.getOpposite()`: the target face read from.
+        let read_from = facing.to_block_direction().opposite();
         let mut target_pos = pos.offset(facing.to_offset());
         let (target_block, target_state) = world.get_block_and_state(&target_pos);
 
@@ -227,6 +229,7 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
                         block: target_block,
                         state: target_state,
                         position: &target_pos,
+                        direction: read_from,
                     })
                 })
                 .unwrap_or(0);
@@ -247,6 +250,7 @@ impl RedstoneGateBlock<ComparatorLikeProperties> for ComparatorBlock {
                             block: target_block,
                             state: target_state,
                             position: &target_pos,
+                            direction: read_from,
                         })
                     })
                     .unwrap_or(0);

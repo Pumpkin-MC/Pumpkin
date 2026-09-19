@@ -1,0 +1,50 @@
+{
+  "elements": [
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "minecraft:bastion/hoglin_stable/large_stables/outer_0",
+        "processors": "minecraft:stable_degradation",
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "minecraft:bastion/hoglin_stable/large_stables/outer_1",
+        "processors": "minecraft:stable_degradation",
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "minecraft:bastion/hoglin_stable/large_stables/outer_2",
+        "processors": "minecraft:stable_degradation",
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "minecraft:bastion/hoglin_stable/large_stables/outer_3",
+        "processors": "minecraft:stable_degradation",
+        "projection": "rigid"
+      },
+      "weight": 1
+    },
+    {
+      "element": {
+        "element_type": "minecraft:single_pool_element",
+        "location": "minecraft:bastion/hoglin_stable/large_stables/outer_4",
+        "processors": "minecraft:stable_degradation",
+        "projection": "rigid"
+      },
+      "weight": 1
+    }
+  ],
+  "fallback": "minecraft:empty"
+}

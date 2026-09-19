@@ -1,3 +1,4 @@
+use pumpkin_data::data_component_impl::ContainerImpl;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
@@ -16,6 +17,7 @@ pub struct ShulkerBoxBlockEntity {
     pub position: BlockPos,
     pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
     pub dirty: AtomicBool,
+    pub comparator_dirty: AtomicBool,
 
     // Viewer
     pub viewers: ViewerCountTracker,
@@ -38,6 +40,7 @@ impl BlockEntity for ShulkerBoxBlockEntity {
             position,
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
             viewers: ViewerCountTracker::new(),
         };
 
@@ -67,6 +70,54 @@ impl BlockEntity for ShulkerBoxBlockEntity {
 
     fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn Inventory>> {
         Some(self)
+    }
+
+    fn collect_item_components(&self, stack: &mut ItemStack) {
+        let items = self
+            .items
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let contents: Vec<(u8, ItemStack)> = items
+            .iter()
+            .enumerate()
+            .filter(|(_, item)| !item.is_empty())
+            .map(|(slot, item)| (slot as u8, item.clone()))
+            .collect();
+
+        if !contents.is_empty() {
+            stack.set_data_component(ContainerImpl { items: contents });
+        }
+    }
+
+    fn apply_item_components(&self, stack: &ItemStack) {
+        let Some(container) = stack.get_data_component::<ContainerImpl>() else {
+            return;
+        };
+
+        let mut items = self
+            .items
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        for (slot, item) in &container.items {
+            if let Some(target) = items.get_mut(*slot as usize) {
+                *target = item.clone();
+            }
+        }
+
+        self.mark_dirty();
+    }
+
+    fn drops_for_creative_player(&self) -> bool {
+        !self.is_empty()
+    }
+
+    fn is_comparator_dirty(&self) -> bool {
+        self.comparator_dirty.load(Ordering::Relaxed)
+    }
+
+    fn clear_comparator_dirty(&self) {
+        self.comparator_dirty.store(false, Ordering::Relaxed);
     }
 
     fn is_dirty(&self) -> bool {
@@ -117,6 +168,7 @@ impl ShulkerBoxBlockEntity {
             position,
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
             viewers: ViewerCountTracker::new(),
         }
     }
@@ -201,6 +253,7 @@ impl Inventory for ShulkerBoxBlockEntity {
 
     fn mark_dirty(&self) {
         self.dirty.store(true, Ordering::Relaxed);
+        self.comparator_dirty.store(true, Ordering::Relaxed);
     }
 
     fn as_any(&self) -> &dyn Any {

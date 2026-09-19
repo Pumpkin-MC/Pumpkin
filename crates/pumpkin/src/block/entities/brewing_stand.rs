@@ -6,12 +6,12 @@ use std::sync::{
 };
 
 use crate::block::entities::PropertyDelegate;
+use pumpkin_data::data_component_impl::BrewingFuelImpl;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::potion::Potion;
 use pumpkin_data::potion_brewing::BREWING_RECIPES;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::tag::{self, Taggable};
 use pumpkin_inventory::{Inventory, sync_read_items_from_nbt, sync_write_items_to_nbt};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::recipe::DynamicRecipe;
@@ -22,6 +22,7 @@ pub struct BrewingStandBlockEntity {
     pub position: BlockPos,
     pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
     pub dirty: AtomicBool,
+    pub comparator_dirty: AtomicBool,
     pub brew_time: AtomicI32,
     pub fuel: AtomicI32,
     pub last_potion_count: StdMutex<Option<[bool; 3]>>,
@@ -39,11 +40,17 @@ impl BrewingStandBlockEntity {
             position,
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
             brew_time: AtomicI32::new(0),
             fuel: AtomicI32::new(0),
             last_potion_count: StdMutex::new(None),
             ingredient_item: StdMutex::new(None),
         }
+    }
+
+    /// Vanilla `setChanged` only persists the entity, comparators react to slot changes instead.
+    fn mark_timer_dirty(&self) {
+        self.dirty.store(true, Ordering::Relaxed);
     }
 
     /// Check if the current ingredient matches the stored ingredient
@@ -297,9 +304,7 @@ impl BrewingStandBlockEntity {
         let expected_fuel = if self.fuel.load(Ordering::Relaxed) <= 0
             && let Ok(items) = self.items.try_read()
             && !items[4].is_empty()
-            && items[4]
-                .get_item()
-                .has_tag(&tag::Item::MINECRAFT_BREWING_FUEL)
+            && items[4].get_data_component::<BrewingFuelImpl>().is_some()
         {
             items[4].clone()
         } else {
@@ -331,6 +336,8 @@ impl BrewingStandBlockEntity {
         {
             self.fuel.store(i32::from(fuel_power), Ordering::Relaxed);
             items[4].decrement(1);
+            // The fuel slot shrank, comparators needs an update.
+            self.comparator_dirty.store(true, Ordering::Relaxed);
             true
         } else {
             false
@@ -406,6 +413,7 @@ impl pumpkin_inventory::Inventory for BrewingStandBlockEntity {
 
     fn mark_dirty(&self) {
         self.dirty.store(true, Ordering::Relaxed);
+        self.comparator_dirty.store(true, Ordering::Relaxed);
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -424,15 +432,15 @@ impl pumpkin_inventory::Inventory for BrewingStandBlockEntity {
                 .is_some(),
             // Slot 3 - ingredient (must be tagged as brewable)
             3 => {
-                // Check if item is a valid brewing ingredient
-                if stack.get_item().has_tag(&tag::Item::MINECRAFT_BREWING_FUEL) {
-                    return false; // Fuel should not go in ingredient slot
+                // Fuel items belong in slot 4, not the ingredient slot.
+                if stack.get_data_component::<BrewingFuelImpl>().is_some() {
+                    return false;
                 }
                 // Allow any item that's not fuel (ingredient validation happens during brewing)
                 true
             }
-            // Slot 4 - fuel
-            4 => stack.get_item().has_tag(&tag::Item::MINECRAFT_BREWING_FUEL),
+            // Slot 4 - fuel (`minecraft:brewing_fuel` data component, 26.3+)
+            4 => stack.get_data_component::<BrewingFuelImpl>().is_some(),
             _ => false,
         }
     }
@@ -538,6 +546,14 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
         Some(nbt)
     }
 
+    fn is_comparator_dirty(&self) -> bool {
+        self.comparator_dirty.load(Ordering::Relaxed)
+    }
+
+    fn clear_comparator_dirty(&self) {
+        self.comparator_dirty.store(false, Ordering::Relaxed);
+    }
+
     fn is_dirty(&self) -> bool {
         self.dirty.load(Ordering::Relaxed)
     }
@@ -576,10 +592,10 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
             } else if !brewable || !self.ingredient_matches(&ingredient) {
                 // Cancel brewing
                 self.brew_time.store(0, Ordering::Relaxed);
-                self.mark_dirty();
+                self.mark_timer_dirty();
             } else {
                 // Continue brewing
-                self.mark_dirty();
+                self.mark_timer_dirty();
             }
         } else if brewable && self.fuel.load(Ordering::Relaxed) > 0 {
             let brew_time = if let Some(server) = world.server.upgrade() {
@@ -607,10 +623,10 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
                 .ingredient_item
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(ingredient.get_item());
-            self.mark_dirty();
+            self.mark_timer_dirty();
         } else if fuel_refilled {
             // Mark dirty if fuel was refilled to update fuel indicator
-            self.mark_dirty();
+            self.mark_timer_dirty();
         }
 
         // Ensure clients are notified when potion slot contents (and their data) change.
@@ -653,8 +669,9 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
                 crate::world::BlockFlags::NOTIFY_ALL,
             );
 
-            // Also mark dirty so inventory/container updates are sent to open screens
-            self.mark_dirty();
+            // Also mark dirty so inventory/container updates are sent to open screens.
+            // The slot change that flipped these bits already flagged the comparator.
+            self.mark_timer_dirty();
         }
     }
 

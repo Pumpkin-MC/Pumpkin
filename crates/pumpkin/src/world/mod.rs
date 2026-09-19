@@ -4,7 +4,9 @@ use pumpkin_data::chunk::Biome;
 use pumpkin_data::item::{BedrockItem, BedrockItemVersion};
 use pumpkin_protocol::bedrock::client::item_registry::{CItemRegistry, ItemData};
 use pumpkin_protocol::bedrock::client::level_event::{CLevelEvent, LevelEvent};
-use pumpkin_protocol::bedrock::client::{CBiomeDefinitionList, block_actor_data::CBlockActorData};
+use pumpkin_protocol::bedrock::client::{
+    CBiomeDefinitionList, CJigsawStructureData, CVoxelShapes, block_actor_data::CBlockActorData,
+};
 use pumpkin_protocol::bedrock::network_item::{NetworkItemDescriptor, NetworkItemStackDescriptor};
 use pumpkin_protocol::codec::data_component::data_to_proto_sound;
 use pumpkin_world::generation::proto_chunk::GenerationCache;
@@ -571,9 +573,9 @@ impl World {
     }
 
     pub async fn shutdown(&self) {
-        for entity in self.entities.load().iter() {
-            self.save_entity(entity).await;
-        }
+        let entities = self.entities.load_full();
+        self.save_entities_by_chunk(&entities, self.level.live_entity_chunk_positions())
+            .await;
 
         let chunks: Vec<Vector2<i32>> = self
             .block_entities
@@ -597,26 +599,52 @@ impl World {
         self.level.shutdown().await;
     }
 
-    /// Serializes a live entity into its current chunk's entity data. The live
-    /// entity list is the source of truth while a chunk is loaded (its saved NBT
-    /// is consumed on load), so this simply appends the entity to the chunk it is
-    /// currently in; the chunk is rewritten from scratch every unload cycle, so
-    /// there is nothing stale to deduplicate.
-    async fn save_entity(&self, entity: &Arc<dyn EntityBase>) {
-        let base_entity = entity.get_entity();
-        if base_entity.is_removed() {
-            return;
+    /// Writes `entities` into the saved data of the chunks they are in. A live chunk is
+    /// rebuilt from scratch, so `snapshot_chunks` lists the live chunks that must be rewritten
+    /// even when nothing is left in them; a chunk that never went live keeps its records.
+    async fn save_entities_by_chunk(
+        &self,
+        entities: &[Arc<dyn EntityBase>],
+        snapshot_chunks: impl IntoIterator<Item = Vector2<i32>>,
+    ) {
+        let mut groups: FxHashMap<Vector2<i32>, Vec<NbtCompound>> = FxHashMap::default();
+        for entity in entities {
+            let base_entity = entity.get_entity();
+            if base_entity.is_removed() {
+                continue;
+            }
+            let mut nbt = NbtCompound::new();
+            entity.write_nbt(&mut nbt);
+            groups
+                .entry(base_entity.chunk_pos.load())
+                .or_default()
+                .push(nbt);
         }
-        let current_chunk = base_entity.block_pos.load().chunk_position();
-        let mut nbt = NbtCompound::new();
-        entity.write_nbt(&mut nbt);
-        let chunk = self.level.get_entity_chunk(current_chunk).await;
-        chunk
-            .data
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .push(nbt);
-        chunk.mark_dirty(true);
+        for pos in snapshot_chunks {
+            groups.entry(pos).or_default();
+        }
+
+        for (pos, records) in groups {
+            let chunk = if records.is_empty() {
+                let Some(chunk) = self.level.get_entity_chunk_sync(&pos) else {
+                    continue;
+                };
+                chunk
+            } else {
+                self.level.get_entity_chunk(pos).await
+            };
+            let live = chunk.live.load(Relaxed);
+            if !live && records.is_empty() {
+                continue;
+            }
+            let mut data = chunk
+                .data
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            merge_entity_records(&mut data, live, records);
+            drop(data);
+            chunk.mark_dirty(true);
+        }
     }
 
     /// Serializes the live block entities of a chunk back into that chunk's block
@@ -1627,6 +1655,10 @@ impl World {
                 be.tick(self);
             }
         });
+        // Drained after all ticks, so changes (hopper -> chest) land in the same tick.
+        let guard = be_handle.enter();
+        self.flush_comparator_updates(&block_entities);
+        drop(guard);
         let block_entity_elapsed = t_be.elapsed();
 
         self.level
@@ -1709,10 +1741,7 @@ impl World {
                 self.broadcast_to_chunk_editioned(
                     chunk_pos,
                     &CBlockUpdate::new(block_pos, i32::from(block_state_id.as_u16()).into()),
-                    &pumpkin_protocol::bedrock::client::CUpdateBlock::new(
-                        block_pos,
-                        be_block_id as u32,
-                    ),
+                    &pumpkin_protocol::bedrock::client::CUpdateBlock::new(block_pos, be_block_id),
                 );
                 if let Some(block_entity) = self.get_block_entity(&block_pos)
                     && let Some(nbt) = block_entity.chunk_data_nbt()
@@ -1748,7 +1777,7 @@ impl World {
                     let be_block_id = BlockState::to_be_network_id(*block_state_id);
                     let update_packet = pumpkin_protocol::bedrock::client::CUpdateBlock::new(
                         *block_pos,
-                        be_block_id as u32,
+                        be_block_id,
                     );
                     let actor_packet = self
                         .bedrock_block_entity_data(*block_state_id, *block_pos)
@@ -1808,7 +1837,7 @@ impl World {
                 let water_state = bedrock_water_state(*block_state_id);
                 let packet = pumpkin_protocol::bedrock::client::CUpdateBlock::with_layer(
                     *block_pos,
-                    u32::from(BlockState::to_be_network_id(water_state)),
+                    BlockState::to_be_network_id(water_state),
                     1,
                 );
                 bedrock_water_packets.push(packet);
@@ -2630,10 +2659,6 @@ impl World {
             Vec<CreativeItemEntryPayload>,
         )> = std::sync::OnceLock::new();
 
-        static BEDROCK_CRAFTING_DATA: std::sync::OnceLock<
-            Vec<pumpkin_protocol::bedrock::client::BedrockRecipe>,
-        > = std::sync::OnceLock::new();
-
         let level_info = server.level_info.load();
         let (rain_level, lightning_level) = {
             let weather = self
@@ -2787,7 +2812,7 @@ impl World {
             block_registry_checksum: 0,
             world_template_id: Uuid::nil(),
             enable_clientside_generation: false,
-            blocknetwork_ids_are_hashed: false,
+            blocknetwork_ids_are_hashed: true,
             server_auth_sounds: true,
             server_join_information: None,
             telemetry: ServerTelemetryData {
@@ -2797,6 +2822,8 @@ impl World {
                 owner_id: String::new(),
             },
         };
+        client.send_packet(&CJigsawStructureData).await;
+        client.send_packet(&CVoxelShapes).await;
         if let Ok(data) = client.serialize_packet(&start_game) {
             client.send_game_packet(data).await;
         }
@@ -2886,180 +2913,8 @@ impl World {
             client.send_game_packet(data).await;
         }
 
-        let bedrock_recipes = BEDROCK_CRAFTING_DATA.get_or_init(|| {
-            use pumpkin_data::item::{Item, JavaToBedrockItemMapping};
-            use pumpkin_data::recipes::{CraftingRecipeTypes, RecipeIngredientTypes};
-            use pumpkin_protocol::bedrock::client::{
-                BedrockRecipe, BedrockShapedRecipe, BedrockShapelessRecipe, ItemDescriptorCount,
-                RecipeUnlockRequirement,
-            };
-            use pumpkin_protocol::bedrock::network_item::NetworkItemDescriptor;
-            use pumpkin_protocol::codec::{var_int::VarInt, var_uint::VarUInt};
-
-            let mut mapped_recipes = Vec::new();
-            let mut network_id_counter = 1u32;
-
-            for recipe in pumpkin_data::recipes::RECIPES_CRAFTING {
-                let map_ingredient = |ing: &RecipeIngredientTypes| -> ItemDescriptorCount {
-                    let item_key = match ing {
-                        RecipeIngredientTypes::Simple(name) => Some(*name),
-                        RecipeIngredientTypes::Tagged(tag) => {
-                            let tag_name = tag.strip_prefix('#').unwrap_or(tag);
-                            pumpkin_data::tag::get_tag_ids(
-                                pumpkin_data::tag::RegistryKey::Item,
-                                tag_name,
-                            )
-                            .and_then(|ids| {
-                                ids.first().and_then(|&first_id| {
-                                    Item::from_id(first_id).map(|item| item.registry_key)
-                                })
-                            })
-                        }
-                        RecipeIngredientTypes::OneOf(names) => names.first().copied(),
-                    };
-
-                    if let Some(key) = item_key {
-                        let registry_key = key.strip_prefix("minecraft:").unwrap_or(key);
-                        if let Some(item) = Item::from_registry_key(registry_key)
-                            && let Some(mapping) =
-                                JavaToBedrockItemMapping::from_java_item_id(item.id)
-                        {
-                            return ItemDescriptorCount {
-                                item_identifier: mapping.bedrock_item.registry_key.to_string(),
-                                metadata_value: mapping.bedrock_data as i32,
-                                count: 1,
-                            };
-                        }
-                    }
-
-                    ItemDescriptorCount {
-                        item_identifier: String::new(),
-                        metadata_value: 0,
-                        count: 0,
-                    }
-                };
-
-                match recipe {
-                    CraftingRecipeTypes::CraftingShaped {
-                        category: _,
-                        group: _,
-                        show_notification: _,
-                        key,
-                        pattern,
-                        result,
-                    } => {
-                        let height = pattern.len() as i32;
-                        let width = pattern.iter().map(|s| s.len()).max().unwrap_or(0) as i32;
-
-                        let mut input = Vec::new();
-                        for r in 0..height {
-                            let pattern_row = pattern[r as usize];
-                            for c in 0..width {
-                                let ch = pattern_row.chars().nth(c as usize).unwrap_or(' ');
-                                if ch == ' ' {
-                                    input.push(ItemDescriptorCount {
-                                        item_identifier: String::new(),
-                                        metadata_value: 0,
-                                        count: 0,
-                                    });
-                                } else {
-                                    let mut ingredient = None;
-                                    for &(key_ch, ref ing) in *key {
-                                        if key_ch == ch {
-                                            ingredient = Some(ing);
-                                            break;
-                                        }
-                                    }
-                                    if let Some(ing) = ingredient {
-                                        input.push(map_ingredient(ing));
-                                    } else {
-                                        input.push(ItemDescriptorCount {
-                                            item_identifier: String::new(),
-                                            metadata_value: 0,
-                                            count: 0,
-                                        });
-                                    }
-                                }
-                            }
-                        }
-
-                        let output_item = Item::from_registry_key(result.id);
-                        if let Some(item) = output_item
-                            && let Some(mapping) =
-                                JavaToBedrockItemMapping::from_java_item_id(item.id)
-                        {
-                            let output_descriptor = NetworkItemDescriptor {
-                                id: VarInt::from(mapping.bedrock_item.id),
-                                stack_size: result.count as u16,
-                                aux_value: VarUInt(mapping.bedrock_data),
-                                block_runtime_id: VarInt::from(mapping.bedrock_block_state),
-                                nbt_data: pumpkin_nbt::Nbt::default(),
-                                place_on_blocks: Vec::new(),
-                                destroy_blocks: Vec::new(),
-                                shield_blocking_tick: 0,
-                            };
-
-                            mapped_recipes.push(BedrockRecipe::Shaped(BedrockShapedRecipe {
-                                recipe_id: format!("pumpkin:recipe_{network_id_counter}"),
-                                width: VarInt(width),
-                                height: VarInt(height),
-                                input,
-                                output: vec![output_descriptor],
-                                uuid: Uuid::nil(),
-                                block: "crafting_table".to_string(),
-                                priority: VarInt(1),
-                                assume_symmetry: true,
-                                unlock_requirement: RecipeUnlockRequirement { context: 1 },
-                                recipe_network_id: VarUInt(network_id_counter),
-                            }));
-                            network_id_counter += 1;
-                        }
-                    }
-                    CraftingRecipeTypes::CraftingShapeless {
-                        category: _,
-                        group: _,
-                        ingredients,
-                        result,
-                    } => {
-                        let input = ingredients.iter().map(map_ingredient).collect::<Vec<_>>();
-
-                        let output_item = Item::from_registry_key(result.id);
-                        if let Some(item) = output_item
-                            && let Some(mapping) =
-                                JavaToBedrockItemMapping::from_java_item_id(item.id)
-                        {
-                            let output_descriptor = NetworkItemDescriptor {
-                                id: VarInt::from(mapping.bedrock_item.id),
-                                stack_size: result.count as u16,
-                                aux_value: VarUInt(mapping.bedrock_data),
-                                block_runtime_id: VarInt::from(mapping.bedrock_block_state),
-                                nbt_data: pumpkin_nbt::Nbt::default(),
-                                place_on_blocks: Vec::new(),
-                                destroy_blocks: Vec::new(),
-                                shield_blocking_tick: 0,
-                            };
-
-                            mapped_recipes.push(BedrockRecipe::Shapeless(BedrockShapelessRecipe {
-                                recipe_id: format!("pumpkin:recipe_{network_id_counter}"),
-                                input,
-                                output: vec![output_descriptor],
-                                uuid: Uuid::nil(),
-                                block: "crafting_table".to_string(),
-                                priority: VarInt(1),
-                                unlock_requirement: RecipeUnlockRequirement { context: 1 },
-                                recipe_network_id: VarUInt(network_id_counter),
-                            }));
-                            network_id_counter += 1;
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            mapped_recipes
-        });
-
         let crafting_data = pumpkin_protocol::bedrock::client::CCraftingData {
-            recipes: bedrock_recipes.clone(),
+            recipes: crate::net::bedrock::recipe::crafting_data().to_vec(),
             clean_recipes: false,
         };
         if let Ok(data) = client.serialize_packet(&crafting_data) {
@@ -4736,8 +4591,7 @@ impl World {
                             .lock()
                             .unwrap_or_else(std::sync::PoisonError::into_inner),
                     );
-                    let mut entities_to_add: Vec<Arc<dyn EntityBase>> =
-                        Vec::with_capacity(entity_nbts.len());
+                    chunk.live.store(true, Relaxed);
                     for entity_nbt in &entity_nbts {
                         let Some(id) = entity_nbt.get_string("id") else {
                             debug!("Entity has no ID");
@@ -4766,29 +4620,17 @@ impl World {
                         // stale data.
                         base_entity.velocity.store(Vector3::default());
 
-                        player.client.enqueue_spawn_packet(&entity);
+                        // UUID-dedupes if another watcher already loaded this entity.
+                        // Tracker owns pairing (spawn packets + vehicle restore).
+                        world.add_entity_silent(entity.clone());
                         player.try_restore_vehicle(&entity);
-                        entities_to_add.push(entity);
-                    }
-
-                    if !entities_to_add.is_empty() {
-                        world.entities.rcu(|current_entities| {
-                            let mut new_entities = (**current_entities).clone();
-                            new_entities.extend(entities_to_add.iter().cloned());
-                            new_entities
-                        });
                     }
                 } else {
-                    // The chunk's entities are already live (another watcher loaded
-                    // them). Just send this player the spawn packets for the live
-                    // entities currently in this chunk.
-                    for entity in world.entities.load().iter() {
-                        let base_entity = entity.get_entity();
-                        if base_entity.chunk_pos.load() == position {
-                            player.client.enqueue_spawn_packet(entity);
-                            player.try_restore_vehicle(entity);
-                        }
-                    }
+                    // Already live for other watchers: pair this player now so
+                    // spawn packets and vehicle restore do not wait on a tracker tick.
+                    world
+                        .entity_tracker
+                        .update_player_chunks(&player, &world, &[position]);
                 }
             }
 
@@ -4971,10 +4813,17 @@ impl World {
             .collect()
     }
 
-    pub fn get_closest_player(&self, pos: Vector3<f64>, radius: f64) -> Option<Arc<Player>> {
-        let players = self.get_nearby_players(pos, radius);
-        players
-            .iter()
+    /// Closest player that satisfies `predicate`. Unlike [`Self::get_closest_player`], a nearer
+    /// player failing the predicate does not hide a farther one that passes it.
+    pub fn get_nearest_player(
+        &self,
+        pos: Vector3<f64>,
+        radius: f64,
+        predicate: impl Fn(&Arc<Player>) -> bool,
+    ) -> Option<Arc<Player>> {
+        self.get_nearby_players(pos, radius)
+            .into_iter()
+            .filter(|player| predicate(player))
             .min_by(|a, b| {
                 a.get_entity()
                     .pos
@@ -4982,7 +4831,34 @@ impl World {
                     .squared_distance_to_vec(&pos)
                     .total_cmp(&b.get_entity().pos.load().squared_distance_to_vec(&pos))
             })
-            .cloned()
+    }
+
+    /// Closest entity that satisfies `predicate`. See [`Self::get_nearest_player`] for why this is
+    /// not [`Self::get_closest_entity`] followed by a check.
+    pub fn get_nearest_entity(
+        &self,
+        pos: Vector3<f64>,
+        radius: f64,
+        entity_types: Option<&[&'static EntityType]>,
+        predicate: impl Fn(&Arc<dyn EntityBase>) -> bool,
+    ) -> Option<Arc<dyn EntityBase>> {
+        self.get_nearby_entities(pos, radius)
+            .into_values()
+            .filter(|entity| {
+                entity_types.is_none_or(|types| types.contains(&entity.get_entity().entity_type))
+                    && predicate(entity)
+            })
+            .min_by(|a, b| {
+                a.get_entity()
+                    .pos
+                    .load()
+                    .squared_distance_to_vec(&pos)
+                    .total_cmp(&b.get_entity().pos.load().squared_distance_to_vec(&pos))
+            })
+    }
+
+    pub fn get_closest_player(&self, pos: Vector3<f64>, radius: f64) -> Option<Arc<Player>> {
+        self.get_nearest_player(pos, radius, |_| true)
     }
 
     /// Gets the closest entity to a position, with optional filtering by entity type.
@@ -5002,33 +4878,7 @@ impl World {
         radius: f64,
         entity_types: Option<&[&'static EntityType]>,
     ) -> Option<Arc<dyn EntityBase>> {
-        // Get regular entities
-        let entities = self.get_nearby_entities(pos, radius);
-
-        // Filter by entity type if specified
-        let filtered_entities = if let Some(types) = entity_types {
-            entities
-                .into_iter()
-                .filter(|(_, entity)| {
-                    let entity_type = entity.get_entity().entity_type;
-                    types.contains(&entity_type)
-                })
-                .collect::<HashMap<_, _>>()
-        } else {
-            entities
-        };
-
-        // Find the closest entity
-        filtered_entities
-            .iter()
-            .min_by(|a, b| {
-                a.1.get_entity()
-                    .pos
-                    .load()
-                    .squared_distance_to_vec(&pos)
-                    .total_cmp(&b.1.get_entity().pos.load().squared_distance_to_vec(&pos))
-            })
-            .map(|p| p.1.clone())
+        self.get_nearest_entity(pos, radius, entity_types, |_| true)
     }
 
     /// Adds entities to the provided [`Vec`] that satisfy a particular condition and are
@@ -5243,22 +5093,6 @@ impl World {
         self.add_entity_silent(entity);
     }
 
-    pub fn broadcast_entity_spawn(&self, entity: &Arc<dyn EntityBase>) {
-        let base_entity = entity.get_entity();
-        let chunk_pos = base_entity.chunk_pos.load();
-
-        let players = self.players.load();
-        for player in players.iter() {
-            if player
-                .watched_section
-                .load()
-                .is_within_distance(chunk_pos.x, chunk_pos.y)
-            {
-                player.client.try_enqueue_spawn_packet(entity);
-            }
-        }
-    }
-
     #[expect(clippy::needless_pass_by_value)]
     pub fn add_entity_silent(&self, entity: Arc<dyn EntityBase>) {
         let base_entity = entity.get_entity();
@@ -5276,7 +5110,7 @@ impl World {
         }
 
         // The entity stays live-only: it is written to its chunk's saved data on
-        // unload (see `save_entity`), never at spawn, so it can't be both live and
+        // unload (see `save_entities_by_chunk`), never at spawn, so it can't be both live and
         // serialized at once (which would double it on the next reload).
         self.spawn_state.load().add_entity(self, entity.as_ref());
         self.entity_tracker.add_entity(&entity, self);
@@ -5319,6 +5153,7 @@ impl World {
         let mut entities_to_remove = Vec::new();
 
         self.entities.rcu(|current_entities| {
+            entities_to_remove.clear();
             let mut new_entities = (**current_entities).clone();
             new_entities.retain(|entity| {
                 let base_entity = entity.get_entity();
@@ -5333,9 +5168,11 @@ impl World {
             new_entities
         });
 
+        self.save_entities_by_chunk(&entities_to_remove, chunks_set.iter().copied())
+            .await;
+
         for entity in entities_to_remove {
             self.entity_tracker.remove_entity(entity.as_ref(), self);
-            self.save_entity(&entity).await;
             self.spawn_state.load().remove_entity(self, entity.as_ref());
         }
 
@@ -5572,6 +5409,16 @@ impl World {
             return None;
         }
 
+        let mut flags = flags;
+        if flags.contains(BlockFlags::SKIP_DROPS)
+            && cause.is_some_and(|p| p.gamemode.load() == pumpkin_util::GameMode::Creative)
+            && self
+                .get_block_entity(position)
+                .is_some_and(|entity| entity.drops_for_creative_player())
+        {
+            flags.remove(BlockFlags::SKIP_DROPS);
+        }
+
         let mut event = BlockBreakEvent::new(
             cause.cloned(),
             broken_block,
@@ -5586,7 +5433,6 @@ impl World {
             return None;
         }
 
-        let mut flags = flags;
         if event.drop {
             flags.remove(BlockFlags::SKIP_DROPS);
         } else {
@@ -5630,7 +5476,7 @@ impl World {
             let be_packet = CLevelEvent {
                 event_id: VarInt(LevelEvent::ParticlesDestroyBlock as i32),
                 position: position.to_centered_f64().to_f32_lossy(),
-                data: VarInt(BlockState::to_be_network_id(broken_state_id).into()),
+                data: VarInt(BlockState::to_be_network_id(broken_state_id) as i32),
             };
             let chunk_pos = position.chunk_position();
             if let Some(player) = cause {
@@ -6361,6 +6207,22 @@ impl World {
         }
     }
 
+    /// Sends output-signal updates for block entities changed this tick, in list order.
+    fn flush_comparator_updates(self: &Arc<Self>, block_entities: &[Arc<dyn BlockEntity>]) {
+        for be in block_entities {
+            // Vanilla `BlockEntity.setChanged` -> `Level.updateNeighbourForOutputSignal`.
+            if !be.is_comparator_dirty() {
+                continue;
+            }
+            be.clear_comparator_dirty();
+            let pos = be.get_position();
+            // The list is a snapshot, so the chunk may be gone by now.
+            if let Some(state_id) = self.get_block_state_id_if_loaded(&pos) {
+                self.update_neighbour_for_output_signal(&pos, state_id.to_block());
+            }
+        }
+    }
+
     pub fn update_from_neighbor_shapes(
         self: &Arc<Self>,
         state_id: BlockStateId,
@@ -6723,25 +6585,17 @@ impl World {
         Some((t_hit, direction, hit_pos))
     }
 
-    pub fn ray_outline_check_detailed(
-        &self,
+    /// Clips the segment against the outline shapes of `state`. A shapeless block,
+    /// air above all, cannot be hit.
+    fn clip_outline_shapes(
+        state: &BlockState,
         block_pos: &BlockPos,
         from: Vector3<f64>,
         to: Vector3<f64>,
     ) -> Option<(BlockDirection, Vector3<f64>)> {
-        let state = self.get_block_state(block_pos);
-
-        if state.outline_shapes.is_empty() {
-            let block_min = block_pos.0.to_f64();
-            let block_max = block_min.add_raw(1.0, 1.0, 1.0);
-            return Self::intersects_aabb_with_hit(from, to, block_min, block_max)
-                .map(|(_, dir, hit_pos)| (dir, hit_pos));
-        }
-
-        let bounding_boxes = state.get_block_outline_shapes_at(block_pos);
         let mut closest_hit: Option<(f64, BlockDirection, Vector3<f64>)> = None;
 
-        for shape in bounding_boxes {
+        for shape in state.get_block_outline_shapes_at(block_pos) {
             let world_min = shape.min.add(&block_pos.0.to_f64());
             let world_max = shape.max.add(&block_pos.0.to_f64());
 
@@ -6756,6 +6610,15 @@ impl World {
         }
 
         closest_hit.map(|(_, dir, hit_pos)| (dir, hit_pos))
+    }
+
+    pub fn ray_outline_check_detailed(
+        &self,
+        block_pos: &BlockPos,
+        from: Vector3<f64>,
+        to: Vector3<f64>,
+    ) -> Option<(BlockDirection, Vector3<f64>)> {
+        Self::clip_outline_shapes(self.get_block_state(block_pos), block_pos, from, to)
     }
 
     fn ray_outline_check(
@@ -6953,6 +6816,8 @@ impl World {
             .collect()
     }
 
+    /// Returns the closest entity the segment from `start` to `end` hits, or
+    /// `None`. Convenience wrapper over [`Self::ray_trace_entities`].
     pub fn ray_trace_entity(
         &self,
         start: Vector3<f64>,
@@ -6961,6 +6826,14 @@ impl World {
         self.ray_trace_entities(start, end).into_iter().next()
     }
 
+    /// Traces the block grid from `start_pos` to `end_pos` (vanilla
+    /// `Block.clip` semantics) and returns the first block the ray actually
+    /// passes through whose outline collides and whose `hit_check` returns
+    /// true, together with the direction reported for that hit. The start
+    /// block is tested like any other; since the ray begins inside it, the
+    /// reported direction there is a fallback rather than a true entry face.
+    /// Returns `None` when nothing is hit or the ray starts and ends in the
+    /// same block.
     pub fn raycast(
         self: &Arc<Self>,
         start_pos: Vector3<f64>,
@@ -7211,9 +7084,9 @@ impl World {
     }
 
     pub async fn save(&self) {
-        for entity in self.entities.load().iter() {
-            self.save_entity(entity).await;
-        }
+        let entities = self.entities.load_full();
+        self.save_entities_by_chunk(&entities, self.level.live_entity_chunk_positions())
+            .await;
 
         let chunks: Vec<Vector2<i32>> = self
             .block_entities
@@ -7686,6 +7559,22 @@ pub fn calculate_celestial_angle(time_of_day: i64) -> f32 {
     y_curve.sample(t)
 }
 
+/// A live chunk's records were already spawned, so `fresh` replaces them. Otherwise the
+/// records are the only copy of unspawned entities, so they stay and are only replaced by UUID.
+fn merge_entity_records(data: &mut Vec<NbtCompound>, live: bool, fresh: Vec<NbtCompound>) {
+    if live {
+        *data = fresh;
+        return;
+    }
+
+    for record in fresh {
+        if let Some(uuid) = record.get_uuid("UUID") {
+            data.retain(|existing| existing.get_uuid("UUID") != Some(uuid));
+        }
+        data.push(record);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use pumpkin_data::{
@@ -7693,9 +7582,118 @@ mod tests {
         block_properties::{ChestLikeProperties, ChestType, HorizontalFacing, WaterLikeProperties},
         fluid::Fluid,
     };
+    use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_util::math::position::BlockPos;
+    use uuid::Uuid;
 
-    use super::{World, bedrock_block_breaking_rate, bedrock_chest_block_actor};
+    use super::{
+        World, bedrock_block_breaking_rate, bedrock_chest_block_actor, merge_entity_records,
+    };
+
+    fn record(uuid: Option<Uuid>, id: &str) -> NbtCompound {
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("id", id.to_string());
+        if let Some(uuid) = uuid {
+            nbt.put_uuid("UUID", uuid);
+        }
+        nbt
+    }
+
+    fn ids(data: &[NbtCompound]) -> Vec<&str> {
+        data.iter()
+            .filter_map(|record| record.get_string("id"))
+            .collect()
+    }
+
+    #[test]
+    fn merge_entity_records_replaces_everything_in_a_live_chunk() {
+        let stale = Uuid::from_u128(1);
+        let fresh = Uuid::from_u128(2);
+        let mut data = vec![record(Some(stale), "minecraft:piglin")];
+
+        merge_entity_records(
+            &mut data,
+            true,
+            vec![record(Some(fresh), "minecraft:zombie")],
+        );
+
+        assert_eq!(ids(&data), ["minecraft:zombie"]);
+        assert_eq!(data[0].get_uuid("UUID"), Some(fresh));
+    }
+
+    #[test]
+    fn merge_entity_records_empties_a_live_chunk_with_no_entities_left() {
+        let mut data = vec![
+            record(Some(Uuid::from_u128(1)), "minecraft:piglin"),
+            record(Some(Uuid::from_u128(2)), "minecraft:zombie"),
+        ];
+
+        merge_entity_records(&mut data, true, Vec::new());
+
+        assert!(data.is_empty());
+    }
+
+    #[test]
+    fn merge_entity_records_keeps_unspawned_records_of_a_dormant_chunk() {
+        let dormant = Uuid::from_u128(1);
+        let mut data = vec![record(Some(dormant), "minecraft:piglin")];
+
+        merge_entity_records(
+            &mut data,
+            false,
+            vec![record(Some(Uuid::from_u128(2)), "minecraft:zombie")],
+        );
+
+        assert_eq!(ids(&data), ["minecraft:piglin", "minecraft:zombie"]);
+    }
+
+    #[test]
+    fn merge_entity_records_replaces_a_same_uuid_record_of_a_dormant_chunk() {
+        let shared = Uuid::from_u128(1);
+        let mut data = vec![
+            record(Some(shared), "minecraft:piglin"),
+            record(Some(Uuid::from_u128(2)), "minecraft:zombie"),
+        ];
+
+        merge_entity_records(
+            &mut data,
+            false,
+            vec![record(Some(shared), "minecraft:hoglin")],
+        );
+
+        assert_eq!(ids(&data), ["minecraft:zombie", "minecraft:hoglin"]);
+        assert_eq!(
+            data.iter()
+                .filter(|r| r.get_uuid("UUID") == Some(shared))
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn merge_entity_records_never_matches_a_record_without_a_uuid() {
+        let mut data = vec![record(None, "minecraft:piglin")];
+
+        merge_entity_records(&mut data, false, vec![record(None, "minecraft:zombie")]);
+
+        assert_eq!(ids(&data), ["minecraft:piglin", "minecraft:zombie"]);
+    }
+
+    #[test]
+    fn merge_entity_records_is_idempotent_on_a_dormant_chunk() {
+        let uuid = Uuid::from_u128(1);
+        let mut data = Vec::new();
+
+        for _ in 0..3 {
+            merge_entity_records(
+                &mut data,
+                false,
+                vec![record(Some(uuid), "minecraft:piglin")],
+            );
+        }
+
+        assert_eq!(ids(&data), ["minecraft:piglin"]);
+    }
 
     #[test]
     fn liquid_block_states_preserve_source_flow_and_falling_depths() {
@@ -7753,6 +7751,22 @@ mod tests {
             assert!(state.is_empty);
             assert_eq!(state.height, 0.0);
         }
+    }
+
+    #[test]
+    fn a_shapeless_block_never_stops_a_ray() {
+        // The ray always starts inside a block, usually air, and that block must not
+        // count as a hit or every raycast would stop where it began.
+        let pos = BlockPos::new(10, 64, 10);
+        let from = pumpkin_util::math::vector3::Vector3::new(10.5, 64.5, 10.5);
+        let to = pumpkin_util::math::vector3::Vector3::new(20.5, 64.5, 10.5);
+
+        assert!(
+            super::World::clip_outline_shapes(Block::AIR.default_state, &pos, from, to).is_none()
+        );
+        assert!(
+            super::World::clip_outline_shapes(Block::STONE.default_state, &pos, from, to).is_some()
+        );
     }
 
     #[test]

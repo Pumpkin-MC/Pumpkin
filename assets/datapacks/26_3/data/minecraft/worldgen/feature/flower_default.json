@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:simple_block",
+  "to_place": {
+    "type": "minecraft:weighted",
+    "entries": [
+      {
+        "data": "minecraft:poppy",
+        "weight": 2
+      },
+      {
+        "data": "minecraft:dandelion",
+        "weight": 1
+      }
+    ]
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "entries": [
+        {
+          "type": "minecraft:alternatives",
+          "children": [
+            {
+              "type": "minecraft:item",
+              "condition": "minecraft:tool/can_silk_touch",
+              "name": "minecraft:brown_mushroom_block"
+            },
+            {
+              "type": "minecraft:item",
+              "modifier": [
+                {
+                  "type": "minecraft:set_count",
+                  "count": {
+                    "type": "minecraft:uniform",
+                    "max": 2,
+                    "min": -6
+                  }
+                },
+                {
+                  "type": "minecraft:limit_count",
+                  "limit": {
+                    "min": 0
+                  }
+                },
+                {
+                  "type": "minecraft:explosion_decay"
+                }
+              ],
+              "name": "minecraft:brown_mushroom"
+            }
+          ]
+        }
+      ],
+      "rolls": 1
+    }
+  ],
+  "random_sequence": "minecraft:blocks/brown_mushroom_block"
+}

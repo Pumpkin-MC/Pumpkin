@@ -12,6 +12,7 @@ pub struct ChestBlockEntity {
     pub position: BlockPos,
     pub items: RwLock<[ItemStack; Self::INVENTORY_SIZE]>,
     pub dirty: AtomicBool,
+    pub comparator_dirty: AtomicBool,
 
     // Viewer
     viewers: ViewerCountTracker,

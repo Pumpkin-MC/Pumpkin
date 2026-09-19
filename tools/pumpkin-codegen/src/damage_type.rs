@@ -61,7 +61,7 @@ pub enum DeathMessageType {
 
 /// Generates the `TokenStream` for the `DamageType` struct, its associated enums, and constants.
 pub fn build() -> TokenStream {
-    let dir = std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/damage_type");
+    let dir = std::path::Path::new("../../assets/datapacks/26_3/data/minecraft/damage_type");
     let mut damage_types: BTreeMap<String, DamageTypeData> = BTreeMap::new();
     let mut entries: Vec<_> = fs::read_dir(dir)
         .expect("Missing damage_type directory")
