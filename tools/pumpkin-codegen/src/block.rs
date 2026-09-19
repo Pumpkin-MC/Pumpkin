@@ -1184,16 +1184,28 @@ pub fn build() -> TokenStream {
         ));
     }
 
+    // An alias named after a real block belongs to that block's own group. A name derived from
+    // a group's common suffix must not take it: `rail` and the group holding `powered_rail`,
+    // `detector_rail` and `activator_rail` both want `RailProperties`, and whichever group came
+    // first in the map claimed it. Map order follows the property hashes, so a change in how
+    // those are produced silently pointed `RailProperties` at the struct carrying `powered`.
+    let block_owned_aliases: HashSet<String> = property_collection_map
+        .values()
+        .flat_map(|group| group.blocks.iter())
+        .map(|(name, _)| format!("{name}_properties").to_upper_camel_case())
+        .collect();
+
     for property_group in property_collection_map.into_values() {
         let struct_name = property_group_name_from_derived_name(&property_group.derive_name());
         let property_name = Ident::new(&struct_name, Span::call_site());
 
         let mut group_aliases = Vec::new();
 
-        if let Some(canonical) = common_suffix_group_alias(&property_group.blocks) {
-            if emitted_aliases.insert(canonical.clone()) {
-                group_aliases.push(Ident::new(&canonical, Span::call_site()));
-            }
+        if let Some(canonical) = common_suffix_group_alias(&property_group.blocks)
+            && !block_owned_aliases.contains(&canonical)
+            && emitted_aliases.insert(canonical.clone())
+        {
+            group_aliases.push(Ident::new(&canonical, Span::call_site()));
         }
 
         for (b_name, _) in &property_group.blocks {
