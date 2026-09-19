@@ -119,9 +119,11 @@ pub fn build_consumed_args_from_context(context: &CommandContext) -> HashMap<Str
 
 /// The Java client-side parser declared for argument `name`
 fn declared_parser(context: &CommandContext, name: &str) -> Option<JavaClientArgumentType> {
+    // 同名参数由最后一次解析覆盖，声明类型也必须取实际路径中的最后一个节点。
     context
         .nodes
         .iter()
+        .rev()
         .find_map(|parsed| match &context.tree[parsed.node] {
             AttachedNode::Argument(argument) if argument.meta.name == name => {
                 Some(argument.meta.argument_type.client_side_parser())
@@ -171,4 +173,61 @@ fn coordinates_to_owned_arg(
 
 pub struct ConsumedArgsResource {
     pub provider: HashMap<String, OwnedArg>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{OwnedArg, build_consumed_args_from_context, declared_parser};
+    use crate::command::{
+        argument_builder::{ArgumentBuilder, argument, command},
+        argument_types::coordinates::{block_pos::BlockPosArgumentType, vec3::Vec3ArgumentType},
+        context::command_source::CommandSource,
+        dispatcher::CommandDispatcher,
+    };
+    use pumpkin_util::math::vector3::Vector3;
+
+    #[test]
+    fn coordinates_use_the_last_parsed_declaration_when_names_collide() {
+        let mut dispatcher = CommandDispatcher::new();
+        dispatcher.register(
+            command("probe", "test command").then(
+                argument("pos", BlockPosArgumentType)
+                    .then(argument("pos", Vec3ArgumentType::Uncorrected)),
+            ),
+        );
+        let source = CommandSource::dummy();
+        let input = "probe 1 2 3 4.25 5.5 -6.75";
+        let parsed = dispatcher.parse_input(input, &source);
+        assert!(parsed.errors.is_empty());
+        assert!(!parsed.reader.can_read_char());
+        let context = parsed.context.build(input);
+
+        // 同一路径中的后一个 pos 覆盖前值，转换时不能再按前一个方块坐标取整。
+        assert_eq!(context.arguments.len(), 1);
+        let args = build_consumed_args_from_context(&context);
+        assert!(matches!(
+            args.get("pos"),
+            Some(OwnedArg::Pos3D(pos)) if *pos == Vector3::new(4.25, 5.5, -6.75)
+        ));
+    }
+
+    #[test]
+    fn coordinates_without_parsed_nodes_do_not_use_tree_fallback() {
+        let mut dispatcher = CommandDispatcher::new();
+        dispatcher.register(
+            command("probe", "test command").then(argument("pos", Vec3ArgumentType::Uncorrected)),
+        );
+        let source = CommandSource::dummy();
+        let input = "probe 1.25 2.5 3.75";
+        let parsed = dispatcher.parse_input(input, &source);
+        assert!(parsed.errors.is_empty());
+        assert!(!parsed.reader.can_read_char());
+        let mut context = parsed.context.build(input);
+        assert!(build_consumed_args_from_context(&context).contains_key("pos"));
+
+        // 即使命令树和值仍在，没有实际解析节点也不能从全树猜测参数类型。
+        context.nodes.clear();
+        assert!(declared_parser(&context, "pos").is_none());
+        assert!(!build_consumed_args_from_context(&context).contains_key("pos"));
+    }
 }
