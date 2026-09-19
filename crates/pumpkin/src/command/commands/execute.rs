@@ -29,6 +29,7 @@ use crate::command::argument_types::range::{FloatRangeArgumentType, IntRangeArgu
 use crate::command::argument_types::resource::{ENTITY_TYPE_ARGUMENT, ResourceArgument};
 use crate::command::argument_types::resource_key::{BIOME_REGISTRY, ResourceKeyArgument};
 use crate::command::argument_types::resource_or_tag::{ResourceOrTag, ResourceOrTagArgument};
+use crate::command::argument_types::score_holder::ScoreHolderArgumentType;
 use crate::command::commands::data::{
     BlockDataAccessor, DataAccessor, EntityDataAccessor, StorageDataAccessor,
 };
@@ -436,11 +437,11 @@ fn get_score(context: &CommandContext, target: &str, objective: &str) -> Option<
 fn execute_if_score_matches_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
-    let target = StringArgumentType::get(context, "target")?;
+    let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
     let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
     let range = IntRangeArgumentType::get(context, "range")?;
 
-    if let Some(score) = get_score(context, target, target_obj) {
+    if let Some(score) = get_score(context, &target, target_obj) {
         if range.matches(score) {
             return Ok(vec![context.source.clone()]);
         }
@@ -451,11 +452,11 @@ fn execute_if_score_matches_modifier(
 fn execute_unless_score_matches_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
-    let target = StringArgumentType::get(context, "target")?;
+    let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
     let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
     let range = IntRangeArgumentType::get(context, "range")?;
 
-    if let Some(score) = get_score(context, target, target_obj) {
+    if let Some(score) = get_score(context, &target, target_obj) {
         if !range.matches(score) {
             return Ok(vec![context.source.clone()]);
         }
@@ -468,14 +469,14 @@ fn execute_unless_score_matches_modifier(
 fn execute_if_score_eq_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
-    let target = StringArgumentType::get(context, "target")?;
+    let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
     let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
-    let source = StringArgumentType::get(context, "source")?;
+    let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
     let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
 
     if let (Some(a), Some(b)) = (
-        get_score(context, target, target_obj),
-        get_score(context, source, source_obj),
+        get_score(context, &target, target_obj),
+        get_score(context, &source, source_obj),
     ) {
         if a == b {
             return Ok(vec![context.source.clone()]);
@@ -487,14 +488,14 @@ fn execute_if_score_eq_modifier(
 fn execute_if_score_lt_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
-    let target = StringArgumentType::get(context, "target")?;
+    let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
     let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
-    let source = StringArgumentType::get(context, "source")?;
+    let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
     let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
 
     if let (Some(a), Some(b)) = (
-        get_score(context, target, target_obj),
-        get_score(context, source, source_obj),
+        get_score(context, &target, target_obj),
+        get_score(context, &source, source_obj),
     ) {
         if a < b {
             return Ok(vec![context.source.clone()]);
@@ -506,14 +507,14 @@ fn execute_if_score_lt_modifier(
 fn execute_if_score_le_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
-    let target = StringArgumentType::get(context, "target")?;
+    let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
     let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
-    let source = StringArgumentType::get(context, "source")?;
+    let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
     let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
 
     if let (Some(a), Some(b)) = (
-        get_score(context, target, target_obj),
-        get_score(context, source, source_obj),
+        get_score(context, &target, target_obj),
+        get_score(context, &source, source_obj),
     ) {
         if a <= b {
             return Ok(vec![context.source.clone()]);
@@ -525,14 +526,14 @@ fn execute_if_score_le_modifier(
 fn execute_if_score_gt_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
-    let target = StringArgumentType::get(context, "target")?;
+    let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
     let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
-    let source = StringArgumentType::get(context, "source")?;
+    let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
     let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
 
     if let (Some(a), Some(b)) = (
-        get_score(context, target, target_obj),
-        get_score(context, source, source_obj),
+        get_score(context, &target, target_obj),
+        get_score(context, &source, source_obj),
     ) {
         if a > b {
             return Ok(vec![context.source.clone()]);
@@ -544,14 +545,14 @@ fn execute_if_score_gt_modifier(
 fn execute_if_score_ge_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
-    let target = StringArgumentType::get(context, "target")?;
+    let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
     let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
-    let source = StringArgumentType::get(context, "source")?;
+    let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
     let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
 
     if let (Some(a), Some(b)) = (
-        get_score(context, target, target_obj),
-        get_score(context, source, source_obj),
+        get_score(context, &target, target_obj),
+        get_score(context, &source, source_obj),
     ) {
         if a >= b {
             return Ok(vec![context.source.clone()]);
@@ -563,14 +564,14 @@ fn execute_if_score_ge_modifier(
 fn execute_unless_score_eq_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
-    let target = StringArgumentType::get(context, "target")?;
+    let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
     let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
-    let source = StringArgumentType::get(context, "source")?;
+    let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
     let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
 
     if let (Some(a), Some(b)) = (
-        get_score(context, target, target_obj),
-        get_score(context, source, source_obj),
+        get_score(context, &target, target_obj),
+        get_score(context, &source, source_obj),
     ) {
         if a != b {
             return Ok(vec![context.source.clone()]);
@@ -584,14 +585,14 @@ fn execute_unless_score_eq_modifier(
 fn execute_unless_score_lt_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
-    let target = StringArgumentType::get(context, "target")?;
+    let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
     let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
-    let source = StringArgumentType::get(context, "source")?;
+    let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
     let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
 
     if let (Some(a), Some(b)) = (
-        get_score(context, target, target_obj),
-        get_score(context, source, source_obj),
+        get_score(context, &target, target_obj),
+        get_score(context, &source, source_obj),
     ) {
         if a >= b {
             return Ok(vec![context.source.clone()]);
@@ -605,14 +606,14 @@ fn execute_unless_score_lt_modifier(
 fn execute_unless_score_le_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
-    let target = StringArgumentType::get(context, "target")?;
+    let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
     let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
-    let source = StringArgumentType::get(context, "source")?;
+    let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
     let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
 
     if let (Some(a), Some(b)) = (
-        get_score(context, target, target_obj),
-        get_score(context, source, source_obj),
+        get_score(context, &target, target_obj),
+        get_score(context, &source, source_obj),
     ) {
         if a > b {
             return Ok(vec![context.source.clone()]);
@@ -626,14 +627,14 @@ fn execute_unless_score_le_modifier(
 fn execute_unless_score_gt_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
-    let target = StringArgumentType::get(context, "target")?;
+    let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
     let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
-    let source = StringArgumentType::get(context, "source")?;
+    let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
     let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
 
     if let (Some(a), Some(b)) = (
-        get_score(context, target, target_obj),
-        get_score(context, source, source_obj),
+        get_score(context, &target, target_obj),
+        get_score(context, &source, source_obj),
     ) {
         if a <= b {
             return Ok(vec![context.source.clone()]);
@@ -647,14 +648,14 @@ fn execute_unless_score_gt_modifier(
 fn execute_unless_score_ge_modifier(
     context: &CommandContext,
 ) -> crate::command::node::RedirectModifierResult {
-    let target = StringArgumentType::get(context, "target")?;
+    let target = ScoreHolderArgumentType::get_score_holder(context, "target")?.name;
     let target_obj = ObjectiveArgumentType::get(context, "target_obj")?;
-    let source = StringArgumentType::get(context, "source")?;
+    let source = ScoreHolderArgumentType::get_score_holder(context, "source")?.name;
     let source_obj = ObjectiveArgumentType::get(context, "source_obj")?;
 
     if let (Some(a), Some(b)) = (
-        get_score(context, target, target_obj),
-        get_score(context, source, source_obj),
+        get_score(context, &target, target_obj),
+        get_score(context, &source, source_obj),
     ) {
         if a < b {
             return Ok(vec![context.source.clone()]);
@@ -1257,7 +1258,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                 )
                 .then(
                     literal("score").then(
-                        argument("target", StringArgumentType::SingleWord).then(
+                        argument("target", ScoreHolderArgumentType::Single).then(
                             argument("target_obj", ObjectiveArgumentType)
                                 .then(literal("matches").then(
                                     argument("range", IntRangeArgumentType).redirect_with_modifier(
@@ -1269,7 +1270,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 ))
                                 .then(
                                     literal("=").then(
-                                        argument("source", StringArgumentType::SingleWord).then(
+                                        argument("source", ScoreHolderArgumentType::Single).then(
                                             argument("source_obj", ObjectiveArgumentType)
                                                 .redirect_with_modifier(
                                                     Redirection::Root,
@@ -1282,7 +1283,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 )
                                 .then(
                                     literal("<").then(
-                                        argument("source", StringArgumentType::SingleWord).then(
+                                        argument("source", ScoreHolderArgumentType::Single).then(
                                             argument("source_obj", ObjectiveArgumentType)
                                                 .redirect_with_modifier(
                                                     Redirection::Root,
@@ -1295,7 +1296,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 )
                                 .then(
                                     literal("<=").then(
-                                        argument("source", StringArgumentType::SingleWord).then(
+                                        argument("source", ScoreHolderArgumentType::Single).then(
                                             argument("source_obj", ObjectiveArgumentType)
                                                 .redirect_with_modifier(
                                                     Redirection::Root,
@@ -1308,7 +1309,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 )
                                 .then(
                                     literal(">").then(
-                                        argument("source", StringArgumentType::SingleWord).then(
+                                        argument("source", ScoreHolderArgumentType::Single).then(
                                             argument("source_obj", ObjectiveArgumentType)
                                                 .redirect_with_modifier(
                                                     Redirection::Root,
@@ -1321,7 +1322,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 )
                                 .then(
                                     literal(">=").then(
-                                        argument("source", StringArgumentType::SingleWord).then(
+                                        argument("source", ScoreHolderArgumentType::Single).then(
                                             argument("source_obj", ObjectiveArgumentType)
                                                 .redirect_with_modifier(
                                                     Redirection::Root,
@@ -1446,7 +1447,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                 )
                 .then(
                     literal("score").then(
-                        argument("target", StringArgumentType::SingleWord).then(
+                        argument("target", ScoreHolderArgumentType::Single).then(
                             argument("target_obj", ObjectiveArgumentType)
                                 .then(literal("matches").then(
                                     argument("range", IntRangeArgumentType).redirect_with_modifier(
@@ -1458,7 +1459,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 ))
                                 .then(
                                     literal("=").then(
-                                        argument("source", StringArgumentType::SingleWord).then(
+                                        argument("source", ScoreHolderArgumentType::Single).then(
                                             argument("source_obj", ObjectiveArgumentType)
                                                 .redirect_with_modifier(
                                                     Redirection::Root,
@@ -1471,7 +1472,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 )
                                 .then(
                                     literal("<").then(
-                                        argument("source", StringArgumentType::SingleWord).then(
+                                        argument("source", ScoreHolderArgumentType::Single).then(
                                             argument("source_obj", ObjectiveArgumentType)
                                                 .redirect_with_modifier(
                                                     Redirection::Root,
@@ -1484,7 +1485,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 )
                                 .then(
                                     literal("<=").then(
-                                        argument("source", StringArgumentType::SingleWord).then(
+                                        argument("source", ScoreHolderArgumentType::Single).then(
                                             argument("source_obj", ObjectiveArgumentType)
                                                 .redirect_with_modifier(
                                                     Redirection::Root,
@@ -1497,7 +1498,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 )
                                 .then(
                                     literal(">").then(
-                                        argument("source", StringArgumentType::SingleWord).then(
+                                        argument("source", ScoreHolderArgumentType::Single).then(
                                             argument("source_obj", ObjectiveArgumentType)
                                                 .redirect_with_modifier(
                                                     Redirection::Root,
@@ -1510,7 +1511,7 @@ pub fn register(dispatcher: &mut CommandDispatcher, registry: &PermissionRegistr
                                 )
                                 .then(
                                     literal(">=").then(
-                                        argument("source", StringArgumentType::SingleWord).then(
+                                        argument("source", ScoreHolderArgumentType::Single).then(
                                             argument("source_obj", ObjectiveArgumentType)
                                                 .redirect_with_modifier(
                                                     Redirection::Root,
@@ -1585,5 +1586,54 @@ fn set_redirects_to_execute(tree: &mut Tree, parent: NodeId, execute_id: Command
             tree[child_id].set_redirect(Some(Redirection::Local(NodeId::from(execute_id))));
         }
         set_redirects_to_execute(tree, child_id, execute_id);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::command::CommandSource;
+
+    #[test]
+    fn score_conditions_accept_single_score_holders() {
+        let mut dispatcher = CommandDispatcher::new();
+        register(&mut dispatcher, &PermissionRegistry::default());
+        let source = Arc::new(CommandSource::dummy());
+        for condition in ["if", "unless"] {
+            for holder in ["Fake", "#temp", "$x", "@s", "@e[limit=1]"] {
+                for comparison in [
+                    "matches 1..",
+                    "= @s other",
+                    "< @e[limit=1] other",
+                    "<= $reference other",
+                    "> #reference other",
+                    ">= Fake other",
+                ] {
+                    let input = format!("execute {condition} score {holder} test {comparison}");
+                    let result = dispatcher.parse_input(&input, &source);
+                    assert!(result.errors.is_empty(), "{input}: {:?}", result.errors);
+                    assert_eq!(result.reader.remaining_length(), 0, "{input}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn score_conditions_reject_multiple_holder_selectors() {
+        let mut dispatcher = CommandDispatcher::new();
+        register(&mut dispatcher, &PermissionRegistry::default());
+        let source = Arc::new(CommandSource::dummy());
+        for condition in ["if", "unless"] {
+            for arguments in [
+                "@a test matches 1",
+                "@e test matches 1",
+                "Fake test = @a other",
+                "@s test >= @e other",
+            ] {
+                let input = format!("execute {condition} score {arguments}");
+                let result = dispatcher.parse_input(&input, &source);
+                assert!(!result.errors.is_empty(), "{input}");
+            }
+        }
     }
 }
