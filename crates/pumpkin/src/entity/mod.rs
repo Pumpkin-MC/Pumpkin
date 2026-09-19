@@ -790,11 +790,24 @@ pub trait EntityBase: Send + Sync + std::any::Any {
 
     /// Kills the Entity.
     fn kill(&self, caller: &dyn EntityBase) {
-        if self.get_living_entity().is_some() {
+        if self.get_player().is_some() {
             caller.damage(caller, f32::MAX, DamageType::GENERIC_KILL);
         } else {
-            // TODO this should be removed once all entities are implemented
-            self.get_entity().remove();
+            let entity = self.get_entity();
+            if let Some(vehicle) = entity.get_vehicle() {
+                vehicle.get_entity().remove_passenger_sync(entity.entity_id);
+            }
+
+            let passengers = entity
+                .passengers
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
+            for passenger in passengers {
+                entity.remove_passenger_sync(passenger.get_entity().entity_id);
+            }
+
+            entity.remove();
         }
     }
 
