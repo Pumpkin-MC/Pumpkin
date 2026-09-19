@@ -166,7 +166,7 @@ impl Goal for BreakDoorGoal {
                 0,
             );
             world.sync_world_event(
-                WorldEvent::ParticlesDestroyBlock,
+                WorldEvent::ParticlesAndSoundDestroyBlock,
                 self.door_interact_goal.door_pos,
                 i32::from(block_state_id.as_u16()),
             );

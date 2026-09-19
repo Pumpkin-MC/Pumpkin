@@ -64,7 +64,7 @@ fn spawn_wither(world: &Arc<World>, pattern: &WitherPattern) {
     for pos in pattern.blocks {
         world.set_block_state(&pos, Block::AIR.default_state.id, BlockFlags::NOTIFY_ALL);
         world.sync_world_event(
-            WorldEvent::ParticlesDestroyBlock,
+            WorldEvent::ParticlesAndSoundDestroyBlock,
             pos,
             Block::SOUL_SAND.default_state.id.as_u16().into(),
         );

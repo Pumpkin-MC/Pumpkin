@@ -5451,7 +5451,7 @@ impl World {
             && broken_block != &Block::SOUL_FIRE
         {
             let je_packet = CWorldEvent::new(
-                WorldEvent::ParticlesDestroyBlock as i32,
+                WorldEvent::ParticlesAndSoundDestroyBlock as i32,
                 *position,
                 broken_state_id.as_u16().into(),
                 false,
