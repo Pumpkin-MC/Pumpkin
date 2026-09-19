@@ -3,10 +3,19 @@ use std::sync::Arc;
 use pumpkin_data::block_properties::SuspiciousSandLikeProperties;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::{Block, BlockId, BlockStateId};
+use pumpkin_world::tick::TickPriority;
 use pumpkin_world::world::BlockFlags;
 
+use crate::block::blocks::falling::FallingBlock;
 use crate::block::entities::brushable_block::BrushableBlockBlockEntity;
-use crate::block::{BlockBehaviour, BlockMetadata, BrokenArgs, OnPlaceArgs, PlacedArgs};
+use crate::block::{
+    BlockBehaviour, BlockMetadata, BrokenArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
+    OnScheduledTickArgs, PlacedArgs,
+};
+use crate::entity::falling::FallingEntity;
+
+/// Vanilla schedules the fall check two ticks out.
+const FALL_DELAY: u8 = 2;
 
 pub struct BrushableBlock;
 
@@ -86,6 +95,38 @@ impl BlockBehaviour for BrushableBlock {
     fn placed(&self, args: PlacedArgs<'_>) {
         let entity = BrushableBlockBlockEntity::new(*args.position);
         args.world.add_block_entity(Arc::new(entity));
+        args.world.schedule_block_tick(
+            args.block,
+            *args.position,
+            FALL_DELAY,
+            TickPriority::Normal,
+        );
+    }
+
+    fn get_state_for_neighbor_update(
+        &self,
+        args: GetStateForNeighborUpdateArgs<'_>,
+    ) -> BlockStateId {
+        args.world.schedule_block_tick(
+            args.block,
+            *args.position,
+            FALL_DELAY,
+            TickPriority::Normal,
+        );
+        args.state_id
+    }
+
+    fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
+        let (below_block, below_state) = args.world.get_block_and_state(&args.position.down());
+        if !FallingBlock::can_fall_through(below_state, below_block)
+            || args.position.0.y < args.world.min_y
+        {
+            return;
+        }
+
+        // Vanilla disables the drop, so the block breaks on landing instead of settling.
+        let state = args.world.get_block_state(args.position);
+        FallingEntity::replace_spawn_with(args.world, *args.position, state.id, true);
     }
 
     fn broken(&self, args: BrokenArgs<'_>) {
@@ -98,6 +139,25 @@ impl BlockBehaviour for BrushableBlock {
                 .take()
         {
             args.world.drop_stack(args.position, contained);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BrushableBlock;
+    use crate::block::BlockMetadata;
+    use crate::block::blocks::falling::FallingBlock;
+    use pumpkin_data::BlockId;
+
+    /// `BlockManager::register` keeps one behaviour per block id, so a block claimed by two
+    /// behaviours silently loses the one registered first. Suspicious sand and gravel need
+    /// `BrushableBlock`, which carries their falling hooks as well as the block entity.
+    #[test]
+    fn suspicious_blocks_are_only_claimed_by_brushable_block() {
+        for id in [BlockId::SUSPICIOUS_SAND, BlockId::SUSPICIOUS_GRAVEL] {
+            assert!(BrushableBlock::ids().contains(&id));
+            assert!(!FallingBlock::ids().contains(&id));
         }
     }
 }

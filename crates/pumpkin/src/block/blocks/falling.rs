@@ -58,8 +58,6 @@ impl BlockMetadata for FallingBlock {
             BlockId::GRAVEL,
             BlockId::SAND,
             BlockId::RED_SAND,
-            BlockId::SUSPICIOUS_SAND,
-            BlockId::SUSPICIOUS_GRAVEL,
             BlockId::WHITE_CONCRETE_POWDER,
             BlockId::ORANGE_CONCRETE_POWDER,
             BlockId::MAGENTA_CONCRETE_POWDER,
