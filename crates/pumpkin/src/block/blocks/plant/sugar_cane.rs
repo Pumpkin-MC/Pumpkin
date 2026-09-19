@@ -18,7 +18,11 @@ pub struct SugarCaneBlock;
 
 impl BlockBehaviour for SugarCaneBlock {
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        if !can_place_at(args.world.as_ref(), Some(args.world.as_ref()), args.position) {
+        if !can_place_at(
+            args.world.as_ref(),
+            Some(args.world.as_ref()),
+            args.position,
+        ) {
             args.world
                 .break_block(args.position, None, BlockFlags::NOTIFY_ALL);
         }
@@ -84,7 +88,10 @@ fn can_place_at(
             let block = block_accessor.get_block(&adj_pos);
 
             let fluid_ok = world
-                .map(|w| w.get_fluid(&adj_pos).has_tag(&tag::Fluid::MINECRAFT_SUPPORTS_SUGAR_CANE_ADJACENTLY))
+                .map(|w| {
+                    w.get_fluid(&adj_pos)
+                        .has_tag(&tag::Fluid::MINECRAFT_SUPPORTS_SUGAR_CANE_ADJACENTLY)
+                })
                 .unwrap_or(false);
 
             let block_ok = block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_SUGAR_CANE_ADJACENTLY);
