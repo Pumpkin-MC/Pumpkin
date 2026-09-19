@@ -3711,6 +3711,10 @@ impl World {
         }
 
         player.send_client_information();
+        // The client just re-created the player entity (respawn or dimension change), so
+        // it dropped its entity data; push it again or things like the second skin layer
+        // stay hidden until the next change.
+        player.get_entity().refresh_synced_data();
 
         chunker::update_position(player);
         // Update commands

@@ -2862,18 +2862,18 @@ impl Entity {
         }
     }
 
-    pub fn send_meta_data<T: MetadataSerializer>(
+    /// The Java players that should receive entity data for this entity: everyone
+    /// tracking it, plus the entity itself when it is a player. Until the entity is
+    /// tracked, every player watching its chunk stands in for the tracker.
+    fn java_metadata_recipients<'a>(
         &self,
-        meta: &[Metadata<T>],
-        bedrock_meta: Option<&SyncedActorDataList>,
-    ) {
-        let world = self.world.load();
-        let players = world.players.load();
-
+        world: &World,
+        players: &'a [Arc<Player>],
+    ) -> Vec<&'a Arc<Player>> {
         let mut java_recipients = Vec::new();
 
         if let Some(tracked) = world.entity_tracker.get_tracked_entity(self.entity_id) {
-            for player in players.iter() {
+            for player in players {
                 if (tracked.seen_by.contains(&player.gameprofile.id)
                     || player.entity_id() == self.entity_id)
                     && let ClientPlatform::Java(_) = player.client.as_ref()
@@ -2883,17 +2883,36 @@ impl Entity {
             }
         } else {
             let chunk_pos = self.chunk_pos.load();
-            for player in players.iter() {
-                if player
-                    .watched_section
-                    .load()
-                    .is_within_distance(chunk_pos.x, chunk_pos.y)
+            for player in players {
+                // A player that just changed world is in the new world's player list but
+                // not in its tracker yet, and its watched section still points at the
+                // world it left, so it has to be matched on its entity id instead.
+                if (player.entity_id() == self.entity_id
+                    || player
+                        .watched_section
+                        .load()
+                        .is_within_distance(chunk_pos.x, chunk_pos.y))
                     && let ClientPlatform::Java(_) = player.client.as_ref()
                 {
                     java_recipients.push(player);
                 }
             }
         }
+
+        java_recipients
+    }
+
+    /// Sends the given metadata entries to this entity's viewers, and the matching
+    /// actor data to the Bedrock ones when `bedrock_meta` is given.
+    pub fn send_meta_data<T: MetadataSerializer>(
+        &self,
+        meta: &[Metadata<T>],
+        bedrock_meta: Option<&SyncedActorDataList>,
+    ) {
+        let world = self.world.load();
+        let players = world.players.load();
+
+        let java_recipients = self.java_metadata_recipients(&world, &players);
 
         let recipients_by_version =
             World::collect_java_recipients_by_version(java_recipients.into_iter());
@@ -2923,6 +2942,8 @@ impl Entity {
         }
     }
 
+    /// Sends the synced values that changed since the last call to this entity's
+    /// viewers, and does nothing when none did.
     pub fn send_dirty_entity_data(&self) {
         if !self.synched_data.is_dirty() {
             return;
@@ -2931,34 +2952,18 @@ impl Entity {
         let world = self.world.load();
         let players = world.players.load();
 
-        let mut java_recipients = Vec::new();
-
-        if let Some(tracked) = world.entity_tracker.get_tracked_entity(self.entity_id) {
-            if tracked.seen_by.is_empty() && self.entity_type != &EntityType::PLAYER {
-                self.synched_data.clear_dirty();
-                return;
-            }
-            for player in players.iter() {
-                if (tracked.seen_by.contains(&player.gameprofile.id)
-                    || player.entity_id() == self.entity_id)
-                    && let ClientPlatform::Java(_) = player.client.as_ref()
-                {
-                    java_recipients.push(player);
-                }
-            }
-        } else {
-            let chunk_pos = self.chunk_pos.load();
-            for player in players.iter() {
-                if player
-                    .watched_section
-                    .load()
-                    .is_within_distance(chunk_pos.x, chunk_pos.y)
-                    && let ClientPlatform::Java(_) = player.client.as_ref()
-                {
-                    java_recipients.push(player);
-                }
-            }
+        // Unwatched, skip the player scan.
+        if self.entity_type != &EntityType::PLAYER
+            && world
+                .entity_tracker
+                .get_tracked_entity(self.entity_id)
+                .is_some_and(|tracked| tracked.seen_by.is_empty())
+        {
+            self.synched_data.clear_dirty();
+            return;
         }
+
+        let java_recipients = self.java_metadata_recipients(&world, &players);
 
         if java_recipients.is_empty() {
             // Vanilla `packDirty` clears even without recipients.
@@ -2971,6 +2976,43 @@ impl Entity {
 
         for (version, recipients) in recipients_by_version {
             if let Some(buf) = self.synched_data.pack_dirty_for_version(&version) {
+                let packet = CSetEntityMetadata::new(self.entity_id.into(), buf);
+                if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version)
+                {
+                    for recipient in recipients {
+                        recipient.try_enqueue_packet(packet_data.clone());
+                    }
+                }
+            }
+        }
+        self.synched_data.clear_dirty();
+    }
+
+    /// Resends every non-default synced value of this entity to its viewers, the entity
+    /// itself included when it is a player.
+    ///
+    /// Clients discard the entity data they cached whenever the entity is re-created on
+    /// their side (a respawn or a dimension change re-creates the local player, and a
+    /// spawn packet resets the entity for everyone else), so the values have to be pushed
+    /// again even though nothing became dirty on our side.
+    pub fn refresh_synced_data(&self) {
+        let world = self.world.load();
+        let players = world.players.load();
+
+        let java_recipients = self.java_metadata_recipients(&world, &players);
+
+        if java_recipients.is_empty() {
+            return;
+        }
+
+        let recipients_by_version =
+            World::collect_java_recipients_by_version(java_recipients.into_iter());
+
+        for (version, recipients) in recipients_by_version {
+            if let Some(buf) = self
+                .synched_data
+                .get_non_default_values_for_version(&version)
+            {
                 let packet = CSetEntityMetadata::new(self.entity_id.into(), buf);
                 if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version)
                 {
