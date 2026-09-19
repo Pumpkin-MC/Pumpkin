@@ -99,7 +99,7 @@ impl Goal for EatGrassGoal {
                 if block_below.id == Block::GRASS_BLOCK.id {
                     if mob_griefing {
                         world.sync_world_event(
-                            WorldEvent::ParticlesDestroyBlock,
+                            WorldEvent::ParticlesAndSoundDestroyBlock,
                             below_pos,
                             i32::from(Block::GRASS_BLOCK.default_state.id.as_u16()),
                         );
