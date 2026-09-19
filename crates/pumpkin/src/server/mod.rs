@@ -199,8 +199,12 @@ impl Server {
                     basic_config.seed,
                     Dimension::OVERWORLD,
                 );
-                let default_data =
+                let mut default_data =
                     LevelData::from_world_generator(basic_config.seed, &overworld_gen);
+                if basic_config.hardcore {
+                    default_data.difficulty = Difficulty::Hard;
+                    default_data.difficulty_locked = true;
+                }
                 if let Err(err) = AnvilLevelInfo.write_world_info(&default_data, &world_path) {
                     error!("Failed to save level.dat: {err}");
                 }
@@ -225,6 +229,15 @@ impl Server {
                 std::process::exit(1);
             }
         };
+
+        let mut level_info = level_info;
+        if basic_config.hardcore {
+            level_info.difficulty = Difficulty::Hard;
+            level_info.difficulty_locked = true;
+            if let Err(err) = AnvilLevelInfo.write_world_info(&level_info, &world_path) {
+                error!("Failed to persist hardcore difficulty fix: {err}");
+            }
+        }
 
         let seed = level_info.world_gen_settings.seed;
         let level_info = Arc::new(ArcSwap::new(Arc::new(level_info)));
