@@ -81,6 +81,13 @@ impl Drop for ItemMergeReservation<'_> {
 
 const ITEM_UPDATE_INTERVAL: u32 = 20;
 
+/// Horizontal friction for a grounded item: the block's slipperiness times air drag, applied
+/// once - matching vanilla. Multiplying air drag in twice (`0.98 * slipperiness * 0.98`) made
+/// items stop ~2%/tick sooner than the client's own prediction of the same item.
+fn ground_friction(slipperiness: f32) -> f64 {
+    f64::from(slipperiness) * 0.98
+}
+
 impl ItemEntity {
     pub const DEFAULT_PICKUP_DELAY: u8 = 10;
 
@@ -444,14 +451,15 @@ impl ItemEntity {
         entity.move_entity(caller, move_velo);
         entity.tick_block_collisions(caller);
 
-        let mut friction = 0.98;
         let on_ground = entity.on_ground.load(Ordering::SeqCst);
 
         let mut velo = entity.velocity.load();
-        if on_ground {
+        let friction = if on_ground {
             let block_affecting_velo = entity.get_block_with_y_offset(0.999_999).1;
-            friction *= f64::from(block_affecting_velo.slipperiness) * 0.98;
-        }
+            ground_friction(block_affecting_velo.slipperiness)
+        } else {
+            0.98
+        };
 
         velo = velo.multiply(friction, 0.98, friction);
 
@@ -785,5 +793,17 @@ impl EntityBase for ItemEntity {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ground_friction;
+
+    #[test]
+    fn ground_friction_applies_air_drag_once() {
+        // Default block slipperiness is 0.6; vanilla's grounded horizontal friction is
+        // slipperiness * airDrag, applied once, not airDrag * slipperiness * airDrag.
+        assert!((ground_friction(0.6) - 0.588).abs() < 1.0e-6);
     }
 }
