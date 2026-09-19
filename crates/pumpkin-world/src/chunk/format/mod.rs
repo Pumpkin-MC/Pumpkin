@@ -768,6 +768,7 @@ impl ChunkEntityData {
             x: position.x,
             z: position.y,
             data: std::sync::Mutex::new(entities),
+            live: AtomicBool::new(false),
             dirty: AtomicBool::new(false),
         })
     }
