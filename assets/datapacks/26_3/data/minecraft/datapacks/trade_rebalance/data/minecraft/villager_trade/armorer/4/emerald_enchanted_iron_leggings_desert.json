@@ -1,0 +1,45 @@
+{
+  "given_item_modifier": [
+    {
+      "type": "minecraft:set_enchantments",
+      "enchantments": {
+        "minecraft:thorns": 1
+      }
+    },
+    {
+      "type": "minecraft:filtered",
+      "item_filter": {
+        "items": "minecraft:iron_leggings",
+        "predicates": {
+          "minecraft:enchantments": [
+            {
+              "levels": 1
+            }
+          ]
+        }
+      },
+      "on_fail": {
+        "type": "minecraft:discard"
+      }
+    }
+  ],
+  "gives": {
+    "id": "minecraft:iron_leggings"
+  },
+  "max_uses": 3,
+  "merchant_predicate": {
+    "type": "minecraft:entity_properties",
+    "entity": "this",
+    "predicate": {
+      "minecraft:predicates": {
+        "minecraft:villager/variant": "minecraft:desert"
+      }
+    }
+  },
+  "reputation_discount": 0.05,
+  "wants": {
+    "count": 11,
+    "id": "minecraft:emerald"
+  },
+  "xp": 15
+}

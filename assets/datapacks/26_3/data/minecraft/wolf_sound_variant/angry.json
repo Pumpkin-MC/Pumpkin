@@ -1,0 +1,20 @@
+{
+  "adult_sounds": {
+    "ambient_sound": "minecraft:entity.wolf_angry.ambient",
+    "death_sound": "minecraft:entity.wolf_angry.death",
+    "growl_sound": "minecraft:entity.wolf_angry.growl",
+    "hurt_sound": "minecraft:entity.wolf_angry.hurt",
+    "pant_sound": "minecraft:entity.wolf_angry.pant",
+    "step_sound": "minecraft:entity.wolf.step",
+    "whine_sound": "minecraft:entity.wolf_angry.whine"
+  },
+  "baby_sounds": {
+    "ambient_sound": "minecraft:entity.baby_wolf.ambient",
+    "death_sound": "minecraft:entity.baby_wolf.death",
+    "growl_sound": "minecraft:entity.baby_wolf.growl",
+    "hurt_sound": "minecraft:entity.baby_wolf.hurt",
+    "pant_sound": "minecraft:entity.baby_wolf.pant",
+    "step_sound": "minecraft:entity.baby_wolf.step",
+    "whine_sound": "minecraft:entity.baby_wolf.whine"
+  }
+}

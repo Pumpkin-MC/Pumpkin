@@ -1267,7 +1267,7 @@ impl Enchantment {
                         },
                         ReplaceDiskPredicate::Unobstructed,
                     ])),
-                    block_state: crate::Block::FROSTED_ICE.default_state,
+                    block_state: crate::Block::AIR.default_state,
                     trigger_game_event: Some(crate::game_event::GameEvent::BlockPlace),
                 },
             }],

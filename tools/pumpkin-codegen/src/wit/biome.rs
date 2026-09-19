@@ -4,7 +4,7 @@ use std::fs;
 use wit_encoder::{Enum, Interface, Package, PackageName, TypeDef, TypeDefKind};
 
 pub fn build() -> String {
-    let dir = std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/worldgen/biome");
+    let dir = std::path::Path::new("../../assets/datapacks/26_3/data/minecraft/worldgen/biome");
     let mut biome_vec: Vec<String> = fs::read_dir(dir)
         .expect("Missing worldgen/biome directory")
         .flatten()

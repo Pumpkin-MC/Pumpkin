@@ -272,6 +272,7 @@ pub fn build() -> TokenStream {
             pub attributes: &'static [(Attributes, f64)],
             pub experience_reward: u32,
             pub hurt_sound: Option<Sound>,
+            pub death_sound: Option<Sound>,
             pub attackable: Option<bool>,
             pub mob: bool,
             pub saveable: bool,

@@ -48,7 +48,7 @@ struct BrewingOutputPotionContents {
 /// Generates the `TokenStream` for `BREWING_RECIPES`, `POTION_RECIPES` and `ITEM_RECIPES`.
 pub fn build() -> TokenStream {
     // 2. Load 26.3 data-driven brewing recipes from datapack
-    let brewing_dir = Path::new("../../assets/datapacks/26_2/data/minecraft/recipe/brewing");
+    let brewing_dir = Path::new("../../assets/datapacks/26_3/data/minecraft/recipe/brewing");
     let mut entries: Vec<_> = fs::read_dir(brewing_dir)
         .expect("Missing brewing recipe directory")
         .flatten()
