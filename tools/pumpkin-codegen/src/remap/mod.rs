@@ -202,7 +202,12 @@ macro_rules! remap_nodes {
             value: "../../assets/viabackwards/data/mappings-26.2to26.1.nbt",
             child: Some(&node_1_21_11),
         };
-        $remapper.process(&node_26_1)
+        let node_26_2 = $crate::remap::MappingNode {
+            version: $crate::version::JavaMinecraftVersion::V_26_2,
+            value: "../../assets/viabackwards/data/mappings-26.3to26.2.nbt",
+            child: Some(&node_26_1),
+        };
+        $remapper.process(&node_26_2)
     }};
 }
 
@@ -613,6 +618,7 @@ pub fn version_patterns(ver: JavaMinecraftVersion) -> Vec<JavaMinecraftVersion> 
         JavaMinecraftVersion::V_1_21_11 => vec![JavaMinecraftVersion::V_1_21_11],
         JavaMinecraftVersion::V_26_1 => vec![JavaMinecraftVersion::V_26_1],
         JavaMinecraftVersion::V_26_2 => vec![JavaMinecraftVersion::V_26_2],
+        JavaMinecraftVersion::V_26_3 => vec![JavaMinecraftVersion::V_26_3],
         _ => vec![ver],
     }
 }

@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_the_recipe": {
+      "conditions": {
+        "recipes": "minecraft:yellow_concrete_stairs_from_yellow_concrete_stonecutting"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    },
+    "has_yellow_concrete": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:yellow_concrete"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_yellow_concrete"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:yellow_concrete_stairs_from_yellow_concrete_stonecutting"
+    ]
+  }
+}

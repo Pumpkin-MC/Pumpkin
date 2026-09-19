@@ -1,9 +1,11 @@
-use std::io::{Read, Write};
+use std::io::{Cursor, Read, Write};
 
 use flate2::{Compression, read::GzDecoder, write::GzEncoder};
 use pumpkin_data::block_entity_type_id_remap::remap_block_entity_type_id_for_version;
 use pumpkin_data::packet::clientbound::play::BLOCK_ENTITY_DATA;
 use pumpkin_macros::java_packet;
+use pumpkin_nbt::{COMPOUND_ID, Nbt, deserializer::NbtReadHelperJava};
+use pumpkin_util::text::sign::remap_block_entity_sign_nbt;
 use pumpkin_util::{math::position::BlockPos, version::JavaMinecraftVersion};
 
 use crate::{
@@ -37,11 +39,36 @@ impl CBlockEntityData {
     }
 }
 
+fn looks_like_sign_nbt(nbt_data: &[u8]) -> bool {
+    nbt_data.windows(10).any(|w| w == b"front_text")
+        || nbt_data.windows(9).any(|w| w == b"back_text")
+}
+
+fn remap_sign_nbt_payload(nbt_data: &[u8], version: JavaMinecraftVersion) -> Option<Vec<u8>> {
+    if version >= JavaMinecraftVersion::V_1_21_5
+        || nbt_data.len() < 2
+        || nbt_data[0] != COMPOUND_ID
+        || !looks_like_sign_nbt(nbt_data)
+    {
+        return None;
+    }
+
+    let mut cursor = Cursor::new(nbt_data);
+    let mut reader = NbtReadHelperJava::new(&mut cursor);
+    let mut compound = Nbt::read_unnamed(&mut reader).ok()?.root_tag;
+
+    remap_block_entity_sign_nbt(&mut compound, version)
+        .then(|| Nbt::from(compound).write_unnamed().to_vec())
+}
+
 pub fn write_nbt_payload(
     mut write: impl Write,
     nbt_data: &[u8],
     version: &JavaMinecraftVersion,
 ) -> Result<(), WritingError> {
+    let remapped = remap_sign_nbt_payload(nbt_data, *version);
+    let nbt_data = remapped.as_deref().unwrap_or(nbt_data);
+
     if *version >= JavaMinecraftVersion::V_1_8 {
         if nbt_data.is_empty() || nbt_data == [0] {
             write.write_u8(0)?;

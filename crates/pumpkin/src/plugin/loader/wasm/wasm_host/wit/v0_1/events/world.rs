@@ -594,6 +594,7 @@ impl ToFromWasmEvent for crate::plugin::api::events::world::structure_grow::Stru
                         crate::plugin::api::events::world::structure_grow::TreeType::Mangrove
                     }
                     "Cherry" => crate::plugin::api::events::world::structure_grow::TreeType::Cherry,
+                    "Poplar" => crate::plugin::api::events::world::structure_grow::TreeType::Poplar,
                     "Azalea" => crate::plugin::api::events::world::structure_grow::TreeType::Azalea,
                     "BrownMushroom" => {
                         crate::plugin::api::events::world::structure_grow::TreeType::BrownMushroom
