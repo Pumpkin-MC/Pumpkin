@@ -310,10 +310,11 @@ impl DataAccessor for BlockDataAccessor {
         TextComponent::translate_cross(
             translation::java::COMMANDS_DATA_BLOCK_MODIFIED,
             translation::java::COMMANDS_DATA_BLOCK_MODIFIED,
-            [TextComponent::text(format!(
-                "{}, {}, {}",
-                self.pos.0.x, self.pos.0.y, self.pos.0.z
-            ))],
+            [
+                TextComponent::text(self.pos.0.x.to_string()),
+                TextComponent::text(self.pos.0.y.to_string()),
+                TextComponent::text(self.pos.0.z.to_string()),
+            ],
         )
     }
 
@@ -322,10 +323,9 @@ impl DataAccessor for BlockDataAccessor {
             translation::java::COMMANDS_DATA_BLOCK_QUERY,
             translation::java::COMMANDS_DATA_BLOCK_QUERY,
             [
-                TextComponent::text(format!(
-                    "{}, {}, {}",
-                    self.pos.0.x, self.pos.0.y, self.pos.0.z
-                )),
+                TextComponent::text(self.pos.0.x.to_string()),
+                TextComponent::text(self.pos.0.y.to_string()),
+                TextComponent::text(self.pos.0.z.to_string()),
                 snbt_colorful_display(data, 0),
             ],
         )
