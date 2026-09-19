@@ -1301,10 +1301,8 @@ impl LivingEntity {
         let world = self.entity.world.load();
         let entity_id = self.entity_id();
 
-        let je_packet = pumpkin_protocol::java::client::play::CEntityAnimation::new(
-            entity_id.into(),
-            pumpkin_protocol::java::client::play::Animation::SwingMainArm,
-        );
+        let je_packet =
+            pumpkin_protocol::java::client::play::CSwingArm::new(entity_id.into(), false);
         let be_packet = pumpkin_protocol::bedrock::server::animate::SAnimate {
             action: pumpkin_protocol::bedrock::server::animate::AnimateAction::SwingArm,
             target_actor_runtime_id: pumpkin_protocol::codec::var_ulong::VarULong(entity_id as u64),
@@ -4061,7 +4059,7 @@ mod tests {
         metadata
             .write(
                 &mut bytes,
-                &pumpkin_util::version::JavaMinecraftVersion::V_26_2,
+                &pumpkin_util::version::JavaMinecraftVersion::V_26_3,
             )
             .unwrap();
 

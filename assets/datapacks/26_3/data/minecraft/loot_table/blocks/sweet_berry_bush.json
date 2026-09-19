@@ -1,0 +1,77 @@
+{
+  "type": "minecraft:block",
+  "modifier": {
+    "type": "minecraft:explosion_decay"
+  },
+  "pools": [
+    {
+      "condition": {
+        "type": "minecraft:match_block",
+        "blocks": "minecraft:sweet_berry_bush",
+        "state": {
+          "age": "3"
+        }
+      },
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:sweet_berries"
+        }
+      ],
+      "modifier": [
+        {
+          "type": "minecraft:set_count",
+          "count": {
+            "type": "minecraft:uniform",
+            "max": 3,
+            "min": 2
+          }
+        },
+        {
+          "type": "minecraft:apply_bonus",
+          "enchantment": "minecraft:fortune",
+          "formula": "minecraft:uniform_bonus_count",
+          "parameters": {
+            "bonusMultiplier": 1
+          }
+        }
+      ],
+      "rolls": 1
+    },
+    {
+      "condition": {
+        "type": "minecraft:match_block",
+        "blocks": "minecraft:sweet_berry_bush",
+        "state": {
+          "age": "2"
+        }
+      },
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "minecraft:sweet_berries"
+        }
+      ],
+      "modifier": [
+        {
+          "type": "minecraft:set_count",
+          "count": {
+            "type": "minecraft:uniform",
+            "max": 2,
+            "min": 1
+          }
+        },
+        {
+          "type": "minecraft:apply_bonus",
+          "enchantment": "minecraft:fortune",
+          "formula": "minecraft:uniform_bonus_count",
+          "parameters": {
+            "bonusMultiplier": 1
+          }
+        }
+      ],
+      "rolls": 1
+    }
+  ],
+  "random_sequence": "minecraft:blocks/sweet_berry_bush"
+}

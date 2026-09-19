@@ -1,4 +1,6 @@
 use super::{Entity, EntityBase, ai::pathfinder::Navigator, living::LivingEntity};
+use crate::entity::ai::brain::Brain;
+use crate::entity::ai::brain::memory::PackedMemories;
 use crate::entity::ai::control::MoveControlTrait;
 use crate::entity::ai::control::look_control::LookControl;
 use crate::entity::ai::control::move_control::MoveControl;
@@ -82,6 +84,7 @@ pub struct MobEntity {
     pub look_control: std::sync::Mutex<LookControl>,
     pub sensing: std::sync::Mutex<Sensing>,
     pub move_control: std::sync::Mutex<Box<dyn MoveControlTrait>>,
+    pub brain: std::sync::Mutex<Brain>,
     pub position_target: AtomicCell<BlockPos>,
     pub position_target_range: AtomicI32,
     pub love_ticks: AtomicI32,
@@ -170,6 +173,7 @@ impl MobEntity {
             look_control: std::sync::Mutex::new(LookControl::default()),
             sensing: std::sync::Mutex::new(Sensing::default()),
             move_control: std::sync::Mutex::new(Box::new(MoveControl::default())),
+            brain: std::sync::Mutex::new(Brain::default()),
             position_target: AtomicCell::new(BlockPos::ZERO),
             position_target_range: AtomicI32::new(-1),
             love_ticks: AtomicI32::new(0),
@@ -338,8 +342,25 @@ impl MobEntity {
         }
     }
 
+    pub fn tick_brain(&self, mob: &dyn Mob) {
+        let world = self.living_entity.entity.world.load_full();
+        let time = world.get_world_age();
+        self.brain
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .tick(&world, mob, time);
+    }
+
     pub fn write_mob_nbt(&self, nbt: &mut NbtCompound) {
         self.write_drop_chances(nbt);
+        nbt.put_compound(
+            "Brain",
+            self.brain
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .pack()
+                .into_nbt(),
+        );
         if self.is_no_ai() {
             nbt.put_bool("NoAI", true);
         }
@@ -1040,6 +1061,14 @@ pub trait Mob: EntityBase + Send + Sync {
         }
     }
 
+    /// Runs after navigation and before the movement controls, where vanilla ticks a mob's brain.
+    fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {}
+
+    /// Builds this mob's brain from its saved memories; goal mobs keep the brain-dead default.
+    fn make_brain(&self, _packed: &PackedMemories) -> Brain {
+        Brain::default()
+    }
+
     fn mob_write_nbt(&self, _nbt: &mut NbtCompound) {}
 
     fn mob_read_nbt(&self, _nbt: &NbtCompound) {}
@@ -1366,6 +1395,8 @@ impl<T: Mob + Send + 'static> EntityBase for T {
                 .unwrap_or_else(std::sync::PoisonError::into_inner) = navigator;
         };
 
+        self.custom_server_ai_step(caller);
+
         // Controllers are synchronous, so we can just use normal blocks
         {
             let mut look_control = mob_entity
@@ -1524,6 +1555,14 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn read_custom_nbt(&self, nbt: &NbtCompound) {
         self.get_mob_entity().read_mob_nbt(nbt);
+        if let Some(brain) = nbt.get_compound("Brain") {
+            *self
+                .get_mob_entity()
+                .brain
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                self.make_brain(&PackedMemories::from_nbt(brain));
+        }
         if let Some(ageable) = self.as_ageable() {
             ageable.read_ageable_nbt(nbt);
         }
