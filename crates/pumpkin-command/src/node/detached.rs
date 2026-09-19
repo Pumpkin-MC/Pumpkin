@@ -71,6 +71,7 @@ impl<S: CommandSource> LiteralDetachedNode<S> {
         Self {
             owned: OwnedNodeData {
                 global_id,
+                aliases: Vec::new(),
                 requirements,
                 modifier,
                 forks,
@@ -117,6 +118,7 @@ impl<S: CommandSource> CommandDetachedNode<S> {
         Self {
             owned: OwnedNodeData {
                 global_id,
+                aliases: Vec::new(),
                 requirements,
                 modifier,
                 forks,
@@ -161,6 +163,7 @@ impl<S: CommandSource> ArgumentDetachedNode<S> {
         Self {
             owned: OwnedNodeData {
                 global_id,
+                aliases: Vec::new(),
                 requirements,
                 modifier,
                 forks,
@@ -237,7 +240,7 @@ impl<S: CommandSource> DetachedNode<S> {
     }
 
     /// This node's children, whatever kind of node it is.
-    fn children_mut(&mut self) -> &mut FxHashMap<String, Self> {
+    const fn children_mut(&mut self) -> &mut FxHashMap<String, Self> {
         match self {
             Self::Literal(node) => &mut node.children,
             Self::Command(node) => &mut node.children,
@@ -245,12 +248,12 @@ impl<S: CommandSource> DetachedNode<S> {
         }
     }
 
-    /// The executor attached to this node, whatever kind of node it is.
-    fn command_mut(&mut self) -> &mut Option<Command<S>> {
+    /// The owned data of this node, whatever kind of node it is.
+    const fn owned_mut(&mut self) -> &mut OwnedNodeData<S> {
         match self {
-            Self::Literal(node) => &mut node.owned.command,
-            Self::Command(node) => &mut node.owned.command,
-            Self::Argument(node) => &mut node.owned.command,
+            Self::Literal(node) => &mut node.owned,
+            Self::Command(node) => &mut node.owned,
+            Self::Argument(node) => &mut node.owned,
         }
     }
 
@@ -267,9 +270,14 @@ impl<S: CommandSource> DetachedNode<S> {
     /// overwriting outright would silently drop every branch but the last.
     pub fn merge(&mut self, other: Self) {
         let other = other.decompose();
+        let owned = self.owned_mut();
         if other.owned.command.is_some() {
-            *self.command_mut() = other.owned.command;
+            owned.command = other.owned.command;
         }
+        // The incoming node itself goes away, but a redirect may already have been taken
+        // against its id with `ArgumentBuilder::id`, so keep that id resolving to this node.
+        owned.aliases.push(other.owned.global_id);
+        owned.aliases.extend(other.owned.aliases);
         for (name, child) in other.children {
             match self.children_mut().entry(name) {
                 Entry::Occupied(mut existing) => existing.get_mut().merge(child),

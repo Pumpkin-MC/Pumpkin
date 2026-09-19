@@ -132,11 +132,15 @@ impl<S: CommandSource> Tree<S> {
     /// its [`NodeId`].
     fn add(&mut self, node: AttachedNode<S>) -> NodeId {
         let global_id = node.global_id();
+        let aliases = node.owned_node_data_ref().aliases.clone();
         let local_id = self.alloc();
 
         // Update state variables.
         self.nodes.push(node);
         self.ids_map.insert(global_id, local_id);
+        for alias in aliases {
+            self.ids_map.insert(alias, local_id);
+        }
 
         local_id
     }

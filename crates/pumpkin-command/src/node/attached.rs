@@ -88,6 +88,7 @@ impl<S: CommandSource> RootAttachedNode<S> {
         Self {
             owned: OwnedNodeData {
                 global_id: GlobalNodeId::new(),
+                aliases: Vec::new(),
                 requirements: Requirements::new(),
                 modifier: RedirectModifier::KeepSource,
                 forks: false,

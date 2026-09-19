@@ -1045,6 +1045,30 @@ mod test {
         assert_eq!(dispatcher.execute_input("verb get second", &source), Ok(2));
     }
 
+    /// A redirect taken against a node that is later merged away still has to resolve. The
+    /// merge keeps the incoming node's id as an alias of the one that survives, so the
+    /// captured id points at the surviving node rather than at nothing.
+    #[test]
+    fn a_redirect_survives_the_node_it_targets_being_merged() {
+        let mut dispatcher = CommandDispatcher::new();
+        let executor: fn(&CommandContext) -> CommandExecutorResult = |_| Ok(1);
+
+        let mut absorbed = LiteralArgumentBuilder::new("get");
+        let absorbed_id = absorbed.id();
+        absorbed = absorbed.then(LiteralArgumentBuilder::new("here").executes(executor));
+
+        dispatcher.register(
+            CommandArgumentBuilder::new("verb", "a verb whose branch redirects to itself")
+                .then(LiteralArgumentBuilder::new("get").executes(executor))
+                .then(absorbed)
+                .then(LiteralArgumentBuilder::new("jump").redirect(absorbed_id)),
+        );
+
+        let source = DummySource::dummy();
+        assert_eq!(dispatcher.execute_input("verb get here", &source), Ok(1));
+        assert_eq!(dispatcher.execute_input("verb jump here", &source), Ok(1));
+    }
+
     /// A later registration installs its executor on the node already there, the way Brigadier
     /// takes the incoming command when it is set — without discarding the branch the earlier
     /// registration hung below it.
