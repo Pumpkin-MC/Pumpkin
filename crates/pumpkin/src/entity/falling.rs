@@ -2,6 +2,8 @@ use pumpkin_data::Block;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
@@ -60,6 +62,8 @@ impl EntityBase for FallingEntity {
             entity.velocity.store(velo.multiply(0.7, -0.5, 0.7));
             let world = entity.world.load();
             let landing_pos = self.entity.block_pos.load();
+            let landing_state = world.get_block_state(&landing_pos);
+            let landing_block = Block::from_state_id(landing_state.id);
             let mut state_id = self.block_state_id;
             let block = Block::from_state_id(state_id);
             if block.has_tag(&tag::Block::MINECRAFT_CONCRETE_POWDERS)
@@ -69,7 +73,14 @@ impl EntityBase for FallingEntity {
             {
                 state_id = concrete.default_state.id;
             }
-            world.set_block_state(&landing_pos, state_id, BlockFlags::NOTIFY_ALL);
+
+            if FallingBlock::can_fall_through(landing_state, landing_block) {
+                world.set_block_state(&landing_pos, state_id, BlockFlags::NOTIFY_ALL);
+            } else if world.level_info.load().game_rules.entity_drops
+                && let Some(item) = Item::from_registry_key(block.name)
+            {
+                world.drop_stack(&landing_pos, ItemStack::new(1, item));
+            }
             self.entity.remove();
         }
 
