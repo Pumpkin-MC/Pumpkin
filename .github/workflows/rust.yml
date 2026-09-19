@@ -114,7 +114,7 @@ jobs:
       - run: rustup component add clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --release --all-targets --all-features
-      
+
   check_wit:
     name: Test `pumpkin-plugin-wit` against `wit-bindgen`
     needs: prepare
@@ -131,13 +131,13 @@ jobs:
     name: Test (${{ matrix.name }})
     needs: [prepare, format, machete, clippy, check_wit]
     if: >-
-      always() &&
+      !cancelled() &&
       needs.prepare.outputs.has_code == 'true' &&
       needs.format.result == 'success' &&
       needs.machete.result == 'success' &&
       needs.clippy.result == 'success' &&
       (needs.check_wit.result == 'success' || needs.check_wit.result == 'skipped')
-    runs-on: ${{ matrix.os }} 
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.prepare.outputs.test_matrix) }}
@@ -168,7 +168,7 @@ jobs:
     name: Test on Android AArch64
     needs: [prepare, format, machete, clippy, check_wit]
     if: >-
-      always() &&
+      !cancelled() &&
       needs.prepare.outputs.run_full == 'true' &&
       needs.format.result == 'success' &&
       needs.machete.result == 'success' &&
@@ -247,7 +247,7 @@ jobs:
     name: Build affected packages for Android AArch64
     needs: [prepare, test, test_android]
     if: >-
-      always() &&
+      !cancelled() &&
       github.event_name == 'pull_request' &&
       needs.prepare.outputs.has_code == 'true' &&
       needs.test.result == 'success' &&
