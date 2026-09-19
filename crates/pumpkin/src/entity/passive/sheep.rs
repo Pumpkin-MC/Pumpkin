@@ -21,8 +21,12 @@ use crate::entity::{
     player::Player,
 };
 
+use pumpkin_data::dye_color::DyeColor;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
+use pumpkin_util::loot_table::{LootEntityPropertyValue, LootEntityTarget};
+
+use crate::world::loot::LootContextParameters;
 
 const TEMPT_ITEMS: &[&Item] = &[&Item::WHEAT];
 
@@ -129,10 +133,7 @@ impl Animal for SheepEntity {
 impl Mob for SheepEntity {
     /// Publishes the wool color and sheared state that `entities/sheep` predicates match on,
     /// so only the entry for this sheep's color is eligible and a sheared sheep drops none.
-    fn populate_loot_context(&self, params: &mut crate::world::loot::LootContextParameters) {
-        use pumpkin_data::dye_color::DyeColor;
-        use pumpkin_util::loot_table::{LootEntityPropertyValue, LootEntityTarget};
-
+    fn populate_loot_context(&self, params: &mut LootContextParameters) {
         params.add_entity_property(
             LootEntityTarget::This,
             COLOR_LOOT_PROPERTY,

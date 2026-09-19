@@ -178,10 +178,13 @@ fn parse_condition(cond: &ConditionStruct) -> LootCondition {
             }
         }
         "minecraft:entity_properties" => {
-            let target = match cond.entity.as_deref() {
-                Some("this") => LootEntityTarget::This,
-                Some("attacker") => LootEntityTarget::Attacker,
-                Some("direct_attacker") => LootEntityTarget::DirectAttacker,
+            let Some(target_name) = cond.entity.as_deref() else {
+                return LootCondition::None;
+            };
+            let target = match target_name {
+                "this" => LootEntityTarget::This,
+                "attacker" => LootEntityTarget::Attacker,
+                "direct_attacker" => LootEntityTarget::DirectAttacker,
                 _ => return LootCondition::None,
             };
 
@@ -195,7 +198,6 @@ fn parse_condition(cond: &ConditionStruct) -> LootCondition {
                 flatten_entity_properties(key, value, &mut properties, &mut skipped);
             }
 
-            let target_name = cond.entity.as_deref().unwrap_or("this");
             if properties.is_empty() {
                 if !skipped.is_empty() {
                     eprintln!(
@@ -473,11 +475,16 @@ struct ParsedEntry {
     bonus_formula: Option<LootBonusFormula>,
 }
 
-/// Require both conditions, collapsing the cases where one of them adds nothing.
+/// Require both conditions, dropping only a [`LootCondition::None`], which adds nothing.
+///
+/// Two structurally equal conditions are kept as a pair on purpose: the runtime evaluates every
+/// element of a [`LootCondition::AllOf`] on its own, and a stateful one such as
+/// [`LootCondition::RandomChance`] rolls once per evaluation, exactly as vanilla rolls the pool
+/// condition and the entry condition separately. Collapsing them would turn a `p * p` chance
+/// into `p`.
 fn combine_pair(first: LootCondition, second: LootCondition) -> LootCondition {
     match (first, second) {
         (LootCondition::None, cond) | (cond, LootCondition::None) => cond,
-        (first, second) if first == second => first,
         (first, second) => LootCondition::AllOf(Box::leak(vec![first, second].into_boxed_slice())),
     }
 }
@@ -1156,5 +1163,39 @@ mod tests {
         .expect("condition should deserialize");
 
         assert_eq!(parse_condition(&cond), LootCondition::None);
+    }
+
+    /// A pool chance and an entry chance that happen to be equal must both survive: the runtime
+    /// rolls every element of an [`LootCondition::AllOf`] on its own, the way vanilla rolls the
+    /// pool condition and the entry condition separately, so collapsing them would turn a
+    /// `p * p` chance into `p`.
+    #[test]
+    fn equal_stateful_conditions_are_both_kept() {
+        let entry: PoolEntryStruct = serde_json::from_str(
+            r#"{
+                "type": "minecraft:item",
+                "name": "minecraft:feather",
+                "condition": { "type": "minecraft:random_chance", "chance": 0.5 }
+            }"#,
+        )
+        .expect("entry should deserialize");
+
+        let mut entries = Vec::new();
+        let mut empty_weight = 0;
+        extract_entries(
+            &entry,
+            LootCondition::RandomChance { chance: 0.5 },
+            &mut entries,
+            &mut empty_weight,
+        );
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(
+            entries[0].condition,
+            LootCondition::AllOf(&[
+                LootCondition::RandomChance { chance: 0.5 },
+                LootCondition::RandomChance { chance: 0.5 },
+            ])
+        );
     }
 }
