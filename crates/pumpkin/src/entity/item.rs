@@ -79,26 +79,13 @@ impl Drop for ItemMergeReservation<'_> {
     }
 }
 
-/// Below this, a settled item's residual friction-decayed velocity is visually indistinguishable
-/// from rest; see `move_and_apply_friction`.
-const REST_EPSILON: f64 = 1.0E-3;
+const ITEM_UPDATE_INTERVAL: u32 = 20;
 
-/// Horizontal friction for a grounded item: air drag times the block's slipperiness, applied
-/// once - matching vanilla. Multiplying air drag into it twice made items stop ~2%/tick sooner
-/// than the client's own prediction, desyncing position every tick until the next sync packet.
+/// Horizontal friction for a grounded item: the block's slipperiness times air drag, applied
+/// once - matching vanilla. Multiplying air drag in twice (`0.98 * slipperiness * 0.98`) made
+/// items stop ~2%/tick sooner than the client's own prediction of the same item.
 fn ground_friction(slipperiness: f32) -> f64 {
     f64::from(slipperiness) * 0.98
-}
-
-/// Whether the item is submerged enough for `apply_fluid_drag_or_gravity`'s buoyancy nudge to be
-/// active, matching that function's own water/lava thresholds.
-fn is_buoyant(
-    touching_water: bool,
-    water_height: f64,
-    touching_lava: bool,
-    lava_height: f64,
-) -> bool {
-    (touching_water && water_height > 0.1) || (touching_lava && lava_height > 0.1)
 }
 
 impl ItemEntity {
@@ -480,31 +467,6 @@ impl ItemEntity {
             velo.y = 0.0;
         }
 
-        // Buoyancy (see `apply_fluid_drag_or_gravity`) nudges velo.y by 5.0e-4, which lands under
-        // REST_EPSILON after the 0.98 drag above - snapping it to zero here would cancel the
-        // nudge every tick and leave the item hanging in water/lava instead of bobbing up.
-        let buoyant = is_buoyant(
-            entity.touching_water.load(Ordering::SeqCst),
-            entity.water_height.load(),
-            entity.touching_lava.load(Ordering::SeqCst),
-            entity.lava_height.load(),
-        );
-
-        // Friction only ever shrinks velocity toward zero, never reaching it exactly, so a
-        // settled item's position technically changes by a subatomic amount every tick forever.
-        // That kept `moved` true and triggered a full sync packet every tick for the item's
-        // entire remaining lifetime. Snap negligible velocity to exactly zero once it's visually
-        // indistinguishable from rest, matching what the client already renders.
-        if velo.x.abs() < REST_EPSILON {
-            velo.x = 0.0;
-        }
-        if !buoyant && velo.y.abs() < REST_EPSILON {
-            velo.y = 0.0;
-        }
-        if velo.z.abs() < REST_EPSILON {
-            velo.z = 0.0;
-        }
-
         entity.velocity.store(velo);
     }
 
@@ -563,13 +525,16 @@ impl ItemEntity {
             || entity.touching_lava.load(Ordering::SeqCst)
             || entity.velocity.load().sub(&original_velo).length_squared() > 0.1;
         let moved = entity.pos.load() != entity.last_sent_pos.load();
+        let position_dirty = moved
+            && self
+                .item_age
+                .load(Ordering::Relaxed)
+                .is_multiple_of(ITEM_UPDATE_INTERVAL);
 
-        // Sync every tick the item actually moved, not on a fixed interval - vanilla clients
-        // don't run their own physics prediction for item entities, so throttling this let the
-        // item drift/settle unsynced for up to a second before snapping to the true server
-        // position once the delayed update finally arrived.
-        if moved || velocity_dirty {
+        if position_dirty || velocity_dirty {
             entity.send_pos_rot();
+        } else if moved {
+            entity.send_bedrock_pos();
         }
         if velocity_dirty {
             entity.send_velocity();
@@ -833,28 +798,12 @@ impl EntityBase for ItemEntity {
 
 #[cfg(test)]
 mod tests {
-    use super::{REST_EPSILON, ground_friction, is_buoyant};
+    use super::ground_friction;
 
     #[test]
     fn ground_friction_applies_air_drag_once() {
         // Default block slipperiness is 0.6; vanilla's grounded horizontal friction is
         // slipperiness * airDrag, applied once, not airDrag * slipperiness * airDrag.
         assert!((ground_friction(0.6) - 0.588).abs() < 1.0e-6);
-    }
-
-    #[test]
-    fn fluid_nudge_would_be_eaten_by_rest_epsilon() {
-        // The buoyancy nudge (5.0e-4) after the 0.98 vertical drag lands under REST_EPSILON, so
-        // callers must skip the rest-snap while buoyant or the nudge never accumulates.
-        let nudge_after_drag = 5.0e-4 * 0.98;
-        assert!(nudge_after_drag < REST_EPSILON);
-    }
-
-    #[test]
-    fn is_buoyant_requires_touching_and_enough_height() {
-        assert!(is_buoyant(true, 0.5, false, 0.0));
-        assert!(is_buoyant(false, 0.0, true, 0.5));
-        assert!(!is_buoyant(true, 0.05, false, 0.0));
-        assert!(!is_buoyant(false, 0.0, false, 0.0));
     }
 }
