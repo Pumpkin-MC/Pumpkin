@@ -7,13 +7,11 @@ use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
 use crate::world::World;
-use pumpkin_data::block_properties::OakDoorLikeProperties;
+use pumpkin_data::Block;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::tag::Taggable;
 use pumpkin_data::world::WorldEvent;
-use pumpkin_data::{Block, tag};
-use pumpkin_data::{BlockDirection, BlockId};
+use pumpkin_data::{BlockDirection, BlockId, BlockStateId};
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::world::BlockFlags;
@@ -51,6 +49,22 @@ impl ItemBehaviour for HoneyCombItem {
     }
 }
 
+/// The state `block` should become once waxed into `waxed`.
+///
+/// Vanilla waxes with `Block.withPropertiesOf`, which carries every shared property over
+/// rather than special-casing each family: trapdoors keep their facing and open state,
+/// stairs their shape, slabs their half, bulbs their lit state, grates their waterlogging.
+fn waxed_state_id(block: &Block, state_id: BlockStateId, waxed: &'static Block) -> BlockStateId {
+    if waxed.states.len() <= 1 {
+        return waxed.default_state.id;
+    }
+    block
+        .properties(state_id)
+        .map_or(waxed.default_state.id, |props| {
+            waxed.from_properties(&props.to_props()).to_state_id(waxed)
+        })
+}
+
 /// Waxes the block at `location` if it has a waxed equivalent, emitting the wax
 /// particles and sound on success.
 pub(crate) fn try_wax_block(world: &Arc<World>, location: BlockPos, block: &Block) -> bool {
@@ -59,21 +73,7 @@ pub(crate) fn try_wax_block(world: &Arc<World>, location: BlockPos, block: &Bloc
     };
     let new_block = replacement.to_block();
 
-    let new_state_id = if block.has_tag(&tag::Block::MINECRAFT_DOORS) {
-        // Carry the door state over to the waxed door.
-        let door_information = world.get_block_state_id(&location);
-        let door_props = OakDoorLikeProperties::from_state_id(door_information);
-        let mut new_door_properties = OakDoorLikeProperties::default(new_block);
-        new_door_properties.facing = door_props.facing;
-        new_door_properties.open = door_props.open;
-        new_door_properties.half = door_props.half;
-        new_door_properties.hinge = door_props.hinge;
-        new_door_properties.powered = door_props.powered;
-        new_door_properties.to_state_id(new_block)
-    } else {
-        // TODO: Also carry over the properties of trapdoors.
-        new_block.default_state.id
-    };
+    let new_state_id = waxed_state_id(block, world.get_block_state_id(&location), new_block);
 
     world.set_block_state(&location, new_state_id, BlockFlags::NOTIFY_ALL);
     world.sync_world_event(WorldEvent::ParticlesWaxOn, location, 0);
@@ -139,5 +139,44 @@ const fn get_waxed_equivalent(id: BlockId) -> Option<BlockId> {
         BlockId::EXPOSED_COPPER_TRAPDOOR => Some(BlockId::WAXED_EXPOSED_COPPER_TRAPDOOR),
         BlockId::COPPER_TRAPDOOR => Some(BlockId::WAXED_COPPER_TRAPDOOR),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{get_waxed_equivalent, waxed_state_id};
+    use pumpkin_data::BlockId;
+
+    /// Waxing changes the copper variant and nothing else, so every property the unwaxed
+    /// block carries has to survive the swap: a trapdoor's facing and open state, a stair's
+    /// shape, a slab's half, a bulb's lit state, a grate's waterlogging.
+    #[test]
+    fn waxing_preserves_every_block_property() {
+        let mut checked = 0;
+        for raw in 0..BlockId::COUNT {
+            let Some(id) = BlockId::new(raw) else {
+                continue;
+            };
+            let Some(waxed) = get_waxed_equivalent(id) else {
+                continue;
+            };
+            let block = id.to_block();
+            let waxed_block = waxed.to_block();
+
+            for state in block.states {
+                let Some(props) = block.properties(state.id) else {
+                    continue;
+                };
+                let before = props.to_props();
+                let after_id = waxed_state_id(block, state.id, waxed_block);
+                let after = waxed_block
+                    .properties(after_id)
+                    .expect("the waxed block has the same properties")
+                    .to_props();
+                assert_eq!(before, after, "{} -> {}", block.name, waxed_block.name);
+                checked += 1;
+            }
+        }
+        assert!(checked > 0, "no waxable block states were checked");
     }
 }
