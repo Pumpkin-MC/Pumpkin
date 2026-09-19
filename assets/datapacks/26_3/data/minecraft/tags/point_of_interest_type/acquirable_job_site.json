@@ -1,0 +1,17 @@
+{
+  "values": [
+    "minecraft:armorer",
+    "minecraft:butcher",
+    "minecraft:cartographer",
+    "minecraft:cleric",
+    "minecraft:farmer",
+    "minecraft:fisherman",
+    "minecraft:fletcher",
+    "minecraft:leatherworker",
+    "minecraft:librarian",
+    "minecraft:mason",
+    "minecraft:shepherd",
+    "minecraft:toolsmith",
+    "minecraft:weaponsmith"
+  ]
+}

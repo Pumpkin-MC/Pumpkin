@@ -23,7 +23,7 @@ use pumpkin_data::item_id_remap::remap_item_id_for_version;
 
 impl Statistic {
     pub fn write(&self, write: impl std::io::Write) -> Result<(), crate::ser::WritingError> {
-        self.write_with_version(write, &JavaMinecraftVersion::V_26_2)
+        self.write_with_version(write, &JavaMinecraftVersion::V_26_3)
     }
 
     pub fn write_with_version(

@@ -101,6 +101,7 @@ use crate::block::blocks::plant::roots::RootsBlock;
 use crate::block::blocks::plant::sapling::SaplingBlock;
 use crate::block::blocks::plant::sea_pickles::SeaPickleBlock;
 use crate::block::blocks::plant::seagrass::SeaGrassBlock;
+use crate::block::blocks::plant::shelf_mushroom::ShelfMushroomBlock;
 use crate::block::blocks::plant::short_plant::ShortPlantBlock;
 use crate::block::blocks::plant::small_dripleaf::SmallDripleafBlock;
 use crate::block::blocks::plant::spore_blossom::SporeBlossomBlock;
@@ -155,6 +156,7 @@ use crate::block::blocks::spawner::SpawnerBlock;
 use crate::block::blocks::sponge::{SpongeBlock, WetSpongeBlock};
 use crate::block::blocks::spreading_snowy_block::{MyceliumBlock, PodzolBlock};
 use crate::block::blocks::stairs::StairBlock;
+use crate::block::blocks::straw_bed::StrawBedBlock;
 use crate::block::blocks::structure_block::StructureBlock;
 use crate::block::blocks::structure_void::StructureVoidBlock;
 use crate::block::blocks::test_block::{TestBlock, TestInstanceBlock};
@@ -241,6 +243,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(AnvilBlock);
     manager.register(BeaconBlock);
     manager.register(BedBlock);
+    manager.register(StrawBedBlock);
     manager.register(SaplingBlock);
     manager.register(MangrovePropaguleBlock);
     manager.register(CactusBlock);
@@ -335,6 +338,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(TorchBlock);
     manager.register(TrapDoorBlock);
     manager.register(MushroomPlantBlock);
+    manager.register(ShelfMushroomBlock);
     manager.register(FlowerbedBlock);
     manager.register(LeafLitterBlock);
     manager.register(WallBlock);
@@ -792,8 +796,15 @@ impl BlockRegistry {
         world.play_bedrock_level_sound(
             "place",
             &final_block_pos.to_centered_f64(),
-            i32::from(BlockState::to_be_network_id(new_state)),
+            BlockState::to_be_network_id(new_state) as i32,
         );
+
+        if let Ok(hand) = pumpkin_util::Hand::from_packet_id(use_item_on.hand.0)
+            && placed_block.default_state.block_entity_type != u16::MAX
+            && let Some(block_entity) = world.get_block_entity(&final_block_pos)
+        {
+            block_entity.apply_item_components(&player.inventory().get_stack_in_hand(hand));
+        }
 
         self.player_placed(
             &world,
