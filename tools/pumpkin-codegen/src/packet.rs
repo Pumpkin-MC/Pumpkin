@@ -94,60 +94,7 @@ fn parse_packets(path: &str, content: &str) -> Packets {
 /// Generates the `TokenStream` for the `PacketId` struct, `CURRENT_MC_VERSION`, and
 /// all `serverbound`/`clientbound` packet ID constants.
 pub(crate) fn build() -> TokenStream {
-    let assets = [
-        (JavaMinecraftVersion::V_1_7_2, "1_7_2_packets.json"),
-        (JavaMinecraftVersion::V_1_7_6, "1_7_6_packets.json"),
-        (JavaMinecraftVersion::V_1_8, "1_8_packets.json"),
-        (JavaMinecraftVersion::V_1_9, "1_9_packets.json"),
-        (JavaMinecraftVersion::V_1_9_1, "1_9_1_packets.json"),
-        (JavaMinecraftVersion::V_1_9_2, "1_9_2_packets.json"),
-        (JavaMinecraftVersion::V_1_9_3, "1_9_3_packets.json"),
-        (JavaMinecraftVersion::V_1_10, "1_10_packets.json"),
-        (JavaMinecraftVersion::V_1_11, "1_11_packets.json"),
-        (JavaMinecraftVersion::V_1_11_1, "1_11_1_packets.json"),
-        (JavaMinecraftVersion::V_1_12, "1_12_packets.json"),
-        (JavaMinecraftVersion::V_1_12_1, "1_12_1_packets.json"),
-        (JavaMinecraftVersion::V_1_12_2, "1_12_2_packets.json"),
-        (JavaMinecraftVersion::V_1_13, "1_13_packets.json"),
-        (JavaMinecraftVersion::V_1_13_1, "1_13_1_packets.json"),
-        (JavaMinecraftVersion::V_1_13_2, "1_13_2_packets.json"),
-        (JavaMinecraftVersion::V_1_14, "1_14_packets.json"),
-        (JavaMinecraftVersion::V_1_14_1, "1_14_1_packets.json"),
-        (JavaMinecraftVersion::V_1_14_2, "1_14_2_packets.json"),
-        (JavaMinecraftVersion::V_1_14_3, "1_14_3_packets.json"),
-        (JavaMinecraftVersion::V_1_14_4, "1_14_4_packets.json"),
-        (JavaMinecraftVersion::V_1_15, "1_15_packets.json"),
-        (JavaMinecraftVersion::V_1_15_1, "1_15_1_packets.json"),
-        (JavaMinecraftVersion::V_1_15_2, "1_15_2_packets.json"),
-        (JavaMinecraftVersion::V_1_16, "1_16_packets.json"),
-        (JavaMinecraftVersion::V_1_16_1, "1_16_1_packets.json"),
-        (JavaMinecraftVersion::V_1_16_2, "1_16_2_packets.json"),
-        (JavaMinecraftVersion::V_1_16_3, "1_16_3_packets.json"),
-        (JavaMinecraftVersion::V_1_16_4, "1_16_4_packets.json"),
-        (JavaMinecraftVersion::V_1_17, "1_17_packets.json"),
-        (JavaMinecraftVersion::V_1_17_1, "1_17_1_packets.json"),
-        (JavaMinecraftVersion::V_1_18, "1_18_packets.json"),
-        (JavaMinecraftVersion::V_1_18_2, "1_18_2_packets.json"),
-        (JavaMinecraftVersion::V_1_19, "1_19_packets.json"),
-        (JavaMinecraftVersion::V_1_19_1, "1_19_1_packets.json"),
-        (JavaMinecraftVersion::V_1_19_3, "1_19_3_packets.json"),
-        (JavaMinecraftVersion::V_1_19_4, "1_19_4_packets.json"),
-        (JavaMinecraftVersion::V_1_20, "1_20_packets.json"),
-        (JavaMinecraftVersion::V_1_20_2, "1_20_2_packets.json"),
-        (JavaMinecraftVersion::V_1_20_3, "1_20_3_packets.json"),
-        (JavaMinecraftVersion::V_1_20_5, "1_20_5_packets.json"),
-        (JavaMinecraftVersion::V_1_21, "1_21_packets.json"),
-        (JavaMinecraftVersion::V_1_21_2, "1_21_2_packets.json"),
-        (JavaMinecraftVersion::V_1_21_4, "1_21_4_packets.json"),
-        (JavaMinecraftVersion::V_1_21_5, "1_21_5_packets.json"),
-        (JavaMinecraftVersion::V_1_21_6, "1_21_6_packets.json"),
-        (JavaMinecraftVersion::V_1_21_7, "1_21_7_packets.json"),
-        (JavaMinecraftVersion::V_1_21_9, "1_21_9_packets.json"),
-        (JavaMinecraftVersion::V_1_21_11, "1_21_11_packets.json"),
-        (JavaMinecraftVersion::V_26_1, "26_1_packets.json"),
-        (JavaMinecraftVersion::V_26_2, "26_2_packets.json"),
-        (JavaMinecraftVersion::V_26_3, "26_3_packets.json"),
-    ];
+    let assets = [(JavaMinecraftVersion::V_26_3, "26_3_packets.json")];
 
     // Parse available packet files into a BTreeMap keyed by JavaMinecraftVersion
     let mut versions = BTreeMap::new();
@@ -170,7 +117,7 @@ pub(crate) fn build() -> TokenStream {
         use pumpkin_util::version::JavaMinecraftVersion;
 
         pub const CURRENT_MC_VERSION: JavaMinecraftVersion = #LATEST_VERSION;
-        pub const LOWEST_SUPPORTED_MC_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_1_7_2;
+        pub const LOWEST_SUPPORTED_MC_VERSION: JavaMinecraftVersion = #LATEST_VERSION;
 
         #packet_id_struct
 
@@ -185,56 +132,41 @@ pub(crate) fn build() -> TokenStream {
     )
 }
 
-/// Generate the `PacketId` struct and impls (including `to_id`) dynamically based on available versions.
-fn generate_struct<T>(versions: &BTreeMap<JavaMinecraftVersion, T>) -> TokenStream {
-    // Build struct fields
-    let mut struct_fields = TokenStream::new();
-    for ver in versions.keys() {
-        let ident = ver.to_field_ident();
-        struct_fields.extend(quote! {
-            pub #ident: i32,
-        });
-    }
-
-    let latest_field_ident = LATEST_VERSION.to_field_ident();
-
-    // Build match arms
-    let mut match_arms = TokenStream::new();
-    for ver in versions.keys() {
-        let ident = ver.to_field_ident();
-        match_arms.extend(quote! {
-            #ver => self.#ident,
-        });
-    }
-
+/// Generate the `PacketId` struct and impls.
+fn generate_struct<T>(_versions: &BTreeMap<JavaMinecraftVersion, T>) -> TokenStream {
     quote! {
-        #[derive(Clone, Copy, Debug)]
-        pub struct PacketId {
-            #struct_fields
-        }
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        pub struct PacketId(pub i32);
 
         impl PacketId {
             /// Converts the requested protocol version into the corresponding packet ID.
-            /// Returns -1 if the packet does not exist in that version.
             #[must_use]
-            pub const fn to_id(&self, version: JavaMinecraftVersion) -> i32 {
-                #[allow(clippy::match_same_arms)]
-                match version {
-                    #match_arms
-                    _ => self.#latest_field_ident,
-                }
+            pub const fn to_id(&self, _version: JavaMinecraftVersion) -> i32 {
+                self.0
             }
         }
 
         impl PartialEq<i32> for PacketId {
             fn eq(&self, other: &i32) -> bool {
-                self.#latest_field_ident == *other
+                self.0 == *other
             }
         }
 
         impl PartialEq<PacketId> for i32 {
             fn eq(&self, other: &PacketId) -> bool {
-                *self == other.#latest_field_ident
+                *self == other.0
+            }
+        }
+
+        impl From<PacketId> for i32 {
+            fn from(id: PacketId) -> Self {
+                id.0
+            }
+        }
+
+        impl From<i32> for PacketId {
+            fn from(id: i32) -> Self {
+                Self(id)
             }
         }
     }
@@ -310,11 +242,13 @@ fn generate_phase_modules(
                 ("STEER_BOAT", "PADDLE_BOAT"),
                 ("PLAYER_DIGGING", "PLAYER_ACTION"),
                 ("ENTITY_ACTION", "PLAYER_COMMAND"),
-                ("SWING_ARM", "SWING"),
-                ("ANIMATION", "SWING"),
+                ("SWING_ARM", "PUNCH"),
+                ("ANIMATION", "PUNCH"),
+                ("SWING", "PUNCH"),
+                ("DEBUG_SAMPLE_SUBSCRIPTION", "DEBUG_SUBSCRIPTION_REQUEST"),
                 ("PLAYER_BLOCK_PLACEMENT", "USE_ITEM_ON"),
-                ("SPECTATE", "SPECTATE_ENTITY"),
-                ("SPECTATOR_ACTION", "SPECTATE_ENTITY"),
+                ("SPECTATE", "SPECTATOR_ACTION"),
+                ("SPECTATE_ENTITY", "SPECTATOR_ACTION"),
             ],
         );
     } else {
@@ -332,6 +266,8 @@ fn generate_phase_modules(
         aliases.insert(
             "play",
             vec![
+                ("SET_CARRIED_ITEM", "SET_CURSOR_ITEM"),
+                ("CHAT", "SYSTEM_CHAT"),
                 ("BUNDLE", "BUNDLE_DELIMITER"),
                 ("SPAWN_ENTITY", "ADD_ENTITY"),
                 ("ENTITY_ANIMATION", "ANIMATE"),
@@ -424,19 +360,10 @@ fn generate_phase_modules(
         let packets_in_phase = phase_packets.get(phase_name).unwrap_or(&empty_map);
 
         for (name, values) in packets_in_phase {
-            let mut init_pairs = TokenStream::new();
-            for ver in versions.keys() {
-                let id = values.get(ver).copied().unwrap_or(-1);
-                let field_ident = ver.to_field_ident();
-                init_pairs.extend(quote! {
-                    #field_ident: #id,
-                });
-            }
+            let id = values.get(&LATEST_VERSION).copied().unwrap_or(-1);
             let const_name = format_ident!("{}", name);
             consts_ts.extend(quote! {
-                pub const #const_name: super::super::PacketId = super::super::PacketId {
-                    #init_pairs
-                };
+                pub const #const_name: super::super::PacketId = super::super::PacketId(#id);
             });
         }
 

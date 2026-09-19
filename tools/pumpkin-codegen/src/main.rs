@@ -72,7 +72,6 @@ mod potion_brewing;
 mod recipe_remainder;
 mod recipes;
 mod registry;
-mod remap;
 mod scoreboard_slot;
 mod screen;
 mod sdk;
@@ -175,11 +174,14 @@ pub fn main() {
         (block_transformer::build, "block_transformer.rs"),
         (trial_spawner::build, "trial_spawner.rs"),
     ];
-    build_functions.extend(remap::build());
 
     // If any arguments are given, treat them as file-stem filters.
     // e.g. `cargo run -- chest_loot` only regenerates chest_loot.rs.
     let filters: Vec<String> = std::env::args().skip(1).collect();
+    if filters.iter().any(|f| f == "wit") {
+        wit::main();
+        return;
+    }
     let build_functions: Vec<_> = if filters.is_empty() {
         wit::main();
         sdk::main();
