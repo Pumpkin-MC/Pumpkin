@@ -77,6 +77,8 @@ world plugin {
     import potions;
     /// Provides entity status / animation event types.
     import entity-statuses;
+    /// Provides a plugin configuration API.
+    import config;
 
     // --- Plugin-provided exports ---
 
