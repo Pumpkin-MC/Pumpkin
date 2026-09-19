@@ -297,7 +297,7 @@ macro_rules! impl_viewer_count_listener_for_chest {
 /// as well as `new()` and `get_viewer_count()` methods.
 #[macro_export]
 macro_rules! impl_chest_helper_methods {
-    ($struct_name:ty) => {
+    ($struct_name:ty, $block:expr) => {
         impl $struct_name {
             /// Returns the number of players currently viewing this chest
             pub fn get_viewer_count(&self) -> u16 {
@@ -332,7 +332,9 @@ macro_rules! impl_chest_helper_methods {
                 );
 
                 let (block, state) = world.get_block_and_state(&self.position);
-                if !<pumpkin_data::block_properties::ChestLikeProperties as pumpkin_data::block_properties::BlockProperties>::handles_block_id(block.id) {
+                // `ChestLikeProperties` also covers the copper chest variants, which this entity
+                // does not represent, so compare against the exact block this entity belongs to.
+                if block.id != $block.id {
                     return;
                 }
                 let properties =

@@ -326,3 +326,6 @@ pub use game_test_highlight_pos::*;
 
 mod test_instance_block_status;
 pub use test_instance_block_status::*;
+
+mod post_effects;
+pub use post_effects::*;

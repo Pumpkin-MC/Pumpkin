@@ -19,7 +19,7 @@ pub mod tick;
 pub mod world;
 pub mod world_info;
 
-pub const CURRENT_MC_VERSION: &str = "26.2";
+pub const CURRENT_MC_VERSION: &str = "26.3";
 pub const CURRENT_BEDROCK_MC_VERSION: &str = "1.26.51";
 pub const CURRENT_BEDROCK_MC_PROTOCOL: u32 = 2193;
 

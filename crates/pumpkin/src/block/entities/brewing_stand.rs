@@ -7,12 +7,12 @@ use std::sync::{
 
 use crate::block::entities::PropertyDelegate;
 use pumpkin_data::block_properties::BlockProperties;
+use pumpkin_data::data_component_impl::BrewingFuelImpl;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::potion::Potion;
 use pumpkin_data::potion_brewing::BREWING_RECIPES;
 use pumpkin_data::sound::{Sound, SoundCategory};
-use pumpkin_data::tag::{self, Taggable};
 use pumpkin_inventory::{Inventory, sync_read_items_from_nbt, sync_write_items_to_nbt};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_protocol::codec::recipe::DynamicRecipe;
@@ -305,9 +305,7 @@ impl BrewingStandBlockEntity {
         let expected_fuel = if self.fuel.load(Ordering::Relaxed) <= 0
             && let Ok(items) = self.items.try_read()
             && !items[4].is_empty()
-            && items[4]
-                .get_item()
-                .has_tag(&tag::Item::MINECRAFT_BREWING_FUEL)
+            && items[4].get_data_component::<BrewingFuelImpl>().is_some()
         {
             items[4].clone()
         } else {
@@ -435,15 +433,15 @@ impl pumpkin_inventory::Inventory for BrewingStandBlockEntity {
                 .is_some(),
             // Slot 3 - ingredient (must be tagged as brewable)
             3 => {
-                // Check if item is a valid brewing ingredient
-                if stack.get_item().has_tag(&tag::Item::MINECRAFT_BREWING_FUEL) {
-                    return false; // Fuel should not go in ingredient slot
+                // Fuel items belong in slot 4, not the ingredient slot.
+                if stack.get_data_component::<BrewingFuelImpl>().is_some() {
+                    return false;
                 }
                 // Allow any item that's not fuel (ingredient validation happens during brewing)
                 true
             }
-            // Slot 4 - fuel
-            4 => stack.get_item().has_tag(&tag::Item::MINECRAFT_BREWING_FUEL),
+            // Slot 4 - fuel (`minecraft:brewing_fuel` data component, 26.3+)
+            4 => stack.get_data_component::<BrewingFuelImpl>().is_some(),
             _ => false,
         }
     }
@@ -642,18 +640,17 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
             }
         }
 
-        // If potion presence changed, update last_potion_count and update block state so clients
-        let mut needs_update = false;
-        {
-            let mut last_guard = self
+        // If potion presence changed, update block state so clients see the new bottles.
+        // `last_potion_count` is only recorded once the state is actually written below, so a
+        // stale entity that bails out at the block-id guard will retry on a later tick instead of
+        // believing the update was already applied.
+        let needs_update = {
+            let last_guard = self
                 .last_potion_count
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if last_guard.as_ref() != Some(&current) {
-                *last_guard = Some(current);
-                needs_update = true;
-            }
-        }
+            last_guard.as_ref() != Some(&current)
+        };
 
         if needs_update {
             // Update the block state properties for the brewing stand to reflect bottle presence
@@ -676,6 +673,11 @@ impl crate::block::entities::BlockEntity for BrewingStandBlockEntity {
                     props.to_state_id(block),
                     crate::world::BlockFlags::NOTIFY_ALL,
                 );
+
+                *self
+                    .last_potion_count
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(current);
 
                 // Also mark dirty so inventory/container updates are sent to open screens.
                 // The slot change that flipped these bits already flagged the comparator.

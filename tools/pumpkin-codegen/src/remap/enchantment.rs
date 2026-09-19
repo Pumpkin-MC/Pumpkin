@@ -9,7 +9,7 @@ use crate::version::JavaMinecraftVersion;
 /// `remap_enchantment_id_for_version` function.
 pub fn build() -> TokenStream {
     let remapper: Remapper<_, Option<Vec<u32>>> = Remapper {
-        version: JavaMinecraftVersion::V_26_2,
+        version: JavaMinecraftVersion::V_26_3,
         remapper: |first, second| match (first, second) {
             (Some(first), Some(second)) => Some(
                 first

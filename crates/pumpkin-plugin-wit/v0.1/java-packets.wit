@@ -154,6 +154,9 @@ interface java-packets {
   }
   record s-confirm-teleport {
     teleport-id: s32,
+    position: tuple<f64, f64, f64>,
+    yaw: f32,
+    pitch: f32,
   }
   record s-container-button-click {
     window-id: s32,
@@ -262,6 +265,7 @@ interface java-packets {
     release-item-in-use,
     swap-item,
     spear-jab,
+    change-destroy-direction,
   }
   record s-player-command {
     entity-id: s32,
@@ -641,6 +645,25 @@ interface java-packets {
   record c-chunk-batch-end {
     batch-size: s32,
   }
+  record chunk-heightmaps {
+    world-surface: option<list<s64>>,
+    motion-blocking: option<list<s64>>,
+    motion-blocking-no-leaves: option<list<s64>>,
+  }
+  record chunk-block-entity {
+    packed-xz: u8,
+    y: s32,
+    type-id: s32,
+    data: string,
+  }
+  record c-chunk-data {
+    chunk-x: s32,
+    chunk-z: s32,
+    heightmaps: chunk-heightmaps,
+    data: list<u8>,
+    block-entities: list<chunk-block-entity>,
+    light-data: light-data,
+  }
   record chunk-biome-entry {
     chunk-x: s32,
     chunk-z: s32,
@@ -870,6 +893,10 @@ interface java-packets {
   record c-entity-animation {
     entity-id: s32,
     animation: u8,
+  }
+  record c-swing-arm {
+    entity-id: s32,
+    off-hand: bool,
   }
   enum animation {
     swing-main-arm,
@@ -1371,7 +1398,7 @@ interface java-packets {
     position: tuple<f64, f64, f64>,
     volume: f32,
     pitch: f32,
-    seed: f64,
+    seed: s64,
   }
   record c-spawn-entity {
     entity-id: s32,
@@ -1657,7 +1684,6 @@ interface java-packets {
     s-set-structure-block(s-set-structure-block),
     s-set-test-block(s-set-test-block),
     s-spectate-entity(s-spectate-entity),
-    s-swing-arm(s-swing-arm),
     s-teleport-to-entity(s-teleport-to-entity),
     s-test-instance-block-action(s-test-instance-block-action),
     s-update-sign(s-update-sign),
