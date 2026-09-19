@@ -1292,6 +1292,19 @@ impl Entity {
         }
     }
 
+    #[must_use]
+    pub fn get_dimensions_for_pose(&self, pose: EntityPose) -> EntityDimensions {
+        if pose == EntityPose::Standing {
+            EntityDimensions {
+                width: self.entity_type.dimension[0],
+                height: self.entity_type.dimension[1],
+                eye_height: self.entity_type.eye_height,
+            }
+        } else {
+            Self::get_entity_dimensions(pose)
+        }
+    }
+
     pub fn get_eye_height(&self) -> f64 {
         f64::from(Self::get_entity_dimensions(self.pose.load()).eye_height)
     }
@@ -3278,7 +3291,7 @@ impl Entity {
             }
         }
 
-        let dimension = Self::get_entity_dimensions(pose);
+        let dimension = self.get_dimensions_for_pose(pose);
         let position = self.pos.load();
         let aabb = BoundingBox::new_from_pos(position.x, position.y, position.z, &dimension);
         self.pose.store(pose);
