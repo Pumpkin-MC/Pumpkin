@@ -527,6 +527,7 @@ pub struct Player {
     pub seen_credits: AtomicBool,
     pub score: AtomicI32,
     pub spawn_extra_particles_on_fall: AtomicBool,
+    pub post_effects: std::sync::Mutex<Vec<String>>,
     /// Inbound packets waiting to be processed during player tick.
     pub inbound_packets: SegQueue<RawPacket>,
 }
@@ -828,8 +829,81 @@ impl Player {
             seen_credits: AtomicBool::new(false),
             score: AtomicI32::new(0),
             spawn_extra_particles_on_fall: AtomicBool::new(false),
+            post_effects: std::sync::Mutex::new(Vec::new()),
             inbound_packets: SegQueue::new(),
         }
+    }
+
+    #[must_use]
+    pub fn get_post_effects(&self) -> Vec<String> {
+        self.post_effects
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    #[must_use]
+    pub fn has_post_effect(&self, effect: &str) -> bool {
+        self.post_effects
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .any(|e| e == effect)
+    }
+
+    pub fn add_post_effect(&self, effect: String) -> bool {
+        let mut effects = self
+            .post_effects
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if effects.iter().any(|e| e == &effect) {
+            return false;
+        }
+        effects.push(effect);
+        self.try_send_client_packet(&pumpkin_protocol::java::client::play::CPostEffects::new(
+            &effects,
+        ));
+        true
+    }
+
+    pub fn remove_post_effect(&self, effect: &str) -> bool {
+        let mut effects = self
+            .post_effects
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        effects.iter().position(|e| e == effect).is_some_and(|pos| {
+            effects.remove(pos);
+            self.try_send_client_packet(&pumpkin_protocol::java::client::play::CPostEffects::new(
+                &effects,
+            ));
+            true
+        })
+    }
+
+    pub fn clear_post_effects(&self) -> usize {
+        let mut effects = self
+            .post_effects
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if effects.is_empty() {
+            return 0;
+        }
+        let count = effects.len();
+        effects.clear();
+        self.try_send_client_packet(&pumpkin_protocol::java::client::play::CPostEffects::new(
+            &effects,
+        ));
+        count
+    }
+
+    pub fn send_post_effects(&self) {
+        let effects = self
+            .post_effects
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        self.try_send_client_packet(&pumpkin_protocol::java::client::play::CPostEffects::new(
+            &effects,
+        ));
     }
 
     /// Sets the tab list header and footer for Java Edition clients.
