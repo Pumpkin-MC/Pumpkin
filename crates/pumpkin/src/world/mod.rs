@@ -5668,6 +5668,10 @@ impl World {
         self.level.is_block_tick_scheduled(block_pos, block)
     }
 
+    pub fn cancel_block_tick(&self, block_pos: &BlockPos, block: &Block) -> bool {
+        self.level.cancel_block_tick(block_pos, block)
+    }
+
     pub fn is_fluid_tick_scheduled(&self, block_pos: &BlockPos, fluid: &Fluid) -> bool {
         self.level.is_fluid_tick_scheduled(block_pos, fluid)
     }

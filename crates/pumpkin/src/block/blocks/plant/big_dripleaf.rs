@@ -8,7 +8,7 @@ use crate::block::blocks::plant::big_dripleaf_stem::{
 use crate::block::blocks::redstone::block_receives_redstone_power;
 use crate::block::{
     BlockBehaviour, BrokenArgs, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnEntityStepArgs,
-    OnNeighborUpdateArgs, OnPlaceArgs, OnScheduledTickArgs, PlacedArgs,
+    OnNeighborUpdateArgs, OnPlaceArgs, OnProjectileHitArgs, OnScheduledTickArgs, PlacedArgs,
 };
 use crate::entity::EntityBase;
 use crate::entity::ai::pathfinder::node::Coordinate;
@@ -69,7 +69,16 @@ impl BlockBehaviour for BigDripleafBlock {
             reset_tilt(state.id, args.world, args.position);
         }
     }
-    //TODO: onProjectileHit
+    fn on_projectile_hit(&self, args: OnProjectileHitArgs<'_>) {
+        set_tilt_and_schedule_tick(
+            args.state.id,
+            args.world,
+            args.position,
+            Tilt::Full,
+            Some(Sound::BlockBigDripleafTiltDown),
+        );
+    }
+
     fn can_place_at(&self, args: CanPlaceAtArgs<'_>) -> bool {
         <Self as PlantBlockBase>::can_place_at(self, args.block_accessor, args.position)
     }
@@ -145,6 +154,9 @@ fn set_tilt_and_schedule_tick(
     tilt: Tilt,
     sound_wrapper: Option<Sound>,
 ) {
+    if tilt == Tilt::Full {
+        world.cancel_block_tick(pos, &Block::BIG_DRIPLEAF);
+    }
     set_tilt(state_id, world, pos, tilt);
     if let Some(tilt_sound) = sound_wrapper {
         play_tilt_sound(world, pos, tilt_sound);

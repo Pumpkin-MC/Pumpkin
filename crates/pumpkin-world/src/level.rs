@@ -1009,6 +1009,24 @@ impl Level {
         .unwrap_or(false)
     }
 
+    pub fn cancel_block_tick(&self, block_pos: &BlockPos, block: &Block) -> bool {
+        let chunk_pos = block_pos.chunk_position();
+        // SAFETY: registered block values are process-wide singletons, matching scheduled tick values.
+        let block: &'static Block = unsafe { &*std::ptr::from_ref(block) };
+        let Some((removed, empty)) = self.read_chunk_sync(&chunk_pos, |chunk| {
+            let removed = chunk.block_ticks.remove_tick(*block_pos, block);
+            let empty = !chunk.block_ticks.has_ticks() && !chunk.fluid_ticks.has_ticks();
+            (removed, empty)
+        }) else {
+            return false;
+        };
+
+        if empty {
+            self.chunks_with_scheduled_ticks.remove(&chunk_pos);
+        }
+        removed
+    }
+
     pub fn is_fluid_tick_scheduled(&self, block_pos: &BlockPos, fluid: &Fluid) -> bool {
         self.read_chunk_sync(&block_pos.chunk_position(), |chunk| {
             chunk.fluid_ticks.is_scheduled(*block_pos, fluid)

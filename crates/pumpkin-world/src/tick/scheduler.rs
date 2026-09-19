@@ -81,6 +81,29 @@ impl<'a, T: std::hash::Hash + Eq> ChunkTickScheduler<&'a T> {
             .is_some_and(|inner| inner.queued_ticks.contains(&(pos, value)))
     }
 
+    pub fn remove_tick(&self, pos: BlockPos, value: &'a T) -> bool {
+        let mut inner_guard = self
+            .inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let Some(inner) = inner_guard.as_mut() else {
+            return false;
+        };
+
+        if !inner.queued_ticks.remove(&(pos, value)) {
+            return false;
+        }
+
+        for queue in &mut inner.tick_queue {
+            queue.retain(|tick| tick.position != pos || tick.value != value);
+        }
+
+        if inner.queued_ticks.is_empty() {
+            *inner_guard = None;
+        }
+        true
+    }
+
     pub fn clear_area(&self, min: &BlockPos, max: &BlockPos) {
         let mut inner_guard = self
             .inner
@@ -181,5 +204,32 @@ impl<T> Default for ChunkTickScheduler<T> {
             inner: Mutex::new(None),
             offset: AtomicUsize::new(0),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::tick::TickPriority;
+    use pumpkin_data::Block;
+    use pumpkin_util::math::position::BlockPos;
+
+    use super::*;
+
+    #[test]
+    fn remove_tick_clears_the_queued_entry() {
+        let scheduler = ChunkTickScheduler::default();
+        let position = BlockPos::new(3, 64, -2);
+        let tick = ScheduledTick {
+            delay: 10,
+            priority: TickPriority::Normal,
+            position,
+            value: &Block::BIG_DRIPLEAF,
+        };
+
+        scheduler.schedule_tick(&tick, 0);
+        assert!(scheduler.is_scheduled(position, &Block::BIG_DRIPLEAF));
+        assert!(scheduler.remove_tick(position, &Block::BIG_DRIPLEAF));
+        assert!(!scheduler.is_scheduled(position, &Block::BIG_DRIPLEAF));
+        assert!(scheduler.to_vec().is_empty());
     }
 }
