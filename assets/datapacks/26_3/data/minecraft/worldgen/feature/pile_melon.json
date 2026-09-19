@@ -1,0 +1,6 @@
+{
+  "type": "minecraft:block_pile",
+  "state_provider": {
+    "id": "minecraft:melon"
+  }
+}

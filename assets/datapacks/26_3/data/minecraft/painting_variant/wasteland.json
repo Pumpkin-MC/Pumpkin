@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:wasteland",
+  "author": {
+    "color": "gray",
+    "translate": "painting.minecraft.wasteland.author"
+  },
+  "height": 1,
+  "title": {
+    "color": "yellow",
+    "translate": "painting.minecraft.wasteland.title"
+  },
+  "width": 1
+}

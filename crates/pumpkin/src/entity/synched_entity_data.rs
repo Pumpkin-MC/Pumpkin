@@ -42,7 +42,7 @@ impl<T: MetadataSerializer + Clone + Send + Sync + 'static> ErasedSerializer
     fn write_canonical(&self, index: TrackedId, r#type: MetaDataType) -> Vec<u8> {
         let mut buf = Vec::new();
         let meta = Metadata::new_raw(index, r#type, &self.value);
-        let _ = meta.write(&mut buf, &JavaMinecraftVersion::V_26_2);
+        let _ = meta.write(&mut buf, &JavaMinecraftVersion::V_26_3);
         buf
     }
 }

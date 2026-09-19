@@ -1,0 +1,8 @@
+{
+  "comparator_output": 3,
+  "description": {
+    "translate": "jukebox_song.minecraft.blocks"
+  },
+  "length_in_seconds": 345.0,
+  "sound_event": "minecraft:music_disc.blocks"
+}

@@ -1,4 +1,6 @@
 use super::{Entity, EntityBase, ai::pathfinder::Navigator, living::LivingEntity};
+use crate::entity::ai::brain::Brain;
+use crate::entity::ai::brain::memory::PackedMemories;
 use crate::entity::ai::control::MoveControlTrait;
 use crate::entity::ai::control::look_control::LookControl;
 use crate::entity::ai::control::move_control::MoveControl;
@@ -82,6 +84,7 @@ pub struct MobEntity {
     pub look_control: std::sync::Mutex<LookControl>,
     pub sensing: std::sync::Mutex<Sensing>,
     pub move_control: std::sync::Mutex<Box<dyn MoveControlTrait>>,
+    pub brain: std::sync::Mutex<Brain>,
     pub position_target: AtomicCell<BlockPos>,
     pub position_target_range: AtomicI32,
     pub love_ticks: AtomicI32,
@@ -105,6 +108,7 @@ impl MobEntity {
     pub const MAX_PICKUP_LOOT_CHANCE: f32 = 0.55;
     pub const MAX_ENCHANTED_ARMOR_CHANCE: f32 = 0.5;
     pub const MAX_ENCHANTED_WEAPON_CHANCE: f32 = 0.25;
+    pub const GUARANTEED_DROP_CHANCE: f32 = 2.0;
     pub const EQUIPMENT_POPULATION_ORDER: [EquipmentSlot; 4] = [
         EquipmentSlot::HEAD,
         EquipmentSlot::CHEST,
@@ -169,6 +173,7 @@ impl MobEntity {
             look_control: std::sync::Mutex::new(LookControl::default()),
             sensing: std::sync::Mutex::new(Sensing::default()),
             move_control: std::sync::Mutex::new(Box::new(MoveControl::default())),
+            brain: std::sync::Mutex::new(Brain::default()),
             position_target: AtomicCell::new(BlockPos::ZERO),
             position_target_range: AtomicI32::new(-1),
             love_ticks: AtomicI32::new(0),
@@ -252,7 +257,110 @@ impl MobEntity {
         }
     }
 
+    pub fn spawn_at_location(&self, stack: ItemStack) {
+        if stack.is_empty() {
+            return;
+        }
+        let entity = &self.living_entity.entity;
+        let world = entity.world.load();
+        let item_entity = crate::entity::item::ItemEntity::new(
+            Entity::new(world.clone(), entity.pos.load(), &EntityType::ITEM),
+            stack,
+        );
+        world.spawn_entity(Arc::new(item_entity));
+    }
+
+    #[must_use]
+    pub fn drop_chance(&self, slot: &EquipmentSlot) -> f32 {
+        self.living_entity
+            .equipment_drop_chances
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(slot)
+            .copied()
+            .unwrap_or(crate::entity::mob::equipment::DEFAULT_EQUIPMENT_DROP_CHANCE)
+    }
+
+    pub fn set_guaranteed_drop(&self, slot: &EquipmentSlot) {
+        self.living_entity
+            .equipment_drop_chances
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(slot.clone(), Self::GUARANTEED_DROP_CHANCE);
+    }
+
+    /// Equips `stack` and tells tracking clients, returning what was in the slot.
+    pub fn set_item_slot(&self, slot: &EquipmentSlot, stack: ItemStack) -> ItemStack {
+        let previous = self
+            .living_entity
+            .entity_equipment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .put(slot, stack.clone());
+        self.living_entity
+            .send_equipment_changes(&[(slot.clone(), stack)]);
+        previous
+    }
+
+    pub fn set_item_slot_and_drop_when_killed(&self, slot: &EquipmentSlot, stack: ItemStack) {
+        self.set_item_slot(slot, stack);
+        self.set_guaranteed_drop(slot);
+    }
+
+    fn write_drop_chances(&self, nbt: &mut NbtCompound) {
+        let chances = self
+            .living_entity
+            .equipment_drop_chances
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut compound = NbtCompound::new();
+        for (slot, chance) in chances.iter() {
+            if *chance != crate::entity::mob::equipment::DEFAULT_EQUIPMENT_DROP_CHANCE {
+                compound.put_float(slot.to_name(), *chance);
+            }
+        }
+        if !compound.child_tags.is_empty() {
+            nbt.put("drop_chances", pumpkin_nbt::tag::NbtTag::Compound(compound));
+        }
+    }
+
+    fn read_drop_chances(&self, nbt: &NbtCompound) {
+        let Some(compound) = nbt.get_compound("drop_chances") else {
+            return;
+        };
+        let mut chances = self
+            .living_entity
+            .equipment_drop_chances
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for (name, tag) in &compound.child_tags {
+            if let Some(slot) = EquipmentSlot::get_from_name(name)
+                && let Some(chance) = tag.extract_float()
+            {
+                chances.insert(slot.clone(), chance);
+            }
+        }
+    }
+
+    pub fn tick_brain(&self, mob: &dyn Mob) {
+        let world = self.living_entity.entity.world.load_full();
+        let time = world.get_world_age();
+        self.brain
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .tick(&world, mob, time);
+    }
+
     pub fn write_mob_nbt(&self, nbt: &mut NbtCompound) {
+        self.write_drop_chances(nbt);
+        nbt.put_compound(
+            "Brain",
+            self.brain
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .pack()
+                .into_nbt(),
+        );
         if self.is_no_ai() {
             nbt.put_bool("NoAI", true);
         }
@@ -268,6 +376,7 @@ impl MobEntity {
     }
 
     pub fn read_mob_nbt(&self, nbt: &NbtCompound) {
+        self.read_drop_chances(nbt);
         if let Some(no_ai) = nbt.get_bool("NoAI") {
             self.set_no_ai(no_ai);
         }
@@ -772,6 +881,25 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn post_tick(&self) {}
 
+    fn get_preferred_weapon_type(&self) -> Option<&'static pumpkin_data::tag::Tag> {
+        None
+    }
+
+    fn can_replace_current_item(
+        &self,
+        new_item: &ItemStack,
+        current_item: &ItemStack,
+        slot: &EquipmentSlot,
+    ) -> bool {
+        equipment::can_replace_current_item(
+            self.get_mob_entity(),
+            self.get_preferred_weapon_type(),
+            new_item,
+            current_item,
+            slot,
+        )
+    }
+
     /// Called before damage is applied. Return `false` to cancel the damage entirely.
     /// Used by endermen to dodge projectiles via teleportation.
     fn pre_damage(&self, _damage_type: DamageType, _source: Option<&dyn EntityBase>) -> bool {
@@ -931,6 +1059,14 @@ pub trait Mob: EntityBase + Send + Sync {
                 difficulty.special_multiplier,
             );
         }
+    }
+
+    /// Runs after navigation and before the movement controls, where vanilla ticks a mob's brain.
+    fn custom_server_ai_step(&self, _caller: &dyn EntityBase) {}
+
+    /// Builds this mob's brain from its saved memories; goal mobs keep the brain-dead default.
+    fn make_brain(&self, _packed: &PackedMemories) -> Brain {
+        Brain::default()
     }
 
     fn mob_write_nbt(&self, _nbt: &mut NbtCompound) {}
@@ -1259,6 +1395,8 @@ impl<T: Mob + Send + 'static> EntityBase for T {
                 .unwrap_or_else(std::sync::PoisonError::into_inner) = navigator;
         };
 
+        self.custom_server_ai_step(caller);
+
         // Controllers are synchronous, so we can just use normal blocks
         {
             let mut look_control = mob_entity
@@ -1417,6 +1555,14 @@ impl<T: Mob + Send + 'static> EntityBase for T {
 
     fn read_custom_nbt(&self, nbt: &NbtCompound) {
         self.get_mob_entity().read_mob_nbt(nbt);
+        if let Some(brain) = nbt.get_compound("Brain") {
+            *self
+                .get_mob_entity()
+                .brain
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                self.make_brain(&PackedMemories::from_nbt(brain));
+        }
         if let Some(ageable) = self.as_ageable() {
             ageable.read_ageable_nbt(nbt);
         }

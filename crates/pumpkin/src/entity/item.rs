@@ -82,6 +82,8 @@ impl Drop for ItemMergeReservation<'_> {
 const ITEM_UPDATE_INTERVAL: u32 = 20;
 
 impl ItemEntity {
+    pub const DEFAULT_PICKUP_DELAY: u8 = 10;
+
     pub fn new(entity: Entity, item_stack: ItemStack) -> Self {
         entity.velocity.store(Vector3::new(
             rand::random::<f64>().mul_add(0.2, -0.1),
@@ -101,7 +103,7 @@ impl ItemEntity {
             entity,
             item_stack: Mutex::new(item_stack),
             item_age: AtomicU32::new(0),
-            pickup_delay: AtomicU8::new(10), // Vanilla pickup delay is 10 ticks
+            pickup_delay: AtomicU8::new(Self::DEFAULT_PICKUP_DELAY),
             health: AtomicF32::new(5.0),
             never_despawn: AtomicBool::new(false),
             never_pickup: AtomicBool::new(false),
