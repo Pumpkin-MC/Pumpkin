@@ -1455,9 +1455,8 @@ impl HostBeaconBlockEntity for PluginHostState {
         Ok(entity
             .as_any()
             .downcast_ref::<InternalBeaconBlockEntity>()
-            .map_or(-1, |b| {
-                b.primary_effect.load(std::sync::atomic::Ordering::Relaxed)
-            }))
+            .and_then(InternalBeaconBlockEntity::primary_effect)
+            .map_or(-1, |e| i32::from(e.id)))
     }
 
     async fn get_secondary_effect(
@@ -1468,10 +1467,8 @@ impl HostBeaconBlockEntity for PluginHostState {
         Ok(entity
             .as_any()
             .downcast_ref::<InternalBeaconBlockEntity>()
-            .map_or(-1, |b| {
-                b.secondary_effect
-                    .load(std::sync::atomic::Ordering::Relaxed)
-            }))
+            .and_then(InternalBeaconBlockEntity::secondary_effect)
+            .map_or(-1, |e| i32::from(e.id)))
     }
 
     async fn get_levels(&mut self, res: Resource<BeaconBlockEntity>) -> wasmtime::Result<i32> {
@@ -1479,7 +1476,7 @@ impl HostBeaconBlockEntity for PluginHostState {
         Ok(entity
             .as_any()
             .downcast_ref::<InternalBeaconBlockEntity>()
-            .map_or(0, |b| b.levels.load(std::sync::atomic::Ordering::Relaxed)))
+            .map_or(0, InternalBeaconBlockEntity::levels))
     }
 
     async fn drop(&mut self, rep: Resource<BeaconBlockEntity>) -> wasmtime::Result<()> {
