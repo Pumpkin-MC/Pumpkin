@@ -70,6 +70,7 @@ pub mod spider;
 pub mod vex;
 pub mod vindicator;
 pub mod warden;
+pub mod warden_anger;
 pub mod warden_spawn_tracker;
 pub mod witch;
 pub mod zoglin;
