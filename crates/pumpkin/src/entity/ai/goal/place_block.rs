@@ -3,8 +3,8 @@ use std::sync::Arc;
 use super::{Goal, to_goal_ticks};
 use crate::entity::mob::Mob;
 use crate::entity::mob::enderman::EndermanEntity;
-use pumpkin_data::Block;
 use pumpkin_data::block_properties::is_air;
+use pumpkin_data::{Block, BlockState};
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
@@ -80,7 +80,22 @@ impl Goal for PlaceBlockGoal {
             return;
         }
 
-        // TODO: also check the carried block can survive there.
+        let carried_block = Block::from_state_id(block_state_id);
+        let carried_state = BlockState::from_id(block_state_id);
+        if !world_clone.block_registry.can_place_at(
+            None,
+            Some(&world_clone),
+            world_clone.as_ref(),
+            None,
+            carried_block,
+            carried_state,
+            &target_pos,
+            None,
+            None,
+        ) {
+            return;
+        }
+
         world_clone.set_block_state(&target_pos, block_state_id, BlockFlags::NOTIFY_ALL);
         self.enderman.set_carried_block(None);
     }
