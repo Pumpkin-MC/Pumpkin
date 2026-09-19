@@ -1,0 +1,24 @@
+{
+  "adult_sounds": {
+    "ambient_sound": "minecraft:entity.cat.ambient",
+    "beg_for_food_sound": "minecraft:entity.cat.beg_for_food",
+    "death_sound": "minecraft:entity.cat.death",
+    "eat_sound": "minecraft:entity.cat.eat",
+    "hiss_sound": "minecraft:entity.cat.hiss",
+    "hurt_sound": "minecraft:entity.cat.hurt",
+    "purr_sound": "minecraft:entity.cat.purr",
+    "purreow_sound": "minecraft:entity.cat.purreow",
+    "stray_ambient_sound": "minecraft:entity.cat.stray_ambient"
+  },
+  "baby_sounds": {
+    "ambient_sound": "minecraft:entity.baby_cat.ambient",
+    "beg_for_food_sound": "minecraft:entity.baby_cat.beg_for_food",
+    "death_sound": "minecraft:entity.baby_cat.death",
+    "eat_sound": "minecraft:entity.baby_cat.eat",
+    "hiss_sound": "minecraft:entity.baby_cat.hiss",
+    "hurt_sound": "minecraft:entity.baby_cat.hurt",
+    "purr_sound": "minecraft:entity.baby_cat.purr",
+    "purreow_sound": "minecraft:entity.baby_cat.purreow",
+    "stray_ambient_sound": "minecraft:entity.baby_cat.stray_ambient"
+  }
+}

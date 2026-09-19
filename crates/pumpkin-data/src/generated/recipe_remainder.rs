@@ -3,13 +3,13 @@
 #[allow(clippy::match_same_arms)]
 pub const fn get_recipe_remainder_id(item_id: u16) -> Option<u16> {
     match item_id {
-        975 => Some(920),
-        1046 => Some(1040),
-        1150 => Some(1149),
-        1281 => Some(920),
-        1319 => Some(920),
-        1371 => Some(920),
-        1412 => Some(1149),
+        1061 => Some(1006),
+        1134 => Some(1128),
+        1271 => Some(1270),
+        1402 => Some(1006),
+        1440 => Some(1006),
+        1492 => Some(1006),
+        1533 => Some(1270),
         _ => None,
     }
 }

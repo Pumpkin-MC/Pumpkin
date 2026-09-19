@@ -21,7 +21,7 @@ pub enum BuildPlatform {
     Dedicated = 9,
     TvOs = 10,
     Sony = 11,
-    Nx = 12,
+    Nintendo = 12,
     Xbox = 13,
     WindowsPhone = 14,
     Linux = 15,

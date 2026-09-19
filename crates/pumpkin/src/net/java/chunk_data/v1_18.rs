@@ -293,13 +293,14 @@ pub fn write_chunk_data(
         }
 
         // Write Sky Light Mask
-        write.write_bitset(&BitSet(Box::new([sky_light_mask as i64])))?;
+        BitSet(Box::new([sky_light_mask as i64])).encode_with_version(&mut write, version)?;
         // Write Block Light Mask
-        write.write_bitset(&BitSet(Box::new([block_light_mask as i64])))?;
+        BitSet(Box::new([block_light_mask as i64])).encode_with_version(&mut write, version)?;
         // Write Empty Sky Light Mask
-        write.write_bitset(&BitSet(Box::new([sky_light_empty_mask as i64])))?;
+        BitSet(Box::new([sky_light_empty_mask as i64])).encode_with_version(&mut write, version)?;
         // Write Empty Block Light Mask
-        write.write_bitset(&BitSet(Box::new([block_light_empty_mask as i64])))?;
+        BitSet(Box::new([block_light_empty_mask as i64]))
+            .encode_with_version(&mut write, version)?;
 
         let light_data_size: VarInt = VarInt(LightContainer::ARRAY_SIZE as i32);
 

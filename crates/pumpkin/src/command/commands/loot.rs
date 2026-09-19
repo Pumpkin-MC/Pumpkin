@@ -27,6 +27,8 @@ use crate::command::errors::command_syntax_error::CommandSyntaxError;
 use crate::command::errors::error_types::CommandErrorType;
 use crate::command::node::dispatcher::CommandDispatcher;
 use crate::command::node::{CommandExecutor, CommandExecutorResult};
+use crate::command::suggestion::provider::{SuggestionProvider, SuggestionProviderResult};
+use crate::command::suggestion::suggestions::SuggestionsBuilder;
 use crate::entity::EntityBase;
 use crate::world::loot::LootContextParameters;
 
@@ -38,6 +40,23 @@ static ERROR_INVALID_LOOT_TABLE: CommandErrorType<1> = CommandErrorType::new(
     translation::bedrock::COMMANDS_LOOT_FAILURE_INVALIDLOOTTABLE,
     "Loot table '%s' not found",
 );
+
+struct LootTableSuggestionProvider;
+
+impl SuggestionProvider for LootTableSuggestionProvider {
+    fn suggest(
+        &self,
+        context: &CommandContext,
+        mut builder: SuggestionsBuilder,
+    ) -> SuggestionProviderResult {
+        let server = context.server();
+        let custom_names = server.datapack_manager.get_loot_table_names();
+        for name in custom_names {
+            builder = builder.suggest(name);
+        }
+        builder.build()
+    }
+}
 
 static ERROR_NO_HELD_ITEMS: CommandErrorType<1> = CommandErrorType::new(
     translation::java::COMMANDS_DROP_NO_HELD_ITEMS,
@@ -345,8 +364,11 @@ impl CommandExecutor for LootExecutor {
                     ToolSource::OffHand => get_hand_item(context, false)?,
                 };
 
-                let loot_table =
-                    pumpkin_data::loot_table::get_loot_table(&key).ok_or_else(|| {
+                let loot_table = context
+                    .server()
+                    .datapack_manager
+                    .get_loot_table(&key)
+                    .ok_or_else(|| {
                         ERROR_INVALID_LOOT_TABLE
                             .create_without_context(TextComponent::text(loot_table_str.to_string()))
                     })?;
@@ -361,7 +383,7 @@ impl CommandExecutor for LootExecutor {
                     ..Default::default()
                 };
                 let seed: i64 = rand::random();
-                drops = crate::world::loot::generate_loot_with_context(loot_table, seed, &params);
+                drops = crate::world::loot::generate_loot_from_handle(&loot_table, seed, &params);
             }
             Source::Loot => {
                 let loot_table_str = StringArgumentType::get(context, "loot_table")?;
@@ -371,8 +393,11 @@ impl CommandExecutor for LootExecutor {
                     format!("minecraft:{loot_table_str}")
                 };
 
-                let loot_table =
-                    pumpkin_data::loot_table::get_loot_table(&key).ok_or_else(|| {
+                let loot_table = context
+                    .server()
+                    .datapack_manager
+                    .get_loot_table(&key)
+                    .ok_or_else(|| {
                         ERROR_INVALID_LOOT_TABLE
                             .create_without_context(TextComponent::text(loot_table_str.to_string()))
                     })?;
@@ -382,7 +407,7 @@ impl CommandExecutor for LootExecutor {
                     ..Default::default()
                 };
                 let seed: i64 = rand::random();
-                drops = crate::world::loot::generate_loot_with_context(loot_table, seed, &params);
+                drops = crate::world::loot::generate_loot_from_handle(&loot_table, seed, &params);
             }
             Source::Kill => {
                 let target_entities = EntityArgumentType::get_entities(context, "target_entity")?;
@@ -402,10 +427,13 @@ impl CommandExecutor for LootExecutor {
                 for entity in &target_entities {
                     let resource_name = entity.get_entity().entity_type.resource_name;
                     let key = format!("minecraft:entities/{resource_name}");
-                    if let Some(loot_table) = pumpkin_data::loot_table::get_loot_table(&key) {
+                    if let Some(loot_table) = context.server().datapack_manager.get_loot_table(&key)
+                    {
                         let seed: i64 = rand::random();
-                        drops.extend(crate::world::loot::generate_loot_with_context(
-                            loot_table, seed, &params,
+                        drops.extend(crate::world::loot::generate_loot_from_handle(
+                            &loot_table,
+                            seed,
+                            &params,
                         ));
                         last_key = Some(key);
                     }
@@ -427,8 +455,11 @@ impl CommandExecutor for LootExecutor {
                 let block = world.get_block(&pos);
                 let key = format!("minecraft:blocks/{}", block.name);
 
-                let loot_table =
-                    pumpkin_data::loot_table::get_loot_table(&key).ok_or_else(|| {
+                let loot_table = context
+                    .server()
+                    .datapack_manager
+                    .get_loot_table(&key)
+                    .ok_or_else(|| {
                         ERROR_NO_BLOCK_LOOT_TABLE
                             .create_without_context(TextComponent::text(block.name.to_string()))
                     })?;
@@ -451,7 +482,7 @@ impl CommandExecutor for LootExecutor {
                     ..Default::default()
                 };
                 let seed: i64 = rand::random();
-                drops = crate::world::loot::generate_loot_with_context(loot_table, seed, &params);
+                drops = crate::world::loot::generate_loot_from_handle(&loot_table, seed, &params);
                 table_id_for_callback = Some(key);
             }
         }
@@ -589,41 +620,45 @@ impl CommandExecutor for LootExecutor {
 fn add_sources(target: Target) -> Vec<LiteralArgumentBuilder> {
     vec![
         literal("fish").then(
-            argument("loot_table", StringArgumentType::SingleWord).then(
-                argument("fish_pos", BlockPosArgumentType)
-                    .executes(LootExecutor {
-                        target,
-                        source: Source::Fish {
-                            tool: ToolSource::None,
-                        },
-                    })
-                    .then(
-                        argument("tool", ItemStackArgumentType).executes(LootExecutor {
+            argument("loot_table", StringArgumentType::SingleWord)
+                .suggests(LootTableSuggestionProvider)
+                .then(
+                    argument("fish_pos", BlockPosArgumentType)
+                        .executes(LootExecutor {
                             target,
                             source: Source::Fish {
-                                tool: ToolSource::Item,
+                                tool: ToolSource::None,
                             },
-                        }),
-                    )
-                    .then(literal("mainhand").executes(LootExecutor {
-                        target,
-                        source: Source::Fish {
-                            tool: ToolSource::MainHand,
-                        },
-                    }))
-                    .then(literal("offhand").executes(LootExecutor {
-                        target,
-                        source: Source::Fish {
-                            tool: ToolSource::OffHand,
-                        },
-                    })),
-            ),
+                        })
+                        .then(
+                            argument("tool", ItemStackArgumentType).executes(LootExecutor {
+                                target,
+                                source: Source::Fish {
+                                    tool: ToolSource::Item,
+                                },
+                            }),
+                        )
+                        .then(literal("mainhand").executes(LootExecutor {
+                            target,
+                            source: Source::Fish {
+                                tool: ToolSource::MainHand,
+                            },
+                        }))
+                        .then(literal("offhand").executes(LootExecutor {
+                            target,
+                            source: Source::Fish {
+                                tool: ToolSource::OffHand,
+                            },
+                        })),
+                ),
         ),
         literal("loot").then(
-            argument("loot_table", StringArgumentType::SingleWord).executes(LootExecutor {
-                target,
-                source: Source::Loot,
-            }),
+            argument("loot_table", StringArgumentType::SingleWord)
+                .suggests(LootTableSuggestionProvider)
+                .executes(LootExecutor {
+                    target,
+                    source: Source::Loot,
+                }),
         ),
         literal("kill").then(
             argument("target_entity", EntityArgumentType::Entities).executes(LootExecutor {

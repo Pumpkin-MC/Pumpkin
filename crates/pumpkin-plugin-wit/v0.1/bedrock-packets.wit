@@ -174,12 +174,17 @@ interface bedrock-packets {
     old-item: network-item-descriptor,
     new-item: network-item-descriptor,
   }
+  enum hand-slot {
+    mainhand,
+    offhand,
+  }
   record use-item-transaction-data {
     action-type: s32,
     trigger-type: u8,
     block-position: tuple<s32, s32, s32>,
     block-face: u8,
     hot-bar-slot: s32,
+    hand: hand-slot,
     item-in-hand: network-item-descriptor,
     player-position: tuple<f64, f64, f64>,
     click-position: tuple<f64, f64, f64>,
@@ -777,7 +782,6 @@ interface bedrock-packets {
   }
   record c-boss-event {
     boss-entity-id: s64,
-    player-entity-id: s64,
     event-type: u8,
     title: string,
     filtered-title: string,
@@ -813,7 +817,7 @@ interface bedrock-packets {
     dedicated,
     tv-os,
     sony,
-    nx,
+    nintendo,
     xbox,
     windows-phone,
     linux,
@@ -1000,12 +1004,6 @@ interface bedrock-packets {
   record c-item-stack-response {
     responses: list<item-stack-response-info>,
   }
-  record c-level-chunk {
-    dimension: s32,
-    cache-enabled: bool,
-    chunk: list<u8>,
-    block-actors: list<string>,
-  }
   record c-level-event {
     event-id: s32,
     position: tuple<f64, f64, f64>,
@@ -1065,6 +1063,7 @@ interface bedrock-packets {
     pitch: u8,
     yaw: u8,
     head-yaw: u8,
+    tick: s64,
   }
   record c-move-player {
     player-runtime-id: s64,
@@ -1667,7 +1666,7 @@ interface bedrock-packets {
     c-inventory-slot(c-inventory-slot),
     c-item-registry(c-item-registry),
     c-item-stack-response(c-item-stack-response),
-    c-level-chunk(c-level-chunk),
+    c-jigsaw-structure-data,
     c-level-event(c-level-event),
     c-level-sound-event(c-level-sound-event),
     c-mob-effect(c-mob-effect),
@@ -1704,6 +1703,7 @@ interface bedrock-packets {
     c-update-attributes(c-update-attributes),
     c-update-block(c-update-block),
     c-update-trade(c-update-trade),
+    c-voxel-shapes,
     unknown,
   }
 }

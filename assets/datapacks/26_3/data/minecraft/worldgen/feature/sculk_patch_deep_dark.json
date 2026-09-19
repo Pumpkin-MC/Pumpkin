@@ -1,0 +1,45 @@
+{
+  "type": "minecraft:sequence",
+  "features": [
+    {
+      "feature": {
+        "type": "minecraft:sculk_patch",
+        "amount_per_charge": 32,
+        "charge_count": 10,
+        "growth_rounds": 0,
+        "spread_attempts": 64,
+        "spread_rounds": 1
+      },
+      "placement": []
+    },
+    {
+      "feature": {
+        "type": "minecraft:simple_block",
+        "to_place": {
+          "id": "minecraft:sculk_catalyst",
+          "properties": {
+            "bloom": "false"
+          }
+        }
+      },
+      "placement": [
+        {
+          "type": "minecraft:random_chance",
+          "chance": 0.5
+        },
+        {
+          "type": "minecraft:block_predicate_filter",
+          "predicate": {
+            "type": "minecraft:has_sturdy_face",
+            "direction": "up",
+            "offset": [
+              0,
+              -1,
+              0
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

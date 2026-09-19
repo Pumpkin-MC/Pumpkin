@@ -38,8 +38,6 @@ pub const BOSS_EVENT_OVERLAY_NOTCHED_20: u8 = 4;
 pub struct CBossEvent {
     /// The unique ID of the boss entity that the boss event sent involves.
     pub boss_entity_id: VarLong,
-    /// The unique ID of the player that is registered to or unregistered from the boss fight.
-    pub player_entity_id: VarLong,
     /// The type of the event (one of `BOSS_EVENT_*`).
     pub event_type: u8,
     /// The title shown above the boss bar.
@@ -55,11 +53,9 @@ pub struct CBossEvent {
 }
 
 impl CBossEvent {
-    #[allow(clippy::too_many_arguments)]
     #[must_use]
     pub const fn new(
         boss_entity_id: VarLong,
-        player_entity_id: VarLong,
         event_type: u8,
         title: String,
         filtered_title: String,
@@ -69,7 +65,6 @@ impl CBossEvent {
     ) -> Self {
         Self {
             boss_entity_id,
-            player_entity_id,
             event_type,
             title,
             filtered_title,
@@ -82,7 +77,6 @@ impl CBossEvent {
     #[must_use]
     pub fn show(
         boss_entity_id: VarLong,
-        player_entity_id: VarLong,
         title: impl Into<String>,
         health_percentage: f32,
         color: u8,
@@ -91,7 +85,6 @@ impl CBossEvent {
         let title = title.into();
         Self {
             boss_entity_id,
-            player_entity_id,
             event_type: BOSS_EVENT_SHOW,
             filtered_title: title.clone(),
             title,
@@ -102,10 +95,9 @@ impl CBossEvent {
     }
 
     #[must_use]
-    pub const fn register_player(boss_entity_id: VarLong, player_entity_id: VarLong) -> Self {
+    pub const fn register_player(boss_entity_id: VarLong) -> Self {
         Self {
             boss_entity_id,
-            player_entity_id,
             event_type: BOSS_EVENT_REGISTER_PLAYER,
             title: String::new(),
             filtered_title: String::new(),
@@ -119,7 +111,6 @@ impl CBossEvent {
     pub const fn hide(boss_entity_id: VarLong) -> Self {
         Self {
             boss_entity_id,
-            player_entity_id: VarLong(0),
             event_type: BOSS_EVENT_HIDE,
             title: String::new(),
             filtered_title: String::new(),
@@ -130,10 +121,9 @@ impl CBossEvent {
     }
 
     #[must_use]
-    pub const fn unregister_player(boss_entity_id: VarLong, player_entity_id: VarLong) -> Self {
+    pub const fn unregister_player(boss_entity_id: VarLong) -> Self {
         Self {
             boss_entity_id,
-            player_entity_id,
             event_type: BOSS_EVENT_UNREGISTER_PLAYER,
             title: String::new(),
             filtered_title: String::new(),
@@ -147,7 +137,6 @@ impl CBossEvent {
     pub const fn update_health(boss_entity_id: VarLong, health_percentage: f32) -> Self {
         Self {
             boss_entity_id,
-            player_entity_id: VarLong(0),
             event_type: BOSS_EVENT_HEALTH_PERCENTAGE,
             title: String::new(),
             filtered_title: String::new(),
@@ -162,7 +151,6 @@ impl CBossEvent {
         let title = title.into();
         Self {
             boss_entity_id,
-            player_entity_id: VarLong(0),
             event_type: BOSS_EVENT_TITLE,
             filtered_title: title.clone(),
             title,
@@ -176,7 +164,6 @@ impl CBossEvent {
     pub const fn update_properties(boss_entity_id: VarLong, color: u8, overlay: u8) -> Self {
         Self {
             boss_entity_id,
-            player_entity_id: VarLong(0),
             event_type: BOSS_EVENT_APPEARANCE_PROPERTIES,
             title: String::new(),
             filtered_title: String::new(),
@@ -190,7 +177,6 @@ impl CBossEvent {
     pub const fn update_texture(boss_entity_id: VarLong, color: u8, overlay: u8) -> Self {
         Self {
             boss_entity_id,
-            player_entity_id: VarLong(0),
             event_type: BOSS_EVENT_TEXTURE,
             title: String::new(),
             filtered_title: String::new(),
@@ -201,10 +187,9 @@ impl CBossEvent {
     }
 
     #[must_use]
-    pub const fn request(boss_entity_id: VarLong, player_entity_id: VarLong) -> Self {
+    pub const fn request(boss_entity_id: VarLong) -> Self {
         Self {
             boss_entity_id,
-            player_entity_id,
             event_type: BOSS_EVENT_REQUEST,
             title: String::new(),
             filtered_title: String::new(),
@@ -212,5 +197,18 @@ impl CBossEvent {
             color: 0,
             overlay: 0,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn boss_event_has_no_player_id() {
+        let packet = CBossEvent::hide(VarLong(1));
+        let mut bytes = Vec::new();
+        packet.write(&mut bytes).unwrap();
+        assert_eq!(bytes, [2, 2, 0, 0, 0, 0, 0, 0, 0, 0]);
     }
 }

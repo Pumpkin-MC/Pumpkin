@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:simple_block",
+  "to_place": {
+    "type": "minecraft:randomized_int",
+    "property": "pickles",
+    "source": {
+      "id": "minecraft:sea_pickle",
+      "properties": {
+        "pickles": "1",
+        "waterlogged": "true"
+      }
+    },
+    "values": {
+      "type": "minecraft:uniform",
+      "max_inclusive": 4,
+      "min_inclusive": 1
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    "minecraft:furnace",
+    "minecraft:minecart"
+  ],
+  "result": {
+    "id": "minecraft:furnace_minecart"
+  }
+}

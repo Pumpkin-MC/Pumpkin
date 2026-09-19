@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:pointer",
+  "author": {
+    "color": "gray",
+    "translate": "painting.minecraft.pointer.author"
+  },
+  "height": 4,
+  "title": {
+    "color": "yellow",
+    "translate": "painting.minecraft.pointer.title"
+  },
+  "width": 4
+}
