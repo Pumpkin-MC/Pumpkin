@@ -87,11 +87,10 @@ fn can_place_at(
             let adj_pos = block_pos.down().offset(direction.to_offset());
             let block = block_accessor.get_block(&adj_pos);
 
-            let fluid_ok = world
-                .is_some_and(|w| {
-                    w.get_fluid(&adj_pos)
-                        .has_tag(&tag::Fluid::MINECRAFT_SUPPORTS_SUGAR_CANE_ADJACENTLY)
-                });
+            let fluid_ok = world.is_some_and(|w| {
+                w.get_fluid(&adj_pos)
+                    .has_tag(&tag::Fluid::MINECRAFT_SUPPORTS_SUGAR_CANE_ADJACENTLY)
+            });
 
             let block_ok = block.has_tag(&tag::Block::MINECRAFT_SUPPORTS_SUGAR_CANE_ADJACENTLY);
 
