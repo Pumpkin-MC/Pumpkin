@@ -1,3 +1,58 @@
+/// Entity selected when evaluating an entity-properties loot condition.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LootEntityTarget {
+    This,
+    Attacker,
+    DirectAttacker,
+}
+
+/// Primitive value stored in a generated entity-property predicate.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LootEntityPropertyValue {
+    Bool(bool),
+    Integer(i64),
+    String(&'static str),
+}
+
+/// A flattened entity-property path and its expected or actual value.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LootEntityProperty {
+    pub key: &'static str,
+    pub value: LootEntityPropertyValue,
+}
+
+/// Properties required by an entity-properties loot condition.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LootEntityPredicate {
+    pub properties: &'static [LootEntityProperty],
+}
+
+/// Property values published by an entity into a loot context.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct LootEntityProperties {
+    pub values: Vec<LootEntityProperty>,
+}
+
+impl LootEntityProperties {
+    /// Returns whether every property required by `predicate` has an equal value.
+    #[must_use]
+    pub fn matches(&self, predicate: LootEntityPredicate) -> bool {
+        predicate
+            .properties
+            .iter()
+            .all(|expected| self.matches_property(*expected))
+    }
+
+    /// Returns whether this snapshot publishes `expected`'s key with an equal value.
+    #[must_use]
+    pub fn matches_property(&self, expected: LootEntityProperty) -> bool {
+        self.values
+            .iter()
+            .find(|actual| actual.key == expected.key)
+            .is_some_and(|actual| actual.value == expected.value)
+    }
+}
+
 /// Conditions required for an entry or pool to be eligible for loot generation.
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub enum LootCondition {
@@ -17,6 +72,10 @@ pub enum LootCondition {
         unenchanted_chance: f32,
         enchanted_chance_base: f32,
         enchanted_chance_per_level_above_first: f32,
+    },
+    EntityProperties {
+        target: LootEntityTarget,
+        predicate: LootEntityPredicate,
     },
     TableBonus {
         chances: &'static [f32],
@@ -75,3 +134,53 @@ pub struct LootTable {
 pub type ChestLootEntry = LootEntry;
 pub type ChestLootPool = LootPool;
 pub type ChestLootTable = LootTable;
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        LootEntityPredicate, LootEntityProperties, LootEntityProperty, LootEntityPropertyValue,
+    };
+
+    /// A predicate matches only when every property it requires is published with an equal
+    /// value; a differing or missing property must not match.
+    #[test]
+    fn entity_properties_match_all_predicate_values() {
+        let properties = LootEntityProperties {
+            values: vec![
+                LootEntityProperty {
+                    key: "minecraft:variant",
+                    value: LootEntityPropertyValue::String("example"),
+                },
+                LootEntityProperty {
+                    key: "minecraft:flags/is_baby",
+                    value: LootEntityPropertyValue::Bool(false),
+                },
+            ],
+        };
+
+        assert!(properties.matches(LootEntityPredicate {
+            properties: &[
+                LootEntityProperty {
+                    key: "minecraft:variant",
+                    value: LootEntityPropertyValue::String("example"),
+                },
+                LootEntityProperty {
+                    key: "minecraft:flags/is_baby",
+                    value: LootEntityPropertyValue::Bool(false),
+                },
+            ],
+        }));
+        assert!(!properties.matches(LootEntityPredicate {
+            properties: &[LootEntityProperty {
+                key: "minecraft:flags/is_baby",
+                value: LootEntityPropertyValue::Bool(true),
+            }],
+        }));
+        assert!(!properties.matches(LootEntityPredicate {
+            properties: &[LootEntityProperty {
+                key: "minecraft:missing",
+                value: LootEntityPropertyValue::Integer(1),
+            }],
+        }));
+    }
+}

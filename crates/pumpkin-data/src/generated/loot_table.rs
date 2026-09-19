@@ -24612,7 +24612,15 @@ static CHARGED_CREEPER_ROOT_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[LootEntityProperty {
+                    key: "minecraft:entity_type",
+                    value: LootEntityPropertyValue::String("minecraft:piglin"),
+                }],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -24620,7 +24628,15 @@ static CHARGED_CREEPER_ROOT_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[LootEntityProperty {
+                    key: "minecraft:entity_type",
+                    value: LootEntityPropertyValue::String("minecraft:creeper"),
+                }],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -24628,7 +24644,15 @@ static CHARGED_CREEPER_ROOT_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[LootEntityProperty {
+                    key: "minecraft:entity_type",
+                    value: LootEntityPropertyValue::String("minecraft:skeleton"),
+                }],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -24636,7 +24660,15 @@ static CHARGED_CREEPER_ROOT_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[LootEntityProperty {
+                    key: "minecraft:entity_type",
+                    value: LootEntityPropertyValue::String("minecraft:wither_skeleton"),
+                }],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -24644,7 +24676,15 @@ static CHARGED_CREEPER_ROOT_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[LootEntityProperty {
+                    key: "minecraft:entity_type",
+                    value: LootEntityPropertyValue::String("minecraft:zombie"),
+                }],
+            },
+        },
         bonus_formula: None,
     },
 ];
@@ -33327,7 +33367,15 @@ static ENTITIES_CREEPER_POOLS: &[LootPool] = &[
         min_rolls: 1i32,
         max_rolls: 1i32,
         empty_weight: 0i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::Attacker,
+            predicate: LootEntityPredicate {
+                properties: &[LootEntityProperty {
+                    key: "minecraft:entity_type",
+                    value: LootEntityPropertyValue::String("#minecraft:skeletons"),
+                }],
+            },
+        },
     },
 ];
 pub static ENTITIES_CREEPER: LootTable = LootTable {
@@ -33842,7 +33890,15 @@ static ENTITIES_HUSK_POOL1_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 0i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::EntityProperties {
+        target: LootEntityTarget::This,
+        predicate: LootEntityPredicate {
+            properties: &[LootEntityProperty {
+                key: "minecraft:vehicle/minecraft:entity_type",
+                value: LootEntityPropertyValue::String("minecraft:camel_husk"),
+            }],
+        },
+    },
     bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
 }];
 static ENTITIES_HUSK_POOL2_ENTRIES: &[LootEntry] = &[
@@ -33967,7 +34023,15 @@ static ENTITIES_MAGMA_CUBE_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: -2i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[LootEntityProperty {
+                    key: "minecraft:type_specific/cube_mob/size/min",
+                    value: LootEntityPropertyValue::Integer(2i64),
+                }],
+            },
+        },
         bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
     },
     LootEntry {
@@ -34234,7 +34298,15 @@ static ENTITIES_PILLAGER_POOLS: &[LootPool] = &[LootPool {
     min_rolls: 1i32,
     max_rolls: 1i32,
     empty_weight: 0i32,
-    condition: LootCondition::None,
+    condition: LootCondition::EntityProperties {
+        target: LootEntityTarget::This,
+        predicate: LootEntityPredicate {
+            properties: &[LootEntityProperty {
+                key: "minecraft:type_specific/raider/is_captain",
+                value: LootEntityPropertyValue::Bool(true),
+            }],
+        },
+    },
 }];
 pub static ENTITIES_PILLAGER: LootTable = LootTable {
     pools: ENTITIES_PILLAGER_POOLS,
@@ -34430,7 +34502,21 @@ static ENTITIES_SHEEP_POOL1_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("white"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -34438,7 +34524,21 @@ static ENTITIES_SHEEP_POOL1_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("orange"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -34446,7 +34546,21 @@ static ENTITIES_SHEEP_POOL1_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("magenta"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -34454,7 +34568,21 @@ static ENTITIES_SHEEP_POOL1_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("light_blue"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -34462,7 +34590,21 @@ static ENTITIES_SHEEP_POOL1_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("yellow"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -34470,7 +34612,21 @@ static ENTITIES_SHEEP_POOL1_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("lime"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -34478,7 +34634,21 @@ static ENTITIES_SHEEP_POOL1_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("pink"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -34486,7 +34656,21 @@ static ENTITIES_SHEEP_POOL1_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("gray"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -34494,7 +34678,21 @@ static ENTITIES_SHEEP_POOL1_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("light_gray"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -34502,7 +34700,21 @@ static ENTITIES_SHEEP_POOL1_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("cyan"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -34510,7 +34722,21 @@ static ENTITIES_SHEEP_POOL1_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("purple"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -34518,7 +34744,21 @@ static ENTITIES_SHEEP_POOL1_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("blue"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -34526,7 +34766,21 @@ static ENTITIES_SHEEP_POOL1_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("brown"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -34534,7 +34788,21 @@ static ENTITIES_SHEEP_POOL1_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("green"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -34542,7 +34810,21 @@ static ENTITIES_SHEEP_POOL1_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("red"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -34550,7 +34832,21 @@ static ENTITIES_SHEEP_POOL1_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("black"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
 ];
@@ -34963,7 +35259,15 @@ static ENTITIES_SLIME_POOLS: &[LootPool] = &[LootPool {
     min_rolls: 1i32,
     max_rolls: 1i32,
     empty_weight: 0i32,
-    condition: LootCondition::None,
+    condition: LootCondition::EntityProperties {
+        target: LootEntityTarget::This,
+        predicate: LootEntityPredicate {
+            properties: &[LootEntityProperty {
+                key: "minecraft:type_specific/cube_mob/size",
+                value: LootEntityPropertyValue::Integer(1i64),
+            }],
+        },
+    },
 }];
 pub static ENTITIES_SLIME: LootTable = LootTable {
     pools: ENTITIES_SLIME_POOLS,
@@ -35428,7 +35732,15 @@ static ENTITIES_ZOMBIE_POOL1_ENTRIES: &[LootEntry] = &[LootEntry {
     weight: 1i32,
     min_count: 0i32,
     max_count: 1i32,
-    condition: LootCondition::None,
+    condition: LootCondition::EntityProperties {
+        target: LootEntityTarget::This,
+        predicate: LootEntityPredicate {
+            properties: &[LootEntityProperty {
+                key: "minecraft:vehicle/minecraft:entity_type",
+                value: LootEntityPropertyValue::String("minecraft:zombie_horse"),
+            }],
+        },
+    },
     bonus_formula: Some(LootBonusFormula::UniformBonusCount(1i32)),
 }];
 static ENTITIES_ZOMBIE_POOL2_ENTRIES: &[LootEntry] = &[
@@ -35499,7 +35811,24 @@ static ENTITIES_ZOMBIE_POOLS: &[LootPool] = &[
         min_rolls: 1i32,
         max_rolls: 1i32,
         empty_weight: 0i32,
-        condition: LootCondition::KilledByPlayer,
+        condition: LootCondition::AllOf(&[
+            LootCondition::KilledByPlayer,
+            LootCondition::EntityProperties {
+                target: LootEntityTarget::This,
+                predicate: LootEntityPredicate {
+                    properties: &[
+                        LootEntityProperty {
+                            key: "minecraft:flags/is_baby",
+                            value: LootEntityPropertyValue::Bool(true),
+                        },
+                        LootEntityProperty {
+                            key: "minecraft:vehicle/minecraft:entity_type",
+                            value: LootEntityPropertyValue::String("minecraft:chicken"),
+                        },
+                    ],
+                },
+            },
+        ]),
     },
 ];
 pub static ENTITIES_ZOMBIE: LootTable = LootTable {
@@ -36008,7 +36337,15 @@ static GAMEPLAY_CHICKEN_LAY_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[LootEntityProperty {
+                    key: "minecraft:components/minecraft:chicken/variant",
+                    value: LootEntityPropertyValue::String("minecraft:temperate"),
+                }],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -36016,7 +36353,15 @@ static GAMEPLAY_CHICKEN_LAY_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[LootEntityProperty {
+                    key: "minecraft:components/minecraft:chicken/variant",
+                    value: LootEntityPropertyValue::String("minecraft:warm"),
+                }],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -36024,7 +36369,15 @@ static GAMEPLAY_CHICKEN_LAY_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[LootEntityProperty {
+                    key: "minecraft:components/minecraft:chicken/variant",
+                    value: LootEntityPropertyValue::String("minecraft:cold"),
+                }],
+            },
+        },
         bonus_formula: None,
     },
 ];
@@ -36148,7 +36501,15 @@ static GAMEPLAY_FISHING_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[LootEntityProperty {
+                    key: "minecraft:type_specific/fishing_hook/in_open_water",
+                    value: LootEntityPropertyValue::Bool(true),
+                }],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -36156,7 +36517,15 @@ static GAMEPLAY_FISHING_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[LootEntityProperty {
+                    key: "minecraft:type_specific/fishing_hook/in_open_water",
+                    value: LootEntityPropertyValue::Bool(true),
+                }],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -36164,7 +36533,15 @@ static GAMEPLAY_FISHING_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[LootEntityProperty {
+                    key: "minecraft:type_specific/fishing_hook/in_open_water",
+                    value: LootEntityPropertyValue::Bool(true),
+                }],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -36172,7 +36549,15 @@ static GAMEPLAY_FISHING_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[LootEntityProperty {
+                    key: "minecraft:type_specific/fishing_hook/in_open_water",
+                    value: LootEntityPropertyValue::Bool(true),
+                }],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -36180,7 +36565,15 @@ static GAMEPLAY_FISHING_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[LootEntityProperty {
+                    key: "minecraft:type_specific/fishing_hook/in_open_water",
+                    value: LootEntityPropertyValue::Bool(true),
+                }],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -36188,7 +36581,15 @@ static GAMEPLAY_FISHING_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[LootEntityProperty {
+                    key: "minecraft:type_specific/fishing_hook/in_open_water",
+                    value: LootEntityPropertyValue::Bool(true),
+                }],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -37513,7 +37914,15 @@ static SHEARING_MOOSHROOM_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[LootEntityProperty {
+                    key: "minecraft:components/minecraft:mooshroom/variant",
+                    value: LootEntityPropertyValue::String("red"),
+                }],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -37521,7 +37930,15 @@ static SHEARING_MOOSHROOM_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[LootEntityProperty {
+                    key: "minecraft:components/minecraft:mooshroom/variant",
+                    value: LootEntityPropertyValue::String("brown"),
+                }],
+            },
+        },
         bonus_formula: None,
     },
 ];
@@ -37577,7 +37994,21 @@ static SHEARING_SHEEP_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("white"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -37585,7 +38016,21 @@ static SHEARING_SHEEP_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("orange"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -37593,7 +38038,21 @@ static SHEARING_SHEEP_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("magenta"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -37601,7 +38060,21 @@ static SHEARING_SHEEP_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("light_blue"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -37609,7 +38082,21 @@ static SHEARING_SHEEP_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("yellow"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -37617,7 +38104,21 @@ static SHEARING_SHEEP_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("lime"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -37625,7 +38126,21 @@ static SHEARING_SHEEP_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("pink"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -37633,7 +38148,21 @@ static SHEARING_SHEEP_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("gray"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -37641,7 +38170,21 @@ static SHEARING_SHEEP_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("light_gray"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -37649,7 +38192,21 @@ static SHEARING_SHEEP_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("cyan"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -37657,7 +38214,21 @@ static SHEARING_SHEEP_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("purple"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -37665,7 +38236,21 @@ static SHEARING_SHEEP_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("blue"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -37673,7 +38258,21 @@ static SHEARING_SHEEP_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("brown"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -37681,7 +38280,21 @@ static SHEARING_SHEEP_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("green"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -37689,7 +38302,21 @@ static SHEARING_SHEEP_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("red"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
     LootEntry {
@@ -37697,7 +38324,21 @@ static SHEARING_SHEEP_POOL0_ENTRIES: &[LootEntry] = &[
         weight: 1i32,
         min_count: 1i32,
         max_count: 1i32,
-        condition: LootCondition::None,
+        condition: LootCondition::EntityProperties {
+            target: LootEntityTarget::This,
+            predicate: LootEntityPredicate {
+                properties: &[
+                    LootEntityProperty {
+                        key: "minecraft:components/minecraft:sheep/color",
+                        value: LootEntityPropertyValue::String("black"),
+                    },
+                    LootEntityProperty {
+                        key: "minecraft:type_specific/sheep/sheared",
+                        value: LootEntityPropertyValue::Bool(false),
+                    },
+                ],
+            },
+        },
         bonus_formula: None,
     },
 ];
