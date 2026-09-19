@@ -71,6 +71,21 @@ pub(crate) fn bounce_entity_after_fall(entity: &dyn EntityBase, bounce_multiplie
     base_entity.velocity.store(velocity);
 }
 
+pub(crate) fn push_entities_up(world: &Arc<World>, position: &BlockPos) {
+    let block_box = BoundingBox::from_block(position);
+    let old_top = f64::from(position.0.y) + 15.0 / 16.0;
+
+    for entity in world.get_all_at_box(&block_box) {
+        let base_entity = entity.get_entity();
+        if base_entity.bounding_box.load().max.y <= old_top {
+            continue;
+        }
+
+        base_entity.set_pos(base_entity.pos.load() + Vector3::new(0.0, 1.0 / 16.0, 0.0));
+        base_entity.send_pos();
+    }
+}
+
 pub trait BlockBehaviour: Send + Sync {
     fn is_valid_bonemeal_target(&self, _args: BonemealArgs<'_>) -> bool {
         false
