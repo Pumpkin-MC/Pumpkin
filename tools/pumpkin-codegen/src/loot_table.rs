@@ -190,11 +190,28 @@ fn parse_condition(cond: &ConditionStruct) -> LootCondition {
             };
 
             let mut properties = Vec::new();
+            let mut skipped = Vec::new();
             for (key, value) in &predicate.entity_properties {
-                flatten_entity_properties(key, value, &mut properties);
+                flatten_entity_properties(key, value, &mut properties, &mut skipped);
             }
+
+            let target_name = cond.entity.as_deref().unwrap_or("this");
             if properties.is_empty() {
+                if !skipped.is_empty() {
+                    eprintln!(
+                        "loot_table: no value of the `{target_name}` entity predicate can be \
+                         expressed ({}), leaving the entry unconditional",
+                        skipped.join(", ")
+                    );
+                }
                 return LootCondition::None;
+            }
+            if !skipped.is_empty() {
+                eprintln!(
+                    "loot_table: the `{target_name}` entity predicate is only partly expressed, \
+                     ignoring {}",
+                    skipped.join(", ")
+                );
             }
 
             LootCondition::EntityProperties {
@@ -281,18 +298,23 @@ fn parse_condition(cond: &ConditionStruct) -> LootCondition {
 /// Flatten a nested entity predicate into `path/to/key` and primitive value pairs.
 ///
 /// `path` is the prefix accumulated so far; nested objects recurse with their key appended.
-/// Values the runtime has no representation for (arrays, floats, `null`) are skipped, so a
-/// predicate that only contains those ends up empty and its condition becomes
-/// [`LootCondition::None`].
+/// Values the runtime has no representation for (arrays, floats, `null`) are collected in
+/// `skipped` instead of being matched on. The condition then only checks what is left, which
+/// stays closer to vanilla than dropping the whole condition would; a predicate made up of
+/// nothing but those ends up empty and its condition becomes [`LootCondition::None`], the same
+/// permissive fallback every condition the runtime cannot evaluate gets. Both cases are
+/// reported by [`parse_condition`] so an unrepresentable predicate is visible when the data is
+/// regenerated.
 fn flatten_entity_properties(
     path: &str,
     value: &serde_json::Value,
     properties: &mut Vec<LootEntityProperty>,
+    skipped: &mut Vec<String>,
 ) {
     match value {
         serde_json::Value::Object(values) => {
             for (key, value) in values {
-                flatten_entity_properties(&format!("{path}/{key}"), value, properties);
+                flatten_entity_properties(&format!("{path}/{key}"), value, properties, skipped);
             }
         }
         serde_json::Value::Bool(value) => properties.push(LootEntityProperty {
@@ -305,13 +327,16 @@ fn flatten_entity_properties(
                     key: Box::leak(path.to_owned().into_boxed_str()),
                     value: LootEntityPropertyValue::Integer(value),
                 });
+            } else {
+                skipped.push(format!("{path} (non-integer number)"));
             }
         }
         serde_json::Value::String(value) => properties.push(LootEntityProperty {
             key: Box::leak(path.to_owned().into_boxed_str()),
             value: LootEntityPropertyValue::String(Box::leak(value.clone().into_boxed_str())),
         }),
-        _ => {}
+        serde_json::Value::Array(_) => skipped.push(format!("{path} (array)")),
+        serde_json::Value::Null => skipped.push(format!("{path} (null)")),
     }
 }
 
@@ -961,7 +986,9 @@ mod tests {
         LootEntityPredicate, LootEntityProperty, LootEntityPropertyValue, LootEntityTarget,
     };
 
-    use super::{LootCondition, PoolEntryStruct, extract_entries};
+    use super::{
+        ConditionStruct, LootCondition, PoolEntryStruct, extract_entries, parse_condition,
+    };
 
     /// The condition the `entity_properties` child in these fixtures parses into.
     const SHEEP_IS_WHITE: LootCondition = LootCondition::EntityProperties {
@@ -1074,5 +1101,60 @@ mod tests {
             entries[0].condition,
             LootCondition::AllOf(&[LootCondition::KilledByPlayer, SHEEP_IS_WHITE])
         );
+    }
+
+    /// A predicate the runtime cannot express in full still constrains the entry with the
+    /// values it does understand; dropping those too would let the entry roll whenever the
+    /// unsupported half is all there is to check.
+    #[test]
+    fn entity_properties_keep_the_values_that_can_be_expressed() {
+        let cond: ConditionStruct = serde_json::from_str(
+            r#"{
+                "type": "minecraft:entity_properties",
+                "entity": "this",
+                "predicate": {
+                    "minecraft:components": { "minecraft:sheep/color": "white" },
+                    "minecraft:equipment": {
+                        "mainhand": {
+                            "predicates": {
+                                "minecraft:enchantments": [
+                                    { "enchantments": "minecraft:silk_touch" }
+                                ]
+                            }
+                        }
+                    }
+                }
+            }"#,
+        )
+        .expect("condition should deserialize");
+
+        assert_eq!(parse_condition(&cond), SHEEP_IS_WHITE);
+    }
+
+    /// With nothing left to check the condition falls back to [`LootCondition::None`], the
+    /// same permissive fallback every unrepresentable condition gets: the entry keeps dropping
+    /// as it did before the predicate was understood at all, rather than never dropping.
+    #[test]
+    fn entity_properties_without_expressible_values_stay_unconditional() {
+        let cond: ConditionStruct = serde_json::from_str(
+            r##"{
+                "type": "minecraft:entity_properties",
+                "entity": "direct_attacker",
+                "predicate": {
+                    "minecraft:equipment": {
+                        "mainhand": {
+                            "predicates": {
+                                "minecraft:enchantments": [
+                                    { "enchantments": "#minecraft:smelts_loot" }
+                                ]
+                            }
+                        }
+                    }
+                }
+            }"##,
+        )
+        .expect("condition should deserialize");
+
+        assert_eq!(parse_condition(&cond), LootCondition::None);
     }
 }
