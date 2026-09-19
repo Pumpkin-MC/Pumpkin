@@ -59,7 +59,11 @@ impl ClientPacket for CLevelEvent {
         write.write_i32_be(self.event)?;
         write.write_block_pos(&self.location, version)?;
 
-        let data = if self.event == WorldEvent::ParticlesDestroyBlock as i32 {
+        // Both destroy effects carry a block state id that needs remapping; 2014 only
+        // exists from 26.3 on, while 2001 is what vanilla actually emits.
+        let carries_block_state = self.event == WorldEvent::ParticlesAndSoundDestroyBlock as i32
+            || self.event == WorldEvent::ParticlesDestroyBlock as i32;
+        let data = if carries_block_state {
             u16::try_from(self.data).map_or(self.data, |state_id| {
                 i32::from(remap_block_state_for_version(state_id, *version))
             })
