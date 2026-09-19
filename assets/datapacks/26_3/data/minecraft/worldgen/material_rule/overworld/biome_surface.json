@@ -1,0 +1,162 @@
+{
+  "type": "minecraft:sequence",
+  "sequence": [
+    {
+      "type": "minecraft:condition",
+      "if_true": {
+        "type": "minecraft:biome",
+        "biome_is": "minecraft:frozen_peaks"
+      },
+      "then_run": "minecraft:overworld/biome_surface/frozen_peaks"
+    },
+    {
+      "type": "minecraft:condition",
+      "if_true": {
+        "type": "minecraft:biome",
+        "biome_is": "minecraft:snowy_slopes"
+      },
+      "then_run": "minecraft:overworld/biome_surface/snowy_slopes"
+    },
+    {
+      "type": "minecraft:condition",
+      "if_true": {
+        "type": "minecraft:biome",
+        "biome_is": "minecraft:jagged_peaks"
+      },
+      "then_run": "minecraft:overworld/biome_surface/jagged_peaks"
+    },
+    {
+      "type": "minecraft:condition",
+      "if_true": {
+        "type": "minecraft:biome",
+        "biome_is": "minecraft:grove"
+      },
+      "then_run": "minecraft:overworld/biome_surface/grove"
+    },
+    {
+      "type": "minecraft:sequence",
+      "sequence": [
+        {
+          "type": "minecraft:condition",
+          "if_true": {
+            "type": "minecraft:biome",
+            "biome_is": "minecraft:stony_peaks"
+          },
+          "then_run": "minecraft:overworld/biome_surface/stony_peaks"
+        },
+        {
+          "type": "minecraft:condition",
+          "if_true": {
+            "type": "minecraft:biome",
+            "biome_is": "minecraft:stony_shore"
+          },
+          "then_run": "minecraft:overworld/biome_surface/stony_shore"
+        },
+        {
+          "type": "minecraft:condition",
+          "if_true": {
+            "type": "minecraft:biome",
+            "biome_is": "minecraft:windswept_hills"
+          },
+          "then_run": "minecraft:overworld/biome_surface/windswept_hills"
+        },
+        {
+          "type": "minecraft:condition",
+          "if_true": {
+            "type": "minecraft:biome",
+            "biome_is": [
+              "minecraft:warm_ocean",
+              "minecraft:beach",
+              "minecraft:snowy_beach"
+            ]
+          },
+          "then_run": "minecraft:overworld/sand_or_sandstone_if_ceiling"
+        },
+        {
+          "type": "minecraft:condition",
+          "if_true": {
+            "type": "minecraft:biome",
+            "biome_is": "minecraft:desert"
+          },
+          "then_run": "minecraft:overworld/sand_or_sandstone_if_ceiling"
+        },
+        {
+          "type": "minecraft:condition",
+          "if_true": {
+            "type": "minecraft:biome",
+            "biome_is": "minecraft:dripstone_caves"
+          },
+          "then_run": "minecraft:overworld/biome_surface/dripstone_caves"
+        },
+        {
+          "type": "minecraft:condition",
+          "if_true": {
+            "type": "minecraft:biome",
+            "biome_is": "minecraft:sulfur_caves"
+          },
+          "then_run": "minecraft:overworld/biome_surface/sulfur_caves"
+        },
+        {
+          "type": "minecraft:condition",
+          "if_true": {
+            "type": "minecraft:biome",
+            "biome_is": "minecraft:mangrove_swamp"
+          },
+          "then_run": "minecraft:overworld/biome_surface/mangrove_swamp"
+        }
+      ]
+    },
+    {
+      "type": "minecraft:condition",
+      "if_true": {
+        "type": "minecraft:biome",
+        "biome_is": "minecraft:windswept_savanna"
+      },
+      "then_run": "minecraft:overworld/biome_surface/windswept_savanna"
+    },
+    {
+      "type": "minecraft:condition",
+      "if_true": {
+        "type": "minecraft:biome",
+        "biome_is": "minecraft:windswept_gravelly_hills"
+      },
+      "then_run": "minecraft:overworld/biome_surface/windswept_gravelly_hills"
+    },
+    {
+      "type": "minecraft:condition",
+      "if_true": {
+        "type": "minecraft:biome",
+        "biome_is": [
+          "minecraft:old_growth_pine_taiga",
+          "minecraft:old_growth_spruce_taiga"
+        ]
+      },
+      "then_run": "minecraft:overworld/biome_surface/old_growth_pine_taiga"
+    },
+    {
+      "type": "minecraft:condition",
+      "if_true": {
+        "type": "minecraft:biome",
+        "biome_is": "minecraft:ice_spikes"
+      },
+      "then_run": "minecraft:overworld/biome_surface/ice_spikes"
+    },
+    {
+      "type": "minecraft:condition",
+      "if_true": {
+        "type": "minecraft:biome",
+        "biome_is": "minecraft:mushroom_fields"
+      },
+      "then_run": "minecraft:overworld/biome_surface/mushroom_fields"
+    },
+    {
+      "type": "minecraft:condition",
+      "if_true": {
+        "type": "minecraft:biome",
+        "biome_is": "minecraft:dappled_forest"
+      },
+      "then_run": "minecraft:overworld/biome_surface/dappled_forest"
+    },
+    "minecraft:overworld/biome_surface/default"
+  ]
+}

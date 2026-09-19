@@ -1,0 +1,9 @@
+{
+  "asset_id": "minecraft:entity/cat/cat_british_shorthair",
+  "baby_asset_id": "minecraft:entity/cat/cat_british_shorthair_baby",
+  "spawn_conditions": [
+    {
+      "priority": 0
+    }
+  ]
+}

@@ -329,6 +329,7 @@ impl Level {
                 x: pos.x,
                 z: pos.y,
                 data: std::sync::Mutex::new(Vec::new()),
+                live: AtomicBool::new(false),
                 dirty: AtomicBool::new(false),
             });
 
@@ -802,6 +803,7 @@ impl Level {
                     x: pos.x,
                     z: pos.y,
                     data: std::sync::Mutex::new(Vec::new()),
+                    live: AtomicBool::new(false),
                     dirty: AtomicBool::new(false),
                 })
             })
@@ -916,6 +918,15 @@ impl Level {
         self.loaded_entity_chunks
             .get(pos)
             .map(|x| x.value().clone())
+    }
+
+    #[must_use]
+    pub fn live_entity_chunk_positions(&self) -> Vec<Vector2<i32>> {
+        self.loaded_entity_chunks
+            .iter()
+            .filter(|entry| entry.value().live.load(Ordering::Relaxed))
+            .map(|entry| *entry.key())
+            .collect()
     }
 
     pub async fn get_or_fetch_entity_chunk<R, F: Fn(&SyncEntityChunk) -> R>(

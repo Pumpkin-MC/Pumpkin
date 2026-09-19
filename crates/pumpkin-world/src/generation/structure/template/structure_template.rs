@@ -308,26 +308,29 @@ impl PaletteEntry {
     #[must_use]
     pub fn to_nbt_compound(&self) -> NbtCompound {
         let mut compound = NbtCompound::new();
-        compound.put_string("Name", self.name.clone());
+        compound.put_string("id", self.name.clone());
         if !self.properties.is_empty() {
             let mut props = NbtCompound::new();
             for (k, v) in &self.properties {
                 props.put_string(k, v.clone());
             }
-            compound.put_compound("Properties", props);
+            compound.put_compound("properties", props);
         }
         compound
     }
 
     /// Deserializes a palette entry from an NBT compound tag.
     pub fn from_nbt_compound(entry_compound: &NbtCompound) -> Result<Self, TemplateError> {
+        // 26.3 renamed the palette keys from Name and Properties to id and properties
         let name = entry_compound
-            .get_string("Name")
-            .ok_or(TemplateError::MissingField("palette.Name"))?
+            .get_string("id")
+            .or_else(|| entry_compound.get_string("Name"))
+            .ok_or(TemplateError::MissingField("palette.id"))?
             .to_string();
 
         let properties: Vec<(String, String)> = entry_compound
-            .get_compound("Properties")
+            .get_compound("properties")
+            .or_else(|| entry_compound.get_compound("Properties"))
             .map_or_else(Vec::new, |props_compound| {
                 props_compound
                     .child_tags
@@ -1343,5 +1346,28 @@ mod tests {
             ],
         );
         assert_eq!(entry_with_props.properties.len(), 2);
+    }
+
+    /// Loads a real template from the shipped 26.3 datapack, which names the palette keys id and
+    /// properties instead of Name and Properties.
+    #[test]
+    fn load_26_3_template() {
+        let bytes = include_bytes!(
+            "../../../../../../assets/datapacks/26_3/data/minecraft/structure/igloo/top.nbt"
+        );
+        let template = StructureTemplate::from_nbt_bytes(bytes).expect("failed to load template");
+
+        let palette = &template.palette;
+        assert!(!palette.is_empty(), "the palette must not be empty");
+        assert!(
+            palette.iter().any(|entry| entry.name == "minecraft:ice"),
+            "the palette must keep the block names"
+        );
+        assert!(
+            palette
+                .iter()
+                .any(|entry| !entry.properties.is_empty() && entry.name.contains("trapdoor")),
+            "the palette must keep the block properties"
+        );
     }
 }

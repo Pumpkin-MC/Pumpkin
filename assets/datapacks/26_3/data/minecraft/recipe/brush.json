@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "key": {
+    "#": "minecraft:copper_ingot",
+    "I": "minecraft:stick",
+    "X": "minecraft:feather"
+  },
+  "pattern": [
+    "X",
+    "#",
+    "I"
+  ],
+  "result": {
+    "id": "minecraft:brush"
+  }
+}
