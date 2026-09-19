@@ -22,6 +22,7 @@ use pumpkin_util::permission::{Permission, PermissionDefault, PermissionRegistry
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::text::color::NamedColor;
 
+use crate::block::entities::block_entity_from_nbt;
 use crate::command::argument_builder::{ArgumentBuilder, argument, command, literal};
 use crate::command::argument_types::coordinates::block_pos::BlockPosArgumentType;
 use crate::command::argument_types::core::double::DoubleArgumentType;
@@ -288,12 +289,25 @@ impl BlockDataAccessor {
 
 impl DataAccessor for BlockDataAccessor {
     fn set_data(&self, tag: &NbtCompound) -> Result<(), CommandSyntaxError> {
-        if self.world.get_block_entity(&self.pos).is_some() {
-            self.world.add_block_entity_nbt(self.pos, tag);
-            Ok(())
-        } else {
-            Err(ERROR_BLOCK_INVALID.create_without_context())
-        }
+        let Some(existing) = self.world.get_block_entity(&self.pos) else {
+            return Err(ERROR_BLOCK_INVALID.create_without_context());
+        };
+
+        // Vanilla loads the tag into the block entity that is already there, so the `id` and
+        // the coordinates it carries can neither retype the entity nor move it. Pumpkin has no
+        // in-place load and builds block entities from NBT, so pin both back to what is
+        // actually at this position before rebuilding.
+        let mut tag = tag.clone();
+        tag.put_string("id", existing.resource_location().to_string());
+        tag.put_int("x", self.pos.0.x);
+        tag.put_int("y", self.pos.0.y);
+        tag.put_int("z", self.pos.0.z);
+
+        let Some(block_entity) = block_entity_from_nbt(&tag) else {
+            return Err(ERROR_BLOCK_INVALID.create_without_context());
+        };
+        self.world.add_block_entity(block_entity);
+        Ok(())
     }
 
     fn get_data(&self) -> Result<NbtCompound, CommandSyntaxError> {
