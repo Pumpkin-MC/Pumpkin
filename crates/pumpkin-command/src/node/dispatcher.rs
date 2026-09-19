@@ -975,6 +975,7 @@ impl<S: CommandSource> CommandDispatcher<S> {
 mod test {
     use crate::argument_builder::{
         ArgumentBuilder, CommandArgumentBuilder, LiteralArgumentBuilder, RequiredArgumentBuilder,
+        literal,
     };
     use crate::argument_types::core::integer::IntegerArgumentType;
     use crate::context::command_context::CommandContext;
@@ -1022,6 +1023,45 @@ mod test {
             assert_eq!(java["with"][0]["text"], "x");
             assert_eq!(error.context.expect("error context").input, input);
         }
+    }
+
+    /// Describing one verb over several targets means registering the same literal more than
+    /// once — `/data get` reaches entity, block and storage that way. Brigadier's `addChild`
+    /// merges such a node into the one already present; replacing it outright silently dropped
+    /// every branch but the last, which left two thirds of `/data` unreachable.
+    #[test]
+    fn a_repeated_literal_keeps_every_branch() {
+        let mut dispatcher = CommandDispatcher::new();
+        let first: fn(&CommandContext) -> CommandExecutorResult = |_| Ok(1);
+        let second: fn(&CommandContext) -> CommandExecutorResult = |_| Ok(2);
+        dispatcher.register(
+            CommandArgumentBuilder::new("verb", "one verb over two targets")
+                .then(literal("get").then(literal("first").executes(first)))
+                .then(literal("get").then(literal("second").executes(second))),
+        );
+
+        let source = DummySource::dummy();
+        assert_eq!(dispatcher.execute_input("verb get first", &source), Ok(1));
+        assert_eq!(dispatcher.execute_input("verb get second", &source), Ok(2));
+    }
+
+    /// A later registration installs its executor on the node already there, the way Brigadier
+    /// takes the incoming command when it is set — without discarding the branch the earlier
+    /// registration hung below it.
+    #[test]
+    fn a_repeated_literal_takes_the_later_executor() {
+        let mut dispatcher = CommandDispatcher::new();
+        let branch: fn(&CommandContext) -> CommandExecutorResult = |_| Ok(1);
+        let executor: fn(&CommandContext) -> CommandExecutorResult = |_| Ok(7);
+        dispatcher.register(
+            CommandArgumentBuilder::new("verb", "one verb registered twice")
+                .then(literal("get").then(literal("first").executes(branch)))
+                .then(literal("get").executes(executor)),
+        );
+
+        let source = DummySource::dummy();
+        assert_eq!(dispatcher.execute_input("verb get", &source), Ok(7));
+        assert_eq!(dispatcher.execute_input("verb get first", &source), Ok(1));
     }
 
     #[test]

@@ -7,6 +7,7 @@ use crate::source::{CommandSource, DummySource};
 use crate::suggestion::provider::SuggestionProvider;
 use rustc_hash::FxHashMap;
 use std::borrow::Cow;
+use std::collections::hash_map::Entry;
 use std::num::NonZero;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -232,6 +233,50 @@ impl<S: CommandSource> DetachedNode<S> {
                 redirect: node.redirect,
                 meta: NodeMetadata::Argument(node.meta),
             },
+        }
+    }
+
+    /// This node's children, whatever kind of node it is.
+    fn children_mut(&mut self) -> &mut FxHashMap<String, Self> {
+        match self {
+            Self::Literal(node) => &mut node.children,
+            Self::Command(node) => &mut node.children,
+            Self::Argument(node) => &mut node.children,
+        }
+    }
+
+    /// The executor attached to this node, whatever kind of node it is.
+    fn command_mut(&mut self) -> &mut Option<Command<S>> {
+        match self {
+            Self::Literal(node) => &mut node.owned.command,
+            Self::Command(node) => &mut node.owned.command,
+            Self::Argument(node) => &mut node.owned.command,
+        }
+    }
+
+    /// Folds `other` into this node, which must carry the same name.
+    ///
+    /// This is Brigadier's `CommandNode.addChild` for the case where a child of that name is
+    /// already present: an incoming executor replaces the current one, and the incoming
+    /// children are merged in recursively instead of replacing what is already there. As in
+    /// Brigadier, `other`'s own requirements and redirect are not carried over; only the
+    /// subtree below it is.
+    ///
+    /// Registering the same literal more than once is how a command describes one verb over
+    /// several targets — `/data get` over entity, block and storage, for instance — so
+    /// overwriting outright would silently drop every branch but the last.
+    pub fn merge(&mut self, other: Self) {
+        let other = other.decompose();
+        if other.owned.command.is_some() {
+            *self.command_mut() = other.owned.command;
+        }
+        for (name, child) in other.children {
+            match self.children_mut().entry(name) {
+                Entry::Occupied(mut existing) => existing.get_mut().merge(child),
+                Entry::Vacant(slot) => {
+                    slot.insert(child);
+                }
+            }
         }
     }
 
