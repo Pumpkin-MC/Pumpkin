@@ -204,7 +204,8 @@ impl CachedStatus {
         StatusResponse {
             version: Some(Version {
                 name: format!("{LOWEST_SUPPORTED_MC_VERSION}-{CURRENT_MC_VERSION}"),
-                protocol: LOWEST_SUPPORTED_MC_VERSION.protocol_version() as u32,
+                // Generic proxy probes must detect our native protocol, not the oldest client.
+                protocol: CURRENT_MC_VERSION.protocol_version() as u32,
             }),
             players: Some(Players {
                 max: max_players,
@@ -227,5 +228,48 @@ impl Default for CachedStatus {
             "A blazingly fast Pumpkin server!",
             1000,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generic_status_probes_advertise_the_current_protocol() {
+        let status = CachedStatus::default();
+        for protocol in [-1, 0, i32::MAX] {
+            let response = status.get_status_response(protocol);
+            assert_eq!(
+                response.version.expect("server version").protocol,
+                CURRENT_MC_VERSION.protocol_version() as u32,
+                "probe protocol {protocol}"
+            );
+        }
+    }
+
+    #[test]
+    fn supported_clients_keep_their_protocol_without_changing_the_default() {
+        let status = CachedStatus::default();
+        for version in [
+            LOWEST_SUPPORTED_MC_VERSION,
+            pumpkin_util::version::JavaMinecraftVersion::V_1_16,
+            CURRENT_MC_VERSION,
+        ] {
+            let protocol = version.protocol_version();
+            let response = status.get_status_response(protocol);
+            assert_eq!(
+                response.version.expect("client version").protocol,
+                protocol as u32
+            );
+        }
+        assert_eq!(
+            status
+                .status_response
+                .version
+                .expect("cached version")
+                .protocol,
+            CURRENT_MC_VERSION.protocol_version() as u32
+        );
     }
 }
