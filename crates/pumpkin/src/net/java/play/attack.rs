@@ -1,5 +1,6 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use pumpkin_data::entity::EntityType;
 
 impl JavaClient {
     pub fn handle_attack(&self, player: &Arc<Player>, attack: &SAttack, server: &Arc<Server>) {
@@ -30,14 +31,22 @@ impl JavaClient {
             .as_ref()
             .map(|p| Arc::clone(p) as Arc<dyn EntityBase>)
             .or_else(|| world.get_entity_by_id(entity_id.0));
+        // Vanilla ignores an attack on an entity it cannot find: the entity is routinely gone
+        // by the time the packet lands, and disconnecting over that drops legitimate players.
         let Some(target) = target else {
+            return;
+        };
+
+        // These are the targets vanilla actually disconnects for.
+        let target_type = target.get_entity().entity_type;
+        if target_type == &EntityType::ITEM || target_type == &EntityType::EXPERIENCE_ORB {
             self.try_kick(&TextComponent::translate_cross(
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
                 translation::java::MULTIPLAYER_DISCONNECT_INVALID_ENTITY_ATTACKED,
                 [],
             ));
             return;
-        };
+        }
         if let Some(player_victim) = &player_target {
             if player_victim.living_entity.health.load() <= 0.0 {
                 return;
