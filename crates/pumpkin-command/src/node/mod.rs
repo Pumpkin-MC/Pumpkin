@@ -156,6 +156,9 @@ impl<S: CommandSource> Default for Requirements<S> {
 #[derive(Clone)]
 pub struct OwnedNodeData<S: CommandSource = DummySource> {
     pub global_id: GlobalNodeId,
+    /// Ids of nodes that were merged into this one, so a redirect captured from any of them
+    /// still resolves here. See [`DetachedNode::merge`](crate::node::detached::DetachedNode::merge).
+    pub aliases: Vec<GlobalNodeId>,
     pub requirements: Requirements<S>,
     pub modifier: RedirectModifier<S>,
     pub forks: bool,
