@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::fs;
 
 pub fn build() -> TokenStream {
-    let dir = std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/worldgen/carver");
+    let dir = std::path::Path::new("../../assets/datapacks/26_3/data/minecraft/worldgen/carver");
     let mut carvers: BTreeMap<String, Value> = BTreeMap::new();
     let mut entries: Vec<_> = fs::read_dir(dir)
         .expect("Missing worldgen/carver directory")

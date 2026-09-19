@@ -4,6 +4,7 @@
 //! into a runtime representation with palettes, entities, block info, and transformations.
 
 use std::io::Cursor;
+use std::sync::OnceLock;
 
 use pumpkin_data::{Mirror, Rotation};
 use pumpkin_nbt::{compound::NbtCompound, nbt_compress::read_gzip_compound_tag, tag::NbtTag};
@@ -11,7 +12,7 @@ use pumpkin_util::math::{block_box::BlockBox, vector3::Vector3};
 use thiserror::Error;
 
 use super::processor::StructureProcessor;
-use crate::generation::structure::structures::jigsaw::JigsawJointType;
+use crate::generation::structure::structures::jigsaw::{JigsawBlock, JigsawJointType};
 
 /// Errors that can occur when loading or saving a structure template.
 #[derive(Debug, Error)]
@@ -187,6 +188,20 @@ impl StructurePlaceSettings {
     }
 }
 
+/// Lazily-parsed jigsaw blocks for a template.
+///
+/// Wrapped so the template's `Debug` derive does not require `JigsawBlock: Debug`.
+#[derive(Clone, Default)]
+struct JigsawBlockCache(Vec<JigsawBlock>);
+
+impl std::fmt::Debug for JigsawBlockCache {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("JigsawBlockCache")
+            .field(&self.0.len())
+            .finish()
+    }
+}
+
 /// A loaded structure template from an NBT file matching vanilla `StructureTemplate`.
 #[derive(Debug, Clone, Default)]
 pub struct StructureTemplate {
@@ -196,9 +211,16 @@ pub struct StructureTemplate {
     pub author: String,
 
     // Backward-compatible fields
+    // TODO: make these fields private with accessors. They are public now, so a
+    // caller can change them after the jigsaw cache is filled. The cache then
+    // goes stale. `load()` resets the cache, but a direct mutation does not.
     pub palette: Vec<PaletteEntry>,
     pub blocks: Vec<TemplateBlock>,
     pub entities: Vec<TemplateEntity>,
+
+    /// Jigsaw blocks parsed from the flat `blocks`/`palette` view, computed lazily
+    /// on first use so placement never rescans the template's block list.
+    jigsaw_blocks_cache: OnceLock<JigsawBlockCache>,
 }
 
 /// A single entry in the template's block palette.
@@ -286,26 +308,29 @@ impl PaletteEntry {
     #[must_use]
     pub fn to_nbt_compound(&self) -> NbtCompound {
         let mut compound = NbtCompound::new();
-        compound.put_string("Name", self.name.clone());
+        compound.put_string("id", self.name.clone());
         if !self.properties.is_empty() {
             let mut props = NbtCompound::new();
             for (k, v) in &self.properties {
                 props.put_string(k, v.clone());
             }
-            compound.put_compound("Properties", props);
+            compound.put_compound("properties", props);
         }
         compound
     }
 
     /// Deserializes a palette entry from an NBT compound tag.
     pub fn from_nbt_compound(entry_compound: &NbtCompound) -> Result<Self, TemplateError> {
+        // 26.3 renamed the palette keys from Name and Properties to id and properties
         let name = entry_compound
-            .get_string("Name")
-            .ok_or(TemplateError::MissingField("palette.Name"))?
+            .get_string("id")
+            .or_else(|| entry_compound.get_string("Name"))
+            .ok_or(TemplateError::MissingField("palette.id"))?
             .to_string();
 
         let properties: Vec<(String, String)> = entry_compound
-            .get_compound("Properties")
+            .get_compound("properties")
+            .or_else(|| entry_compound.get_compound("Properties"))
             .map_or_else(Vec::new, |props_compound| {
                 props_compound
                     .child_tags
@@ -556,6 +581,30 @@ impl StructureTemplate {
 
     pub const fn palettes_mut(&mut self) -> &mut Vec<Palette> {
         &mut self.palettes
+    }
+
+    /// Returns the template's jigsaw blocks in template-local coordinates.
+    ///
+    /// Parsed once from the flat `blocks`/`palette` view and cached, rather than
+    /// being re-scanned and re-parsed on every placement attempt.
+    #[must_use]
+    pub fn jigsaw_blocks(&self) -> &[JigsawBlock] {
+        &self
+            .jigsaw_blocks_cache
+            .get_or_init(|| {
+                JigsawBlockCache(
+                    self.blocks
+                        .iter()
+                        .filter_map(|block| {
+                            JigsawBlock::from_template_block(
+                                block,
+                                &self.palette[block.state as usize],
+                            )
+                        })
+                        .collect(),
+                )
+            })
+            .0
     }
 
     #[must_use]
@@ -892,6 +941,7 @@ impl StructureTemplate {
     pub fn load(&mut self, compound: &NbtCompound) -> Result<(), TemplateError> {
         self.palettes.clear();
         self.entity_info_list.clear();
+        self.jigsaw_blocks_cache = OnceLock::new();
 
         // 1. size
         self.size = Self::parse_size(compound)?;
@@ -1296,5 +1346,28 @@ mod tests {
             ],
         );
         assert_eq!(entry_with_props.properties.len(), 2);
+    }
+
+    /// Loads a real template from the shipped 26.3 datapack, which names the palette keys id and
+    /// properties instead of Name and Properties.
+    #[test]
+    fn load_26_3_template() {
+        let bytes = include_bytes!(
+            "../../../../../../assets/datapacks/26_3/data/minecraft/structure/igloo/top.nbt"
+        );
+        let template = StructureTemplate::from_nbt_bytes(bytes).expect("failed to load template");
+
+        let palette = &template.palette;
+        assert!(!palette.is_empty(), "the palette must not be empty");
+        assert!(
+            palette.iter().any(|entry| entry.name == "minecraft:ice"),
+            "the palette must keep the block names"
+        );
+        assert!(
+            palette
+                .iter()
+                .any(|entry| !entry.properties.is_empty() && entry.name.contains("trapdoor")),
+            "the palette must keep the block properties"
+        );
     }
 }

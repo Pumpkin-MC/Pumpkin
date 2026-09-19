@@ -1,0 +1,12 @@
+{
+  "feature": "minecraft:super_birch_bees_0002",
+  "placement": [
+    {
+      "type": "minecraft:block_predicate_filter",
+      "predicate": {
+        "type": "minecraft:would_survive",
+        "state": "minecraft:birch_sapling"
+      }
+    }
+  ]
+}

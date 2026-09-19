@@ -85,7 +85,6 @@ pub struct Server {
     /// Bedrock OIDC provider keys, fetched on startup for 1.26.10+ token validation.
     pub bedrock_oidc_keys: Arc<OnceCell<(String, pumpkin_auth::jwt::Jwks)>>,
     /// Cached Bedrock server private key (process-lifetime). Generated on first Bedrock login and reused.
-    pub bedrock_private_key: OnceCell<Arc<pumpkin_auth::p384::ecdsa::SigningKey>>,
     /// Manages server status information.
     listing: std::sync::Mutex<CachedStatus>,
     /// Saves server branding information.
@@ -296,7 +295,6 @@ impl Server {
             item_registry: super::item::items::default_registry(),
             key_store: OnceCell::new(),
             bedrock_oidc_keys: Arc::new(OnceCell::new()),
-            bedrock_private_key: OnceCell::new(),
             listing,
             branding: CachedBranding::new(),
             bossbars: std::sync::Mutex::new(CustomBossbars::new()),
@@ -1130,6 +1128,13 @@ impl Server {
 
     /// Ticks the game logic for all worlds. This is the part that is affected by `/tick freeze`.
     pub fn tick_worlds(self: &Arc<Self>) {
+        let source = crate::command::CommandSender::Console
+            .into_source(self)
+            .with_silent();
+        let _ = self
+            .datapack_manager
+            .execute_function(self, &source, "#minecraft:tick");
+
         self.task_scheduler.tick(self);
         self.scheduled_functions.tick(
             self,
