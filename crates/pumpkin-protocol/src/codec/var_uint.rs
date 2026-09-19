@@ -55,12 +55,14 @@ impl VarUInt {
         Ok(())
     }
 
-    // TODO: Validate that the first byte will not overflow a i32
     #[inline]
     pub fn decode(read: &mut impl Read) -> Result<Self, ReadingError> {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
             let byte = read.get_u8()?;
+            if i == Self::MAX_SIZE.get() - 1 && (byte & 0x7F) > 0x0F {
+                return Err(ReadingError::TooLarge("VarUInt".to_string()));
+            }
             val |= (u32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
                 return Ok(Self(val));
@@ -89,6 +91,9 @@ impl VarUInt {
                     ReadingError::Incomplete(err.to_string())
                 }
             })?;
+            if i == Self::MAX_SIZE.get() - 1 && (byte & 0x7F) > 0x0F {
+                return Err(ReadingError::TooLarge("VarUInt".to_string()));
+            }
             val |= (u32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
                 return Ok(Self(val));
@@ -173,11 +178,83 @@ impl PacketRead for VarUInt {
         let mut val = 0;
         for i in 0..Self::MAX_SIZE.get() {
             let byte = u8::read(reader)?;
+            if i == Self::MAX_SIZE.get() - 1 && (byte & 0x7F) > 0x0F {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    "VarUInt is too big (overflow)",
+                ));
+            }
             val |= (u32::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
                 return Ok(Self(val));
             }
         }
         Err(Error::new(ErrorKind::InvalidData, ""))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn decode(bytes: &[u8]) -> Result<VarUInt, ReadingError> {
+        let mut reader = bytes;
+        VarUInt::decode(&mut reader)
+    }
+
+    async fn decode_async(bytes: &[u8]) -> Result<VarUInt, ReadingError> {
+        let mut reader = bytes;
+        VarUInt::decode_async(&mut reader).await
+    }
+
+    fn packet_read(bytes: &[u8]) -> Result<VarUInt, Error> {
+        let mut reader = bytes;
+        VarUInt::read(&mut reader)
+    }
+
+    #[test]
+    fn decodes_largest_valid_values() {
+        assert_eq!(decode(&[0xff, 0xff, 0xff, 0xff, 0x0f]).unwrap().0, u32::MAX);
+        assert_eq!(
+            decode(&[0xff, 0xff, 0xff, 0xff, 0x07]).unwrap().0,
+            0x7fff_ffff
+        );
+        assert_eq!(decode(&[0x00]).unwrap().0, 0);
+    }
+
+    #[test]
+    fn rejects_overflowing_final_byte() {
+        // The fifth byte only has four payload bits left, so 0x10 sets bit 32
+        // and 0x7f sets every bit above it.
+        assert!(decode(&[0x80, 0x80, 0x80, 0x80, 0x10]).is_err());
+        assert!(decode(&[0xff, 0xff, 0xff, 0xff, 0x7f]).is_err());
+    }
+
+    #[test]
+    fn packet_read_rejects_overflowing_final_byte() {
+        assert!(packet_read(&[0x80, 0x80, 0x80, 0x80, 0x10]).is_err());
+        assert!(packet_read(&[0xff, 0xff, 0xff, 0xff, 0x7f]).is_err());
+        assert_eq!(
+            packet_read(&[0xff, 0xff, 0xff, 0xff, 0x0f]).unwrap().0,
+            u32::MAX
+        );
+    }
+
+    #[tokio::test]
+    async fn decodes_largest_valid_values_async() {
+        assert_eq!(
+            decode_async(&[0xff, 0xff, 0xff, 0xff, 0x0f])
+                .await
+                .unwrap()
+                .0,
+            u32::MAX
+        );
+        assert_eq!(decode_async(&[0x00]).await.unwrap().0, 0);
+    }
+
+    #[tokio::test]
+    async fn rejects_overflowing_final_byte_async() {
+        assert!(decode_async(&[0x80, 0x80, 0x80, 0x80, 0x10]).await.is_err());
+        assert!(decode_async(&[0xff, 0xff, 0xff, 0xff, 0x7f]).await.is_err());
     }
 }
