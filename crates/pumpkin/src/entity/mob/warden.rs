@@ -254,7 +254,7 @@ impl WardenEntity {
             .into_iter()
             .map(|player| player as Arc<dyn EntityBase>)
             .chain(world.get_entities_at_box(&bounding_box))
-            .find(|other| other.get_entity().entity_id != entity.entity_id);
+            .find(|other| other.get_entity().entity_id != entity.entity_id && other.is_pushable());
         if let Some(other) = touching {
             self.touch_cooldown
                 .store(TOUCH_COOLDOWN_TICKS, Ordering::Relaxed);
