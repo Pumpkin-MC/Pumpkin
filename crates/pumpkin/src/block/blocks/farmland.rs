@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::block::{
     BlockBehaviour, CanPlaceAtArgs, GetStateForNeighborUpdateArgs, OnPlaceArgs,
-    OnScheduledTickArgs, PathComputationType, RandomTickArgs,
+    OnScheduledTickArgs, PathComputationType, RandomTickArgs, push_entities_up,
 };
 use crate::world::World;
 use pumpkin_data::block_properties::FarmlandLikeProperties;
@@ -23,7 +23,7 @@ pub struct FarmlandBlock;
 
 impl BlockBehaviour for FarmlandBlock {
     fn on_scheduled_tick(&self, args: OnScheduledTickArgs<'_>) {
-        // TODO: push up entities
+        push_entities_up(args.world, args.position);
         args.world.set_block_state(
             args.position,
             Block::DIRT.default_state.id,
@@ -86,7 +86,7 @@ impl BlockBehaviour for FarmlandBlock {
                     .get_block(&args.position.up())
                     .has_tag(&tag::Block::MINECRAFT_MAINTAINS_FARMLAND)
                 {
-                    //TODO push entities up
+                    push_entities_up(args.world, args.position);
                     args.world.set_block_state(
                         args.position,
                         Block::DIRT.default_state.id,
