@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use pumpkin_util::text::{
     TextComponent,
@@ -7,9 +7,10 @@ use pumpkin_util::text::{
 
 use crate::{
     command::{
-        context::command_context::CommandContext,
+        argument_builder::ArgumentBuilder,
+        context::{command_context::CommandContext, command_source::CommandSource},
         errors::error_types::DISPATCHER_PARSE_EXCEPTION,
-        node::{CommandExecutor, CommandExecutorResult},
+        node::{CommandExecutor, CommandExecutorResult, Requirement},
         suggestion::{
             provider::SuggestionProvider,
             suggestions::{Suggestions, SuggestionsBuilder},
@@ -18,7 +19,10 @@ use crate::{
     plugin::loader::wasm::wasm_host::{
         DowncastResourceExt, PluginInstance, WasmPlugin,
         args::build_consumed_args_from_context,
-        state::{CommandSenderResource, ConsumedArgsResource, PluginHostState, ServerResource},
+        state::{
+            CommandSenderResource, ConsumedArgsResource, PluginHostState, ServerResource,
+            WasmCommandNode,
+        },
         wit::v0_1::pumpkin::plugin::command::{CommandError as CommandErrorWit, SuggestionRequest},
     },
     server::Server,
@@ -47,6 +51,118 @@ fn map_command_result(
         Err(CommandErrorWit::CommandFailed(resource)) => {
             Err(DISPATCHER_PARSE_EXCEPTION.create_without_context(resource.consume(state).provider))
         }
+    }
+}
+
+impl WasmCommandNode {
+    #[must_use]
+    pub fn requires<F>(self, requirement: F) -> Self
+    where
+        F: for<'a> Fn(&'a CommandSource) -> bool + Send + Sync + 'static,
+    {
+        let requirement = Requirement::from(requirement);
+        match self {
+            Self::Literal(builder) => Self::Literal(builder.requires(requirement)),
+            Self::Argument(builder) => Self::Argument(builder.requires(requirement)),
+        }
+    }
+}
+
+pub struct WasmCommandRequirement {
+    pub handler_id: u32,
+    pub plugin: Arc<WasmPlugin>,
+    pub server: Arc<Server>,
+}
+
+impl WasmCommandRequirement {
+    #[must_use]
+    pub fn evaluate(&self, source: &CommandSource) -> bool {
+        let sender = source.output.clone();
+        let server = self.server.clone();
+        let handler_id = self.handler_id;
+        let function = match self.plugin.plugin_instance.as_ref() {
+            PluginInstance::V0_1(plugin) => plugin.func_handle_command(),
+        };
+
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(async {
+                match self
+                    .plugin
+                    .store
+                    .call_guest(move |mut guest| {
+                        Box::pin(async move {
+                            let (sender_resource, server_resource, args_resource, reps) = guest
+                                .with(|mut store| {
+                                    let sender_resource =
+                                        store.data_mut().add_command_sender(sender)?;
+                                    let sender_rep = sender_resource.rep();
+                                    let server_resource = match store.data_mut().add_server(server)
+                                    {
+                                        Ok(resource) => resource,
+                                        Err(error) => {
+                                            remove_resource::<CommandSenderResource>(
+                                                store.data_mut(),
+                                                sender_rep,
+                                            );
+                                            return Err(error);
+                                        }
+                                    };
+                                    let server_rep = server_resource.rep();
+                                    let args_resource = match store
+                                        .data_mut()
+                                        .add_consumed_args(HashMap::default())
+                                    {
+                                        Ok(resource) => resource,
+                                        Err(error) => {
+                                            remove_resource::<ServerResource>(
+                                                store.data_mut(),
+                                                server_rep,
+                                            );
+                                            remove_resource::<CommandSenderResource>(
+                                                store.data_mut(),
+                                                sender_rep,
+                                            );
+                                            return Err(error);
+                                        }
+                                    };
+                                    let reps = (sender_rep, server_rep, args_resource.rep());
+                                    Ok::<_, wasmtime::Error>((
+                                        sender_resource,
+                                        server_resource,
+                                        args_resource,
+                                        reps,
+                                    ))
+                                })?;
+
+                            let response = guest
+                                .call(
+                                    function,
+                                    (handler_id, sender_resource, server_resource, args_resource),
+                                )
+                                .await;
+
+                            guest.with(|mut store| {
+                                let allowed = response.map(|(result,)| {
+                                    map_command_result(store.data_mut(), result)
+                                        .is_ok_and(|value| value != 0)
+                                });
+                                remove_resource::<CommandSenderResource>(store.data_mut(), reps.0);
+                                remove_resource::<ServerResource>(store.data_mut(), reps.1);
+                                remove_resource::<ConsumedArgsResource>(store.data_mut(), reps.2);
+                                allowed
+                            })
+                        })
+                    })
+                    .await
+                {
+                    Ok(allowed) => allowed,
+                    Err(error) => {
+                        tracing::error!("Wasm command requirement failed: {error}");
+                        false
+                    }
+                }
+            })
+        })
     }
 }
 
