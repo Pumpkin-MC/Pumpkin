@@ -247,7 +247,7 @@ jobs:
     name: Build affected packages for Android AArch64
     needs: [prepare, test, test_android]
     if: >-
-      always() &&
+      !cancelled() &&
       github.event_name == 'pull_request' &&
       needs.prepare.outputs.has_code == 'true' &&
       needs.test.result == 'success' &&
