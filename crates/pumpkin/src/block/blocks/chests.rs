@@ -676,8 +676,8 @@ mod tests {
         assert_eq!(search_box.max, Vector3::new(11.0, 66.0, -4.0));
     }
 
-    #[test]
-    fn sitting_cat_blocks_chest_but_standing_cat_does_not() {
+    #[tokio::test]
+    async fn sitting_cat_blocks_chest_but_standing_cat_does_not() {
         let (_temp_dir, world) = test_world();
         let chest_pos = BlockPos::new(10, 64, -5);
         let cat = CatEntity::new(Entity::new(
@@ -699,8 +699,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn unrelated_entity_does_not_block_chest() {
+    #[tokio::test]
+    async fn unrelated_entity_does_not_block_chest() {
         let (_temp_dir, world) = test_world();
         let chest_pos = BlockPos::new(10, 64, -5);
         let slime = SlimeEntity::new(Entity::new(
@@ -717,8 +717,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn sitting_cat_outside_search_box_does_not_block_chest() {
+    #[tokio::test]
+    async fn sitting_cat_outside_search_box_does_not_block_chest() {
         let (_temp_dir, world) = test_world();
         let chest_pos = BlockPos::new(10, 64, -5);
         let cat = CatEntity::new(Entity::new(
