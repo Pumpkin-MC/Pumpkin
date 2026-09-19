@@ -854,10 +854,10 @@ impl LivingEntity {
                 .find(|a| a.0.id == attribute.id)
                 .map_or_else(
                     || {
-                        tracing::warn!(
-                            "Entity type {:?} has no base value for attribute {:?}; falling back to default {}",
-                            self.entity.entity_type,
-                            attribute.id,
+                        tracing::debug!(
+                            "Entity type {} has no base value for attribute {}; falling back to default {}",
+                            self.entity.entity_type.resource_name,
+                            attribute.name,
                             attribute.default_value,
                         );
                         attribute.default_value
@@ -3383,14 +3383,6 @@ impl EntityBase for LivingEntity {
         // Coalesce velocity sends to once per tick.
         if self.entity.velocity_dirty.swap(false, Ordering::SeqCst) {
             self.entity.send_velocity();
-        }
-
-        // TODO
-        let player = caller.get_player();
-        let is_player = player.is_some();
-
-        if !is_player {
-            self.entity.send_pos_rot();
         }
 
         // Fetch supporting blocks for players or other entities

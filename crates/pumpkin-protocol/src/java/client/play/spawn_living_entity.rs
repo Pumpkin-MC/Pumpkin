@@ -12,6 +12,9 @@ use crate::{
     ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError},
 };
 
+use super::CSpawnEntity;
+
+// TODO: `unpack_degrees` helper next to `pumpkin_util::math::pack_degrees`.
 const ROTATION_FACTOR: f32 = 256.0 / 360.0;
 const VELOCITY_FACTOR: f64 = 8000.0;
 
@@ -208,28 +211,18 @@ pub struct CSpawnLivingEntity {
 }
 
 impl CSpawnLivingEntity {
-    #[expect(clippy::too_many_arguments)]
+    /// Pre-1.19 `Spawn Living Entity` from the same packed pose as `CSpawnEntity`.
     #[must_use]
-    pub fn new(
-        entity_id: VarInt,
-        entity_uuid: uuid::Uuid,
-        r#type: VarInt,
-        position: Vector3<f64>,
-        pitch: f32,
-        yaw: f32,
-        head_yaw: f32,
-        velocity: Vector3<f64>,
-        metadata: Option<Box<[u8]>>,
-    ) -> Self {
+    pub const fn from_spawn_entity(spawn: &CSpawnEntity, metadata: Option<Box<[u8]>>) -> Self {
         Self {
-            entity_id,
-            entity_uuid,
-            r#type,
-            position,
-            pitch: (pitch * ROTATION_FACTOR).floor() as u8,
-            yaw: (yaw.rem_euclid(360.0) * ROTATION_FACTOR).floor() as u8,
-            head_yaw: (head_yaw.rem_euclid(360.0) * ROTATION_FACTOR).floor() as u8,
-            velocity: LpVector3d(velocity),
+            entity_id: spawn.entity_id,
+            entity_uuid: spawn.entity_uuid,
+            r#type: spawn.r#type,
+            position: spawn.position,
+            yaw: spawn.yaw,
+            pitch: spawn.pitch,
+            head_yaw: spawn.head_yaw,
+            velocity: spawn.velocity,
             metadata,
         }
     }
