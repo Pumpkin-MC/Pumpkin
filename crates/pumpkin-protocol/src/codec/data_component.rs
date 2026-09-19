@@ -385,9 +385,21 @@ impl DataComponentCodec<Self> for ItemNameImpl {
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let name = seq.get_str()?;
+        // Encoded as raw NBT on the wire (matching `serialize` above), not a length-prefixed
+        // wire string - reading it as one desyncs the rest of the stream on any item that
+        // round-trips through this codec (e.g. nested inside a bundle).
+        let tag = seq.get_nbt_with_version(&pumpkin_util::version::JavaMinecraftVersion::V_26_2)?;
+        let name = match tag {
+            Some(NbtTag::Compound(compound)) => compound
+                .get_string("translate")
+                .or_else(|| compound.get_string("text"))
+                .unwrap_or_default()
+                .to_owned(),
+            Some(NbtTag::String(s)) => s.to_string(),
+            _ => String::new(),
+        };
         Ok(Self {
-            name: Cow::Owned(name.into()),
+            name: Cow::Owned(name),
         })
     }
 }
@@ -1294,8 +1306,10 @@ fn deserialize_item_stack_template(
         let id = DataComponent::try_from_id(id_val as u8)
             .ok_or_else(|| ReadingError::Message(format!("Unknown component ID: {id_val}")))?;
 
-        let _byte_len = seq.get_var_int()?;
-
+        // This is the plain Slot format (Prefixed Array of Slot per the protocol spec): unlike
+        // the length-prefixed format used elsewhere (e.g. Set Creative Mode Slot), there's no
+        // per-component byte-length prefix here. Reading a phantom one consumes the first
+        // bytes of the component's actual payload and desyncs every read after it.
         let component_impl = deserialize(id, seq)?;
         patch.push((id, Some(component_impl)));
     }
@@ -2802,5 +2816,97 @@ impl DataComponentCodec<Self> for BreakSoundImpl {
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let _ = seq.get_var_int()?;
         Ok(Self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::data_component_impl::{
+        BundleContentsImpl, DataComponentImpl, FireworkExplosionImpl, FireworkExplosionShape,
+        FireworksImpl,
+    };
+    use pumpkin_data::item::Item;
+    use pumpkin_data::item_stack::ItemStack;
+
+    // Regression test for a stream desync when a bundle contains an item with a non-empty
+    // component patch (e.g. a crafted firework rocket with real explosion data, optionally
+    // renamed). `bundle_contents` nested items use the plain, non-length-prefixed Slot format,
+    // so decoding must not assume a byte-length prefix per component, and text-component
+    // fields (custom_name/item_name) must be parsed as NBT rather than a plain wire string.
+    #[test]
+    fn bundle_with_named_firework_round_trips() {
+        let explosion = FireworkExplosionImpl::new(
+            FireworkExplosionShape::LargeBall,
+            vec![0x00FF_0000, 0x0000_FF00],
+            vec![0x0000_00FF],
+            true,
+            false,
+        );
+        let fireworks = FireworksImpl::new(2, vec![explosion]);
+
+        let mut firework_rocket = ItemStack::new(1, &Item::FIREWORK_ROCKET);
+        firework_rocket
+            .patch
+            .push((DataComponent::Fireworks, Some(fireworks.to_dyn())));
+        firework_rocket.patch.push((
+            DataComponent::CustomName,
+            Some(
+                CustomNameImpl {
+                    name: pumpkin_util::text::TextComponent::text("Boost".to_string()),
+                }
+                .to_dyn(),
+            ),
+        ));
+
+        let mut bundle = ItemStack::new(1, &Item::BUNDLE);
+        bundle.patch.push((
+            DataComponent::BundleContents,
+            Some(
+                BundleContentsImpl {
+                    items: vec![firework_rocket],
+                }
+                .to_dyn(),
+            ),
+        ));
+
+        let mut bytes = Vec::new();
+        serialize(
+            DataComponent::BundleContents,
+            bundle.patch[0].1.as_ref().unwrap().as_ref(),
+            &mut bytes,
+        )
+        .expect("serialize bundle_contents");
+
+        let mut cursor = std::io::Cursor::new(bytes.as_slice());
+        let decoded = deserialize(DataComponent::BundleContents, &mut cursor)
+            .expect("deserialize bundle_contents without desyncing");
+
+        let decoded_bundle = decoded
+            .as_ref()
+            .as_any()
+            .downcast_ref::<BundleContentsImpl>()
+            .expect("decoded value is BundleContentsImpl");
+        assert_eq!(decoded_bundle.items.len(), 1);
+
+        let decoded_firework = &decoded_bundle.items[0];
+        let decoded_fireworks = decoded_firework
+            .patch
+            .iter()
+            .find(|(id, _)| *id == DataComponent::Fireworks)
+            .and_then(|(_, data)| data.as_ref())
+            .and_then(|data| data.as_any().downcast_ref::<FireworksImpl>())
+            .expect("nested item kept its Fireworks component");
+        assert_eq!(decoded_fireworks.flight_duration, 2);
+        assert_eq!(decoded_fireworks.explosions.len(), 1);
+
+        let decoded_name = decoded_firework
+            .patch
+            .iter()
+            .find(|(id, _)| *id == DataComponent::CustomName)
+            .and_then(|(_, data)| data.as_ref())
+            .and_then(|data| data.as_any().downcast_ref::<CustomNameImpl>())
+            .expect("nested item kept its CustomName component");
+        assert_eq!(decoded_name.name.clone().get_text(), "Boost");
     }
 }
