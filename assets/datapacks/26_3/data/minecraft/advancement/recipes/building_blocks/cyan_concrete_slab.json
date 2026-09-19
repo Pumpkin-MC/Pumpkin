@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_cyan_concrete": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:cyan_concrete"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipes": "minecraft:cyan_concrete_slab"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_cyan_concrete"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:cyan_concrete_slab"
+    ]
+  }
+}

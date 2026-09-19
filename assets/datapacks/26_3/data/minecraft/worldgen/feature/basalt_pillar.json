@@ -1,0 +1,266 @@
+{
+  "type": "minecraft:overlay",
+  "features": [
+    {
+      "feature": {
+        "type": "minecraft:single_block_pillar",
+        "block": {
+          "id": "minecraft:basalt",
+          "properties": {
+            "axis": "y"
+          }
+        },
+        "can_replace": {
+          "type": "minecraft:matching_block_tag",
+          "tag": "minecraft:air"
+        },
+        "cap_feature": {
+          "feature": {
+            "type": "minecraft:overlay",
+            "features": [
+              {
+                "feature": {
+                  "type": "minecraft:projected_random_patchy_square",
+                  "block": {
+                    "type": "minecraft:rule_based",
+                    "rules": [
+                      {
+                        "if_true": {
+                          "type": "minecraft:not",
+                          "predicate": {
+                            "type": "minecraft:matching_block_tag",
+                            "offset": [
+                              0,
+                              -1,
+                              0
+                            ],
+                            "tag": "minecraft:air"
+                          }
+                        },
+                        "then": {
+                          "id": "minecraft:basalt",
+                          "properties": {
+                            "axis": "y"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "max_projection_height": 3,
+                  "project_through": {
+                    "type": "minecraft:matching_block_tag",
+                    "tag": "minecraft:air"
+                  },
+                  "size": 3
+                },
+                "placement": [
+                  {
+                    "type": "minecraft:offset",
+                    "x": 0,
+                    "y": -1,
+                    "z": 0
+                  }
+                ]
+              },
+              {
+                "feature": {
+                  "type": "minecraft:simple_block",
+                  "to_place": {
+                    "id": "minecraft:basalt",
+                    "properties": {
+                      "axis": "y"
+                    }
+                  }
+                },
+                "placement": [
+                  {
+                    "type": "minecraft:rarity_filter",
+                    "chance": 2
+                  },
+                  {
+                    "type": "minecraft:offset",
+                    "x": 1,
+                    "y": 0,
+                    "z": 0
+                  }
+                ]
+              },
+              {
+                "feature": {
+                  "type": "minecraft:simple_block",
+                  "to_place": {
+                    "id": "minecraft:basalt",
+                    "properties": {
+                      "axis": "y"
+                    }
+                  }
+                },
+                "placement": [
+                  {
+                    "type": "minecraft:rarity_filter",
+                    "chance": 2
+                  },
+                  {
+                    "type": "minecraft:offset",
+                    "x": -1,
+                    "y": 0,
+                    "z": 0
+                  }
+                ]
+              },
+              {
+                "feature": {
+                  "type": "minecraft:simple_block",
+                  "to_place": {
+                    "id": "minecraft:basalt",
+                    "properties": {
+                      "axis": "y"
+                    }
+                  }
+                },
+                "placement": [
+                  {
+                    "type": "minecraft:rarity_filter",
+                    "chance": 2
+                  },
+                  {
+                    "type": "minecraft:offset",
+                    "x": 0,
+                    "y": 0,
+                    "z": 1
+                  }
+                ]
+              },
+              {
+                "feature": {
+                  "type": "minecraft:simple_block",
+                  "to_place": {
+                    "id": "minecraft:basalt",
+                    "properties": {
+                      "axis": "y"
+                    }
+                  }
+                },
+                "placement": [
+                  {
+                    "type": "minecraft:rarity_filter",
+                    "chance": 2
+                  },
+                  {
+                    "type": "minecraft:offset",
+                    "x": 0,
+                    "y": 0,
+                    "z": -1
+                  }
+                ]
+              }
+            ]
+          },
+          "placement": []
+        },
+        "direction": "down"
+      },
+      "placement": []
+    },
+    {
+      "feature": {
+        "type": "minecraft:single_block_pillar",
+        "block": {
+          "id": "minecraft:basalt",
+          "properties": {
+            "axis": "y"
+          }
+        },
+        "can_replace": {
+          "type": "minecraft:matching_block_tag",
+          "tag": "minecraft:air"
+        },
+        "chance_to_continue": 0.9,
+        "direction": "down"
+      },
+      "placement": [
+        {
+          "type": "minecraft:offset",
+          "x": 1,
+          "y": 0,
+          "z": 0
+        }
+      ]
+    },
+    {
+      "feature": {
+        "type": "minecraft:single_block_pillar",
+        "block": {
+          "id": "minecraft:basalt",
+          "properties": {
+            "axis": "y"
+          }
+        },
+        "can_replace": {
+          "type": "minecraft:matching_block_tag",
+          "tag": "minecraft:air"
+        },
+        "chance_to_continue": 0.9,
+        "direction": "down"
+      },
+      "placement": [
+        {
+          "type": "minecraft:offset",
+          "x": -1,
+          "y": 0,
+          "z": 0
+        }
+      ]
+    },
+    {
+      "feature": {
+        "type": "minecraft:single_block_pillar",
+        "block": {
+          "id": "minecraft:basalt",
+          "properties": {
+            "axis": "y"
+          }
+        },
+        "can_replace": {
+          "type": "minecraft:matching_block_tag",
+          "tag": "minecraft:air"
+        },
+        "chance_to_continue": 0.9,
+        "direction": "down"
+      },
+      "placement": [
+        {
+          "type": "minecraft:offset",
+          "x": 0,
+          "y": 0,
+          "z": 1
+        }
+      ]
+    },
+    {
+      "feature": {
+        "type": "minecraft:single_block_pillar",
+        "block": {
+          "id": "minecraft:basalt",
+          "properties": {
+            "axis": "y"
+          }
+        },
+        "can_replace": {
+          "type": "minecraft:matching_block_tag",
+          "tag": "minecraft:air"
+        },
+        "chance_to_continue": 0.9,
+        "direction": "down"
+      },
+      "placement": [
+        {
+          "type": "minecraft:offset",
+          "x": 0,
+          "y": 0,
+          "z": -1
+        }
+      ]
+    }
+  ]
+}

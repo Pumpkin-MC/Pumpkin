@@ -13,6 +13,7 @@ pub struct TrackedId {
     pub v1_21_11: u8,
     pub v26_1: u8,
     pub v26_2: u8,
+    pub v26_3: u8,
 }
 impl TrackedId {
     #[must_use]
@@ -28,13 +29,14 @@ impl TrackedId {
             pumpkin_util::version::JavaMinecraftVersion::V_1_21_11 => self.v1_21_11,
             pumpkin_util::version::JavaMinecraftVersion::V_26_1 => self.v26_1,
             pumpkin_util::version::JavaMinecraftVersion::V_26_2 => self.v26_2,
-            _ => self.v26_2,
+            pumpkin_util::version::JavaMinecraftVersion::V_26_3 => self.v26_3,
+            _ => self.v26_3,
         }
     }
 }
 impl From<TrackedId> for u8 {
     fn from(id: TrackedId) -> u8 {
-        id.v26_2
+        id.v26_3
     }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -66,6 +68,7 @@ pub mod abstract_arrow {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -81,6 +84,7 @@ pub mod abstract_arrow {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -96,6 +100,7 @@ pub mod abstract_arrow {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -111,6 +116,7 @@ pub mod abstract_arrow {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -126,6 +132,7 @@ pub mod abstract_arrow {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -141,6 +148,7 @@ pub mod abstract_arrow {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -156,6 +164,7 @@ pub mod abstract_arrow {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -171,6 +180,7 @@ pub mod abstract_arrow {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -186,6 +196,7 @@ pub mod abstract_arrow {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -201,6 +212,7 @@ pub mod abstract_arrow {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -216,6 +228,7 @@ pub mod abstract_arrow {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -231,6 +244,7 @@ pub mod abstract_arrow {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -263,6 +277,7 @@ pub mod abstract_boat {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -278,6 +293,7 @@ pub mod abstract_boat {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -293,6 +309,7 @@ pub mod abstract_boat {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -308,6 +325,7 @@ pub mod abstract_boat {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -323,6 +341,7 @@ pub mod abstract_boat {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -338,6 +357,7 @@ pub mod abstract_boat {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -353,6 +373,7 @@ pub mod abstract_boat {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -368,6 +389,7 @@ pub mod abstract_boat {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -383,6 +405,7 @@ pub mod abstract_boat {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -398,6 +421,7 @@ pub mod abstract_boat {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -413,6 +437,7 @@ pub mod abstract_boat {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -428,6 +453,7 @@ pub mod abstract_boat {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -443,6 +469,7 @@ pub mod abstract_boat {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -458,6 +485,7 @@ pub mod abstract_boat {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -499,6 +527,7 @@ pub mod abstract_chest_boat {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -514,6 +543,7 @@ pub mod abstract_chest_boat {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -529,6 +559,7 @@ pub mod abstract_chest_boat {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -544,6 +575,7 @@ pub mod abstract_chest_boat {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -559,6 +591,7 @@ pub mod abstract_chest_boat {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -574,6 +607,7 @@ pub mod abstract_chest_boat {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -589,6 +623,7 @@ pub mod abstract_chest_boat {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -604,6 +639,7 @@ pub mod abstract_chest_boat {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -619,6 +655,7 @@ pub mod abstract_chest_boat {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -634,6 +671,7 @@ pub mod abstract_chest_boat {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -649,6 +687,7 @@ pub mod abstract_chest_boat {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -664,6 +703,7 @@ pub mod abstract_chest_boat {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -679,6 +719,7 @@ pub mod abstract_chest_boat {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -694,6 +735,7 @@ pub mod abstract_chest_boat {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -735,6 +777,7 @@ pub mod abstract_chested_horse {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -750,6 +793,7 @@ pub mod abstract_chested_horse {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -765,6 +809,7 @@ pub mod abstract_chested_horse {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -780,6 +825,7 @@ pub mod abstract_chested_horse {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -795,6 +841,7 @@ pub mod abstract_chested_horse {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -810,6 +857,7 @@ pub mod abstract_chested_horse {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -825,6 +873,7 @@ pub mod abstract_chested_horse {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -840,6 +889,7 @@ pub mod abstract_chested_horse {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -855,6 +905,7 @@ pub mod abstract_chested_horse {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -870,6 +921,7 @@ pub mod abstract_chested_horse {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -885,6 +937,7 @@ pub mod abstract_chested_horse {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -900,6 +953,7 @@ pub mod abstract_chested_horse {
             v1_21_11: 17u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -915,6 +969,7 @@ pub mod abstract_chested_horse {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -930,6 +985,7 @@ pub mod abstract_chested_horse {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -945,6 +1001,7 @@ pub mod abstract_chested_horse {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -960,6 +1017,7 @@ pub mod abstract_chested_horse {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -975,6 +1033,7 @@ pub mod abstract_chested_horse {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -990,6 +1049,7 @@ pub mod abstract_chested_horse {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -1005,6 +1065,7 @@ pub mod abstract_chested_horse {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -1020,6 +1081,7 @@ pub mod abstract_chested_horse {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -1035,6 +1097,7 @@ pub mod abstract_chested_horse {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -1091,6 +1154,7 @@ pub mod abstract_cow {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -1106,6 +1170,7 @@ pub mod abstract_cow {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -1121,6 +1186,7 @@ pub mod abstract_cow {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -1136,6 +1202,7 @@ pub mod abstract_cow {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -1151,6 +1218,7 @@ pub mod abstract_cow {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -1166,6 +1234,7 @@ pub mod abstract_cow {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -1181,6 +1250,7 @@ pub mod abstract_cow {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -1196,6 +1266,7 @@ pub mod abstract_cow {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -1211,6 +1282,7 @@ pub mod abstract_cow {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -1226,6 +1298,7 @@ pub mod abstract_cow {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -1241,6 +1314,7 @@ pub mod abstract_cow {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -1256,6 +1330,7 @@ pub mod abstract_cow {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -1271,6 +1346,7 @@ pub mod abstract_cow {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -1286,6 +1362,7 @@ pub mod abstract_cow {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -1301,6 +1378,7 @@ pub mod abstract_cow {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -1316,6 +1394,7 @@ pub mod abstract_cow {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -1331,6 +1410,7 @@ pub mod abstract_cow {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -1346,6 +1426,7 @@ pub mod abstract_cow {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -1400,6 +1481,7 @@ pub mod abstract_cube_mob {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -1415,6 +1497,7 @@ pub mod abstract_cube_mob {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -1430,6 +1513,7 @@ pub mod abstract_cube_mob {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -1445,6 +1529,7 @@ pub mod abstract_cube_mob {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -1460,6 +1545,7 @@ pub mod abstract_cube_mob {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -1475,6 +1561,7 @@ pub mod abstract_cube_mob {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -1490,6 +1577,7 @@ pub mod abstract_cube_mob {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -1505,6 +1593,7 @@ pub mod abstract_cube_mob {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -1520,6 +1609,7 @@ pub mod abstract_cube_mob {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -1535,6 +1625,7 @@ pub mod abstract_cube_mob {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -1550,6 +1641,7 @@ pub mod abstract_cube_mob {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -1565,6 +1657,7 @@ pub mod abstract_cube_mob {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -1580,6 +1673,7 @@ pub mod abstract_cube_mob {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -1595,6 +1689,7 @@ pub mod abstract_cube_mob {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -1610,6 +1705,7 @@ pub mod abstract_cube_mob {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -1625,6 +1721,7 @@ pub mod abstract_cube_mob {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -1640,6 +1737,7 @@ pub mod abstract_cube_mob {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -1655,6 +1753,7 @@ pub mod abstract_cube_mob {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -1670,6 +1769,7 @@ pub mod abstract_cube_mob {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -1724,6 +1824,7 @@ pub mod abstract_fish {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -1739,6 +1840,7 @@ pub mod abstract_fish {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -1754,6 +1856,7 @@ pub mod abstract_fish {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -1769,6 +1872,7 @@ pub mod abstract_fish {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -1784,6 +1888,7 @@ pub mod abstract_fish {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -1799,6 +1904,7 @@ pub mod abstract_fish {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -1814,6 +1920,7 @@ pub mod abstract_fish {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -1829,6 +1936,7 @@ pub mod abstract_fish {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -1844,6 +1952,7 @@ pub mod abstract_fish {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -1859,6 +1968,7 @@ pub mod abstract_fish {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -1874,6 +1984,7 @@ pub mod abstract_fish {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -1889,6 +2000,7 @@ pub mod abstract_fish {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -1904,6 +2016,7 @@ pub mod abstract_fish {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -1919,6 +2032,7 @@ pub mod abstract_fish {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -1934,6 +2048,7 @@ pub mod abstract_fish {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -1949,6 +2064,7 @@ pub mod abstract_fish {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -1964,6 +2080,7 @@ pub mod abstract_fish {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -2015,6 +2132,7 @@ pub mod abstract_golem {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -2030,6 +2148,7 @@ pub mod abstract_golem {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -2045,6 +2164,7 @@ pub mod abstract_golem {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -2060,6 +2180,7 @@ pub mod abstract_golem {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -2075,6 +2196,7 @@ pub mod abstract_golem {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -2090,6 +2212,7 @@ pub mod abstract_golem {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -2105,6 +2228,7 @@ pub mod abstract_golem {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -2120,6 +2244,7 @@ pub mod abstract_golem {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -2135,6 +2260,7 @@ pub mod abstract_golem {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -2150,6 +2276,7 @@ pub mod abstract_golem {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -2165,6 +2292,7 @@ pub mod abstract_golem {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -2180,6 +2308,7 @@ pub mod abstract_golem {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -2195,6 +2324,7 @@ pub mod abstract_golem {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -2210,6 +2340,7 @@ pub mod abstract_golem {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -2225,6 +2356,7 @@ pub mod abstract_golem {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -2240,6 +2372,7 @@ pub mod abstract_golem {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -2291,6 +2424,7 @@ pub mod abstract_horse {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -2306,6 +2440,7 @@ pub mod abstract_horse {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -2321,6 +2456,7 @@ pub mod abstract_horse {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -2336,6 +2472,7 @@ pub mod abstract_horse {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -2351,6 +2488,7 @@ pub mod abstract_horse {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -2366,6 +2504,7 @@ pub mod abstract_horse {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -2381,6 +2520,7 @@ pub mod abstract_horse {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -2396,6 +2536,7 @@ pub mod abstract_horse {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -2411,6 +2552,7 @@ pub mod abstract_horse {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -2426,6 +2568,7 @@ pub mod abstract_horse {
             v1_21_11: 17u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -2441,6 +2584,7 @@ pub mod abstract_horse {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -2456,6 +2600,7 @@ pub mod abstract_horse {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -2471,6 +2616,7 @@ pub mod abstract_horse {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -2486,6 +2632,7 @@ pub mod abstract_horse {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -2501,6 +2648,7 @@ pub mod abstract_horse {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -2516,6 +2664,7 @@ pub mod abstract_horse {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -2531,6 +2680,7 @@ pub mod abstract_horse {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -2546,6 +2696,7 @@ pub mod abstract_horse {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -2561,6 +2712,7 @@ pub mod abstract_horse {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -2616,6 +2768,7 @@ pub mod abstract_hurting_projectile {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -2631,6 +2784,7 @@ pub mod abstract_hurting_projectile {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -2646,6 +2800,7 @@ pub mod abstract_hurting_projectile {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -2661,6 +2816,7 @@ pub mod abstract_hurting_projectile {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -2676,6 +2832,7 @@ pub mod abstract_hurting_projectile {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -2691,6 +2848,7 @@ pub mod abstract_hurting_projectile {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -2706,6 +2864,7 @@ pub mod abstract_hurting_projectile {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -2721,6 +2880,7 @@ pub mod abstract_hurting_projectile {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -2736,6 +2896,7 @@ pub mod abstract_hurting_projectile {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -2770,6 +2931,7 @@ pub mod abstract_illager {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -2785,6 +2947,7 @@ pub mod abstract_illager {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -2800,6 +2963,7 @@ pub mod abstract_illager {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -2815,6 +2979,7 @@ pub mod abstract_illager {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -2830,6 +2995,7 @@ pub mod abstract_illager {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -2845,6 +3011,7 @@ pub mod abstract_illager {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -2860,6 +3027,7 @@ pub mod abstract_illager {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -2875,6 +3043,7 @@ pub mod abstract_illager {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -2890,6 +3059,7 @@ pub mod abstract_illager {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -2905,6 +3075,7 @@ pub mod abstract_illager {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -2920,6 +3091,7 @@ pub mod abstract_illager {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -2935,6 +3107,7 @@ pub mod abstract_illager {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -2950,6 +3123,7 @@ pub mod abstract_illager {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -2965,6 +3139,7 @@ pub mod abstract_illager {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -2980,6 +3155,7 @@ pub mod abstract_illager {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -2995,6 +3171,7 @@ pub mod abstract_illager {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -3010,6 +3187,7 @@ pub mod abstract_illager {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -3025,6 +3203,7 @@ pub mod abstract_illager {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -3076,6 +3255,7 @@ pub mod abstract_minecart {
             v1_21_11: 12u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -3091,6 +3271,7 @@ pub mod abstract_minecart {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -3106,6 +3287,7 @@ pub mod abstract_minecart {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -3121,6 +3303,7 @@ pub mod abstract_minecart {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -3136,6 +3319,7 @@ pub mod abstract_minecart {
             v1_21_11: 11u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_STATE,
     };
@@ -3151,6 +3335,7 @@ pub mod abstract_minecart {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -3166,6 +3351,7 @@ pub mod abstract_minecart {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -3181,6 +3367,7 @@ pub mod abstract_minecart {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -3196,6 +3383,7 @@ pub mod abstract_minecart {
             v1_21_11: 255u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_STATE,
     };
@@ -3211,6 +3399,7 @@ pub mod abstract_minecart {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -3226,6 +3415,7 @@ pub mod abstract_minecart {
             v1_21_11: 255u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -3241,6 +3431,7 @@ pub mod abstract_minecart {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -3256,6 +3447,7 @@ pub mod abstract_minecart {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -3271,6 +3463,7 @@ pub mod abstract_minecart {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -3286,6 +3479,7 @@ pub mod abstract_minecart {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -3301,6 +3495,7 @@ pub mod abstract_minecart {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -3316,6 +3511,7 @@ pub mod abstract_minecart {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -3331,6 +3527,7 @@ pub mod abstract_minecart {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -3372,6 +3569,7 @@ pub mod abstract_minecart_container {
             v1_21_11: 12u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -3387,6 +3585,7 @@ pub mod abstract_minecart_container {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -3402,6 +3601,7 @@ pub mod abstract_minecart_container {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -3417,6 +3617,7 @@ pub mod abstract_minecart_container {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -3432,6 +3633,7 @@ pub mod abstract_minecart_container {
             v1_21_11: 11u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_STATE,
     };
@@ -3447,6 +3649,7 @@ pub mod abstract_minecart_container {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -3462,6 +3665,7 @@ pub mod abstract_minecart_container {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -3477,6 +3681,7 @@ pub mod abstract_minecart_container {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -3492,6 +3697,7 @@ pub mod abstract_minecart_container {
             v1_21_11: 255u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_STATE,
     };
@@ -3507,6 +3713,7 @@ pub mod abstract_minecart_container {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -3522,6 +3729,7 @@ pub mod abstract_minecart_container {
             v1_21_11: 255u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -3537,6 +3745,7 @@ pub mod abstract_minecart_container {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -3552,6 +3761,7 @@ pub mod abstract_minecart_container {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -3567,6 +3777,7 @@ pub mod abstract_minecart_container {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -3582,6 +3793,7 @@ pub mod abstract_minecart_container {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -3597,6 +3809,7 @@ pub mod abstract_minecart_container {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -3612,6 +3825,7 @@ pub mod abstract_minecart_container {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -3627,6 +3841,7 @@ pub mod abstract_minecart_container {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -3668,6 +3883,7 @@ pub mod abstract_nautilus {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -3683,6 +3899,7 @@ pub mod abstract_nautilus {
             v1_21_11: 255u8,
             v26_1: 20u8,
             v26_2: 20u8,
+            v26_3: 20u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -3698,6 +3915,7 @@ pub mod abstract_nautilus {
             v1_21_11: 19u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -3713,6 +3931,7 @@ pub mod abstract_nautilus {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -3728,6 +3947,7 @@ pub mod abstract_nautilus {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -3743,6 +3963,7 @@ pub mod abstract_nautilus {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -3758,6 +3979,7 @@ pub mod abstract_nautilus {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -3773,6 +3995,7 @@ pub mod abstract_nautilus {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -3788,6 +4011,7 @@ pub mod abstract_nautilus {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -3803,6 +4027,7 @@ pub mod abstract_nautilus {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -3818,6 +4043,7 @@ pub mod abstract_nautilus {
             v1_21_11: 17u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -3833,6 +4059,7 @@ pub mod abstract_nautilus {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -3848,6 +4075,7 @@ pub mod abstract_nautilus {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -3863,6 +4091,7 @@ pub mod abstract_nautilus {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -3878,6 +4107,7 @@ pub mod abstract_nautilus {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -3893,6 +4123,7 @@ pub mod abstract_nautilus {
             v1_21_11: 18u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::OPTIONAL_LIVING_ENTITY_REFERENCE,
     };
@@ -3908,6 +4139,7 @@ pub mod abstract_nautilus {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -3923,6 +4155,7 @@ pub mod abstract_nautilus {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -3938,6 +4171,7 @@ pub mod abstract_nautilus {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -3953,6 +4187,7 @@ pub mod abstract_nautilus {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -3968,6 +4203,7 @@ pub mod abstract_nautilus {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -3983,6 +4219,7 @@ pub mod abstract_nautilus {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -4045,6 +4282,7 @@ pub mod abstract_piglin {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -4060,6 +4298,7 @@ pub mod abstract_piglin {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -4075,6 +4314,7 @@ pub mod abstract_piglin {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -4090,6 +4330,7 @@ pub mod abstract_piglin {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -4105,6 +4346,7 @@ pub mod abstract_piglin {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -4120,6 +4362,7 @@ pub mod abstract_piglin {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -4135,6 +4378,7 @@ pub mod abstract_piglin {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -4150,6 +4394,7 @@ pub mod abstract_piglin {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -4165,6 +4410,7 @@ pub mod abstract_piglin {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -4180,6 +4426,7 @@ pub mod abstract_piglin {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -4195,6 +4442,7 @@ pub mod abstract_piglin {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -4210,6 +4458,7 @@ pub mod abstract_piglin {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -4225,6 +4474,7 @@ pub mod abstract_piglin {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -4240,6 +4490,7 @@ pub mod abstract_piglin {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -4255,6 +4506,7 @@ pub mod abstract_piglin {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -4270,6 +4522,7 @@ pub mod abstract_piglin {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -4285,6 +4538,7 @@ pub mod abstract_piglin {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -4300,6 +4554,7 @@ pub mod abstract_piglin {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -4351,6 +4606,7 @@ pub mod abstract_schooling_fish {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -4366,6 +4622,7 @@ pub mod abstract_schooling_fish {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -4381,6 +4638,7 @@ pub mod abstract_schooling_fish {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -4396,6 +4654,7 @@ pub mod abstract_schooling_fish {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -4411,6 +4670,7 @@ pub mod abstract_schooling_fish {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -4426,6 +4686,7 @@ pub mod abstract_schooling_fish {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -4441,6 +4702,7 @@ pub mod abstract_schooling_fish {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -4456,6 +4718,7 @@ pub mod abstract_schooling_fish {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -4471,6 +4734,7 @@ pub mod abstract_schooling_fish {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -4486,6 +4750,7 @@ pub mod abstract_schooling_fish {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -4501,6 +4766,7 @@ pub mod abstract_schooling_fish {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -4516,6 +4782,7 @@ pub mod abstract_schooling_fish {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -4531,6 +4798,7 @@ pub mod abstract_schooling_fish {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -4546,6 +4814,7 @@ pub mod abstract_schooling_fish {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -4561,6 +4830,7 @@ pub mod abstract_schooling_fish {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -4576,6 +4846,7 @@ pub mod abstract_schooling_fish {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -4591,6 +4862,7 @@ pub mod abstract_schooling_fish {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -4642,6 +4914,7 @@ pub mod abstract_skeleton {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -4657,6 +4930,7 @@ pub mod abstract_skeleton {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -4672,6 +4946,7 @@ pub mod abstract_skeleton {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -4687,6 +4962,7 @@ pub mod abstract_skeleton {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -4702,6 +4978,7 @@ pub mod abstract_skeleton {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -4717,6 +4994,7 @@ pub mod abstract_skeleton {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -4732,6 +5010,7 @@ pub mod abstract_skeleton {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -4747,6 +5026,7 @@ pub mod abstract_skeleton {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -4762,6 +5042,7 @@ pub mod abstract_skeleton {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -4777,6 +5058,7 @@ pub mod abstract_skeleton {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -4792,6 +5074,7 @@ pub mod abstract_skeleton {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -4807,6 +5090,7 @@ pub mod abstract_skeleton {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -4822,6 +5106,7 @@ pub mod abstract_skeleton {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -4837,6 +5122,7 @@ pub mod abstract_skeleton {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -4852,6 +5138,7 @@ pub mod abstract_skeleton {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -4867,6 +5154,7 @@ pub mod abstract_skeleton {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -4918,6 +5206,7 @@ pub mod abstract_thrown_potion {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -4933,6 +5222,7 @@ pub mod abstract_thrown_potion {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -4948,6 +5238,7 @@ pub mod abstract_thrown_potion {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -4963,6 +5254,7 @@ pub mod abstract_thrown_potion {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -4978,6 +5270,7 @@ pub mod abstract_thrown_potion {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -4993,6 +5286,7 @@ pub mod abstract_thrown_potion {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -5008,6 +5302,7 @@ pub mod abstract_thrown_potion {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -5023,6 +5318,7 @@ pub mod abstract_thrown_potion {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -5038,6 +5334,7 @@ pub mod abstract_thrown_potion {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -5053,6 +5350,7 @@ pub mod abstract_thrown_potion {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -5088,6 +5386,7 @@ pub mod abstract_villager {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -5103,6 +5402,7 @@ pub mod abstract_villager {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -5118,6 +5418,7 @@ pub mod abstract_villager {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -5133,6 +5434,7 @@ pub mod abstract_villager {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -5148,6 +5450,7 @@ pub mod abstract_villager {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -5163,6 +5466,7 @@ pub mod abstract_villager {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -5178,6 +5482,7 @@ pub mod abstract_villager {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -5193,6 +5498,7 @@ pub mod abstract_villager {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -5208,6 +5514,7 @@ pub mod abstract_villager {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -5223,6 +5530,7 @@ pub mod abstract_villager {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -5238,6 +5546,7 @@ pub mod abstract_villager {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -5253,6 +5562,7 @@ pub mod abstract_villager {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -5268,6 +5578,7 @@ pub mod abstract_villager {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -5283,6 +5594,7 @@ pub mod abstract_villager {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -5298,6 +5610,7 @@ pub mod abstract_villager {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -5313,6 +5626,7 @@ pub mod abstract_villager {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -5328,6 +5642,7 @@ pub mod abstract_villager {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -5343,6 +5658,7 @@ pub mod abstract_villager {
             v1_21_11: 17u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -5358,6 +5674,7 @@ pub mod abstract_villager {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -5414,6 +5731,7 @@ pub mod abstract_wind_charge {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -5429,6 +5747,7 @@ pub mod abstract_wind_charge {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -5444,6 +5763,7 @@ pub mod abstract_wind_charge {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -5459,6 +5779,7 @@ pub mod abstract_wind_charge {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -5474,6 +5795,7 @@ pub mod abstract_wind_charge {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -5489,6 +5811,7 @@ pub mod abstract_wind_charge {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -5504,6 +5827,7 @@ pub mod abstract_wind_charge {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -5519,6 +5843,7 @@ pub mod abstract_wind_charge {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -5551,6 +5876,7 @@ pub mod acacia_boat {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -5566,6 +5892,7 @@ pub mod acacia_boat {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -5581,6 +5908,7 @@ pub mod acacia_boat {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -5596,6 +5924,7 @@ pub mod acacia_boat {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -5611,6 +5940,7 @@ pub mod acacia_boat {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -5626,6 +5956,7 @@ pub mod acacia_boat {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -5641,6 +5972,7 @@ pub mod acacia_boat {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -5656,6 +5988,7 @@ pub mod acacia_boat {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -5671,6 +6004,7 @@ pub mod acacia_boat {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -5686,6 +6020,7 @@ pub mod acacia_boat {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -5701,6 +6036,7 @@ pub mod acacia_boat {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -5716,6 +6052,7 @@ pub mod acacia_boat {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -5731,6 +6068,7 @@ pub mod acacia_boat {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -5746,6 +6084,7 @@ pub mod acacia_boat {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -5787,6 +6126,7 @@ pub mod acacia_chest_boat {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -5802,6 +6142,7 @@ pub mod acacia_chest_boat {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -5817,6 +6158,7 @@ pub mod acacia_chest_boat {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -5832,6 +6174,7 @@ pub mod acacia_chest_boat {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -5847,6 +6190,7 @@ pub mod acacia_chest_boat {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -5862,6 +6206,7 @@ pub mod acacia_chest_boat {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -5877,6 +6222,7 @@ pub mod acacia_chest_boat {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -5892,6 +6238,7 @@ pub mod acacia_chest_boat {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -5907,6 +6254,7 @@ pub mod acacia_chest_boat {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -5922,6 +6270,7 @@ pub mod acacia_chest_boat {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -5937,6 +6286,7 @@ pub mod acacia_chest_boat {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -5952,6 +6302,7 @@ pub mod acacia_chest_boat {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -5967,6 +6318,7 @@ pub mod acacia_chest_boat {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -5982,6 +6334,7 @@ pub mod acacia_chest_boat {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -6023,6 +6376,7 @@ pub mod ageable_mob {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -6038,6 +6392,7 @@ pub mod ageable_mob {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -6053,6 +6408,7 @@ pub mod ageable_mob {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -6068,6 +6424,7 @@ pub mod ageable_mob {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -6083,6 +6440,7 @@ pub mod ageable_mob {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -6098,6 +6456,7 @@ pub mod ageable_mob {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -6113,6 +6472,7 @@ pub mod ageable_mob {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -6128,6 +6488,7 @@ pub mod ageable_mob {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -6143,6 +6504,7 @@ pub mod ageable_mob {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -6158,6 +6520,7 @@ pub mod ageable_mob {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -6173,6 +6536,7 @@ pub mod ageable_mob {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -6188,6 +6552,7 @@ pub mod ageable_mob {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -6203,6 +6568,7 @@ pub mod ageable_mob {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -6218,6 +6584,7 @@ pub mod ageable_mob {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -6233,6 +6600,7 @@ pub mod ageable_mob {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -6248,6 +6616,7 @@ pub mod ageable_mob {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -6263,6 +6632,7 @@ pub mod ageable_mob {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -6278,6 +6648,7 @@ pub mod ageable_mob {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -6332,6 +6703,7 @@ pub mod ageable_water_creature {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -6347,6 +6719,7 @@ pub mod ageable_water_creature {
             v1_21_11: 255u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -6362,6 +6735,7 @@ pub mod ageable_water_creature {
             v1_21_11: 255u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -6377,6 +6751,7 @@ pub mod ageable_water_creature {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -6392,6 +6767,7 @@ pub mod ageable_water_creature {
             v1_21_11: 255u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -6407,6 +6783,7 @@ pub mod ageable_water_creature {
             v1_21_11: 255u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -6422,6 +6799,7 @@ pub mod ageable_water_creature {
             v1_21_11: 255u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -6437,6 +6815,7 @@ pub mod ageable_water_creature {
             v1_21_11: 255u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -6452,6 +6831,7 @@ pub mod ageable_water_creature {
             v1_21_11: 255u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -6467,6 +6847,7 @@ pub mod ageable_water_creature {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -6482,6 +6863,7 @@ pub mod ageable_water_creature {
             v1_21_11: 255u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -6497,6 +6879,7 @@ pub mod ageable_water_creature {
             v1_21_11: 255u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -6512,6 +6895,7 @@ pub mod ageable_water_creature {
             v1_21_11: 255u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -6527,6 +6911,7 @@ pub mod ageable_water_creature {
             v1_21_11: 255u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -6542,6 +6927,7 @@ pub mod ageable_water_creature {
             v1_21_11: 255u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -6557,6 +6943,7 @@ pub mod ageable_water_creature {
             v1_21_11: 255u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -6572,6 +6959,7 @@ pub mod ageable_water_creature {
             v1_21_11: 255u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -6587,6 +6975,7 @@ pub mod ageable_water_creature {
             v1_21_11: 255u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -6641,6 +7030,7 @@ pub mod allay {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -6656,6 +7046,7 @@ pub mod allay {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -6671,6 +7062,7 @@ pub mod allay {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -6686,6 +7078,7 @@ pub mod allay {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -6701,6 +7094,7 @@ pub mod allay {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -6716,6 +7110,7 @@ pub mod allay {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -6731,6 +7126,7 @@ pub mod allay {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -6746,6 +7142,7 @@ pub mod allay {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -6761,6 +7158,7 @@ pub mod allay {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -6776,6 +7174,7 @@ pub mod allay {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -6791,6 +7190,7 @@ pub mod allay {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -6806,6 +7206,7 @@ pub mod allay {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -6821,6 +7222,7 @@ pub mod allay {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -6836,6 +7238,7 @@ pub mod allay {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -6851,6 +7254,7 @@ pub mod allay {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -6866,6 +7270,7 @@ pub mod allay {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -6881,6 +7286,7 @@ pub mod allay {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -6896,6 +7302,7 @@ pub mod allay {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -6911,6 +7318,7 @@ pub mod allay {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -6926,6 +7334,7 @@ pub mod allay {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -6977,6 +7386,7 @@ pub mod ambient_creature {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -6992,6 +7402,7 @@ pub mod ambient_creature {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -7007,6 +7418,7 @@ pub mod ambient_creature {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -7022,6 +7434,7 @@ pub mod ambient_creature {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -7037,6 +7450,7 @@ pub mod ambient_creature {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -7052,6 +7466,7 @@ pub mod ambient_creature {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -7067,6 +7482,7 @@ pub mod ambient_creature {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -7082,6 +7498,7 @@ pub mod ambient_creature {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -7097,6 +7514,7 @@ pub mod ambient_creature {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -7112,6 +7530,7 @@ pub mod ambient_creature {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -7127,6 +7546,7 @@ pub mod ambient_creature {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -7142,6 +7562,7 @@ pub mod ambient_creature {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -7157,6 +7578,7 @@ pub mod ambient_creature {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -7172,6 +7594,7 @@ pub mod ambient_creature {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -7187,6 +7610,7 @@ pub mod ambient_creature {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -7202,6 +7626,7 @@ pub mod ambient_creature {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -7253,6 +7678,7 @@ pub mod animal {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -7268,6 +7694,7 @@ pub mod animal {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -7283,6 +7710,7 @@ pub mod animal {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -7298,6 +7726,7 @@ pub mod animal {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -7313,6 +7742,7 @@ pub mod animal {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -7328,6 +7758,7 @@ pub mod animal {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -7343,6 +7774,7 @@ pub mod animal {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -7358,6 +7790,7 @@ pub mod animal {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -7373,6 +7806,7 @@ pub mod animal {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -7388,6 +7822,7 @@ pub mod animal {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -7403,6 +7838,7 @@ pub mod animal {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -7418,6 +7854,7 @@ pub mod animal {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -7433,6 +7870,7 @@ pub mod animal {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -7448,6 +7886,7 @@ pub mod animal {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -7463,6 +7902,7 @@ pub mod animal {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -7478,6 +7918,7 @@ pub mod animal {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -7493,6 +7934,7 @@ pub mod animal {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -7508,6 +7950,7 @@ pub mod animal {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -7562,6 +8005,7 @@ pub mod area_effect_cloud {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -7577,6 +8021,7 @@ pub mod area_effect_cloud {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -7592,6 +8037,7 @@ pub mod area_effect_cloud {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -7607,6 +8053,7 @@ pub mod area_effect_cloud {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -7622,6 +8069,7 @@ pub mod area_effect_cloud {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLE,
     };
@@ -7637,6 +8085,7 @@ pub mod area_effect_cloud {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -7652,6 +8101,7 @@ pub mod area_effect_cloud {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -7667,6 +8117,7 @@ pub mod area_effect_cloud {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -7682,6 +8133,7 @@ pub mod area_effect_cloud {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -7697,6 +8149,7 @@ pub mod area_effect_cloud {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -7712,6 +8165,7 @@ pub mod area_effect_cloud {
             v1_21_11: 255u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -7727,6 +8181,7 @@ pub mod area_effect_cloud {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::PARTICLE,
     };
@@ -7742,6 +8197,7 @@ pub mod area_effect_cloud {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -7757,6 +8213,7 @@ pub mod area_effect_cloud {
             v1_21_11: 9u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -7790,6 +8247,7 @@ pub mod armadillo {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -7805,6 +8263,7 @@ pub mod armadillo {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::ARMADILLO_STATE,
     };
@@ -7820,6 +8279,7 @@ pub mod armadillo {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -7835,6 +8295,7 @@ pub mod armadillo {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -7850,6 +8311,7 @@ pub mod armadillo {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -7865,6 +8327,7 @@ pub mod armadillo {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -7880,6 +8343,7 @@ pub mod armadillo {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -7895,6 +8359,7 @@ pub mod armadillo {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -7910,6 +8375,7 @@ pub mod armadillo {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -7925,6 +8391,7 @@ pub mod armadillo {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -7940,6 +8407,7 @@ pub mod armadillo {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -7955,6 +8423,7 @@ pub mod armadillo {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -7970,6 +8439,7 @@ pub mod armadillo {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -7985,6 +8455,7 @@ pub mod armadillo {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -8000,6 +8471,7 @@ pub mod armadillo {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -8015,6 +8487,7 @@ pub mod armadillo {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -8030,6 +8503,7 @@ pub mod armadillo {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -8045,6 +8519,7 @@ pub mod armadillo {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -8060,6 +8535,7 @@ pub mod armadillo {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -8075,6 +8551,7 @@ pub mod armadillo {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ARMADILLO_STATE,
     };
@@ -8129,6 +8606,7 @@ pub mod armor_stand {
             v1_21_11: 15u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -8144,6 +8622,7 @@ pub mod armor_stand {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -8159,6 +8638,7 @@ pub mod armor_stand {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -8174,6 +8654,7 @@ pub mod armor_stand {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::ROTATIONS,
     };
@@ -8189,6 +8670,7 @@ pub mod armor_stand {
             v1_21_11: 255u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -8204,6 +8686,7 @@ pub mod armor_stand {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -8219,6 +8702,7 @@ pub mod armor_stand {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -8234,6 +8718,7 @@ pub mod armor_stand {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -8249,6 +8734,7 @@ pub mod armor_stand {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -8264,6 +8750,7 @@ pub mod armor_stand {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::ROTATIONS,
     };
@@ -8279,6 +8766,7 @@ pub mod armor_stand {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -8294,6 +8782,7 @@ pub mod armor_stand {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::ROTATIONS,
     };
@@ -8309,6 +8798,7 @@ pub mod armor_stand {
             v1_21_11: 255u8,
             v26_1: 20u8,
             v26_2: 20u8,
+            v26_3: 20u8,
         },
         r#type: MetaDataType::ROTATIONS,
     };
@@ -8324,6 +8814,7 @@ pub mod armor_stand {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -8339,6 +8830,7 @@ pub mod armor_stand {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -8354,6 +8846,7 @@ pub mod armor_stand {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -8369,6 +8862,7 @@ pub mod armor_stand {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::ROTATIONS,
     };
@@ -8384,6 +8878,7 @@ pub mod armor_stand {
             v1_21_11: 255u8,
             v26_1: 21u8,
             v26_2: 21u8,
+            v26_3: 21u8,
         },
         r#type: MetaDataType::ROTATIONS,
     };
@@ -8399,6 +8894,7 @@ pub mod armor_stand {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -8414,6 +8910,7 @@ pub mod armor_stand {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -8429,6 +8926,7 @@ pub mod armor_stand {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -8444,6 +8942,7 @@ pub mod armor_stand {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -8459,6 +8958,7 @@ pub mod armor_stand {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -8474,6 +8974,7 @@ pub mod armor_stand {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ROTATIONS,
     };
@@ -8489,6 +8990,7 @@ pub mod armor_stand {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ROTATIONS,
     };
@@ -8504,6 +9006,7 @@ pub mod armor_stand {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ROTATIONS,
     };
@@ -8519,6 +9022,7 @@ pub mod armor_stand {
             v1_21_11: 20u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ROTATIONS,
     };
@@ -8534,6 +9038,7 @@ pub mod armor_stand {
             v1_21_11: 19u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ROTATIONS,
     };
@@ -8549,6 +9054,7 @@ pub mod armor_stand {
             v1_21_11: 21u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ROTATIONS,
     };
@@ -8604,6 +9110,7 @@ pub mod arrow {
             v1_21_11: 11u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -8619,6 +9126,7 @@ pub mod arrow {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -8634,6 +9142,7 @@ pub mod arrow {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -8649,6 +9158,7 @@ pub mod arrow {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -8664,6 +9174,7 @@ pub mod arrow {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -8679,6 +9190,7 @@ pub mod arrow {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -8694,6 +9206,7 @@ pub mod arrow {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -8709,6 +9222,7 @@ pub mod arrow {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -8724,6 +9238,7 @@ pub mod arrow {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -8739,6 +9254,7 @@ pub mod arrow {
             v1_21_11: 255u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -8754,6 +9270,7 @@ pub mod arrow {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -8769,6 +9286,7 @@ pub mod arrow {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -8784,6 +9302,7 @@ pub mod arrow {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -8799,6 +9318,7 @@ pub mod arrow {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -8831,6 +9351,7 @@ pub mod avatar {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -8846,6 +9367,7 @@ pub mod avatar {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -8861,6 +9383,7 @@ pub mod avatar {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -8876,6 +9399,7 @@ pub mod avatar {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -8891,6 +9415,7 @@ pub mod avatar {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -8906,6 +9431,7 @@ pub mod avatar {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -8921,6 +9447,7 @@ pub mod avatar {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -8936,6 +9463,7 @@ pub mod avatar {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -8951,6 +9479,7 @@ pub mod avatar {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -8966,6 +9495,7 @@ pub mod avatar {
             v1_21_11: 255u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::HUMANOID_ARM,
     };
@@ -8981,6 +9511,7 @@ pub mod avatar {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -8996,6 +9527,7 @@ pub mod avatar {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -9011,6 +9543,7 @@ pub mod avatar {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -9026,6 +9559,7 @@ pub mod avatar {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -9041,6 +9575,7 @@ pub mod avatar {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -9056,6 +9591,7 @@ pub mod avatar {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -9071,6 +9607,7 @@ pub mod avatar {
             v1_21_11: 15u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ARM,
     };
@@ -9086,6 +9623,7 @@ pub mod avatar {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -9101,6 +9639,7 @@ pub mod avatar {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -9153,6 +9692,7 @@ pub mod axolotl {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -9168,6 +9708,7 @@ pub mod axolotl {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -9183,6 +9724,7 @@ pub mod axolotl {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -9198,6 +9740,7 @@ pub mod axolotl {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -9213,6 +9756,7 @@ pub mod axolotl {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -9228,6 +9772,7 @@ pub mod axolotl {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -9243,6 +9788,7 @@ pub mod axolotl {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -9258,6 +9804,7 @@ pub mod axolotl {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -9273,6 +9820,7 @@ pub mod axolotl {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -9288,6 +9836,7 @@ pub mod axolotl {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -9303,6 +9852,7 @@ pub mod axolotl {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -9318,6 +9868,7 @@ pub mod axolotl {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -9333,6 +9884,7 @@ pub mod axolotl {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -9348,6 +9900,7 @@ pub mod axolotl {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -9363,6 +9916,7 @@ pub mod axolotl {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -9378,6 +9932,7 @@ pub mod axolotl {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -9393,6 +9948,7 @@ pub mod axolotl {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -9408,6 +9964,7 @@ pub mod axolotl {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -9423,6 +9980,7 @@ pub mod axolotl {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -9438,6 +9996,7 @@ pub mod axolotl {
             v1_21_11: 19u8,
             v26_1: 20u8,
             v26_2: 20u8,
+            v26_3: 20u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -9453,6 +10012,7 @@ pub mod axolotl {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -9468,6 +10028,7 @@ pub mod axolotl {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -9483,6 +10044,7 @@ pub mod axolotl {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -9537,6 +10099,7 @@ pub mod bamboo_chest_raft {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -9552,6 +10115,7 @@ pub mod bamboo_chest_raft {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -9567,6 +10131,7 @@ pub mod bamboo_chest_raft {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -9582,6 +10147,7 @@ pub mod bamboo_chest_raft {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -9597,6 +10163,7 @@ pub mod bamboo_chest_raft {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -9612,6 +10179,7 @@ pub mod bamboo_chest_raft {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -9627,6 +10195,7 @@ pub mod bamboo_chest_raft {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -9642,6 +10211,7 @@ pub mod bamboo_chest_raft {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -9657,6 +10227,7 @@ pub mod bamboo_chest_raft {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -9672,6 +10243,7 @@ pub mod bamboo_chest_raft {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -9687,6 +10259,7 @@ pub mod bamboo_chest_raft {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -9702,6 +10275,7 @@ pub mod bamboo_chest_raft {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -9717,6 +10291,7 @@ pub mod bamboo_chest_raft {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -9732,6 +10307,7 @@ pub mod bamboo_chest_raft {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -9773,6 +10349,7 @@ pub mod bamboo_raft {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -9788,6 +10365,7 @@ pub mod bamboo_raft {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -9803,6 +10381,7 @@ pub mod bamboo_raft {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -9818,6 +10397,7 @@ pub mod bamboo_raft {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -9833,6 +10413,7 @@ pub mod bamboo_raft {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -9848,6 +10429,7 @@ pub mod bamboo_raft {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -9863,6 +10445,7 @@ pub mod bamboo_raft {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -9878,6 +10461,7 @@ pub mod bamboo_raft {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -9893,6 +10477,7 @@ pub mod bamboo_raft {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -9908,6 +10493,7 @@ pub mod bamboo_raft {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -9923,6 +10509,7 @@ pub mod bamboo_raft {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -9938,6 +10525,7 @@ pub mod bamboo_raft {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -9953,6 +10541,7 @@ pub mod bamboo_raft {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -9968,6 +10557,7 @@ pub mod bamboo_raft {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -10009,6 +10599,7 @@ pub mod bat {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -10024,6 +10615,7 @@ pub mod bat {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -10039,6 +10631,7 @@ pub mod bat {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -10054,6 +10647,7 @@ pub mod bat {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -10069,6 +10663,7 @@ pub mod bat {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -10084,6 +10679,7 @@ pub mod bat {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -10099,6 +10695,7 @@ pub mod bat {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -10114,6 +10711,7 @@ pub mod bat {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -10129,6 +10727,7 @@ pub mod bat {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -10144,6 +10743,7 @@ pub mod bat {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -10159,6 +10759,7 @@ pub mod bat {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -10174,6 +10775,7 @@ pub mod bat {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -10189,6 +10791,7 @@ pub mod bat {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -10204,6 +10807,7 @@ pub mod bat {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -10219,6 +10823,7 @@ pub mod bat {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -10234,6 +10839,7 @@ pub mod bat {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -10249,6 +10855,7 @@ pub mod bat {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -10264,6 +10871,7 @@ pub mod bat {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -10316,6 +10924,7 @@ pub mod bee {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -10331,6 +10940,7 @@ pub mod bee {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -10346,6 +10956,7 @@ pub mod bee {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::LONG,
     };
@@ -10361,6 +10972,7 @@ pub mod bee {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -10376,6 +10988,7 @@ pub mod bee {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -10391,6 +11004,7 @@ pub mod bee {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::LONG,
     };
@@ -10406,6 +11020,7 @@ pub mod bee {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -10421,6 +11036,7 @@ pub mod bee {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -10436,6 +11052,7 @@ pub mod bee {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -10451,6 +11068,7 @@ pub mod bee {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -10466,6 +11084,7 @@ pub mod bee {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -10481,6 +11100,7 @@ pub mod bee {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -10496,6 +11116,7 @@ pub mod bee {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -10511,6 +11132,7 @@ pub mod bee {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -10526,6 +11148,7 @@ pub mod bee {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -10541,6 +11164,7 @@ pub mod bee {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -10556,6 +11180,7 @@ pub mod bee {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -10571,6 +11196,7 @@ pub mod bee {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -10586,6 +11212,7 @@ pub mod bee {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -10601,6 +11228,7 @@ pub mod bee {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -10616,6 +11244,7 @@ pub mod bee {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -10631,6 +11260,7 @@ pub mod bee {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -10646,6 +11276,7 @@ pub mod bee {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -10704,6 +11335,7 @@ pub mod birch_boat {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -10719,6 +11351,7 @@ pub mod birch_boat {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -10734,6 +11367,7 @@ pub mod birch_boat {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -10749,6 +11383,7 @@ pub mod birch_boat {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -10764,6 +11399,7 @@ pub mod birch_boat {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -10779,6 +11415,7 @@ pub mod birch_boat {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -10794,6 +11431,7 @@ pub mod birch_boat {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -10809,6 +11447,7 @@ pub mod birch_boat {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -10824,6 +11463,7 @@ pub mod birch_boat {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -10839,6 +11479,7 @@ pub mod birch_boat {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -10854,6 +11495,7 @@ pub mod birch_boat {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -10869,6 +11511,7 @@ pub mod birch_boat {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -10884,6 +11527,7 @@ pub mod birch_boat {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -10899,6 +11543,7 @@ pub mod birch_boat {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -10940,6 +11585,7 @@ pub mod birch_chest_boat {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -10955,6 +11601,7 @@ pub mod birch_chest_boat {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -10970,6 +11617,7 @@ pub mod birch_chest_boat {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -10985,6 +11633,7 @@ pub mod birch_chest_boat {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -11000,6 +11649,7 @@ pub mod birch_chest_boat {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -11015,6 +11665,7 @@ pub mod birch_chest_boat {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -11030,6 +11681,7 @@ pub mod birch_chest_boat {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -11045,6 +11697,7 @@ pub mod birch_chest_boat {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -11060,6 +11713,7 @@ pub mod birch_chest_boat {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -11075,6 +11729,7 @@ pub mod birch_chest_boat {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -11090,6 +11745,7 @@ pub mod birch_chest_boat {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -11105,6 +11761,7 @@ pub mod birch_chest_boat {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -11120,6 +11777,7 @@ pub mod birch_chest_boat {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -11135,6 +11793,7 @@ pub mod birch_chest_boat {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -11176,6 +11835,7 @@ pub mod blaze {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -11191,6 +11851,7 @@ pub mod blaze {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -11206,6 +11867,7 @@ pub mod blaze {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -11221,6 +11883,7 @@ pub mod blaze {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -11236,6 +11899,7 @@ pub mod blaze {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -11251,6 +11915,7 @@ pub mod blaze {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -11266,6 +11931,7 @@ pub mod blaze {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -11281,6 +11947,7 @@ pub mod blaze {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -11296,6 +11963,7 @@ pub mod blaze {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -11311,6 +11979,7 @@ pub mod blaze {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -11326,6 +11995,7 @@ pub mod blaze {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -11341,6 +12011,7 @@ pub mod blaze {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -11356,6 +12027,7 @@ pub mod blaze {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -11371,6 +12043,7 @@ pub mod blaze {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -11386,6 +12059,7 @@ pub mod blaze {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -11401,6 +12075,7 @@ pub mod blaze {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -11416,6 +12091,7 @@ pub mod blaze {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -11471,6 +12147,7 @@ pub mod block_attached_entity {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -11486,6 +12163,7 @@ pub mod block_attached_entity {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -11501,6 +12179,7 @@ pub mod block_attached_entity {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -11516,6 +12195,7 @@ pub mod block_attached_entity {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -11531,6 +12211,7 @@ pub mod block_attached_entity {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -11546,6 +12227,7 @@ pub mod block_attached_entity {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -11561,6 +12243,7 @@ pub mod block_attached_entity {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -11576,6 +12259,7 @@ pub mod block_attached_entity {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -11608,6 +12292,7 @@ pub mod block_display {
             v1_21_11: 15u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -11623,6 +12308,7 @@ pub mod block_display {
             v1_21_11: 23u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BLOCK_STATE,
     };
@@ -11638,6 +12324,7 @@ pub mod block_display {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -11653,6 +12340,7 @@ pub mod block_display {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -11668,6 +12356,7 @@ pub mod block_display {
             v1_21_11: 255u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -11683,6 +12372,7 @@ pub mod block_display {
             v1_21_11: 255u8,
             v26_1: 23u8,
             v26_2: 23u8,
+            v26_3: 23u8,
         },
         r#type: MetaDataType::BLOCK_STATE,
     };
@@ -11698,6 +12388,7 @@ pub mod block_display {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -11713,6 +12404,7 @@ pub mod block_display {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -11728,6 +12420,7 @@ pub mod block_display {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -11743,6 +12436,7 @@ pub mod block_display {
             v1_21_11: 255u8,
             v26_1: 22u8,
             v26_2: 22u8,
+            v26_3: 22u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -11758,6 +12452,7 @@ pub mod block_display {
             v1_21_11: 255u8,
             v26_1: 21u8,
             v26_2: 21u8,
+            v26_3: 21u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -11773,6 +12468,7 @@ pub mod block_display {
             v1_21_11: 255u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::QUATERNION,
     };
@@ -11788,6 +12484,7 @@ pub mod block_display {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -11803,6 +12500,7 @@ pub mod block_display {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -11818,6 +12516,7 @@ pub mod block_display {
             v1_21_11: 255u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -11833,6 +12532,7 @@ pub mod block_display {
             v1_21_11: 255u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::QUATERNION,
     };
@@ -11848,6 +12548,7 @@ pub mod block_display {
             v1_21_11: 255u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::VECTOR3,
     };
@@ -11863,6 +12564,7 @@ pub mod block_display {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -11878,6 +12580,7 @@ pub mod block_display {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -11893,6 +12596,7 @@ pub mod block_display {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -11908,6 +12612,7 @@ pub mod block_display {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -11923,6 +12628,7 @@ pub mod block_display {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -11938,6 +12644,7 @@ pub mod block_display {
             v1_21_11: 255u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -11953,6 +12660,7 @@ pub mod block_display {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -11968,6 +12676,7 @@ pub mod block_display {
             v1_21_11: 255u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::VECTOR3,
     };
@@ -11983,6 +12692,7 @@ pub mod block_display {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -11998,6 +12708,7 @@ pub mod block_display {
             v1_21_11: 255u8,
             v26_1: 20u8,
             v26_2: 20u8,
+            v26_3: 20u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -12013,6 +12724,7 @@ pub mod block_display {
             v1_21_11: 22u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -12028,6 +12740,7 @@ pub mod block_display {
             v1_21_11: 21u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -12043,6 +12756,7 @@ pub mod block_display {
             v1_21_11: 9u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -12058,6 +12772,7 @@ pub mod block_display {
             v1_21_11: 13u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::QUATERNION,
     };
@@ -12073,6 +12788,7 @@ pub mod block_display {
             v1_21_11: 14u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::QUATERNION,
     };
@@ -12088,6 +12804,7 @@ pub mod block_display {
             v1_21_11: 12u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::VECTOR3,
     };
@@ -12103,6 +12820,7 @@ pub mod block_display {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -12118,6 +12836,7 @@ pub mod block_display {
             v1_21_11: 19u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -12133,6 +12852,7 @@ pub mod block_display {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -12148,6 +12868,7 @@ pub mod block_display {
             v1_21_11: 10u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -12163,6 +12884,7 @@ pub mod block_display {
             v1_21_11: 11u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::VECTOR3,
     };
@@ -12178,6 +12900,7 @@ pub mod block_display {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -12193,6 +12916,7 @@ pub mod block_display {
             v1_21_11: 20u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -12270,6 +12994,7 @@ pub mod boat {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -12285,6 +13010,7 @@ pub mod boat {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -12300,6 +13026,7 @@ pub mod boat {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -12315,6 +13042,7 @@ pub mod boat {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -12330,6 +13058,7 @@ pub mod boat {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -12345,6 +13074,7 @@ pub mod boat {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -12360,6 +13090,7 @@ pub mod boat {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -12375,6 +13106,7 @@ pub mod boat {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -12390,6 +13122,7 @@ pub mod boat {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -12405,6 +13138,7 @@ pub mod boat {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -12420,6 +13154,7 @@ pub mod boat {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -12435,6 +13170,7 @@ pub mod boat {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -12450,6 +13186,7 @@ pub mod boat {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -12465,6 +13202,7 @@ pub mod boat {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -12480,6 +13218,7 @@ pub mod boat {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -12521,6 +13260,7 @@ pub mod bogged {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -12536,6 +13276,7 @@ pub mod bogged {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -12551,6 +13292,7 @@ pub mod bogged {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -12566,6 +13308,7 @@ pub mod bogged {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -12581,6 +13324,7 @@ pub mod bogged {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -12596,6 +13340,7 @@ pub mod bogged {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -12611,6 +13356,7 @@ pub mod bogged {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -12626,6 +13372,7 @@ pub mod bogged {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -12641,6 +13388,7 @@ pub mod bogged {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -12656,6 +13404,7 @@ pub mod bogged {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -12671,6 +13420,7 @@ pub mod bogged {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -12686,6 +13436,7 @@ pub mod bogged {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -12701,6 +13452,7 @@ pub mod bogged {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -12716,6 +13468,7 @@ pub mod bogged {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -12731,6 +13484,7 @@ pub mod bogged {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -12746,6 +13500,7 @@ pub mod bogged {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -12761,6 +13516,7 @@ pub mod bogged {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -12776,6 +13532,7 @@ pub mod bogged {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -12827,6 +13584,7 @@ pub mod breeze {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -12842,6 +13600,7 @@ pub mod breeze {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -12857,6 +13616,7 @@ pub mod breeze {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -12872,6 +13632,7 @@ pub mod breeze {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -12887,6 +13648,7 @@ pub mod breeze {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -12902,6 +13664,7 @@ pub mod breeze {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -12917,6 +13680,7 @@ pub mod breeze {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -12932,6 +13696,7 @@ pub mod breeze {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -12947,6 +13712,7 @@ pub mod breeze {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -12962,6 +13728,7 @@ pub mod breeze {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -12977,6 +13744,7 @@ pub mod breeze {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -12992,6 +13760,7 @@ pub mod breeze {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -13007,6 +13776,7 @@ pub mod breeze {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -13022,6 +13792,7 @@ pub mod breeze {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -13037,6 +13808,7 @@ pub mod breeze {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -13052,6 +13824,7 @@ pub mod breeze {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -13103,6 +13876,7 @@ pub mod breeze_wind_charge {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -13118,6 +13892,7 @@ pub mod breeze_wind_charge {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -13133,6 +13908,7 @@ pub mod breeze_wind_charge {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -13148,6 +13924,7 @@ pub mod breeze_wind_charge {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -13163,6 +13940,7 @@ pub mod breeze_wind_charge {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -13178,6 +13956,7 @@ pub mod breeze_wind_charge {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -13193,6 +13972,7 @@ pub mod breeze_wind_charge {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -13208,6 +13988,7 @@ pub mod breeze_wind_charge {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -13240,6 +14021,7 @@ pub mod camel {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -13255,6 +14037,7 @@ pub mod camel {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -13270,6 +14053,7 @@ pub mod camel {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -13285,6 +14069,7 @@ pub mod camel {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -13300,6 +14085,7 @@ pub mod camel {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -13315,6 +14101,7 @@ pub mod camel {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -13330,6 +14117,7 @@ pub mod camel {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -13345,6 +14133,7 @@ pub mod camel {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -13360,6 +14149,7 @@ pub mod camel {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -13375,6 +14165,7 @@ pub mod camel {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -13390,6 +14181,7 @@ pub mod camel {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -13405,6 +14197,7 @@ pub mod camel {
             v1_21_11: 17u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -13420,6 +14213,7 @@ pub mod camel {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -13435,6 +14229,7 @@ pub mod camel {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -13450,6 +14245,7 @@ pub mod camel {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -13465,6 +14261,7 @@ pub mod camel {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -13480,6 +14277,7 @@ pub mod camel {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -13495,6 +14293,7 @@ pub mod camel {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -13510,6 +14309,7 @@ pub mod camel {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -13525,6 +14325,7 @@ pub mod camel {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -13540,6 +14341,7 @@ pub mod camel {
             v1_21_11: 255u8,
             v26_1: 20u8,
             v26_2: 20u8,
+            v26_3: 20u8,
         },
         r#type: MetaDataType::LONG,
     };
@@ -13555,6 +14357,7 @@ pub mod camel {
             v1_21_11: 19u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::LONG,
     };
@@ -13570,6 +14373,7 @@ pub mod camel {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -13625,6 +14429,7 @@ pub mod camel_husk {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -13640,6 +14445,7 @@ pub mod camel_husk {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -13655,6 +14461,7 @@ pub mod camel_husk {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -13670,6 +14477,7 @@ pub mod camel_husk {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -13685,6 +14493,7 @@ pub mod camel_husk {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -13700,6 +14509,7 @@ pub mod camel_husk {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -13715,6 +14525,7 @@ pub mod camel_husk {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -13730,6 +14541,7 @@ pub mod camel_husk {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -13745,6 +14557,7 @@ pub mod camel_husk {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -13760,6 +14573,7 @@ pub mod camel_husk {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -13775,6 +14589,7 @@ pub mod camel_husk {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -13790,6 +14605,7 @@ pub mod camel_husk {
             v1_21_11: 17u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -13805,6 +14621,7 @@ pub mod camel_husk {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -13820,6 +14637,7 @@ pub mod camel_husk {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -13835,6 +14653,7 @@ pub mod camel_husk {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -13850,6 +14669,7 @@ pub mod camel_husk {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -13865,6 +14685,7 @@ pub mod camel_husk {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -13880,6 +14701,7 @@ pub mod camel_husk {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -13895,6 +14717,7 @@ pub mod camel_husk {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -13910,6 +14733,7 @@ pub mod camel_husk {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -13925,6 +14749,7 @@ pub mod camel_husk {
             v1_21_11: 255u8,
             v26_1: 20u8,
             v26_2: 20u8,
+            v26_3: 20u8,
         },
         r#type: MetaDataType::LONG,
     };
@@ -13940,6 +14765,7 @@ pub mod camel_husk {
             v1_21_11: 19u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::LONG,
     };
@@ -13955,6 +14781,7 @@ pub mod camel_husk {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -14010,6 +14837,7 @@ pub mod cat {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -14025,6 +14853,7 @@ pub mod cat {
             v1_21_11: 19u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::CAT_VARIANT,
     };
@@ -14040,6 +14869,7 @@ pub mod cat {
             v1_21_11: 22u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -14055,6 +14885,7 @@ pub mod cat {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -14070,6 +14901,7 @@ pub mod cat {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -14085,6 +14917,7 @@ pub mod cat {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -14100,6 +14933,7 @@ pub mod cat {
             v1_21_11: 255u8,
             v26_1: 23u8,
             v26_2: 23u8,
+            v26_3: 23u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -14115,6 +14949,7 @@ pub mod cat {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -14130,6 +14965,7 @@ pub mod cat {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -14145,6 +14981,7 @@ pub mod cat {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -14160,6 +14997,7 @@ pub mod cat {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -14175,6 +15013,7 @@ pub mod cat {
             v1_21_11: 17u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -14190,6 +15029,7 @@ pub mod cat {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -14205,6 +15045,7 @@ pub mod cat {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -14220,6 +15061,7 @@ pub mod cat {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -14235,6 +15077,7 @@ pub mod cat {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -14250,6 +15093,7 @@ pub mod cat {
             v1_21_11: 18u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::OPTIONAL_LIVING_ENTITY_REFERENCE,
     };
@@ -14265,6 +15109,7 @@ pub mod cat {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -14280,6 +15125,7 @@ pub mod cat {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -14295,6 +15141,7 @@ pub mod cat {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -14310,6 +15157,7 @@ pub mod cat {
             v1_21_11: 255u8,
             v26_1: 24u8,
             v26_2: 24u8,
+            v26_3: 24u8,
         },
         r#type: MetaDataType::CAT_SOUND_VARIANT,
     };
@@ -14325,6 +15173,7 @@ pub mod cat {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -14340,6 +15189,7 @@ pub mod cat {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -14355,6 +15205,7 @@ pub mod cat {
             v1_21_11: 255u8,
             v26_1: 20u8,
             v26_2: 20u8,
+            v26_3: 20u8,
         },
         r#type: MetaDataType::CAT_VARIANT,
     };
@@ -14370,6 +15221,7 @@ pub mod cat {
             v1_21_11: 21u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -14385,6 +15237,7 @@ pub mod cat {
             v1_21_11: 20u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -14400,6 +15253,7 @@ pub mod cat {
             v1_21_11: 255u8,
             v26_1: 21u8,
             v26_2: 21u8,
+            v26_3: 21u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -14415,6 +15269,7 @@ pub mod cat {
             v1_21_11: 255u8,
             v26_1: 22u8,
             v26_2: 22u8,
+            v26_3: 22u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -14430,6 +15285,7 @@ pub mod cat {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -14500,6 +15356,7 @@ pub mod cave_spider {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -14515,6 +15372,7 @@ pub mod cave_spider {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -14530,6 +15388,7 @@ pub mod cave_spider {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -14545,6 +15404,7 @@ pub mod cave_spider {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -14560,6 +15420,7 @@ pub mod cave_spider {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -14575,6 +15436,7 @@ pub mod cave_spider {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -14590,6 +15452,7 @@ pub mod cave_spider {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -14605,6 +15468,7 @@ pub mod cave_spider {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -14620,6 +15484,7 @@ pub mod cave_spider {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -14635,6 +15500,7 @@ pub mod cave_spider {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -14650,6 +15516,7 @@ pub mod cave_spider {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -14665,6 +15532,7 @@ pub mod cave_spider {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -14680,6 +15548,7 @@ pub mod cave_spider {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -14695,6 +15564,7 @@ pub mod cave_spider {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -14710,6 +15580,7 @@ pub mod cave_spider {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -14725,6 +15596,7 @@ pub mod cave_spider {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -14740,6 +15612,7 @@ pub mod cave_spider {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -14795,6 +15668,7 @@ pub mod cherry_boat {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -14810,6 +15684,7 @@ pub mod cherry_boat {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -14825,6 +15700,7 @@ pub mod cherry_boat {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -14840,6 +15716,7 @@ pub mod cherry_boat {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -14855,6 +15732,7 @@ pub mod cherry_boat {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -14870,6 +15748,7 @@ pub mod cherry_boat {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -14885,6 +15764,7 @@ pub mod cherry_boat {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -14900,6 +15780,7 @@ pub mod cherry_boat {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -14915,6 +15796,7 @@ pub mod cherry_boat {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -14930,6 +15812,7 @@ pub mod cherry_boat {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -14945,6 +15828,7 @@ pub mod cherry_boat {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -14960,6 +15844,7 @@ pub mod cherry_boat {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -14975,6 +15860,7 @@ pub mod cherry_boat {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -14990,6 +15876,7 @@ pub mod cherry_boat {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -15031,6 +15918,7 @@ pub mod cherry_chest_boat {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -15046,6 +15934,7 @@ pub mod cherry_chest_boat {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -15061,6 +15950,7 @@ pub mod cherry_chest_boat {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -15076,6 +15966,7 @@ pub mod cherry_chest_boat {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -15091,6 +15982,7 @@ pub mod cherry_chest_boat {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -15106,6 +15998,7 @@ pub mod cherry_chest_boat {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -15121,6 +16014,7 @@ pub mod cherry_chest_boat {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -15136,6 +16030,7 @@ pub mod cherry_chest_boat {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -15151,6 +16046,7 @@ pub mod cherry_chest_boat {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -15166,6 +16062,7 @@ pub mod cherry_chest_boat {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -15181,6 +16078,7 @@ pub mod cherry_chest_boat {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -15196,6 +16094,7 @@ pub mod cherry_chest_boat {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -15211,6 +16110,7 @@ pub mod cherry_chest_boat {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -15226,6 +16126,7 @@ pub mod cherry_chest_boat {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -15267,6 +16168,7 @@ pub mod chest_boat {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -15282,6 +16184,7 @@ pub mod chest_boat {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -15297,6 +16200,7 @@ pub mod chest_boat {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -15312,6 +16216,7 @@ pub mod chest_boat {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -15327,6 +16232,7 @@ pub mod chest_boat {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -15342,6 +16248,7 @@ pub mod chest_boat {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -15357,6 +16264,7 @@ pub mod chest_boat {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -15372,6 +16280,7 @@ pub mod chest_boat {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -15387,6 +16296,7 @@ pub mod chest_boat {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -15402,6 +16312,7 @@ pub mod chest_boat {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -15417,6 +16328,7 @@ pub mod chest_boat {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -15432,6 +16344,7 @@ pub mod chest_boat {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -15447,6 +16360,7 @@ pub mod chest_boat {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -15462,6 +16376,7 @@ pub mod chest_boat {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -15477,6 +16392,7 @@ pub mod chest_boat {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -15518,6 +16434,7 @@ pub mod chest_minecart {
             v1_21_11: 12u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -15533,6 +16450,7 @@ pub mod chest_minecart {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -15548,6 +16466,7 @@ pub mod chest_minecart {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -15563,6 +16482,7 @@ pub mod chest_minecart {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -15578,6 +16498,7 @@ pub mod chest_minecart {
             v1_21_11: 11u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_STATE,
     };
@@ -15593,6 +16514,7 @@ pub mod chest_minecart {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -15608,6 +16530,7 @@ pub mod chest_minecart {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -15623,6 +16546,7 @@ pub mod chest_minecart {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -15638,6 +16562,7 @@ pub mod chest_minecart {
             v1_21_11: 255u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_STATE,
     };
@@ -15653,6 +16578,7 @@ pub mod chest_minecart {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -15668,6 +16594,7 @@ pub mod chest_minecart {
             v1_21_11: 255u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -15683,6 +16610,7 @@ pub mod chest_minecart {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -15698,6 +16626,7 @@ pub mod chest_minecart {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -15713,6 +16642,7 @@ pub mod chest_minecart {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -15728,6 +16658,7 @@ pub mod chest_minecart {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -15743,6 +16674,7 @@ pub mod chest_minecart {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -15758,6 +16690,7 @@ pub mod chest_minecart {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -15773,6 +16706,7 @@ pub mod chest_minecart {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -15814,6 +16748,7 @@ pub mod chest_raft {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -15829,6 +16764,7 @@ pub mod chest_raft {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -15844,6 +16780,7 @@ pub mod chest_raft {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -15859,6 +16796,7 @@ pub mod chest_raft {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -15874,6 +16812,7 @@ pub mod chest_raft {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -15889,6 +16828,7 @@ pub mod chest_raft {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -15904,6 +16844,7 @@ pub mod chest_raft {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -15919,6 +16860,7 @@ pub mod chest_raft {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -15934,6 +16876,7 @@ pub mod chest_raft {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -15949,6 +16892,7 @@ pub mod chest_raft {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -15964,6 +16908,7 @@ pub mod chest_raft {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -15979,6 +16924,7 @@ pub mod chest_raft {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -15994,6 +16940,7 @@ pub mod chest_raft {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -16009,6 +16956,7 @@ pub mod chest_raft {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -16050,6 +16998,7 @@ pub mod chicken {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -16065,6 +17014,7 @@ pub mod chicken {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -16080,6 +17030,7 @@ pub mod chicken {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -16095,6 +17046,7 @@ pub mod chicken {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -16110,6 +17062,7 @@ pub mod chicken {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -16125,6 +17078,7 @@ pub mod chicken {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -16140,6 +17094,7 @@ pub mod chicken {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -16155,6 +17110,7 @@ pub mod chicken {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -16170,6 +17126,7 @@ pub mod chicken {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -16185,6 +17142,7 @@ pub mod chicken {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -16200,6 +17158,7 @@ pub mod chicken {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -16215,6 +17174,7 @@ pub mod chicken {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -16230,6 +17190,7 @@ pub mod chicken {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -16245,6 +17206,7 @@ pub mod chicken {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -16260,6 +17222,7 @@ pub mod chicken {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -16275,6 +17238,7 @@ pub mod chicken {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::CHICKEN_SOUND_VARIANT,
     };
@@ -16290,6 +17254,7 @@ pub mod chicken {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -16305,6 +17270,7 @@ pub mod chicken {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -16320,6 +17286,7 @@ pub mod chicken {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::CHICKEN_VARIANT,
     };
@@ -16335,6 +17302,7 @@ pub mod chicken {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -16350,6 +17318,7 @@ pub mod chicken {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::CHICKEN_VARIANT,
     };
@@ -16409,6 +17378,7 @@ pub mod cod {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -16424,6 +17394,7 @@ pub mod cod {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -16439,6 +17410,7 @@ pub mod cod {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -16454,6 +17426,7 @@ pub mod cod {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -16469,6 +17442,7 @@ pub mod cod {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -16484,6 +17458,7 @@ pub mod cod {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -16499,6 +17474,7 @@ pub mod cod {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -16514,6 +17490,7 @@ pub mod cod {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -16529,6 +17506,7 @@ pub mod cod {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -16544,6 +17522,7 @@ pub mod cod {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -16559,6 +17538,7 @@ pub mod cod {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -16574,6 +17554,7 @@ pub mod cod {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -16589,6 +17570,7 @@ pub mod cod {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -16604,6 +17586,7 @@ pub mod cod {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -16619,6 +17602,7 @@ pub mod cod {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -16634,6 +17618,7 @@ pub mod cod {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -16649,6 +17634,7 @@ pub mod cod {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -16700,6 +17686,7 @@ pub mod command_block_minecart {
             v1_21_11: 12u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -16715,6 +17702,7 @@ pub mod command_block_minecart {
             v1_21_11: 13u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::STRING,
     };
@@ -16730,6 +17718,7 @@ pub mod command_block_minecart {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -16745,6 +17734,7 @@ pub mod command_block_minecart {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -16760,6 +17750,7 @@ pub mod command_block_minecart {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -16775,6 +17766,7 @@ pub mod command_block_minecart {
             v1_21_11: 11u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_STATE,
     };
@@ -16790,6 +17782,7 @@ pub mod command_block_minecart {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -16805,6 +17798,7 @@ pub mod command_block_minecart {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -16820,6 +17814,7 @@ pub mod command_block_minecart {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -16835,6 +17830,7 @@ pub mod command_block_minecart {
             v1_21_11: 255u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::STRING,
     };
@@ -16850,6 +17846,7 @@ pub mod command_block_minecart {
             v1_21_11: 255u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_STATE,
     };
@@ -16865,6 +17862,7 @@ pub mod command_block_minecart {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -16880,6 +17878,7 @@ pub mod command_block_minecart {
             v1_21_11: 255u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -16895,6 +17894,7 @@ pub mod command_block_minecart {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -16910,6 +17910,7 @@ pub mod command_block_minecart {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -16925,6 +17926,7 @@ pub mod command_block_minecart {
             v1_21_11: 255u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::COMPONENT,
     };
@@ -16940,6 +17942,7 @@ pub mod command_block_minecart {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -16955,6 +17958,7 @@ pub mod command_block_minecart {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -16970,6 +17974,7 @@ pub mod command_block_minecart {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -16985,6 +17990,7 @@ pub mod command_block_minecart {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -17000,6 +18006,7 @@ pub mod command_block_minecart {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -17015,6 +18022,7 @@ pub mod command_block_minecart {
             v1_21_11: 14u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::COMPONENT,
     };
@@ -17058,6 +18066,7 @@ pub mod copper_golem {
             v1_21_11: 17u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::COPPER_GOLEM_STATE,
     };
@@ -17073,6 +18082,7 @@ pub mod copper_golem {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -17088,6 +18098,7 @@ pub mod copper_golem {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -17103,6 +18114,7 @@ pub mod copper_golem {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -17118,6 +18130,7 @@ pub mod copper_golem {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -17133,6 +18146,7 @@ pub mod copper_golem {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -17148,6 +18162,7 @@ pub mod copper_golem {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -17163,6 +18178,7 @@ pub mod copper_golem {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -17178,6 +18194,7 @@ pub mod copper_golem {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -17193,6 +18210,7 @@ pub mod copper_golem {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -17208,6 +18226,7 @@ pub mod copper_golem {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -17223,6 +18242,7 @@ pub mod copper_golem {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -17238,6 +18258,7 @@ pub mod copper_golem {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -17253,6 +18274,7 @@ pub mod copper_golem {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -17268,6 +18290,7 @@ pub mod copper_golem {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -17283,6 +18306,7 @@ pub mod copper_golem {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -17298,6 +18322,7 @@ pub mod copper_golem {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::WEATHERING_COPPER_STATE,
     };
@@ -17313,6 +18338,7 @@ pub mod copper_golem {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::OXIDATION_LEVEL,
     };
@@ -17328,6 +18354,7 @@ pub mod copper_golem {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -17380,6 +18407,7 @@ pub mod cow {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -17395,6 +18423,7 @@ pub mod cow {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -17410,6 +18439,7 @@ pub mod cow {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -17425,6 +18455,7 @@ pub mod cow {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -17440,6 +18471,7 @@ pub mod cow {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -17455,6 +18487,7 @@ pub mod cow {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -17470,6 +18503,7 @@ pub mod cow {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -17485,6 +18519,7 @@ pub mod cow {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -17500,6 +18535,7 @@ pub mod cow {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -17515,6 +18551,7 @@ pub mod cow {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -17530,6 +18567,7 @@ pub mod cow {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -17545,6 +18583,7 @@ pub mod cow {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -17560,6 +18599,7 @@ pub mod cow {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -17575,6 +18615,7 @@ pub mod cow {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -17590,6 +18631,7 @@ pub mod cow {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -17605,6 +18647,7 @@ pub mod cow {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::COW_SOUND_VARIANT,
     };
@@ -17620,6 +18663,7 @@ pub mod cow {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -17635,6 +18679,7 @@ pub mod cow {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -17650,6 +18695,7 @@ pub mod cow {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::COW_VARIANT,
     };
@@ -17665,6 +18711,7 @@ pub mod cow {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -17680,6 +18727,7 @@ pub mod cow {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::COW_VARIANT,
     };
@@ -17739,6 +18787,7 @@ pub mod creaking {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -17754,6 +18803,7 @@ pub mod creaking {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -17769,6 +18819,7 @@ pub mod creaking {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -17784,6 +18835,7 @@ pub mod creaking {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -17799,6 +18851,7 @@ pub mod creaking {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -17814,6 +18867,7 @@ pub mod creaking {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -17829,6 +18883,7 @@ pub mod creaking {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -17844,6 +18899,7 @@ pub mod creaking {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -17859,6 +18915,7 @@ pub mod creaking {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -17874,6 +18931,7 @@ pub mod creaking {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -17889,6 +18947,7 @@ pub mod creaking {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -17904,6 +18963,7 @@ pub mod creaking {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -17919,6 +18979,7 @@ pub mod creaking {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -17934,6 +18995,7 @@ pub mod creaking {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -17949,6 +19011,7 @@ pub mod creaking {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -17964,6 +19027,7 @@ pub mod creaking {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -17979,6 +19043,7 @@ pub mod creaking {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -17994,6 +19059,7 @@ pub mod creaking {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -18009,6 +19075,7 @@ pub mod creaking {
             v1_21_11: 19u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -18024,6 +19091,7 @@ pub mod creaking {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -18039,6 +19107,7 @@ pub mod creaking {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -18054,6 +19123,7 @@ pub mod creaking {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -18069,6 +19139,7 @@ pub mod creaking {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -18120,6 +19191,7 @@ pub mod creeper {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -18135,6 +19207,7 @@ pub mod creeper {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -18150,6 +19223,7 @@ pub mod creeper {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -18165,6 +19239,7 @@ pub mod creeper {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -18180,6 +19255,7 @@ pub mod creeper {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -18195,6 +19271,7 @@ pub mod creeper {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -18210,6 +19287,7 @@ pub mod creeper {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -18225,6 +19303,7 @@ pub mod creeper {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -18240,6 +19319,7 @@ pub mod creeper {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -18255,6 +19335,7 @@ pub mod creeper {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -18270,6 +19351,7 @@ pub mod creeper {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -18285,6 +19367,7 @@ pub mod creeper {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -18300,6 +19383,7 @@ pub mod creeper {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -18315,6 +19399,7 @@ pub mod creeper {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -18330,6 +19415,7 @@ pub mod creeper {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -18345,6 +19431,7 @@ pub mod creeper {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -18360,6 +19447,7 @@ pub mod creeper {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -18375,6 +19463,7 @@ pub mod creeper {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -18390,6 +19479,7 @@ pub mod creeper {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -18405,6 +19495,7 @@ pub mod creeper {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -18420,6 +19511,7 @@ pub mod creeper {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -18435,6 +19527,7 @@ pub mod creeper {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -18476,6 +19569,168 @@ pub mod creeper {
     pub const FROZEN_TICKS: TrackedData = DATA_TICKS_FROZEN;
     pub const SLEEPING_POS: TrackedData = SLEEPING_POS_ID;
 }
+pub mod cushion {
+    use super::*;
+    pub const DATA_AIR_SUPPLY_ID: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 1u8,
+        },
+        r#type: MetaDataType::INT,
+    };
+    pub const DATA_COLOR: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 8u8,
+        },
+        r#type: MetaDataType::DYE_COLOR,
+    };
+    pub const DATA_CUSTOM_NAME: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 2u8,
+        },
+        r#type: MetaDataType::OPTIONAL_COMPONENT,
+    };
+    pub const DATA_CUSTOM_NAME_VISIBLE: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 3u8,
+        },
+        r#type: MetaDataType::BOOLEAN,
+    };
+    pub const DATA_NO_GRAVITY: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 5u8,
+        },
+        r#type: MetaDataType::BOOLEAN,
+    };
+    pub const DATA_POSE: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 6u8,
+        },
+        r#type: MetaDataType::POSE,
+    };
+    pub const DATA_SHARED_FLAGS_ID: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 0u8,
+        },
+        r#type: MetaDataType::BYTE,
+    };
+    pub const DATA_SILENT: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 4u8,
+        },
+        r#type: MetaDataType::BOOLEAN,
+    };
+    pub const DATA_TICKS_FROZEN: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 7u8,
+        },
+        r#type: MetaDataType::INT,
+    };
+    pub const AIR_SUPPLY_ID: TrackedData = DATA_AIR_SUPPLY_ID;
+    pub const DATA_AIR_SUPPLY: TrackedData = DATA_AIR_SUPPLY_ID;
+    pub const AIR_SUPPLY: TrackedData = DATA_AIR_SUPPLY_ID;
+    pub const AIR: TrackedData = DATA_AIR_SUPPLY_ID;
+    pub const COLOR: TrackedData = DATA_COLOR;
+    pub const CUSTOM_NAME: TrackedData = DATA_CUSTOM_NAME;
+    pub const CUSTOM_NAME_VISIBLE: TrackedData = DATA_CUSTOM_NAME_VISIBLE;
+    pub const NO_GRAVITY: TrackedData = DATA_NO_GRAVITY;
+    pub const POSE: TrackedData = DATA_POSE;
+    pub const SHARED_FLAGS_ID: TrackedData = DATA_SHARED_FLAGS_ID;
+    pub const DATA_SHARED_FLAGS: TrackedData = DATA_SHARED_FLAGS_ID;
+    pub const SHARED_FLAGS: TrackedData = DATA_SHARED_FLAGS_ID;
+    pub const SILENT: TrackedData = DATA_SILENT;
+    pub const TICKS_FROZEN: TrackedData = DATA_TICKS_FROZEN;
+    pub const FROZEN_TICKS: TrackedData = DATA_TICKS_FROZEN;
+}
 pub mod dark_oak_boat {
     use super::*;
     pub const DATA_AIR_SUPPLY_ID: TrackedData = TrackedData {
@@ -18490,6 +19745,7 @@ pub mod dark_oak_boat {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -18505,6 +19761,7 @@ pub mod dark_oak_boat {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -18520,6 +19777,7 @@ pub mod dark_oak_boat {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -18535,6 +19793,7 @@ pub mod dark_oak_boat {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -18550,6 +19809,7 @@ pub mod dark_oak_boat {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -18565,6 +19825,7 @@ pub mod dark_oak_boat {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -18580,6 +19841,7 @@ pub mod dark_oak_boat {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -18595,6 +19857,7 @@ pub mod dark_oak_boat {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -18610,6 +19873,7 @@ pub mod dark_oak_boat {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -18625,6 +19889,7 @@ pub mod dark_oak_boat {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -18640,6 +19905,7 @@ pub mod dark_oak_boat {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -18655,6 +19921,7 @@ pub mod dark_oak_boat {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -18670,6 +19937,7 @@ pub mod dark_oak_boat {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -18685,6 +19953,7 @@ pub mod dark_oak_boat {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -18726,6 +19995,7 @@ pub mod dark_oak_chest_boat {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -18741,6 +20011,7 @@ pub mod dark_oak_chest_boat {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -18756,6 +20027,7 @@ pub mod dark_oak_chest_boat {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -18771,6 +20043,7 @@ pub mod dark_oak_chest_boat {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -18786,6 +20059,7 @@ pub mod dark_oak_chest_boat {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -18801,6 +20075,7 @@ pub mod dark_oak_chest_boat {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -18816,6 +20091,7 @@ pub mod dark_oak_chest_boat {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -18831,6 +20107,7 @@ pub mod dark_oak_chest_boat {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -18846,6 +20123,7 @@ pub mod dark_oak_chest_boat {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -18861,6 +20139,7 @@ pub mod dark_oak_chest_boat {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -18876,6 +20155,7 @@ pub mod dark_oak_chest_boat {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -18891,6 +20171,7 @@ pub mod dark_oak_chest_boat {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -18906,6 +20187,7 @@ pub mod dark_oak_chest_boat {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -18921,6 +20203,7 @@ pub mod dark_oak_chest_boat {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -18962,6 +20245,7 @@ pub mod display {
             v1_21_11: 15u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -18977,6 +20261,7 @@ pub mod display {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -18992,6 +20277,7 @@ pub mod display {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -19007,6 +20293,7 @@ pub mod display {
             v1_21_11: 255u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -19022,6 +20309,7 @@ pub mod display {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -19037,6 +20325,7 @@ pub mod display {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -19052,6 +20341,7 @@ pub mod display {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -19067,6 +20357,7 @@ pub mod display {
             v1_21_11: 255u8,
             v26_1: 22u8,
             v26_2: 22u8,
+            v26_3: 22u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -19082,6 +20373,7 @@ pub mod display {
             v1_21_11: 255u8,
             v26_1: 21u8,
             v26_2: 21u8,
+            v26_3: 21u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -19097,6 +20389,7 @@ pub mod display {
             v1_21_11: 255u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::QUATERNION,
     };
@@ -19112,6 +20405,7 @@ pub mod display {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -19127,6 +20421,7 @@ pub mod display {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -19142,6 +20437,7 @@ pub mod display {
             v1_21_11: 255u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -19157,6 +20453,7 @@ pub mod display {
             v1_21_11: 255u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::QUATERNION,
     };
@@ -19172,6 +20469,7 @@ pub mod display {
             v1_21_11: 255u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::VECTOR3,
     };
@@ -19187,6 +20485,7 @@ pub mod display {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -19202,6 +20501,7 @@ pub mod display {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -19217,6 +20517,7 @@ pub mod display {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -19232,6 +20533,7 @@ pub mod display {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -19247,6 +20549,7 @@ pub mod display {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -19262,6 +20565,7 @@ pub mod display {
             v1_21_11: 255u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -19277,6 +20581,7 @@ pub mod display {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -19292,6 +20597,7 @@ pub mod display {
             v1_21_11: 255u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::VECTOR3,
     };
@@ -19307,6 +20613,7 @@ pub mod display {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -19322,6 +20629,7 @@ pub mod display {
             v1_21_11: 255u8,
             v26_1: 20u8,
             v26_2: 20u8,
+            v26_3: 20u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -19337,6 +20645,7 @@ pub mod display {
             v1_21_11: 22u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -19352,6 +20661,7 @@ pub mod display {
             v1_21_11: 21u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -19367,6 +20677,7 @@ pub mod display {
             v1_21_11: 9u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -19382,6 +20693,7 @@ pub mod display {
             v1_21_11: 13u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::QUATERNION,
     };
@@ -19397,6 +20709,7 @@ pub mod display {
             v1_21_11: 14u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::QUATERNION,
     };
@@ -19412,6 +20725,7 @@ pub mod display {
             v1_21_11: 12u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::VECTOR3,
     };
@@ -19427,6 +20741,7 @@ pub mod display {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -19442,6 +20757,7 @@ pub mod display {
             v1_21_11: 19u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -19457,6 +20773,7 @@ pub mod display {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -19472,6 +20789,7 @@ pub mod display {
             v1_21_11: 10u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -19487,6 +20805,7 @@ pub mod display {
             v1_21_11: 11u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::VECTOR3,
     };
@@ -19502,6 +20821,7 @@ pub mod display {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -19517,6 +20837,7 @@ pub mod display {
             v1_21_11: 20u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -19592,6 +20913,7 @@ pub mod dolphin {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -19607,6 +20929,7 @@ pub mod dolphin {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -19622,6 +20945,7 @@ pub mod dolphin {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -19637,6 +20961,7 @@ pub mod dolphin {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -19652,6 +20977,7 @@ pub mod dolphin {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -19667,6 +20993,7 @@ pub mod dolphin {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -19682,6 +21009,7 @@ pub mod dolphin {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -19697,6 +21025,7 @@ pub mod dolphin {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -19712,6 +21041,7 @@ pub mod dolphin {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -19727,6 +21057,7 @@ pub mod dolphin {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -19742,6 +21073,7 @@ pub mod dolphin {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -19757,6 +21089,7 @@ pub mod dolphin {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -19772,6 +21105,7 @@ pub mod dolphin {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -19787,6 +21121,7 @@ pub mod dolphin {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -19802,6 +21137,7 @@ pub mod dolphin {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -19817,6 +21153,7 @@ pub mod dolphin {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -19832,6 +21169,7 @@ pub mod dolphin {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -19847,6 +21185,7 @@ pub mod dolphin {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -19862,6 +21201,7 @@ pub mod dolphin {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -19877,6 +21217,7 @@ pub mod dolphin {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -19892,6 +21233,7 @@ pub mod dolphin {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -19907,6 +21249,7 @@ pub mod dolphin {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -19922,6 +21265,7 @@ pub mod dolphin {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BLOCK_POS,
     };
@@ -19976,6 +21320,7 @@ pub mod donkey {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -19991,6 +21336,7 @@ pub mod donkey {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -20006,6 +21352,7 @@ pub mod donkey {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -20021,6 +21368,7 @@ pub mod donkey {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -20036,6 +21384,7 @@ pub mod donkey {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -20051,6 +21400,7 @@ pub mod donkey {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -20066,6 +21416,7 @@ pub mod donkey {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -20081,6 +21432,7 @@ pub mod donkey {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -20096,6 +21448,7 @@ pub mod donkey {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -20111,6 +21464,7 @@ pub mod donkey {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -20126,6 +21480,7 @@ pub mod donkey {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -20141,6 +21496,7 @@ pub mod donkey {
             v1_21_11: 17u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -20156,6 +21512,7 @@ pub mod donkey {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -20171,6 +21528,7 @@ pub mod donkey {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -20186,6 +21544,7 @@ pub mod donkey {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -20201,6 +21560,7 @@ pub mod donkey {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -20216,6 +21576,7 @@ pub mod donkey {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -20231,6 +21592,7 @@ pub mod donkey {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -20246,6 +21608,7 @@ pub mod donkey {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -20261,6 +21624,7 @@ pub mod donkey {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -20276,6 +21640,7 @@ pub mod donkey {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -20332,6 +21697,7 @@ pub mod dragon_fireball {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -20347,6 +21713,7 @@ pub mod dragon_fireball {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -20362,6 +21729,7 @@ pub mod dragon_fireball {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -20377,6 +21745,7 @@ pub mod dragon_fireball {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -20392,6 +21761,7 @@ pub mod dragon_fireball {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -20407,6 +21777,7 @@ pub mod dragon_fireball {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -20422,6 +21793,7 @@ pub mod dragon_fireball {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -20437,6 +21809,7 @@ pub mod dragon_fireball {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -20469,6 +21842,7 @@ pub mod drowned {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -20484,6 +21858,7 @@ pub mod drowned {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -20499,6 +21874,7 @@ pub mod drowned {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -20514,6 +21890,7 @@ pub mod drowned {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -20529,6 +21906,7 @@ pub mod drowned {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -20544,6 +21922,7 @@ pub mod drowned {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -20559,6 +21938,7 @@ pub mod drowned {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -20574,6 +21954,7 @@ pub mod drowned {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -20589,6 +21970,7 @@ pub mod drowned {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -20604,6 +21986,7 @@ pub mod drowned {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -20619,6 +22002,7 @@ pub mod drowned {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -20634,6 +22018,7 @@ pub mod drowned {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -20649,6 +22034,7 @@ pub mod drowned {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -20664,6 +22050,7 @@ pub mod drowned {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -20679,6 +22066,7 @@ pub mod drowned {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -20694,6 +22082,7 @@ pub mod drowned {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -20709,6 +22098,7 @@ pub mod drowned {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -20724,6 +22114,7 @@ pub mod drowned {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -20739,6 +22130,7 @@ pub mod drowned {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -20754,6 +22146,7 @@ pub mod drowned {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -20769,6 +22162,7 @@ pub mod drowned {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -20829,6 +22223,7 @@ pub mod egg {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -20844,6 +22239,7 @@ pub mod egg {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -20859,6 +22255,7 @@ pub mod egg {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -20874,6 +22271,7 @@ pub mod egg {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -20889,6 +22287,7 @@ pub mod egg {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -20904,6 +22303,7 @@ pub mod egg {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -20919,6 +22319,7 @@ pub mod egg {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -20934,6 +22335,7 @@ pub mod egg {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -20949,6 +22351,7 @@ pub mod egg {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -20964,6 +22367,7 @@ pub mod egg {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -20999,6 +22403,7 @@ pub mod elder_guardian {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -21014,6 +22419,7 @@ pub mod elder_guardian {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -21029,6 +22435,7 @@ pub mod elder_guardian {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -21044,6 +22451,7 @@ pub mod elder_guardian {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -21059,6 +22467,7 @@ pub mod elder_guardian {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -21074,6 +22483,7 @@ pub mod elder_guardian {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -21089,6 +22499,7 @@ pub mod elder_guardian {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -21104,6 +22515,7 @@ pub mod elder_guardian {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -21119,6 +22531,7 @@ pub mod elder_guardian {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -21134,6 +22547,7 @@ pub mod elder_guardian {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -21149,6 +22563,7 @@ pub mod elder_guardian {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -21164,6 +22579,7 @@ pub mod elder_guardian {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -21179,6 +22595,7 @@ pub mod elder_guardian {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -21194,6 +22611,7 @@ pub mod elder_guardian {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -21209,6 +22627,7 @@ pub mod elder_guardian {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -21224,6 +22643,7 @@ pub mod elder_guardian {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -21239,6 +22659,7 @@ pub mod elder_guardian {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -21254,6 +22675,7 @@ pub mod elder_guardian {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -21269,6 +22691,7 @@ pub mod elder_guardian {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -21284,6 +22707,7 @@ pub mod elder_guardian {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -21338,6 +22762,7 @@ pub mod end_crystal {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -21353,6 +22778,7 @@ pub mod end_crystal {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -21368,6 +22794,7 @@ pub mod end_crystal {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -21383,6 +22810,7 @@ pub mod end_crystal {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -21398,6 +22826,7 @@ pub mod end_crystal {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -21413,6 +22842,7 @@ pub mod end_crystal {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -21428,6 +22858,7 @@ pub mod end_crystal {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -21443,6 +22874,7 @@ pub mod end_crystal {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -21458,6 +22890,7 @@ pub mod end_crystal {
             v1_21_11: 255u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -21473,6 +22906,7 @@ pub mod end_crystal {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -21488,6 +22922,7 @@ pub mod end_crystal {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -21503,6 +22938,7 @@ pub mod end_crystal {
             v1_21_11: 9u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -21535,6 +22971,7 @@ pub mod ender_dragon {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -21550,6 +22987,7 @@ pub mod ender_dragon {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -21565,6 +23003,7 @@ pub mod ender_dragon {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -21580,6 +23019,7 @@ pub mod ender_dragon {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -21595,6 +23035,7 @@ pub mod ender_dragon {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -21610,6 +23051,7 @@ pub mod ender_dragon {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -21625,6 +23067,7 @@ pub mod ender_dragon {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -21640,6 +23083,7 @@ pub mod ender_dragon {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -21655,6 +23099,7 @@ pub mod ender_dragon {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -21670,6 +23115,7 @@ pub mod ender_dragon {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -21685,6 +23131,7 @@ pub mod ender_dragon {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -21700,6 +23147,7 @@ pub mod ender_dragon {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -21715,6 +23163,7 @@ pub mod ender_dragon {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -21730,6 +23179,7 @@ pub mod ender_dragon {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -21745,6 +23195,7 @@ pub mod ender_dragon {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -21760,6 +23211,7 @@ pub mod ender_dragon {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -21775,6 +23227,7 @@ pub mod ender_dragon {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -21790,6 +23243,7 @@ pub mod ender_dragon {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -21830,63 +23284,35 @@ pub mod ender_dragon {
 }
 pub mod ender_man {
     use super::*;
-    pub const ANGRY: TrackedData = TrackedData {
-        id: TrackedId {
-            v1_21: 17u8,
-            v1_21_2: 17u8,
-            v1_21_4: 17u8,
-            v1_21_5: 17u8,
-            v1_21_6: 17u8,
-            v1_21_7: 17u8,
-            v1_21_9: 17u8,
-            v1_21_11: 17u8,
-            v26_1: 255u8,
-            v26_2: 255u8,
-        },
-        r#type: MetaDataType::BOOLEAN,
-    };
-    pub const CARRIED_BLOCK: TrackedData = TrackedData {
-        id: TrackedId {
-            v1_21: 16u8,
-            v1_21_2: 16u8,
-            v1_21_4: 16u8,
-            v1_21_5: 16u8,
-            v1_21_6: 16u8,
-            v1_21_7: 16u8,
-            v1_21_9: 16u8,
-            v1_21_11: 16u8,
-            v26_1: 255u8,
-            v26_2: 255u8,
-        },
-        r#type: MetaDataType::OPTIONAL_BLOCK_STATE,
-    };
     pub const DATA_AIR_SUPPLY_ID: TrackedData = TrackedData {
         id: TrackedId {
-            v1_21: 1u8,
-            v1_21_2: 1u8,
-            v1_21_4: 1u8,
-            v1_21_5: 1u8,
-            v1_21_6: 1u8,
-            v1_21_7: 1u8,
-            v1_21_9: 1u8,
-            v1_21_11: 1u8,
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
     pub const DATA_ARROW_COUNT_ID: TrackedData = TrackedData {
         id: TrackedId {
-            v1_21: 12u8,
-            v1_21_2: 12u8,
-            v1_21_4: 12u8,
-            v1_21_5: 12u8,
-            v1_21_6: 12u8,
-            v1_21_7: 12u8,
-            v1_21_9: 12u8,
-            v1_21_11: 12u8,
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -21902,6 +23328,7 @@ pub mod ender_man {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_STATE,
     };
@@ -21917,171 +23344,183 @@ pub mod ender_man {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
     pub const DATA_CUSTOM_NAME: TrackedData = TrackedData {
         id: TrackedId {
-            v1_21: 2u8,
-            v1_21_2: 2u8,
-            v1_21_4: 2u8,
-            v1_21_5: 2u8,
-            v1_21_6: 2u8,
-            v1_21_7: 2u8,
-            v1_21_9: 2u8,
-            v1_21_11: 2u8,
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
     pub const DATA_CUSTOM_NAME_VISIBLE: TrackedData = TrackedData {
         id: TrackedId {
-            v1_21: 3u8,
-            v1_21_2: 3u8,
-            v1_21_4: 3u8,
-            v1_21_5: 3u8,
-            v1_21_6: 3u8,
-            v1_21_7: 3u8,
-            v1_21_9: 3u8,
-            v1_21_11: 3u8,
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
     pub const DATA_EFFECT_AMBIENCE_ID: TrackedData = TrackedData {
         id: TrackedId {
-            v1_21: 11u8,
-            v1_21_2: 11u8,
-            v1_21_4: 11u8,
-            v1_21_5: 11u8,
-            v1_21_6: 11u8,
-            v1_21_7: 11u8,
-            v1_21_9: 11u8,
-            v1_21_11: 11u8,
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
     pub const DATA_EFFECT_PARTICLES: TrackedData = TrackedData {
         id: TrackedId {
-            v1_21: 10u8,
-            v1_21_2: 10u8,
-            v1_21_4: 10u8,
-            v1_21_5: 10u8,
-            v1_21_6: 10u8,
-            v1_21_7: 10u8,
-            v1_21_9: 10u8,
-            v1_21_11: 10u8,
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
     pub const DATA_HEALTH_ID: TrackedData = TrackedData {
         id: TrackedId {
-            v1_21: 9u8,
-            v1_21_2: 9u8,
-            v1_21_4: 9u8,
-            v1_21_5: 9u8,
-            v1_21_6: 9u8,
-            v1_21_7: 9u8,
-            v1_21_9: 9u8,
-            v1_21_11: 9u8,
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::FLOAT,
     };
     pub const DATA_LIVING_ENTITY_FLAGS: TrackedData = TrackedData {
         id: TrackedId {
-            v1_21: 8u8,
-            v1_21_2: 8u8,
-            v1_21_4: 8u8,
-            v1_21_5: 8u8,
-            v1_21_6: 8u8,
-            v1_21_7: 8u8,
-            v1_21_9: 8u8,
-            v1_21_11: 8u8,
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
     pub const DATA_MOB_FLAGS_ID: TrackedData = TrackedData {
         id: TrackedId {
-            v1_21: 15u8,
-            v1_21_2: 15u8,
-            v1_21_4: 15u8,
-            v1_21_5: 15u8,
-            v1_21_6: 15u8,
-            v1_21_7: 15u8,
-            v1_21_9: 15u8,
-            v1_21_11: 15u8,
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
     pub const DATA_NO_GRAVITY: TrackedData = TrackedData {
         id: TrackedId {
-            v1_21: 5u8,
-            v1_21_2: 5u8,
-            v1_21_4: 5u8,
-            v1_21_5: 5u8,
-            v1_21_6: 5u8,
-            v1_21_7: 5u8,
-            v1_21_9: 5u8,
-            v1_21_11: 5u8,
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
     pub const DATA_POSE: TrackedData = TrackedData {
         id: TrackedId {
-            v1_21: 6u8,
-            v1_21_2: 6u8,
-            v1_21_4: 6u8,
-            v1_21_5: 6u8,
-            v1_21_6: 6u8,
-            v1_21_7: 6u8,
-            v1_21_9: 6u8,
-            v1_21_11: 6u8,
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::POSE,
     };
     pub const DATA_SHARED_FLAGS_ID: TrackedData = TrackedData {
         id: TrackedId {
-            v1_21: 0u8,
-            v1_21_2: 0u8,
-            v1_21_4: 0u8,
-            v1_21_5: 0u8,
-            v1_21_6: 0u8,
-            v1_21_7: 0u8,
-            v1_21_9: 0u8,
-            v1_21_11: 0u8,
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
     pub const DATA_SILENT: TrackedData = TrackedData {
         id: TrackedId {
-            v1_21: 4u8,
-            v1_21_2: 4u8,
-            v1_21_4: 4u8,
-            v1_21_5: 4u8,
-            v1_21_6: 4u8,
-            v1_21_7: 4u8,
-            v1_21_9: 4u8,
-            v1_21_11: 4u8,
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -22097,66 +23536,55 @@ pub mod ender_man {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
     pub const DATA_STINGER_COUNT_ID: TrackedData = TrackedData {
         id: TrackedId {
-            v1_21: 13u8,
-            v1_21_2: 13u8,
-            v1_21_4: 13u8,
-            v1_21_5: 13u8,
-            v1_21_6: 13u8,
-            v1_21_7: 13u8,
-            v1_21_9: 13u8,
-            v1_21_11: 13u8,
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
     pub const DATA_TICKS_FROZEN: TrackedData = TrackedData {
         id: TrackedId {
-            v1_21: 7u8,
-            v1_21_2: 7u8,
-            v1_21_4: 7u8,
-            v1_21_5: 7u8,
-            v1_21_6: 7u8,
-            v1_21_7: 7u8,
-            v1_21_9: 7u8,
-            v1_21_11: 7u8,
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
-    pub const PROVOKED: TrackedData = TrackedData {
-        id: TrackedId {
-            v1_21: 18u8,
-            v1_21_2: 18u8,
-            v1_21_4: 18u8,
-            v1_21_5: 18u8,
-            v1_21_6: 18u8,
-            v1_21_7: 18u8,
-            v1_21_9: 18u8,
-            v1_21_11: 18u8,
-            v26_1: 255u8,
-            v26_2: 255u8,
-        },
-        r#type: MetaDataType::BOOLEAN,
-    };
     pub const SLEEPING_POS_ID: TrackedData = TrackedData {
         id: TrackedId {
-            v1_21: 14u8,
-            v1_21_2: 14u8,
-            v1_21_4: 14u8,
-            v1_21_5: 14u8,
-            v1_21_6: 14u8,
-            v1_21_7: 14u8,
-            v1_21_9: 14u8,
-            v1_21_11: 14u8,
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -22211,6 +23639,7 @@ pub mod ender_pearl {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -22226,6 +23655,7 @@ pub mod ender_pearl {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -22241,6 +23671,7 @@ pub mod ender_pearl {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -22256,6 +23687,7 @@ pub mod ender_pearl {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -22271,6 +23703,7 @@ pub mod ender_pearl {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -22286,6 +23719,7 @@ pub mod ender_pearl {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -22301,6 +23735,7 @@ pub mod ender_pearl {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -22316,6 +23751,7 @@ pub mod ender_pearl {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -22331,6 +23767,7 @@ pub mod ender_pearl {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -22346,6 +23783,7 @@ pub mod ender_pearl {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -22381,6 +23819,7 @@ pub mod enderman {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -22396,6 +23835,7 @@ pub mod enderman {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_STATE,
     };
@@ -22411,6 +23851,7 @@ pub mod enderman {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -22426,6 +23867,7 @@ pub mod enderman {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -22441,6 +23883,7 @@ pub mod enderman {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_STATE,
     };
@@ -22456,6 +23899,7 @@ pub mod enderman {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -22471,6 +23915,7 @@ pub mod enderman {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -22486,6 +23931,7 @@ pub mod enderman {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -22501,6 +23947,7 @@ pub mod enderman {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -22516,6 +23963,7 @@ pub mod enderman {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -22531,6 +23979,7 @@ pub mod enderman {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -22546,6 +23995,7 @@ pub mod enderman {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -22561,6 +24011,7 @@ pub mod enderman {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -22576,6 +24027,7 @@ pub mod enderman {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -22591,6 +24043,7 @@ pub mod enderman {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -22606,6 +24059,7 @@ pub mod enderman {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -22621,6 +24075,7 @@ pub mod enderman {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -22636,6 +24091,7 @@ pub mod enderman {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -22651,6 +24107,7 @@ pub mod enderman {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -22666,6 +24123,7 @@ pub mod enderman {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -22681,6 +24139,7 @@ pub mod enderman {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -22696,6 +24155,7 @@ pub mod enderman {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -22736,6 +24196,346 @@ pub mod enderman {
     pub const FROZEN_TICKS: TrackedData = DATA_TICKS_FROZEN;
     pub const SLEEPING_POS: TrackedData = SLEEPING_POS_ID;
 }
+pub mod enderman_entity {
+    use super::*;
+    pub const ANGRY: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 17u8,
+            v1_21_2: 17u8,
+            v1_21_4: 17u8,
+            v1_21_5: 17u8,
+            v1_21_6: 17u8,
+            v1_21_7: 17u8,
+            v1_21_9: 17u8,
+            v1_21_11: 17u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 255u8,
+        },
+        r#type: MetaDataType::BOOLEAN,
+    };
+    pub const CARRIED_BLOCK: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 16u8,
+            v1_21_2: 16u8,
+            v1_21_4: 16u8,
+            v1_21_5: 16u8,
+            v1_21_6: 16u8,
+            v1_21_7: 16u8,
+            v1_21_9: 16u8,
+            v1_21_11: 16u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 255u8,
+        },
+        r#type: MetaDataType::OPTIONAL_BLOCK_STATE,
+    };
+    pub const DATA_AIR_SUPPLY_ID: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 1u8,
+            v1_21_2: 1u8,
+            v1_21_4: 1u8,
+            v1_21_5: 1u8,
+            v1_21_6: 1u8,
+            v1_21_7: 1u8,
+            v1_21_9: 1u8,
+            v1_21_11: 1u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 255u8,
+        },
+        r#type: MetaDataType::INT,
+    };
+    pub const DATA_ARROW_COUNT_ID: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 12u8,
+            v1_21_2: 12u8,
+            v1_21_4: 12u8,
+            v1_21_5: 12u8,
+            v1_21_6: 12u8,
+            v1_21_7: 12u8,
+            v1_21_9: 12u8,
+            v1_21_11: 12u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 255u8,
+        },
+        r#type: MetaDataType::INT,
+    };
+    pub const DATA_CUSTOM_NAME: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 2u8,
+            v1_21_2: 2u8,
+            v1_21_4: 2u8,
+            v1_21_5: 2u8,
+            v1_21_6: 2u8,
+            v1_21_7: 2u8,
+            v1_21_9: 2u8,
+            v1_21_11: 2u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 255u8,
+        },
+        r#type: MetaDataType::OPTIONAL_COMPONENT,
+    };
+    pub const DATA_CUSTOM_NAME_VISIBLE: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 3u8,
+            v1_21_2: 3u8,
+            v1_21_4: 3u8,
+            v1_21_5: 3u8,
+            v1_21_6: 3u8,
+            v1_21_7: 3u8,
+            v1_21_9: 3u8,
+            v1_21_11: 3u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 255u8,
+        },
+        r#type: MetaDataType::BOOLEAN,
+    };
+    pub const DATA_EFFECT_AMBIENCE_ID: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 11u8,
+            v1_21_2: 11u8,
+            v1_21_4: 11u8,
+            v1_21_5: 11u8,
+            v1_21_6: 11u8,
+            v1_21_7: 11u8,
+            v1_21_9: 11u8,
+            v1_21_11: 11u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 255u8,
+        },
+        r#type: MetaDataType::BOOLEAN,
+    };
+    pub const DATA_EFFECT_PARTICLES: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 10u8,
+            v1_21_2: 10u8,
+            v1_21_4: 10u8,
+            v1_21_5: 10u8,
+            v1_21_6: 10u8,
+            v1_21_7: 10u8,
+            v1_21_9: 10u8,
+            v1_21_11: 10u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 255u8,
+        },
+        r#type: MetaDataType::PARTICLES,
+    };
+    pub const DATA_HEALTH_ID: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 9u8,
+            v1_21_2: 9u8,
+            v1_21_4: 9u8,
+            v1_21_5: 9u8,
+            v1_21_6: 9u8,
+            v1_21_7: 9u8,
+            v1_21_9: 9u8,
+            v1_21_11: 9u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 255u8,
+        },
+        r#type: MetaDataType::FLOAT,
+    };
+    pub const DATA_LIVING_ENTITY_FLAGS: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 8u8,
+            v1_21_2: 8u8,
+            v1_21_4: 8u8,
+            v1_21_5: 8u8,
+            v1_21_6: 8u8,
+            v1_21_7: 8u8,
+            v1_21_9: 8u8,
+            v1_21_11: 8u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 255u8,
+        },
+        r#type: MetaDataType::BYTE,
+    };
+    pub const DATA_MOB_FLAGS_ID: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 15u8,
+            v1_21_2: 15u8,
+            v1_21_4: 15u8,
+            v1_21_5: 15u8,
+            v1_21_6: 15u8,
+            v1_21_7: 15u8,
+            v1_21_9: 15u8,
+            v1_21_11: 15u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 255u8,
+        },
+        r#type: MetaDataType::BYTE,
+    };
+    pub const DATA_NO_GRAVITY: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 5u8,
+            v1_21_2: 5u8,
+            v1_21_4: 5u8,
+            v1_21_5: 5u8,
+            v1_21_6: 5u8,
+            v1_21_7: 5u8,
+            v1_21_9: 5u8,
+            v1_21_11: 5u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 255u8,
+        },
+        r#type: MetaDataType::BOOLEAN,
+    };
+    pub const DATA_POSE: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 6u8,
+            v1_21_2: 6u8,
+            v1_21_4: 6u8,
+            v1_21_5: 6u8,
+            v1_21_6: 6u8,
+            v1_21_7: 6u8,
+            v1_21_9: 6u8,
+            v1_21_11: 6u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 255u8,
+        },
+        r#type: MetaDataType::POSE,
+    };
+    pub const DATA_SHARED_FLAGS_ID: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 0u8,
+            v1_21_2: 0u8,
+            v1_21_4: 0u8,
+            v1_21_5: 0u8,
+            v1_21_6: 0u8,
+            v1_21_7: 0u8,
+            v1_21_9: 0u8,
+            v1_21_11: 0u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 255u8,
+        },
+        r#type: MetaDataType::BYTE,
+    };
+    pub const DATA_SILENT: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 4u8,
+            v1_21_2: 4u8,
+            v1_21_4: 4u8,
+            v1_21_5: 4u8,
+            v1_21_6: 4u8,
+            v1_21_7: 4u8,
+            v1_21_9: 4u8,
+            v1_21_11: 4u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 255u8,
+        },
+        r#type: MetaDataType::BOOLEAN,
+    };
+    pub const DATA_STINGER_COUNT_ID: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 13u8,
+            v1_21_2: 13u8,
+            v1_21_4: 13u8,
+            v1_21_5: 13u8,
+            v1_21_6: 13u8,
+            v1_21_7: 13u8,
+            v1_21_9: 13u8,
+            v1_21_11: 13u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 255u8,
+        },
+        r#type: MetaDataType::INT,
+    };
+    pub const DATA_TICKS_FROZEN: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 7u8,
+            v1_21_2: 7u8,
+            v1_21_4: 7u8,
+            v1_21_5: 7u8,
+            v1_21_6: 7u8,
+            v1_21_7: 7u8,
+            v1_21_9: 7u8,
+            v1_21_11: 7u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 255u8,
+        },
+        r#type: MetaDataType::INT,
+    };
+    pub const PROVOKED: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 18u8,
+            v1_21_2: 18u8,
+            v1_21_4: 18u8,
+            v1_21_5: 18u8,
+            v1_21_6: 18u8,
+            v1_21_7: 18u8,
+            v1_21_9: 18u8,
+            v1_21_11: 18u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 255u8,
+        },
+        r#type: MetaDataType::BOOLEAN,
+    };
+    pub const SLEEPING_POS_ID: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 14u8,
+            v1_21_2: 14u8,
+            v1_21_4: 14u8,
+            v1_21_5: 14u8,
+            v1_21_6: 14u8,
+            v1_21_7: 14u8,
+            v1_21_9: 14u8,
+            v1_21_11: 14u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 255u8,
+        },
+        r#type: MetaDataType::OPTIONAL_BLOCK_POS,
+    };
+    pub const AIR_SUPPLY_ID: TrackedData = DATA_AIR_SUPPLY_ID;
+    pub const DATA_AIR_SUPPLY: TrackedData = DATA_AIR_SUPPLY_ID;
+    pub const AIR_SUPPLY: TrackedData = DATA_AIR_SUPPLY_ID;
+    pub const AIR: TrackedData = DATA_AIR_SUPPLY_ID;
+    pub const ARROW_COUNT_ID: TrackedData = DATA_ARROW_COUNT_ID;
+    pub const DATA_ARROW_COUNT: TrackedData = DATA_ARROW_COUNT_ID;
+    pub const ARROW_COUNT: TrackedData = DATA_ARROW_COUNT_ID;
+    pub const CUSTOM_NAME: TrackedData = DATA_CUSTOM_NAME;
+    pub const CUSTOM_NAME_VISIBLE: TrackedData = DATA_CUSTOM_NAME_VISIBLE;
+    pub const EFFECT_AMBIENCE_ID: TrackedData = DATA_EFFECT_AMBIENCE_ID;
+    pub const DATA_EFFECT_AMBIENCE: TrackedData = DATA_EFFECT_AMBIENCE_ID;
+    pub const EFFECT_AMBIENCE: TrackedData = DATA_EFFECT_AMBIENCE_ID;
+    pub const EFFECT_PARTICLES: TrackedData = DATA_EFFECT_PARTICLES;
+    pub const HEALTH_ID: TrackedData = DATA_HEALTH_ID;
+    pub const DATA_HEALTH: TrackedData = DATA_HEALTH_ID;
+    pub const HEALTH: TrackedData = DATA_HEALTH_ID;
+    pub const LIVING_ENTITY_FLAGS: TrackedData = DATA_LIVING_ENTITY_FLAGS;
+    pub const LIVING_FLAGS: TrackedData = DATA_LIVING_ENTITY_FLAGS;
+    pub const MOB_FLAGS_ID: TrackedData = DATA_MOB_FLAGS_ID;
+    pub const DATA_MOB_FLAGS: TrackedData = DATA_MOB_FLAGS_ID;
+    pub const MOB_FLAGS: TrackedData = DATA_MOB_FLAGS_ID;
+    pub const NO_GRAVITY: TrackedData = DATA_NO_GRAVITY;
+    pub const POSE: TrackedData = DATA_POSE;
+    pub const SHARED_FLAGS_ID: TrackedData = DATA_SHARED_FLAGS_ID;
+    pub const DATA_SHARED_FLAGS: TrackedData = DATA_SHARED_FLAGS_ID;
+    pub const SHARED_FLAGS: TrackedData = DATA_SHARED_FLAGS_ID;
+    pub const SILENT: TrackedData = DATA_SILENT;
+    pub const STINGER_COUNT_ID: TrackedData = DATA_STINGER_COUNT_ID;
+    pub const DATA_STINGER_COUNT: TrackedData = DATA_STINGER_COUNT_ID;
+    pub const STINGER_COUNT: TrackedData = DATA_STINGER_COUNT_ID;
+    pub const TICKS_FROZEN: TrackedData = DATA_TICKS_FROZEN;
+    pub const FROZEN_TICKS: TrackedData = DATA_TICKS_FROZEN;
+    pub const SLEEPING_POS: TrackedData = SLEEPING_POS_ID;
+}
 pub mod endermite {
     use super::*;
     pub const DATA_AIR_SUPPLY_ID: TrackedData = TrackedData {
@@ -22750,6 +24550,7 @@ pub mod endermite {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -22765,6 +24566,7 @@ pub mod endermite {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -22780,6 +24582,7 @@ pub mod endermite {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -22795,6 +24598,7 @@ pub mod endermite {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -22810,6 +24614,7 @@ pub mod endermite {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -22825,6 +24630,7 @@ pub mod endermite {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -22840,6 +24646,7 @@ pub mod endermite {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -22855,6 +24662,7 @@ pub mod endermite {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -22870,6 +24678,7 @@ pub mod endermite {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -22885,6 +24694,7 @@ pub mod endermite {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -22900,6 +24710,7 @@ pub mod endermite {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -22915,6 +24726,7 @@ pub mod endermite {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -22930,6 +24742,7 @@ pub mod endermite {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -22945,6 +24758,7 @@ pub mod endermite {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -22960,6 +24774,7 @@ pub mod endermite {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -22975,6 +24790,7 @@ pub mod endermite {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -23026,6 +24842,7 @@ pub mod entity {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -23041,6 +24858,7 @@ pub mod entity {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -23056,6 +24874,7 @@ pub mod entity {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -23071,6 +24890,7 @@ pub mod entity {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -23086,6 +24906,7 @@ pub mod entity {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -23101,6 +24922,7 @@ pub mod entity {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -23116,6 +24938,7 @@ pub mod entity {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -23131,6 +24954,7 @@ pub mod entity {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -23163,6 +24987,7 @@ pub mod evoker {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -23178,6 +25003,7 @@ pub mod evoker {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -23193,6 +25019,7 @@ pub mod evoker {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -23208,6 +25035,7 @@ pub mod evoker {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -23223,6 +25051,7 @@ pub mod evoker {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -23238,6 +25067,7 @@ pub mod evoker {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -23253,6 +25083,7 @@ pub mod evoker {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -23268,6 +25099,7 @@ pub mod evoker {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -23283,6 +25115,7 @@ pub mod evoker {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -23298,6 +25131,7 @@ pub mod evoker {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -23313,6 +25147,7 @@ pub mod evoker {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -23328,6 +25163,7 @@ pub mod evoker {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -23343,6 +25179,7 @@ pub mod evoker {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -23358,6 +25195,7 @@ pub mod evoker {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -23373,6 +25211,7 @@ pub mod evoker {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -23388,6 +25227,7 @@ pub mod evoker {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -23403,6 +25243,7 @@ pub mod evoker {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -23418,6 +25259,7 @@ pub mod evoker {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -23433,6 +25275,7 @@ pub mod evoker {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -23448,6 +25291,7 @@ pub mod evoker {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -23502,6 +25346,7 @@ pub mod evoker_fangs {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -23517,6 +25362,7 @@ pub mod evoker_fangs {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -23532,6 +25378,7 @@ pub mod evoker_fangs {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -23547,6 +25394,7 @@ pub mod evoker_fangs {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -23562,6 +25410,7 @@ pub mod evoker_fangs {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -23577,6 +25426,7 @@ pub mod evoker_fangs {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -23592,6 +25442,7 @@ pub mod evoker_fangs {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -23607,6 +25458,7 @@ pub mod evoker_fangs {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -23639,6 +25491,7 @@ pub mod experience_bottle {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -23654,6 +25507,7 @@ pub mod experience_bottle {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -23669,6 +25523,7 @@ pub mod experience_bottle {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -23684,6 +25539,7 @@ pub mod experience_bottle {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -23699,6 +25555,7 @@ pub mod experience_bottle {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -23714,6 +25571,7 @@ pub mod experience_bottle {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -23729,6 +25587,7 @@ pub mod experience_bottle {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -23744,6 +25603,7 @@ pub mod experience_bottle {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -23759,6 +25619,7 @@ pub mod experience_bottle {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -23774,6 +25635,7 @@ pub mod experience_bottle {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -23809,6 +25671,7 @@ pub mod experience_orb {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -23824,6 +25687,7 @@ pub mod experience_orb {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -23839,6 +25703,7 @@ pub mod experience_orb {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -23854,6 +25719,7 @@ pub mod experience_orb {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -23869,6 +25735,7 @@ pub mod experience_orb {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -23884,6 +25751,7 @@ pub mod experience_orb {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -23899,6 +25767,7 @@ pub mod experience_orb {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -23914,6 +25783,7 @@ pub mod experience_orb {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -23929,6 +25799,7 @@ pub mod experience_orb {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -23944,6 +25815,7 @@ pub mod experience_orb {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -23976,6 +25848,7 @@ pub mod eye_of_ender {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -23991,6 +25864,7 @@ pub mod eye_of_ender {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -24006,6 +25880,7 @@ pub mod eye_of_ender {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -24021,6 +25896,7 @@ pub mod eye_of_ender {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -24036,6 +25912,7 @@ pub mod eye_of_ender {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -24051,6 +25928,7 @@ pub mod eye_of_ender {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -24066,6 +25944,7 @@ pub mod eye_of_ender {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -24081,6 +25960,7 @@ pub mod eye_of_ender {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -24096,6 +25976,7 @@ pub mod eye_of_ender {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -24111,6 +25992,7 @@ pub mod eye_of_ender {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -24146,6 +26028,7 @@ pub mod falling_block {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BLOCK_POS,
     };
@@ -24161,6 +26044,7 @@ pub mod falling_block {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -24176,6 +26060,7 @@ pub mod falling_block {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -24191,6 +26076,7 @@ pub mod falling_block {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -24206,6 +26092,7 @@ pub mod falling_block {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -24221,6 +26108,7 @@ pub mod falling_block {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -24236,6 +26124,7 @@ pub mod falling_block {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -24251,6 +26140,7 @@ pub mod falling_block {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -24266,6 +26156,7 @@ pub mod falling_block {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BLOCK_POS,
     };
@@ -24281,6 +26172,7 @@ pub mod falling_block {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -24314,6 +26206,7 @@ pub mod falling_block_entity {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BLOCK_POS,
     };
@@ -24329,6 +26222,7 @@ pub mod falling_block_entity {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -24344,6 +26238,7 @@ pub mod falling_block_entity {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -24359,6 +26254,7 @@ pub mod falling_block_entity {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -24374,6 +26270,7 @@ pub mod falling_block_entity {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -24389,6 +26286,7 @@ pub mod falling_block_entity {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -24404,6 +26302,7 @@ pub mod falling_block_entity {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -24419,6 +26318,7 @@ pub mod falling_block_entity {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -24434,6 +26334,7 @@ pub mod falling_block_entity {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BLOCK_POS,
     };
@@ -24449,6 +26350,7 @@ pub mod falling_block_entity {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -24482,6 +26384,7 @@ pub mod fireball {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -24497,6 +26400,7 @@ pub mod fireball {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -24512,6 +26416,7 @@ pub mod fireball {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -24527,6 +26432,7 @@ pub mod fireball {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -24542,6 +26448,7 @@ pub mod fireball {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -24557,6 +26464,7 @@ pub mod fireball {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -24572,6 +26480,7 @@ pub mod fireball {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -24587,6 +26496,7 @@ pub mod fireball {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -24602,6 +26512,7 @@ pub mod fireball {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -24617,6 +26528,7 @@ pub mod fireball {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -24652,6 +26564,7 @@ pub mod firework_rocket {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -24667,6 +26580,7 @@ pub mod firework_rocket {
             v1_21_11: 255u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::OPTIONAL_UNSIGNED_INT,
     };
@@ -24682,6 +26596,7 @@ pub mod firework_rocket {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -24697,6 +26612,7 @@ pub mod firework_rocket {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -24712,6 +26628,7 @@ pub mod firework_rocket {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -24727,6 +26644,7 @@ pub mod firework_rocket {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -24742,6 +26660,7 @@ pub mod firework_rocket {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -24757,6 +26676,7 @@ pub mod firework_rocket {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -24772,6 +26692,7 @@ pub mod firework_rocket {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -24787,6 +26708,7 @@ pub mod firework_rocket {
             v1_21_11: 255u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -24802,6 +26724,7 @@ pub mod firework_rocket {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -24817,6 +26740,7 @@ pub mod firework_rocket {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -24832,6 +26756,7 @@ pub mod firework_rocket {
             v1_21_11: 9u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::OPTIONAL_UNSIGNED_INT,
     };
@@ -24847,6 +26772,7 @@ pub mod firework_rocket {
             v1_21_11: 10u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -24884,6 +26810,7 @@ pub mod firework_rocket_entity {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -24899,6 +26826,7 @@ pub mod firework_rocket_entity {
             v1_21_11: 255u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::OPTIONAL_UNSIGNED_INT,
     };
@@ -24914,6 +26842,7 @@ pub mod firework_rocket_entity {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -24929,6 +26858,7 @@ pub mod firework_rocket_entity {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -24944,6 +26874,7 @@ pub mod firework_rocket_entity {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -24959,6 +26890,7 @@ pub mod firework_rocket_entity {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -24974,6 +26906,7 @@ pub mod firework_rocket_entity {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -24989,6 +26922,7 @@ pub mod firework_rocket_entity {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -25004,6 +26938,7 @@ pub mod firework_rocket_entity {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -25019,6 +26954,7 @@ pub mod firework_rocket_entity {
             v1_21_11: 255u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -25034,6 +26970,7 @@ pub mod firework_rocket_entity {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -25049,6 +26986,7 @@ pub mod firework_rocket_entity {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -25064,6 +27002,7 @@ pub mod firework_rocket_entity {
             v1_21_11: 9u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::OPTIONAL_UNSIGNED_INT,
     };
@@ -25079,6 +27018,7 @@ pub mod firework_rocket_entity {
             v1_21_11: 10u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -25116,6 +27056,7 @@ pub mod fishing_bobber {
             v1_21_11: 9u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -25131,6 +27072,7 @@ pub mod fishing_bobber {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -25146,6 +27088,7 @@ pub mod fishing_bobber {
             v1_21_11: 255u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -25161,6 +27104,7 @@ pub mod fishing_bobber {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -25176,6 +27120,7 @@ pub mod fishing_bobber {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -25191,6 +27136,7 @@ pub mod fishing_bobber {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -25206,6 +27152,7 @@ pub mod fishing_bobber {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -25221,6 +27168,7 @@ pub mod fishing_bobber {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -25236,6 +27184,7 @@ pub mod fishing_bobber {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -25251,6 +27200,7 @@ pub mod fishing_bobber {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -25266,6 +27216,7 @@ pub mod fishing_bobber {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -25281,6 +27232,7 @@ pub mod fishing_bobber {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -25316,6 +27268,7 @@ pub mod fishing_hook {
             v1_21_11: 9u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -25331,6 +27284,7 @@ pub mod fishing_hook {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -25346,6 +27300,7 @@ pub mod fishing_hook {
             v1_21_11: 255u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -25361,6 +27316,7 @@ pub mod fishing_hook {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -25376,6 +27332,7 @@ pub mod fishing_hook {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -25391,6 +27348,7 @@ pub mod fishing_hook {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -25406,6 +27364,7 @@ pub mod fishing_hook {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -25421,6 +27380,7 @@ pub mod fishing_hook {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -25436,6 +27396,7 @@ pub mod fishing_hook {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -25451,6 +27412,7 @@ pub mod fishing_hook {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -25466,6 +27428,7 @@ pub mod fishing_hook {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -25481,6 +27444,7 @@ pub mod fishing_hook {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -25516,6 +27480,7 @@ pub mod flying_entity {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -25531,6 +27496,7 @@ pub mod flying_entity {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -25546,6 +27512,7 @@ pub mod flying_entity {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -25561,6 +27528,7 @@ pub mod flying_entity {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -25576,6 +27544,7 @@ pub mod flying_entity {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -25591,6 +27560,7 @@ pub mod flying_entity {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -25606,6 +27576,7 @@ pub mod flying_entity {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -25621,6 +27592,7 @@ pub mod flying_entity {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -25636,6 +27608,7 @@ pub mod flying_entity {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -25651,6 +27624,7 @@ pub mod flying_entity {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -25666,6 +27640,7 @@ pub mod flying_entity {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -25681,6 +27656,7 @@ pub mod flying_entity {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -25696,6 +27672,7 @@ pub mod flying_entity {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -25711,6 +27688,7 @@ pub mod flying_entity {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -25726,6 +27704,7 @@ pub mod flying_entity {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -25741,6 +27720,7 @@ pub mod flying_entity {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -25792,6 +27772,7 @@ pub mod fox {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -25807,6 +27788,7 @@ pub mod fox {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -25822,6 +27804,7 @@ pub mod fox {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -25837,6 +27820,7 @@ pub mod fox {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -25852,6 +27836,7 @@ pub mod fox {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -25867,6 +27852,7 @@ pub mod fox {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -25882,6 +27868,7 @@ pub mod fox {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -25897,6 +27884,7 @@ pub mod fox {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -25912,6 +27900,7 @@ pub mod fox {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -25927,6 +27916,7 @@ pub mod fox {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -25942,6 +27932,7 @@ pub mod fox {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -25957,6 +27948,7 @@ pub mod fox {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -25972,6 +27964,7 @@ pub mod fox {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -25987,6 +27980,7 @@ pub mod fox {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -26002,6 +27996,7 @@ pub mod fox {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -26017,6 +28012,7 @@ pub mod fox {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -26032,6 +28028,7 @@ pub mod fox {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -26047,6 +28044,7 @@ pub mod fox {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -26062,6 +28060,7 @@ pub mod fox {
             v1_21_11: 255u8,
             v26_1: 20u8,
             v26_2: 20u8,
+            v26_3: 20u8,
         },
         r#type: MetaDataType::OPTIONAL_LIVING_ENTITY_REFERENCE,
     };
@@ -26077,6 +28076,7 @@ pub mod fox {
             v1_21_11: 255u8,
             v26_1: 21u8,
             v26_2: 21u8,
+            v26_3: 21u8,
         },
         r#type: MetaDataType::OPTIONAL_LIVING_ENTITY_REFERENCE,
     };
@@ -26092,6 +28092,7 @@ pub mod fox {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -26107,6 +28108,7 @@ pub mod fox {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -26122,6 +28124,7 @@ pub mod fox {
             v1_21_11: 20u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::OPTIONAL_LIVING_ENTITY_REFERENCE,
     };
@@ -26137,6 +28140,7 @@ pub mod fox {
             v1_21_11: 19u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::OPTIONAL_LIVING_ENTITY_REFERENCE,
     };
@@ -26152,6 +28156,7 @@ pub mod fox {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -26167,6 +28172,7 @@ pub mod fox {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -26182,6 +28188,7 @@ pub mod fox {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -26244,6 +28251,7 @@ pub mod frog {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -26259,6 +28267,7 @@ pub mod frog {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -26274,6 +28283,7 @@ pub mod frog {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -26289,6 +28299,7 @@ pub mod frog {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -26304,6 +28315,7 @@ pub mod frog {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -26319,6 +28331,7 @@ pub mod frog {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -26334,6 +28347,7 @@ pub mod frog {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -26349,6 +28363,7 @@ pub mod frog {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -26364,6 +28379,7 @@ pub mod frog {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -26379,6 +28395,7 @@ pub mod frog {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -26394,6 +28411,7 @@ pub mod frog {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -26409,6 +28427,7 @@ pub mod frog {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -26424,6 +28443,7 @@ pub mod frog {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -26439,6 +28459,7 @@ pub mod frog {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -26454,6 +28475,7 @@ pub mod frog {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -26469,6 +28491,7 @@ pub mod frog {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -26484,6 +28507,7 @@ pub mod frog {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -26499,6 +28523,7 @@ pub mod frog {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::OPTIONAL_UNSIGNED_INT,
     };
@@ -26514,6 +28539,7 @@ pub mod frog {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::FROG_VARIANT,
     };
@@ -26529,6 +28555,7 @@ pub mod frog {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -26544,6 +28571,7 @@ pub mod frog {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::OPTIONAL_UNSIGNED_INT,
     };
@@ -26559,6 +28587,7 @@ pub mod frog {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::FROG_VARIANT,
     };
@@ -26618,6 +28647,7 @@ pub mod furnace_minecart {
             v1_21_11: 12u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -26633,6 +28663,7 @@ pub mod furnace_minecart {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -26648,6 +28679,7 @@ pub mod furnace_minecart {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -26663,6 +28695,7 @@ pub mod furnace_minecart {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -26678,6 +28711,7 @@ pub mod furnace_minecart {
             v1_21_11: 11u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_STATE,
     };
@@ -26693,6 +28727,7 @@ pub mod furnace_minecart {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -26708,6 +28743,7 @@ pub mod furnace_minecart {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -26723,6 +28759,7 @@ pub mod furnace_minecart {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -26738,6 +28775,7 @@ pub mod furnace_minecart {
             v1_21_11: 255u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_STATE,
     };
@@ -26753,6 +28791,7 @@ pub mod furnace_minecart {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -26768,6 +28807,7 @@ pub mod furnace_minecart {
             v1_21_11: 255u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -26783,6 +28823,7 @@ pub mod furnace_minecart {
             v1_21_11: 255u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -26798,6 +28839,7 @@ pub mod furnace_minecart {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -26813,6 +28855,7 @@ pub mod furnace_minecart {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -26828,6 +28871,7 @@ pub mod furnace_minecart {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -26843,6 +28887,7 @@ pub mod furnace_minecart {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -26858,6 +28903,7 @@ pub mod furnace_minecart {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -26873,6 +28919,7 @@ pub mod furnace_minecart {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -26888,6 +28935,7 @@ pub mod furnace_minecart {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -26903,6 +28951,7 @@ pub mod furnace_minecart {
             v1_21_11: 13u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -26945,6 +28994,7 @@ pub mod ghast {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -26960,6 +29010,7 @@ pub mod ghast {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -26975,6 +29026,7 @@ pub mod ghast {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -26990,6 +29042,7 @@ pub mod ghast {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -27005,6 +29058,7 @@ pub mod ghast {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -27020,6 +29074,7 @@ pub mod ghast {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -27035,6 +29090,7 @@ pub mod ghast {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -27050,6 +29106,7 @@ pub mod ghast {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -27065,6 +29122,7 @@ pub mod ghast {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -27080,6 +29138,7 @@ pub mod ghast {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -27095,6 +29154,7 @@ pub mod ghast {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -27110,6 +29170,7 @@ pub mod ghast {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -27125,6 +29186,7 @@ pub mod ghast {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -27140,6 +29202,7 @@ pub mod ghast {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -27155,6 +29218,7 @@ pub mod ghast {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -27170,6 +29234,7 @@ pub mod ghast {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -27185,6 +29250,7 @@ pub mod ghast {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -27200,6 +29266,7 @@ pub mod ghast {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -27252,6 +29319,7 @@ pub mod giant {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -27267,6 +29335,7 @@ pub mod giant {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -27282,6 +29351,7 @@ pub mod giant {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -27297,6 +29367,7 @@ pub mod giant {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -27312,6 +29383,7 @@ pub mod giant {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -27327,6 +29399,7 @@ pub mod giant {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -27342,6 +29415,7 @@ pub mod giant {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -27357,6 +29431,7 @@ pub mod giant {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -27372,6 +29447,7 @@ pub mod giant {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -27387,6 +29463,7 @@ pub mod giant {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -27402,6 +29479,7 @@ pub mod giant {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -27417,6 +29495,7 @@ pub mod giant {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -27432,6 +29511,7 @@ pub mod giant {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -27447,6 +29527,7 @@ pub mod giant {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -27462,6 +29543,7 @@ pub mod giant {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -27477,6 +29559,7 @@ pub mod giant {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -27528,6 +29611,7 @@ pub mod glow_item_frame {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -27543,6 +29627,7 @@ pub mod glow_item_frame {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -27558,6 +29643,7 @@ pub mod glow_item_frame {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -27573,6 +29659,7 @@ pub mod glow_item_frame {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::DIRECTION,
     };
@@ -27588,6 +29675,7 @@ pub mod glow_item_frame {
             v1_21_11: 255u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -27603,6 +29691,7 @@ pub mod glow_item_frame {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -27618,6 +29707,7 @@ pub mod glow_item_frame {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -27633,6 +29723,7 @@ pub mod glow_item_frame {
             v1_21_11: 255u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -27648,6 +29739,7 @@ pub mod glow_item_frame {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -27663,6 +29755,7 @@ pub mod glow_item_frame {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -27678,6 +29771,7 @@ pub mod glow_item_frame {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -27693,6 +29787,7 @@ pub mod glow_item_frame {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::DIRECTION,
     };
@@ -27708,6 +29803,7 @@ pub mod glow_item_frame {
             v1_21_11: 9u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -27723,6 +29819,7 @@ pub mod glow_item_frame {
             v1_21_11: 10u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -27758,6 +29855,7 @@ pub mod glow_squid {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -27773,6 +29871,7 @@ pub mod glow_squid {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -27788,6 +29887,7 @@ pub mod glow_squid {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -27803,6 +29903,7 @@ pub mod glow_squid {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -27818,6 +29919,7 @@ pub mod glow_squid {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -27833,6 +29935,7 @@ pub mod glow_squid {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -27848,6 +29951,7 @@ pub mod glow_squid {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -27863,6 +29967,7 @@ pub mod glow_squid {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -27878,6 +29983,7 @@ pub mod glow_squid {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -27893,6 +29999,7 @@ pub mod glow_squid {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -27908,6 +30015,7 @@ pub mod glow_squid {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -27923,6 +30031,7 @@ pub mod glow_squid {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -27938,6 +30047,7 @@ pub mod glow_squid {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -27953,6 +30063,7 @@ pub mod glow_squid {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -27968,6 +30079,7 @@ pub mod glow_squid {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -27983,6 +30095,7 @@ pub mod glow_squid {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -27998,6 +30111,7 @@ pub mod glow_squid {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -28013,6 +30127,7 @@ pub mod glow_squid {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -28028,6 +30143,7 @@ pub mod glow_squid {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -28043,6 +30159,7 @@ pub mod glow_squid {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -28097,6 +30214,7 @@ pub mod goat {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -28112,6 +30230,7 @@ pub mod goat {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -28127,6 +30246,7 @@ pub mod goat {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -28142,6 +30262,7 @@ pub mod goat {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -28157,6 +30278,7 @@ pub mod goat {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -28172,6 +30294,7 @@ pub mod goat {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -28187,6 +30310,7 @@ pub mod goat {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -28202,6 +30326,7 @@ pub mod goat {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -28217,6 +30342,7 @@ pub mod goat {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -28232,6 +30358,7 @@ pub mod goat {
             v1_21_11: 255u8,
             v26_1: 20u8,
             v26_2: 20u8,
+            v26_3: 20u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -28247,6 +30374,7 @@ pub mod goat {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -28262,6 +30390,7 @@ pub mod goat {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -28277,6 +30406,7 @@ pub mod goat {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -28292,6 +30422,7 @@ pub mod goat {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -28307,6 +30438,7 @@ pub mod goat {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -28322,6 +30454,7 @@ pub mod goat {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -28337,6 +30470,7 @@ pub mod goat {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -28352,6 +30486,7 @@ pub mod goat {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -28367,6 +30502,7 @@ pub mod goat {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -28382,6 +30518,7 @@ pub mod goat {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -28397,6 +30534,7 @@ pub mod goat {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -28412,6 +30550,7 @@ pub mod goat {
             v1_21_11: 19u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -28427,6 +30566,7 @@ pub mod goat {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -28442,6 +30582,7 @@ pub mod goat {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -28499,6 +30640,7 @@ pub mod guardian {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -28514,6 +30656,7 @@ pub mod guardian {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -28529,6 +30672,7 @@ pub mod guardian {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -28544,6 +30688,7 @@ pub mod guardian {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -28559,6 +30704,7 @@ pub mod guardian {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -28574,6 +30720,7 @@ pub mod guardian {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -28589,6 +30736,7 @@ pub mod guardian {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -28604,6 +30752,7 @@ pub mod guardian {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -28619,6 +30768,7 @@ pub mod guardian {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -28634,6 +30784,7 @@ pub mod guardian {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -28649,6 +30800,7 @@ pub mod guardian {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -28664,6 +30816,7 @@ pub mod guardian {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -28679,6 +30832,7 @@ pub mod guardian {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -28694,6 +30848,7 @@ pub mod guardian {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -28709,6 +30864,7 @@ pub mod guardian {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -28724,6 +30880,7 @@ pub mod guardian {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -28739,6 +30896,7 @@ pub mod guardian {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -28754,6 +30912,7 @@ pub mod guardian {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -28769,6 +30928,7 @@ pub mod guardian {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -28784,6 +30944,7 @@ pub mod guardian {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -28838,6 +30999,7 @@ pub mod hanging_entity {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -28853,6 +31015,7 @@ pub mod hanging_entity {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -28868,6 +31031,7 @@ pub mod hanging_entity {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -28883,6 +31047,7 @@ pub mod hanging_entity {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::DIRECTION,
     };
@@ -28898,6 +31063,7 @@ pub mod hanging_entity {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -28913,6 +31079,7 @@ pub mod hanging_entity {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -28928,6 +31095,7 @@ pub mod hanging_entity {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -28943,6 +31111,7 @@ pub mod hanging_entity {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -28958,6 +31127,7 @@ pub mod hanging_entity {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -28973,6 +31143,7 @@ pub mod hanging_entity {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::DIRECTION,
     };
@@ -29006,6 +31177,7 @@ pub mod happy_ghast {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -29021,6 +31193,7 @@ pub mod happy_ghast {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -29036,6 +31209,7 @@ pub mod happy_ghast {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -29051,6 +31225,7 @@ pub mod happy_ghast {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -29066,6 +31241,7 @@ pub mod happy_ghast {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -29081,6 +31257,7 @@ pub mod happy_ghast {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -29096,6 +31273,7 @@ pub mod happy_ghast {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -29111,6 +31289,7 @@ pub mod happy_ghast {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -29126,6 +31305,7 @@ pub mod happy_ghast {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -29141,6 +31321,7 @@ pub mod happy_ghast {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -29156,6 +31337,7 @@ pub mod happy_ghast {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -29171,6 +31353,7 @@ pub mod happy_ghast {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -29186,6 +31369,7 @@ pub mod happy_ghast {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -29201,6 +31385,7 @@ pub mod happy_ghast {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -29216,6 +31401,7 @@ pub mod happy_ghast {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -29231,6 +31417,7 @@ pub mod happy_ghast {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -29246,6 +31433,7 @@ pub mod happy_ghast {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -29261,6 +31449,7 @@ pub mod happy_ghast {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -29276,6 +31465,7 @@ pub mod happy_ghast {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -29291,6 +31481,7 @@ pub mod happy_ghast {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -29306,6 +31497,7 @@ pub mod happy_ghast {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -29321,6 +31513,7 @@ pub mod happy_ghast {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -29375,6 +31568,7 @@ pub mod hoglin {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -29390,6 +31584,7 @@ pub mod hoglin {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -29405,6 +31600,7 @@ pub mod hoglin {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -29420,6 +31616,7 @@ pub mod hoglin {
             v1_21_11: 17u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -29435,6 +31632,7 @@ pub mod hoglin {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -29450,6 +31648,7 @@ pub mod hoglin {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -29465,6 +31664,7 @@ pub mod hoglin {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -29480,6 +31680,7 @@ pub mod hoglin {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -29495,6 +31696,7 @@ pub mod hoglin {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -29510,6 +31712,7 @@ pub mod hoglin {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -29525,6 +31728,7 @@ pub mod hoglin {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -29540,6 +31744,7 @@ pub mod hoglin {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -29555,6 +31760,7 @@ pub mod hoglin {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -29570,6 +31776,7 @@ pub mod hoglin {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -29585,6 +31792,7 @@ pub mod hoglin {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -29600,6 +31808,7 @@ pub mod hoglin {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -29615,6 +31824,7 @@ pub mod hoglin {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -29630,6 +31840,7 @@ pub mod hoglin {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -29645,6 +31856,7 @@ pub mod hoglin {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -29700,6 +31912,7 @@ pub mod hopper_minecart {
             v1_21_11: 12u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -29715,6 +31928,7 @@ pub mod hopper_minecart {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -29730,6 +31944,7 @@ pub mod hopper_minecart {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -29745,6 +31960,7 @@ pub mod hopper_minecart {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -29760,6 +31976,7 @@ pub mod hopper_minecart {
             v1_21_11: 11u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_STATE,
     };
@@ -29775,6 +31992,7 @@ pub mod hopper_minecart {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -29790,6 +32008,7 @@ pub mod hopper_minecart {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -29805,6 +32024,7 @@ pub mod hopper_minecart {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -29820,6 +32040,7 @@ pub mod hopper_minecart {
             v1_21_11: 255u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_STATE,
     };
@@ -29835,6 +32056,7 @@ pub mod hopper_minecart {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -29850,6 +32072,7 @@ pub mod hopper_minecart {
             v1_21_11: 255u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -29865,6 +32088,7 @@ pub mod hopper_minecart {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -29880,6 +32104,7 @@ pub mod hopper_minecart {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -29895,6 +32120,7 @@ pub mod hopper_minecart {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -29910,6 +32136,7 @@ pub mod hopper_minecart {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -29925,6 +32152,7 @@ pub mod hopper_minecart {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -29940,6 +32168,7 @@ pub mod hopper_minecart {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -29955,6 +32184,7 @@ pub mod hopper_minecart {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -29996,6 +32226,7 @@ pub mod horse {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -30011,6 +32242,7 @@ pub mod horse {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -30026,6 +32258,7 @@ pub mod horse {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -30041,6 +32274,7 @@ pub mod horse {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -30056,6 +32290,7 @@ pub mod horse {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -30071,6 +32306,7 @@ pub mod horse {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -30086,6 +32322,7 @@ pub mod horse {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -30101,6 +32338,7 @@ pub mod horse {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -30116,6 +32354,7 @@ pub mod horse {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -30131,6 +32370,7 @@ pub mod horse {
             v1_21_11: 17u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -30146,6 +32386,7 @@ pub mod horse {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -30161,6 +32402,7 @@ pub mod horse {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -30176,6 +32418,7 @@ pub mod horse {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -30191,6 +32434,7 @@ pub mod horse {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -30206,6 +32450,7 @@ pub mod horse {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -30221,6 +32466,7 @@ pub mod horse {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -30236,6 +32482,7 @@ pub mod horse {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -30251,6 +32498,7 @@ pub mod horse {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -30266,6 +32514,7 @@ pub mod horse {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -30281,6 +32530,7 @@ pub mod horse {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -30296,6 +32546,7 @@ pub mod horse {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -30352,6 +32603,7 @@ pub mod husk {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -30367,6 +32619,7 @@ pub mod husk {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -30382,6 +32635,7 @@ pub mod husk {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -30397,6 +32651,7 @@ pub mod husk {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -30412,6 +32667,7 @@ pub mod husk {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -30427,6 +32683,7 @@ pub mod husk {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -30442,6 +32699,7 @@ pub mod husk {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -30457,6 +32715,7 @@ pub mod husk {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -30472,6 +32731,7 @@ pub mod husk {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -30487,6 +32747,7 @@ pub mod husk {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -30502,6 +32763,7 @@ pub mod husk {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -30517,6 +32779,7 @@ pub mod husk {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -30532,6 +32795,7 @@ pub mod husk {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -30547,6 +32811,7 @@ pub mod husk {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -30562,6 +32827,7 @@ pub mod husk {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -30577,6 +32843,7 @@ pub mod husk {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -30592,6 +32859,7 @@ pub mod husk {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -30607,6 +32875,7 @@ pub mod husk {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -30622,6 +32891,7 @@ pub mod husk {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -30637,6 +32907,7 @@ pub mod husk {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -30652,6 +32923,7 @@ pub mod husk {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -30712,6 +32984,7 @@ pub mod illusioner {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -30727,6 +33000,7 @@ pub mod illusioner {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -30742,6 +33016,7 @@ pub mod illusioner {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -30757,6 +33032,7 @@ pub mod illusioner {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -30772,6 +33048,7 @@ pub mod illusioner {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -30787,6 +33064,7 @@ pub mod illusioner {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -30802,6 +33080,7 @@ pub mod illusioner {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -30817,6 +33096,7 @@ pub mod illusioner {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -30832,6 +33112,7 @@ pub mod illusioner {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -30847,6 +33128,7 @@ pub mod illusioner {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -30862,6 +33144,7 @@ pub mod illusioner {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -30877,6 +33160,7 @@ pub mod illusioner {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -30892,6 +33176,7 @@ pub mod illusioner {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -30907,6 +33192,7 @@ pub mod illusioner {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -30922,6 +33208,7 @@ pub mod illusioner {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -30937,6 +33224,7 @@ pub mod illusioner {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -30952,6 +33240,7 @@ pub mod illusioner {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -30967,6 +33256,7 @@ pub mod illusioner {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -30982,6 +33272,7 @@ pub mod illusioner {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -30997,6 +33288,7 @@ pub mod illusioner {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -31051,6 +33343,7 @@ pub mod interaction {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -31066,6 +33359,7 @@ pub mod interaction {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -31081,6 +33375,7 @@ pub mod interaction {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -31096,6 +33391,7 @@ pub mod interaction {
             v1_21_11: 255u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -31111,6 +33407,7 @@ pub mod interaction {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -31126,6 +33423,7 @@ pub mod interaction {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -31141,6 +33439,7 @@ pub mod interaction {
             v1_21_11: 255u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -31156,6 +33455,7 @@ pub mod interaction {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -31171,6 +33471,7 @@ pub mod interaction {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -31186,6 +33487,7 @@ pub mod interaction {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -31201,6 +33503,7 @@ pub mod interaction {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -31216,6 +33519,7 @@ pub mod interaction {
             v1_21_11: 9u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -31231,6 +33535,7 @@ pub mod interaction {
             v1_21_11: 10u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -31246,6 +33551,7 @@ pub mod interaction {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -31284,6 +33590,7 @@ pub mod iron_golem {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -31299,6 +33606,7 @@ pub mod iron_golem {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -31314,6 +33622,7 @@ pub mod iron_golem {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -31329,6 +33638,7 @@ pub mod iron_golem {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -31344,6 +33654,7 @@ pub mod iron_golem {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -31359,6 +33670,7 @@ pub mod iron_golem {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -31374,6 +33686,7 @@ pub mod iron_golem {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -31389,6 +33702,7 @@ pub mod iron_golem {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -31404,6 +33718,7 @@ pub mod iron_golem {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -31419,6 +33734,7 @@ pub mod iron_golem {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -31434,6 +33750,7 @@ pub mod iron_golem {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -31449,6 +33766,7 @@ pub mod iron_golem {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -31464,6 +33782,7 @@ pub mod iron_golem {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -31479,6 +33798,7 @@ pub mod iron_golem {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -31494,6 +33814,7 @@ pub mod iron_golem {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -31509,6 +33830,7 @@ pub mod iron_golem {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -31524,6 +33846,7 @@ pub mod iron_golem {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -31539,6 +33862,7 @@ pub mod iron_golem {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -31594,6 +33918,7 @@ pub mod item {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -31609,6 +33934,7 @@ pub mod item {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -31624,6 +33950,7 @@ pub mod item {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -31639,6 +33966,7 @@ pub mod item {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -31654,6 +33982,7 @@ pub mod item {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -31669,6 +33998,7 @@ pub mod item {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -31684,6 +34014,7 @@ pub mod item {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -31699,6 +34030,7 @@ pub mod item {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -31714,6 +34046,7 @@ pub mod item {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -31748,6 +34081,7 @@ pub mod item_display {
             v1_21_11: 15u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -31763,6 +34097,7 @@ pub mod item_display {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -31778,6 +34113,7 @@ pub mod item_display {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -31793,6 +34129,7 @@ pub mod item_display {
             v1_21_11: 255u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -31808,6 +34145,7 @@ pub mod item_display {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -31823,6 +34161,7 @@ pub mod item_display {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -31838,6 +34177,7 @@ pub mod item_display {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -31853,6 +34193,7 @@ pub mod item_display {
             v1_21_11: 255u8,
             v26_1: 22u8,
             v26_2: 22u8,
+            v26_3: 22u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -31868,6 +34209,7 @@ pub mod item_display {
             v1_21_11: 255u8,
             v26_1: 21u8,
             v26_2: 21u8,
+            v26_3: 21u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -31883,6 +34225,7 @@ pub mod item_display {
             v1_21_11: 23u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -31898,6 +34241,7 @@ pub mod item_display {
             v1_21_11: 255u8,
             v26_1: 24u8,
             v26_2: 24u8,
+            v26_3: 24u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -31913,6 +34257,7 @@ pub mod item_display {
             v1_21_11: 255u8,
             v26_1: 23u8,
             v26_2: 23u8,
+            v26_3: 23u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -31928,6 +34273,7 @@ pub mod item_display {
             v1_21_11: 255u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::QUATERNION,
     };
@@ -31943,6 +34289,7 @@ pub mod item_display {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -31958,6 +34305,7 @@ pub mod item_display {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -31973,6 +34321,7 @@ pub mod item_display {
             v1_21_11: 255u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -31988,6 +34337,7 @@ pub mod item_display {
             v1_21_11: 255u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::QUATERNION,
     };
@@ -32003,6 +34353,7 @@ pub mod item_display {
             v1_21_11: 255u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::VECTOR3,
     };
@@ -32018,6 +34369,7 @@ pub mod item_display {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -32033,6 +34385,7 @@ pub mod item_display {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -32048,6 +34401,7 @@ pub mod item_display {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -32063,6 +34417,7 @@ pub mod item_display {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -32078,6 +34433,7 @@ pub mod item_display {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -32093,6 +34449,7 @@ pub mod item_display {
             v1_21_11: 255u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -32108,6 +34465,7 @@ pub mod item_display {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -32123,6 +34481,7 @@ pub mod item_display {
             v1_21_11: 255u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::VECTOR3,
     };
@@ -32138,6 +34497,7 @@ pub mod item_display {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -32153,6 +34513,7 @@ pub mod item_display {
             v1_21_11: 255u8,
             v26_1: 20u8,
             v26_2: 20u8,
+            v26_3: 20u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -32168,6 +34529,7 @@ pub mod item_display {
             v1_21_11: 22u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -32183,6 +34545,7 @@ pub mod item_display {
             v1_21_11: 21u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -32198,6 +34561,7 @@ pub mod item_display {
             v1_21_11: 9u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -32213,6 +34577,7 @@ pub mod item_display {
             v1_21_11: 24u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -32228,6 +34593,7 @@ pub mod item_display {
             v1_21_11: 13u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::QUATERNION,
     };
@@ -32243,6 +34609,7 @@ pub mod item_display {
             v1_21_11: 14u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::QUATERNION,
     };
@@ -32258,6 +34625,7 @@ pub mod item_display {
             v1_21_11: 12u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::VECTOR3,
     };
@@ -32273,6 +34641,7 @@ pub mod item_display {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -32288,6 +34657,7 @@ pub mod item_display {
             v1_21_11: 19u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -32303,6 +34673,7 @@ pub mod item_display {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -32318,6 +34689,7 @@ pub mod item_display {
             v1_21_11: 10u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -32333,6 +34705,7 @@ pub mod item_display {
             v1_21_11: 11u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::VECTOR3,
     };
@@ -32348,6 +34721,7 @@ pub mod item_display {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -32363,6 +34737,7 @@ pub mod item_display {
             v1_21_11: 20u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -32445,6 +34820,7 @@ pub mod item_entity {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -32460,6 +34836,7 @@ pub mod item_entity {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -32475,6 +34852,7 @@ pub mod item_entity {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -32490,6 +34868,7 @@ pub mod item_entity {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -32505,6 +34884,7 @@ pub mod item_entity {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -32520,6 +34900,7 @@ pub mod item_entity {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -32535,6 +34916,7 @@ pub mod item_entity {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -32550,6 +34932,7 @@ pub mod item_entity {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -32565,6 +34948,7 @@ pub mod item_entity {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -32599,6 +34983,7 @@ pub mod item_frame {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -32614,6 +34999,7 @@ pub mod item_frame {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -32629,6 +35015,7 @@ pub mod item_frame {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -32644,6 +35031,7 @@ pub mod item_frame {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::DIRECTION,
     };
@@ -32659,6 +35047,7 @@ pub mod item_frame {
             v1_21_11: 255u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -32674,6 +35063,7 @@ pub mod item_frame {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -32689,6 +35079,7 @@ pub mod item_frame {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -32704,6 +35095,7 @@ pub mod item_frame {
             v1_21_11: 255u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -32719,6 +35111,7 @@ pub mod item_frame {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -32734,6 +35127,7 @@ pub mod item_frame {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -32749,6 +35143,7 @@ pub mod item_frame {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -32764,6 +35159,7 @@ pub mod item_frame {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::DIRECTION,
     };
@@ -32779,6 +35175,7 @@ pub mod item_frame {
             v1_21_11: 9u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -32794,6 +35191,7 @@ pub mod item_frame {
             v1_21_11: 10u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -32829,6 +35227,7 @@ pub mod jungle_boat {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -32844,6 +35243,7 @@ pub mod jungle_boat {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -32859,6 +35259,7 @@ pub mod jungle_boat {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -32874,6 +35275,7 @@ pub mod jungle_boat {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -32889,6 +35291,7 @@ pub mod jungle_boat {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -32904,6 +35307,7 @@ pub mod jungle_boat {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -32919,6 +35323,7 @@ pub mod jungle_boat {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -32934,6 +35339,7 @@ pub mod jungle_boat {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -32949,6 +35355,7 @@ pub mod jungle_boat {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -32964,6 +35371,7 @@ pub mod jungle_boat {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -32979,6 +35387,7 @@ pub mod jungle_boat {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -32994,6 +35403,7 @@ pub mod jungle_boat {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -33009,6 +35419,7 @@ pub mod jungle_boat {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -33024,6 +35435,7 @@ pub mod jungle_boat {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -33065,6 +35477,7 @@ pub mod jungle_chest_boat {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -33080,6 +35493,7 @@ pub mod jungle_chest_boat {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -33095,6 +35509,7 @@ pub mod jungle_chest_boat {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -33110,6 +35525,7 @@ pub mod jungle_chest_boat {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -33125,6 +35541,7 @@ pub mod jungle_chest_boat {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -33140,6 +35557,7 @@ pub mod jungle_chest_boat {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -33155,6 +35573,7 @@ pub mod jungle_chest_boat {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -33170,6 +35589,7 @@ pub mod jungle_chest_boat {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -33185,6 +35605,7 @@ pub mod jungle_chest_boat {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -33200,6 +35621,7 @@ pub mod jungle_chest_boat {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -33215,6 +35637,7 @@ pub mod jungle_chest_boat {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -33230,6 +35653,7 @@ pub mod jungle_chest_boat {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -33245,6 +35669,7 @@ pub mod jungle_chest_boat {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -33260,6 +35685,7 @@ pub mod jungle_chest_boat {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -33301,6 +35727,7 @@ pub mod large_fireball {
             v1_21_11: 255u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -33316,6 +35743,7 @@ pub mod large_fireball {
             v1_21_11: 255u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -33331,6 +35759,7 @@ pub mod large_fireball {
             v1_21_11: 255u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -33346,6 +35775,7 @@ pub mod large_fireball {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -33361,6 +35791,7 @@ pub mod large_fireball {
             v1_21_11: 255u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -33376,6 +35807,7 @@ pub mod large_fireball {
             v1_21_11: 255u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -33391,6 +35823,7 @@ pub mod large_fireball {
             v1_21_11: 255u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -33406,6 +35839,7 @@ pub mod large_fireball {
             v1_21_11: 255u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -33421,6 +35855,7 @@ pub mod large_fireball {
             v1_21_11: 255u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -33454,6 +35889,7 @@ pub mod leash_fence_knot_entity {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -33469,6 +35905,7 @@ pub mod leash_fence_knot_entity {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -33484,6 +35921,7 @@ pub mod leash_fence_knot_entity {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -33499,6 +35937,7 @@ pub mod leash_fence_knot_entity {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -33514,6 +35953,7 @@ pub mod leash_fence_knot_entity {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -33529,6 +35969,7 @@ pub mod leash_fence_knot_entity {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -33544,6 +35985,7 @@ pub mod leash_fence_knot_entity {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -33559,6 +36001,7 @@ pub mod leash_fence_knot_entity {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -33591,6 +36034,7 @@ pub mod leash_knot {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -33606,6 +36050,7 @@ pub mod leash_knot {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -33621,6 +36066,7 @@ pub mod leash_knot {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -33636,6 +36082,7 @@ pub mod leash_knot {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -33651,6 +36098,7 @@ pub mod leash_knot {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -33666,6 +36114,7 @@ pub mod leash_knot {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -33681,6 +36130,7 @@ pub mod leash_knot {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -33696,6 +36146,7 @@ pub mod leash_knot {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -33728,6 +36179,7 @@ pub mod lightning_bolt {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -33743,6 +36195,7 @@ pub mod lightning_bolt {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -33758,6 +36211,7 @@ pub mod lightning_bolt {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -33773,6 +36227,7 @@ pub mod lightning_bolt {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -33788,6 +36243,7 @@ pub mod lightning_bolt {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -33803,6 +36259,7 @@ pub mod lightning_bolt {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -33818,6 +36275,7 @@ pub mod lightning_bolt {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -33833,6 +36291,7 @@ pub mod lightning_bolt {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -33865,6 +36324,7 @@ pub mod lingering_potion {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -33880,6 +36340,7 @@ pub mod lingering_potion {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -33895,6 +36356,7 @@ pub mod lingering_potion {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -33910,6 +36372,7 @@ pub mod lingering_potion {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -33925,6 +36388,7 @@ pub mod lingering_potion {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -33940,6 +36404,7 @@ pub mod lingering_potion {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -33955,6 +36420,7 @@ pub mod lingering_potion {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -33970,6 +36436,7 @@ pub mod lingering_potion {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -33985,6 +36452,7 @@ pub mod lingering_potion {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -34000,6 +36468,7 @@ pub mod lingering_potion {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -34035,6 +36504,7 @@ pub mod living_entity {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -34050,6 +36520,7 @@ pub mod living_entity {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -34065,6 +36536,7 @@ pub mod living_entity {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -34080,6 +36552,7 @@ pub mod living_entity {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -34095,6 +36568,7 @@ pub mod living_entity {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -34110,6 +36584,7 @@ pub mod living_entity {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -34125,6 +36600,7 @@ pub mod living_entity {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -34140,6 +36616,7 @@ pub mod living_entity {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -34155,6 +36632,7 @@ pub mod living_entity {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -34170,6 +36648,7 @@ pub mod living_entity {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -34185,6 +36664,7 @@ pub mod living_entity {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -34200,6 +36680,7 @@ pub mod living_entity {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -34215,6 +36696,7 @@ pub mod living_entity {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -34230,6 +36712,7 @@ pub mod living_entity {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -34245,6 +36728,7 @@ pub mod living_entity {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -34293,6 +36777,7 @@ pub mod llama {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -34308,6 +36793,7 @@ pub mod llama {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -34323,6 +36809,7 @@ pub mod llama {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -34338,6 +36825,7 @@ pub mod llama {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -34353,6 +36841,7 @@ pub mod llama {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -34368,6 +36857,7 @@ pub mod llama {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -34383,6 +36873,7 @@ pub mod llama {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -34398,6 +36889,7 @@ pub mod llama {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -34413,6 +36905,7 @@ pub mod llama {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -34428,6 +36921,7 @@ pub mod llama {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -34443,6 +36937,7 @@ pub mod llama {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -34458,6 +36953,7 @@ pub mod llama {
             v1_21_11: 17u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -34473,6 +36969,7 @@ pub mod llama {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -34488,6 +36985,7 @@ pub mod llama {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -34503,6 +37001,7 @@ pub mod llama {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -34518,6 +37017,7 @@ pub mod llama {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -34533,6 +37033,7 @@ pub mod llama {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -34548,6 +37049,7 @@ pub mod llama {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -34563,6 +37065,7 @@ pub mod llama {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -34578,6 +37081,7 @@ pub mod llama {
             v1_21_11: 255u8,
             v26_1: 20u8,
             v26_2: 20u8,
+            v26_3: 20u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -34593,6 +37097,7 @@ pub mod llama {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -34608,6 +37113,7 @@ pub mod llama {
             v1_21_11: 255u8,
             v26_1: 21u8,
             v26_2: 21u8,
+            v26_3: 21u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -34623,6 +37129,7 @@ pub mod llama {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -34638,6 +37145,7 @@ pub mod llama {
             v1_21_11: 19u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -34653,6 +37161,7 @@ pub mod llama {
             v1_21_11: 20u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -34713,6 +37222,7 @@ pub mod llama_spit {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -34728,6 +37238,7 @@ pub mod llama_spit {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -34743,6 +37254,7 @@ pub mod llama_spit {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -34758,6 +37270,7 @@ pub mod llama_spit {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -34773,6 +37286,7 @@ pub mod llama_spit {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -34788,6 +37302,7 @@ pub mod llama_spit {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -34803,6 +37318,7 @@ pub mod llama_spit {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -34818,6 +37334,7 @@ pub mod llama_spit {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -34850,6 +37367,7 @@ pub mod magma_cube {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -34865,6 +37383,7 @@ pub mod magma_cube {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -34880,6 +37399,7 @@ pub mod magma_cube {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -34895,6 +37415,7 @@ pub mod magma_cube {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -34910,6 +37431,7 @@ pub mod magma_cube {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -34925,6 +37447,7 @@ pub mod magma_cube {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -34940,6 +37463,7 @@ pub mod magma_cube {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -34955,6 +37479,7 @@ pub mod magma_cube {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -34970,6 +37495,7 @@ pub mod magma_cube {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -34985,6 +37511,7 @@ pub mod magma_cube {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -35000,6 +37527,7 @@ pub mod magma_cube {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -35015,6 +37543,7 @@ pub mod magma_cube {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -35030,6 +37559,7 @@ pub mod magma_cube {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -35045,6 +37575,7 @@ pub mod magma_cube {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -35060,6 +37591,7 @@ pub mod magma_cube {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -35075,6 +37607,7 @@ pub mod magma_cube {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -35090,6 +37623,7 @@ pub mod magma_cube {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -35105,6 +37639,7 @@ pub mod magma_cube {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -35120,6 +37655,7 @@ pub mod magma_cube {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -35135,6 +37671,7 @@ pub mod magma_cube {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -35189,6 +37726,7 @@ pub mod mangrove_boat {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -35204,6 +37742,7 @@ pub mod mangrove_boat {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -35219,6 +37758,7 @@ pub mod mangrove_boat {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -35234,6 +37774,7 @@ pub mod mangrove_boat {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -35249,6 +37790,7 @@ pub mod mangrove_boat {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -35264,6 +37806,7 @@ pub mod mangrove_boat {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -35279,6 +37822,7 @@ pub mod mangrove_boat {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -35294,6 +37838,7 @@ pub mod mangrove_boat {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -35309,6 +37854,7 @@ pub mod mangrove_boat {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -35324,6 +37870,7 @@ pub mod mangrove_boat {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -35339,6 +37886,7 @@ pub mod mangrove_boat {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -35354,6 +37902,7 @@ pub mod mangrove_boat {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -35369,6 +37918,7 @@ pub mod mangrove_boat {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -35384,6 +37934,7 @@ pub mod mangrove_boat {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -35425,6 +37976,7 @@ pub mod mangrove_chest_boat {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -35440,6 +37992,7 @@ pub mod mangrove_chest_boat {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -35455,6 +38008,7 @@ pub mod mangrove_chest_boat {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -35470,6 +38024,7 @@ pub mod mangrove_chest_boat {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -35485,6 +38040,7 @@ pub mod mangrove_chest_boat {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -35500,6 +38056,7 @@ pub mod mangrove_chest_boat {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -35515,6 +38072,7 @@ pub mod mangrove_chest_boat {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -35530,6 +38088,7 @@ pub mod mangrove_chest_boat {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -35545,6 +38104,7 @@ pub mod mangrove_chest_boat {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -35560,6 +38120,7 @@ pub mod mangrove_chest_boat {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -35575,6 +38136,7 @@ pub mod mangrove_chest_boat {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -35590,6 +38152,7 @@ pub mod mangrove_chest_boat {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -35605,6 +38168,7 @@ pub mod mangrove_chest_boat {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -35620,6 +38184,7 @@ pub mod mangrove_chest_boat {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -35661,6 +38226,7 @@ pub mod mannequin {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -35676,6 +38242,7 @@ pub mod mannequin {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -35691,6 +38258,7 @@ pub mod mannequin {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -35706,6 +38274,7 @@ pub mod mannequin {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -35721,6 +38290,7 @@ pub mod mannequin {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -35736,6 +38306,7 @@ pub mod mannequin {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -35751,6 +38322,7 @@ pub mod mannequin {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -35766,6 +38338,7 @@ pub mod mannequin {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -35781,6 +38354,7 @@ pub mod mannequin {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -35796,6 +38370,7 @@ pub mod mannequin {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -35811,6 +38386,7 @@ pub mod mannequin {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -35826,6 +38402,7 @@ pub mod mannequin {
             v1_21_11: 255u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::HUMANOID_ARM,
     };
@@ -35841,6 +38418,7 @@ pub mod mannequin {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -35856,6 +38434,7 @@ pub mod mannequin {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -35871,6 +38450,7 @@ pub mod mannequin {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::RESOLVABLE_PROFILE,
     };
@@ -35886,6 +38466,7 @@ pub mod mannequin {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -35901,6 +38482,7 @@ pub mod mannequin {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -35916,6 +38498,7 @@ pub mod mannequin {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -35931,6 +38514,7 @@ pub mod mannequin {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -35946,6 +38530,7 @@ pub mod mannequin {
             v1_21_11: 19u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -35961,6 +38546,7 @@ pub mod mannequin {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -35976,6 +38562,7 @@ pub mod mannequin {
             v1_21_11: 15u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ARM,
     };
@@ -35991,6 +38578,7 @@ pub mod mannequin {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -36006,6 +38594,7 @@ pub mod mannequin {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::PROFILE,
     };
@@ -36021,6 +38610,7 @@ pub mod mannequin {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -36073,6 +38663,7 @@ pub mod marker {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -36088,6 +38679,7 @@ pub mod marker {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -36103,6 +38695,7 @@ pub mod marker {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -36118,6 +38711,7 @@ pub mod marker {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -36133,6 +38727,7 @@ pub mod marker {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -36148,6 +38743,7 @@ pub mod marker {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -36163,6 +38759,7 @@ pub mod marker {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -36178,6 +38775,7 @@ pub mod marker {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -36210,6 +38808,7 @@ pub mod minecart {
             v1_21_11: 12u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -36225,6 +38824,7 @@ pub mod minecart {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -36240,6 +38840,7 @@ pub mod minecart {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -36255,6 +38856,7 @@ pub mod minecart {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -36270,6 +38872,7 @@ pub mod minecart {
             v1_21_11: 11u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_STATE,
     };
@@ -36285,6 +38888,7 @@ pub mod minecart {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -36300,6 +38904,7 @@ pub mod minecart {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -36315,6 +38920,7 @@ pub mod minecart {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -36330,6 +38936,7 @@ pub mod minecart {
             v1_21_11: 255u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_STATE,
     };
@@ -36345,6 +38952,7 @@ pub mod minecart {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -36360,6 +38968,7 @@ pub mod minecart {
             v1_21_11: 255u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -36375,6 +38984,7 @@ pub mod minecart {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -36390,6 +39000,7 @@ pub mod minecart {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -36405,6 +39016,7 @@ pub mod minecart {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -36420,6 +39032,7 @@ pub mod minecart {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -36435,6 +39048,7 @@ pub mod minecart {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -36450,6 +39064,7 @@ pub mod minecart {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -36465,6 +39080,7 @@ pub mod minecart {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -36506,6 +39122,7 @@ pub mod minecart_chest {
             v1_21_11: 255u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -36521,6 +39138,7 @@ pub mod minecart_chest {
             v1_21_11: 255u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -36536,6 +39154,7 @@ pub mod minecart_chest {
             v1_21_11: 255u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -36551,6 +39170,7 @@ pub mod minecart_chest {
             v1_21_11: 255u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_STATE,
     };
@@ -36566,6 +39186,7 @@ pub mod minecart_chest {
             v1_21_11: 255u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -36581,6 +39202,7 @@ pub mod minecart_chest {
             v1_21_11: 255u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -36596,6 +39218,7 @@ pub mod minecart_chest {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -36611,6 +39234,7 @@ pub mod minecart_chest {
             v1_21_11: 255u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -36626,6 +39250,7 @@ pub mod minecart_chest {
             v1_21_11: 255u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -36641,6 +39266,7 @@ pub mod minecart_chest {
             v1_21_11: 255u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -36656,6 +39282,7 @@ pub mod minecart_chest {
             v1_21_11: 255u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -36671,6 +39298,7 @@ pub mod minecart_chest {
             v1_21_11: 255u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -36686,6 +39314,7 @@ pub mod minecart_chest {
             v1_21_11: 255u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -36726,6 +39355,7 @@ pub mod minecart_command_block {
             v1_21_11: 255u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -36741,6 +39371,7 @@ pub mod minecart_command_block {
             v1_21_11: 255u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -36756,6 +39387,7 @@ pub mod minecart_command_block {
             v1_21_11: 255u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -36771,6 +39403,7 @@ pub mod minecart_command_block {
             v1_21_11: 255u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::STRING,
     };
@@ -36786,6 +39419,7 @@ pub mod minecart_command_block {
             v1_21_11: 255u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_STATE,
     };
@@ -36801,6 +39435,7 @@ pub mod minecart_command_block {
             v1_21_11: 255u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -36816,6 +39451,7 @@ pub mod minecart_command_block {
             v1_21_11: 255u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -36831,6 +39467,7 @@ pub mod minecart_command_block {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -36846,6 +39483,7 @@ pub mod minecart_command_block {
             v1_21_11: 255u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -36861,6 +39499,7 @@ pub mod minecart_command_block {
             v1_21_11: 255u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::COMPONENT,
     };
@@ -36876,6 +39515,7 @@ pub mod minecart_command_block {
             v1_21_11: 255u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -36891,6 +39531,7 @@ pub mod minecart_command_block {
             v1_21_11: 255u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -36906,6 +39547,7 @@ pub mod minecart_command_block {
             v1_21_11: 255u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -36921,6 +39563,7 @@ pub mod minecart_command_block {
             v1_21_11: 255u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -36936,6 +39579,7 @@ pub mod minecart_command_block {
             v1_21_11: 255u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -36978,6 +39622,7 @@ pub mod minecart_furnace {
             v1_21_11: 255u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -36993,6 +39638,7 @@ pub mod minecart_furnace {
             v1_21_11: 255u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -37008,6 +39654,7 @@ pub mod minecart_furnace {
             v1_21_11: 255u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -37023,6 +39670,7 @@ pub mod minecart_furnace {
             v1_21_11: 255u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_STATE,
     };
@@ -37038,6 +39686,7 @@ pub mod minecart_furnace {
             v1_21_11: 255u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -37053,6 +39702,7 @@ pub mod minecart_furnace {
             v1_21_11: 255u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -37068,6 +39718,7 @@ pub mod minecart_furnace {
             v1_21_11: 255u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -37083,6 +39734,7 @@ pub mod minecart_furnace {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -37098,6 +39750,7 @@ pub mod minecart_furnace {
             v1_21_11: 255u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -37113,6 +39766,7 @@ pub mod minecart_furnace {
             v1_21_11: 255u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -37128,6 +39782,7 @@ pub mod minecart_furnace {
             v1_21_11: 255u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -37143,6 +39798,7 @@ pub mod minecart_furnace {
             v1_21_11: 255u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -37158,6 +39814,7 @@ pub mod minecart_furnace {
             v1_21_11: 255u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -37173,6 +39830,7 @@ pub mod minecart_furnace {
             v1_21_11: 255u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -37214,6 +39872,7 @@ pub mod minecart_hopper {
             v1_21_11: 255u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -37229,6 +39888,7 @@ pub mod minecart_hopper {
             v1_21_11: 255u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -37244,6 +39904,7 @@ pub mod minecart_hopper {
             v1_21_11: 255u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -37259,6 +39920,7 @@ pub mod minecart_hopper {
             v1_21_11: 255u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_STATE,
     };
@@ -37274,6 +39936,7 @@ pub mod minecart_hopper {
             v1_21_11: 255u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -37289,6 +39952,7 @@ pub mod minecart_hopper {
             v1_21_11: 255u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -37304,6 +39968,7 @@ pub mod minecart_hopper {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -37319,6 +39984,7 @@ pub mod minecart_hopper {
             v1_21_11: 255u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -37334,6 +40000,7 @@ pub mod minecart_hopper {
             v1_21_11: 255u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -37349,6 +40016,7 @@ pub mod minecart_hopper {
             v1_21_11: 255u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -37364,6 +40032,7 @@ pub mod minecart_hopper {
             v1_21_11: 255u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -37379,6 +40048,7 @@ pub mod minecart_hopper {
             v1_21_11: 255u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -37394,6 +40064,7 @@ pub mod minecart_hopper {
             v1_21_11: 255u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -37434,6 +40105,7 @@ pub mod minecart_spawner {
             v1_21_11: 255u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -37449,6 +40121,7 @@ pub mod minecart_spawner {
             v1_21_11: 255u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -37464,6 +40137,7 @@ pub mod minecart_spawner {
             v1_21_11: 255u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -37479,6 +40153,7 @@ pub mod minecart_spawner {
             v1_21_11: 255u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_STATE,
     };
@@ -37494,6 +40169,7 @@ pub mod minecart_spawner {
             v1_21_11: 255u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -37509,6 +40185,7 @@ pub mod minecart_spawner {
             v1_21_11: 255u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -37524,6 +40201,7 @@ pub mod minecart_spawner {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -37539,6 +40217,7 @@ pub mod minecart_spawner {
             v1_21_11: 255u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -37554,6 +40233,7 @@ pub mod minecart_spawner {
             v1_21_11: 255u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -37569,6 +40249,7 @@ pub mod minecart_spawner {
             v1_21_11: 255u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -37584,6 +40265,7 @@ pub mod minecart_spawner {
             v1_21_11: 255u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -37599,6 +40281,7 @@ pub mod minecart_spawner {
             v1_21_11: 255u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -37614,6 +40297,7 @@ pub mod minecart_spawner {
             v1_21_11: 255u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -37654,6 +40338,7 @@ pub mod minecart_tnt {
             v1_21_11: 255u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -37669,6 +40354,7 @@ pub mod minecart_tnt {
             v1_21_11: 255u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -37684,6 +40370,7 @@ pub mod minecart_tnt {
             v1_21_11: 255u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -37699,6 +40386,7 @@ pub mod minecart_tnt {
             v1_21_11: 255u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_STATE,
     };
@@ -37714,6 +40402,7 @@ pub mod minecart_tnt {
             v1_21_11: 255u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -37729,6 +40418,7 @@ pub mod minecart_tnt {
             v1_21_11: 255u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -37744,6 +40434,7 @@ pub mod minecart_tnt {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -37759,6 +40450,7 @@ pub mod minecart_tnt {
             v1_21_11: 255u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -37774,6 +40466,7 @@ pub mod minecart_tnt {
             v1_21_11: 255u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -37789,6 +40482,7 @@ pub mod minecart_tnt {
             v1_21_11: 255u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -37804,6 +40498,7 @@ pub mod minecart_tnt {
             v1_21_11: 255u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -37819,6 +40514,7 @@ pub mod minecart_tnt {
             v1_21_11: 255u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -37834,6 +40530,7 @@ pub mod minecart_tnt {
             v1_21_11: 255u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -37874,6 +40571,7 @@ pub mod mob {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -37889,6 +40587,7 @@ pub mod mob {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -37904,6 +40603,7 @@ pub mod mob {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -37919,6 +40619,7 @@ pub mod mob {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -37934,6 +40635,7 @@ pub mod mob {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -37949,6 +40651,7 @@ pub mod mob {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -37964,6 +40667,7 @@ pub mod mob {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -37979,6 +40683,7 @@ pub mod mob {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -37994,6 +40699,7 @@ pub mod mob {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -38009,6 +40715,7 @@ pub mod mob {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -38024,6 +40731,7 @@ pub mod mob {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -38039,6 +40747,7 @@ pub mod mob {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -38054,6 +40763,7 @@ pub mod mob {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -38069,6 +40779,7 @@ pub mod mob {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -38084,6 +40795,7 @@ pub mod mob {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -38099,6 +40811,7 @@ pub mod mob {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -38150,6 +40863,7 @@ pub mod monster {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -38165,6 +40879,7 @@ pub mod monster {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -38180,6 +40895,7 @@ pub mod monster {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -38195,6 +40911,7 @@ pub mod monster {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -38210,6 +40927,7 @@ pub mod monster {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -38225,6 +40943,7 @@ pub mod monster {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -38240,6 +40959,7 @@ pub mod monster {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -38255,6 +40975,7 @@ pub mod monster {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -38270,6 +40991,7 @@ pub mod monster {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -38285,6 +41007,7 @@ pub mod monster {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -38300,6 +41023,7 @@ pub mod monster {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -38315,6 +41039,7 @@ pub mod monster {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -38330,6 +41055,7 @@ pub mod monster {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -38345,6 +41071,7 @@ pub mod monster {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -38360,6 +41087,7 @@ pub mod monster {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -38375,6 +41103,7 @@ pub mod monster {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -38426,6 +41155,7 @@ pub mod mooshroom {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -38441,6 +41171,7 @@ pub mod mooshroom {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -38456,6 +41187,7 @@ pub mod mooshroom {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -38471,6 +41203,7 @@ pub mod mooshroom {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -38486,6 +41219,7 @@ pub mod mooshroom {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -38501,6 +41235,7 @@ pub mod mooshroom {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -38516,6 +41251,7 @@ pub mod mooshroom {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -38531,6 +41267,7 @@ pub mod mooshroom {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -38546,6 +41283,7 @@ pub mod mooshroom {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -38561,6 +41299,7 @@ pub mod mooshroom {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -38576,6 +41315,7 @@ pub mod mooshroom {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -38591,6 +41331,7 @@ pub mod mooshroom {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -38606,6 +41347,7 @@ pub mod mooshroom {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -38621,6 +41363,7 @@ pub mod mooshroom {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -38636,6 +41379,7 @@ pub mod mooshroom {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -38651,6 +41395,7 @@ pub mod mooshroom {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -38666,6 +41411,7 @@ pub mod mooshroom {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -38681,6 +41427,7 @@ pub mod mooshroom {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -38696,6 +41443,7 @@ pub mod mooshroom {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -38711,6 +41459,7 @@ pub mod mooshroom {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::STRING,
     };
@@ -38726,6 +41475,7 @@ pub mod mooshroom {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -38780,6 +41530,7 @@ pub mod mule {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -38795,6 +41546,7 @@ pub mod mule {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -38810,6 +41562,7 @@ pub mod mule {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -38825,6 +41578,7 @@ pub mod mule {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -38840,6 +41594,7 @@ pub mod mule {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -38855,6 +41610,7 @@ pub mod mule {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -38870,6 +41626,7 @@ pub mod mule {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -38885,6 +41642,7 @@ pub mod mule {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -38900,6 +41658,7 @@ pub mod mule {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -38915,6 +41674,7 @@ pub mod mule {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -38930,6 +41690,7 @@ pub mod mule {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -38945,6 +41706,7 @@ pub mod mule {
             v1_21_11: 17u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -38960,6 +41722,7 @@ pub mod mule {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -38975,6 +41738,7 @@ pub mod mule {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -38990,6 +41754,7 @@ pub mod mule {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -39005,6 +41770,7 @@ pub mod mule {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -39020,6 +41786,7 @@ pub mod mule {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -39035,6 +41802,7 @@ pub mod mule {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -39050,6 +41818,7 @@ pub mod mule {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -39065,6 +41834,7 @@ pub mod mule {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -39080,6 +41850,7 @@ pub mod mule {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -39136,6 +41907,7 @@ pub mod mushroom_cow {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -39151,6 +41923,7 @@ pub mod mushroom_cow {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -39166,6 +41939,7 @@ pub mod mushroom_cow {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -39181,6 +41955,7 @@ pub mod mushroom_cow {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -39196,6 +41971,7 @@ pub mod mushroom_cow {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -39211,6 +41987,7 @@ pub mod mushroom_cow {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -39226,6 +42003,7 @@ pub mod mushroom_cow {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -39241,6 +42019,7 @@ pub mod mushroom_cow {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -39256,6 +42035,7 @@ pub mod mushroom_cow {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -39271,6 +42051,7 @@ pub mod mushroom_cow {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -39286,6 +42067,7 @@ pub mod mushroom_cow {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -39301,6 +42083,7 @@ pub mod mushroom_cow {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -39316,6 +42099,7 @@ pub mod mushroom_cow {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -39331,6 +42115,7 @@ pub mod mushroom_cow {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -39346,6 +42131,7 @@ pub mod mushroom_cow {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -39361,6 +42147,7 @@ pub mod mushroom_cow {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -39376,6 +42163,7 @@ pub mod mushroom_cow {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -39391,6 +42179,7 @@ pub mod mushroom_cow {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -39406,6 +42195,7 @@ pub mod mushroom_cow {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -39421,6 +42211,7 @@ pub mod mushroom_cow {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::STRING,
     };
@@ -39436,6 +42227,7 @@ pub mod mushroom_cow {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -39490,6 +42282,7 @@ pub mod nautilus {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -39505,6 +42298,7 @@ pub mod nautilus {
             v1_21_11: 255u8,
             v26_1: 20u8,
             v26_2: 20u8,
+            v26_3: 20u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -39520,6 +42314,7 @@ pub mod nautilus {
             v1_21_11: 19u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -39535,6 +42330,7 @@ pub mod nautilus {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -39550,6 +42346,7 @@ pub mod nautilus {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -39565,6 +42362,7 @@ pub mod nautilus {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -39580,6 +42378,7 @@ pub mod nautilus {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -39595,6 +42394,7 @@ pub mod nautilus {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -39610,6 +42410,7 @@ pub mod nautilus {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -39625,6 +42426,7 @@ pub mod nautilus {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -39640,6 +42442,7 @@ pub mod nautilus {
             v1_21_11: 17u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -39655,6 +42458,7 @@ pub mod nautilus {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -39670,6 +42474,7 @@ pub mod nautilus {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -39685,6 +42490,7 @@ pub mod nautilus {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -39700,6 +42506,7 @@ pub mod nautilus {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -39715,6 +42522,7 @@ pub mod nautilus {
             v1_21_11: 18u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::OPTIONAL_LIVING_ENTITY_REFERENCE,
     };
@@ -39730,6 +42538,7 @@ pub mod nautilus {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -39745,6 +42554,7 @@ pub mod nautilus {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -39760,6 +42570,7 @@ pub mod nautilus {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -39775,6 +42586,7 @@ pub mod nautilus {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -39790,6 +42602,7 @@ pub mod nautilus {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -39805,6 +42618,7 @@ pub mod nautilus {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -39867,6 +42681,7 @@ pub mod oak_boat {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -39882,6 +42697,7 @@ pub mod oak_boat {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -39897,6 +42713,7 @@ pub mod oak_boat {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -39912,6 +42729,7 @@ pub mod oak_boat {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -39927,6 +42745,7 @@ pub mod oak_boat {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -39942,6 +42761,7 @@ pub mod oak_boat {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -39957,6 +42777,7 @@ pub mod oak_boat {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -39972,6 +42793,7 @@ pub mod oak_boat {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -39987,6 +42809,7 @@ pub mod oak_boat {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -40002,6 +42825,7 @@ pub mod oak_boat {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -40017,6 +42841,7 @@ pub mod oak_boat {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -40032,6 +42857,7 @@ pub mod oak_boat {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -40047,6 +42873,7 @@ pub mod oak_boat {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -40062,6 +42889,7 @@ pub mod oak_boat {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -40103,6 +42931,7 @@ pub mod oak_chest_boat {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -40118,6 +42947,7 @@ pub mod oak_chest_boat {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -40133,6 +42963,7 @@ pub mod oak_chest_boat {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -40148,6 +42979,7 @@ pub mod oak_chest_boat {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -40163,6 +42995,7 @@ pub mod oak_chest_boat {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -40178,6 +43011,7 @@ pub mod oak_chest_boat {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -40193,6 +43027,7 @@ pub mod oak_chest_boat {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -40208,6 +43043,7 @@ pub mod oak_chest_boat {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -40223,6 +43059,7 @@ pub mod oak_chest_boat {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -40238,6 +43075,7 @@ pub mod oak_chest_boat {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -40253,6 +43091,7 @@ pub mod oak_chest_boat {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -40268,6 +43107,7 @@ pub mod oak_chest_boat {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -40283,6 +43123,7 @@ pub mod oak_chest_boat {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -40298,6 +43139,7 @@ pub mod oak_chest_boat {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -40339,6 +43181,7 @@ pub mod ocelot {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -40354,6 +43197,7 @@ pub mod ocelot {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -40369,6 +43213,7 @@ pub mod ocelot {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -40384,6 +43229,7 @@ pub mod ocelot {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -40399,6 +43245,7 @@ pub mod ocelot {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -40414,6 +43261,7 @@ pub mod ocelot {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -40429,6 +43277,7 @@ pub mod ocelot {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -40444,6 +43293,7 @@ pub mod ocelot {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -40459,6 +43309,7 @@ pub mod ocelot {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -40474,6 +43325,7 @@ pub mod ocelot {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -40489,6 +43341,7 @@ pub mod ocelot {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -40504,6 +43357,7 @@ pub mod ocelot {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -40519,6 +43373,7 @@ pub mod ocelot {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -40534,6 +43389,7 @@ pub mod ocelot {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -40549,6 +43405,7 @@ pub mod ocelot {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -40564,6 +43421,7 @@ pub mod ocelot {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -40579,6 +43437,7 @@ pub mod ocelot {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -40594,6 +43453,7 @@ pub mod ocelot {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -40609,6 +43469,7 @@ pub mod ocelot {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -40624,6 +43485,7 @@ pub mod ocelot {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -40678,6 +43540,7 @@ pub mod ominous_item_spawner {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -40693,6 +43556,7 @@ pub mod ominous_item_spawner {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -40708,6 +43572,7 @@ pub mod ominous_item_spawner {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -40723,6 +43588,7 @@ pub mod ominous_item_spawner {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -40738,6 +43604,7 @@ pub mod ominous_item_spawner {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -40753,6 +43620,7 @@ pub mod ominous_item_spawner {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -40768,6 +43636,7 @@ pub mod ominous_item_spawner {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -40783,6 +43652,7 @@ pub mod ominous_item_spawner {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -40798,6 +43668,7 @@ pub mod ominous_item_spawner {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -40832,6 +43703,7 @@ pub mod painting {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -40847,6 +43719,7 @@ pub mod painting {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -40862,6 +43735,7 @@ pub mod painting {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -40877,6 +43751,7 @@ pub mod painting {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::DIRECTION,
     };
@@ -40892,6 +43767,7 @@ pub mod painting {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -40907,6 +43783,7 @@ pub mod painting {
             v1_21_11: 255u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::PAINTING_VARIANT,
     };
@@ -40922,6 +43799,7 @@ pub mod painting {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -40937,6 +43815,7 @@ pub mod painting {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -40952,6 +43831,7 @@ pub mod painting {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -40967,6 +43847,7 @@ pub mod painting {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -40982,6 +43863,7 @@ pub mod painting {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::DIRECTION,
     };
@@ -40997,6 +43879,7 @@ pub mod painting {
             v1_21_11: 9u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::PAINTING_VARIANT,
     };
@@ -41033,6 +43916,7 @@ pub mod pale_oak_boat {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -41048,6 +43932,7 @@ pub mod pale_oak_boat {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -41063,6 +43948,7 @@ pub mod pale_oak_boat {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -41078,6 +43964,7 @@ pub mod pale_oak_boat {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -41093,6 +43980,7 @@ pub mod pale_oak_boat {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -41108,6 +43996,7 @@ pub mod pale_oak_boat {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -41123,6 +44012,7 @@ pub mod pale_oak_boat {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -41138,6 +44028,7 @@ pub mod pale_oak_boat {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -41153,6 +44044,7 @@ pub mod pale_oak_boat {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -41168,6 +44060,7 @@ pub mod pale_oak_boat {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -41183,6 +44076,7 @@ pub mod pale_oak_boat {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -41198,6 +44092,7 @@ pub mod pale_oak_boat {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -41213,6 +44108,7 @@ pub mod pale_oak_boat {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -41228,6 +44124,7 @@ pub mod pale_oak_boat {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -41269,6 +44166,7 @@ pub mod pale_oak_chest_boat {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -41284,6 +44182,7 @@ pub mod pale_oak_chest_boat {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -41299,6 +44198,7 @@ pub mod pale_oak_chest_boat {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -41314,6 +44214,7 @@ pub mod pale_oak_chest_boat {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -41329,6 +44230,7 @@ pub mod pale_oak_chest_boat {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -41344,6 +44246,7 @@ pub mod pale_oak_chest_boat {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -41359,6 +44262,7 @@ pub mod pale_oak_chest_boat {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -41374,6 +44278,7 @@ pub mod pale_oak_chest_boat {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -41389,6 +44294,7 @@ pub mod pale_oak_chest_boat {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -41404,6 +44310,7 @@ pub mod pale_oak_chest_boat {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -41419,6 +44326,7 @@ pub mod pale_oak_chest_boat {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -41434,6 +44342,7 @@ pub mod pale_oak_chest_boat {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -41449,6 +44358,7 @@ pub mod pale_oak_chest_boat {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -41464,6 +44374,7 @@ pub mod pale_oak_chest_boat {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -41505,6 +44416,7 @@ pub mod panda {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -41520,6 +44432,7 @@ pub mod panda {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -41535,6 +44448,7 @@ pub mod panda {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -41550,6 +44464,7 @@ pub mod panda {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -41565,6 +44480,7 @@ pub mod panda {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -41580,6 +44496,7 @@ pub mod panda {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -41595,6 +44512,7 @@ pub mod panda {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -41610,6 +44528,7 @@ pub mod panda {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -41625,6 +44544,7 @@ pub mod panda {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -41640,6 +44560,7 @@ pub mod panda {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -41655,6 +44576,7 @@ pub mod panda {
             v1_21_11: 255u8,
             v26_1: 23u8,
             v26_2: 23u8,
+            v26_3: 23u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -41670,6 +44592,7 @@ pub mod panda {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -41685,6 +44608,7 @@ pub mod panda {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -41700,6 +44624,7 @@ pub mod panda {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -41715,6 +44640,7 @@ pub mod panda {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -41730,6 +44656,7 @@ pub mod panda {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -41745,6 +44672,7 @@ pub mod panda {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -41760,6 +44688,7 @@ pub mod panda {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -41775,6 +44704,7 @@ pub mod panda {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -41790,6 +44720,7 @@ pub mod panda {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -41805,6 +44736,7 @@ pub mod panda {
             v1_21_11: 19u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -41820,6 +44752,7 @@ pub mod panda {
             v1_21_11: 255u8,
             v26_1: 20u8,
             v26_2: 20u8,
+            v26_3: 20u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -41835,6 +44768,7 @@ pub mod panda {
             v1_21_11: 21u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -41850,6 +44784,7 @@ pub mod panda {
             v1_21_11: 255u8,
             v26_1: 22u8,
             v26_2: 22u8,
+            v26_3: 22u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -41865,6 +44800,7 @@ pub mod panda {
             v1_21_11: 20u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -41880,6 +44816,7 @@ pub mod panda {
             v1_21_11: 255u8,
             v26_1: 21u8,
             v26_2: 21u8,
+            v26_3: 21u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -41895,6 +44832,7 @@ pub mod panda {
             v1_21_11: 22u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -41910,6 +44848,7 @@ pub mod panda {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -41925,6 +44864,7 @@ pub mod panda {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -41940,6 +44880,7 @@ pub mod panda {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -41997,6 +44938,7 @@ pub mod parched {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -42012,6 +44954,7 @@ pub mod parched {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -42027,6 +44970,7 @@ pub mod parched {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -42042,6 +44986,7 @@ pub mod parched {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -42057,6 +45002,7 @@ pub mod parched {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -42072,6 +45018,7 @@ pub mod parched {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -42087,6 +45034,7 @@ pub mod parched {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -42102,6 +45050,7 @@ pub mod parched {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -42117,6 +45066,7 @@ pub mod parched {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -42132,6 +45082,7 @@ pub mod parched {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -42147,6 +45098,7 @@ pub mod parched {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -42162,6 +45114,7 @@ pub mod parched {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -42177,6 +45130,7 @@ pub mod parched {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -42192,6 +45146,7 @@ pub mod parched {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -42207,6 +45162,7 @@ pub mod parched {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -42222,6 +45178,7 @@ pub mod parched {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -42273,6 +45230,7 @@ pub mod parrot {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -42288,6 +45246,7 @@ pub mod parrot {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -42303,6 +45262,7 @@ pub mod parrot {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -42318,6 +45278,7 @@ pub mod parrot {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -42333,6 +45294,7 @@ pub mod parrot {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -42348,6 +45310,7 @@ pub mod parrot {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -42363,6 +45326,7 @@ pub mod parrot {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -42378,6 +45342,7 @@ pub mod parrot {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -42393,6 +45358,7 @@ pub mod parrot {
             v1_21_11: 17u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -42408,6 +45374,7 @@ pub mod parrot {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -42423,6 +45390,7 @@ pub mod parrot {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -42438,6 +45406,7 @@ pub mod parrot {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -42453,6 +45422,7 @@ pub mod parrot {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -42468,6 +45438,7 @@ pub mod parrot {
             v1_21_11: 18u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::OPTIONAL_LIVING_ENTITY_REFERENCE,
     };
@@ -42483,6 +45454,7 @@ pub mod parrot {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -42498,6 +45470,7 @@ pub mod parrot {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -42513,6 +45486,7 @@ pub mod parrot {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -42528,6 +45502,7 @@ pub mod parrot {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -42543,6 +45518,7 @@ pub mod parrot {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -42558,6 +45534,7 @@ pub mod parrot {
             v1_21_11: 255u8,
             v26_1: 20u8,
             v26_2: 20u8,
+            v26_3: 20u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -42573,6 +45550,7 @@ pub mod parrot {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -42588,6 +45566,7 @@ pub mod parrot {
             v1_21_11: 19u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -42652,6 +45631,7 @@ pub mod pathfinder_mob {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -42667,6 +45647,7 @@ pub mod pathfinder_mob {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -42682,6 +45663,7 @@ pub mod pathfinder_mob {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -42697,6 +45679,7 @@ pub mod pathfinder_mob {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -42712,6 +45695,7 @@ pub mod pathfinder_mob {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -42727,6 +45711,7 @@ pub mod pathfinder_mob {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -42742,6 +45727,7 @@ pub mod pathfinder_mob {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -42757,6 +45743,7 @@ pub mod pathfinder_mob {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -42772,6 +45759,7 @@ pub mod pathfinder_mob {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -42787,6 +45775,7 @@ pub mod pathfinder_mob {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -42802,6 +45791,7 @@ pub mod pathfinder_mob {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -42817,6 +45807,7 @@ pub mod pathfinder_mob {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -42832,6 +45823,7 @@ pub mod pathfinder_mob {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -42847,6 +45839,7 @@ pub mod pathfinder_mob {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -42862,6 +45855,7 @@ pub mod pathfinder_mob {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -42877,6 +45871,7 @@ pub mod pathfinder_mob {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -42928,6 +45923,7 @@ pub mod patrolling_monster {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -42943,6 +45939,7 @@ pub mod patrolling_monster {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -42958,6 +45955,7 @@ pub mod patrolling_monster {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -42973,6 +45971,7 @@ pub mod patrolling_monster {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -42988,6 +45987,7 @@ pub mod patrolling_monster {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -43003,6 +46003,7 @@ pub mod patrolling_monster {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -43018,6 +46019,7 @@ pub mod patrolling_monster {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -43033,6 +46035,7 @@ pub mod patrolling_monster {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -43048,6 +46051,7 @@ pub mod patrolling_monster {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -43063,6 +46067,7 @@ pub mod patrolling_monster {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -43078,6 +46083,7 @@ pub mod patrolling_monster {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -43093,6 +46099,7 @@ pub mod patrolling_monster {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -43108,6 +46115,7 @@ pub mod patrolling_monster {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -43123,6 +46131,7 @@ pub mod patrolling_monster {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -43138,6 +46147,7 @@ pub mod patrolling_monster {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -43153,6 +46163,7 @@ pub mod patrolling_monster {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -43204,6 +46215,7 @@ pub mod phantom {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -43219,6 +46231,7 @@ pub mod phantom {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -43234,6 +46247,7 @@ pub mod phantom {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -43249,6 +46263,7 @@ pub mod phantom {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -43264,6 +46279,7 @@ pub mod phantom {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -43279,6 +46295,7 @@ pub mod phantom {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -43294,6 +46311,7 @@ pub mod phantom {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -43309,6 +46327,7 @@ pub mod phantom {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -43324,6 +46343,7 @@ pub mod phantom {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -43339,6 +46359,7 @@ pub mod phantom {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -43354,6 +46375,7 @@ pub mod phantom {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -43369,6 +46391,7 @@ pub mod phantom {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -43384,6 +46407,7 @@ pub mod phantom {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -43399,6 +46423,7 @@ pub mod phantom {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -43414,6 +46439,7 @@ pub mod phantom {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -43429,6 +46455,7 @@ pub mod phantom {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -43444,6 +46471,7 @@ pub mod phantom {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -43459,6 +46487,7 @@ pub mod phantom {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -43510,6 +46539,7 @@ pub mod pig {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -43525,6 +46555,7 @@ pub mod pig {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -43540,6 +46571,7 @@ pub mod pig {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -43555,6 +46587,7 @@ pub mod pig {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -43570,6 +46603,7 @@ pub mod pig {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -43585,6 +46619,7 @@ pub mod pig {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -43600,6 +46635,7 @@ pub mod pig {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -43615,6 +46651,7 @@ pub mod pig {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -43630,6 +46667,7 @@ pub mod pig {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -43645,6 +46683,7 @@ pub mod pig {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -43660,6 +46699,7 @@ pub mod pig {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -43675,6 +46715,7 @@ pub mod pig {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -43690,6 +46731,7 @@ pub mod pig {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -43705,6 +46747,7 @@ pub mod pig {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -43720,6 +46763,7 @@ pub mod pig {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -43735,6 +46779,7 @@ pub mod pig {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -43750,6 +46795,7 @@ pub mod pig {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -43765,6 +46811,7 @@ pub mod pig {
             v1_21_11: 255u8,
             v26_1: 20u8,
             v26_2: 20u8,
+            v26_3: 20u8,
         },
         r#type: MetaDataType::PIG_SOUND_VARIANT,
     };
@@ -43780,6 +46827,7 @@ pub mod pig {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -43795,6 +46843,7 @@ pub mod pig {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -43810,6 +46859,7 @@ pub mod pig {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::PIG_VARIANT,
     };
@@ -43825,6 +46875,7 @@ pub mod pig {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -43840,6 +46891,7 @@ pub mod pig {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -43855,6 +46907,7 @@ pub mod pig {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::PIG_VARIANT,
     };
@@ -43914,6 +46967,7 @@ pub mod piglin {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -43929,6 +46983,7 @@ pub mod piglin {
             v1_21_11: 19u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -43944,6 +46999,7 @@ pub mod piglin {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -43959,6 +47015,7 @@ pub mod piglin {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -43974,6 +47031,7 @@ pub mod piglin {
             v1_21_11: 17u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -43989,6 +47047,7 @@ pub mod piglin {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -44004,6 +47063,7 @@ pub mod piglin {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -44019,6 +47079,7 @@ pub mod piglin {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -44034,6 +47095,7 @@ pub mod piglin {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -44049,6 +47111,7 @@ pub mod piglin {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -44064,6 +47127,7 @@ pub mod piglin {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -44079,6 +47143,7 @@ pub mod piglin {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -44094,6 +47159,7 @@ pub mod piglin {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -44109,6 +47175,7 @@ pub mod piglin {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -44124,6 +47191,7 @@ pub mod piglin {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -44139,6 +47207,7 @@ pub mod piglin {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -44154,6 +47223,7 @@ pub mod piglin {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -44169,6 +47239,7 @@ pub mod piglin {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -44184,6 +47255,7 @@ pub mod piglin {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -44199,6 +47271,7 @@ pub mod piglin {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -44214,6 +47287,7 @@ pub mod piglin {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -44229,6 +47303,7 @@ pub mod piglin {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -44244,6 +47319,7 @@ pub mod piglin {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -44300,6 +47376,7 @@ pub mod piglin_brute {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -44315,6 +47392,7 @@ pub mod piglin_brute {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -44330,6 +47408,7 @@ pub mod piglin_brute {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -44345,6 +47424,7 @@ pub mod piglin_brute {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -44360,6 +47440,7 @@ pub mod piglin_brute {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -44375,6 +47456,7 @@ pub mod piglin_brute {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -44390,6 +47472,7 @@ pub mod piglin_brute {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -44405,6 +47488,7 @@ pub mod piglin_brute {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -44420,6 +47504,7 @@ pub mod piglin_brute {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -44435,6 +47520,7 @@ pub mod piglin_brute {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -44450,6 +47536,7 @@ pub mod piglin_brute {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -44465,6 +47552,7 @@ pub mod piglin_brute {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -44480,6 +47568,7 @@ pub mod piglin_brute {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -44495,6 +47584,7 @@ pub mod piglin_brute {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -44510,6 +47600,7 @@ pub mod piglin_brute {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -44525,6 +47616,7 @@ pub mod piglin_brute {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -44540,6 +47632,7 @@ pub mod piglin_brute {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -44555,6 +47648,7 @@ pub mod piglin_brute {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -44606,6 +47700,7 @@ pub mod pillager {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -44621,6 +47716,7 @@ pub mod pillager {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -44636,6 +47732,7 @@ pub mod pillager {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -44651,6 +47748,7 @@ pub mod pillager {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -44666,6 +47764,7 @@ pub mod pillager {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -44681,6 +47780,7 @@ pub mod pillager {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -44696,6 +47796,7 @@ pub mod pillager {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -44711,6 +47812,7 @@ pub mod pillager {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -44726,6 +47828,7 @@ pub mod pillager {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -44741,6 +47844,7 @@ pub mod pillager {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -44756,6 +47860,7 @@ pub mod pillager {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -44771,6 +47876,7 @@ pub mod pillager {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -44786,6 +47892,7 @@ pub mod pillager {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -44801,6 +47908,7 @@ pub mod pillager {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -44816,6 +47924,7 @@ pub mod pillager {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -44831,6 +47940,7 @@ pub mod pillager {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -44846,6 +47956,7 @@ pub mod pillager {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -44861,6 +47972,7 @@ pub mod pillager {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -44876,6 +47988,7 @@ pub mod pillager {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -44891,6 +48004,7 @@ pub mod pillager {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -44942,6 +48056,7 @@ pub mod player {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -44957,6 +48072,7 @@ pub mod player {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -44972,6 +48088,7 @@ pub mod player {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -44987,6 +48104,7 @@ pub mod player {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -45002,6 +48120,7 @@ pub mod player {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -45017,6 +48136,7 @@ pub mod player {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -45032,6 +48152,7 @@ pub mod player {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -45047,6 +48168,7 @@ pub mod player {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -45062,6 +48184,7 @@ pub mod player {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -45077,6 +48200,7 @@ pub mod player {
             v1_21_11: 17u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -45092,6 +48216,7 @@ pub mod player {
             v1_21_11: 255u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::HUMANOID_ARM,
     };
@@ -45107,6 +48232,7 @@ pub mod player {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -45122,6 +48248,7 @@ pub mod player {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -45137,6 +48264,7 @@ pub mod player {
             v1_21_11: 18u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -45152,6 +48280,7 @@ pub mod player {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -45167,6 +48296,7 @@ pub mod player {
             v1_21_11: 19u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::OPTIONAL_UNSIGNED_INT,
     };
@@ -45182,6 +48312,7 @@ pub mod player {
             v1_21_11: 20u8,
             v26_1: 20u8,
             v26_2: 20u8,
+            v26_3: 20u8,
         },
         r#type: MetaDataType::OPTIONAL_UNSIGNED_INT,
     };
@@ -45197,6 +48328,7 @@ pub mod player {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -45212,6 +48344,7 @@ pub mod player {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -45227,6 +48360,7 @@ pub mod player {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -45242,6 +48376,7 @@ pub mod player {
             v1_21_11: 15u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ARM,
     };
@@ -45257,6 +48392,7 @@ pub mod player {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -45272,6 +48408,7 @@ pub mod player {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -45333,6 +48470,7 @@ pub mod polar_bear {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -45348,6 +48486,7 @@ pub mod polar_bear {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -45363,6 +48502,7 @@ pub mod polar_bear {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -45378,6 +48518,7 @@ pub mod polar_bear {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -45393,6 +48534,7 @@ pub mod polar_bear {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -45408,6 +48550,7 @@ pub mod polar_bear {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -45423,6 +48566,7 @@ pub mod polar_bear {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -45438,6 +48582,7 @@ pub mod polar_bear {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -45453,6 +48598,7 @@ pub mod polar_bear {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -45468,6 +48614,7 @@ pub mod polar_bear {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -45483,6 +48630,7 @@ pub mod polar_bear {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -45498,6 +48646,7 @@ pub mod polar_bear {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -45513,6 +48662,7 @@ pub mod polar_bear {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -45528,6 +48678,7 @@ pub mod polar_bear {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -45543,6 +48694,7 @@ pub mod polar_bear {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -45558,6 +48710,7 @@ pub mod polar_bear {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -45573,6 +48726,7 @@ pub mod polar_bear {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -45588,6 +48742,7 @@ pub mod polar_bear {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -45603,6 +48758,7 @@ pub mod polar_bear {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -45618,6 +48774,7 @@ pub mod polar_bear {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -45661,6 +48818,506 @@ pub mod polar_bear {
     pub const FROZEN_TICKS: TrackedData = DATA_TICKS_FROZEN;
     pub const SLEEPING_POS: TrackedData = SLEEPING_POS_ID;
 }
+pub mod poplar_boat {
+    use super::*;
+    pub const DATA_AIR_SUPPLY_ID: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 1u8,
+        },
+        r#type: MetaDataType::INT,
+    };
+    pub const DATA_CUSTOM_NAME: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 2u8,
+        },
+        r#type: MetaDataType::OPTIONAL_COMPONENT,
+    };
+    pub const DATA_CUSTOM_NAME_VISIBLE: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 3u8,
+        },
+        r#type: MetaDataType::BOOLEAN,
+    };
+    pub const DATA_ID_BUBBLE_TIME: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 13u8,
+        },
+        r#type: MetaDataType::INT,
+    };
+    pub const DATA_ID_DAMAGE: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 10u8,
+        },
+        r#type: MetaDataType::FLOAT,
+    };
+    pub const DATA_ID_HURT: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 8u8,
+        },
+        r#type: MetaDataType::INT,
+    };
+    pub const DATA_ID_HURTDIR: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 9u8,
+        },
+        r#type: MetaDataType::INT,
+    };
+    pub const DATA_ID_PADDLE_LEFT: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 11u8,
+        },
+        r#type: MetaDataType::BOOLEAN,
+    };
+    pub const DATA_ID_PADDLE_RIGHT: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 12u8,
+        },
+        r#type: MetaDataType::BOOLEAN,
+    };
+    pub const DATA_NO_GRAVITY: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 5u8,
+        },
+        r#type: MetaDataType::BOOLEAN,
+    };
+    pub const DATA_POSE: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 6u8,
+        },
+        r#type: MetaDataType::POSE,
+    };
+    pub const DATA_SHARED_FLAGS_ID: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 0u8,
+        },
+        r#type: MetaDataType::BYTE,
+    };
+    pub const DATA_SILENT: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 4u8,
+        },
+        r#type: MetaDataType::BOOLEAN,
+    };
+    pub const DATA_TICKS_FROZEN: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 7u8,
+        },
+        r#type: MetaDataType::INT,
+    };
+    pub const AIR_SUPPLY_ID: TrackedData = DATA_AIR_SUPPLY_ID;
+    pub const DATA_AIR_SUPPLY: TrackedData = DATA_AIR_SUPPLY_ID;
+    pub const AIR_SUPPLY: TrackedData = DATA_AIR_SUPPLY_ID;
+    pub const AIR: TrackedData = DATA_AIR_SUPPLY_ID;
+    pub const CUSTOM_NAME: TrackedData = DATA_CUSTOM_NAME;
+    pub const CUSTOM_NAME_VISIBLE: TrackedData = DATA_CUSTOM_NAME_VISIBLE;
+    pub const ID_BUBBLE_TIME: TrackedData = DATA_ID_BUBBLE_TIME;
+    pub const ID_DAMAGE: TrackedData = DATA_ID_DAMAGE;
+    pub const DAMAGE_WOBBLE_STRENGTH: TrackedData = DATA_ID_DAMAGE;
+    pub const ID_HURT: TrackedData = DATA_ID_HURT;
+    pub const DAMAGE_WOBBLE_TICKS: TrackedData = DATA_ID_HURT;
+    pub const ID_HURTDIR: TrackedData = DATA_ID_HURTDIR;
+    pub const DAMAGE_WOBBLE_SIDE: TrackedData = DATA_ID_HURTDIR;
+    pub const ID_PADDLE_LEFT: TrackedData = DATA_ID_PADDLE_LEFT;
+    pub const ID_PADDLE_RIGHT: TrackedData = DATA_ID_PADDLE_RIGHT;
+    pub const NO_GRAVITY: TrackedData = DATA_NO_GRAVITY;
+    pub const POSE: TrackedData = DATA_POSE;
+    pub const SHARED_FLAGS_ID: TrackedData = DATA_SHARED_FLAGS_ID;
+    pub const DATA_SHARED_FLAGS: TrackedData = DATA_SHARED_FLAGS_ID;
+    pub const SHARED_FLAGS: TrackedData = DATA_SHARED_FLAGS_ID;
+    pub const SILENT: TrackedData = DATA_SILENT;
+    pub const TICKS_FROZEN: TrackedData = DATA_TICKS_FROZEN;
+    pub const FROZEN_TICKS: TrackedData = DATA_TICKS_FROZEN;
+}
+pub mod poplar_chest_boat {
+    use super::*;
+    pub const DATA_AIR_SUPPLY_ID: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 1u8,
+        },
+        r#type: MetaDataType::INT,
+    };
+    pub const DATA_CUSTOM_NAME: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 2u8,
+        },
+        r#type: MetaDataType::OPTIONAL_COMPONENT,
+    };
+    pub const DATA_CUSTOM_NAME_VISIBLE: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 3u8,
+        },
+        r#type: MetaDataType::BOOLEAN,
+    };
+    pub const DATA_ID_BUBBLE_TIME: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 13u8,
+        },
+        r#type: MetaDataType::INT,
+    };
+    pub const DATA_ID_DAMAGE: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 10u8,
+        },
+        r#type: MetaDataType::FLOAT,
+    };
+    pub const DATA_ID_HURT: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 8u8,
+        },
+        r#type: MetaDataType::INT,
+    };
+    pub const DATA_ID_HURTDIR: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 9u8,
+        },
+        r#type: MetaDataType::INT,
+    };
+    pub const DATA_ID_PADDLE_LEFT: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 11u8,
+        },
+        r#type: MetaDataType::BOOLEAN,
+    };
+    pub const DATA_ID_PADDLE_RIGHT: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 12u8,
+        },
+        r#type: MetaDataType::BOOLEAN,
+    };
+    pub const DATA_NO_GRAVITY: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 5u8,
+        },
+        r#type: MetaDataType::BOOLEAN,
+    };
+    pub const DATA_POSE: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 6u8,
+        },
+        r#type: MetaDataType::POSE,
+    };
+    pub const DATA_SHARED_FLAGS_ID: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 0u8,
+        },
+        r#type: MetaDataType::BYTE,
+    };
+    pub const DATA_SILENT: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 4u8,
+        },
+        r#type: MetaDataType::BOOLEAN,
+    };
+    pub const DATA_TICKS_FROZEN: TrackedData = TrackedData {
+        id: TrackedId {
+            v1_21: 255u8,
+            v1_21_2: 255u8,
+            v1_21_4: 255u8,
+            v1_21_5: 255u8,
+            v1_21_6: 255u8,
+            v1_21_7: 255u8,
+            v1_21_9: 255u8,
+            v1_21_11: 255u8,
+            v26_1: 255u8,
+            v26_2: 255u8,
+            v26_3: 7u8,
+        },
+        r#type: MetaDataType::INT,
+    };
+    pub const AIR_SUPPLY_ID: TrackedData = DATA_AIR_SUPPLY_ID;
+    pub const DATA_AIR_SUPPLY: TrackedData = DATA_AIR_SUPPLY_ID;
+    pub const AIR_SUPPLY: TrackedData = DATA_AIR_SUPPLY_ID;
+    pub const AIR: TrackedData = DATA_AIR_SUPPLY_ID;
+    pub const CUSTOM_NAME: TrackedData = DATA_CUSTOM_NAME;
+    pub const CUSTOM_NAME_VISIBLE: TrackedData = DATA_CUSTOM_NAME_VISIBLE;
+    pub const ID_BUBBLE_TIME: TrackedData = DATA_ID_BUBBLE_TIME;
+    pub const ID_DAMAGE: TrackedData = DATA_ID_DAMAGE;
+    pub const DAMAGE_WOBBLE_STRENGTH: TrackedData = DATA_ID_DAMAGE;
+    pub const ID_HURT: TrackedData = DATA_ID_HURT;
+    pub const DAMAGE_WOBBLE_TICKS: TrackedData = DATA_ID_HURT;
+    pub const ID_HURTDIR: TrackedData = DATA_ID_HURTDIR;
+    pub const DAMAGE_WOBBLE_SIDE: TrackedData = DATA_ID_HURTDIR;
+    pub const ID_PADDLE_LEFT: TrackedData = DATA_ID_PADDLE_LEFT;
+    pub const ID_PADDLE_RIGHT: TrackedData = DATA_ID_PADDLE_RIGHT;
+    pub const NO_GRAVITY: TrackedData = DATA_NO_GRAVITY;
+    pub const POSE: TrackedData = DATA_POSE;
+    pub const SHARED_FLAGS_ID: TrackedData = DATA_SHARED_FLAGS_ID;
+    pub const DATA_SHARED_FLAGS: TrackedData = DATA_SHARED_FLAGS_ID;
+    pub const SHARED_FLAGS: TrackedData = DATA_SHARED_FLAGS_ID;
+    pub const SILENT: TrackedData = DATA_SILENT;
+    pub const TICKS_FROZEN: TrackedData = DATA_TICKS_FROZEN;
+    pub const FROZEN_TICKS: TrackedData = DATA_TICKS_FROZEN;
+}
 pub mod potion {
     use super::*;
     pub const DATA_AIR_SUPPLY_ID: TrackedData = TrackedData {
@@ -45675,6 +49332,7 @@ pub mod potion {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -45690,6 +49348,7 @@ pub mod potion {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -45705,6 +49364,7 @@ pub mod potion {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -45720,6 +49380,7 @@ pub mod potion {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -45735,6 +49396,7 @@ pub mod potion {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -45750,6 +49412,7 @@ pub mod potion {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -45765,6 +49428,7 @@ pub mod potion {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -45780,6 +49444,7 @@ pub mod potion {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -45795,6 +49460,7 @@ pub mod potion {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -45829,6 +49495,7 @@ pub mod primed_tnt {
             v1_21_11: 255u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -45844,6 +49511,7 @@ pub mod primed_tnt {
             v1_21_11: 255u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::BLOCK_STATE,
     };
@@ -45859,6 +49527,7 @@ pub mod primed_tnt {
             v1_21_11: 255u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -45874,6 +49543,7 @@ pub mod primed_tnt {
             v1_21_11: 255u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -45889,6 +49559,7 @@ pub mod primed_tnt {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -45904,6 +49575,7 @@ pub mod primed_tnt {
             v1_21_11: 255u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -45919,6 +49591,7 @@ pub mod primed_tnt {
             v1_21_11: 255u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -45934,6 +49607,7 @@ pub mod primed_tnt {
             v1_21_11: 255u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -45949,6 +49623,7 @@ pub mod primed_tnt {
             v1_21_11: 255u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -45964,6 +49639,7 @@ pub mod primed_tnt {
             v1_21_11: 255u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -46002,6 +49678,7 @@ pub mod projectile {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -46017,6 +49694,7 @@ pub mod projectile {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -46032,6 +49710,7 @@ pub mod projectile {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -46047,6 +49726,7 @@ pub mod projectile {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -46062,6 +49742,7 @@ pub mod projectile {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -46077,6 +49758,7 @@ pub mod projectile {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -46092,6 +49774,7 @@ pub mod projectile {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -46107,6 +49790,7 @@ pub mod projectile {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -46139,6 +49823,7 @@ pub mod pufferfish {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -46154,6 +49839,7 @@ pub mod pufferfish {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -46169,6 +49855,7 @@ pub mod pufferfish {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -46184,6 +49871,7 @@ pub mod pufferfish {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -46199,6 +49887,7 @@ pub mod pufferfish {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -46214,6 +49903,7 @@ pub mod pufferfish {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -46229,6 +49919,7 @@ pub mod pufferfish {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -46244,6 +49935,7 @@ pub mod pufferfish {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -46259,6 +49951,7 @@ pub mod pufferfish {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -46274,6 +49967,7 @@ pub mod pufferfish {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -46289,6 +49983,7 @@ pub mod pufferfish {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -46304,6 +49999,7 @@ pub mod pufferfish {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -46319,6 +50015,7 @@ pub mod pufferfish {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -46334,6 +50031,7 @@ pub mod pufferfish {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -46349,6 +50047,7 @@ pub mod pufferfish {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -46364,6 +50063,7 @@ pub mod pufferfish {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -46379,6 +50079,7 @@ pub mod pufferfish {
             v1_21_11: 17u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -46394,6 +50095,7 @@ pub mod pufferfish {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -46445,6 +50147,7 @@ pub mod rabbit {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -46460,6 +50163,7 @@ pub mod rabbit {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -46475,6 +50179,7 @@ pub mod rabbit {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -46490,6 +50195,7 @@ pub mod rabbit {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -46505,6 +50211,7 @@ pub mod rabbit {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -46520,6 +50227,7 @@ pub mod rabbit {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -46535,6 +50243,7 @@ pub mod rabbit {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -46550,6 +50259,7 @@ pub mod rabbit {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -46565,6 +50275,7 @@ pub mod rabbit {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -46580,6 +50291,7 @@ pub mod rabbit {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -46595,6 +50307,7 @@ pub mod rabbit {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -46610,6 +50323,7 @@ pub mod rabbit {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -46625,6 +50339,7 @@ pub mod rabbit {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -46640,6 +50355,7 @@ pub mod rabbit {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -46655,6 +50371,7 @@ pub mod rabbit {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -46670,6 +50387,7 @@ pub mod rabbit {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -46685,6 +50403,7 @@ pub mod rabbit {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -46700,6 +50419,7 @@ pub mod rabbit {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -46715,6 +50435,7 @@ pub mod rabbit {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -46730,6 +50451,7 @@ pub mod rabbit {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -46745,6 +50467,7 @@ pub mod rabbit {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -46802,6 +50525,7 @@ pub mod raft {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -46817,6 +50541,7 @@ pub mod raft {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -46832,6 +50557,7 @@ pub mod raft {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -46847,6 +50573,7 @@ pub mod raft {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -46862,6 +50589,7 @@ pub mod raft {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -46877,6 +50605,7 @@ pub mod raft {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -46892,6 +50621,7 @@ pub mod raft {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -46907,6 +50637,7 @@ pub mod raft {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -46922,6 +50653,7 @@ pub mod raft {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -46937,6 +50669,7 @@ pub mod raft {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -46952,6 +50685,7 @@ pub mod raft {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -46967,6 +50701,7 @@ pub mod raft {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -46982,6 +50717,7 @@ pub mod raft {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -46997,6 +50733,7 @@ pub mod raft {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -47038,6 +50775,7 @@ pub mod raider {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -47053,6 +50791,7 @@ pub mod raider {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -47068,6 +50807,7 @@ pub mod raider {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -47083,6 +50823,7 @@ pub mod raider {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -47098,6 +50839,7 @@ pub mod raider {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -47113,6 +50855,7 @@ pub mod raider {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -47128,6 +50871,7 @@ pub mod raider {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -47143,6 +50887,7 @@ pub mod raider {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -47158,6 +50903,7 @@ pub mod raider {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -47173,6 +50919,7 @@ pub mod raider {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -47188,6 +50935,7 @@ pub mod raider {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -47203,6 +50951,7 @@ pub mod raider {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -47218,6 +50967,7 @@ pub mod raider {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -47233,6 +50983,7 @@ pub mod raider {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -47248,6 +50999,7 @@ pub mod raider {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -47263,6 +51015,7 @@ pub mod raider {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -47278,6 +51031,7 @@ pub mod raider {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -47293,6 +51047,7 @@ pub mod raider {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -47344,6 +51099,7 @@ pub mod ravager {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -47359,6 +51115,7 @@ pub mod ravager {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -47374,6 +51131,7 @@ pub mod ravager {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -47389,6 +51147,7 @@ pub mod ravager {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -47404,6 +51163,7 @@ pub mod ravager {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -47419,6 +51179,7 @@ pub mod ravager {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -47434,6 +51195,7 @@ pub mod ravager {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -47449,6 +51211,7 @@ pub mod ravager {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -47464,6 +51227,7 @@ pub mod ravager {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -47479,6 +51243,7 @@ pub mod ravager {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -47494,6 +51259,7 @@ pub mod ravager {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -47509,6 +51275,7 @@ pub mod ravager {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -47524,6 +51291,7 @@ pub mod ravager {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -47539,6 +51307,7 @@ pub mod ravager {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -47554,6 +51323,7 @@ pub mod ravager {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -47569,6 +51339,7 @@ pub mod ravager {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -47584,6 +51355,7 @@ pub mod ravager {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -47599,6 +51371,7 @@ pub mod ravager {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -47650,6 +51423,7 @@ pub mod salmon {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -47665,6 +51439,7 @@ pub mod salmon {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -47680,6 +51455,7 @@ pub mod salmon {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -47695,6 +51471,7 @@ pub mod salmon {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -47710,6 +51487,7 @@ pub mod salmon {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -47725,6 +51503,7 @@ pub mod salmon {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -47740,6 +51519,7 @@ pub mod salmon {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -47755,6 +51535,7 @@ pub mod salmon {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -47770,6 +51551,7 @@ pub mod salmon {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -47785,6 +51567,7 @@ pub mod salmon {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -47800,6 +51583,7 @@ pub mod salmon {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -47815,6 +51599,7 @@ pub mod salmon {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -47830,6 +51615,7 @@ pub mod salmon {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -47845,6 +51631,7 @@ pub mod salmon {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -47860,6 +51647,7 @@ pub mod salmon {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -47875,6 +51663,7 @@ pub mod salmon {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -47890,6 +51679,7 @@ pub mod salmon {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -47905,6 +51695,7 @@ pub mod salmon {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -47920,6 +51711,7 @@ pub mod salmon {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -47972,6 +51764,7 @@ pub mod sheep {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -47987,6 +51780,7 @@ pub mod sheep {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -48002,6 +51796,7 @@ pub mod sheep {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -48017,6 +51812,7 @@ pub mod sheep {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -48032,6 +51828,7 @@ pub mod sheep {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -48047,6 +51844,7 @@ pub mod sheep {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -48062,6 +51860,7 @@ pub mod sheep {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -48077,6 +51876,7 @@ pub mod sheep {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -48092,6 +51892,7 @@ pub mod sheep {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -48107,6 +51908,7 @@ pub mod sheep {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -48122,6 +51924,7 @@ pub mod sheep {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -48137,6 +51940,7 @@ pub mod sheep {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -48152,6 +51956,7 @@ pub mod sheep {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -48167,6 +51972,7 @@ pub mod sheep {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -48182,6 +51988,7 @@ pub mod sheep {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -48197,6 +52004,7 @@ pub mod sheep {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -48212,6 +52020,7 @@ pub mod sheep {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -48227,6 +52036,7 @@ pub mod sheep {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -48242,6 +52052,7 @@ pub mod sheep {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -48257,6 +52068,7 @@ pub mod sheep {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -48314,6 +52126,7 @@ pub mod shoulder_riding_entity {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -48329,6 +52142,7 @@ pub mod shoulder_riding_entity {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -48344,6 +52158,7 @@ pub mod shoulder_riding_entity {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -48359,6 +52174,7 @@ pub mod shoulder_riding_entity {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -48374,6 +52190,7 @@ pub mod shoulder_riding_entity {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -48389,6 +52206,7 @@ pub mod shoulder_riding_entity {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -48404,6 +52222,7 @@ pub mod shoulder_riding_entity {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -48419,6 +52238,7 @@ pub mod shoulder_riding_entity {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -48434,6 +52254,7 @@ pub mod shoulder_riding_entity {
             v1_21_11: 17u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -48449,6 +52270,7 @@ pub mod shoulder_riding_entity {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -48464,6 +52286,7 @@ pub mod shoulder_riding_entity {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -48479,6 +52302,7 @@ pub mod shoulder_riding_entity {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -48494,6 +52318,7 @@ pub mod shoulder_riding_entity {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -48509,6 +52334,7 @@ pub mod shoulder_riding_entity {
             v1_21_11: 18u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::OPTIONAL_LIVING_ENTITY_REFERENCE,
     };
@@ -48524,6 +52350,7 @@ pub mod shoulder_riding_entity {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -48539,6 +52366,7 @@ pub mod shoulder_riding_entity {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -48554,6 +52382,7 @@ pub mod shoulder_riding_entity {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -48569,6 +52398,7 @@ pub mod shoulder_riding_entity {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -48584,6 +52414,7 @@ pub mod shoulder_riding_entity {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -48599,6 +52430,7 @@ pub mod shoulder_riding_entity {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -48661,6 +52493,7 @@ pub mod shulker {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::DIRECTION,
     };
@@ -48676,6 +52509,7 @@ pub mod shulker {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -48691,6 +52525,7 @@ pub mod shulker {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -48706,6 +52541,7 @@ pub mod shulker {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -48721,6 +52557,7 @@ pub mod shulker {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::DIRECTION,
     };
@@ -48736,6 +52573,7 @@ pub mod shulker {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -48751,6 +52589,7 @@ pub mod shulker {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -48766,6 +52605,7 @@ pub mod shulker {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -48781,6 +52621,7 @@ pub mod shulker {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -48796,6 +52637,7 @@ pub mod shulker {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -48811,6 +52653,7 @@ pub mod shulker {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -48826,6 +52669,7 @@ pub mod shulker {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -48841,6 +52685,7 @@ pub mod shulker {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -48856,6 +52701,7 @@ pub mod shulker {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -48871,6 +52717,7 @@ pub mod shulker {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -48886,6 +52733,7 @@ pub mod shulker {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -48901,6 +52749,7 @@ pub mod shulker {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -48916,6 +52765,7 @@ pub mod shulker {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -48931,6 +52781,7 @@ pub mod shulker {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -48946,6 +52797,7 @@ pub mod shulker {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -48961,6 +52813,7 @@ pub mod shulker {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -48976,6 +52829,7 @@ pub mod shulker {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -49035,6 +52889,7 @@ pub mod shulker_bullet {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -49050,6 +52905,7 @@ pub mod shulker_bullet {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -49065,6 +52921,7 @@ pub mod shulker_bullet {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -49080,6 +52937,7 @@ pub mod shulker_bullet {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -49095,6 +52953,7 @@ pub mod shulker_bullet {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -49110,6 +52969,7 @@ pub mod shulker_bullet {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -49125,6 +52985,7 @@ pub mod shulker_bullet {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -49140,6 +53001,7 @@ pub mod shulker_bullet {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -49172,6 +53034,7 @@ pub mod silverfish {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -49187,6 +53050,7 @@ pub mod silverfish {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -49202,6 +53066,7 @@ pub mod silverfish {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -49217,6 +53082,7 @@ pub mod silverfish {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -49232,6 +53098,7 @@ pub mod silverfish {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -49247,6 +53114,7 @@ pub mod silverfish {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -49262,6 +53130,7 @@ pub mod silverfish {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -49277,6 +53146,7 @@ pub mod silverfish {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -49292,6 +53162,7 @@ pub mod silverfish {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -49307,6 +53178,7 @@ pub mod silverfish {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -49322,6 +53194,7 @@ pub mod silverfish {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -49337,6 +53210,7 @@ pub mod silverfish {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -49352,6 +53226,7 @@ pub mod silverfish {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -49367,6 +53242,7 @@ pub mod silverfish {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -49382,6 +53258,7 @@ pub mod silverfish {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -49397,6 +53274,7 @@ pub mod silverfish {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -49448,6 +53326,7 @@ pub mod skeleton {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -49463,6 +53342,7 @@ pub mod skeleton {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -49478,6 +53358,7 @@ pub mod skeleton {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -49493,6 +53374,7 @@ pub mod skeleton {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -49508,6 +53390,7 @@ pub mod skeleton {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -49523,6 +53406,7 @@ pub mod skeleton {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -49538,6 +53422,7 @@ pub mod skeleton {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -49553,6 +53438,7 @@ pub mod skeleton {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -49568,6 +53454,7 @@ pub mod skeleton {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -49583,6 +53470,7 @@ pub mod skeleton {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -49598,6 +53486,7 @@ pub mod skeleton {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -49613,6 +53502,7 @@ pub mod skeleton {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -49628,6 +53518,7 @@ pub mod skeleton {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -49643,6 +53534,7 @@ pub mod skeleton {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -49658,6 +53550,7 @@ pub mod skeleton {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -49673,6 +53566,7 @@ pub mod skeleton {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -49688,6 +53582,7 @@ pub mod skeleton {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -49703,6 +53598,7 @@ pub mod skeleton {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -49757,6 +53653,7 @@ pub mod skeleton_horse {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -49772,6 +53669,7 @@ pub mod skeleton_horse {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -49787,6 +53685,7 @@ pub mod skeleton_horse {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -49802,6 +53701,7 @@ pub mod skeleton_horse {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -49817,6 +53717,7 @@ pub mod skeleton_horse {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -49832,6 +53733,7 @@ pub mod skeleton_horse {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -49847,6 +53749,7 @@ pub mod skeleton_horse {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -49862,6 +53765,7 @@ pub mod skeleton_horse {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -49877,6 +53781,7 @@ pub mod skeleton_horse {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -49892,6 +53797,7 @@ pub mod skeleton_horse {
             v1_21_11: 17u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -49907,6 +53813,7 @@ pub mod skeleton_horse {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -49922,6 +53829,7 @@ pub mod skeleton_horse {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -49937,6 +53845,7 @@ pub mod skeleton_horse {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -49952,6 +53861,7 @@ pub mod skeleton_horse {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -49967,6 +53877,7 @@ pub mod skeleton_horse {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -49982,6 +53893,7 @@ pub mod skeleton_horse {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -49997,6 +53909,7 @@ pub mod skeleton_horse {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -50012,6 +53925,7 @@ pub mod skeleton_horse {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -50027,6 +53941,7 @@ pub mod skeleton_horse {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -50082,6 +53997,7 @@ pub mod slime {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -50097,6 +54013,7 @@ pub mod slime {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -50112,6 +54029,7 @@ pub mod slime {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -50127,6 +54045,7 @@ pub mod slime {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -50142,6 +54061,7 @@ pub mod slime {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -50157,6 +54077,7 @@ pub mod slime {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -50172,6 +54093,7 @@ pub mod slime {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -50187,6 +54109,7 @@ pub mod slime {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -50202,6 +54125,7 @@ pub mod slime {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -50217,6 +54141,7 @@ pub mod slime {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -50232,6 +54157,7 @@ pub mod slime {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -50247,6 +54173,7 @@ pub mod slime {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -50262,6 +54189,7 @@ pub mod slime {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -50277,6 +54205,7 @@ pub mod slime {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -50292,6 +54221,7 @@ pub mod slime {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -50307,6 +54237,7 @@ pub mod slime {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -50322,6 +54253,7 @@ pub mod slime {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -50337,6 +54269,7 @@ pub mod slime {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -50352,6 +54285,7 @@ pub mod slime {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -50367,6 +54301,7 @@ pub mod slime {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -50421,6 +54356,7 @@ pub mod small_fireball {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -50436,6 +54372,7 @@ pub mod small_fireball {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -50451,6 +54388,7 @@ pub mod small_fireball {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -50466,6 +54404,7 @@ pub mod small_fireball {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -50481,6 +54420,7 @@ pub mod small_fireball {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -50496,6 +54436,7 @@ pub mod small_fireball {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -50511,6 +54452,7 @@ pub mod small_fireball {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -50526,6 +54468,7 @@ pub mod small_fireball {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -50541,6 +54484,7 @@ pub mod small_fireball {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -50556,6 +54500,7 @@ pub mod small_fireball {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -50591,6 +54536,7 @@ pub mod sniffer {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -50606,6 +54552,7 @@ pub mod sniffer {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -50621,6 +54568,7 @@ pub mod sniffer {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -50636,6 +54584,7 @@ pub mod sniffer {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -50651,6 +54600,7 @@ pub mod sniffer {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -50666,6 +54616,7 @@ pub mod sniffer {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -50681,6 +54632,7 @@ pub mod sniffer {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -50696,6 +54648,7 @@ pub mod sniffer {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -50711,6 +54664,7 @@ pub mod sniffer {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -50726,6 +54680,7 @@ pub mod sniffer {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -50741,6 +54696,7 @@ pub mod sniffer {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -50756,6 +54712,7 @@ pub mod sniffer {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -50771,6 +54728,7 @@ pub mod sniffer {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -50786,6 +54744,7 @@ pub mod sniffer {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -50801,6 +54760,7 @@ pub mod sniffer {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -50816,6 +54776,7 @@ pub mod sniffer {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -50831,6 +54792,7 @@ pub mod sniffer {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::SNIFFER_STATE,
     };
@@ -50846,6 +54808,7 @@ pub mod sniffer {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -50861,6 +54824,7 @@ pub mod sniffer {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -50876,6 +54840,7 @@ pub mod sniffer {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -50891,6 +54856,7 @@ pub mod sniffer {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -50906,6 +54872,7 @@ pub mod sniffer {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::SNIFFER_STATE,
     };
@@ -50961,6 +54928,7 @@ pub mod snow_golem {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -50976,6 +54944,7 @@ pub mod snow_golem {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -50991,6 +54960,7 @@ pub mod snow_golem {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -51006,6 +54976,7 @@ pub mod snow_golem {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -51021,6 +54992,7 @@ pub mod snow_golem {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -51036,6 +55008,7 @@ pub mod snow_golem {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -51051,6 +55024,7 @@ pub mod snow_golem {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -51066,6 +55040,7 @@ pub mod snow_golem {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -51081,6 +55056,7 @@ pub mod snow_golem {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -51096,6 +55072,7 @@ pub mod snow_golem {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -51111,6 +55088,7 @@ pub mod snow_golem {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -51126,6 +55104,7 @@ pub mod snow_golem {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -51141,6 +55120,7 @@ pub mod snow_golem {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -51156,6 +55136,7 @@ pub mod snow_golem {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -51171,6 +55152,7 @@ pub mod snow_golem {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -51186,6 +55168,7 @@ pub mod snow_golem {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -51201,6 +55184,7 @@ pub mod snow_golem {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -51216,6 +55200,7 @@ pub mod snow_golem {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -51270,6 +55255,7 @@ pub mod snowball {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -51285,6 +55271,7 @@ pub mod snowball {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -51300,6 +55287,7 @@ pub mod snowball {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -51315,6 +55303,7 @@ pub mod snowball {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -51330,6 +55319,7 @@ pub mod snowball {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -51345,6 +55335,7 @@ pub mod snowball {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -51360,6 +55351,7 @@ pub mod snowball {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -51375,6 +55367,7 @@ pub mod snowball {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -51390,6 +55383,7 @@ pub mod snowball {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -51405,6 +55399,7 @@ pub mod snowball {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -51440,6 +55435,7 @@ pub mod spawner_minecart {
             v1_21_11: 12u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -51455,6 +55451,7 @@ pub mod spawner_minecart {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -51470,6 +55467,7 @@ pub mod spawner_minecart {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -51485,6 +55483,7 @@ pub mod spawner_minecart {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -51500,6 +55499,7 @@ pub mod spawner_minecart {
             v1_21_11: 11u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_STATE,
     };
@@ -51515,6 +55515,7 @@ pub mod spawner_minecart {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -51530,6 +55531,7 @@ pub mod spawner_minecart {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -51545,6 +55547,7 @@ pub mod spawner_minecart {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -51560,6 +55563,7 @@ pub mod spawner_minecart {
             v1_21_11: 255u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_STATE,
     };
@@ -51575,6 +55579,7 @@ pub mod spawner_minecart {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -51590,6 +55595,7 @@ pub mod spawner_minecart {
             v1_21_11: 255u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -51605,6 +55611,7 @@ pub mod spawner_minecart {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -51620,6 +55627,7 @@ pub mod spawner_minecart {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -51635,6 +55643,7 @@ pub mod spawner_minecart {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -51650,6 +55659,7 @@ pub mod spawner_minecart {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -51665,6 +55675,7 @@ pub mod spawner_minecart {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -51680,6 +55691,7 @@ pub mod spawner_minecart {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -51695,6 +55707,7 @@ pub mod spawner_minecart {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -51736,6 +55749,7 @@ pub mod spectral_arrow {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -51751,6 +55765,7 @@ pub mod spectral_arrow {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -51766,6 +55781,7 @@ pub mod spectral_arrow {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -51781,6 +55797,7 @@ pub mod spectral_arrow {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -51796,6 +55813,7 @@ pub mod spectral_arrow {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -51811,6 +55829,7 @@ pub mod spectral_arrow {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -51826,6 +55845,7 @@ pub mod spectral_arrow {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -51841,6 +55861,7 @@ pub mod spectral_arrow {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -51856,6 +55877,7 @@ pub mod spectral_arrow {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -51871,6 +55893,7 @@ pub mod spectral_arrow {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -51886,6 +55909,7 @@ pub mod spectral_arrow {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -51901,6 +55925,7 @@ pub mod spectral_arrow {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -51933,6 +55958,7 @@ pub mod spellcaster_illager {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -51948,6 +55974,7 @@ pub mod spellcaster_illager {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -51963,6 +55990,7 @@ pub mod spellcaster_illager {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -51978,6 +56006,7 @@ pub mod spellcaster_illager {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -51993,6 +56022,7 @@ pub mod spellcaster_illager {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -52008,6 +56038,7 @@ pub mod spellcaster_illager {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -52023,6 +56054,7 @@ pub mod spellcaster_illager {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -52038,6 +56070,7 @@ pub mod spellcaster_illager {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -52053,6 +56086,7 @@ pub mod spellcaster_illager {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -52068,6 +56102,7 @@ pub mod spellcaster_illager {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -52083,6 +56118,7 @@ pub mod spellcaster_illager {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -52098,6 +56134,7 @@ pub mod spellcaster_illager {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -52113,6 +56150,7 @@ pub mod spellcaster_illager {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -52128,6 +56166,7 @@ pub mod spellcaster_illager {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -52143,6 +56182,7 @@ pub mod spellcaster_illager {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -52158,6 +56198,7 @@ pub mod spellcaster_illager {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -52173,6 +56214,7 @@ pub mod spellcaster_illager {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -52188,6 +56230,7 @@ pub mod spellcaster_illager {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -52203,6 +56246,7 @@ pub mod spellcaster_illager {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -52218,6 +56262,7 @@ pub mod spellcaster_illager {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -52272,6 +56317,7 @@ pub mod spider {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -52287,6 +56333,7 @@ pub mod spider {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -52302,6 +56349,7 @@ pub mod spider {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -52317,6 +56365,7 @@ pub mod spider {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -52332,6 +56381,7 @@ pub mod spider {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -52347,6 +56397,7 @@ pub mod spider {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -52362,6 +56413,7 @@ pub mod spider {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -52377,6 +56429,7 @@ pub mod spider {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -52392,6 +56445,7 @@ pub mod spider {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -52407,6 +56461,7 @@ pub mod spider {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -52422,6 +56477,7 @@ pub mod spider {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -52437,6 +56493,7 @@ pub mod spider {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -52452,6 +56509,7 @@ pub mod spider {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -52467,6 +56525,7 @@ pub mod spider {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -52482,6 +56541,7 @@ pub mod spider {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -52497,6 +56557,7 @@ pub mod spider {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -52512,6 +56573,7 @@ pub mod spider {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -52567,6 +56629,7 @@ pub mod splash_potion {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -52582,6 +56645,7 @@ pub mod splash_potion {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -52597,6 +56661,7 @@ pub mod splash_potion {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -52612,6 +56677,7 @@ pub mod splash_potion {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -52627,6 +56693,7 @@ pub mod splash_potion {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -52642,6 +56709,7 @@ pub mod splash_potion {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -52657,6 +56725,7 @@ pub mod splash_potion {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -52672,6 +56741,7 @@ pub mod splash_potion {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -52687,6 +56757,7 @@ pub mod splash_potion {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -52702,6 +56773,7 @@ pub mod splash_potion {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -52737,6 +56809,7 @@ pub mod spruce_boat {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -52752,6 +56825,7 @@ pub mod spruce_boat {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -52767,6 +56841,7 @@ pub mod spruce_boat {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -52782,6 +56857,7 @@ pub mod spruce_boat {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -52797,6 +56873,7 @@ pub mod spruce_boat {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -52812,6 +56889,7 @@ pub mod spruce_boat {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -52827,6 +56905,7 @@ pub mod spruce_boat {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -52842,6 +56921,7 @@ pub mod spruce_boat {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -52857,6 +56937,7 @@ pub mod spruce_boat {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -52872,6 +56953,7 @@ pub mod spruce_boat {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -52887,6 +56969,7 @@ pub mod spruce_boat {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -52902,6 +56985,7 @@ pub mod spruce_boat {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -52917,6 +57001,7 @@ pub mod spruce_boat {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -52932,6 +57017,7 @@ pub mod spruce_boat {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -52973,6 +57059,7 @@ pub mod spruce_chest_boat {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -52988,6 +57075,7 @@ pub mod spruce_chest_boat {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -53003,6 +57091,7 @@ pub mod spruce_chest_boat {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -53018,6 +57107,7 @@ pub mod spruce_chest_boat {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -53033,6 +57123,7 @@ pub mod spruce_chest_boat {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -53048,6 +57139,7 @@ pub mod spruce_chest_boat {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -53063,6 +57155,7 @@ pub mod spruce_chest_boat {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -53078,6 +57171,7 @@ pub mod spruce_chest_boat {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -53093,6 +57187,7 @@ pub mod spruce_chest_boat {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -53108,6 +57203,7 @@ pub mod spruce_chest_boat {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -53123,6 +57219,7 @@ pub mod spruce_chest_boat {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -53138,6 +57235,7 @@ pub mod spruce_chest_boat {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -53153,6 +57251,7 @@ pub mod spruce_chest_boat {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -53168,6 +57267,7 @@ pub mod spruce_chest_boat {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -53209,6 +57309,7 @@ pub mod squid {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -53224,6 +57325,7 @@ pub mod squid {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -53239,6 +57341,7 @@ pub mod squid {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -53254,6 +57357,7 @@ pub mod squid {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -53269,6 +57373,7 @@ pub mod squid {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -53284,6 +57389,7 @@ pub mod squid {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -53299,6 +57405,7 @@ pub mod squid {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -53314,6 +57421,7 @@ pub mod squid {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -53329,6 +57437,7 @@ pub mod squid {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -53344,6 +57453,7 @@ pub mod squid {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -53359,6 +57469,7 @@ pub mod squid {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -53374,6 +57485,7 @@ pub mod squid {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -53389,6 +57501,7 @@ pub mod squid {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -53404,6 +57517,7 @@ pub mod squid {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -53419,6 +57533,7 @@ pub mod squid {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -53434,6 +57549,7 @@ pub mod squid {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -53449,6 +57565,7 @@ pub mod squid {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -53464,6 +57581,7 @@ pub mod squid {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -53518,6 +57636,7 @@ pub mod stray {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -53533,6 +57652,7 @@ pub mod stray {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -53548,6 +57668,7 @@ pub mod stray {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -53563,6 +57684,7 @@ pub mod stray {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -53578,6 +57700,7 @@ pub mod stray {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -53593,6 +57716,7 @@ pub mod stray {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -53608,6 +57732,7 @@ pub mod stray {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -53623,6 +57748,7 @@ pub mod stray {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -53638,6 +57764,7 @@ pub mod stray {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -53653,6 +57780,7 @@ pub mod stray {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -53668,6 +57796,7 @@ pub mod stray {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -53683,6 +57812,7 @@ pub mod stray {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -53698,6 +57828,7 @@ pub mod stray {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -53713,6 +57844,7 @@ pub mod stray {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -53728,6 +57860,7 @@ pub mod stray {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -53743,6 +57876,7 @@ pub mod stray {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -53794,6 +57928,7 @@ pub mod strider {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -53809,6 +57944,7 @@ pub mod strider {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -53824,6 +57960,7 @@ pub mod strider {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -53839,6 +57976,7 @@ pub mod strider {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -53854,6 +57992,7 @@ pub mod strider {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -53869,6 +58008,7 @@ pub mod strider {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -53884,6 +58024,7 @@ pub mod strider {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -53899,6 +58040,7 @@ pub mod strider {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -53914,6 +58056,7 @@ pub mod strider {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -53929,6 +58072,7 @@ pub mod strider {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -53944,6 +58088,7 @@ pub mod strider {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -53959,6 +58104,7 @@ pub mod strider {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -53974,6 +58120,7 @@ pub mod strider {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -53989,6 +58136,7 @@ pub mod strider {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -54004,6 +58152,7 @@ pub mod strider {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -54019,6 +58168,7 @@ pub mod strider {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -54034,6 +58184,7 @@ pub mod strider {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -54049,6 +58200,7 @@ pub mod strider {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -54064,6 +58216,7 @@ pub mod strider {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -54079,6 +58232,7 @@ pub mod strider {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -54094,6 +58248,7 @@ pub mod strider {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -54109,6 +58264,7 @@ pub mod strider {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -54124,6 +58280,7 @@ pub mod strider {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -54179,6 +58336,7 @@ pub mod sulfur_cube {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -54194,6 +58352,7 @@ pub mod sulfur_cube {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -54209,6 +58368,7 @@ pub mod sulfur_cube {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -54224,6 +58384,7 @@ pub mod sulfur_cube {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -54239,6 +58400,7 @@ pub mod sulfur_cube {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -54254,6 +58416,7 @@ pub mod sulfur_cube {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -54269,6 +58432,7 @@ pub mod sulfur_cube {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -54284,6 +58448,7 @@ pub mod sulfur_cube {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -54299,6 +58464,7 @@ pub mod sulfur_cube {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -54314,6 +58480,7 @@ pub mod sulfur_cube {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -54329,6 +58496,7 @@ pub mod sulfur_cube {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -54344,6 +58512,7 @@ pub mod sulfur_cube {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -54359,6 +58528,7 @@ pub mod sulfur_cube {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -54374,6 +58544,7 @@ pub mod sulfur_cube {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -54389,6 +58560,7 @@ pub mod sulfur_cube {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -54404,6 +58576,7 @@ pub mod sulfur_cube {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -54419,6 +58592,7 @@ pub mod sulfur_cube {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -54434,6 +58608,7 @@ pub mod sulfur_cube {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 20u8,
+            v26_3: 20u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -54449,6 +58624,7 @@ pub mod sulfur_cube {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -54464,6 +58640,7 @@ pub mod sulfur_cube {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -54479,6 +58656,7 @@ pub mod sulfur_cube {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -54533,6 +58711,7 @@ pub mod tadpole {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -54548,6 +58727,7 @@ pub mod tadpole {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -54563,6 +58743,7 @@ pub mod tadpole {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -54578,6 +58759,7 @@ pub mod tadpole {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -54593,6 +58775,7 @@ pub mod tadpole {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -54608,6 +58791,7 @@ pub mod tadpole {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -54623,6 +58807,7 @@ pub mod tadpole {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -54638,6 +58823,7 @@ pub mod tadpole {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -54653,6 +58839,7 @@ pub mod tadpole {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -54668,6 +58855,7 @@ pub mod tadpole {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -54683,6 +58871,7 @@ pub mod tadpole {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -54698,6 +58887,7 @@ pub mod tadpole {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -54713,6 +58903,7 @@ pub mod tadpole {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -54728,6 +58919,7 @@ pub mod tadpole {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -54743,6 +58935,7 @@ pub mod tadpole {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -54758,6 +58951,7 @@ pub mod tadpole {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -54773,6 +58967,7 @@ pub mod tadpole {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -54788,6 +58983,7 @@ pub mod tadpole {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -54839,6 +59035,7 @@ pub mod tamable_animal {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -54854,6 +59051,7 @@ pub mod tamable_animal {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -54869,6 +59067,7 @@ pub mod tamable_animal {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -54884,6 +59083,7 @@ pub mod tamable_animal {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -54899,6 +59099,7 @@ pub mod tamable_animal {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -54914,6 +59115,7 @@ pub mod tamable_animal {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -54929,6 +59131,7 @@ pub mod tamable_animal {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -54944,6 +59147,7 @@ pub mod tamable_animal {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -54959,6 +59163,7 @@ pub mod tamable_animal {
             v1_21_11: 17u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -54974,6 +59179,7 @@ pub mod tamable_animal {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -54989,6 +59195,7 @@ pub mod tamable_animal {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -55004,6 +59211,7 @@ pub mod tamable_animal {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -55019,6 +59227,7 @@ pub mod tamable_animal {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -55034,6 +59243,7 @@ pub mod tamable_animal {
             v1_21_11: 18u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::OPTIONAL_LIVING_ENTITY_REFERENCE,
     };
@@ -55049,6 +59259,7 @@ pub mod tamable_animal {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -55064,6 +59275,7 @@ pub mod tamable_animal {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -55079,6 +59291,7 @@ pub mod tamable_animal {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -55094,6 +59307,7 @@ pub mod tamable_animal {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -55109,6 +59323,7 @@ pub mod tamable_animal {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -55124,6 +59339,7 @@ pub mod tamable_animal {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -55186,6 +59402,7 @@ pub mod text_display {
             v1_21_11: 25u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -55201,6 +59418,7 @@ pub mod text_display {
             v1_21_11: 15u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -55216,6 +59434,7 @@ pub mod text_display {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -55231,6 +59450,7 @@ pub mod text_display {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -55246,6 +59466,7 @@ pub mod text_display {
             v1_21_11: 255u8,
             v26_1: 25u8,
             v26_2: 25u8,
+            v26_3: 25u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -55261,6 +59482,7 @@ pub mod text_display {
             v1_21_11: 255u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -55276,6 +59498,7 @@ pub mod text_display {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -55291,6 +59514,7 @@ pub mod text_display {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -55306,6 +59530,7 @@ pub mod text_display {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -55321,6 +59546,7 @@ pub mod text_display {
             v1_21_11: 255u8,
             v26_1: 22u8,
             v26_2: 22u8,
+            v26_3: 22u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -55336,6 +59562,7 @@ pub mod text_display {
             v1_21_11: 255u8,
             v26_1: 21u8,
             v26_2: 21u8,
+            v26_3: 21u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -55351,6 +59578,7 @@ pub mod text_display {
             v1_21_11: 255u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::QUATERNION,
     };
@@ -55366,6 +59594,7 @@ pub mod text_display {
             v1_21_11: 255u8,
             v26_1: 24u8,
             v26_2: 24u8,
+            v26_3: 24u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -55381,6 +59610,7 @@ pub mod text_display {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -55396,6 +59626,7 @@ pub mod text_display {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -55411,6 +59642,7 @@ pub mod text_display {
             v1_21_11: 255u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -55426,6 +59658,7 @@ pub mod text_display {
             v1_21_11: 255u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::QUATERNION,
     };
@@ -55441,6 +59674,7 @@ pub mod text_display {
             v1_21_11: 255u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::VECTOR3,
     };
@@ -55456,6 +59690,7 @@ pub mod text_display {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -55471,6 +59706,7 @@ pub mod text_display {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -55486,6 +59722,7 @@ pub mod text_display {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -55501,6 +59738,7 @@ pub mod text_display {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -55516,6 +59754,7 @@ pub mod text_display {
             v1_21_11: 255u8,
             v26_1: 27u8,
             v26_2: 27u8,
+            v26_3: 27u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -55531,6 +59770,7 @@ pub mod text_display {
             v1_21_11: 255u8,
             v26_1: 23u8,
             v26_2: 23u8,
+            v26_3: 23u8,
         },
         r#type: MetaDataType::COMPONENT,
     };
@@ -55546,6 +59786,7 @@ pub mod text_display {
             v1_21_11: 255u8,
             v26_1: 26u8,
             v26_2: 26u8,
+            v26_3: 26u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -55561,6 +59802,7 @@ pub mod text_display {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -55576,6 +59818,7 @@ pub mod text_display {
             v1_21_11: 255u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -55591,6 +59834,7 @@ pub mod text_display {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -55606,6 +59850,7 @@ pub mod text_display {
             v1_21_11: 255u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::VECTOR3,
     };
@@ -55621,6 +59866,7 @@ pub mod text_display {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -55636,6 +59882,7 @@ pub mod text_display {
             v1_21_11: 255u8,
             v26_1: 20u8,
             v26_2: 20u8,
+            v26_3: 20u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -55651,6 +59898,7 @@ pub mod text_display {
             v1_21_11: 22u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -55666,6 +59914,7 @@ pub mod text_display {
             v1_21_11: 21u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -55681,6 +59930,7 @@ pub mod text_display {
             v1_21_11: 9u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -55696,6 +59946,7 @@ pub mod text_display {
             v1_21_11: 13u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::QUATERNION,
     };
@@ -55711,6 +59962,7 @@ pub mod text_display {
             v1_21_11: 24u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -55726,6 +59978,7 @@ pub mod text_display {
             v1_21_11: 14u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::QUATERNION,
     };
@@ -55741,6 +59994,7 @@ pub mod text_display {
             v1_21_11: 12u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::VECTOR3,
     };
@@ -55756,6 +60010,7 @@ pub mod text_display {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -55771,6 +60026,7 @@ pub mod text_display {
             v1_21_11: 19u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -55786,6 +60042,7 @@ pub mod text_display {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -55801,6 +60058,7 @@ pub mod text_display {
             v1_21_11: 10u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -55816,6 +60074,7 @@ pub mod text_display {
             v1_21_11: 23u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::COMPONENT,
     };
@@ -55831,6 +60090,7 @@ pub mod text_display {
             v1_21_11: 27u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -55846,6 +60106,7 @@ pub mod text_display {
             v1_21_11: 26u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -55861,6 +60122,7 @@ pub mod text_display {
             v1_21_11: 11u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::VECTOR3,
     };
@@ -55876,6 +60138,7 @@ pub mod text_display {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -55891,6 +60154,7 @@ pub mod text_display {
             v1_21_11: 20u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -55978,6 +60242,7 @@ pub mod throwable_item_projectile {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -55993,6 +60258,7 @@ pub mod throwable_item_projectile {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -56008,6 +60274,7 @@ pub mod throwable_item_projectile {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -56023,6 +60290,7 @@ pub mod throwable_item_projectile {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -56038,6 +60306,7 @@ pub mod throwable_item_projectile {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -56053,6 +60322,7 @@ pub mod throwable_item_projectile {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -56068,6 +60338,7 @@ pub mod throwable_item_projectile {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -56083,6 +60354,7 @@ pub mod throwable_item_projectile {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -56098,6 +60370,7 @@ pub mod throwable_item_projectile {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -56113,6 +60386,7 @@ pub mod throwable_item_projectile {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -56148,6 +60422,7 @@ pub mod throwable_projectile {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -56163,6 +60438,7 @@ pub mod throwable_projectile {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -56178,6 +60454,7 @@ pub mod throwable_projectile {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -56193,6 +60470,7 @@ pub mod throwable_projectile {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -56208,6 +60486,7 @@ pub mod throwable_projectile {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -56223,6 +60502,7 @@ pub mod throwable_projectile {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -56238,6 +60518,7 @@ pub mod throwable_projectile {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -56253,6 +60534,7 @@ pub mod throwable_projectile {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -56285,6 +60567,7 @@ pub mod thrown_egg {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -56300,6 +60583,7 @@ pub mod thrown_egg {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -56315,6 +60599,7 @@ pub mod thrown_egg {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -56330,6 +60615,7 @@ pub mod thrown_egg {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -56345,6 +60631,7 @@ pub mod thrown_egg {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -56360,6 +60647,7 @@ pub mod thrown_egg {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -56375,6 +60663,7 @@ pub mod thrown_egg {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -56390,6 +60679,7 @@ pub mod thrown_egg {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -56405,6 +60695,7 @@ pub mod thrown_egg {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -56420,6 +60711,7 @@ pub mod thrown_egg {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -56455,6 +60747,7 @@ pub mod thrown_enderpearl {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -56470,6 +60763,7 @@ pub mod thrown_enderpearl {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -56485,6 +60779,7 @@ pub mod thrown_enderpearl {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -56500,6 +60795,7 @@ pub mod thrown_enderpearl {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -56515,6 +60811,7 @@ pub mod thrown_enderpearl {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -56530,6 +60827,7 @@ pub mod thrown_enderpearl {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -56545,6 +60843,7 @@ pub mod thrown_enderpearl {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -56560,6 +60859,7 @@ pub mod thrown_enderpearl {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -56575,6 +60875,7 @@ pub mod thrown_enderpearl {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -56590,6 +60891,7 @@ pub mod thrown_enderpearl {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -56625,6 +60927,7 @@ pub mod thrown_experience_bottle {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -56640,6 +60943,7 @@ pub mod thrown_experience_bottle {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -56655,6 +60959,7 @@ pub mod thrown_experience_bottle {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -56670,6 +60975,7 @@ pub mod thrown_experience_bottle {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -56685,6 +60991,7 @@ pub mod thrown_experience_bottle {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -56700,6 +61007,7 @@ pub mod thrown_experience_bottle {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -56715,6 +61023,7 @@ pub mod thrown_experience_bottle {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -56730,6 +61039,7 @@ pub mod thrown_experience_bottle {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -56745,6 +61055,7 @@ pub mod thrown_experience_bottle {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -56760,6 +61071,7 @@ pub mod thrown_experience_bottle {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -56795,6 +61107,7 @@ pub mod thrown_lingering_potion {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -56810,6 +61123,7 @@ pub mod thrown_lingering_potion {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -56825,6 +61139,7 @@ pub mod thrown_lingering_potion {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -56840,6 +61155,7 @@ pub mod thrown_lingering_potion {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -56855,6 +61171,7 @@ pub mod thrown_lingering_potion {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -56870,6 +61187,7 @@ pub mod thrown_lingering_potion {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -56885,6 +61203,7 @@ pub mod thrown_lingering_potion {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -56900,6 +61219,7 @@ pub mod thrown_lingering_potion {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -56915,6 +61235,7 @@ pub mod thrown_lingering_potion {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -56930,6 +61251,7 @@ pub mod thrown_lingering_potion {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -56965,6 +61287,7 @@ pub mod thrown_splash_potion {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -56980,6 +61303,7 @@ pub mod thrown_splash_potion {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -56995,6 +61319,7 @@ pub mod thrown_splash_potion {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -57010,6 +61335,7 @@ pub mod thrown_splash_potion {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -57025,6 +61351,7 @@ pub mod thrown_splash_potion {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::ITEM_STACK,
     };
@@ -57040,6 +61367,7 @@ pub mod thrown_splash_potion {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -57055,6 +61383,7 @@ pub mod thrown_splash_potion {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -57070,6 +61399,7 @@ pub mod thrown_splash_potion {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -57085,6 +61415,7 @@ pub mod thrown_splash_potion {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -57100,6 +61431,7 @@ pub mod thrown_splash_potion {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -57135,6 +61467,7 @@ pub mod thrown_trident {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -57150,6 +61483,7 @@ pub mod thrown_trident {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -57165,6 +61499,7 @@ pub mod thrown_trident {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -57180,6 +61515,7 @@ pub mod thrown_trident {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -57195,6 +61531,7 @@ pub mod thrown_trident {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -57210,6 +61547,7 @@ pub mod thrown_trident {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -57225,6 +61563,7 @@ pub mod thrown_trident {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -57240,6 +61579,7 @@ pub mod thrown_trident {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -57255,6 +61595,7 @@ pub mod thrown_trident {
             v1_21_11: 12u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -57270,6 +61611,7 @@ pub mod thrown_trident {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -57285,6 +61627,7 @@ pub mod thrown_trident {
             v1_21_11: 255u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -57300,6 +61643,7 @@ pub mod thrown_trident {
             v1_21_11: 255u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -57315,6 +61659,7 @@ pub mod thrown_trident {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -57330,6 +61675,7 @@ pub mod thrown_trident {
             v1_21_11: 11u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -57345,6 +61691,7 @@ pub mod thrown_trident {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -57360,6 +61707,7 @@ pub mod thrown_trident {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -57392,6 +61740,7 @@ pub mod tnt {
             v1_21_11: 9u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BLOCK_STATE,
     };
@@ -57407,6 +61756,7 @@ pub mod tnt {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -57422,6 +61772,7 @@ pub mod tnt {
             v1_21_11: 255u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::BLOCK_STATE,
     };
@@ -57437,6 +61788,7 @@ pub mod tnt {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -57452,6 +61804,7 @@ pub mod tnt {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -57467,6 +61820,7 @@ pub mod tnt {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -57482,6 +61836,7 @@ pub mod tnt {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -57497,6 +61852,7 @@ pub mod tnt {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -57512,6 +61868,7 @@ pub mod tnt {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -57527,6 +61884,7 @@ pub mod tnt {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -57542,6 +61900,7 @@ pub mod tnt {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -57557,6 +61916,7 @@ pub mod tnt {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -57593,6 +61953,7 @@ pub mod tnt_minecart {
             v1_21_11: 12u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -57608,6 +61969,7 @@ pub mod tnt_minecart {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -57623,6 +61985,7 @@ pub mod tnt_minecart {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -57638,6 +62001,7 @@ pub mod tnt_minecart {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -57653,6 +62017,7 @@ pub mod tnt_minecart {
             v1_21_11: 11u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_STATE,
     };
@@ -57668,6 +62033,7 @@ pub mod tnt_minecart {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -57683,6 +62049,7 @@ pub mod tnt_minecart {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -57698,6 +62065,7 @@ pub mod tnt_minecart {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -57713,6 +62081,7 @@ pub mod tnt_minecart {
             v1_21_11: 255u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_STATE,
     };
@@ -57728,6 +62097,7 @@ pub mod tnt_minecart {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -57743,6 +62113,7 @@ pub mod tnt_minecart {
             v1_21_11: 255u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -57758,6 +62129,7 @@ pub mod tnt_minecart {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -57773,6 +62145,7 @@ pub mod tnt_minecart {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -57788,6 +62161,7 @@ pub mod tnt_minecart {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -57803,6 +62177,7 @@ pub mod tnt_minecart {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -57818,6 +62193,7 @@ pub mod tnt_minecart {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -57833,6 +62209,7 @@ pub mod tnt_minecart {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -57848,6 +62225,7 @@ pub mod tnt_minecart {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -57889,6 +62267,7 @@ pub mod trader_llama {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -57904,6 +62283,7 @@ pub mod trader_llama {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -57919,6 +62299,7 @@ pub mod trader_llama {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -57934,6 +62315,7 @@ pub mod trader_llama {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -57949,6 +62331,7 @@ pub mod trader_llama {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -57964,6 +62347,7 @@ pub mod trader_llama {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -57979,6 +62363,7 @@ pub mod trader_llama {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -57994,6 +62379,7 @@ pub mod trader_llama {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -58009,6 +62395,7 @@ pub mod trader_llama {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -58024,6 +62411,7 @@ pub mod trader_llama {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -58039,6 +62427,7 @@ pub mod trader_llama {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -58054,6 +62443,7 @@ pub mod trader_llama {
             v1_21_11: 17u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -58069,6 +62459,7 @@ pub mod trader_llama {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -58084,6 +62475,7 @@ pub mod trader_llama {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -58099,6 +62491,7 @@ pub mod trader_llama {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -58114,6 +62507,7 @@ pub mod trader_llama {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -58129,6 +62523,7 @@ pub mod trader_llama {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -58144,6 +62539,7 @@ pub mod trader_llama {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -58159,6 +62555,7 @@ pub mod trader_llama {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -58174,6 +62571,7 @@ pub mod trader_llama {
             v1_21_11: 255u8,
             v26_1: 20u8,
             v26_2: 20u8,
+            v26_3: 20u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -58189,6 +62587,7 @@ pub mod trader_llama {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -58204,6 +62603,7 @@ pub mod trader_llama {
             v1_21_11: 255u8,
             v26_1: 21u8,
             v26_2: 21u8,
+            v26_3: 21u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -58219,6 +62619,7 @@ pub mod trader_llama {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -58234,6 +62635,7 @@ pub mod trader_llama {
             v1_21_11: 19u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -58249,6 +62651,7 @@ pub mod trader_llama {
             v1_21_11: 20u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -58309,6 +62712,7 @@ pub mod trident {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -58324,6 +62728,7 @@ pub mod trident {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -58339,6 +62744,7 @@ pub mod trident {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -58354,6 +62760,7 @@ pub mod trident {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -58369,6 +62776,7 @@ pub mod trident {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -58384,6 +62792,7 @@ pub mod trident {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -58399,6 +62808,7 @@ pub mod trident {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -58414,6 +62824,7 @@ pub mod trident {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -58429,6 +62840,7 @@ pub mod trident {
             v1_21_11: 12u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -58444,6 +62856,7 @@ pub mod trident {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -58459,6 +62872,7 @@ pub mod trident {
             v1_21_11: 255u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -58474,6 +62888,7 @@ pub mod trident {
             v1_21_11: 255u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -58489,6 +62904,7 @@ pub mod trident {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -58504,6 +62920,7 @@ pub mod trident {
             v1_21_11: 11u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -58519,6 +62936,7 @@ pub mod trident {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -58534,6 +62952,7 @@ pub mod trident {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -58566,6 +62985,7 @@ pub mod tropical_fish {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -58581,6 +63001,7 @@ pub mod tropical_fish {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -58596,6 +63017,7 @@ pub mod tropical_fish {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -58611,6 +63033,7 @@ pub mod tropical_fish {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -58626,6 +63049,7 @@ pub mod tropical_fish {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -58641,6 +63065,7 @@ pub mod tropical_fish {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -58656,6 +63081,7 @@ pub mod tropical_fish {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -58671,6 +63097,7 @@ pub mod tropical_fish {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -58686,6 +63113,7 @@ pub mod tropical_fish {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -58701,6 +63129,7 @@ pub mod tropical_fish {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -58716,6 +63145,7 @@ pub mod tropical_fish {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -58731,6 +63161,7 @@ pub mod tropical_fish {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -58746,6 +63177,7 @@ pub mod tropical_fish {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -58761,6 +63193,7 @@ pub mod tropical_fish {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -58776,6 +63209,7 @@ pub mod tropical_fish {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -58791,6 +63225,7 @@ pub mod tropical_fish {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -58806,6 +63241,7 @@ pub mod tropical_fish {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -58821,6 +63257,7 @@ pub mod tropical_fish {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -58836,6 +63273,7 @@ pub mod tropical_fish {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -58888,6 +63326,7 @@ pub mod turtle {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -58903,6 +63342,7 @@ pub mod turtle {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -58918,6 +63358,7 @@ pub mod turtle {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -58933,6 +63374,7 @@ pub mod turtle {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -58948,6 +63390,7 @@ pub mod turtle {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -58963,6 +63406,7 @@ pub mod turtle {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -58978,6 +63422,7 @@ pub mod turtle {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -58993,6 +63438,7 @@ pub mod turtle {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -59008,6 +63454,7 @@ pub mod turtle {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -59023,6 +63470,7 @@ pub mod turtle {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -59038,6 +63486,7 @@ pub mod turtle {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -59053,6 +63502,7 @@ pub mod turtle {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -59068,6 +63518,7 @@ pub mod turtle {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -59083,6 +63534,7 @@ pub mod turtle {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -59098,6 +63550,7 @@ pub mod turtle {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -59113,6 +63566,7 @@ pub mod turtle {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -59128,6 +63582,7 @@ pub mod turtle {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -59143,6 +63598,7 @@ pub mod turtle {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -59158,6 +63614,7 @@ pub mod turtle {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -59173,6 +63630,7 @@ pub mod turtle {
             v1_21_11: 17u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -59188,6 +63646,7 @@ pub mod turtle {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BLOCK_POS,
     };
@@ -59203,6 +63662,7 @@ pub mod turtle {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -59218,6 +63678,7 @@ pub mod turtle {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -59233,6 +63694,7 @@ pub mod turtle {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -59248,6 +63710,7 @@ pub mod turtle {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BLOCK_POS,
     };
@@ -59302,6 +63765,7 @@ pub mod vehicle_entity {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -59317,6 +63781,7 @@ pub mod vehicle_entity {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -59332,6 +63797,7 @@ pub mod vehicle_entity {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -59347,6 +63813,7 @@ pub mod vehicle_entity {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -59362,6 +63829,7 @@ pub mod vehicle_entity {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -59377,6 +63845,7 @@ pub mod vehicle_entity {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -59392,6 +63861,7 @@ pub mod vehicle_entity {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -59407,6 +63877,7 @@ pub mod vehicle_entity {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -59422,6 +63893,7 @@ pub mod vehicle_entity {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -59437,6 +63909,7 @@ pub mod vehicle_entity {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -59452,6 +63925,7 @@ pub mod vehicle_entity {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -59490,6 +63964,7 @@ pub mod vex {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -59505,6 +63980,7 @@ pub mod vex {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -59520,6 +63996,7 @@ pub mod vex {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -59535,6 +64012,7 @@ pub mod vex {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -59550,6 +64028,7 @@ pub mod vex {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -59565,6 +64044,7 @@ pub mod vex {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -59580,6 +64060,7 @@ pub mod vex {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -59595,6 +64076,7 @@ pub mod vex {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -59610,6 +64092,7 @@ pub mod vex {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -59625,6 +64108,7 @@ pub mod vex {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -59640,6 +64124,7 @@ pub mod vex {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -59655,6 +64140,7 @@ pub mod vex {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -59670,6 +64156,7 @@ pub mod vex {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -59685,6 +64172,7 @@ pub mod vex {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -59700,6 +64188,7 @@ pub mod vex {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -59715,6 +64204,7 @@ pub mod vex {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -59730,6 +64220,7 @@ pub mod vex {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -59745,6 +64236,7 @@ pub mod vex {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -59800,6 +64292,7 @@ pub mod villager {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -59815,6 +64308,7 @@ pub mod villager {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -59830,6 +64324,7 @@ pub mod villager {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -59845,6 +64340,7 @@ pub mod villager {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -59860,6 +64356,7 @@ pub mod villager {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -59875,6 +64372,7 @@ pub mod villager {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -59890,6 +64388,7 @@ pub mod villager {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -59905,6 +64404,7 @@ pub mod villager {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -59920,6 +64420,7 @@ pub mod villager {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -59935,6 +64436,7 @@ pub mod villager {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -59950,6 +64452,7 @@ pub mod villager {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -59965,6 +64468,7 @@ pub mod villager {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -59980,6 +64484,7 @@ pub mod villager {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -59995,6 +64500,7 @@ pub mod villager {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -60010,6 +64516,7 @@ pub mod villager {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -60025,6 +64532,7 @@ pub mod villager {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -60040,6 +64548,7 @@ pub mod villager {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -60055,6 +64564,7 @@ pub mod villager {
             v1_21_11: 17u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -60070,6 +64580,7 @@ pub mod villager {
             v1_21_11: 18u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::VILLAGER_DATA,
     };
@@ -60085,6 +64596,7 @@ pub mod villager {
             v1_21_11: 255u8,
             v26_1: 20u8,
             v26_2: 20u8,
+            v26_3: 20u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -60100,6 +64612,7 @@ pub mod villager {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -60158,6 +64671,7 @@ pub mod vindicator {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -60173,6 +64687,7 @@ pub mod vindicator {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -60188,6 +64703,7 @@ pub mod vindicator {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -60203,6 +64719,7 @@ pub mod vindicator {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -60218,6 +64735,7 @@ pub mod vindicator {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -60233,6 +64751,7 @@ pub mod vindicator {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -60248,6 +64767,7 @@ pub mod vindicator {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -60263,6 +64783,7 @@ pub mod vindicator {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -60278,6 +64799,7 @@ pub mod vindicator {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -60293,6 +64815,7 @@ pub mod vindicator {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -60308,6 +64831,7 @@ pub mod vindicator {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -60323,6 +64847,7 @@ pub mod vindicator {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -60338,6 +64863,7 @@ pub mod vindicator {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -60353,6 +64879,7 @@ pub mod vindicator {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -60368,6 +64895,7 @@ pub mod vindicator {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -60383,6 +64911,7 @@ pub mod vindicator {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -60398,6 +64927,7 @@ pub mod vindicator {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -60413,6 +64943,7 @@ pub mod vindicator {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -60464,6 +64995,7 @@ pub mod wandering_trader {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -60479,6 +65011,7 @@ pub mod wandering_trader {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -60494,6 +65027,7 @@ pub mod wandering_trader {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -60509,6 +65043,7 @@ pub mod wandering_trader {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -60524,6 +65059,7 @@ pub mod wandering_trader {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -60539,6 +65075,7 @@ pub mod wandering_trader {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -60554,6 +65091,7 @@ pub mod wandering_trader {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -60569,6 +65107,7 @@ pub mod wandering_trader {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -60584,6 +65123,7 @@ pub mod wandering_trader {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -60599,6 +65139,7 @@ pub mod wandering_trader {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -60614,6 +65155,7 @@ pub mod wandering_trader {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -60629,6 +65171,7 @@ pub mod wandering_trader {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -60644,6 +65187,7 @@ pub mod wandering_trader {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -60659,6 +65203,7 @@ pub mod wandering_trader {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -60674,6 +65219,7 @@ pub mod wandering_trader {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -60689,6 +65235,7 @@ pub mod wandering_trader {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -60704,6 +65251,7 @@ pub mod wandering_trader {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -60719,6 +65267,7 @@ pub mod wandering_trader {
             v1_21_11: 17u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -60734,6 +65283,7 @@ pub mod wandering_trader {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -60790,6 +65340,7 @@ pub mod warden {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -60805,6 +65356,7 @@ pub mod warden {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -60820,6 +65372,7 @@ pub mod warden {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -60835,6 +65388,7 @@ pub mod warden {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -60850,6 +65404,7 @@ pub mod warden {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -60865,6 +65420,7 @@ pub mod warden {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -60880,6 +65436,7 @@ pub mod warden {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -60895,6 +65452,7 @@ pub mod warden {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -60910,6 +65468,7 @@ pub mod warden {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -60925,6 +65484,7 @@ pub mod warden {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -60940,6 +65500,7 @@ pub mod warden {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -60955,6 +65516,7 @@ pub mod warden {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -60970,6 +65532,7 @@ pub mod warden {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -60985,6 +65548,7 @@ pub mod warden {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -61000,6 +65564,7 @@ pub mod warden {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -61015,6 +65580,7 @@ pub mod warden {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -61030,6 +65596,7 @@ pub mod warden {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -61045,6 +65612,7 @@ pub mod warden {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -61096,6 +65664,7 @@ pub mod water_animal {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -61111,6 +65680,7 @@ pub mod water_animal {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -61126,6 +65696,7 @@ pub mod water_animal {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -61141,6 +65712,7 @@ pub mod water_animal {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -61156,6 +65728,7 @@ pub mod water_animal {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -61171,6 +65744,7 @@ pub mod water_animal {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -61186,6 +65760,7 @@ pub mod water_animal {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -61201,6 +65776,7 @@ pub mod water_animal {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -61216,6 +65792,7 @@ pub mod water_animal {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -61231,6 +65808,7 @@ pub mod water_animal {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -61246,6 +65824,7 @@ pub mod water_animal {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -61261,6 +65840,7 @@ pub mod water_animal {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -61276,6 +65856,7 @@ pub mod water_animal {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -61291,6 +65872,7 @@ pub mod water_animal {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -61306,6 +65888,7 @@ pub mod water_animal {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -61321,6 +65904,7 @@ pub mod water_animal {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -61336,6 +65920,7 @@ pub mod water_animal {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -61390,6 +65975,7 @@ pub mod wind_charge {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -61405,6 +65991,7 @@ pub mod wind_charge {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -61420,6 +66007,7 @@ pub mod wind_charge {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -61435,6 +66023,7 @@ pub mod wind_charge {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -61450,6 +66039,7 @@ pub mod wind_charge {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -61465,6 +66055,7 @@ pub mod wind_charge {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -61480,6 +66071,7 @@ pub mod wind_charge {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -61495,6 +66087,7 @@ pub mod wind_charge {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -61527,6 +66120,7 @@ pub mod witch {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -61542,6 +66136,7 @@ pub mod witch {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -61557,6 +66152,7 @@ pub mod witch {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -61572,6 +66168,7 @@ pub mod witch {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -61587,6 +66184,7 @@ pub mod witch {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -61602,6 +66200,7 @@ pub mod witch {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -61617,6 +66216,7 @@ pub mod witch {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -61632,6 +66232,7 @@ pub mod witch {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -61647,6 +66248,7 @@ pub mod witch {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -61662,6 +66264,7 @@ pub mod witch {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -61677,6 +66280,7 @@ pub mod witch {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -61692,6 +66296,7 @@ pub mod witch {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -61707,6 +66312,7 @@ pub mod witch {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -61722,6 +66328,7 @@ pub mod witch {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -61737,6 +66344,7 @@ pub mod witch {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -61752,6 +66360,7 @@ pub mod witch {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -61767,6 +66376,7 @@ pub mod witch {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -61782,6 +66392,7 @@ pub mod witch {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -61797,6 +66408,7 @@ pub mod witch {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -61812,6 +66424,7 @@ pub mod witch {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -61864,6 +66477,7 @@ pub mod wither {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -61879,6 +66493,7 @@ pub mod wither {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -61894,6 +66509,7 @@ pub mod wither {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -61909,6 +66525,7 @@ pub mod wither {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -61924,6 +66541,7 @@ pub mod wither {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -61939,6 +66557,7 @@ pub mod wither {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -61954,6 +66573,7 @@ pub mod wither {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -61969,6 +66589,7 @@ pub mod wither {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -61984,6 +66605,7 @@ pub mod wither {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -61999,6 +66621,7 @@ pub mod wither {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -62014,6 +66637,7 @@ pub mod wither {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -62029,6 +66653,7 @@ pub mod wither {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -62044,6 +66669,7 @@ pub mod wither {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -62059,6 +66685,7 @@ pub mod wither {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -62074,6 +66701,7 @@ pub mod wither {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -62089,6 +66717,7 @@ pub mod wither {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -62104,6 +66733,7 @@ pub mod wither {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -62119,6 +66749,7 @@ pub mod wither {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -62134,6 +66765,7 @@ pub mod wither {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -62149,6 +66781,7 @@ pub mod wither {
             v1_21_11: 19u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -62164,6 +66797,7 @@ pub mod wither {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -62179,6 +66813,7 @@ pub mod wither {
             v1_21_11: 16u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -62194,6 +66829,7 @@ pub mod wither {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -62209,6 +66845,7 @@ pub mod wither {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -62264,6 +66901,7 @@ pub mod wither_boss {
             v1_21_11: 255u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -62279,6 +66917,7 @@ pub mod wither_boss {
             v1_21_11: 255u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -62294,6 +66933,7 @@ pub mod wither_boss {
             v1_21_11: 255u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -62309,6 +66949,7 @@ pub mod wither_boss {
             v1_21_11: 255u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -62324,6 +66965,7 @@ pub mod wither_boss {
             v1_21_11: 255u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -62339,6 +66981,7 @@ pub mod wither_boss {
             v1_21_11: 255u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -62354,6 +66997,7 @@ pub mod wither_boss {
             v1_21_11: 255u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -62369,6 +67013,7 @@ pub mod wither_boss {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -62384,6 +67029,7 @@ pub mod wither_boss {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -62399,6 +67045,7 @@ pub mod wither_boss {
             v1_21_11: 255u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -62414,6 +67061,7 @@ pub mod wither_boss {
             v1_21_11: 255u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -62429,6 +67077,7 @@ pub mod wither_boss {
             v1_21_11: 255u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -62444,6 +67093,7 @@ pub mod wither_boss {
             v1_21_11: 255u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -62459,6 +67109,7 @@ pub mod wither_boss {
             v1_21_11: 255u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -62474,6 +67125,7 @@ pub mod wither_boss {
             v1_21_11: 255u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -62489,6 +67141,7 @@ pub mod wither_boss {
             v1_21_11: 255u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -62504,6 +67157,7 @@ pub mod wither_boss {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -62519,6 +67173,7 @@ pub mod wither_boss {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -62534,6 +67189,7 @@ pub mod wither_boss {
             v1_21_11: 255u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -62549,6 +67205,7 @@ pub mod wither_boss {
             v1_21_11: 255u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -62604,6 +67261,7 @@ pub mod wither_skeleton {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -62619,6 +67277,7 @@ pub mod wither_skeleton {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -62634,6 +67293,7 @@ pub mod wither_skeleton {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -62649,6 +67309,7 @@ pub mod wither_skeleton {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -62664,6 +67325,7 @@ pub mod wither_skeleton {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -62679,6 +67341,7 @@ pub mod wither_skeleton {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -62694,6 +67357,7 @@ pub mod wither_skeleton {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -62709,6 +67373,7 @@ pub mod wither_skeleton {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -62724,6 +67389,7 @@ pub mod wither_skeleton {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -62739,6 +67405,7 @@ pub mod wither_skeleton {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -62754,6 +67421,7 @@ pub mod wither_skeleton {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -62769,6 +67437,7 @@ pub mod wither_skeleton {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -62784,6 +67453,7 @@ pub mod wither_skeleton {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -62799,6 +67469,7 @@ pub mod wither_skeleton {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -62814,6 +67485,7 @@ pub mod wither_skeleton {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -62829,6 +67501,7 @@ pub mod wither_skeleton {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -62880,6 +67553,7 @@ pub mod wither_skull {
             v1_21_11: 8u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -62895,6 +67569,7 @@ pub mod wither_skull {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -62910,6 +67585,7 @@ pub mod wither_skull {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -62925,6 +67601,7 @@ pub mod wither_skull {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -62940,6 +67617,7 @@ pub mod wither_skull {
             v1_21_11: 255u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -62955,6 +67633,7 @@ pub mod wither_skull {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -62970,6 +67649,7 @@ pub mod wither_skull {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -62985,6 +67665,7 @@ pub mod wither_skull {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -63000,6 +67681,7 @@ pub mod wither_skull {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -63015,6 +67697,7 @@ pub mod wither_skull {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -63048,6 +67731,7 @@ pub mod wolf {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -63063,6 +67747,7 @@ pub mod wolf {
             v1_21_11: 21u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::LONG,
     };
@@ -63078,6 +67763,7 @@ pub mod wolf {
             v1_21_11: 255u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -63093,6 +67779,7 @@ pub mod wolf {
             v1_21_11: 19u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -63108,6 +67795,7 @@ pub mod wolf {
             v1_21_11: 20u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -63123,6 +67811,7 @@ pub mod wolf {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -63138,6 +67827,7 @@ pub mod wolf {
             v1_21_11: 255u8,
             v26_1: 22u8,
             v26_2: 22u8,
+            v26_3: 22u8,
         },
         r#type: MetaDataType::LONG,
     };
@@ -63153,6 +67843,7 @@ pub mod wolf {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -63168,6 +67859,7 @@ pub mod wolf {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -63183,6 +67875,7 @@ pub mod wolf {
             v1_21_11: 255u8,
             v26_1: 21u8,
             v26_2: 21u8,
+            v26_3: 21u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -63198,6 +67891,7 @@ pub mod wolf {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -63213,6 +67907,7 @@ pub mod wolf {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -63228,6 +67923,7 @@ pub mod wolf {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -63243,6 +67939,7 @@ pub mod wolf {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -63258,6 +67955,7 @@ pub mod wolf {
             v1_21_11: 17u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -63273,6 +67971,7 @@ pub mod wolf {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -63288,6 +67987,7 @@ pub mod wolf {
             v1_21_11: 255u8,
             v26_1: 20u8,
             v26_2: 20u8,
+            v26_3: 20u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -63303,6 +68003,7 @@ pub mod wolf {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -63318,6 +68019,7 @@ pub mod wolf {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -63333,6 +68035,7 @@ pub mod wolf {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -63348,6 +68051,7 @@ pub mod wolf {
             v1_21_11: 18u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::OPTIONAL_LIVING_ENTITY_REFERENCE,
     };
@@ -63363,6 +68067,7 @@ pub mod wolf {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -63378,6 +68083,7 @@ pub mod wolf {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -63393,6 +68099,7 @@ pub mod wolf {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -63408,6 +68115,7 @@ pub mod wolf {
             v1_21_11: 255u8,
             v26_1: 24u8,
             v26_2: 24u8,
+            v26_3: 24u8,
         },
         r#type: MetaDataType::WOLF_SOUND_VARIANT,
     };
@@ -63423,6 +68131,7 @@ pub mod wolf {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -63438,6 +68147,7 @@ pub mod wolf {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -63453,6 +68163,7 @@ pub mod wolf {
             v1_21_11: 255u8,
             v26_1: 23u8,
             v26_2: 23u8,
+            v26_3: 23u8,
         },
         r#type: MetaDataType::WOLF_VARIANT,
     };
@@ -63468,6 +68179,7 @@ pub mod wolf {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -63483,6 +68195,7 @@ pub mod wolf {
             v1_21_11: 23u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::WOLF_SOUND_VARIANT,
     };
@@ -63498,6 +68211,7 @@ pub mod wolf {
             v1_21_11: 22u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::WOLF_VARIANT,
     };
@@ -63569,6 +68283,7 @@ pub mod zoglin {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -63584,6 +68299,7 @@ pub mod zoglin {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -63599,6 +68315,7 @@ pub mod zoglin {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -63614,6 +68331,7 @@ pub mod zoglin {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -63629,6 +68347,7 @@ pub mod zoglin {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -63644,6 +68363,7 @@ pub mod zoglin {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -63659,6 +68379,7 @@ pub mod zoglin {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -63674,6 +68395,7 @@ pub mod zoglin {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -63689,6 +68411,7 @@ pub mod zoglin {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -63704,6 +68427,7 @@ pub mod zoglin {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -63719,6 +68443,7 @@ pub mod zoglin {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -63734,6 +68459,7 @@ pub mod zoglin {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -63749,6 +68475,7 @@ pub mod zoglin {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -63764,6 +68491,7 @@ pub mod zoglin {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -63779,6 +68507,7 @@ pub mod zoglin {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -63794,6 +68523,7 @@ pub mod zoglin {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -63809,6 +68539,7 @@ pub mod zoglin {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -63863,6 +68594,7 @@ pub mod zombie {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -63878,6 +68610,7 @@ pub mod zombie {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -63893,6 +68626,7 @@ pub mod zombie {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -63908,6 +68642,7 @@ pub mod zombie {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -63923,6 +68658,7 @@ pub mod zombie {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -63938,6 +68674,7 @@ pub mod zombie {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -63953,6 +68690,7 @@ pub mod zombie {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -63968,6 +68706,7 @@ pub mod zombie {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -63983,6 +68722,7 @@ pub mod zombie {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -63998,6 +68738,7 @@ pub mod zombie {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -64013,6 +68754,7 @@ pub mod zombie {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -64028,6 +68770,7 @@ pub mod zombie {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -64043,6 +68786,7 @@ pub mod zombie {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -64058,6 +68802,7 @@ pub mod zombie {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -64073,6 +68818,7 @@ pub mod zombie {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -64088,6 +68834,7 @@ pub mod zombie {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -64103,6 +68850,7 @@ pub mod zombie {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -64118,6 +68866,7 @@ pub mod zombie {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -64133,6 +68882,7 @@ pub mod zombie {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -64148,6 +68898,7 @@ pub mod zombie {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -64163,6 +68914,7 @@ pub mod zombie {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -64223,6 +68975,7 @@ pub mod zombie_horse {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -64238,6 +68991,7 @@ pub mod zombie_horse {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -64253,6 +69007,7 @@ pub mod zombie_horse {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -64268,6 +69023,7 @@ pub mod zombie_horse {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -64283,6 +69039,7 @@ pub mod zombie_horse {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -64298,6 +69055,7 @@ pub mod zombie_horse {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -64313,6 +69071,7 @@ pub mod zombie_horse {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -64328,6 +69087,7 @@ pub mod zombie_horse {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -64343,6 +69103,7 @@ pub mod zombie_horse {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -64358,6 +69119,7 @@ pub mod zombie_horse {
             v1_21_11: 17u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -64373,6 +69135,7 @@ pub mod zombie_horse {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -64388,6 +69151,7 @@ pub mod zombie_horse {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -64403,6 +69167,7 @@ pub mod zombie_horse {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -64418,6 +69183,7 @@ pub mod zombie_horse {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -64433,6 +69199,7 @@ pub mod zombie_horse {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -64448,6 +69215,7 @@ pub mod zombie_horse {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -64463,6 +69231,7 @@ pub mod zombie_horse {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -64478,6 +69247,7 @@ pub mod zombie_horse {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -64493,6 +69263,7 @@ pub mod zombie_horse {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -64548,6 +69319,7 @@ pub mod zombie_nautilus {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -64563,6 +69335,7 @@ pub mod zombie_nautilus {
             v1_21_11: 255u8,
             v26_1: 20u8,
             v26_2: 20u8,
+            v26_3: 20u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -64578,6 +69351,7 @@ pub mod zombie_nautilus {
             v1_21_11: 19u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -64593,6 +69367,7 @@ pub mod zombie_nautilus {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -64608,6 +69383,7 @@ pub mod zombie_nautilus {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -64623,6 +69399,7 @@ pub mod zombie_nautilus {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -64638,6 +69415,7 @@ pub mod zombie_nautilus {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -64653,6 +69431,7 @@ pub mod zombie_nautilus {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -64668,6 +69447,7 @@ pub mod zombie_nautilus {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -64683,6 +69463,7 @@ pub mod zombie_nautilus {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -64698,6 +69479,7 @@ pub mod zombie_nautilus {
             v1_21_11: 17u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -64713,6 +69495,7 @@ pub mod zombie_nautilus {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -64728,6 +69511,7 @@ pub mod zombie_nautilus {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -64743,6 +69527,7 @@ pub mod zombie_nautilus {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -64758,6 +69543,7 @@ pub mod zombie_nautilus {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -64773,6 +69559,7 @@ pub mod zombie_nautilus {
             v1_21_11: 18u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::OPTIONAL_LIVING_ENTITY_REFERENCE,
     };
@@ -64788,6 +69575,7 @@ pub mod zombie_nautilus {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -64803,6 +69591,7 @@ pub mod zombie_nautilus {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -64818,6 +69607,7 @@ pub mod zombie_nautilus {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -64833,6 +69623,7 @@ pub mod zombie_nautilus {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -64848,6 +69639,7 @@ pub mod zombie_nautilus {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -64863,6 +69655,7 @@ pub mod zombie_nautilus {
             v1_21_11: 255u8,
             v26_1: 21u8,
             v26_2: 21u8,
+            v26_3: 21u8,
         },
         r#type: MetaDataType::ZOMBIE_NAUTILUS_VARIANT,
     };
@@ -64878,6 +69671,7 @@ pub mod zombie_nautilus {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -64893,6 +69687,7 @@ pub mod zombie_nautilus {
             v1_21_11: 20u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::ZOMBIE_NAUTILUS_VARIANT,
     };
@@ -64957,6 +69752,7 @@ pub mod zombie_villager {
             v1_21_11: 19u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -64972,6 +69768,7 @@ pub mod zombie_villager {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -64987,6 +69784,7 @@ pub mod zombie_villager {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -65002,6 +69800,7 @@ pub mod zombie_villager {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -65017,6 +69816,7 @@ pub mod zombie_villager {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -65032,6 +69832,7 @@ pub mod zombie_villager {
             v1_21_11: 255u8,
             v26_1: 19u8,
             v26_2: 19u8,
+            v26_3: 19u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -65047,6 +69848,7 @@ pub mod zombie_villager {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -65062,6 +69864,7 @@ pub mod zombie_villager {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -65077,6 +69880,7 @@ pub mod zombie_villager {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -65092,6 +69896,7 @@ pub mod zombie_villager {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -65107,6 +69912,7 @@ pub mod zombie_villager {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -65122,6 +69928,7 @@ pub mod zombie_villager {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -65137,6 +69944,7 @@ pub mod zombie_villager {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -65152,6 +69960,7 @@ pub mod zombie_villager {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -65167,6 +69976,7 @@ pub mod zombie_villager {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -65182,6 +69992,7 @@ pub mod zombie_villager {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -65197,6 +70008,7 @@ pub mod zombie_villager {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -65212,6 +70024,7 @@ pub mod zombie_villager {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -65227,6 +70040,7 @@ pub mod zombie_villager {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -65242,6 +70056,7 @@ pub mod zombie_villager {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -65257,6 +70072,7 @@ pub mod zombie_villager {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -65272,6 +70088,7 @@ pub mod zombie_villager {
             v1_21_11: 20u8,
             v26_1: 20u8,
             v26_2: 20u8,
+            v26_3: 20u8,
         },
         r#type: MetaDataType::VILLAGER_DATA,
     };
@@ -65287,6 +70104,7 @@ pub mod zombie_villager {
             v1_21_11: 255u8,
             v26_1: 21u8,
             v26_2: 21u8,
+            v26_3: 21u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -65302,6 +70120,7 @@ pub mod zombie_villager {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -65317,6 +70136,7 @@ pub mod zombie_villager {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -65381,6 +70201,7 @@ pub mod zombified_piglin {
             v1_21_11: 18u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -65396,6 +70217,7 @@ pub mod zombified_piglin {
             v1_21_11: 1u8,
             v26_1: 1u8,
             v26_2: 1u8,
+            v26_3: 1u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -65411,6 +70233,7 @@ pub mod zombified_piglin {
             v1_21_11: 12u8,
             v26_1: 12u8,
             v26_2: 12u8,
+            v26_3: 12u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -65426,6 +70249,7 @@ pub mod zombified_piglin {
             v1_21_11: 16u8,
             v26_1: 16u8,
             v26_2: 16u8,
+            v26_3: 16u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -65441,6 +70265,7 @@ pub mod zombified_piglin {
             v1_21_11: 2u8,
             v26_1: 2u8,
             v26_2: 2u8,
+            v26_3: 2u8,
         },
         r#type: MetaDataType::OPTIONAL_COMPONENT,
     };
@@ -65456,6 +70281,7 @@ pub mod zombified_piglin {
             v1_21_11: 3u8,
             v26_1: 3u8,
             v26_2: 3u8,
+            v26_3: 3u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -65471,6 +70297,7 @@ pub mod zombified_piglin {
             v1_21_11: 255u8,
             v26_1: 18u8,
             v26_2: 18u8,
+            v26_3: 18u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -65486,6 +70313,7 @@ pub mod zombified_piglin {
             v1_21_11: 11u8,
             v26_1: 11u8,
             v26_2: 11u8,
+            v26_3: 11u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -65501,6 +70329,7 @@ pub mod zombified_piglin {
             v1_21_11: 10u8,
             v26_1: 10u8,
             v26_2: 10u8,
+            v26_3: 10u8,
         },
         r#type: MetaDataType::PARTICLES,
     };
@@ -65516,6 +70345,7 @@ pub mod zombified_piglin {
             v1_21_11: 9u8,
             v26_1: 9u8,
             v26_2: 9u8,
+            v26_3: 9u8,
         },
         r#type: MetaDataType::FLOAT,
     };
@@ -65531,6 +70361,7 @@ pub mod zombified_piglin {
             v1_21_11: 8u8,
             v26_1: 8u8,
             v26_2: 8u8,
+            v26_3: 8u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -65546,6 +70377,7 @@ pub mod zombified_piglin {
             v1_21_11: 15u8,
             v26_1: 15u8,
             v26_2: 15u8,
+            v26_3: 15u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -65561,6 +70393,7 @@ pub mod zombified_piglin {
             v1_21_11: 5u8,
             v26_1: 5u8,
             v26_2: 5u8,
+            v26_3: 5u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -65576,6 +70409,7 @@ pub mod zombified_piglin {
             v1_21_11: 6u8,
             v26_1: 6u8,
             v26_2: 6u8,
+            v26_3: 6u8,
         },
         r#type: MetaDataType::POSE,
     };
@@ -65591,6 +70425,7 @@ pub mod zombified_piglin {
             v1_21_11: 0u8,
             v26_1: 0u8,
             v26_2: 0u8,
+            v26_3: 0u8,
         },
         r#type: MetaDataType::BYTE,
     };
@@ -65606,6 +70441,7 @@ pub mod zombified_piglin {
             v1_21_11: 4u8,
             v26_1: 4u8,
             v26_2: 4u8,
+            v26_3: 4u8,
         },
         r#type: MetaDataType::BOOLEAN,
     };
@@ -65621,6 +70457,7 @@ pub mod zombified_piglin {
             v1_21_11: 255u8,
             v26_1: 17u8,
             v26_2: 17u8,
+            v26_3: 17u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -65636,6 +70473,7 @@ pub mod zombified_piglin {
             v1_21_11: 13u8,
             v26_1: 13u8,
             v26_2: 13u8,
+            v26_3: 13u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -65651,6 +70489,7 @@ pub mod zombified_piglin {
             v1_21_11: 7u8,
             v26_1: 7u8,
             v26_2: 7u8,
+            v26_3: 7u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -65666,6 +70505,7 @@ pub mod zombified_piglin {
             v1_21_11: 14u8,
             v26_1: 14u8,
             v26_2: 14u8,
+            v26_3: 14u8,
         },
         r#type: MetaDataType::OPTIONAL_BLOCK_POS,
     };
@@ -65681,6 +70521,7 @@ pub mod zombified_piglin {
             v1_21_11: 17u8,
             v26_1: 255u8,
             v26_2: 255u8,
+            v26_3: 255u8,
         },
         r#type: MetaDataType::INT,
     };
@@ -65906,9 +70747,6 @@ pub mod end_crystal_entity {
 }
 pub mod ender_dragon_entity {
     pub use super::ender_dragon::*;
-}
-pub mod enderman_entity {
-    pub use super::ender_man::*;
 }
 pub mod endermite_entity {
     pub use super::endermite::*;

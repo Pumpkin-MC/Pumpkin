@@ -1,0 +1,49 @@
+{
+  "additional_wants": {
+    "count": 3,
+    "id": "minecraft:diamond"
+  },
+  "given_item_modifier": [
+    {
+      "type": "minecraft:set_enchantments",
+      "enchantments": {
+        "minecraft:blast_protection": 1
+      }
+    },
+    {
+      "type": "minecraft:filtered",
+      "item_filter": {
+        "items": "minecraft:diamond_leggings",
+        "predicates": {
+          "minecraft:enchantments": [
+            {
+              "levels": 1
+            }
+          ]
+        }
+      },
+      "on_fail": {
+        "type": "minecraft:discard"
+      }
+    }
+  ],
+  "gives": {
+    "id": "minecraft:diamond_leggings"
+  },
+  "max_uses": 3,
+  "merchant_predicate": {
+    "type": "minecraft:entity_properties",
+    "entity": "this",
+    "predicate": {
+      "minecraft:predicates": {
+        "minecraft:villager/variant": "minecraft:taiga"
+      }
+    }
+  },
+  "reputation_discount": 0.05,
+  "wants": {
+    "count": 18,
+    "id": "minecraft:emerald"
+  },
+  "xp": 30
+}
