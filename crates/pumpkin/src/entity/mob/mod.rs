@@ -14,7 +14,7 @@ use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::data_component_impl::EquipmentSlot;
-use pumpkin_data::entity::EntityType;
+use pumpkin_data::entity::{EntityPose, EntityType};
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
@@ -856,6 +856,28 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn get_home(&self) -> Option<BlockPos> {
         None
+    }
+
+    fn set_home(&self, _position: Option<BlockPos>) {}
+
+    fn wants_to_breed(&self) -> bool {
+        false
+    }
+
+    fn consume_breeding_food(&self) {}
+
+    fn is_sleeping(&self) -> bool {
+        self.get_entity().pose.load() == EntityPose::Sleeping
+    }
+
+    fn sleep_in_bed(&self, _bed_head_pos: BlockPos) -> bool {
+        false
+    }
+
+    fn wake_up(&self) {}
+
+    fn is_ready_to_sleep(&self) -> bool {
+        true
     }
 
     fn get_path_aware_entity(&self) -> Option<&dyn PathAwareEntity> {
