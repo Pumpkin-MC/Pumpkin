@@ -43,7 +43,11 @@ impl LoadJSONConfiguration for OperatorConfig {
             }
 
             if op.level as u8 > 4 {
-                tracing::warn!("Operator {} has invalid permission level: {}", op.name, op.level as u8);
+                tracing::warn!(
+                    "Operator {} has invalid permission level: {}",
+                    op.name,
+                    op.level as u8
+                );
             }
         }
     }
