@@ -29,6 +29,9 @@ pub fn build() -> TokenStream {
     }
 
     quote! {
+        use crate::tag::RegistryKey;
+        use crate::tag::Taggable;
+
         #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
         pub enum GameEvent {
             #variants
@@ -48,6 +51,23 @@ pub fn build() -> TokenStream {
                     #from_name_match
                     _ => None,
                 }
+            }
+        }
+
+        impl Taggable for GameEvent {
+            #[inline]
+            fn tag_key() -> RegistryKey {
+                RegistryKey::GameEvent
+            }
+            #[inline]
+            fn registry_key(&self) -> &str {
+                self.name()
+            }
+            #[inline]
+            fn registry_id(&self) -> u16 {
+                // The enum is generated straight from `game_event.json`, which is
+                // the registry order, so a variant's discriminant is its registry id.
+                *self as u16
             }
         }
     }

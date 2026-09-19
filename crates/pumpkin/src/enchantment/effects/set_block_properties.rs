@@ -53,7 +53,7 @@ impl SetBlockProperties {
     ) {
         let target = self.target_position(position);
         if let Some(event) = self.trigger_game_event {
-            world.emit_game_event(event.name(), target.to_centered_f64());
+            world.emit_game_event(event.name(), target.to_centered_f64(), None);
         }
     }
 }

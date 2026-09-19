@@ -3737,7 +3737,9 @@ impl LivingEntity {
                         self.fall_distance.store(0.0);
                         // Vanilla broadcasts entity event 46 (teleport particles) on success.
                         world.send_entity_status(&self.entity, EntityStatus::Teleport, None);
-                        world.emit_game_event("teleport", center);
+                        // Vanilla passes the teleporting entity as the event context, so a
+                        // player chorus-fruiting past a shrieker still sets it off.
+                        world.emit_game_event("teleport", center, caller.get_player());
                         world.play_sound(
                             Sound::ItemChorusFruitTeleport,
                             SoundCategory::Players,

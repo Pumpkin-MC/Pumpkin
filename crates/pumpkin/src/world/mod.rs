@@ -30,6 +30,7 @@ pub mod raid;
 pub mod random_sequences;
 pub mod stopwatches;
 pub mod time;
+mod vibration;
 pub mod villager_poi;
 
 use crate::block::RandomTickArgs;
@@ -7043,14 +7044,49 @@ impl World {
         Self::broadcast_bedrock_grouped(be_packet, bedrock_recipients.into_iter());
     }
 
-    pub fn emit_game_event(&self, event_key: impl Into<String>, position: Vector3<f64>) {
+    /// Emits a game event at `position` that is not tied to a block.
+    ///
+    /// `source_player` is the player the event can be attributed to, if any. Sculk shriekers
+    /// only respond when one is present, matching vanilla's `GameEvent.Context`.
+    pub fn emit_game_event(
+        self: &Arc<Self>,
+        event_key: impl Into<String>,
+        position: Vector3<f64>,
+        source_player: Option<&Player>,
+    ) {
+        self.emit_game_event_in(event_key, position, source_player, None);
+    }
+
+    /// Emits a game event at `position` against `affected_state`.
+    ///
+    /// `affected_state` is the block the event happened against -- for a footstep, the block
+    /// being stood on -- and is what vanilla carries in `GameEvent.Context`. A listener uses
+    /// it to tell whether the vibration is dampened before it ever arrives.
+    pub fn emit_game_event_in(
+        self: &Arc<Self>,
+        event_key: impl Into<String>,
+        position: Vector3<f64>,
+        source_player: Option<&Player>,
+        affected_state: Option<&'static BlockState>,
+    ) {
         let mut event = crate::plugin::api::events::world::generic_game::GenericGameEvent::new(
             event_key.into(),
             position,
         );
         if let Some(server) = self.server.upgrade() {
             server.plugin_manager.fire_blocking(&server, &mut event);
+            if event.cancelled {
+                return;
+            }
         }
+
+        vibration::dispatch(
+            self,
+            &event.event_key,
+            position,
+            source_player,
+            affected_state,
+        );
     }
 
     pub async fn unload(self: &Arc<Self>) {

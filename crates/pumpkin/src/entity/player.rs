@@ -530,6 +530,16 @@ pub struct Player {
     pub score: AtomicI32,
     pub spawn_extra_particles_on_fall: AtomicBool,
     pub post_effects: std::sync::Mutex<Vec<String>>,
+    /// Accumulated horizontal travel distance, scaled like vanilla's `moveDist`.
+    pub move_dist: AtomicCell<f32>,
+    /// Distance threshold at which the next step event fires.
+    pub next_step: AtomicCell<f32>,
+    /// Game time of the last sculk shrieker warning, used to rate-limit further ones the way
+    /// vanilla's `WardenSpawnTracker` does. [`None`] until this player has been warned.
+    pub last_warden_warning: AtomicCell<Option<i64>>,
+    /// How many shrieker warnings this player has accumulated, as vanilla's
+    /// `WardenSpawnTracker.warningLevel`. Decays again once warnings stop.
+    pub warden_warning_level: AtomicCell<u8>,
     /// Inbound packets waiting to be processed during player tick.
     pub inbound_packets: SegQueue<RawPacket>,
 }
@@ -566,6 +576,11 @@ struct SkinMetadata {
     #[serde(default)]
     model: Option<String>,
 }
+
+/// Offset vanilla's `Entity.getOnPos()` samples the supporting block with. Small enough
+/// that a player standing exactly on a block boundary reads the block below, but not so
+/// large that standing on a thin block such as a carpet reads past it.
+const SUPPORTING_BLOCK_EPSILON: f64 = 1.0e-5;
 
 impl Player {
     #[must_use]
@@ -833,6 +848,10 @@ impl Player {
             score: AtomicI32::new(0),
             spawn_extra_particles_on_fall: AtomicBool::new(false),
             post_effects: std::sync::Mutex::new(Vec::new()),
+            move_dist: AtomicCell::new(0.0),
+            next_step: AtomicCell::new(1.0),
+            last_warden_warning: AtomicCell::new(None),
+            warden_warning_level: AtomicCell::new(0),
             inbound_packets: SegQueue::new(),
         }
     }
@@ -3014,7 +3033,60 @@ impl Player {
         }
     }
 
+    /// Accumulates travelled distance and emits a `step` game event once the player has
+    /// covered enough ground, mirroring vanilla's `moveDist`/`nextStep` pacing.
+    fn progress_step_event(&self, delta_pos: Vector3<f64>) {
+        // Not the protocol-level `GameEvent` that is already imported in this file.
+        use pumpkin_data::game_event::GameEvent;
+
+        let entity = &self.living_entity.entity;
+        if !entity.on_ground.load(Ordering::Relaxed) || self.is_swimming() {
+            return;
+        }
+
+        // Vanilla's `Player.getMovementEmission` is `NONE` while flying or while crouching
+        // on the ground, which is what lets players sneak past sculk sensors. Reaching here
+        // already implies being on the ground. Events that are not movement emissions stay
+        // suppressed by the `ignore_vibrations_sneaking` tag at the listener instead.
+        let flying = self
+            .abilities
+            .lock()
+            .is_ok_and(|abilities| abilities.flying);
+        if flying || entity.sneaking.load(Ordering::Relaxed) {
+            return;
+        }
+
+        // Vanilla scales the travelled distance by 0.6 before accumulating it.
+        let move_dist = self.move_dist.load() + (delta_pos.horizontal_length() * 0.6) as f32;
+        self.move_dist.store(move_dist);
+        if move_dist <= self.next_step.load() {
+            return;
+        }
+
+        self.next_step.store(move_dist.floor() + 1.0);
+
+        // Vanilla emits the step against the block it is standing on, sampled through
+        // `Entity.getOnPos()`. That is not simply the block below the player's own block
+        // position: standing on a carpet puts the player at the carpet's own y, and it is
+        // the carpet -- not the block under it -- that has to be seen for it to dampen.
+        let position = entity.pos.load();
+        let world = self.world();
+        let supporting_pos = BlockPos::new(
+            position.x.floor() as i32,
+            (position.y - SUPPORTING_BLOCK_EPSILON).floor() as i32,
+            position.z.floor() as i32,
+        );
+        world.emit_game_event_in(
+            GameEvent::Step.name(),
+            position,
+            Some(self),
+            Some(world.get_block_state(&supporting_pos)),
+        );
+    }
+
     pub fn progress_motion(&self, delta_pos: Vector3<f64>) {
+        self.progress_step_event(delta_pos);
+
         // TODO: gliding...
         let entity = &self.living_entity.entity;
         let (rate, distance) = if self.is_swimming() || entity.is_submerged_in_water() {

@@ -1,4 +1,6 @@
 /* This file is generated. Do not edit manually. */
+use crate::tag::RegistryKey;
+use crate::tag::Taggable;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum GameEvent {
     BlockActivate,
@@ -202,5 +204,19 @@ impl GameEvent {
             "resonate_15" | "minecraft:resonate_15" => Some(Self::Resonate15),
             _ => None,
         }
+    }
+}
+impl Taggable for GameEvent {
+    #[inline]
+    fn tag_key() -> RegistryKey {
+        RegistryKey::GameEvent
+    }
+    #[inline]
+    fn registry_key(&self) -> &str {
+        self.name()
+    }
+    #[inline]
+    fn registry_id(&self) -> u16 {
+        *self as u16
     }
 }

@@ -107,7 +107,7 @@ impl SculkShriekerBlock {
         world.set_block_state(pos, props.to_state_id(block), BlockFlags::NOTIFY_LISTENERS);
         world.schedule_block_tick(block, *pos, SHRIEKING_TICKS, TickPriority::Normal);
         world.sync_world_event(WorldEvent::ParticlesSculkShriek, *pos, 0);
-        world.emit_game_event(GameEvent::Shriek.name(), pos.to_centered_f64());
+        world.emit_game_event(GameEvent::Shriek.name(), pos.to_centered_f64(), None);
     }
 
     fn try_respond(world: &Arc<World>, pos: &BlockPos, can_summon: bool) {
