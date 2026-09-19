@@ -573,9 +573,9 @@ impl World {
     }
 
     pub async fn shutdown(&self) {
-        for entity in self.entities.load().iter() {
-            self.save_entity(entity).await;
-        }
+        let entities = self.entities.load_full();
+        self.save_entities_by_chunk(&entities, self.level.live_entity_chunk_positions())
+            .await;
 
         let chunks: Vec<Vector2<i32>> = self
             .block_entities
@@ -599,26 +599,52 @@ impl World {
         self.level.shutdown().await;
     }
 
-    /// Serializes a live entity into its current chunk's entity data. The live
-    /// entity list is the source of truth while a chunk is loaded (its saved NBT
-    /// is consumed on load), so this simply appends the entity to the chunk it is
-    /// currently in; the chunk is rewritten from scratch every unload cycle, so
-    /// there is nothing stale to deduplicate.
-    async fn save_entity(&self, entity: &Arc<dyn EntityBase>) {
-        let base_entity = entity.get_entity();
-        if base_entity.is_removed() {
-            return;
+    /// Writes `entities` into the saved data of the chunks they are in. A live chunk is
+    /// rebuilt from scratch, so `snapshot_chunks` lists the live chunks that must be rewritten
+    /// even when nothing is left in them; a chunk that never went live keeps its records.
+    async fn save_entities_by_chunk(
+        &self,
+        entities: &[Arc<dyn EntityBase>],
+        snapshot_chunks: impl IntoIterator<Item = Vector2<i32>>,
+    ) {
+        let mut groups: FxHashMap<Vector2<i32>, Vec<NbtCompound>> = FxHashMap::default();
+        for entity in entities {
+            let base_entity = entity.get_entity();
+            if base_entity.is_removed() {
+                continue;
+            }
+            let mut nbt = NbtCompound::new();
+            entity.write_nbt(&mut nbt);
+            groups
+                .entry(base_entity.chunk_pos.load())
+                .or_default()
+                .push(nbt);
         }
-        let current_chunk = base_entity.block_pos.load().chunk_position();
-        let mut nbt = NbtCompound::new();
-        entity.write_nbt(&mut nbt);
-        let chunk = self.level.get_entity_chunk(current_chunk).await;
-        chunk
-            .data
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .push(nbt);
-        chunk.mark_dirty(true);
+        for pos in snapshot_chunks {
+            groups.entry(pos).or_default();
+        }
+
+        for (pos, records) in groups {
+            let chunk = if records.is_empty() {
+                let Some(chunk) = self.level.get_entity_chunk_sync(&pos) else {
+                    continue;
+                };
+                chunk
+            } else {
+                self.level.get_entity_chunk(pos).await
+            };
+            let live = chunk.live.load(Relaxed);
+            if !live && records.is_empty() {
+                continue;
+            }
+            let mut data = chunk
+                .data
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            merge_entity_records(&mut data, live, records);
+            drop(data);
+            chunk.mark_dirty(true);
+        }
     }
 
     /// Serializes the live block entities of a chunk back into that chunk's block
@@ -4548,6 +4574,7 @@ impl World {
                             .lock()
                             .unwrap_or_else(std::sync::PoisonError::into_inner),
                     );
+                    chunk.live.store(true, Relaxed);
                     for entity_nbt in &entity_nbts {
                         let Some(id) = entity_nbt.get_string("id") else {
                             debug!("Entity has no ID");
@@ -5066,7 +5093,7 @@ impl World {
         }
 
         // The entity stays live-only: it is written to its chunk's saved data on
-        // unload (see `save_entity`), never at spawn, so it can't be both live and
+        // unload (see `save_entities_by_chunk`), never at spawn, so it can't be both live and
         // serialized at once (which would double it on the next reload).
         self.spawn_state.load().add_entity(self, entity.as_ref());
         self.entity_tracker.add_entity(&entity, self);
@@ -5109,6 +5136,7 @@ impl World {
         let mut entities_to_remove = Vec::new();
 
         self.entities.rcu(|current_entities| {
+            entities_to_remove.clear();
             let mut new_entities = (**current_entities).clone();
             new_entities.retain(|entity| {
                 let base_entity = entity.get_entity();
@@ -5123,9 +5151,11 @@ impl World {
             new_entities
         });
 
+        self.save_entities_by_chunk(&entities_to_remove, chunks_set.iter().copied())
+            .await;
+
         for entity in entities_to_remove {
             self.entity_tracker.remove_entity(entity.as_ref(), self);
-            self.save_entity(&entity).await;
             self.spawn_state.load().remove_entity(self, entity.as_ref());
         }
 
@@ -7037,9 +7067,9 @@ impl World {
     }
 
     pub async fn save(&self) {
-        for entity in self.entities.load().iter() {
-            self.save_entity(entity).await;
-        }
+        let entities = self.entities.load_full();
+        self.save_entities_by_chunk(&entities, self.level.live_entity_chunk_positions())
+            .await;
 
         let chunks: Vec<Vector2<i32>> = self
             .block_entities
@@ -7512,6 +7542,22 @@ pub fn calculate_celestial_angle(time_of_day: i64) -> f32 {
     y_curve.sample(t)
 }
 
+/// A live chunk's records were already spawned, so `fresh` replaces them. Otherwise the
+/// records are the only copy of unspawned entities, so they stay and are only replaced by UUID.
+fn merge_entity_records(data: &mut Vec<NbtCompound>, live: bool, fresh: Vec<NbtCompound>) {
+    if live {
+        *data = fresh;
+        return;
+    }
+
+    for record in fresh {
+        if let Some(uuid) = record.get_uuid("UUID") {
+            data.retain(|existing| existing.get_uuid("UUID") != Some(uuid));
+        }
+        data.push(record);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use pumpkin_data::{
@@ -7519,9 +7565,118 @@ mod tests {
         block_properties::{ChestLikeProperties, ChestType, HorizontalFacing, WaterLikeProperties},
         fluid::Fluid,
     };
+    use pumpkin_nbt::compound::NbtCompound;
     use pumpkin_util::math::position::BlockPos;
+    use uuid::Uuid;
 
-    use super::{World, bedrock_block_breaking_rate, bedrock_chest_block_actor};
+    use super::{
+        World, bedrock_block_breaking_rate, bedrock_chest_block_actor, merge_entity_records,
+    };
+
+    fn record(uuid: Option<Uuid>, id: &str) -> NbtCompound {
+        let mut nbt = NbtCompound::new();
+        nbt.put_string("id", id.to_string());
+        if let Some(uuid) = uuid {
+            nbt.put_uuid("UUID", uuid);
+        }
+        nbt
+    }
+
+    fn ids(data: &[NbtCompound]) -> Vec<&str> {
+        data.iter()
+            .filter_map(|record| record.get_string("id"))
+            .collect()
+    }
+
+    #[test]
+    fn merge_entity_records_replaces_everything_in_a_live_chunk() {
+        let stale = Uuid::from_u128(1);
+        let fresh = Uuid::from_u128(2);
+        let mut data = vec![record(Some(stale), "minecraft:piglin")];
+
+        merge_entity_records(
+            &mut data,
+            true,
+            vec![record(Some(fresh), "minecraft:zombie")],
+        );
+
+        assert_eq!(ids(&data), ["minecraft:zombie"]);
+        assert_eq!(data[0].get_uuid("UUID"), Some(fresh));
+    }
+
+    #[test]
+    fn merge_entity_records_empties_a_live_chunk_with_no_entities_left() {
+        let mut data = vec![
+            record(Some(Uuid::from_u128(1)), "minecraft:piglin"),
+            record(Some(Uuid::from_u128(2)), "minecraft:zombie"),
+        ];
+
+        merge_entity_records(&mut data, true, Vec::new());
+
+        assert!(data.is_empty());
+    }
+
+    #[test]
+    fn merge_entity_records_keeps_unspawned_records_of_a_dormant_chunk() {
+        let dormant = Uuid::from_u128(1);
+        let mut data = vec![record(Some(dormant), "minecraft:piglin")];
+
+        merge_entity_records(
+            &mut data,
+            false,
+            vec![record(Some(Uuid::from_u128(2)), "minecraft:zombie")],
+        );
+
+        assert_eq!(ids(&data), ["minecraft:piglin", "minecraft:zombie"]);
+    }
+
+    #[test]
+    fn merge_entity_records_replaces_a_same_uuid_record_of_a_dormant_chunk() {
+        let shared = Uuid::from_u128(1);
+        let mut data = vec![
+            record(Some(shared), "minecraft:piglin"),
+            record(Some(Uuid::from_u128(2)), "minecraft:zombie"),
+        ];
+
+        merge_entity_records(
+            &mut data,
+            false,
+            vec![record(Some(shared), "minecraft:hoglin")],
+        );
+
+        assert_eq!(ids(&data), ["minecraft:zombie", "minecraft:hoglin"]);
+        assert_eq!(
+            data.iter()
+                .filter(|r| r.get_uuid("UUID") == Some(shared))
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn merge_entity_records_never_matches_a_record_without_a_uuid() {
+        let mut data = vec![record(None, "minecraft:piglin")];
+
+        merge_entity_records(&mut data, false, vec![record(None, "minecraft:zombie")]);
+
+        assert_eq!(ids(&data), ["minecraft:piglin", "minecraft:zombie"]);
+    }
+
+    #[test]
+    fn merge_entity_records_is_idempotent_on_a_dormant_chunk() {
+        let uuid = Uuid::from_u128(1);
+        let mut data = Vec::new();
+
+        for _ in 0..3 {
+            merge_entity_records(
+                &mut data,
+                false,
+                vec![record(Some(uuid), "minecraft:piglin")],
+            );
+        }
+
+        assert_eq!(ids(&data), ["minecraft:piglin"]);
+    }
 
     #[test]
     fn liquid_block_states_preserve_source_flow_and_falling_depths() {
