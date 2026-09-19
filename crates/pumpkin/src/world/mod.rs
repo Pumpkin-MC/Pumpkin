@@ -7279,6 +7279,23 @@ impl World {
         }
     }
 
+    #[must_use]
+    pub fn get_loot_table(&self, key: &str) -> Option<crate::world::loot::LootTableHandle> {
+        self.server.upgrade().map_or_else(
+            || {
+                let full_key = if key.contains(':') {
+                    key.to_string()
+                } else {
+                    format!("minecraft:{key}")
+                };
+                pumpkin_data::loot_table::get_loot_table(key)
+                    .or_else(|| pumpkin_data::loot_table::get_loot_table(&full_key))
+                    .map(crate::world::loot::LootTableHandle::Static)
+            },
+            |server| server.datapack_manager.get_loot_table(key),
+        )
+    }
+
     pub fn generate_loot(&self, loot_table: String) {
         let mut loot_event =
             crate::plugin::api::events::world::loot_generate::LootGenerateEvent::new(loot_table);

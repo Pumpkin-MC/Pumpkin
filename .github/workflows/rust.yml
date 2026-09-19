@@ -2,8 +2,16 @@ name: Cargo Build, Test, and Linting
 
 on:
   push:
+    branches:
+      - master
   pull_request:
   workflow_dispatch:
+    inputs:
+      rust_toolchain_version:
+        description: Rust toolchain version to use
+        required: false
+        default: stable
+        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -11,71 +19,106 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  CI_RUST_TOOLCHAIN_VER: ${{ inputs.rust_toolchain_version || 'stable' }}
   RUSTFLAGS: "-Dwarnings"
 
 jobs:
+  prepare:
+    name: Plan CI
+    runs-on: ubuntu-latest
+    outputs:
+      affected_packages: ${{ steps.plan.outputs.affected_packages }}
+      has_code: ${{ steps.plan.outputs.has_code }}
+      run_full: ${{ steps.plan.outputs.run_full }}
+      should_check_wit: ${{ steps.plan.outputs.should_check_wit }}
+      test_matrix: ${{ steps.plan.outputs.test_matrix }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Select affected packages
+        id: plan
+        env:
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: >-
+          python .github/scripts/ci_packages.py plan
+          --event "${{ github.event_name }}"
+          --base "$CI_BASE_SHA"
+          --head "$CI_HEAD_SHA"
+          --output "$GITHUB_OUTPUT"
+
   format:
     name: Check formatting
+    needs: prepare
+    if: needs.prepare.outputs.has_code == 'true'
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        toolchain:
-          - stable
     steps:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
       - run: rustup component add rustfmt
-      - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --check
+
   machete:
     name: Detect unused dependencies
+    needs: prepare
+    if: needs.prepare.outputs.has_code == 'true'
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        toolchain:
-          - stable
     steps:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
       - uses: bnjbvr/cargo-machete@main
-  clippy_debug:
-    name: Run lints (debug)
+
+  clippy:
+    name: Run lints
+    needs: prepare
+    if: needs.prepare.outputs.has_code == 'true'
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        toolchain:
-          - stable
+    env:
+      CI_AFFECTED_PACKAGES: ${{ needs.prepare.outputs.affected_packages }}
     steps:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
       - run: rustup component add clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Clippy (debug)
-        run: cargo clippy --all-targets --all-features
+        with:
+          shared-key: debug-${{ runner.os }}-${{ runner.arch }}
+      - name: Clippy affected packages
+        run: >-
+          python .github/scripts/ci_packages.py run --
+          cargo clippy --all-targets --all-features
+
   clippy_release:
-    name: Run lints (release)
+    name: Run release lints
+    needs: prepare
+    if: needs.prepare.outputs.run_full == 'true' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        toolchain:
-          - stable
     steps:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
       - run: rustup component add clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Clippy (release)
-        run: cargo clippy --release --all-targets --all-features
+      - run: cargo clippy --release --all-targets --all-features
+      
   check_wit:
     name: Test `pumpkin-plugin-wit` against `wit-bindgen`
+    needs: prepare
+    if: needs.prepare.outputs.should_check_wit == 'true'
     runs-on: ubuntu-slim
     steps:
       - uses: actions/checkout@v7
@@ -83,56 +126,74 @@ jobs:
           sparse-checkout: "crates/pumpkin-plugin-wit"
       - uses: bytecodealliance/actions/wit-bindgen/setup@v1
       - run: wit-bindgen rust crates/pumpkin-plugin-wit/v0.1
-  build_and_test:
-    name: Build project and test
-    runs-on: ${{ matrix.os }}
-    needs: [format, machete, clippy_debug, clippy_release, check_wit]
+
+  test:
+    name: Test (${{ matrix.name }})
+    needs: [prepare, format, machete, clippy, check_wit]
+    if: >-
+      always() &&
+      needs.prepare.outputs.has_code == 'true' &&
+      needs.format.result == 'success' &&
+      needs.machete.result == 'success' &&
+      needs.clippy.result == 'success' &&
+      (needs.check_wit.result == 'success' || needs.check_wit.result == 'skipped')
+    runs-on: ${{ matrix.os }} 
     strategy:
-      matrix:
-        os:
-          [
-            ubuntu-latest,
-            ubuntu-26.04-arm,
-            windows-latest,
-            windows-11-arm,
-            macos-latest,
-          ]
-        toolchain:
-          - stable
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.test_matrix) }}
+    env:
+      CI_AFFECTED_PACKAGES: ${{ needs.prepare.outputs.affected_packages }}
     steps:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
       - uses: taiki-e/install-action@nextest
       - uses: Swatinem/rust-cache@v2
-      - name: Cargo nextest
-        run: cargo nextest run --verbose
-      - name: Cargo doctest
-        run: cargo test --doc --verbose
+        with:
+          shared-key: debug-${{ runner.os }}-${{ runner.arch }}
+      - name: Test affected packages
+        run: >-
+          python .github/scripts/ci_packages.py run --
+          cargo nextest run --verbose --no-tests=pass
+      - name: Test affected package documentation
+        run: >-
+          python .github/scripts/ci_packages.py run --
+          cargo test --doc --verbose
+
   test_android:
     name: Test on Android AArch64
+    needs: [prepare, format, machete, clippy, check_wit]
+    if: >-
+      always() &&
+      needs.prepare.outputs.run_full == 'true' &&
+      needs.format.result == 'success' &&
+      needs.machete.result == 'success' &&
+      needs.clippy.result == 'success' &&
+      (needs.check_wit.result == 'success' || needs.check_wit.result == 'skipped')
     runs-on: ubuntu-latest
-    needs: [format, machete, clippy_debug, clippy_release, check_wit]
     steps:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-linux-android
+      - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
+      - run: rustup target add aarch64-linux-android
       - uses: nttld/setup-ndk@v1
         with:
           ndk-version: r27c
-      - run: cargo install cargo-ndk
-      - uses: taiki-e/install-action@nextest
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: android-debug-${{ runner.os }}-${{ runner.arch }}
+      - run: cargo install cargo-ndk
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Start Android emulator and Test
+      - name: Start Android emulator and test
         uses: reactivecircus/android-emulator-runner@v2
         env:
           CARGO_NDK_PLATFORM: 24
@@ -144,37 +205,110 @@ jobs:
           force-avd-creation: false
           emulator-options: -no-snapshot-load -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
           script: cargo ndk-test -t arm64-v8a
-  build_release:
-    name: Build project in release
+
+  build_pull_request:
+    name: Build affected packages
+    needs: [prepare, test]
+    if: github.event_name == 'pull_request' && needs.prepare.outputs.has_code == 'true'
     runs-on: ${{ matrix.os }}
-    needs: [build_and_test]
     strategy:
+      fail-fast: false
       matrix:
-        os:
-          [
-            ubuntu-latest,
-            ubuntu-26.04-arm,
-            windows-latest,
-            windows-11-arm,
-            macos-latest,
-          ]
-        toolchain:
-          - stable
+        include:
+          - name: Linux x64
+            os: ubuntu-latest
+          - name: Linux ARM64
+            os: ubuntu-26.04-arm
+          - name: Windows x64
+            os: windows-latest
+          - name: Windows ARM64
+            os: windows-11-arm
+          - name: macOS
+            os: macos-latest
+    env:
+      CI_AFFECTED_PACKAGES: ${{ needs.prepare.outputs.affected_packages }}
     steps:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-
-      - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: debug-${{ runner.os }}-${{ runner.arch }}
+      - name: Build affected packages
+        run: >-
+          python .github/scripts/ci_packages.py run --
+          cargo build --verbose
 
+  build_android_pull_request:
+    name: Build affected packages for Android AArch64
+    needs: [prepare, test, test_android]
+    if: >-
+      always() &&
+      github.event_name == 'pull_request' &&
+      needs.prepare.outputs.has_code == 'true' &&
+      needs.test.result == 'success' &&
+      (needs.test_android.result == 'success' || needs.test_android.result == 'skipped')
+    runs-on: ubuntu-latest
+    env:
+      CI_AFFECTED_PACKAGES: ${{ needs.prepare.outputs.affected_packages }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
+      - run: rustup target add aarch64-linux-android
+      - uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: android-debug-${{ runner.os }}-${{ runner.arch }}
+      - run: cargo install cargo-ndk
+      - name: Build affected packages
+        env:
+          CARGO_NDK_PLATFORM: 24
+        run: >-
+          python .github/scripts/ci_packages.py run --
+          cargo ndk -t arm64-v8a build --locked
+
+  build_release:
+    name: Build project in release
+    needs: [prepare, clippy_release, test, test_android]
+    if: needs.prepare.outputs.run_full == 'true' && github.event_name != 'pull_request'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x64
+            os: ubuntu-latest
+          - name: Linux ARM64
+            os: ubuntu-26.04-arm
+          - name: Windows x64
+            os: windows-latest
+          - name: Windows ARM64
+            os: windows-11-arm
+          - name: macOS
+            os: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
+      - uses: Swatinem/rust-cache@v2
       - name: Install musl-tools (Linux only)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y musl-tools
-
-      - name: Build Release
+      - name: Build release
         shell: bash
         run: |
           cargo build --verbose --release
@@ -187,7 +321,6 @@ jobs:
             rustup target add "$TARGET"
             cargo build --verbose --release --target "$TARGET"
           fi
-
       - name: Prepare artifacts
         shell: bash
         run: |
@@ -209,24 +342,24 @@ jobs:
           name: pumpkin-${{ runner.arch }}-${{ runner.os }}
           compression-level: 9
           path: dist/pumpkin-*
+
   build_android_release:
-    name: Build project in release for Android (AArch64)
+    name: Build project in release for Android AArch64
+    needs: [prepare, clippy_release, test, test_android]
+    if: needs.prepare.outputs.run_full == 'true' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    needs: [test_android]
     steps:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-linux-android
+      - run: rustup update ${{ env.CI_RUST_TOOLCHAIN_VER }} && rustup default ${{ env.CI_RUST_TOOLCHAIN_VER }}
+      - run: rustup target add aarch64-linux-android
       - uses: nttld/setup-ndk@v1
         with:
           ndk-version: r27c
-      - name: Install cargo-ndk
-        run: cargo install cargo-ndk
       - uses: Swatinem/rust-cache@v2
-      - name: Build Release with cargo ndk
+      - run: cargo install cargo-ndk
+      - name: Build release with cargo ndk
         env:
           CARGO_NDK_PLATFORM: 24
         run: cargo ndk -t arm64-v8a build --release --locked
@@ -241,7 +374,9 @@ jobs:
           name: pumpkin-aarch64-android
           compression-level: 9
           path: dist/pumpkin-aarch64-android
+
   draft_release:
+    name: Draft nightly release
     permissions:
       contents: write
     needs: [build_release, build_android_release]
@@ -263,14 +398,12 @@ jobs:
           echo "From commit: $(git rev-parse --short HEAD)" > dist/RELEASE.md
           echo "Generated on: $(date -u +"%Y-%m-%d %H:%M") UTC" >> dist/RELEASE.md
           cat dist/RELEASE.md
-
       - name: Update the nightly tag
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag --force nightly && git push --force origin tag nightly
-
-      - name: Draft a nightly github release
+      - name: Draft a nightly GitHub release
         uses: softprops/action-gh-release@v3
         with:
           prerelease: true
