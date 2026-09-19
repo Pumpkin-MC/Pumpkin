@@ -212,7 +212,7 @@ impl PluginStatus {
 impl std::fmt::Display for PluginStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Active => f.write_str("Running"),
+            Self::Active => f.write_str("Active"),
             Self::Loading => f.write_str("Loading"),
             Self::Unloaded => f.write_str("Unloaded"),
             Self::Disabled => f.write_str("Disabled in the server configuration"),
