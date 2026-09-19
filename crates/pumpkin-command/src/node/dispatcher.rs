@@ -1069,6 +1069,39 @@ mod test {
         assert_eq!(dispatcher.execute_input("verb jump here", &source), Ok(1));
     }
 
+    /// The same merge happens again when two separate `register` calls bring the same command,
+    /// this time between nodes already attached to the tree. The node that loses stays in the
+    /// arena as an orphan holding only its own branch, so a redirect taken against it has to be
+    /// pointed at the node that absorbed it or it reaches half a command.
+    #[test]
+    fn a_redirect_survives_an_attached_merge() {
+        let mut dispatcher = CommandDispatcher::new();
+        let first: fn(&CommandContext) -> CommandExecutorResult = |_| Ok(1);
+        let second: fn(&CommandContext) -> CommandExecutorResult = |_| Ok(2);
+
+        dispatcher.register(
+            CommandArgumentBuilder::new("verb", "registered once")
+                .then(literal("get").then(literal("first").executes(first))),
+        );
+
+        let mut absorbed = literal("get");
+        let absorbed_id = absorbed.id();
+        absorbed = absorbed.then(literal("second").executes(second));
+        dispatcher.register(CommandArgumentBuilder::new("verb", "registered again").then(absorbed));
+
+        dispatcher.register(
+            CommandArgumentBuilder::new("jump", "goes to the merged node").redirect(absorbed_id),
+        );
+
+        let source = DummySource::dummy();
+        assert_eq!(dispatcher.execute_input("verb get first", &source), Ok(1));
+        assert_eq!(dispatcher.execute_input("verb get second", &source), Ok(2));
+        // The branch that came from the *first* registration has to be reachable through the
+        // redirect too, which is what fails when the orphan keeps the id.
+        assert_eq!(dispatcher.execute_input("jump first", &source), Ok(1));
+        assert_eq!(dispatcher.execute_input("jump second", &source), Ok(2));
+    }
+
     /// A later registration installs its executor on the node already there, the way Brigadier
     /// takes the incoming command when it is set — without discarding the branch the earlier
     /// registration hung below it.
