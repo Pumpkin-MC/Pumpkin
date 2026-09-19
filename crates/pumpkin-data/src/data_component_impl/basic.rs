@@ -444,14 +444,91 @@ impl DataComponentImpl for BaseColorImpl {
     default_impl!(BaseColor);
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct InstrumentImpl;
+#[derive(Clone, Debug, PartialEq)]
+pub enum InstrumentImpl {
+    Reference(Cow<'static, str>),
+    Inline {
+        sound_event: super::IdOr<SoundEvent>,
+        use_duration: f32,
+        range: f32,
+        description: NbtTag,
+    },
+}
 impl InstrumentImpl {
-    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
-        Some(Self)
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        if let NbtTag::String(name) = data {
+            return Some(Self::Reference(Cow::Owned(if name.contains(':') {
+                name.to_string()
+            } else {
+                format!("minecraft:{name}")
+            })));
+        }
+        let compound = data.extract_compound()?;
+        let sound_event = match compound.get("sound_event")? {
+            NbtTag::String(name) => super::IdOr::Id(crate::sound::Sound::from_name(
+                name.strip_prefix("minecraft:").unwrap_or(name),
+            )?),
+            NbtTag::Compound(sound) => super::IdOr::Value(SoundEvent {
+                sound_name: sound.get_string("sound_id")?.to_string(),
+                range: match sound.get("range") {
+                    Some(tag) => Some(Self::number(tag)?),
+                    None => None,
+                },
+            }),
+            _ => return None,
+        };
+        let use_duration = Self::number(compound.get("use_duration")?)?;
+        let range = Self::number(compound.get("range")?)?;
+        if !use_duration.is_finite() || use_duration <= 0.0 || !range.is_finite() || range <= 0.0 {
+            return None;
+        }
+        let description = compound.get("description")?.clone();
+        if !matches!(
+            description,
+            NbtTag::String(_) | NbtTag::Compound(_) | NbtTag::List(_)
+        ) {
+            return None;
+        }
+        Some(Self::Inline {
+            sound_event,
+            use_duration,
+            range,
+            description,
+        })
+    }
+
+    #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+    fn number(tag: &NbtTag) -> Option<f32> {
+        Some(match tag {
+            NbtTag::Byte(value) => f32::from(*value),
+            NbtTag::Short(value) => f32::from(*value),
+            NbtTag::Int(value) => *value as f32,
+            NbtTag::Long(value) => *value as f32,
+            NbtTag::Float(value) => *value,
+            NbtTag::Double(value) => *value as f32,
+            _ => return None,
+        })
     }
 }
 impl DataComponentImpl for InstrumentImpl {
+    fn write_data(&self) -> NbtTag {
+        match self {
+            Self::Reference(name) => NbtTag::String(name.to_string().into()),
+            Self::Inline {
+                sound_event,
+                use_duration,
+                range,
+                description,
+            } => {
+                let mut compound = NbtCompound::new();
+                super::put_idor(&mut compound, "sound_event", sound_event);
+                compound.put_float("use_duration", *use_duration);
+                compound.put_float("range", *range);
+                compound.put("description", description.clone());
+                NbtTag::Compound(compound)
+            }
+        }
+    }
     default_impl!(Instrument);
 }
 
