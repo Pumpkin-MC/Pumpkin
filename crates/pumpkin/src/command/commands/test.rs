@@ -51,6 +51,11 @@ struct CommandTestReporter {
 
 impl GameTestReporter for CommandTestReporter {
     fn send_message(&self, message: TextComponent) {
+        // A run finishes some ticks after `/test run` returns. An RCON sender collects into a
+        // buffer the connection has already flushed by then, and the console sender belongs to
+        // whoever typed the command, so results reached neither when the server has no players.
+        // Log them as well, which is the only channel a headless run has.
+        info!(target: "pumpkin::gametest", "{}", message.clone().to_pretty_console());
         self.sender.send_message(message);
     }
 }
