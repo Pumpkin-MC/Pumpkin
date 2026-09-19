@@ -15,8 +15,6 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
 
 use crate::entity::{Entity, player::Player};
-use crate::world::loot::fill_chest_inventory;
-use pumpkin_data::loot_table::get_loot_table;
 
 pub(super) struct MinecartInventory {
     items: RwLock<Vec<ItemStack>>,
@@ -98,7 +96,7 @@ impl MinecartInventory {
         let Some((loot_table, seed)) = loot_table else {
             return;
         };
-        let Some(table) = get_loot_table(&loot_table) else {
+        let Some(table) = crate::world::loot::get_loot_table(&loot_table) else {
             *self
                 .loot_table
                 .lock()
@@ -107,7 +105,7 @@ impl MinecartInventory {
         };
 
         let inventory: Arc<dyn Inventory> = self.clone();
-        fill_chest_inventory(&inventory, table, seed);
+        crate::world::loot::fill_chest_inventory_handle(&inventory, &table, seed);
     }
 }
 
