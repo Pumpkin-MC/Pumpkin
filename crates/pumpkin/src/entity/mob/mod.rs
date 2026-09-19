@@ -10,6 +10,7 @@ use crate::entity::player::Player;
 use crate::entity::predicate::EntityPredicate;
 use crate::server::Server;
 use crate::world::World;
+use crate::world::brightness::DAYLIGHT_BRIGHTNESS;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::attributes::Attributes;
 use pumpkin_data::damage::DamageType;
@@ -25,12 +26,10 @@ use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot};
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::random::xoroshiro128::Xoroshiro;
 use pumpkin_util::random::{RandomGenerator, get_seed};
 use pumpkin_util::version::JavaMinecraftVersion;
-use rand::RngExt;
 use std::sync::Arc;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, Ordering};
@@ -54,6 +53,7 @@ pub mod guardian;
 pub mod hoglin;
 pub mod illusioner;
 pub mod magma_cube;
+pub mod neutral;
 pub mod patrol;
 pub mod phantom;
 pub mod piglin;
@@ -67,6 +67,7 @@ pub mod silverfish;
 pub mod skeleton;
 pub mod slime;
 pub mod spider;
+pub mod sun_burn;
 pub mod vex;
 pub mod vindicator;
 pub mod warden;
@@ -617,65 +618,14 @@ impl MobEntity {
         base_box.expand(attack_range, 0.0, attack_range)
     }
 
-    pub fn tick_sun_burn(&self) {
-        if !self
-            .living_entity
-            .entity
-            .entity_type
-            .has_tag(&tag::EntityType::MINECRAFT_BURN_IN_DAYLIGHT)
-        {
-            return;
-        }
-        if !self.is_sun_burn_tick() {
-            return;
-        }
-        self.apply_sun_burn();
-    }
-
-    fn is_sun_burn_tick(&self) -> bool {
+    /// Sunlight at the mob's eye reaches daylight.
+    pub fn is_in_daylight(&self) -> bool {
         let entity = &self.living_entity.entity;
-
-        let world_arc = entity.world.load();
-        let world = world_arc.as_ref();
-
-        let eye_block_pos = entity.get_eye_pos().to_block_pos();
-        if !world.monsters_burn(&eye_block_pos) {
-            return false;
-        }
-
-        // Vanilla: getLightLevelDependentMagicValue() — sky light at eye pos, scaled 0–1.
-        let brightness = world
-            .level
-            .light_engine
-            .get_sky_light_level(&world.level, &eye_block_pos) as f32
-            / 15.0;
-
-        if brightness <= 0.5 {
-            return false;
-        }
-
-        let is_in_non_burnable = entity.touching_water.load(Relaxed)
-            || world.is_raining()
-            || entity.is_in_powder_snow()
-            || entity.was_in_powder_snow.load(Relaxed);
-
-        if is_in_non_burnable {
-            return false;
-        }
-
-        let pos = entity.pos.load();
-        let top_y = world.get_top_block(Vector2::new(pos.x as i32, pos.z as i32));
-        if (entity.get_eye_y() as i32) < top_y {
-            return false;
-        }
-
-        let mut rng = rand::rng();
-        rng.random::<f32>() * 30.0 < (brightness - 0.4) * 2.0
-    }
-
-    fn apply_sun_burn(&self) {
-        let entity = &self.living_entity.entity;
-        entity.set_on_fire_for(8.0);
+        entity
+            .world
+            .load()
+            .get_sunlight_brightness(&entity.get_eye_pos().to_block_pos())
+            >= DAYLIGHT_BRIGHTNESS
     }
 
     pub fn mob_interact(&self, player: &Arc<Player>, item_stack: &mut ItemStack) -> bool {
@@ -802,6 +752,18 @@ pub trait Mob: EntityBase + Send + Sync {
 
     fn requires_custom_persistence(&self) -> bool {
         false
+    }
+
+    /// Whether daylight burns this mob. Default: entity tag `burn_in_daylight`.
+    fn burns_in_daylight(&self) -> bool {
+        self.get_entity()
+            .entity_type
+            .has_tag(&tag::EntityType::MINECRAFT_BURN_IN_DAYLIGHT)
+    }
+
+    /// Slot whose item shields the mob from the sun and takes the wear instead.
+    fn sun_protection_slot(&self) -> EquipmentSlot {
+        EquipmentSlot::HEAD
     }
 
     fn remove_when_far_away(&self, _distance_sq: f64) -> bool {
@@ -955,6 +917,11 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn as_raider(&self) -> Option<&dyn raider::Raider> {
+        None
+    }
+
+    /// Must return `Some(self)` for every `NeutralMob` implementor. Not compiler-enforced.
+    fn as_neutral(&self) -> Option<&dyn neutral::NeutralMob> {
         None
     }
 
@@ -1305,7 +1272,7 @@ impl<T: Mob + Send + 'static> EntityBase for T {
     fn tick(&self, caller: &dyn EntityBase, server: &Server) {
         let mob_entity = self.get_mob_entity();
         mob_entity.living_entity.entity.tick_leash();
-        mob_entity.tick_sun_burn();
+        sun_burn::tick(self);
 
         if mob_entity.breeding_cooldown.load(Relaxed) > 0 {
             mob_entity.breeding_cooldown.fetch_sub(1, Relaxed);
@@ -1328,6 +1295,10 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         }
 
         mob_entity.check_despawn(self);
+
+        if let Some(neutral) = self.as_neutral() {
+            neutral.update_persistent_anger();
+        }
 
         self.mob_tick(caller);
 
@@ -1550,6 +1521,9 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         if let Some(tamable) = self.as_tamable() {
             tamable.write_tamable_nbt(nbt);
         }
+        if let Some(neutral) = self.as_neutral() {
+            neutral.write_anger_nbt(nbt);
+        }
         self.mob_write_nbt(nbt);
     }
 
@@ -1571,6 +1545,9 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         }
         if let Some(tamable) = self.as_tamable() {
             tamable.read_tamable_nbt(nbt);
+        }
+        if let Some(neutral) = self.as_neutral() {
+            neutral.read_anger_nbt(nbt);
         }
         self.mob_read_nbt(nbt);
     }

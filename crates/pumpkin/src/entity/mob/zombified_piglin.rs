@@ -1,27 +1,37 @@
-use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_nbt::compound::NbtCompound;
 
+use crate::entity::ai::util::goal_utils;
 use crate::entity::{
     Entity, EntityBase,
+    ai::behavior::neutral::apply_targets,
     ai::goal::{
         look_around::RandomLookAroundGoal, look_at_entity::LookAtEntityGoal,
         melee_attack::MeleeAttackGoal, revenge::RevengeGoal, swim::SwimGoal,
         wander_around::WanderAroundGoal,
     },
-    mob::{Mob, MobEntity, equipment::RegionalDifficulty},
+    mob::{
+        Mob, MobEntity,
+        equipment::RegionalDifficulty,
+        neutral::{NeutralData, NeutralMob},
+    },
 };
 use crate::world::World;
 
+/// Vanilla `ALERT_INTERVAL`: 4 to 6 seconds.
+const ALERT_INTERVAL: std::ops::RangeInclusive<i32> = 80..=120;
+
 pub struct ZombifiedPiglinEntity {
     pub mob_entity: MobEntity,
-    anger_time: AtomicI32,
+    neutral_data: NeutralData,
     ticks_until_next_alert: AtomicI32,
+    /// Detects the target transition that restarts the alert interval.
+    had_target: AtomicBool,
 }
 
 impl ZombifiedPiglinEntity {
@@ -31,8 +41,9 @@ impl ZombifiedPiglinEntity {
         let mob_entity = MobEntity::new(entity);
         let piglin = Self {
             mob_entity,
-            anger_time: AtomicI32::new(0),
+            neutral_data: NeutralData::default(),
             ticks_until_next_alert: AtomicI32::new(0),
+            had_target: AtomicBool::new(false),
         };
         let mob_arc = Arc::new(piglin);
         let mob_weak: Weak<dyn Mob> = {
@@ -61,24 +72,50 @@ impl ZombifiedPiglinEntity {
                 .target_selector
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            target_selector.add_goal(1, Box::new(RevengeGoal::new(true)));
+            target_selector.add_goal(1, Box::new(RevengeGoal::new(true).alerting_others()));
+            apply_targets(&mut target_selector, &mob_arc.mob_entity, 2, 3, true);
         };
 
         mob_arc
     }
 
-    pub fn is_angry(&self) -> bool {
-        self.anger_time.load(Ordering::Relaxed) > 0
-    }
+    /// Hands the current target to nearby piglins that have none of their own.
+    fn maybe_alert_others(&self, target: &Arc<dyn EntityBase>) {
+        let remaining = self.ticks_until_next_alert.load(Ordering::Relaxed);
+        if remaining > 0 {
+            self.ticks_until_next_alert
+                .store(remaining - 1, Ordering::Relaxed);
+            return;
+        }
 
-    pub fn set_anger_time(&self, ticks: i32) {
-        self.anger_time.store(ticks, Ordering::Relaxed);
+        if self.has_line_of_sight(target.get_entity()) {
+            for other in goal_utils::nearby_same_type(self) {
+                let Some(other_mob) = other.get_mob() else {
+                    continue;
+                };
+                if other_mob.get_mob_entity().get_target().is_some()
+                    || other.is_allied_to(target.as_ref())
+                {
+                    continue;
+                }
+                other_mob.set_mob_target(Some(target.clone()));
+            }
+        }
+
+        self.ticks_until_next_alert
+            .store(rand::random_range(ALERT_INTERVAL), Ordering::Relaxed);
     }
 }
+
+crate::impl_neutral_mob!(ZombifiedPiglinEntity, neutral_data);
 
 impl Mob for ZombifiedPiglinEntity {
     fn get_mob_entity(&self) -> &MobEntity {
         &self.mob_entity
+    }
+
+    fn as_neutral(&self) -> Option<&dyn NeutralMob> {
+        Some(self)
     }
 
     fn populate_default_equipment_slots(
@@ -100,69 +137,23 @@ impl Mob for ZombifiedPiglinEntity {
         equipment.put(&EquipmentSlot::MAIN_HAND, ItemStack::new(1, weapon));
     }
 
-    fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
-        let anger = self.anger_time.load(Ordering::Relaxed);
-        if anger > 0 {
-            nbt.put_int("AngerTime", anger);
-        }
-    }
-
-    fn mob_read_nbt(&self, nbt: &NbtCompound) {
-        if let Some(anger) = nbt.get_int("AngerTime") {
-            self.anger_time.store(anger, Ordering::Relaxed);
-        }
-    }
-
     fn mob_tick(&self, _caller: &dyn EntityBase) {
         let entity = &self.mob_entity.living_entity.entity;
         if !entity.is_alive() {
             return;
         }
 
-        let anger = self.anger_time.load(Ordering::Relaxed);
-        if anger > 0 {
-            self.anger_time.store(anger - 1, Ordering::Relaxed);
+        let Some(target) = self.mob_entity.get_target() else {
+            self.had_target.store(false, Ordering::Relaxed);
+            return;
+        };
+
+        // Fresh target: wait out a full interval before spreading the word.
+        if !self.had_target.swap(true, Ordering::Relaxed) {
+            self.ticks_until_next_alert
+                .store(rand::random_range(ALERT_INTERVAL), Ordering::Relaxed);
         }
 
-        if let Some(target) = self.mob_entity.get_target() {
-            let next_alert = self.ticks_until_next_alert.load(Ordering::Relaxed);
-            if next_alert > 0 {
-                self.ticks_until_next_alert
-                    .store(next_alert - 1, Ordering::Relaxed);
-            } else {
-                self.ticks_until_next_alert
-                    .store(rand::random_range(80..120), Ordering::Relaxed);
-                let world = entity.world.load();
-                let my_pos = entity.pos.load();
-                let nearby_zombies = world.get_nearby_entities(my_pos, 35.0);
-                for (_uuid, other) in nearby_zombies {
-                    if other.get_entity().entity_id != entity.entity_id
-                        && other.get_entity().entity_type == &EntityType::ZOMBIFIED_PIGLIN
-                        && let Some(mob) = other.get_mob()
-                    {
-                        mob.get_mob_entity().set_target(Some(target.clone()));
-                    }
-                }
-            }
-        }
-    }
-
-    fn on_damage(
-        &self,
-        _damage_type: pumpkin_data::damage::DamageType,
-        source: Option<&dyn EntityBase>,
-    ) {
-        let anger_ticks = rand::random_range(400..780);
-        self.set_anger_time(anger_ticks);
-
-        if let Some(attacker) = source
-            && let Some(player) = attacker.get_player()
-        {
-            let world = self.mob_entity.living_entity.entity.world.load();
-            if let Some(player_arc) = world.get_player_by_id(player.living_entity.entity.entity_id)
-            {
-                self.mob_entity.set_target(Some(player_arc));
-            }
-        }
+        self.maybe_alert_others(&target);
     }
 }

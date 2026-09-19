@@ -12,13 +12,17 @@ use pumpkin_util::GameMode;
 
 use crate::entity::{
     Entity, EntityBase,
+    ai::behavior::neutral::apply_targets,
     ai::goal::{
         active_target::ActiveTargetGoal, look_around::RandomLookAroundGoal,
         look_at_entity::LookAtEntityGoal, melee_attack::MeleeAttackGoal,
         move_towards_target::MoveTowardsTargetGoal, offer_flower::OfferFlowerGoal,
         revenge::RevengeGoal, wander_around::WanderAroundGoal,
     },
-    mob::{Mob, MobEntity},
+    mob::{
+        Mob, MobEntity,
+        neutral::{NeutralData, NeutralMob},
+    },
     player::Player,
 };
 
@@ -27,6 +31,7 @@ use crate::entity::{
 /// Wiki: <https://minecraft.wiki/w/Iron_Golem>
 pub struct IronGolemEntity {
     pub mob_entity: MobEntity,
+    pub neutral_data: NeutralData,
     pub player_created: AtomicBool,
     pub attack_animation_tick: AtomicI32,
     pub offer_flower_tick: AtomicI32,
@@ -37,6 +42,7 @@ impl IronGolemEntity {
         let mob_entity = MobEntity::new(entity);
         let iron_golem = Self {
             mob_entity,
+            neutral_data: NeutralData::default(),
             player_created: AtomicBool::new(false),
             attack_animation_tick: AtomicI32::new(0),
             offer_flower_tick: AtomicI32::new(0),
@@ -69,9 +75,10 @@ impl IronGolemEntity {
             );
             goal_selector.add_goal(8, Box::new(RandomLookAroundGoal::default()));
 
+            // TODO: DefendVillageTargetGoal at 1.
             target_selector.add_goal(2, Box::new(RevengeGoal::new(true)));
-            // Players are omitted (vanilla gates that on the unimplemented NeutralMob anger
-            // system). Mirrors NearestAttackableTargetGoal<Mob>: any monster but creepers.
+            apply_targets(&mut target_selector, &mob_arc.mob_entity, 3, 4, false);
+            // Mirrors NearestAttackableTargetGoal<Mob>: any monster but creepers.
             target_selector.add_goal(
                 3,
                 ActiveTargetGoal::predicated(&mob_arc.mob_entity, 5, false, |living, _world| {
@@ -115,7 +122,17 @@ impl IronGolemEntity {
     }
 }
 
+impl NeutralMob for IronGolemEntity {
+    fn get_neutral_data(&self) -> &NeutralData {
+        &self.neutral_data
+    }
+}
+
 impl Mob for IronGolemEntity {
+    fn as_neutral(&self) -> Option<&dyn NeutralMob> {
+        Some(self)
+    }
+
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         nbt.put_bool("PlayerCreated", self.is_player_created());
     }
