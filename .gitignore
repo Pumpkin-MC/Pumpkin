@@ -102,7 +102,7 @@ plugins/
 world/*
 logs/
 crash-reports/
-config/
+/config/
 
 wepif.yml
 
