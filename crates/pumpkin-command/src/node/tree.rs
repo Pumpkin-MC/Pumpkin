@@ -132,11 +132,15 @@ impl<S: CommandSource> Tree<S> {
     /// its [`NodeId`].
     fn add(&mut self, node: AttachedNode<S>) -> NodeId {
         let global_id = node.global_id();
+        let aliases = node.owned_node_data_ref().aliases.clone();
         let local_id = self.alloc();
 
         // Update state variables.
         self.nodes.push(node);
         self.ids_map.insert(global_id, local_id);
+        for alias in aliases {
+            self.ids_map.insert(alias, local_id);
+        }
 
         local_id
     }
@@ -234,7 +238,15 @@ impl<S: CommandSource> Tree<S> {
             let node_children: Vec<NodeId> = self[node].children_ref().values().copied().collect();
 
             let child = *child;
-            // Merge onto the child.
+            // Merge onto the child. The incoming node stays in `nodes` but leaves the tree,
+            // so point every id that resolved to it at the child instead; otherwise a
+            // redirect taken against it reaches an orphan holding only its own branch.
+            let orphan_ids: Vec<GlobalNodeId> = std::iter::once(self[node].global_id())
+                .chain(self[node].owned_node_data_ref().aliases.iter().copied())
+                .collect();
+            for id in orphan_ids {
+                self.ids_map.insert(id, child);
+            }
             if let Some(command) = node_command {
                 self[child].set_command(Some(command));
             }

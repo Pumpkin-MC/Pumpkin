@@ -10,6 +10,7 @@ use crate::source::{CommandSource, DummySource};
 use crate::suggestion::provider::SuggestionProvider;
 use rustc_hash::FxHashMap;
 use std::borrow::Cow;
+use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
 /// Represents an intermediate struct for
@@ -252,7 +253,14 @@ macro_rules! impl_boilerplate_argument_builder {
                 "Cannot add a CommandDetachedNode as a child of a builder"
             );
 
-            self.common.arguments.insert(node.name(), node);
+            // Brigadier merges a same-named child rather than replacing it; see
+            // `DetachedNode::merge`.
+            match self.common.arguments.entry(node.name()) {
+                Entry::Occupied(mut existing) => existing.get_mut().merge(node),
+                Entry::Vacant(slot) => {
+                    slot.insert(node);
+                }
+            }
             self
         }
 

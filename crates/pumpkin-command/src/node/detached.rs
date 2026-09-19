@@ -7,6 +7,7 @@ use crate::source::{CommandSource, DummySource};
 use crate::suggestion::provider::SuggestionProvider;
 use rustc_hash::FxHashMap;
 use std::borrow::Cow;
+use std::collections::hash_map::Entry;
 use std::num::NonZero;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -70,6 +71,7 @@ impl<S: CommandSource> LiteralDetachedNode<S> {
         Self {
             owned: OwnedNodeData {
                 global_id,
+                aliases: Vec::new(),
                 requirements,
                 modifier,
                 forks,
@@ -116,6 +118,7 @@ impl<S: CommandSource> CommandDetachedNode<S> {
         Self {
             owned: OwnedNodeData {
                 global_id,
+                aliases: Vec::new(),
                 requirements,
                 modifier,
                 forks,
@@ -160,6 +163,7 @@ impl<S: CommandSource> ArgumentDetachedNode<S> {
         Self {
             owned: OwnedNodeData {
                 global_id,
+                aliases: Vec::new(),
                 requirements,
                 modifier,
                 forks,
@@ -232,6 +236,55 @@ impl<S: CommandSource> DetachedNode<S> {
                 redirect: node.redirect,
                 meta: NodeMetadata::Argument(node.meta),
             },
+        }
+    }
+
+    /// This node's children, whatever kind of node it is.
+    const fn children_mut(&mut self) -> &mut FxHashMap<String, Self> {
+        match self {
+            Self::Literal(node) => &mut node.children,
+            Self::Command(node) => &mut node.children,
+            Self::Argument(node) => &mut node.children,
+        }
+    }
+
+    /// The owned data of this node, whatever kind of node it is.
+    const fn owned_mut(&mut self) -> &mut OwnedNodeData<S> {
+        match self {
+            Self::Literal(node) => &mut node.owned,
+            Self::Command(node) => &mut node.owned,
+            Self::Argument(node) => &mut node.owned,
+        }
+    }
+
+    /// Folds `other` into this node, which must carry the same name.
+    ///
+    /// This is Brigadier's `CommandNode.addChild` for the case where a child of that name is
+    /// already present: an incoming executor replaces the current one, and the incoming
+    /// children are merged in recursively instead of replacing what is already there. As in
+    /// Brigadier, `other`'s own requirements and redirect are not carried over; only the
+    /// subtree below it is.
+    ///
+    /// Registering the same literal more than once is how a command describes one verb over
+    /// several targets — `/data get` over entity, block and storage, for instance — so
+    /// overwriting outright would silently drop every branch but the last.
+    pub fn merge(&mut self, other: Self) {
+        let other = other.decompose();
+        let owned = self.owned_mut();
+        if other.owned.command.is_some() {
+            owned.command = other.owned.command;
+        }
+        // The incoming node itself goes away, but a redirect may already have been taken
+        // against its id with `ArgumentBuilder::id`, so keep that id resolving to this node.
+        owned.aliases.push(other.owned.global_id);
+        owned.aliases.extend(other.owned.aliases);
+        for (name, child) in other.children {
+            match self.children_mut().entry(name) {
+                Entry::Occupied(mut existing) => existing.get_mut().merge(child),
+                Entry::Vacant(slot) => {
+                    slot.insert(child);
+                }
+            }
         }
     }
 
