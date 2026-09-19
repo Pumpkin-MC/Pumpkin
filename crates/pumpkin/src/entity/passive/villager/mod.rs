@@ -6,7 +6,9 @@ use uuid::Uuid;
 use crate::block::blocks::bed::BedBlock;
 use pumpkin_data::Enchantment;
 use pumpkin_data::attributes::Attributes;
-use pumpkin_data::block_properties::{BedPart, WhiteBedLikeProperties as BedProperties};
+use pumpkin_data::block_properties::{
+    BedPart, HorizontalFacing, WhiteBedLikeProperties as BedProperties,
+};
 use pumpkin_data::effect::StatusEffect;
 use pumpkin_data::entity::{EntityPose, EntityType};
 use pumpkin_data::item::{Item, JavaToBedrockItemMapping};
@@ -22,7 +24,9 @@ use pumpkin_inventory::screen_handler::{
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_protocol::bedrock::{
-    client::set_actor_data::{MetadataValue, SyncedActorDataList, entity_data_key},
+    client::set_actor_data::{
+        MetadataValue, SyncedActorDataList, entity_data_flag, entity_data_key,
+    },
     server::actor_event::ActorEventID,
 };
 use pumpkin_protocol::codec::var_int::VarInt;
@@ -34,6 +38,7 @@ use pumpkin_util::version::JavaMinecraftVersion;
 use crate::entity::player::Player;
 use crate::entity::{
     Entity, EntityBase,
+    ageable::{AgeableData, AgeableMob},
     ai::{
         goal::{
             avoid_entity::AvoidEntityGoal, look_around::RandomLookAroundGoal,
@@ -363,6 +368,7 @@ pub struct VillagerEntity {
     pub sleeping_pos: std::sync::Mutex<Option<BlockPos>>,
     pub restore_sleep: AtomicBool,
     pub last_woken_time: AtomicI64,
+    pub ageable_data: AgeableData,
     pub self_weak: std::sync::Mutex<Option<Weak<Self>>>,
 }
 
@@ -435,6 +441,7 @@ impl VillagerEntity {
             sleeping_pos: std::sync::Mutex::new(None),
             restore_sleep: AtomicBool::new(false),
             last_woken_time: AtomicI64::new(0),
+            ageable_data: AgeableData::default(),
             self_weak: std::sync::Mutex::new(None),
         };
         let mob_arc = Arc::new(villager);
@@ -1697,9 +1704,53 @@ impl VillagerEntity {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(bed_head_pos);
         entity.set_pose(EntityPose::Sleeping);
+        if let Some((yaw, bedrock_offset)) = Self::bed_layout(&entity.world.load(), bed_head_pos) {
+            entity.set_rotation(yaw, 0.0);
+            entity.head_yaw.store(yaw);
+            entity.body_yaw.store(yaw);
+            entity.bedrock_render_offset.store(bedrock_offset);
+        }
         entity.set_pos(bed_head_pos.to_f64().add_raw(0.5, 0.6875, 0.5));
         entity.set_velocity(Vector3::default());
+        self.mob_entity
+            .living_entity
+            .jumping
+            .store(false, Ordering::SeqCst);
         entity.set_synced_data(tracked_data::villager::SLEEPING_POS_ID, Some(bed_head_pos));
+        entity.store_bedrock_flag(entity_data_flag::SLEEPING, true);
+        let mut bedrock_meta = Self::bedrock_bed_metadata(Some(bed_head_pos));
+        entity.put_bedrock_flags(&mut bedrock_meta);
+        entity.send_bedrock_actor_data(&bedrock_meta);
+    }
+
+    fn bed_layout(world: &World, bed_head_pos: BlockPos) -> Option<(f32, Vector3<f64>)> {
+        let (block, state) = world.get_block_and_state(&bed_head_pos);
+        if !block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_BEDS) {
+            return None;
+        }
+        let facing = BedProperties::from_state_id(state.id).facing;
+        let yaw = match facing {
+            HorizontalFacing::South => 180.0,
+            HorizontalFacing::West => 270.0,
+            HorizontalFacing::North => 0.0,
+            HorizontalFacing::East => 90.0,
+        };
+        let to_head = facing.to_offset();
+        let offset = Vector3::new(
+            f64::from(-to_head.x) * 0.5,
+            0.0,
+            f64::from(-to_head.z) * 0.5,
+        );
+        Some((yaw, offset))
+    }
+
+    fn bedrock_bed_metadata(bed_head_pos: Option<BlockPos>) -> SyncedActorDataList {
+        let mut metadata = SyncedActorDataList::new();
+        metadata.set(
+            entity_data_key::BED_POSITION,
+            MetadataValue::ItemPos(bed_head_pos.unwrap_or(BlockPos::ZERO)),
+        );
+        metadata
     }
 
     fn restore_saved_sleep(&self, world: &Arc<World>) {
@@ -1739,6 +1790,7 @@ impl VillagerEntity {
     #[expect(clippy::too_many_lines)]
     pub fn villager_mob_tick(&self) {
         let world = self.get_entity().world.load();
+        self.ageable_ai_step();
         self.restore_saved_sleep(&world);
         self.pick_up_nearby_items();
 
@@ -1854,6 +1906,13 @@ impl VillagerEntity {
             self.wake_up();
         }
 
+        if self.is_sleeping() {
+            self.mob_entity
+                .living_entity
+                .jumping
+                .store(false, Ordering::SeqCst);
+        }
+
         // If no bed, search for one
         if self.get_home_pos().is_none()
             && let Some(home) = find_free_bed(
@@ -1935,7 +1994,17 @@ impl VillagerEntity {
     }
 }
 
+impl AgeableMob for VillagerEntity {
+    fn get_ageable_data(&self) -> &AgeableData {
+        &self.ageable_data
+    }
+}
+
 impl Mob for VillagerEntity {
+    fn as_ageable(&self) -> Option<&dyn AgeableMob> {
+        Some(self)
+    }
+
     #[expect(clippy::too_many_lines)]
     fn mob_write_nbt(&self, nbt: &mut NbtCompound) {
         {
@@ -2293,13 +2362,23 @@ impl Mob for VillagerEntity {
     }
 
     fn mob_bedrock_spawn_metadata(&self) -> Option<SyncedActorDataList> {
-        Some(Self::bedrock_metadata(
+        let mut metadata = Self::bedrock_metadata(
             *self
                 .villager_data
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner),
             self.xp.load(Ordering::Relaxed),
-        ))
+        );
+        let sleeping_pos = *self
+            .sleeping_pos
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if sleeping_pos.is_some() {
+            metadata
+                .0
+                .extend(Self::bedrock_bed_metadata(sleeping_pos).0);
+        }
+        Some(metadata)
     }
 
     fn get_job_site(&self) -> Option<BlockPos> {
@@ -2417,6 +2496,13 @@ impl Mob for VillagerEntity {
 
         entity.set_pose(EntityPose::Standing);
         entity.set_synced_data(tracked_data::villager::SLEEPING_POS_ID, None::<BlockPos>);
+        entity.store_bedrock_flag(entity_data_flag::SLEEPING, false);
+        let mut bedrock_meta = Self::bedrock_bed_metadata(None);
+        entity.put_bedrock_flags(&mut bedrock_meta);
+        entity.send_bedrock_actor_data(&bedrock_meta);
+        entity
+            .bedrock_render_offset
+            .store(Vector3::new(0.0, 0.0, 0.0));
 
         let game_time = world
             .level_time
@@ -2449,6 +2535,7 @@ impl Mob for VillagerEntity {
         entity.send_bedrock_actor_data(&bedrock_metadata);
         if entity.age.load(Ordering::Relaxed) < 0 {
             entity.set_synced_data(tracked_data::villager::BABY_ID, true);
+            entity.set_bedrock_baby(true);
         }
     }
 

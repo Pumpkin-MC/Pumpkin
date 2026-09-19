@@ -5,6 +5,7 @@ use pumpkin_data::Block;
 use pumpkin_data::block_properties::{BedPart, WhiteBedLikeProperties as BedProperties};
 use pumpkin_data::entity::{EntityStatus, EntityType};
 use pumpkin_data::tag::{self, Taggable};
+use pumpkin_protocol::bedrock::server::actor_event::ActorEventID;
 use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use rand::RngExt;
@@ -13,8 +14,23 @@ use uuid::Uuid;
 use crate::entity::ai::goal::{Controls, Goal};
 use crate::entity::ai::pathfinder::NavigatorGoal;
 use crate::entity::mob::Mob;
-use crate::entity::{EntityBase, r#type::from_type};
+use crate::entity::{Entity, EntityBase, r#type::from_type};
 use crate::world::World;
+
+/// Sends a status to both editions. Bedrock only shows one if it is named explicitly,
+/// and the statuses villagers use carry the same name on each.
+fn send_status(entity: &Entity, status: EntityStatus) {
+    let bedrock = match status {
+        EntityStatus::LoveHearts => Some(ActorEventID::LoveHearts),
+        EntityStatus::InLoveHearts => Some(ActorEventID::InLoveHearts),
+        EntityStatus::VillagerAngry => Some(ActorEventID::VillagerAngry),
+        _ => None,
+    };
+    entity
+        .world
+        .load()
+        .send_entity_status(entity, status, bedrock);
+}
 
 #[must_use]
 pub fn bed_head_at(world: &World, position: BlockPos) -> Option<BlockPos> {
@@ -324,6 +340,7 @@ impl Goal for JumpOnBedGoal {
             return false;
         };
         Self::is_baby(mob)
+            && !mob.is_sleeping()
             && Self::is_jumpable(mob, target_bed)
             && !self.tired_of_walking(mob)
             && !self.tired_of_jumping(mob)
@@ -575,8 +592,8 @@ impl VillagerMakeLoveGoal {
 
         let bed = find_free_bed(&world, entity.block_pos.load(), 16, 4, None);
         let Some(bed) = bed else {
-            world.send_entity_status(entity, EntityStatus::VillagerAngry, None);
-            world.send_entity_status(partner.get_entity(), EntityStatus::VillagerAngry, None);
+            send_status(entity, EntityStatus::VillagerAngry);
+            send_status(partner.get_entity(), EntityStatus::VillagerAngry);
             return;
         };
 
@@ -601,9 +618,9 @@ impl VillagerMakeLoveGoal {
         }
         world.spawn_entity(baby.clone());
 
-        world.send_entity_status(baby.get_entity(), EntityStatus::LoveHearts, None);
-        world.send_entity_status(entity, EntityStatus::LoveHearts, None);
-        world.send_entity_status(partner.get_entity(), EntityStatus::LoveHearts, None);
+        send_status(baby.get_entity(), EntityStatus::LoveHearts);
+        send_status(entity, EntityStatus::LoveHearts);
+        send_status(partner.get_entity(), EntityStatus::LoveHearts);
     }
 }
 
@@ -627,10 +644,9 @@ impl Goal for VillagerMakeLoveGoal {
         self.ticks_until_birth = 275 + mob.get_random().random_range(0..50);
 
         let entity = mob.get_entity();
-        let world = entity.world.load();
-        world.send_entity_status(entity, EntityStatus::InLoveHearts, None);
+        send_status(entity, EntityStatus::InLoveHearts);
         if let Some(partner) = &self.partner {
-            world.send_entity_status(partner.get_entity(), EntityStatus::InLoveHearts, None);
+            send_status(partner.get_entity(), EntityStatus::InLoveHearts);
         }
     }
 
@@ -674,8 +690,7 @@ impl Goal for VillagerMakeLoveGoal {
         if self.ticks_until_birth <= 0 {
             Self::try_to_give_birth(mob, &partner);
         } else if mob.get_random().random_range(0..35) == 0 {
-            let world = mob.get_entity().world.load();
-            world.send_entity_status(mob.get_entity(), EntityStatus::LoveHearts, None);
+            send_status(mob.get_entity(), EntityStatus::LoveHearts);
         }
     }
 

@@ -19,6 +19,10 @@ use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
 use pumpkin_data::{Block, BlockDirection};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_protocol::bedrock::client::move_actor_delta::{
+    CMoveActorDelta, MOVE_ACTOR_DELTA_FLAG_HAS_HEAD_YAW,
+};
+use pumpkin_protocol::codec::var_ulong::VarULong;
 use pumpkin_protocol::java::client::play::{CHeadRot, CUpdateEntityRot};
 use pumpkin_util::Difficulty;
 use pumpkin_util::math::boundingbox::BoundingBox;
@@ -1235,6 +1239,7 @@ pub trait Mob: EntityBase + Send + Sync {
         let is_baby = entity.age.load(std::sync::atomic::Ordering::Relaxed) < 0;
         if is_baby {
             entity.set_synced_data(tracked_data::ageable_mob::DATA_BABY_ID, true);
+            entity.set_bedrock_baby(true);
         }
     }
 
@@ -1437,7 +1442,20 @@ impl<T: Mob + Send + 'static> EntityBase for T {
         if head_yaw.abs_diff(last_head_yaw) >= 1 {
             let world = entity.world.load();
 
-            world.broadcast_to_chunk(chunk_pos, &CHeadRot::new(entity.entity_id.into(), head_yaw));
+            world.broadcast_to_chunk_editioned(
+                chunk_pos,
+                &CHeadRot::new(entity.entity_id.into(), head_yaw),
+                &CMoveActorDelta::new(
+                    VarULong(entity.entity_id as u64),
+                    MOVE_ACTOR_DELTA_FLAG_HAS_HEAD_YAW,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0,
+                    0,
+                    head_yaw,
+                ),
+            );
             mob_entity.last_sent_head_yaw.store(head_yaw, Relaxed);
         }
     }
