@@ -59,11 +59,11 @@ impl JavaClient {
             return;
         }
         // Ignore movement packets while awaiting a teleport confirmation (vanilla behavior)
-        if player
-            .awaiting_teleport
+        if !player
+            .awaiting_teleports
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_some()
+            .is_empty()
         {
             return;
         }
@@ -200,11 +200,11 @@ impl JavaClient {
             return;
         }
         // Ignore movement packets while awaiting a teleport confirmation (vanilla behavior)
-        if player
-            .awaiting_teleport
+        if !player
+            .awaiting_teleports
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_some()
+            .is_empty()
         {
             return;
         }
@@ -350,12 +350,16 @@ impl JavaClient {
     }
 
     pub fn force_tp(&self, player: &Arc<Player>, position: Vector3<f64>) {
-        let teleport_id = player.teleport_id_count.fetch_add(1, Ordering::Relaxed) + 1;
-        *player
-            .awaiting_teleport
+        let _teleport_send_guard = player
+            .teleport_send_lock
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) =
-            Some((teleport_id.into(), position));
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let teleport_id = player.teleport_id_count.fetch_add(1, Ordering::Relaxed) + 1;
+        player
+            .awaiting_teleports
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push_back((teleport_id.into(), position));
         player.try_send_client_packet(&CPlayerPosition::new(
             teleport_id.into(),
             player.get_entity().pos.load(),
