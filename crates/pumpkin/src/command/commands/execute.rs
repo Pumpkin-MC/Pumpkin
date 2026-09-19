@@ -42,6 +42,7 @@ use crate::command::node::{RedirectModifier, Redirection};
 use crate::entity::EntityBase;
 use crate::entity::r#type::from_type;
 use crate::world::stopwatches::Stopwatches;
+use pumpkin_data::Block;
 use pumpkin_data::biome::Biome;
 use pumpkin_data::tag::{self, RegistryKey};
 use pumpkin_nbt::tag::NbtTag;
@@ -269,8 +270,8 @@ fn execute_if_block_modifier(
     let expected_block = BlockArgumentType::get(context, "block")?;
 
     if let Some(ref world) = context.source.world {
-        let block = world.get_block(&pos);
-        if block == expected_block {
+        let state_id = world.get_block_state_id(&pos);
+        if expected_block.test(Block::from_state_id(state_id), state_id) {
             return Ok(vec![context.source.clone()]);
         }
     }
@@ -284,8 +285,8 @@ fn execute_unless_block_modifier(
     let expected_block = BlockArgumentType::get(context, "block")?;
 
     if let Some(ref world) = context.source.world {
-        let block = world.get_block(&pos);
-        if block != expected_block {
+        let state_id = world.get_block_state_id(&pos);
+        if !expected_block.test(Block::from_state_id(state_id), state_id) {
             return Ok(vec![context.source.clone()]);
         }
     } else {
