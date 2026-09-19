@@ -1,3 +1,5 @@
+mod advancement_pack;
+pub(crate) use advancement_pack::register_translations;
 pub mod nethernet;
 pub mod play;
 pub(crate) mod recipe;
@@ -38,6 +40,7 @@ use pumpkin_protocol::{
             player_auth_input::SPlayerAuthInput, request_ability::SRequestAbility,
             request_chunk_radius::SRequestChunkRadius,
             request_network_settings::SRequestNetworkSettings,
+            resource_pack_chunk_request::SResourcePackChunkRequest,
             resource_pack_client_response::SResourcePackClientResponse, respawn::SRespawn,
             set_local_player_as_initialized::SSetLocalPlayerAsInitialized,
             set_player_inventory_options::SSetPlayerInventoryOptions, text::SText,
@@ -128,6 +131,8 @@ pub struct BedrockClient {
     last_food_rejection_tick: AtomicCell<Option<i32>>,
     pub client_cache_supported: AtomicBool,
     pub blob_cache: std::sync::Mutex<HashMap<u64, Vec<u8>>>,
+    /// Cancelled once Bedrock confirms that the local player finished loading.
+    client_initialized: CancellationToken,
     /// An notifier that is triggered when this client is closed.
     close_token: CancellationToken,
     last_seen: Arc<AtomicCell<std::time::Instant>>,
@@ -135,6 +140,32 @@ pub struct BedrockClient {
     incoming_game_packet_recv: Mutex<Option<Receiver<RawPacket>>>,
     /// Packet rate limiter for incoming client packets.
     pub packet_limiter: PacketRateLimiter,
+}
+
+/// The way a wait for the client's initialization handshake ended.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InitializationStatus {
+    /// The client confirmed that the local player finished loading.
+    Initialized,
+    /// The client closed before it finished loading.
+    Closed,
+}
+
+/// Waits until the client reports readiness or closes.
+///
+/// Kept separate from [`BedrockClient::await_initialized`] so the branch mapping can be tested
+/// without building a client, which requires a live `NetherNet` session.
+async fn wait_for_initialization(
+    initialized: &CancellationToken,
+    close: &CancellationToken,
+) -> InitializationStatus {
+    tokio::select! {
+        // Both tokens can be cancelled at once when a client closes after loading, in which case
+        // readiness wins so that feedback is still delivered to a client that got that far.
+        biased;
+        () = initialized.cancelled() => InitializationStatus::Initialized,
+        () = close.cancelled() => InitializationStatus::Closed,
+    }
 }
 
 impl BedrockClient {
@@ -170,12 +201,25 @@ impl BedrockClient {
             last_food_rejection_tick: AtomicCell::new(None),
             client_cache_supported: AtomicBool::new(false),
             blob_cache: std::sync::Mutex::new(HashMap::new()),
+            client_initialized: CancellationToken::new(),
             close_token: CancellationToken::new(),
             last_seen: Arc::new(AtomicCell::new(std::time::Instant::now())),
             incoming_game_packet_send: incoming_send,
             incoming_game_packet_recv: Mutex::new(Some(incoming_recv)),
             packet_limiter,
         }
+    }
+
+    /// Waits for Bedrock to confirm that the local player finished loading.
+    ///
+    /// Ends early with [`InitializationStatus::Closed`] when the client closes first, so callers
+    /// do not wait for a client that will never report readiness.
+    pub async fn await_initialized(&self) -> InitializationStatus {
+        wait_for_initialization(&self.client_initialized, &self.close_token).await
+    }
+
+    pub fn set_initialized(&self) {
+        self.client_initialized.cancel();
     }
 
     pub async fn get_packet(&self) -> Option<RawPacket> {
@@ -755,6 +799,10 @@ impl BedrockClient {
                     client.handle_resource_pack_response(packet, &server_c).await;
                 });
             }
+            SResourcePackChunkRequest::PACKET_ID => {
+                let packet = SResourcePackChunkRequest::read(reader)?;
+                self.handle_resource_pack_chunk_request(&packet);
+            }
             SPlayerAuthInput::PACKET_ID => {
                 let packet = SPlayerAuthInput::read(reader)?;
                 self.handle_player_auth_input(player, packet, server);
@@ -929,5 +977,44 @@ impl BedrockClient {
             let _guard = self.rt_handle.enter();
             Some(self.tasks.spawn(task))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{InitializationStatus, wait_for_initialization};
+    use tokio_util::sync::CancellationToken;
+
+    #[tokio::test]
+    async fn initialization_wait_reports_readiness_or_close() {
+        let initialized = CancellationToken::new();
+        let close = CancellationToken::new();
+
+        initialized.cancel();
+        assert_eq!(
+            wait_for_initialization(&initialized, &close).await,
+            InitializationStatus::Initialized
+        );
+
+        let initialized = CancellationToken::new();
+        let close = CancellationToken::new();
+        close.cancel();
+        assert_eq!(
+            wait_for_initialization(&initialized, &close).await,
+            InitializationStatus::Closed
+        );
+    }
+
+    #[tokio::test]
+    async fn initialization_wait_prefers_readiness_when_both_are_set() {
+        let initialized = CancellationToken::new();
+        let close = CancellationToken::new();
+        initialized.cancel();
+        close.cancel();
+
+        assert_eq!(
+            wait_for_initialization(&initialized, &close).await,
+            InitializationStatus::Initialized
+        );
     }
 }

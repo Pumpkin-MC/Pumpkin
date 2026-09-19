@@ -589,7 +589,14 @@ impl FromStr for Locale {
 
     #[expect(clippy::too_many_lines)]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
+        let lowercase = s.to_lowercase();
+        // Bedrock spells Norwegian Bokmål `nb_NO`, which shares Java's `no_no` translations.
+        let code = if lowercase == "nb_no" {
+            "no_no"
+        } else {
+            lowercase.as_str()
+        };
+        match code {
             "af_za" => Ok(Self::AfZa),       // Afrikaans (Suid-Afrika)
             "ar_sa" => Ok(Self::ArSa),       // Arabic
             "ast_es" => Ok(Self::AstEs),     // Asturian
