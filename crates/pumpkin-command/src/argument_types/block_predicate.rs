@@ -1,58 +1,58 @@
-use std::collections::HashMap;
-
 use pumpkin_data::tag::{RegistryKey, get_tag_ids};
-use pumpkin_data::{Block, translation};
+use pumpkin_data::{Block, BlockStateId};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::text::TextComponent;
 
 use crate::argument_types::argument_type::{ArgumentType, JavaClientArgumentType};
-use crate::argument_types::block::INVALID_BLOCK_ERROR_TYPE;
+use crate::argument_types::block::{parse_block_name, parse_properties, properties_match};
 use crate::argument_types::nbt::NbtCompoundArgumentType;
 use crate::context::command_context::CommandContext;
 use crate::errors::command_syntax_error::CommandSyntaxError;
 use crate::errors::error_types::CommandErrorType;
 use crate::string_reader::StringReader;
 use crate::suggestion::suggestions::{Suggestions, SuggestionsBuilder};
+use pumpkin_data::translation;
 
 pub const ERROR_UNKNOWN_TAG: CommandErrorType<1> = CommandErrorType::new(
     translation::java::ARGUMENTS_BLOCK_TAG_UNKNOWN,
     translation::java::ARGUMENTS_BLOCK_TAG_UNKNOWN,
 );
 
-pub const ERROR_NO_VALUE: CommandErrorType<1> = CommandErrorType::new(
-    translation::java::ARGUMENT_BLOCK_PROPERTY_NOVALUE,
-    translation::java::ARGUMENT_BLOCK_PROPERTY_NOVALUE,
-);
-
-pub const ERROR_UNCLOSED_PROPERTIES: CommandErrorType<0> = CommandErrorType::new(
-    translation::java::ARGUMENT_BLOCK_PROPERTY_UNCLOSED,
-    translation::java::ARGUMENT_BLOCK_PROPERTY_UNCLOSED,
-);
-
 #[derive(Clone, Debug)]
 pub enum BlockPredicate {
     Block {
         block: &'static Block,
-        properties: HashMap<String, String>,
+        properties: Vec<(String, String)>,
         nbt: Option<NbtCompound>,
     },
     Tag {
         tag_name: String,
         block_ids: Vec<u16>,
-        properties: HashMap<String, String>,
+        properties: Vec<(String, String)>,
         nbt: Option<NbtCompound>,
     },
 }
 
 impl BlockPredicate {
+    /// Whether the given state satisfies this predicate.
+    ///
+    /// Properties that were not written are wildcards, the way vanilla's
+    /// `BlockPredicateArgument` treats them.
     #[must_use]
-    pub fn test(&self, block: &Block) -> bool {
-        match self {
+    pub fn test(&self, block: &Block, state_id: BlockStateId) -> bool {
+        let (matches_block, properties) = match self {
             Self::Block {
-                block: expected, ..
-            } => block.id == expected.id,
-            Self::Tag { block_ids, .. } => block_ids.contains(&block.id.as_u16()),
-        }
+                block: expected,
+                properties,
+                ..
+            } => (block.id == expected.id, properties),
+            Self::Tag {
+                block_ids,
+                properties,
+                ..
+            } => (block_ids.contains(&block.id.as_u16()), properties),
+        };
+        matches_block && properties_match(block, state_id, properties)
     }
 
     #[must_use]
@@ -61,58 +61,6 @@ impl BlockPredicate {
             Self::Block { nbt, .. } | Self::Tag { nbt, .. } => nbt.is_some(),
         }
     }
-}
-
-fn parse_properties(
-    reader: &mut StringReader,
-) -> Result<HashMap<String, String>, CommandSyntaxError> {
-    let mut properties = HashMap::new();
-    if reader.peek() == Some('[') {
-        reader.skip();
-        reader.skip_whitespace();
-        while reader.can_read_char() && reader.peek() != Some(']') {
-            let start_key = reader.cursor();
-            while let Some(c) = reader.peek() {
-                if c.is_alphanumeric() || c == '_' || c == '-' {
-                    reader.skip();
-                } else {
-                    break;
-                }
-            }
-            let key = reader.string()[start_key..reader.cursor()].to_string();
-            reader.skip_whitespace();
-            if reader.peek() != Some('=') {
-                return Err(ERROR_NO_VALUE.create(reader, TextComponent::text(key)));
-            }
-            reader.skip();
-            reader.skip_whitespace();
-            let start_val = reader.cursor();
-            while let Some(c) = reader.peek() {
-                if c.is_alphanumeric() || c == '_' || c == '-' {
-                    reader.skip();
-                } else {
-                    break;
-                }
-            }
-            let val = reader.string()[start_val..reader.cursor()].to_string();
-            properties.insert(key, val);
-            reader.skip_whitespace();
-            if reader.peek() == Some(',') {
-                reader.skip();
-                reader.skip_whitespace();
-            } else if reader.peek() == Some(']') {
-                break;
-            } else {
-                return Err(ERROR_UNCLOSED_PROPERTIES.create_without_context());
-            }
-        }
-        if reader.peek() == Some(']') {
-            reader.skip();
-        } else {
-            return Err(ERROR_UNCLOSED_PROPERTIES.create_without_context());
-        }
-    }
-    Ok(properties)
 }
 
 fn parse_nbt(reader: &mut StringReader) -> Result<Option<NbtCompound>, CommandSyntaxError> {
@@ -159,7 +107,7 @@ impl<S: crate::source::CommandSource> ArgumentType<S> for BlockPredicateArgument
                 }
             };
 
-            let properties = parse_properties(reader)?;
+            let properties = parse_properties(reader, None)?;
             let nbt = parse_nbt(reader)?;
 
             Ok(BlockPredicate::Tag {
@@ -169,26 +117,8 @@ impl<S: crate::source::CommandSource> ArgumentType<S> for BlockPredicateArgument
                 nbt,
             })
         } else {
-            let start = reader.cursor();
-            while let Some(c) = reader.peek() {
-                if c.is_alphanumeric() || c == '_' || c == ':' || c == '/' || c == '.' || c == '-' {
-                    reader.skip();
-                } else {
-                    break;
-                }
-            }
-            let block_str = &reader.string()[start..reader.cursor()];
-            let normalized = if block_str.contains(':') {
-                block_str.to_string()
-            } else {
-                format!("minecraft:{block_str}")
-            };
-
-            let block = Block::from_name(&normalized).ok_or_else(|| {
-                INVALID_BLOCK_ERROR_TYPE.create(reader, TextComponent::text(normalized))
-            })?;
-
-            let properties = parse_properties(reader)?;
+            let block = parse_block_name(reader)?;
+            let properties = parse_properties(reader, Some(block))?;
             let nbt = parse_nbt(reader)?;
 
             Ok(BlockPredicate::Block {

@@ -39,8 +39,7 @@ struct SetBlockExecutor(Mode);
 
 impl CommandExecutor for SetBlockExecutor {
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
-        let block = BlockArgumentType::get(context, "block")?;
-        let block_state_id = block.default_state.id;
+        let block_state_id = BlockArgumentType::get(context, "block")?.state_id;
         let mode = self.0;
         let world = context.source.world();
         let pos = BlockPosArgumentType::get_loaded_block_pos(context, "pos")?;

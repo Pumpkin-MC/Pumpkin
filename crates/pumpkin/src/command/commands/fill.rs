@@ -11,7 +11,7 @@ use pumpkin_world::world::BlockFlags;
 use crate::command::argument_builder::{
     ArgumentBuilder, RequiredArgumentBuilder, argument, command, literal,
 };
-use crate::command::argument_types::block::BlockArgumentType;
+use crate::command::argument_types::block::{BlockArgumentType, BlockInput};
 use crate::command::argument_types::block_predicate::{BlockPredicate, BlockPredicateArgumentType};
 use crate::command::argument_types::coordinates::block_pos::BlockPosArgumentType;
 use crate::command::context::command_context::CommandContext;
@@ -55,7 +55,7 @@ fn fill_blocks(
     source: &CommandSource,
     from: BlockPos,
     to: BlockPos,
-    target_block: &'static Block,
+    target: &BlockInput,
     mode: FillMode,
     filter: Option<&BlockPredicate>,
     _strict: bool,
@@ -85,7 +85,7 @@ fn fill_blocks(
         ));
     }
 
-    let target_state_id = target_block.default_state.id;
+    let target_state_id = target.state_id;
     let mut changed_positions = Vec::new();
 
     let min_chunk_x = min_x >> 4;
@@ -143,7 +143,7 @@ fn fill_blocks(
                                     }
                                     _ => {
                                         if let Some(f) = filter
-                                            && !f.test(current_block)
+                                            && !f.test(current_block, current_state_id)
                                         {
                                             continue;
                                         }
@@ -260,7 +260,7 @@ impl CommandExecutor for FillExecutor {
             &context.source,
             from,
             to,
-            block,
+            &block,
             self.mode,
             filter.as_ref(),
             self.strict,
