@@ -60,7 +60,7 @@ pub mod java {
     pub const ADVMODE_SETCOMMAND_DISABLED: &str = "advMode.setCommand.disabled";
     #[doc = "Command set: %s"]
     pub const ADVMODE_SETCOMMAND_SUCCESS: &str = "advMode.setCommand.success";
-    #[doc = "Track output"]
+    #[doc = "Track Output"]
     pub const ADVMODE_TRACKOUTPUT: &str = "advMode.trackOutput";
     #[doc = "Triggering"]
     pub const ADVMODE_TRIGGERING: &str = "advMode.triggering";
@@ -758,7 +758,7 @@ pub mod java {
     #[doc = "Upgrade your Pickaxe"]
     pub const ADVANCEMENTS_STORY_IRON_TOOLS_DESCRIPTION: &str =
         "advancements.story.iron_tools.description";
-    #[doc = "Isn't It Iron Pick"]
+    #[doc = "Isn't It Iron Pick?"]
     pub const ADVANCEMENTS_STORY_IRON_TOOLS_TITLE: &str = "advancements.story.iron_tools.title";
     #[doc = "Fill a Bucket with lava"]
     pub const ADVANCEMENTS_STORY_LAVA_BUCKET_DESCRIPTION: &str =
@@ -950,7 +950,7 @@ pub mod java {
     pub const ARGUMENT_ENTITY_SELECTOR_UNKNOWN: &str = "argument.entity.selector.unknown";
     #[doc = "Only one entity is allowed, but the provided selector allows more than one"]
     pub const ARGUMENT_ENTITY_TOOMANY: &str = "argument.entity.toomany";
-    #[doc = "Invalid value \"%s\""]
+    #[doc = "Invalid value '%s'"]
     pub const ARGUMENT_ENUM_INVALID: &str = "argument.enum.invalid";
     #[doc = "Float must not be more than %s: found %s"]
     pub const ARGUMENT_FLOAT_BIG: &str = "argument.float.big";
@@ -1004,9 +1004,9 @@ pub mod java {
     pub const ARGUMENT_POS_MISSING_DOUBLE: &str = "argument.pos.missing.double";
     #[doc = "Expected a block position"]
     pub const ARGUMENT_POS_MISSING_INT: &str = "argument.pos.missing.int";
-    #[doc = "Cannot mix world & local coordinates (everything must either use ^ or not)"]
+    #[doc = "Cannot mix world and local coordinates (everything must either use ^ or not)"]
     pub const ARGUMENT_POS_MIXED: &str = "argument.pos.mixed";
-    #[doc = "That position is outside the allowed boundaries."]
+    #[doc = "That position is outside the allowed boundaries"]
     pub const ARGUMENT_POS_OUTOFBOUNDS: &str = "argument.pos.outofbounds";
     #[doc = "That position is out of this world!"]
     pub const ARGUMENT_POS_OUTOFWORLD: &str = "argument.pos.outofworld";
@@ -1049,6 +1049,8 @@ pub mod java {
         "argument.scoreboardDisplaySlot.invalid";
     #[doc = "Invalid style: %s"]
     pub const ARGUMENT_STYLE_INVALID: &str = "argument.style.invalid";
+    #[doc = "Unknown swing animation type: %s"]
+    pub const ARGUMENT_SWING_ANIMATION_INVALID: &str = "argument.swing_animation.invalid";
     #[doc = "The tick count must be non-negative"]
     pub const ARGUMENT_TIME_INVALID_TICK_COUNT: &str = "argument.time.invalid_tick_count";
     #[doc = "Invalid unit"]
@@ -1305,6 +1307,8 @@ pub mod java {
     pub const BIOME_MINECRAFT_COLD_OCEAN: &str = "biome.minecraft.cold_ocean";
     #[doc = "Crimson Forest"]
     pub const BIOME_MINECRAFT_CRIMSON_FOREST: &str = "biome.minecraft.crimson_forest";
+    #[doc = "Dappled Forest"]
+    pub const BIOME_MINECRAFT_DAPPLED_FOREST: &str = "biome.minecraft.dappled_forest";
     #[doc = "Dark Forest"]
     pub const BIOME_MINECRAFT_DARK_FOREST: &str = "biome.minecraft.dark_forest";
     #[doc = "Deep Cold Ocean"]
@@ -3480,6 +3484,10 @@ pub mod java {
     pub const BLOCK_MINECRAFT_BLACK_CONCRETE: &str = "block.minecraft.black_concrete";
     #[doc = "Black Concrete Powder"]
     pub const BLOCK_MINECRAFT_BLACK_CONCRETE_POWDER: &str = "block.minecraft.black_concrete_powder";
+    #[doc = "Black Concrete Slab"]
+    pub const BLOCK_MINECRAFT_BLACK_CONCRETE_SLAB: &str = "block.minecraft.black_concrete_slab";
+    #[doc = "Black Concrete Stairs"]
+    pub const BLOCK_MINECRAFT_BLACK_CONCRETE_STAIRS: &str = "block.minecraft.black_concrete_stairs";
     #[doc = "Black Glazed Terracotta"]
     pub const BLOCK_MINECRAFT_BLACK_GLAZED_TERRACOTTA: &str =
         "block.minecraft.black_glazed_terracotta";
@@ -3494,6 +3502,10 @@ pub mod java {
     pub const BLOCK_MINECRAFT_BLACK_TERRACOTTA: &str = "block.minecraft.black_terracotta";
     #[doc = "Black Wool"]
     pub const BLOCK_MINECRAFT_BLACK_WOOL: &str = "block.minecraft.black_wool";
+    #[doc = "Black Wool Slab"]
+    pub const BLOCK_MINECRAFT_BLACK_WOOL_SLAB: &str = "block.minecraft.black_wool_slab";
+    #[doc = "Black Wool Stairs"]
+    pub const BLOCK_MINECRAFT_BLACK_WOOL_STAIRS: &str = "block.minecraft.black_wool_stairs";
     #[doc = "Blackstone"]
     pub const BLOCK_MINECRAFT_BLACKSTONE: &str = "block.minecraft.blackstone";
     #[doc = "Blackstone Slab"]
@@ -3518,6 +3530,10 @@ pub mod java {
     pub const BLOCK_MINECRAFT_BLUE_CONCRETE: &str = "block.minecraft.blue_concrete";
     #[doc = "Blue Concrete Powder"]
     pub const BLOCK_MINECRAFT_BLUE_CONCRETE_POWDER: &str = "block.minecraft.blue_concrete_powder";
+    #[doc = "Blue Concrete Slab"]
+    pub const BLOCK_MINECRAFT_BLUE_CONCRETE_SLAB: &str = "block.minecraft.blue_concrete_slab";
+    #[doc = "Blue Concrete Stairs"]
+    pub const BLOCK_MINECRAFT_BLUE_CONCRETE_STAIRS: &str = "block.minecraft.blue_concrete_stairs";
     #[doc = "Blue Glazed Terracotta"]
     pub const BLOCK_MINECRAFT_BLUE_GLAZED_TERRACOTTA: &str =
         "block.minecraft.blue_glazed_terracotta";
@@ -3536,6 +3552,10 @@ pub mod java {
     pub const BLOCK_MINECRAFT_BLUE_TERRACOTTA: &str = "block.minecraft.blue_terracotta";
     #[doc = "Blue Wool"]
     pub const BLOCK_MINECRAFT_BLUE_WOOL: &str = "block.minecraft.blue_wool";
+    #[doc = "Blue Wool Slab"]
+    pub const BLOCK_MINECRAFT_BLUE_WOOL_SLAB: &str = "block.minecraft.blue_wool_slab";
+    #[doc = "Blue Wool Stairs"]
+    pub const BLOCK_MINECRAFT_BLUE_WOOL_STAIRS: &str = "block.minecraft.blue_wool_stairs";
     #[doc = "Bone Block"]
     pub const BLOCK_MINECRAFT_BONE_BLOCK: &str = "block.minecraft.bone_block";
     #[doc = "Bookshelf"]
@@ -3572,6 +3592,10 @@ pub mod java {
     pub const BLOCK_MINECRAFT_BROWN_CONCRETE: &str = "block.minecraft.brown_concrete";
     #[doc = "Brown Concrete Powder"]
     pub const BLOCK_MINECRAFT_BROWN_CONCRETE_POWDER: &str = "block.minecraft.brown_concrete_powder";
+    #[doc = "Brown Concrete Slab"]
+    pub const BLOCK_MINECRAFT_BROWN_CONCRETE_SLAB: &str = "block.minecraft.brown_concrete_slab";
+    #[doc = "Brown Concrete Stairs"]
+    pub const BLOCK_MINECRAFT_BROWN_CONCRETE_STAIRS: &str = "block.minecraft.brown_concrete_stairs";
     #[doc = "Brown Glazed Terracotta"]
     pub const BLOCK_MINECRAFT_BROWN_GLAZED_TERRACOTTA: &str =
         "block.minecraft.brown_glazed_terracotta";
@@ -3590,6 +3614,10 @@ pub mod java {
     pub const BLOCK_MINECRAFT_BROWN_TERRACOTTA: &str = "block.minecraft.brown_terracotta";
     #[doc = "Brown Wool"]
     pub const BLOCK_MINECRAFT_BROWN_WOOL: &str = "block.minecraft.brown_wool";
+    #[doc = "Brown Wool Slab"]
+    pub const BLOCK_MINECRAFT_BROWN_WOOL_SLAB: &str = "block.minecraft.brown_wool_slab";
+    #[doc = "Brown Wool Stairs"]
+    pub const BLOCK_MINECRAFT_BROWN_WOOL_STAIRS: &str = "block.minecraft.brown_wool_stairs";
     #[doc = "Bubble Column"]
     pub const BLOCK_MINECRAFT_BUBBLE_COLUMN: &str = "block.minecraft.bubble_column";
     #[doc = "Bubble Coral"]
@@ -3894,6 +3922,10 @@ pub mod java {
     pub const BLOCK_MINECRAFT_CYAN_CONCRETE: &str = "block.minecraft.cyan_concrete";
     #[doc = "Cyan Concrete Powder"]
     pub const BLOCK_MINECRAFT_CYAN_CONCRETE_POWDER: &str = "block.minecraft.cyan_concrete_powder";
+    #[doc = "Cyan Concrete Slab"]
+    pub const BLOCK_MINECRAFT_CYAN_CONCRETE_SLAB: &str = "block.minecraft.cyan_concrete_slab";
+    #[doc = "Cyan Concrete Stairs"]
+    pub const BLOCK_MINECRAFT_CYAN_CONCRETE_STAIRS: &str = "block.minecraft.cyan_concrete_stairs";
     #[doc = "Cyan Glazed Terracotta"]
     pub const BLOCK_MINECRAFT_CYAN_GLAZED_TERRACOTTA: &str =
         "block.minecraft.cyan_glazed_terracotta";
@@ -3908,6 +3940,10 @@ pub mod java {
     pub const BLOCK_MINECRAFT_CYAN_TERRACOTTA: &str = "block.minecraft.cyan_terracotta";
     #[doc = "Cyan Wool"]
     pub const BLOCK_MINECRAFT_CYAN_WOOL: &str = "block.minecraft.cyan_wool";
+    #[doc = "Cyan Wool Slab"]
+    pub const BLOCK_MINECRAFT_CYAN_WOOL_SLAB: &str = "block.minecraft.cyan_wool_slab";
+    #[doc = "Cyan Wool Stairs"]
+    pub const BLOCK_MINECRAFT_CYAN_WOOL_STAIRS: &str = "block.minecraft.cyan_wool_stairs";
     #[doc = "Damaged Anvil"]
     pub const BLOCK_MINECRAFT_DAMAGED_ANVIL: &str = "block.minecraft.damaged_anvil";
     #[doc = "Dandelion"]
@@ -4218,6 +4254,10 @@ pub mod java {
     pub const BLOCK_MINECRAFT_GRAY_CONCRETE: &str = "block.minecraft.gray_concrete";
     #[doc = "Gray Concrete Powder"]
     pub const BLOCK_MINECRAFT_GRAY_CONCRETE_POWDER: &str = "block.minecraft.gray_concrete_powder";
+    #[doc = "Gray Concrete Slab"]
+    pub const BLOCK_MINECRAFT_GRAY_CONCRETE_SLAB: &str = "block.minecraft.gray_concrete_slab";
+    #[doc = "Gray Concrete Stairs"]
+    pub const BLOCK_MINECRAFT_GRAY_CONCRETE_STAIRS: &str = "block.minecraft.gray_concrete_stairs";
     #[doc = "Gray Glazed Terracotta"]
     pub const BLOCK_MINECRAFT_GRAY_GLAZED_TERRACOTTA: &str =
         "block.minecraft.gray_glazed_terracotta";
@@ -4232,6 +4272,10 @@ pub mod java {
     pub const BLOCK_MINECRAFT_GRAY_TERRACOTTA: &str = "block.minecraft.gray_terracotta";
     #[doc = "Gray Wool"]
     pub const BLOCK_MINECRAFT_GRAY_WOOL: &str = "block.minecraft.gray_wool";
+    #[doc = "Gray Wool Slab"]
+    pub const BLOCK_MINECRAFT_GRAY_WOOL_SLAB: &str = "block.minecraft.gray_wool_slab";
+    #[doc = "Gray Wool Stairs"]
+    pub const BLOCK_MINECRAFT_GRAY_WOOL_STAIRS: &str = "block.minecraft.gray_wool_stairs";
     #[doc = "Green Banner"]
     pub const BLOCK_MINECRAFT_GREEN_BANNER: &str = "block.minecraft.green_banner";
     #[doc = "Green Bed"]
@@ -4246,6 +4290,10 @@ pub mod java {
     pub const BLOCK_MINECRAFT_GREEN_CONCRETE: &str = "block.minecraft.green_concrete";
     #[doc = "Green Concrete Powder"]
     pub const BLOCK_MINECRAFT_GREEN_CONCRETE_POWDER: &str = "block.minecraft.green_concrete_powder";
+    #[doc = "Green Concrete Slab"]
+    pub const BLOCK_MINECRAFT_GREEN_CONCRETE_SLAB: &str = "block.minecraft.green_concrete_slab";
+    #[doc = "Green Concrete Stairs"]
+    pub const BLOCK_MINECRAFT_GREEN_CONCRETE_STAIRS: &str = "block.minecraft.green_concrete_stairs";
     #[doc = "Green Glazed Terracotta"]
     pub const BLOCK_MINECRAFT_GREEN_GLAZED_TERRACOTTA: &str =
         "block.minecraft.green_glazed_terracotta";
@@ -4260,6 +4308,10 @@ pub mod java {
     pub const BLOCK_MINECRAFT_GREEN_TERRACOTTA: &str = "block.minecraft.green_terracotta";
     #[doc = "Green Wool"]
     pub const BLOCK_MINECRAFT_GREEN_WOOL: &str = "block.minecraft.green_wool";
+    #[doc = "Green Wool Slab"]
+    pub const BLOCK_MINECRAFT_GREEN_WOOL_SLAB: &str = "block.minecraft.green_wool_slab";
+    #[doc = "Green Wool Stairs"]
+    pub const BLOCK_MINECRAFT_GREEN_WOOL_STAIRS: &str = "block.minecraft.green_wool_stairs";
     #[doc = "Grindstone"]
     pub const BLOCK_MINECRAFT_GRINDSTONE: &str = "block.minecraft.grindstone";
     #[doc = "Hanging Roots"]
@@ -4403,6 +4455,12 @@ pub mod java {
     #[doc = "Light Blue Concrete Powder"]
     pub const BLOCK_MINECRAFT_LIGHT_BLUE_CONCRETE_POWDER: &str =
         "block.minecraft.light_blue_concrete_powder";
+    #[doc = "Light Blue Concrete Slab"]
+    pub const BLOCK_MINECRAFT_LIGHT_BLUE_CONCRETE_SLAB: &str =
+        "block.minecraft.light_blue_concrete_slab";
+    #[doc = "Light Blue Concrete Stairs"]
+    pub const BLOCK_MINECRAFT_LIGHT_BLUE_CONCRETE_STAIRS: &str =
+        "block.minecraft.light_blue_concrete_stairs";
     #[doc = "Light Blue Glazed Terracotta"]
     pub const BLOCK_MINECRAFT_LIGHT_BLUE_GLAZED_TERRACOTTA: &str =
         "block.minecraft.light_blue_glazed_terracotta";
@@ -4419,6 +4477,11 @@ pub mod java {
     pub const BLOCK_MINECRAFT_LIGHT_BLUE_TERRACOTTA: &str = "block.minecraft.light_blue_terracotta";
     #[doc = "Light Blue Wool"]
     pub const BLOCK_MINECRAFT_LIGHT_BLUE_WOOL: &str = "block.minecraft.light_blue_wool";
+    #[doc = "Light Blue Wool Slab"]
+    pub const BLOCK_MINECRAFT_LIGHT_BLUE_WOOL_SLAB: &str = "block.minecraft.light_blue_wool_slab";
+    #[doc = "Light Blue Wool Stairs"]
+    pub const BLOCK_MINECRAFT_LIGHT_BLUE_WOOL_STAIRS: &str =
+        "block.minecraft.light_blue_wool_stairs";
     #[doc = "Light Gray Banner"]
     pub const BLOCK_MINECRAFT_LIGHT_GRAY_BANNER: &str = "block.minecraft.light_gray_banner";
     #[doc = "Light Gray Bed"]
@@ -4435,6 +4498,12 @@ pub mod java {
     #[doc = "Light Gray Concrete Powder"]
     pub const BLOCK_MINECRAFT_LIGHT_GRAY_CONCRETE_POWDER: &str =
         "block.minecraft.light_gray_concrete_powder";
+    #[doc = "Light Gray Concrete Slab"]
+    pub const BLOCK_MINECRAFT_LIGHT_GRAY_CONCRETE_SLAB: &str =
+        "block.minecraft.light_gray_concrete_slab";
+    #[doc = "Light Gray Concrete Stairs"]
+    pub const BLOCK_MINECRAFT_LIGHT_GRAY_CONCRETE_STAIRS: &str =
+        "block.minecraft.light_gray_concrete_stairs";
     #[doc = "Light Gray Glazed Terracotta"]
     pub const BLOCK_MINECRAFT_LIGHT_GRAY_GLAZED_TERRACOTTA: &str =
         "block.minecraft.light_gray_glazed_terracotta";
@@ -4451,6 +4520,11 @@ pub mod java {
     pub const BLOCK_MINECRAFT_LIGHT_GRAY_TERRACOTTA: &str = "block.minecraft.light_gray_terracotta";
     #[doc = "Light Gray Wool"]
     pub const BLOCK_MINECRAFT_LIGHT_GRAY_WOOL: &str = "block.minecraft.light_gray_wool";
+    #[doc = "Light Gray Wool Slab"]
+    pub const BLOCK_MINECRAFT_LIGHT_GRAY_WOOL_SLAB: &str = "block.minecraft.light_gray_wool_slab";
+    #[doc = "Light Gray Wool Stairs"]
+    pub const BLOCK_MINECRAFT_LIGHT_GRAY_WOOL_STAIRS: &str =
+        "block.minecraft.light_gray_wool_stairs";
     #[doc = "Light Weighted Pressure Plate"]
     pub const BLOCK_MINECRAFT_LIGHT_WEIGHTED_PRESSURE_PLATE: &str =
         "block.minecraft.light_weighted_pressure_plate";
@@ -4476,6 +4550,10 @@ pub mod java {
     pub const BLOCK_MINECRAFT_LIME_CONCRETE: &str = "block.minecraft.lime_concrete";
     #[doc = "Lime Concrete Powder"]
     pub const BLOCK_MINECRAFT_LIME_CONCRETE_POWDER: &str = "block.minecraft.lime_concrete_powder";
+    #[doc = "Lime Concrete Slab"]
+    pub const BLOCK_MINECRAFT_LIME_CONCRETE_SLAB: &str = "block.minecraft.lime_concrete_slab";
+    #[doc = "Lime Concrete Stairs"]
+    pub const BLOCK_MINECRAFT_LIME_CONCRETE_STAIRS: &str = "block.minecraft.lime_concrete_stairs";
     #[doc = "Lime Glazed Terracotta"]
     pub const BLOCK_MINECRAFT_LIME_GLAZED_TERRACOTTA: &str =
         "block.minecraft.lime_glazed_terracotta";
@@ -4490,6 +4568,10 @@ pub mod java {
     pub const BLOCK_MINECRAFT_LIME_TERRACOTTA: &str = "block.minecraft.lime_terracotta";
     #[doc = "Lime Wool"]
     pub const BLOCK_MINECRAFT_LIME_WOOL: &str = "block.minecraft.lime_wool";
+    #[doc = "Lime Wool Slab"]
+    pub const BLOCK_MINECRAFT_LIME_WOOL_SLAB: &str = "block.minecraft.lime_wool_slab";
+    #[doc = "Lime Wool Stairs"]
+    pub const BLOCK_MINECRAFT_LIME_WOOL_STAIRS: &str = "block.minecraft.lime_wool_stairs";
     #[doc = "Lodestone"]
     pub const BLOCK_MINECRAFT_LODESTONE: &str = "block.minecraft.lodestone";
     #[doc = "Loom"]
@@ -4509,6 +4591,11 @@ pub mod java {
     #[doc = "Magenta Concrete Powder"]
     pub const BLOCK_MINECRAFT_MAGENTA_CONCRETE_POWDER: &str =
         "block.minecraft.magenta_concrete_powder";
+    #[doc = "Magenta Concrete Slab"]
+    pub const BLOCK_MINECRAFT_MAGENTA_CONCRETE_SLAB: &str = "block.minecraft.magenta_concrete_slab";
+    #[doc = "Magenta Concrete Stairs"]
+    pub const BLOCK_MINECRAFT_MAGENTA_CONCRETE_STAIRS: &str =
+        "block.minecraft.magenta_concrete_stairs";
     #[doc = "Magenta Glazed Terracotta"]
     pub const BLOCK_MINECRAFT_MAGENTA_GLAZED_TERRACOTTA: &str =
         "block.minecraft.magenta_glazed_terracotta";
@@ -4523,6 +4610,10 @@ pub mod java {
     pub const BLOCK_MINECRAFT_MAGENTA_TERRACOTTA: &str = "block.minecraft.magenta_terracotta";
     #[doc = "Magenta Wool"]
     pub const BLOCK_MINECRAFT_MAGENTA_WOOL: &str = "block.minecraft.magenta_wool";
+    #[doc = "Magenta Wool Slab"]
+    pub const BLOCK_MINECRAFT_MAGENTA_WOOL_SLAB: &str = "block.minecraft.magenta_wool_slab";
+    #[doc = "Magenta Wool Stairs"]
+    pub const BLOCK_MINECRAFT_MAGENTA_WOOL_STAIRS: &str = "block.minecraft.magenta_wool_stairs";
     #[doc = "Magma Block"]
     pub const BLOCK_MINECRAFT_MAGMA_BLOCK: &str = "block.minecraft.magma_block";
     #[doc = "Mangrove Button"]
@@ -4704,9 +4795,16 @@ pub mod java {
     #[doc = "Orange Concrete Powder"]
     pub const BLOCK_MINECRAFT_ORANGE_CONCRETE_POWDER: &str =
         "block.minecraft.orange_concrete_powder";
+    #[doc = "Orange Concrete Slab"]
+    pub const BLOCK_MINECRAFT_ORANGE_CONCRETE_SLAB: &str = "block.minecraft.orange_concrete_slab";
+    #[doc = "Orange Concrete Stairs"]
+    pub const BLOCK_MINECRAFT_ORANGE_CONCRETE_STAIRS: &str =
+        "block.minecraft.orange_concrete_stairs";
     #[doc = "Orange Glazed Terracotta"]
     pub const BLOCK_MINECRAFT_ORANGE_GLAZED_TERRACOTTA: &str =
         "block.minecraft.orange_glazed_terracotta";
+    #[doc = "Orange Poplar Leaves"]
+    pub const BLOCK_MINECRAFT_ORANGE_POPLAR_LEAVES: &str = "block.minecraft.orange_poplar_leaves";
     #[doc = "Orange Shulker Box"]
     pub const BLOCK_MINECRAFT_ORANGE_SHULKER_BOX: &str = "block.minecraft.orange_shulker_box";
     #[doc = "Orange Stained Glass"]
@@ -4720,6 +4818,10 @@ pub mod java {
     pub const BLOCK_MINECRAFT_ORANGE_TULIP: &str = "block.minecraft.orange_tulip";
     #[doc = "Orange Wool"]
     pub const BLOCK_MINECRAFT_ORANGE_WOOL: &str = "block.minecraft.orange_wool";
+    #[doc = "Orange Wool Slab"]
+    pub const BLOCK_MINECRAFT_ORANGE_WOOL_SLAB: &str = "block.minecraft.orange_wool_slab";
+    #[doc = "Orange Wool Stairs"]
+    pub const BLOCK_MINECRAFT_ORANGE_WOOL_STAIRS: &str = "block.minecraft.orange_wool_stairs";
     #[doc = "Oxeye Daisy"]
     pub const BLOCK_MINECRAFT_OXEYE_DAISY: &str = "block.minecraft.oxeye_daisy";
     #[doc = "Oxidized Chiseled Copper"]
@@ -4831,6 +4933,10 @@ pub mod java {
     pub const BLOCK_MINECRAFT_PINK_CONCRETE: &str = "block.minecraft.pink_concrete";
     #[doc = "Pink Concrete Powder"]
     pub const BLOCK_MINECRAFT_PINK_CONCRETE_POWDER: &str = "block.minecraft.pink_concrete_powder";
+    #[doc = "Pink Concrete Slab"]
+    pub const BLOCK_MINECRAFT_PINK_CONCRETE_SLAB: &str = "block.minecraft.pink_concrete_slab";
+    #[doc = "Pink Concrete Stairs"]
+    pub const BLOCK_MINECRAFT_PINK_CONCRETE_STAIRS: &str = "block.minecraft.pink_concrete_stairs";
     #[doc = "Pink Glazed Terracotta"]
     pub const BLOCK_MINECRAFT_PINK_GLAZED_TERRACOTTA: &str =
         "block.minecraft.pink_glazed_terracotta";
@@ -4849,6 +4955,10 @@ pub mod java {
     pub const BLOCK_MINECRAFT_PINK_TULIP: &str = "block.minecraft.pink_tulip";
     #[doc = "Pink Wool"]
     pub const BLOCK_MINECRAFT_PINK_WOOL: &str = "block.minecraft.pink_wool";
+    #[doc = "Pink Wool Slab"]
+    pub const BLOCK_MINECRAFT_PINK_WOOL_SLAB: &str = "block.minecraft.pink_wool_slab";
+    #[doc = "Pink Wool Stairs"]
+    pub const BLOCK_MINECRAFT_PINK_WOOL_STAIRS: &str = "block.minecraft.pink_wool_stairs";
     #[doc = "Piston"]
     pub const BLOCK_MINECRAFT_PISTON: &str = "block.minecraft.piston";
     #[doc = "Piston Head"]
@@ -4959,6 +5069,43 @@ pub mod java {
     pub const BLOCK_MINECRAFT_POLISHED_TUFF_STAIRS: &str = "block.minecraft.polished_tuff_stairs";
     #[doc = "Polished Tuff Wall"]
     pub const BLOCK_MINECRAFT_POLISHED_TUFF_WALL: &str = "block.minecraft.polished_tuff_wall";
+    #[doc = "Poplar Button"]
+    pub const BLOCK_MINECRAFT_POPLAR_BUTTON: &str = "block.minecraft.poplar_button";
+    #[doc = "Poplar Door"]
+    pub const BLOCK_MINECRAFT_POPLAR_DOOR: &str = "block.minecraft.poplar_door";
+    #[doc = "Poplar Fence"]
+    pub const BLOCK_MINECRAFT_POPLAR_FENCE: &str = "block.minecraft.poplar_fence";
+    #[doc = "Poplar Fence Gate"]
+    pub const BLOCK_MINECRAFT_POPLAR_FENCE_GATE: &str = "block.minecraft.poplar_fence_gate";
+    #[doc = "Poplar Hanging Sign"]
+    pub const BLOCK_MINECRAFT_POPLAR_HANGING_SIGN: &str = "block.minecraft.poplar_hanging_sign";
+    #[doc = "Poplar Leaves"]
+    pub const BLOCK_MINECRAFT_POPLAR_LEAVES: &str = "block.minecraft.poplar_leaves";
+    #[doc = "Poplar Log"]
+    pub const BLOCK_MINECRAFT_POPLAR_LOG: &str = "block.minecraft.poplar_log";
+    #[doc = "Poplar Planks"]
+    pub const BLOCK_MINECRAFT_POPLAR_PLANKS: &str = "block.minecraft.poplar_planks";
+    #[doc = "Poplar Pressure Plate"]
+    pub const BLOCK_MINECRAFT_POPLAR_PRESSURE_PLATE: &str = "block.minecraft.poplar_pressure_plate";
+    #[doc = "Poplar Sapling"]
+    pub const BLOCK_MINECRAFT_POPLAR_SAPLING: &str = "block.minecraft.poplar_sapling";
+    #[doc = "Poplar Shelf"]
+    pub const BLOCK_MINECRAFT_POPLAR_SHELF: &str = "block.minecraft.poplar_shelf";
+    #[doc = "Poplar Sign"]
+    pub const BLOCK_MINECRAFT_POPLAR_SIGN: &str = "block.minecraft.poplar_sign";
+    #[doc = "Poplar Slab"]
+    pub const BLOCK_MINECRAFT_POPLAR_SLAB: &str = "block.minecraft.poplar_slab";
+    #[doc = "Poplar Stairs"]
+    pub const BLOCK_MINECRAFT_POPLAR_STAIRS: &str = "block.minecraft.poplar_stairs";
+    #[doc = "Poplar Trapdoor"]
+    pub const BLOCK_MINECRAFT_POPLAR_TRAPDOOR: &str = "block.minecraft.poplar_trapdoor";
+    #[doc = "Poplar Wall Hanging Sign"]
+    pub const BLOCK_MINECRAFT_POPLAR_WALL_HANGING_SIGN: &str =
+        "block.minecraft.poplar_wall_hanging_sign";
+    #[doc = "Poplar Wall Sign"]
+    pub const BLOCK_MINECRAFT_POPLAR_WALL_SIGN: &str = "block.minecraft.poplar_wall_sign";
+    #[doc = "Poplar Wood"]
+    pub const BLOCK_MINECRAFT_POPLAR_WOOD: &str = "block.minecraft.poplar_wood";
     #[doc = "Poppy"]
     pub const BLOCK_MINECRAFT_POPPY: &str = "block.minecraft.poppy";
     #[doc = "Potatoes"]
@@ -5031,6 +5178,8 @@ pub mod java {
         "block.minecraft.potted_pale_oak_sapling";
     #[doc = "Potted Pink Tulip"]
     pub const BLOCK_MINECRAFT_POTTED_PINK_TULIP: &str = "block.minecraft.potted_pink_tulip";
+    #[doc = "Potted Poplar Sapling"]
+    pub const BLOCK_MINECRAFT_POTTED_POPLAR_SAPLING: &str = "block.minecraft.potted_poplar_sapling";
     #[doc = "Potted Poppy"]
     pub const BLOCK_MINECRAFT_POTTED_POPPY: &str = "block.minecraft.potted_poppy";
     #[doc = "Potted Red Mushroom"]
@@ -5089,6 +5238,11 @@ pub mod java {
     #[doc = "Purple Concrete Powder"]
     pub const BLOCK_MINECRAFT_PURPLE_CONCRETE_POWDER: &str =
         "block.minecraft.purple_concrete_powder";
+    #[doc = "Purple Concrete Slab"]
+    pub const BLOCK_MINECRAFT_PURPLE_CONCRETE_SLAB: &str = "block.minecraft.purple_concrete_slab";
+    #[doc = "Purple Concrete Stairs"]
+    pub const BLOCK_MINECRAFT_PURPLE_CONCRETE_STAIRS: &str =
+        "block.minecraft.purple_concrete_stairs";
     #[doc = "Purple Glazed Terracotta"]
     pub const BLOCK_MINECRAFT_PURPLE_GLAZED_TERRACOTTA: &str =
         "block.minecraft.purple_glazed_terracotta";
@@ -5103,6 +5257,10 @@ pub mod java {
     pub const BLOCK_MINECRAFT_PURPLE_TERRACOTTA: &str = "block.minecraft.purple_terracotta";
     #[doc = "Purple Wool"]
     pub const BLOCK_MINECRAFT_PURPLE_WOOL: &str = "block.minecraft.purple_wool";
+    #[doc = "Purple Wool Slab"]
+    pub const BLOCK_MINECRAFT_PURPLE_WOOL_SLAB: &str = "block.minecraft.purple_wool_slab";
+    #[doc = "Purple Wool Stairs"]
+    pub const BLOCK_MINECRAFT_PURPLE_WOOL_STAIRS: &str = "block.minecraft.purple_wool_stairs";
     #[doc = "Purpur Block"]
     pub const BLOCK_MINECRAFT_PURPUR_BLOCK: &str = "block.minecraft.purpur_block";
     #[doc = "Purpur Pillar"]
@@ -5143,6 +5301,10 @@ pub mod java {
     pub const BLOCK_MINECRAFT_RED_CONCRETE: &str = "block.minecraft.red_concrete";
     #[doc = "Red Concrete Powder"]
     pub const BLOCK_MINECRAFT_RED_CONCRETE_POWDER: &str = "block.minecraft.red_concrete_powder";
+    #[doc = "Red Concrete Slab"]
+    pub const BLOCK_MINECRAFT_RED_CONCRETE_SLAB: &str = "block.minecraft.red_concrete_slab";
+    #[doc = "Red Concrete Stairs"]
+    pub const BLOCK_MINECRAFT_RED_CONCRETE_STAIRS: &str = "block.minecraft.red_concrete_stairs";
     #[doc = "Red Glazed Terracotta"]
     pub const BLOCK_MINECRAFT_RED_GLAZED_TERRACOTTA: &str = "block.minecraft.red_glazed_terracotta";
     #[doc = "Red Mushroom"]
@@ -5158,6 +5320,8 @@ pub mod java {
     pub const BLOCK_MINECRAFT_RED_NETHER_BRICK_WALL: &str = "block.minecraft.red_nether_brick_wall";
     #[doc = "Red Nether Bricks"]
     pub const BLOCK_MINECRAFT_RED_NETHER_BRICKS: &str = "block.minecraft.red_nether_bricks";
+    #[doc = "Red Poplar Leaves"]
+    pub const BLOCK_MINECRAFT_RED_POPLAR_LEAVES: &str = "block.minecraft.red_poplar_leaves";
     #[doc = "Red Sand"]
     pub const BLOCK_MINECRAFT_RED_SAND: &str = "block.minecraft.red_sand";
     #[doc = "Red Sandstone"]
@@ -5168,6 +5332,8 @@ pub mod java {
     pub const BLOCK_MINECRAFT_RED_SANDSTONE_STAIRS: &str = "block.minecraft.red_sandstone_stairs";
     #[doc = "Red Sandstone Wall"]
     pub const BLOCK_MINECRAFT_RED_SANDSTONE_WALL: &str = "block.minecraft.red_sandstone_wall";
+    #[doc = "Red Shrub"]
+    pub const BLOCK_MINECRAFT_RED_SHRUB: &str = "block.minecraft.red_shrub";
     #[doc = "Red Shulker Box"]
     pub const BLOCK_MINECRAFT_RED_SHULKER_BOX: &str = "block.minecraft.red_shulker_box";
     #[doc = "Red Stained Glass"]
@@ -5181,6 +5347,10 @@ pub mod java {
     pub const BLOCK_MINECRAFT_RED_TULIP: &str = "block.minecraft.red_tulip";
     #[doc = "Red Wool"]
     pub const BLOCK_MINECRAFT_RED_WOOL: &str = "block.minecraft.red_wool";
+    #[doc = "Red Wool Slab"]
+    pub const BLOCK_MINECRAFT_RED_WOOL_SLAB: &str = "block.minecraft.red_wool_slab";
+    #[doc = "Red Wool Stairs"]
+    pub const BLOCK_MINECRAFT_RED_WOOL_STAIRS: &str = "block.minecraft.red_wool_stairs";
     #[doc = "Block of Redstone"]
     pub const BLOCK_MINECRAFT_REDSTONE_BLOCK: &str = "block.minecraft.redstone_block";
     #[doc = "Redstone Lamp"]
@@ -5248,6 +5418,8 @@ pub mod java {
     pub const BLOCK_MINECRAFT_SEAGRASS: &str = "block.minecraft.seagrass";
     #[doc = "Respawn point set"]
     pub const BLOCK_MINECRAFT_SET_SPAWN: &str = "block.minecraft.set_spawn";
+    #[doc = "Shelf Mushroom"]
+    pub const BLOCK_MINECRAFT_SHELF_MUSHROOM: &str = "block.minecraft.shelf_mushroom";
     #[doc = "Short Dry Grass"]
     pub const BLOCK_MINECRAFT_SHORT_DRY_GRASS: &str = "block.minecraft.short_dry_grass";
     #[doc = "Short Grass"]
@@ -5388,6 +5560,8 @@ pub mod java {
     pub const BLOCK_MINECRAFT_STONE_STAIRS: &str = "block.minecraft.stone_stairs";
     #[doc = "Stonecutter"]
     pub const BLOCK_MINECRAFT_STONECUTTER: &str = "block.minecraft.stonecutter";
+    #[doc = "Straw Bed"]
+    pub const BLOCK_MINECRAFT_STRAW_BED: &str = "block.minecraft.straw_bed";
     #[doc = "Stripped Acacia Log"]
     pub const BLOCK_MINECRAFT_STRIPPED_ACACIA_LOG: &str = "block.minecraft.stripped_acacia_log";
     #[doc = "Stripped Acacia Wood"]
@@ -5430,6 +5604,10 @@ pub mod java {
     #[doc = "Stripped Pale Oak Wood"]
     pub const BLOCK_MINECRAFT_STRIPPED_PALE_OAK_WOOD: &str =
         "block.minecraft.stripped_pale_oak_wood";
+    #[doc = "Stripped Poplar Log"]
+    pub const BLOCK_MINECRAFT_STRIPPED_POPLAR_LOG: &str = "block.minecraft.stripped_poplar_log";
+    #[doc = "Stripped Poplar Wood"]
+    pub const BLOCK_MINECRAFT_STRIPPED_POPLAR_WOOD: &str = "block.minecraft.stripped_poplar_wood";
     #[doc = "Stripped Spruce Log"]
     pub const BLOCK_MINECRAFT_STRIPPED_SPRUCE_LOG: &str = "block.minecraft.stripped_spruce_log";
     #[doc = "Stripped Spruce Wood"]
@@ -5817,6 +5995,10 @@ pub mod java {
     pub const BLOCK_MINECRAFT_WHITE_CONCRETE: &str = "block.minecraft.white_concrete";
     #[doc = "White Concrete Powder"]
     pub const BLOCK_MINECRAFT_WHITE_CONCRETE_POWDER: &str = "block.minecraft.white_concrete_powder";
+    #[doc = "White Concrete Slab"]
+    pub const BLOCK_MINECRAFT_WHITE_CONCRETE_SLAB: &str = "block.minecraft.white_concrete_slab";
+    #[doc = "White Concrete Stairs"]
+    pub const BLOCK_MINECRAFT_WHITE_CONCRETE_STAIRS: &str = "block.minecraft.white_concrete_stairs";
     #[doc = "White Glazed Terracotta"]
     pub const BLOCK_MINECRAFT_WHITE_GLAZED_TERRACOTTA: &str =
         "block.minecraft.white_glazed_terracotta";
@@ -5833,6 +6015,10 @@ pub mod java {
     pub const BLOCK_MINECRAFT_WHITE_TULIP: &str = "block.minecraft.white_tulip";
     #[doc = "White Wool"]
     pub const BLOCK_MINECRAFT_WHITE_WOOL: &str = "block.minecraft.white_wool";
+    #[doc = "White Wool Slab"]
+    pub const BLOCK_MINECRAFT_WHITE_WOOL_SLAB: &str = "block.minecraft.white_wool_slab";
+    #[doc = "White Wool Stairs"]
+    pub const BLOCK_MINECRAFT_WHITE_WOOL_STAIRS: &str = "block.minecraft.white_wool_stairs";
     #[doc = "Wildflowers"]
     pub const BLOCK_MINECRAFT_WILDFLOWERS: &str = "block.minecraft.wildflowers";
     #[doc = "Wither Rose"]
@@ -5857,9 +6043,16 @@ pub mod java {
     #[doc = "Yellow Concrete Powder"]
     pub const BLOCK_MINECRAFT_YELLOW_CONCRETE_POWDER: &str =
         "block.minecraft.yellow_concrete_powder";
+    #[doc = "Yellow Concrete Slab"]
+    pub const BLOCK_MINECRAFT_YELLOW_CONCRETE_SLAB: &str = "block.minecraft.yellow_concrete_slab";
+    #[doc = "Yellow Concrete Stairs"]
+    pub const BLOCK_MINECRAFT_YELLOW_CONCRETE_STAIRS: &str =
+        "block.minecraft.yellow_concrete_stairs";
     #[doc = "Yellow Glazed Terracotta"]
     pub const BLOCK_MINECRAFT_YELLOW_GLAZED_TERRACOTTA: &str =
         "block.minecraft.yellow_glazed_terracotta";
+    #[doc = "Yellow Poplar Leaves"]
+    pub const BLOCK_MINECRAFT_YELLOW_POPLAR_LEAVES: &str = "block.minecraft.yellow_poplar_leaves";
     #[doc = "Yellow Shulker Box"]
     pub const BLOCK_MINECRAFT_YELLOW_SHULKER_BOX: &str = "block.minecraft.yellow_shulker_box";
     #[doc = "Yellow Stained Glass"]
@@ -5871,6 +6064,10 @@ pub mod java {
     pub const BLOCK_MINECRAFT_YELLOW_TERRACOTTA: &str = "block.minecraft.yellow_terracotta";
     #[doc = "Yellow Wool"]
     pub const BLOCK_MINECRAFT_YELLOW_WOOL: &str = "block.minecraft.yellow_wool";
+    #[doc = "Yellow Wool Slab"]
+    pub const BLOCK_MINECRAFT_YELLOW_WOOL_SLAB: &str = "block.minecraft.yellow_wool_slab";
+    #[doc = "Yellow Wool Stairs"]
+    pub const BLOCK_MINECRAFT_YELLOW_WOOL_STAIRS: &str = "block.minecraft.yellow_wool_stairs";
     #[doc = "Zombie Head"]
     pub const BLOCK_MINECRAFT_ZOMBIE_HEAD: &str = "block.minecraft.zombie_head";
     #[doc = "Zombie Wall Head"]
@@ -6011,11 +6208,11 @@ pub mod java {
     #[doc = "Go to the Chat Settings screen"]
     pub const CHAT_RESTRICTION_CHAT_DISABLED_BY_OPTIONS_ACTION: &str =
         "chat_restriction.chat_disabled_by_options.action";
-    #[doc = "Chat is restricted by the launcher"]
+    #[doc = "Chat is restricted by the launcher."]
     pub const CHAT_RESTRICTION_DISABLED_BY_LAUNCHER: &str = "chat_restriction.disabled_by_launcher";
     #[doc = "Chat is restricted by profile settings."]
     pub const CHAT_RESTRICTION_DISABLED_BY_PROFILE: &str = "chat_restriction.disabled_by_profile";
-    #[doc = "Go to your profile settings"]
+    #[doc = "Go to Your Profile Settings"]
     pub const CHAT_RESTRICTION_DISABLED_BY_PROFILE_ACTION: &str =
         "chat_restriction.disabled_by_profile.action";
     #[doc = "Sending commands is not allowed"]
@@ -6078,6 +6275,20 @@ pub mod java {
     pub const COLOR_MINECRAFT_WHITE: &str = "color.minecraft.white";
     #[doc = "Yellow"]
     pub const COLOR_MINECRAFT_YELLOW: &str = "color.minecraft.yellow";
+    #[doc = "%s returned value %s"]
+    pub const COMMAND_COMPUTE_RESULT_NAMED_EXACT: &str = "command.compute.result.named.exact";
+    #[doc = "%s returned invalid value (%s)"]
+    pub const COMMAND_COMPUTE_RESULT_NAMED_INVALID: &str = "command.compute.result.named.invalid";
+    #[doc = "%s returned value %s (rounded to %s)"]
+    pub const COMMAND_COMPUTE_RESULT_NAMED_ROUNDED: &str = "command.compute.result.named.rounded";
+    #[doc = "Number provider returned value %s"]
+    pub const COMMAND_COMPUTE_RESULT_UNNAMED_EXACT: &str = "command.compute.result.unnamed.exact";
+    #[doc = "Number provider returned invalid value (%s)"]
+    pub const COMMAND_COMPUTE_RESULT_UNNAMED_INVALID: &str =
+        "command.compute.result.unnamed.invalid";
+    #[doc = "Number provider returned value %s (rounded to %s)"]
+    pub const COMMAND_COMPUTE_RESULT_UNNAMED_ROUNDED: &str =
+        "command.compute.result.unnamed.rounded";
     #[doc = "<--[HERE]"]
     pub const COMMAND_CONTEXT_HERE: &str = "command.context.here";
     #[doc = "%s at position %s: %s"]
@@ -6235,7 +6446,7 @@ pub mod java {
     pub const COMMANDS_BOSSBAR_GET_VALUE: &str = "commands.bossbar.get.value";
     #[doc = "Custom bossbar %s is currently hidden"]
     pub const COMMANDS_BOSSBAR_GET_VISIBLE_HIDDEN: &str = "commands.bossbar.get.visible.hidden";
-    #[doc = "Custom bossbar %s is currently shown"]
+    #[doc = "Custom bossbar %s is currently visible"]
     pub const COMMANDS_BOSSBAR_GET_VISIBLE_VISIBLE: &str = "commands.bossbar.get.visible.visible";
     #[doc = "There are no custom bossbars active"]
     pub const COMMANDS_BOSSBAR_LIST_BARS_NONE: &str = "commands.bossbar.list.bars.none";
@@ -6249,7 +6460,7 @@ pub mod java {
     pub const COMMANDS_BOSSBAR_SET_COLOR_UNCHANGED: &str = "commands.bossbar.set.color.unchanged";
     #[doc = "Custom bossbar %s has changed maximum to %s"]
     pub const COMMANDS_BOSSBAR_SET_MAX_SUCCESS: &str = "commands.bossbar.set.max.success";
-    #[doc = "Nothing changed. That's already the max of this bossbar"]
+    #[doc = "Nothing changed. That's already the maximum of this bossbar"]
     pub const COMMANDS_BOSSBAR_SET_MAX_UNCHANGED: &str = "commands.bossbar.set.max.unchanged";
     #[doc = "Custom bossbar %s has been renamed"]
     pub const COMMANDS_BOSSBAR_SET_NAME_SUCCESS: &str = "commands.bossbar.set.name.success";
@@ -6557,6 +6768,8 @@ pub mod java {
     pub const COMMANDS_FILL_SUCCESS: &str = "commands.fill.success";
     #[doc = "Too many blocks in the specified area (maximum %s, but specified %s)"]
     pub const COMMANDS_FILL_TOOBIG: &str = "commands.fill.toobig";
+    #[doc = "No biome entries were changed"]
+    pub const COMMANDS_FILLBIOME_NO_CHANGES: &str = "commands.fillbiome.no_changes";
     #[doc = "Biomes set between %s, %s, %s and %s, %s, %s"]
     pub const COMMANDS_FILLBIOME_SUCCESS: &str = "commands.fillbiome.success";
     #[doc = "%s biome entry/entries set between %s, %s, %s and %s, %s, %s"]
@@ -6626,9 +6839,11 @@ pub mod java {
     pub const COMMANDS_GAMEMODE_SUCCESS_OTHER: &str = "commands.gamemode.success.other";
     #[doc = "Set own game mode to %s"]
     pub const COMMANDS_GAMEMODE_SUCCESS_SELF: &str = "commands.gamemode.success.self";
-    #[doc = "Gamerule %s is currently set to: %s"]
+    #[doc = "Game rule %s is already set to %s"]
+    pub const COMMANDS_GAMERULE_NOT_SET: &str = "commands.gamerule.not_set";
+    #[doc = "Game rule %s is currently set to %s"]
     pub const COMMANDS_GAMERULE_QUERY: &str = "commands.gamerule.query";
-    #[doc = "Gamerule %s is now set to: %s"]
+    #[doc = "Game rule %s is now set to %s"]
     pub const COMMANDS_GAMERULE_SET: &str = "commands.gamerule.set";
     #[doc = "Can't give more than %s of %s"]
     pub const COMMANDS_GIVE_FAILED_TOOMANYITEMS: &str = "commands.give.failed.toomanyitems";
@@ -6638,8 +6853,33 @@ pub mod java {
     pub const COMMANDS_GIVE_SUCCESS_SINGLE: &str = "commands.give.success.single";
     #[doc = "Unknown command or insufficient permissions"]
     pub const COMMANDS_HELP_FAILED: &str = "commands.help.failed";
+    #[doc = "Modified %s slot(s) at %s, %s, %s"]
+    pub const COMMANDS_ITEM_BLOCK_MODIFY_SUCCESS: &str = "commands.item.block.modify.success";
+    #[doc = "Replaced %s slot(s) at %s, %s, %s"]
+    pub const COMMANDS_ITEM_BLOCK_REPLACE_SUCCESS: &str = "commands.item.block.replace.success";
+    #[doc = "Replaced %s slot(s) at %s, %s, %s with %s"]
+    pub const COMMANDS_ITEM_BLOCK_REPLACE_SUCCESS_KNOWN_ITEM: &str =
+        "commands.item.block.replace.success.known_item";
     #[doc = "Replaced a slot at %s, %s, %s with %s"]
     pub const COMMANDS_ITEM_BLOCK_SET_SUCCESS: &str = "commands.item.block.set.success";
+    #[doc = "Modified slot(s) on %s entities"]
+    pub const COMMANDS_ITEM_ENTITY_MODIFY_SUCCESS_MULTIPLE: &str =
+        "commands.item.entity.modify.success.multiple";
+    #[doc = "Modified %s slot(s) on %s"]
+    pub const COMMANDS_ITEM_ENTITY_MODIFY_SUCCESS_SINGLE: &str =
+        "commands.item.entity.modify.success.single";
+    #[doc = "Replaced slot(s) on %s entities"]
+    pub const COMMANDS_ITEM_ENTITY_REPLACE_SUCCESS_MULTIPLE: &str =
+        "commands.item.entity.replace.success.multiple";
+    #[doc = "Replaced slot(s) on %s entities with %s"]
+    pub const COMMANDS_ITEM_ENTITY_REPLACE_SUCCESS_MULTIPLE_KNOWN_ITEM: &str =
+        "commands.item.entity.replace.success.multiple.known_item";
+    #[doc = "Replaced %s slot(s) on %s"]
+    pub const COMMANDS_ITEM_ENTITY_REPLACE_SUCCESS_SINGLE: &str =
+        "commands.item.entity.replace.success.single";
+    #[doc = "Replaced %s slot(s) on %s with %s"]
+    pub const COMMANDS_ITEM_ENTITY_REPLACE_SUCCESS_SINGLE_KNOWN_ITEM: &str =
+        "commands.item.entity.replace.success.single.known_item";
     #[doc = "Replaced a slot on %s entities with %s"]
     pub const COMMANDS_ITEM_ENTITY_SET_SUCCESS_MULTIPLE: &str =
         "commands.item.entity.set.success.multiple";
@@ -6648,8 +6888,16 @@ pub mod java {
         "commands.item.entity.set.success.single";
     #[doc = "The source does not have slot %s"]
     pub const COMMANDS_ITEM_SOURCE_NO_SUCH_SLOT: &str = "commands.item.source.no_such_slot";
+    #[doc = "The source does not have specified slots"]
+    pub const COMMANDS_ITEM_SOURCE_NO_SUCH_SLOT_UNNAMED: &str =
+        "commands.item.source.no_such_slot.unnamed";
     #[doc = "Source position %s, %s, %s is not a container"]
     pub const COMMANDS_ITEM_SOURCE_NOT_A_CONTAINER: &str = "commands.item.source.not_a_container";
+    #[doc = "No targets accepted items into specified slots"]
+    pub const COMMANDS_ITEM_TARGET_FAILED: &str = "commands.item.target.failed";
+    #[doc = "No targets accepted item %s into specified slots"]
+    pub const COMMANDS_ITEM_TARGET_FAILED_KNOWN_ITEM: &str =
+        "commands.item.target.failed.known_item";
     #[doc = "No targets accepted item %s into slot %s"]
     pub const COMMANDS_ITEM_TARGET_NO_CHANGED_KNOWN_ITEM: &str =
         "commands.item.target.no_changed.known_item";
@@ -6657,6 +6905,9 @@ pub mod java {
     pub const COMMANDS_ITEM_TARGET_NO_CHANGES: &str = "commands.item.target.no_changes";
     #[doc = "The target does not have slot %s"]
     pub const COMMANDS_ITEM_TARGET_NO_SUCH_SLOT: &str = "commands.item.target.no_such_slot";
+    #[doc = "The target does not have specified slots"]
+    pub const COMMANDS_ITEM_TARGET_NO_SUCH_SLOT_UNNAMED: &str =
+        "commands.item.target.no_such_slot.unnamed";
     #[doc = "Target position %s, %s, %s is not a container"]
     pub const COMMANDS_ITEM_TARGET_NOT_A_CONTAINER: &str = "commands.item.target.not_a_container";
     #[doc = "Failed to dump JFR recording: %s"]
@@ -6667,7 +6918,7 @@ pub mod java {
     pub const COMMANDS_JFR_STARTED: &str = "commands.jfr.started";
     #[doc = "JFR profiling stopped and dumped to %s"]
     pub const COMMANDS_JFR_STOPPED: &str = "commands.jfr.stopped";
-    #[doc = "Cannot kick server owner in LAN game"]
+    #[doc = "Cannot kick the server owner in a LAN game"]
     pub const COMMANDS_KICK_OWNER_FAILED: &str = "commands.kick.owner.failed";
     #[doc = "Cannot kick in an offline singleplayer game"]
     pub const COMMANDS_KICK_SINGLEPLAYER_FAILED: &str = "commands.kick.singleplayer.failed";
@@ -6699,7 +6950,7 @@ pub mod java {
     pub const COMMANDS_MESSAGE_DISPLAY_INCOMING: &str = "commands.message.display.incoming";
     #[doc = "You whisper to %s: %s"]
     pub const COMMANDS_MESSAGE_DISPLAY_OUTGOING: &str = "commands.message.display.outgoing";
-    #[doc = "Nothing changed. The player already is an operator"]
+    #[doc = "Nothing changed. The player is already an operator"]
     pub const COMMANDS_OP_FAILED: &str = "commands.op.failed";
     #[doc = "Made %s a server operator"]
     pub const COMMANDS_OP_SUCCESS: &str = "commands.op.success";
@@ -6725,7 +6976,7 @@ pub mod java {
     pub const COMMANDS_PERF_REPORTFAILED: &str = "commands.perf.reportFailed";
     #[doc = "Created debug report in %s"]
     pub const COMMANDS_PERF_REPORTSAVED: &str = "commands.perf.reportSaved";
-    #[doc = "Started 10 second performance profiling run (use '/perf stop' to stop early)"]
+    #[doc = "Started a 10-second performance profiling run (use '/perf stop' to stop early)"]
     pub const COMMANDS_PERF_STARTED: &str = "commands.perf.started";
     #[doc = "Stopped performance profiling after %s second(s) and %s tick(s) (%s tick(s) per second)"]
     pub const COMMANDS_PERF_STOPPED: &str = "commands.perf.stopped";
@@ -6735,6 +6986,8 @@ pub mod java {
     pub const COMMANDS_PLACE_FEATURE_INVALID: &str = "commands.place.feature.invalid";
     #[doc = "Placed \"%s\" at %s, %s, %s"]
     pub const COMMANDS_PLACE_FEATURE_SUCCESS: &str = "commands.place.feature.success";
+    #[doc = "Placed feature at %s, %s, %s"]
+    pub const COMMANDS_PLACE_FEATURE_SUCCESS_INLINE: &str = "commands.place.feature.success.inline";
     #[doc = "Failed to generate jigsaw"]
     pub const COMMANDS_PLACE_JIGSAW_FAILED: &str = "commands.place.jigsaw.failed";
     #[doc = "There is no template pool with type \"%s\""]
@@ -6759,6 +7012,34 @@ pub mod java {
     pub const COMMANDS_PLAYSOUND_SUCCESS_MULTIPLE: &str = "commands.playsound.success.multiple";
     #[doc = "Played sound %s to %s"]
     pub const COMMANDS_PLAYSOUND_SUCCESS_SINGLE: &str = "commands.playsound.success.single";
+    #[doc = "Player already has the specified post effect"]
+    pub const COMMANDS_POSTEFFECT_ADD_FAILED: &str = "commands.posteffect.add.failed";
+    #[doc = "Added post effect %s to %s players"]
+    pub const COMMANDS_POSTEFFECT_ADD_SUCCESS_MULTIPLE: &str =
+        "commands.posteffect.add.success.multiple";
+    #[doc = "Added post effect %s to %s"]
+    pub const COMMANDS_POSTEFFECT_ADD_SUCCESS_SINGLE: &str =
+        "commands.posteffect.add.success.single";
+    #[doc = "Player does not have any post effects to remove"]
+    pub const COMMANDS_POSTEFFECT_CLEAR_FAILED: &str = "commands.posteffect.clear.failed";
+    #[doc = "Removed all post effects from %s players"]
+    pub const COMMANDS_POSTEFFECT_CLEAR_SUCCESS_MULTIPLE: &str =
+        "commands.posteffect.clear.success.multiple";
+    #[doc = "Removed all post effects from %s"]
+    pub const COMMANDS_POSTEFFECT_CLEAR_SUCCESS_SINGLE: &str =
+        "commands.posteffect.clear.success.single";
+    #[doc = "Player %s does not have any post effects"]
+    pub const COMMANDS_POSTEFFECT_LIST_EMPTY: &str = "commands.posteffect.list.empty";
+    #[doc = "Player %s has %s post effects: %s"]
+    pub const COMMANDS_POSTEFFECT_LIST_SUCCESS: &str = "commands.posteffect.list.success";
+    #[doc = "Player does not have the specified post effect"]
+    pub const COMMANDS_POSTEFFECT_REMOVE_FAILED: &str = "commands.posteffect.remove.failed";
+    #[doc = "Removed post effect %s from %s players"]
+    pub const COMMANDS_POSTEFFECT_REMOVE_SUCCESS_MULTIPLE: &str =
+        "commands.posteffect.remove.success.multiple";
+    #[doc = "Removed post effect %s from %s"]
+    pub const COMMANDS_POSTEFFECT_REMOVE_SUCCESS_SINGLE: &str =
+        "commands.posteffect.remove.success.single";
     #[doc = "Copy Component"]
     pub const COMMANDS_PROFILE_FETCH_COPY_COMPONENT: &str = "commands.profile_fetch.copy_component";
     #[doc = "Failed to serialize profile: %s"]
@@ -6791,9 +7072,9 @@ pub mod java {
     pub const COMMANDS_PUBLISH_STARTED_ONLINE: &str = "commands.publish.started.online";
     #[doc = "Multiplayer game is now hosted on port %s"]
     pub const COMMANDS_PUBLISH_SUCCESS: &str = "commands.publish.success";
-    #[doc = "The range of the random value must be at most 2147483646"]
+    #[doc = "The range of the random value must be at most 2147483647"]
     pub const COMMANDS_RANDOM_ERROR_RANGE_TOO_LARGE: &str = "commands.random.error.range_too_large";
-    #[doc = "The range of the random value must be at least 2"]
+    #[doc = "The range of the random value must be at least 1"]
     pub const COMMANDS_RANDOM_ERROR_RANGE_TOO_SMALL: &str = "commands.random.error.range_too_small";
     #[doc = "Reset %s random sequence(s)"]
     pub const COMMANDS_RANDOM_RESET_ALL_SUCCESS: &str = "commands.random.reset.all.success";
@@ -7013,7 +7294,7 @@ pub mod java {
     #[doc = "The player idle timeout is now disabled"]
     pub const COMMANDS_SETIDLETIMEOUT_SUCCESS_DISABLED: &str =
         "commands.setidletimeout.success.disabled";
-    #[doc = "Can only set the world spawn for overworld"]
+    #[doc = "Can only set the world spawn for the Overworld"]
     pub const COMMANDS_SETWORLDSPAWN_FAILURE_NOT_OVERWORLD: &str =
         "commands.setworldspawn.failure.not_overworld";
     #[doc = "Set the world spawn point to %s, %s, %s [%s]"]
@@ -7068,15 +7349,15 @@ pub mod java {
         "commands.stopsound.success.sourceless.sound";
     #[doc = "Stopwatch '%s' already exists"]
     pub const COMMANDS_STOPWATCH_ALREADY_EXISTS: &str = "commands.stopwatch.already_exists";
-    #[doc = "Created Stopwatch '%s'"]
+    #[doc = "Created stopwatch '%s'"]
     pub const COMMANDS_STOPWATCH_CREATE_SUCCESS: &str = "commands.stopwatch.create.success";
     #[doc = "Stopwatch '%s' does not exist"]
     pub const COMMANDS_STOPWATCH_DOES_NOT_EXIST: &str = "commands.stopwatch.does_not_exist";
     #[doc = "Stopwatch '%s' has run for %ss"]
     pub const COMMANDS_STOPWATCH_QUERY: &str = "commands.stopwatch.query";
-    #[doc = "Removed Stopwatch '%s'"]
+    #[doc = "Removed stopwatch '%s'"]
     pub const COMMANDS_STOPWATCH_REMOVE_SUCCESS: &str = "commands.stopwatch.remove.success";
-    #[doc = "Restarted Stopwatch '%s'"]
+    #[doc = "Restarted stopwatch '%s'"]
     pub const COMMANDS_STOPWATCH_RESTART_SUCCESS: &str = "commands.stopwatch.restart.success";
     #[doc = "Unable to summon entity"]
     pub const COMMANDS_SUMMON_FAILED: &str = "commands.summon.failed";
@@ -7102,11 +7383,11 @@ pub mod java {
     pub const COMMANDS_TAG_ADD_SUCCESS_SINGLE: &str = "commands.tag.add.success.single";
     #[doc = "There are no tags on the %s entities"]
     pub const COMMANDS_TAG_LIST_MULTIPLE_EMPTY: &str = "commands.tag.list.multiple.empty";
-    #[doc = "The %s entities have %s total tags: %s"]
+    #[doc = "The %s entities have %s total tag(s): %s"]
     pub const COMMANDS_TAG_LIST_MULTIPLE_SUCCESS: &str = "commands.tag.list.multiple.success";
     #[doc = "%s has no tags"]
     pub const COMMANDS_TAG_LIST_SINGLE_EMPTY: &str = "commands.tag.list.single.empty";
-    #[doc = "%s has %s tags: %s"]
+    #[doc = "%s has %s tag(s): %s"]
     pub const COMMANDS_TAG_LIST_SINGLE_SUCCESS: &str = "commands.tag.list.single.success";
     #[doc = "Target does not have this tag"]
     pub const COMMANDS_TAG_REMOVE_FAILED: &str = "commands.tag.remove.failed";
@@ -7306,6 +7587,10 @@ pub mod java {
     pub const COMMANDS_TIME_NO_TIME_MARKER_FOUND: &str = "commands.time.no_time_marker_found";
     #[doc = "Paused clock %s"]
     pub const COMMANDS_TIME_PAUSE: &str = "commands.time.pause";
+    #[doc = "Clock %s is already paused"]
+    pub const COMMANDS_TIME_PAUSE_ALREADY_PAUSED: &str = "commands.time.pause.already_paused";
+    #[doc = "Clock %s is already running"]
+    pub const COMMANDS_TIME_PAUSE_ALREADY_RUNNING: &str = "commands.time.pause.already_running";
     #[doc = "The time is %s"]
     pub const COMMANDS_TIME_QUERY: &str = "commands.time.query";
     #[doc = "Clock %s is at %s tick(s)"]
@@ -7319,12 +7604,19 @@ pub mod java {
         "commands.time.query.timeline.repetitions";
     #[doc = "Clock %s will now advance at %sx normal rate"]
     pub const COMMANDS_TIME_RATE: &str = "commands.time.rate";
+    #[doc = "Clock %s is already advancing at %sx normal rate"]
+    pub const COMMANDS_TIME_RATE_ALREADY_SAME: &str = "commands.time.rate.already_same";
     #[doc = "Resumed clock %s"]
     pub const COMMANDS_TIME_RESUME: &str = "commands.time.resume";
     #[doc = "Set the time to %s"]
     pub const COMMANDS_TIME_SET: &str = "commands.time.set";
     #[doc = "Set %s to %s tick(s)"]
     pub const COMMANDS_TIME_SET_ABSOLUTE: &str = "commands.time.set.absolute";
+    #[doc = "Clock %s is already set to %s tick(s)"]
+    pub const COMMANDS_TIME_SET_ALREADY_AT_TIME: &str = "commands.time.set.already_at_time";
+    #[doc = "Clock %s is already at time marker %s"]
+    pub const COMMANDS_TIME_SET_ALREADY_AT_TIME_MARKER: &str =
+        "commands.time.set.already_at_time_marker";
     #[doc = "Set %s to time marker %s"]
     pub const COMMANDS_TIME_SET_TIME_MARKER: &str = "commands.time.set.time_marker";
     #[doc = "Timeline %s is not valid for clock %s"]
@@ -7411,7 +7703,7 @@ pub mod java {
     pub const COMMANDS_WEATHER_SET_CLEAR: &str = "commands.weather.set.clear";
     #[doc = "Set the weather to rain"]
     pub const COMMANDS_WEATHER_SET_RAIN: &str = "commands.weather.set.rain";
-    #[doc = "Set the weather to rain & thunder"]
+    #[doc = "Set the weather to rain and thunder"]
     pub const COMMANDS_WEATHER_SET_THUNDER: &str = "commands.weather.set.thunder";
     #[doc = "Player is already whitelisted"]
     pub const COMMANDS_WHITELIST_ADD_FAILED: &str = "commands.whitelist.add.failed";
@@ -7462,7 +7754,7 @@ pub mod java {
         "commands.worldborder.set.failed.nochange";
     #[doc = "World border cannot be smaller than 1 block wide"]
     pub const COMMANDS_WORLDBORDER_SET_FAILED_SMALL: &str = "commands.worldborder.set.failed.small";
-    #[doc = "Growing the world border to %s blocks wide over %s seconds"]
+    #[doc = "Growing the world border to %s block(s) wide over %s second(s)"]
     pub const COMMANDS_WORLDBORDER_SET_GROW: &str = "commands.worldborder.set.grow";
     #[doc = "Set the world border to %s block(s) wide"]
     pub const COMMANDS_WORLDBORDER_SET_IMMEDIATE: &str = "commands.worldborder.set.immediate";
@@ -7587,7 +7879,7 @@ pub mod java {
     pub const CONTAINER_REPAIR_EXPENSIVE: &str = "container.repair.expensive";
     #[doc = "Shulker Box"]
     pub const CONTAINER_SHULKERBOX: &str = "container.shulkerBox";
-    #[doc = "%s x%s"]
+    #[doc = "%s x %s"]
     pub const CONTAINER_SHULKERBOX_ITEMCOUNT: &str = "container.shulkerBox.itemCount";
     #[doc = "and %s more..."]
     pub const CONTAINER_SHULKERBOX_MORE: &str = "container.shulkerBox.more";
@@ -7722,7 +8014,7 @@ pub mod java {
     #[doc = "This world contains invalid or corrupted save data."]
     pub const DATAPACKFAILURE_SAFEMODE_FAILED_DESCRIPTION: &str =
         "datapackFailure.safeMode.failed.description";
-    #[doc = "Failed to load world in Safe Mode."]
+    #[doc = "Failed to load world in Safe Mode"]
     pub const DATAPACKFAILURE_SAFEMODE_FAILED_TITLE: &str = "datapackFailure.safeMode.failed.title";
     #[doc = "Errors in the currently selected data pack(s) prevented the world from loading.\nYou can either try to load it with only the vanilla data pack (\"Safe Mode\"), or go back to the title screen and fix it manually."]
     pub const DATAPACKFAILURE_TITLE: &str = "datapackFailure.title";
@@ -7886,6 +8178,8 @@ pub mod java {
     pub const DEATH_ATTACK_STING_PLAYER: &str = "death.attack.sting.player";
     #[doc = "%1$s died because not just the floor is lava"]
     pub const DEATH_ATTACK_SULFURCUBEHOT: &str = "death.attack.sulfurCubeHot";
+    #[doc = "%2$s showed %1$s that not just the floor is lava using %3$s"]
+    pub const DEATH_ATTACK_SULFURCUBEHOT_ITEM: &str = "death.attack.sulfurCubeHot.item";
     #[doc = "%2$s showed %1$s that not just the floor is lava"]
     pub const DEATH_ATTACK_SULFURCUBEHOT_PLAYER: &str = "death.attack.sulfurCubeHot.player";
     #[doc = "%1$s was poked to death by a sweet berry bush"]
@@ -8010,6 +8304,10 @@ pub mod java {
     pub const DEBUG_HELP_HELP: &str = "debug.help.help";
     #[doc = "Key bindings:"]
     pub const DEBUG_HELP_MESSAGE: &str = "debug.help.message";
+    #[doc = "Improved transparency: disabled"]
+    pub const DEBUG_IMPROVEDTRANSPARENCY_OFF: &str = "debug.improvedTransparency.off";
+    #[doc = "Improved transparency: enabled"]
+    pub const DEBUG_IMPROVEDTRANSPARENCY_ON: &str = "debug.improvedTransparency.on";
     #[doc = "Copied client-side block data to clipboard"]
     pub const DEBUG_INSPECT_CLIENT_BLOCK: &str = "debug.inspect.client.block";
     #[doc = "Copied client-side entity data to clipboard"]
@@ -8026,7 +8324,7 @@ pub mod java {
     pub const DEBUG_OPTIONS_CATEGORY_TEXT: &str = "debug.options.category.text";
     #[doc = "F3 + F6 = Edit debug options"]
     pub const DEBUG_OPTIONS_HELP: &str = "debug.options.help";
-    #[doc = "Not visible when debug info is reduced"]
+    #[doc = "Not visible when debug info is reduced."]
     pub const DEBUG_OPTIONS_NOTALLOWED_TOOLTIP: &str = "debug.options.notAllowed.tooltip";
     #[doc = "Default profile"]
     pub const DEBUG_OPTIONS_PROFILE_DEFAULT: &str = "debug.options.profile.default";
@@ -8169,7 +8467,7 @@ pub mod java {
     #[doc = "Are you sure you want to discard your pending game rule changes?"]
     pub const EDITGAMERULE_INGAME_DISCARDCHANGES_MESSAGE: &str =
         "editGamerule.inGame.discardChanges.message";
-    #[doc = "Game rule Changes"]
+    #[doc = "Game Rule Changes"]
     pub const EDITGAMERULE_INGAME_DISCARDCHANGES_TITLE: &str =
         "editGamerule.inGame.discardChanges.title";
     #[doc = "Retrieving game rules..."]
@@ -8446,6 +8744,8 @@ pub mod java {
     pub const ENTITY_MINECRAFT_CREAKING_TRANSIENT: &str = "entity.minecraft.creaking_transient";
     #[doc = "Creeper"]
     pub const ENTITY_MINECRAFT_CREEPER: &str = "entity.minecraft.creeper";
+    #[doc = "Cushion"]
+    pub const ENTITY_MINECRAFT_CUSHION: &str = "entity.minecraft.cushion";
     #[doc = "Dark Oak Boat"]
     pub const ENTITY_MINECRAFT_DARK_OAK_BOAT: &str = "entity.minecraft.dark_oak_boat";
     #[doc = "Dark Oak Boat with Chest"]
@@ -8602,6 +8902,10 @@ pub mod java {
     pub const ENTITY_MINECRAFT_PLAYER: &str = "entity.minecraft.player";
     #[doc = "Polar Bear"]
     pub const ENTITY_MINECRAFT_POLAR_BEAR: &str = "entity.minecraft.polar_bear";
+    #[doc = "Poplar Boat"]
+    pub const ENTITY_MINECRAFT_POPLAR_BOAT: &str = "entity.minecraft.poplar_boat";
+    #[doc = "Poplar Boat with Chest"]
+    pub const ENTITY_MINECRAFT_POPLAR_CHEST_BOAT: &str = "entity.minecraft.poplar_chest_boat";
     #[doc = "Potion"]
     pub const ENTITY_MINECRAFT_POTION: &str = "entity.minecraft.potion";
     #[doc = "Pufferfish"]
@@ -8855,14 +9159,41 @@ pub mod java {
     pub const EVENT_MINECRAFT_RAID_VICTORY: &str = "event.minecraft.raid.victory";
     #[doc = "Raid - Victory"]
     pub const EVENT_MINECRAFT_RAID_VICTORY_FULL: &str = "event.minecraft.raid.victory.full";
+    #[doc = "Bamboo Camp Map"]
+    pub const FILLED_MAP_BAMBOO_CAMP_MAP: &str = "filled_map.bamboo_camp_map";
+    #[doc = "Bamboo Jungle Abandoned Camp Map"]
+    pub const FILLED_MAP_BAMBOO_JUNGLE_ABANDONED_CAMP: &str =
+        "filled_map.bamboo_jungle_abandoned_camp";
+    #[doc = "Birch Forest Abandoned Camp Map"]
+    pub const FILLED_MAP_BIRCH_FOREST_ABANDONED_CAMP: &str =
+        "filled_map.birch_forest_abandoned_camp";
+    #[doc = "Birch Forest Camp Map"]
+    pub const FILLED_MAP_BIRCH_FOREST_CAMP_MAP: &str = "filled_map.birch_forest_camp_map";
     #[doc = "Buried Treasure Map"]
     pub const FILLED_MAP_BURIED_TREASURE: &str = "filled_map.buried_treasure";
+    #[doc = "Cherry Grove Abandoned Camp Map"]
+    pub const FILLED_MAP_CHERRY_GROVE_ABANDONED_CAMP: &str =
+        "filled_map.cherry_grove_abandoned_camp";
+    #[doc = "Cherry Grove Camp Map"]
+    pub const FILLED_MAP_CHERRY_GROVE_CAMP_MAP: &str = "filled_map.cherry_grove_camp_map";
+    #[doc = "Dappled Forest Abandoned Camp Map"]
+    pub const FILLED_MAP_DAPPLED_FOREST_ABANDONED_CAMP: &str =
+        "filled_map.dappled_forest_abandoned_camp";
+    #[doc = "Dappled Forest Camp Map"]
+    pub const FILLED_MAP_DAPPLED_FOREST_CAMP_MAP: &str = "filled_map.dappled_forest_camp_map";
     #[doc = "Jungle Explorer Map"]
     pub const FILLED_MAP_EXPLORER_JUNGLE: &str = "filled_map.explorer_jungle";
     #[doc = "Swamp Explorer Map"]
     pub const FILLED_MAP_EXPLORER_SWAMP: &str = "filled_map.explorer_swamp";
+    #[doc = "Flower Forest Abandoned Camp Map"]
+    pub const FILLED_MAP_FLOWER_FOREST_ABANDONED_CAMP: &str =
+        "filled_map.flower_forest_abandoned_camp";
+    #[doc = "Flower Forest Camp Map"]
+    pub const FILLED_MAP_FLOWER_FOREST_CAMP_MAP: &str = "filled_map.flower_forest_camp_map";
     #[doc = "ID #%s"]
     pub const FILLED_MAP_ID: &str = "filled_map.id";
+    #[doc = "Jungle Temple Map"]
+    pub const FILLED_MAP_JUNGLE_TEMPLE: &str = "filled_map.jungle_temple";
     #[doc = "(Level %s/%s)"]
     pub const FILLED_MAP_LEVEL: &str = "filled_map.level";
     #[doc = "Locked"]
@@ -8871,8 +9202,16 @@ pub mod java {
     pub const FILLED_MAP_MANSION: &str = "filled_map.mansion";
     #[doc = "Ocean Explorer Map"]
     pub const FILLED_MAP_MONUMENT: &str = "filled_map.monument";
+    #[doc = "Pale Garden Abandoned Camp Map"]
+    pub const FILLED_MAP_PALE_GARDEN_ABANDONED_CAMP: &str = "filled_map.pale_garden_abandoned_camp";
+    #[doc = "Pale Garden Camp Map"]
+    pub const FILLED_MAP_PALE_GARDEN_CAMP_MAP: &str = "filled_map.pale_garden_camp_map";
     #[doc = "Scaling at 1:%s"]
     pub const FILLED_MAP_SCALE: &str = "filled_map.scale";
+    #[doc = "Swamp Abandoned Camp Map"]
+    pub const FILLED_MAP_SWAMP_ABANDONED_CAMP: &str = "filled_map.swamp_abandoned_camp";
+    #[doc = "Swamp Camp Map"]
+    pub const FILLED_MAP_SWAMP_CAMP_MAP: &str = "filled_map.swamp_camp_map";
     #[doc = "Trial Explorer Map"]
     pub const FILLED_MAP_TRIAL_CHAMBERS: &str = "filled_map.trial_chambers";
     #[doc = "Unknown Map"]
@@ -8887,6 +9226,11 @@ pub mod java {
     pub const FILLED_MAP_VILLAGE_SNOWY: &str = "filled_map.village_snowy";
     #[doc = "Taiga Village Map"]
     pub const FILLED_MAP_VILLAGE_TAIGA: &str = "filled_map.village_taiga";
+    #[doc = "Windswept Forest Abandoned Camp Map"]
+    pub const FILLED_MAP_WINDSWEPT_FOREST_ABANDONED_CAMP: &str =
+        "filled_map.windswept_forest_abandoned_camp";
+    #[doc = "Windswept Forest Camp Map"]
+    pub const FILLED_MAP_WINDSWEPT_FOREST_CAMP_MAP: &str = "filled_map.windswept_forest_camp_map";
     #[doc = "Bottomless Pit"]
     pub const FLAT_WORLD_PRESET_MINECRAFT_BOTTOMLESS_PIT: &str =
         "flat_world_preset.minecraft.bottomless_pit";
@@ -8977,7 +9321,7 @@ pub mod java {
     pub const GAMERULE_DODAYLIGHTCYCLE: &str = "gamerule.doDaylightCycle";
     #[doc = "Drop entity equipment"]
     pub const GAMERULE_DOENTITYDROPS: &str = "gamerule.doEntityDrops";
-    #[doc = "Controls drops from minecarts (including inventories), item frames, boats, etc."]
+    #[doc = "Controls drops from Minecarts (including inventories), Item Frames, Boats, etc."]
     pub const GAMERULE_DOENTITYDROPS_DESCRIPTION: &str = "gamerule.doEntityDrops.description";
     #[doc = "Update fire"]
     pub const GAMERULE_DOFIRETICK: &str = "gamerule.doFireTick";
@@ -9080,7 +9424,7 @@ pub mod java {
     #[doc = "Fire spread radius"]
     pub const GAMERULE_MINECRAFT_FIRE_SPREAD_RADIUS_AROUND_PLAYER: &str =
         "gamerule.minecraft.fire_spread_radius_around_player";
-    #[doc = "The radius in blocks around a player in which fire can spread"]
+    #[doc = "The radius in blocks around a player in which fire can spread."]
     pub const GAMERULE_MINECRAFT_FIRE_SPREAD_RADIUS_AROUND_PLAYER_DESCRIPTION: &str =
         "gamerule.minecraft.fire_spread_radius_around_player.description";
     #[doc = "Do player movement check"]
@@ -9143,7 +9487,7 @@ pub mod java {
         "gamerule.snowAccumulationHeight.description";
     #[doc = "Spawn chunk radius"]
     pub const GAMERULE_SPAWNCHUNKRADIUS: &str = "gamerule.spawnChunkRadius";
-    #[doc = "The amount of chunks that stay loaded around the overworld spawn position."]
+    #[doc = "The amount of chunks that stay loaded around the Overworld spawn position."]
     pub const GAMERULE_SPAWNCHUNKRADIUS_DESCRIPTION: &str = "gamerule.spawnChunkRadius.description";
     #[doc = "Spawn Monsters"]
     pub const GAMERULE_SPAWNMONSTERS: &str = "gamerule.spawnMonsters";
@@ -9558,7 +9902,7 @@ pub mod java {
     #[doc = "Friends List is not working right now.\n\nTry again later."]
     pub const GUI_FRIENDS_ERROR_TEMPORARY_UNAVAILABLE: &str =
         "gui.friends.error.temporary_unavailable";
-    #[doc = "Invalid token supplied. Restart your game and launcher, then try again"]
+    #[doc = "Invalid token supplied. Restart your game and launcher, then try again."]
     pub const GUI_FRIENDS_ERROR_UNAUTHORIZED: &str = "gui.friends.error.unauthorized";
     #[doc = "The Friends List service is currently unavailable. Please check your connection and try again later."]
     pub const GUI_FRIENDS_ERROR_UNAVAILABLE_MESSAGE: &str = "gui.friends.error.unavailable.message";
@@ -9757,7 +10101,7 @@ pub mod java {
     pub const GUI_RECIPEBOOK_TOGGLERECIPES_SMOKABLE: &str = "gui.recipebook.toggleRecipes.smokable";
     #[doc = "Remove"]
     pub const GUI_REMOVE: &str = "gui.remove";
-    #[doc = "Report To Server"]
+    #[doc = "Report to Server"]
     pub const GUI_REPORT_TO_SERVER: &str = "gui.report_to_server";
     #[doc = "Search..."]
     pub const GUI_SELECTWORLD_SEARCH: &str = "gui.selectWorld.search";
@@ -9897,6 +10241,10 @@ pub mod java {
     pub const ITEM_DYED: &str = "item.dyed";
     #[doc = "Intangible"]
     pub const ITEM_INTANGIBLE: &str = "item.intangible";
+    #[doc = "Abandoned Camp Map"]
+    pub const ITEM_MINECRAFT_ABANDONED_CAMP_MAP: &str = "item.minecraft.abandoned_camp_map";
+    #[doc = "Abandoned Campsite Map"]
+    pub const ITEM_MINECRAFT_ABANDONED_CAMPSITE_MAP: &str = "item.minecraft.abandoned_campsite_map";
     #[doc = "Acacia Boat"]
     pub const ITEM_MINECRAFT_ACACIA_BOAT: &str = "item.minecraft.acacia_boat";
     #[doc = "Acacia Boat with Chest"]
@@ -9905,6 +10253,8 @@ pub mod java {
     pub const ITEM_MINECRAFT_ALLAY_SPAWN_EGG: &str = "item.minecraft.allay_spawn_egg";
     #[doc = "Amethyst Shard"]
     pub const ITEM_MINECRAFT_AMETHYST_SHARD: &str = "item.minecraft.amethyst_shard";
+    #[doc = "Ancient City Map"]
+    pub const ITEM_MINECRAFT_ANCIENT_CITY_MAP: &str = "item.minecraft.ancient_city_map";
     #[doc = "Angler Pottery Shard"]
     pub const ITEM_MINECRAFT_ANGLER_POTTERY_SHARD: &str = "item.minecraft.angler_pottery_shard";
     #[doc = "Angler Pottery Sherd"]
@@ -9955,6 +10305,8 @@ pub mod java {
     pub const ITEM_MINECRAFT_BIRCH_CHEST_BOAT: &str = "item.minecraft.birch_chest_boat";
     #[doc = "Black Bundle"]
     pub const ITEM_MINECRAFT_BLACK_BUNDLE: &str = "item.minecraft.black_bundle";
+    #[doc = "Black Cushion"]
+    pub const ITEM_MINECRAFT_BLACK_CUSHION: &str = "item.minecraft.black_cushion";
     #[doc = "Black Dye"]
     pub const ITEM_MINECRAFT_BLACK_DYE: &str = "item.minecraft.black_dye";
     #[doc = "Black Harness"]
@@ -9971,6 +10323,8 @@ pub mod java {
     pub const ITEM_MINECRAFT_BLAZE_SPAWN_EGG: &str = "item.minecraft.blaze_spawn_egg";
     #[doc = "Blue Bundle"]
     pub const ITEM_MINECRAFT_BLUE_BUNDLE: &str = "item.minecraft.blue_bundle";
+    #[doc = "Blue Cushion"]
+    pub const ITEM_MINECRAFT_BLUE_CUSHION: &str = "item.minecraft.blue_cushion";
     #[doc = "Blue Dye"]
     pub const ITEM_MINECRAFT_BLUE_DYE: &str = "item.minecraft.blue_dye";
     #[doc = "Blue Egg"]
@@ -10014,6 +10368,8 @@ pub mod java {
     pub const ITEM_MINECRAFT_BRICK: &str = "item.minecraft.brick";
     #[doc = "Brown Bundle"]
     pub const ITEM_MINECRAFT_BROWN_BUNDLE: &str = "item.minecraft.brown_bundle";
+    #[doc = "Brown Cushion"]
+    pub const ITEM_MINECRAFT_BROWN_CUSHION: &str = "item.minecraft.brown_cushion";
     #[doc = "Brown Dye"]
     pub const ITEM_MINECRAFT_BROWN_DYE: &str = "item.minecraft.brown_dye";
     #[doc = "Brown Egg"]
@@ -10035,6 +10391,16 @@ pub mod java {
     pub const ITEM_MINECRAFT_BUNDLE_FULL: &str = "item.minecraft.bundle.full";
     #[doc = "%s/%s"]
     pub const ITEM_MINECRAFT_BUNDLE_FULLNESS: &str = "item.minecraft.bundle.fullness";
+    #[doc = "Buried Ancient City Map"]
+    pub const ITEM_MINECRAFT_BURIED_ANCIENT_CITY_MAP: &str =
+        "item.minecraft.buried_ancient_city_map";
+    #[doc = "Buried Mineshaft Map"]
+    pub const ITEM_MINECRAFT_BURIED_MINESHAFT_MAP: &str = "item.minecraft.buried_mineshaft_map";
+    #[doc = "Buried Treasure Map"]
+    pub const ITEM_MINECRAFT_BURIED_TREASURE_MAP: &str = "item.minecraft.buried_treasure_map";
+    #[doc = "Buried Trial Chambers Map"]
+    pub const ITEM_MINECRAFT_BURIED_TRIAL_CHAMBERS_MAP: &str =
+        "item.minecraft.buried_trial_chambers_map";
     #[doc = "Burn Pottery Shard"]
     pub const ITEM_MINECRAFT_BURN_POTTERY_SHARD: &str = "item.minecraft.burn_pottery_shard";
     #[doc = "Burn Pottery Sherd"]
@@ -10171,6 +10537,8 @@ pub mod java {
         "item.minecraft.crossbow.projectile.single";
     #[doc = "Cyan Bundle"]
     pub const ITEM_MINECRAFT_CYAN_BUNDLE: &str = "item.minecraft.cyan_bundle";
+    #[doc = "Cyan Cushion"]
+    pub const ITEM_MINECRAFT_CYAN_CUSHION: &str = "item.minecraft.cyan_cushion";
     #[doc = "Cyan Dye"]
     pub const ITEM_MINECRAFT_CYAN_DYE: &str = "item.minecraft.cyan_dye";
     #[doc = "Cyan Harness"]
@@ -10191,6 +10559,10 @@ pub mod java {
     pub const ITEM_MINECRAFT_DEBUG_STICK_SELECT: &str = "item.minecraft.debug_stick.select";
     #[doc = "\"%s\" to %s"]
     pub const ITEM_MINECRAFT_DEBUG_STICK_UPDATE: &str = "item.minecraft.debug_stick.update";
+    #[doc = "Desert Pyramid Map"]
+    pub const ITEM_MINECRAFT_DESERT_PYRAMID_MAP: &str = "item.minecraft.desert_pyramid_map";
+    #[doc = "Desert Village Map"]
+    pub const ITEM_MINECRAFT_DESERT_VILLAGE_MAP: &str = "item.minecraft.desert_village_map";
     #[doc = "Diamond"]
     pub const ITEM_MINECRAFT_DIAMOND: &str = "item.minecraft.diamond";
     #[doc = "Diamond Axe"]
@@ -10293,6 +10665,9 @@ pub mod java {
     pub const ITEM_MINECRAFT_FIREWORK_ROCKET: &str = "item.minecraft.firework_rocket";
     #[doc = "Flight Duration:"]
     pub const ITEM_MINECRAFT_FIREWORK_ROCKET_FLIGHT: &str = "item.minecraft.firework_rocket.flight";
+    #[doc = "Flight Duration: %s"]
+    pub const ITEM_MINECRAFT_FIREWORK_ROCKET_FLIGHT_DURATION: &str =
+        "item.minecraft.firework_rocket.flight_duration";
     #[doc = "%s x %s"]
     pub const ITEM_MINECRAFT_FIREWORK_ROCKET_MULTIPLE_STARS: &str =
         "item.minecraft.firework_rocket.multiple_stars";
@@ -10467,12 +10842,16 @@ pub mod java {
     pub const ITEM_MINECRAFT_GOLDEN_SWORD: &str = "item.minecraft.golden_sword";
     #[doc = "Gray Bundle"]
     pub const ITEM_MINECRAFT_GRAY_BUNDLE: &str = "item.minecraft.gray_bundle";
+    #[doc = "Gray Cushion"]
+    pub const ITEM_MINECRAFT_GRAY_CUSHION: &str = "item.minecraft.gray_cushion";
     #[doc = "Gray Dye"]
     pub const ITEM_MINECRAFT_GRAY_DYE: &str = "item.minecraft.gray_dye";
     #[doc = "Gray Harness"]
     pub const ITEM_MINECRAFT_GRAY_HARNESS: &str = "item.minecraft.gray_harness";
     #[doc = "Green Bundle"]
     pub const ITEM_MINECRAFT_GREEN_BUNDLE: &str = "item.minecraft.green_bundle";
+    #[doc = "Green Cushion"]
+    pub const ITEM_MINECRAFT_GREEN_CUSHION: &str = "item.minecraft.green_cushion";
     #[doc = "Green Dye"]
     pub const ITEM_MINECRAFT_GREEN_DYE: &str = "item.minecraft.green_dye";
     #[doc = "Green Harness"]
@@ -10567,6 +10946,10 @@ pub mod java {
     pub const ITEM_MINECRAFT_JUNGLE_BOAT: &str = "item.minecraft.jungle_boat";
     #[doc = "Jungle Boat with Chest"]
     pub const ITEM_MINECRAFT_JUNGLE_CHEST_BOAT: &str = "item.minecraft.jungle_chest_boat";
+    #[doc = "Jungle Explorer Map"]
+    pub const ITEM_MINECRAFT_JUNGLE_EXPLORER_MAP: &str = "item.minecraft.jungle_explorer_map";
+    #[doc = "Jungle Pyramid Map"]
+    pub const ITEM_MINECRAFT_JUNGLE_PYRAMID_MAP: &str = "item.minecraft.jungle_pyramid_map";
     #[doc = "Knowledge Book"]
     pub const ITEM_MINECRAFT_KNOWLEDGE_BOOK: &str = "item.minecraft.knowledge_book";
     #[doc = "Lapis Lazuli"]
@@ -10589,18 +10972,24 @@ pub mod java {
     pub const ITEM_MINECRAFT_LEATHER_LEGGINGS: &str = "item.minecraft.leather_leggings";
     #[doc = "Light Blue Bundle"]
     pub const ITEM_MINECRAFT_LIGHT_BLUE_BUNDLE: &str = "item.minecraft.light_blue_bundle";
+    #[doc = "Light Blue Cushion"]
+    pub const ITEM_MINECRAFT_LIGHT_BLUE_CUSHION: &str = "item.minecraft.light_blue_cushion";
     #[doc = "Light Blue Dye"]
     pub const ITEM_MINECRAFT_LIGHT_BLUE_DYE: &str = "item.minecraft.light_blue_dye";
     #[doc = "Light Blue Harness"]
     pub const ITEM_MINECRAFT_LIGHT_BLUE_HARNESS: &str = "item.minecraft.light_blue_harness";
     #[doc = "Light Gray Bundle"]
     pub const ITEM_MINECRAFT_LIGHT_GRAY_BUNDLE: &str = "item.minecraft.light_gray_bundle";
+    #[doc = "Light Gray Cushion"]
+    pub const ITEM_MINECRAFT_LIGHT_GRAY_CUSHION: &str = "item.minecraft.light_gray_cushion";
     #[doc = "Light Gray Dye"]
     pub const ITEM_MINECRAFT_LIGHT_GRAY_DYE: &str = "item.minecraft.light_gray_dye";
     #[doc = "Light Gray Harness"]
     pub const ITEM_MINECRAFT_LIGHT_GRAY_HARNESS: &str = "item.minecraft.light_gray_harness";
     #[doc = "Lime Bundle"]
     pub const ITEM_MINECRAFT_LIME_BUNDLE: &str = "item.minecraft.lime_bundle";
+    #[doc = "Lime Cushion"]
+    pub const ITEM_MINECRAFT_LIME_CUSHION: &str = "item.minecraft.lime_cushion";
     #[doc = "Lime Dye"]
     pub const ITEM_MINECRAFT_LIME_DYE: &str = "item.minecraft.lime_dye";
     #[doc = "Lime Harness"]
@@ -10693,6 +11082,8 @@ pub mod java {
     pub const ITEM_MINECRAFT_MACE: &str = "item.minecraft.mace";
     #[doc = "Magenta Bundle"]
     pub const ITEM_MINECRAFT_MAGENTA_BUNDLE: &str = "item.minecraft.magenta_bundle";
+    #[doc = "Magenta Cushion"]
+    pub const ITEM_MINECRAFT_MAGENTA_CUSHION: &str = "item.minecraft.magenta_cushion";
     #[doc = "Magenta Dye"]
     pub const ITEM_MINECRAFT_MAGENTA_DYE: &str = "item.minecraft.magenta_dye";
     #[doc = "Magenta Harness"]
@@ -10719,6 +11110,8 @@ pub mod java {
     pub const ITEM_MINECRAFT_MINER_POTTERY_SHARD: &str = "item.minecraft.miner_pottery_shard";
     #[doc = "Miner Pottery Sherd"]
     pub const ITEM_MINECRAFT_MINER_POTTERY_SHERD: &str = "item.minecraft.miner_pottery_sherd";
+    #[doc = "Mineshaft Map"]
+    pub const ITEM_MINECRAFT_MINESHAFT_MAP: &str = "item.minecraft.mineshaft_map";
     #[doc = "Banner Pattern"]
     pub const ITEM_MINECRAFT_MOJANG_BANNER_PATTERN: &str = "item.minecraft.mojang_banner_pattern";
     #[doc = "Thing"]
@@ -10887,6 +11280,10 @@ pub mod java {
     pub const ITEM_MINECRAFT_OAK_BOAT: &str = "item.minecraft.oak_boat";
     #[doc = "Oak Boat with Chest"]
     pub const ITEM_MINECRAFT_OAK_CHEST_BOAT: &str = "item.minecraft.oak_chest_boat";
+    #[doc = "Ocean Explorer Map"]
+    pub const ITEM_MINECRAFT_OCEAN_EXPLORER_MAP: &str = "item.minecraft.ocean_explorer_map";
+    #[doc = "Ocean Monument Map"]
+    pub const ITEM_MINECRAFT_OCEAN_MONUMENT_MAP: &str = "item.minecraft.ocean_monument_map";
     #[doc = "Ocelot Spawn Egg"]
     pub const ITEM_MINECRAFT_OCELOT_SPAWN_EGG: &str = "item.minecraft.ocelot_spawn_egg";
     #[doc = "Ominous Bottle"]
@@ -10895,6 +11292,8 @@ pub mod java {
     pub const ITEM_MINECRAFT_OMINOUS_TRIAL_KEY: &str = "item.minecraft.ominous_trial_key";
     #[doc = "Orange Bundle"]
     pub const ITEM_MINECRAFT_ORANGE_BUNDLE: &str = "item.minecraft.orange_bundle";
+    #[doc = "Orange Cushion"]
+    pub const ITEM_MINECRAFT_ORANGE_CUSHION: &str = "item.minecraft.orange_cushion";
     #[doc = "Orange Dye"]
     pub const ITEM_MINECRAFT_ORANGE_DYE: &str = "item.minecraft.orange_dye";
     #[doc = "Orange Harness"]
@@ -10935,6 +11334,8 @@ pub mod java {
     pub const ITEM_MINECRAFT_PILLAGER_SPAWN_EGG: &str = "item.minecraft.pillager_spawn_egg";
     #[doc = "Pink Bundle"]
     pub const ITEM_MINECRAFT_PINK_BUNDLE: &str = "item.minecraft.pink_bundle";
+    #[doc = "Pink Cushion"]
+    pub const ITEM_MINECRAFT_PINK_CUSHION: &str = "item.minecraft.pink_cushion";
     #[doc = "Pink Dye"]
     pub const ITEM_MINECRAFT_PINK_DYE: &str = "item.minecraft.pink_dye";
     #[doc = "Pink Harness"]
@@ -10943,6 +11344,8 @@ pub mod java {
     pub const ITEM_MINECRAFT_PITCHER_PLANT: &str = "item.minecraft.pitcher_plant";
     #[doc = "Pitcher Pod"]
     pub const ITEM_MINECRAFT_PITCHER_POD: &str = "item.minecraft.pitcher_pod";
+    #[doc = "Plains Village Map"]
+    pub const ITEM_MINECRAFT_PLAINS_VILLAGE_MAP: &str = "item.minecraft.plains_village_map";
     #[doc = "Plenty Pottery Shard"]
     pub const ITEM_MINECRAFT_PLENTY_POTTERY_SHARD: &str = "item.minecraft.plenty_pottery_shard";
     #[doc = "Plenty Pottery Sherd"]
@@ -10951,6 +11354,10 @@ pub mod java {
     pub const ITEM_MINECRAFT_POISONOUS_POTATO: &str = "item.minecraft.poisonous_potato";
     #[doc = "Polar Bear Spawn Egg"]
     pub const ITEM_MINECRAFT_POLAR_BEAR_SPAWN_EGG: &str = "item.minecraft.polar_bear_spawn_egg";
+    #[doc = "Poplar Boat"]
+    pub const ITEM_MINECRAFT_POPLAR_BOAT: &str = "item.minecraft.poplar_boat";
+    #[doc = "Poplar Boat with Chest"]
+    pub const ITEM_MINECRAFT_POPLAR_CHEST_BOAT: &str = "item.minecraft.poplar_chest_boat";
     #[doc = "Popped Chorus Fruit"]
     pub const ITEM_MINECRAFT_POPPED_CHORUS_FRUIT: &str = "item.minecraft.popped_chorus_fruit";
     #[doc = "Raw Porkchop"]
@@ -11051,6 +11458,8 @@ pub mod java {
     pub const ITEM_MINECRAFT_PUMPKIN_SEEDS: &str = "item.minecraft.pumpkin_seeds";
     #[doc = "Purple Bundle"]
     pub const ITEM_MINECRAFT_PURPLE_BUNDLE: &str = "item.minecraft.purple_bundle";
+    #[doc = "Purple Cushion"]
+    pub const ITEM_MINECRAFT_PURPLE_CUSHION: &str = "item.minecraft.purple_cushion";
     #[doc = "Purple Dye"]
     pub const ITEM_MINECRAFT_PURPLE_DYE: &str = "item.minecraft.purple_dye";
     #[doc = "Purple Harness"]
@@ -11085,6 +11494,8 @@ pub mod java {
     pub const ITEM_MINECRAFT_RECOVERY_COMPASS: &str = "item.minecraft.recovery_compass";
     #[doc = "Red Bundle"]
     pub const ITEM_MINECRAFT_RED_BUNDLE: &str = "item.minecraft.red_bundle";
+    #[doc = "Red Cushion"]
+    pub const ITEM_MINECRAFT_RED_CUSHION: &str = "item.minecraft.red_cushion";
     #[doc = "Red Dye"]
     pub const ITEM_MINECRAFT_RED_DYE: &str = "item.minecraft.red_dye";
     #[doc = "Red Harness"]
@@ -11111,6 +11522,8 @@ pub mod java {
     pub const ITEM_MINECRAFT_SALMON_BUCKET: &str = "item.minecraft.salmon_bucket";
     #[doc = "Salmon Spawn Egg"]
     pub const ITEM_MINECRAFT_SALMON_SPAWN_EGG: &str = "item.minecraft.salmon_spawn_egg";
+    #[doc = "Savanna Village Map"]
+    pub const ITEM_MINECRAFT_SAVANNA_VILLAGE_MAP: &str = "item.minecraft.savanna_village_map";
     #[doc = "Scrape Pottery Sherd"]
     pub const ITEM_MINECRAFT_SCRAPE_POTTERY_SHERD: &str = "item.minecraft.scrape_pottery_sherd";
     #[doc = "Scute"]
@@ -11259,6 +11672,8 @@ pub mod java {
     pub const ITEM_MINECRAFT_SNOW_GOLEM_SPAWN_EGG: &str = "item.minecraft.snow_golem_spawn_egg";
     #[doc = "Snowball"]
     pub const ITEM_MINECRAFT_SNOWBALL: &str = "item.minecraft.snowball";
+    #[doc = "Snowy Village Map"]
+    pub const ITEM_MINECRAFT_SNOWY_VILLAGE_MAP: &str = "item.minecraft.snowy_village_map";
     #[doc = "Spectral Arrow"]
     pub const ITEM_MINECRAFT_SPECTRAL_ARROW: &str = "item.minecraft.spectral_arrow";
     #[doc = "Spider Eye"]
@@ -11373,6 +11788,8 @@ pub mod java {
     pub const ITEM_MINECRAFT_STONE_SPEAR: &str = "item.minecraft.stone_spear";
     #[doc = "Stone Sword"]
     pub const ITEM_MINECRAFT_STONE_SWORD: &str = "item.minecraft.stone_sword";
+    #[doc = "Straw Bed"]
+    pub const ITEM_MINECRAFT_STRAW_BED: &str = "item.minecraft.straw_bed";
     #[doc = "Stray Spawn Egg"]
     pub const ITEM_MINECRAFT_STRAY_SPAWN_EGG: &str = "item.minecraft.stray_spawn_egg";
     #[doc = "Strider Spawn Egg"]
@@ -11387,12 +11804,18 @@ pub mod java {
     pub const ITEM_MINECRAFT_SULFUR_CUBE_SPAWN_EGG: &str = "item.minecraft.sulfur_cube_spawn_egg";
     #[doc = "Suspicious Stew"]
     pub const ITEM_MINECRAFT_SUSPICIOUS_STEW: &str = "item.minecraft.suspicious_stew";
+    #[doc = "Swamp Explorer Map"]
+    pub const ITEM_MINECRAFT_SWAMP_EXPLORER_MAP: &str = "item.minecraft.swamp_explorer_map";
+    #[doc = "Swamp Hut Map"]
+    pub const ITEM_MINECRAFT_SWAMP_HUT_MAP: &str = "item.minecraft.swamp_hut_map";
     #[doc = "Sweet Berries"]
     pub const ITEM_MINECRAFT_SWEET_BERRIES: &str = "item.minecraft.sweet_berries";
     #[doc = "Bucket of Tadpole"]
     pub const ITEM_MINECRAFT_TADPOLE_BUCKET: &str = "item.minecraft.tadpole_bucket";
     #[doc = "Tadpole Spawn Egg"]
     pub const ITEM_MINECRAFT_TADPOLE_SPAWN_EGG: &str = "item.minecraft.tadpole_spawn_egg";
+    #[doc = "Taiga Village Map"]
+    pub const ITEM_MINECRAFT_TAIGA_VILLAGE_MAP: &str = "item.minecraft.taiga_village_map";
     #[doc = "Smithing Template"]
     pub const ITEM_MINECRAFT_TIDE_ARMOR_TRIM_SMITHING_TEMPLATE: &str =
         "item.minecraft.tide_armor_trim_smithing_template";
@@ -11487,6 +11910,8 @@ pub mod java {
     pub const ITEM_MINECRAFT_TOTEM_OF_UNDYING: &str = "item.minecraft.totem_of_undying";
     #[doc = "Trader Llama Spawn Egg"]
     pub const ITEM_MINECRAFT_TRADER_LLAMA_SPAWN_EGG: &str = "item.minecraft.trader_llama_spawn_egg";
+    #[doc = "Trial Explorer Map"]
+    pub const ITEM_MINECRAFT_TRIAL_EXPLORER_MAP: &str = "item.minecraft.trial_explorer_map";
     #[doc = "Trial Key"]
     pub const ITEM_MINECRAFT_TRIAL_KEY: &str = "item.minecraft.trial_key";
     #[doc = "Trident"]
@@ -11527,6 +11952,8 @@ pub mod java {
         "item.minecraft.ward_armor_trim_smithing_template.new";
     #[doc = "Warden Spawn Egg"]
     pub const ITEM_MINECRAFT_WARDEN_SPAWN_EGG: &str = "item.minecraft.warden_spawn_egg";
+    #[doc = "Warm Ocean Ruins Map"]
+    pub const ITEM_MINECRAFT_WARM_OCEAN_RUINS_MAP: &str = "item.minecraft.warm_ocean_ruins_map";
     #[doc = "Warped Fungus on a Stick"]
     pub const ITEM_MINECRAFT_WARPED_FUNGUS_ON_A_STICK: &str =
         "item.minecraft.warped_fungus_on_a_stick";
@@ -11544,6 +11971,8 @@ pub mod java {
     pub const ITEM_MINECRAFT_WHEAT_SEEDS: &str = "item.minecraft.wheat_seeds";
     #[doc = "White Bundle"]
     pub const ITEM_MINECRAFT_WHITE_BUNDLE: &str = "item.minecraft.white_bundle";
+    #[doc = "White Cushion"]
+    pub const ITEM_MINECRAFT_WHITE_CUSHION: &str = "item.minecraft.white_cushion";
     #[doc = "White Dye"]
     pub const ITEM_MINECRAFT_WHITE_DYE: &str = "item.minecraft.white_dye";
     #[doc = "White Harness"]
@@ -11579,12 +12008,18 @@ pub mod java {
     pub const ITEM_MINECRAFT_WOODEN_SPEAR: &str = "item.minecraft.wooden_spear";
     #[doc = "Wooden Sword"]
     pub const ITEM_MINECRAFT_WOODEN_SWORD: &str = "item.minecraft.wooden_sword";
+    #[doc = "Woodland Explorer Map"]
+    pub const ITEM_MINECRAFT_WOODLAND_EXPLORER_MAP: &str = "item.minecraft.woodland_explorer_map";
+    #[doc = "Woodland Mansion Map"]
+    pub const ITEM_MINECRAFT_WOODLAND_MANSION_MAP: &str = "item.minecraft.woodland_mansion_map";
     #[doc = "Book and Quill"]
     pub const ITEM_MINECRAFT_WRITABLE_BOOK: &str = "item.minecraft.writable_book";
     #[doc = "Written Book"]
     pub const ITEM_MINECRAFT_WRITTEN_BOOK: &str = "item.minecraft.written_book";
     #[doc = "Yellow Bundle"]
     pub const ITEM_MINECRAFT_YELLOW_BUNDLE: &str = "item.minecraft.yellow_bundle";
+    #[doc = "Yellow Cushion"]
+    pub const ITEM_MINECRAFT_YELLOW_CUSHION: &str = "item.minecraft.yellow_cushion";
     #[doc = "Yellow Dye"]
     pub const ITEM_MINECRAFT_YELLOW_DYE: &str = "item.minecraft.yellow_dye";
     #[doc = "Yellow Harness"]
@@ -11805,8 +12240,10 @@ pub mod java {
     pub const KEY_DEBUG_DUMPVERSION: &str = "key.debug.dumpVersion";
     #[doc = "Toggle Lost Focus Pause"]
     pub const KEY_DEBUG_FOCUSPAUSE: &str = "key.debug.focusPause";
-    #[doc = "FPS Charts"]
+    #[doc = "Fps Charts"]
     pub const KEY_DEBUG_FPSCHARTS: &str = "key.debug.fpsCharts";
+    #[doc = "Toggle Improved Transparency"]
+    pub const KEY_DEBUG_IMPROVEDTRANSPARENCY: &str = "key.debug.improvedTransparency";
     #[doc = "Lightmap Texture"]
     pub const KEY_DEBUG_LIGHTMAPTEXTURE: &str = "key.debug.lightmapTexture";
     #[doc = "Debug Modifier Key"]
@@ -11863,28 +12300,94 @@ pub mod java {
     pub const KEY_INVENTORY: &str = "key.inventory";
     #[doc = "Jump"]
     pub const KEY_JUMP: &str = "key.jump";
+    #[doc = "AC Back"]
+    pub const KEY_KEYBOARD_AC_BACK: &str = "key.keyboard.ac.back";
+    #[doc = "AC Favorites"]
+    pub const KEY_KEYBOARD_AC_BOOKMARKS: &str = "key.keyboard.ac.bookmarks";
+    #[doc = "AC Close"]
+    pub const KEY_KEYBOARD_AC_CLOSE: &str = "key.keyboard.ac.close";
+    #[doc = "AC Exit"]
+    pub const KEY_KEYBOARD_AC_EXIT: &str = "key.keyboard.ac.exit";
+    #[doc = "AC Forward"]
+    pub const KEY_KEYBOARD_AC_FORWARD: &str = "key.keyboard.ac.forward";
+    #[doc = "AC Home"]
+    pub const KEY_KEYBOARD_AC_HOME: &str = "key.keyboard.ac.home";
+    #[doc = "AC New"]
+    pub const KEY_KEYBOARD_AC_NEW: &str = "key.keyboard.ac.new";
+    #[doc = "AC Open"]
+    pub const KEY_KEYBOARD_AC_OPEN: &str = "key.keyboard.ac.open";
+    #[doc = "AC Print"]
+    pub const KEY_KEYBOARD_AC_PRINT: &str = "key.keyboard.ac.print";
+    #[doc = "AC Properties"]
+    pub const KEY_KEYBOARD_AC_PROPERTIES: &str = "key.keyboard.ac.properties";
+    #[doc = "AC Refresh"]
+    pub const KEY_KEYBOARD_AC_REFRESH: &str = "key.keyboard.ac.refresh";
+    #[doc = "AC Save"]
+    pub const KEY_KEYBOARD_AC_SAVE: &str = "key.keyboard.ac.save";
+    #[doc = "AC Search"]
+    pub const KEY_KEYBOARD_AC_SEARCH: &str = "key.keyboard.ac.search";
+    #[doc = "AC Stop"]
+    pub const KEY_KEYBOARD_AC_STOP: &str = "key.keyboard.ac.stop";
+    #[doc = "Again"]
+    pub const KEY_KEYBOARD_AGAIN: &str = "key.keyboard.again";
+    #[doc = "Alternate Erase"]
+    pub const KEY_KEYBOARD_ALTERNATE_ERASE: &str = "key.keyboard.alternate.erase";
     #[doc = "'"]
     pub const KEY_KEYBOARD_APOSTROPHE: &str = "key.keyboard.apostrophe";
+    #[doc = "Application"]
+    pub const KEY_KEYBOARD_APPLICATION: &str = "key.keyboard.application";
     #[doc = "\\"]
     pub const KEY_KEYBOARD_BACKSLASH: &str = "key.keyboard.backslash";
     #[doc = "Backspace"]
     pub const KEY_KEYBOARD_BACKSPACE: &str = "key.keyboard.backspace";
+    #[doc = "Call"]
+    pub const KEY_KEYBOARD_CALL: &str = "key.keyboard.call";
+    #[doc = "Cancel"]
+    pub const KEY_KEYBOARD_CANCEL: &str = "key.keyboard.cancel";
     #[doc = "Caps Lock"]
     pub const KEY_KEYBOARD_CAPS_LOCK: &str = "key.keyboard.caps.lock";
+    #[doc = "Channel Down"]
+    pub const KEY_KEYBOARD_CHANNEL_DOWN: &str = "key.keyboard.channel.down";
+    #[doc = "Channel Up"]
+    pub const KEY_KEYBOARD_CHANNEL_UP: &str = "key.keyboard.channel.up";
+    #[doc = "Clear"]
+    pub const KEY_KEYBOARD_CLEAR: &str = "key.keyboard.clear";
+    #[doc = "Clear Again"]
+    pub const KEY_KEYBOARD_CLEAR_AGAIN: &str = "key.keyboard.clear.again";
     #[doc = ","]
     pub const KEY_KEYBOARD_COMMA: &str = "key.keyboard.comma";
+    #[doc = "Copy"]
+    pub const KEY_KEYBOARD_COPY: &str = "key.keyboard.copy";
+    #[doc = "CrSel"]
+    pub const KEY_KEYBOARD_CRSEL: &str = "key.keyboard.crsel";
+    #[doc = "Currency Subunit"]
+    pub const KEY_KEYBOARD_CURRENCY_SUBUNIT: &str = "key.keyboard.currency.subunit";
+    #[doc = "Currency Unit"]
+    pub const KEY_KEYBOARD_CURRENCY_UNIT: &str = "key.keyboard.currency.unit";
+    #[doc = "Cut"]
+    pub const KEY_KEYBOARD_CUT: &str = "key.keyboard.cut";
+    #[doc = "Decimal Separator"]
+    pub const KEY_KEYBOARD_DECIMAL_SEPARATOR: &str = "key.keyboard.decimal.separator";
     #[doc = "Delete"]
     pub const KEY_KEYBOARD_DELETE: &str = "key.keyboard.delete";
     #[doc = "Down Arrow"]
     pub const KEY_KEYBOARD_DOWN: &str = "key.keyboard.down";
     #[doc = "End"]
     pub const KEY_KEYBOARD_END: &str = "key.keyboard.end";
+    #[doc = "End Call"]
+    pub const KEY_KEYBOARD_END_CALL: &str = "key.keyboard.end.call";
     #[doc = "Enter"]
     pub const KEY_KEYBOARD_ENTER: &str = "key.keyboard.enter";
+    #[doc = "Enter 2"]
+    pub const KEY_KEYBOARD_ENTER2: &str = "key.keyboard.enter2";
     #[doc = "="]
     pub const KEY_KEYBOARD_EQUAL: &str = "key.keyboard.equal";
     #[doc = "Escape"]
     pub const KEY_KEYBOARD_ESCAPE: &str = "key.keyboard.escape";
+    #[doc = "Execute"]
+    pub const KEY_KEYBOARD_EXECUTE: &str = "key.keyboard.execute";
+    #[doc = "ExSel"]
+    pub const KEY_KEYBOARD_EXSEL: &str = "key.keyboard.exsel";
     #[doc = "F1"]
     pub const KEY_KEYBOARD_F1: &str = "key.keyboard.f1";
     #[doc = "F10"]
@@ -11935,14 +12438,40 @@ pub mod java {
     pub const KEY_KEYBOARD_F8: &str = "key.keyboard.f8";
     #[doc = "F9"]
     pub const KEY_KEYBOARD_F9: &str = "key.keyboard.f9";
+    #[doc = "Find"]
+    pub const KEY_KEYBOARD_FIND: &str = "key.keyboard.find";
     #[doc = "`"]
     pub const KEY_KEYBOARD_GRAVE_ACCENT: &str = "key.keyboard.grave.accent";
+    #[doc = "Help"]
+    pub const KEY_KEYBOARD_HELP: &str = "key.keyboard.help";
     #[doc = "Home"]
     pub const KEY_KEYBOARD_HOME: &str = "key.keyboard.home";
     #[doc = "Insert"]
     pub const KEY_KEYBOARD_INSERT: &str = "key.keyboard.insert";
+    #[doc = "International 1"]
+    pub const KEY_KEYBOARD_INTERNATIONAL1: &str = "key.keyboard.international1";
+    #[doc = "International 2"]
+    pub const KEY_KEYBOARD_INTERNATIONAL2: &str = "key.keyboard.international2";
+    #[doc = "International 3"]
+    pub const KEY_KEYBOARD_INTERNATIONAL3: &str = "key.keyboard.international3";
+    #[doc = "International 4"]
+    pub const KEY_KEYBOARD_INTERNATIONAL4: &str = "key.keyboard.international4";
+    #[doc = "International 5"]
+    pub const KEY_KEYBOARD_INTERNATIONAL5: &str = "key.keyboard.international5";
+    #[doc = "International 6"]
+    pub const KEY_KEYBOARD_INTERNATIONAL6: &str = "key.keyboard.international6";
+    #[doc = "International 7"]
+    pub const KEY_KEYBOARD_INTERNATIONAL7: &str = "key.keyboard.international7";
+    #[doc = "International 8"]
+    pub const KEY_KEYBOARD_INTERNATIONAL8: &str = "key.keyboard.international8";
+    #[doc = "International 9"]
+    pub const KEY_KEYBOARD_INTERNATIONAL9: &str = "key.keyboard.international9";
     #[doc = "Keypad 0"]
     pub const KEY_KEYBOARD_KEYPAD_0: &str = "key.keyboard.keypad.0";
+    #[doc = "Keypad 00"]
+    pub const KEY_KEYBOARD_KEYPAD_00: &str = "key.keyboard.keypad.00";
+    #[doc = "Keypad 000"]
+    pub const KEY_KEYBOARD_KEYPAD_000: &str = "key.keyboard.keypad.000";
     #[doc = "Keypad 1"]
     pub const KEY_KEYBOARD_KEYPAD_1: &str = "key.keyboard.keypad.1";
     #[doc = "Keypad 2"]
@@ -11961,74 +12490,257 @@ pub mod java {
     pub const KEY_KEYBOARD_KEYPAD_8: &str = "key.keyboard.keypad.8";
     #[doc = "Keypad 9"]
     pub const KEY_KEYBOARD_KEYPAD_9: &str = "key.keyboard.keypad.9";
+    #[doc = "Keypad A"]
+    pub const KEY_KEYBOARD_KEYPAD_A: &str = "key.keyboard.keypad.a";
     #[doc = "Keypad +"]
     pub const KEY_KEYBOARD_KEYPAD_ADD: &str = "key.keyboard.keypad.add";
+    #[doc = "Keypad &"]
+    pub const KEY_KEYBOARD_KEYPAD_AMPERSAND: &str = "key.keyboard.keypad.ampersand";
+    #[doc = "Keypad @"]
+    pub const KEY_KEYBOARD_KEYPAD_AT: &str = "key.keyboard.keypad.at";
+    #[doc = "Keypad B"]
+    pub const KEY_KEYBOARD_KEYPAD_B: &str = "key.keyboard.keypad.b";
+    #[doc = "Keypad Backspace"]
+    pub const KEY_KEYBOARD_KEYPAD_BACKSPACE: &str = "key.keyboard.keypad.backspace";
+    #[doc = "Keypad Binary"]
+    pub const KEY_KEYBOARD_KEYPAD_BINARY: &str = "key.keyboard.keypad.binary";
+    #[doc = "Keypad C"]
+    pub const KEY_KEYBOARD_KEYPAD_C: &str = "key.keyboard.keypad.c";
+    #[doc = "Keypad Clear"]
+    pub const KEY_KEYBOARD_KEYPAD_CLEAR: &str = "key.keyboard.keypad.clear";
+    #[doc = "Keypad Clear Entry"]
+    pub const KEY_KEYBOARD_KEYPAD_CLEAR_ENTRY: &str = "key.keyboard.keypad.clear.entry";
+    #[doc = "Keypad :"]
+    pub const KEY_KEYBOARD_KEYPAD_COLON: &str = "key.keyboard.keypad.colon";
+    #[doc = "Keypad ,"]
+    pub const KEY_KEYBOARD_KEYPAD_COMMA: &str = "key.keyboard.keypad.comma";
+    #[doc = "Keypad D"]
+    pub const KEY_KEYBOARD_KEYPAD_D: &str = "key.keyboard.keypad.d";
     #[doc = "Keypad Decimal"]
     pub const KEY_KEYBOARD_KEYPAD_DECIMAL: &str = "key.keyboard.keypad.decimal";
     #[doc = "Keypad /"]
     pub const KEY_KEYBOARD_KEYPAD_DIVIDE: &str = "key.keyboard.keypad.divide";
+    #[doc = "Keypad &&"]
+    pub const KEY_KEYBOARD_KEYPAD_DOUBLE_AMPERSAND: &str = "key.keyboard.keypad.double.ampersand";
+    #[doc = "Keypad ||"]
+    pub const KEY_KEYBOARD_KEYPAD_DOUBLE_VERTICAL_BAR: &str =
+        "key.keyboard.keypad.double.vertical.bar";
+    #[doc = "Keypad E"]
+    pub const KEY_KEYBOARD_KEYPAD_E: &str = "key.keyboard.keypad.e";
     #[doc = "Keypad Enter"]
     pub const KEY_KEYBOARD_KEYPAD_ENTER: &str = "key.keyboard.keypad.enter";
     #[doc = "Keypad ="]
     pub const KEY_KEYBOARD_KEYPAD_EQUAL: &str = "key.keyboard.keypad.equal";
+    #[doc = "Keypad = (AS400)"]
+    pub const KEY_KEYBOARD_KEYPAD_EQUALS_AS400: &str = "key.keyboard.keypad.equals.as400";
+    #[doc = "Keypad !"]
+    pub const KEY_KEYBOARD_KEYPAD_EXCLAMATION: &str = "key.keyboard.keypad.exclamation";
+    #[doc = "Keypad F"]
+    pub const KEY_KEYBOARD_KEYPAD_F: &str = "key.keyboard.keypad.f";
+    #[doc = "Keypad >"]
+    pub const KEY_KEYBOARD_KEYPAD_GREATER: &str = "key.keyboard.keypad.greater";
+    #[doc = "Keypad #"]
+    pub const KEY_KEYBOARD_KEYPAD_HASH: &str = "key.keyboard.keypad.hash";
+    #[doc = "Keypad Hexadecimal"]
+    pub const KEY_KEYBOARD_KEYPAD_HEXADECIMAL: &str = "key.keyboard.keypad.hexadecimal";
+    #[doc = "Keypad {"]
+    pub const KEY_KEYBOARD_KEYPAD_LEFT_BRACE: &str = "key.keyboard.keypad.left.brace";
+    #[doc = "Keypad ("]
+    pub const KEY_KEYBOARD_KEYPAD_LEFT_PARENTHESIS: &str = "key.keyboard.keypad.left.parenthesis";
+    #[doc = "Keypad <"]
+    pub const KEY_KEYBOARD_KEYPAD_LESS: &str = "key.keyboard.keypad.less";
+    #[doc = "Keypad M+"]
+    pub const KEY_KEYBOARD_KEYPAD_MEMORY_ADD: &str = "key.keyboard.keypad.memory.add";
+    #[doc = "Keypad MC"]
+    pub const KEY_KEYBOARD_KEYPAD_MEMORY_CLEAR: &str = "key.keyboard.keypad.memory.clear";
+    #[doc = "Keypad M/"]
+    pub const KEY_KEYBOARD_KEYPAD_MEMORY_DIVIDE: &str = "key.keyboard.keypad.memory.divide";
+    #[doc = "Keypad M*"]
+    pub const KEY_KEYBOARD_KEYPAD_MEMORY_MULTIPLY: &str = "key.keyboard.keypad.memory.multiply";
+    #[doc = "Keypad MR"]
+    pub const KEY_KEYBOARD_KEYPAD_MEMORY_RECALL: &str = "key.keyboard.keypad.memory.recall";
+    #[doc = "Keypad MS"]
+    pub const KEY_KEYBOARD_KEYPAD_MEMORY_STORE: &str = "key.keyboard.keypad.memory.store";
+    #[doc = "Keypad M-"]
+    pub const KEY_KEYBOARD_KEYPAD_MEMORY_SUBTRACT: &str = "key.keyboard.keypad.memory.subtract";
     #[doc = "Keypad *"]
     pub const KEY_KEYBOARD_KEYPAD_MULTIPLY: &str = "key.keyboard.keypad.multiply";
+    #[doc = "Keypad Octal"]
+    pub const KEY_KEYBOARD_KEYPAD_OCTAL: &str = "key.keyboard.keypad.octal";
+    #[doc = "Keypad %"]
+    pub const KEY_KEYBOARD_KEYPAD_PERCENT: &str = "key.keyboard.keypad.percent";
+    #[doc = "Keypad ."]
+    pub const KEY_KEYBOARD_KEYPAD_PERIOD: &str = "key.keyboard.keypad.period";
+    #[doc = "Keypad ±"]
+    pub const KEY_KEYBOARD_KEYPAD_PLUS_MINUS: &str = "key.keyboard.keypad.plus.minus";
+    #[doc = "Keypad ^"]
+    pub const KEY_KEYBOARD_KEYPAD_POWER: &str = "key.keyboard.keypad.power";
+    #[doc = "Keypad }"]
+    pub const KEY_KEYBOARD_KEYPAD_RIGHT_BRACE: &str = "key.keyboard.keypad.right.brace";
+    #[doc = "Keypad )"]
+    pub const KEY_KEYBOARD_KEYPAD_RIGHT_PARENTHESIS: &str = "key.keyboard.keypad.right.parenthesis";
+    #[doc = "Keypad Space"]
+    pub const KEY_KEYBOARD_KEYPAD_SPACE: &str = "key.keyboard.keypad.space";
     #[doc = "Keypad -"]
     pub const KEY_KEYBOARD_KEYPAD_SUBTRACT: &str = "key.keyboard.keypad.subtract";
+    #[doc = "Keypad Tab"]
+    pub const KEY_KEYBOARD_KEYPAD_TAB: &str = "key.keyboard.keypad.tab";
+    #[doc = "Keypad |"]
+    pub const KEY_KEYBOARD_KEYPAD_VERTICAL_BAR: &str = "key.keyboard.keypad.vertical.bar";
+    #[doc = "Keypad XOR"]
+    pub const KEY_KEYBOARD_KEYPAD_XOR: &str = "key.keyboard.keypad.xor";
+    #[doc = "Language 1"]
+    pub const KEY_KEYBOARD_LANG1: &str = "key.keyboard.lang1";
+    #[doc = "Language 2"]
+    pub const KEY_KEYBOARD_LANG2: &str = "key.keyboard.lang2";
+    #[doc = "Language 3"]
+    pub const KEY_KEYBOARD_LANG3: &str = "key.keyboard.lang3";
+    #[doc = "Language 4"]
+    pub const KEY_KEYBOARD_LANG4: &str = "key.keyboard.lang4";
+    #[doc = "Language 5"]
+    pub const KEY_KEYBOARD_LANG5: &str = "key.keyboard.lang5";
+    #[doc = "Language 6"]
+    pub const KEY_KEYBOARD_LANG6: &str = "key.keyboard.lang6";
+    #[doc = "Language 7"]
+    pub const KEY_KEYBOARD_LANG7: &str = "key.keyboard.lang7";
+    #[doc = "Language 8"]
+    pub const KEY_KEYBOARD_LANG8: &str = "key.keyboard.lang8";
+    #[doc = "Language 9"]
+    pub const KEY_KEYBOARD_LANG9: &str = "key.keyboard.lang9";
     #[doc = "Left Arrow"]
     pub const KEY_KEYBOARD_LEFT: &str = "key.keyboard.left";
     #[doc = "Left Alt"]
     pub const KEY_KEYBOARD_LEFT_ALT: &str = "key.keyboard.left.alt";
     #[doc = "["]
     pub const KEY_KEYBOARD_LEFT_BRACKET: &str = "key.keyboard.left.bracket";
+    #[doc = "Left Command"]
+    pub const KEY_KEYBOARD_LEFT_COMMAND: &str = "key.keyboard.left.command";
     #[doc = "Left Control"]
     pub const KEY_KEYBOARD_LEFT_CONTROL: &str = "key.keyboard.left.control";
+    #[doc = "Left Meta"]
+    pub const KEY_KEYBOARD_LEFT_META: &str = "key.keyboard.left.meta";
+    #[doc = "Left Option"]
+    pub const KEY_KEYBOARD_LEFT_OPTION: &str = "key.keyboard.left.option";
     #[doc = "Left Shift"]
     pub const KEY_KEYBOARD_LEFT_SHIFT: &str = "key.keyboard.left.shift";
     #[doc = "Left Win"]
     pub const KEY_KEYBOARD_LEFT_WIN: &str = "key.keyboard.left.win";
+    #[doc = "Left Windows"]
+    pub const KEY_KEYBOARD_LEFT_WINDOWS: &str = "key.keyboard.left.windows";
+    #[doc = "Eject"]
+    pub const KEY_KEYBOARD_MEDIA_EJECT: &str = "key.keyboard.media.eject";
+    #[doc = "Fast Forward"]
+    pub const KEY_KEYBOARD_MEDIA_FAST_FORWARD: &str = "key.keyboard.media.fast.forward";
+    #[doc = "Next Track"]
+    pub const KEY_KEYBOARD_MEDIA_NEXT_TRACK: &str = "key.keyboard.media.next.track";
+    #[doc = "Media Pause"]
+    pub const KEY_KEYBOARD_MEDIA_PAUSE: &str = "key.keyboard.media.pause";
+    #[doc = "Media Play"]
+    pub const KEY_KEYBOARD_MEDIA_PLAY: &str = "key.keyboard.media.play";
+    #[doc = "Play/Pause"]
+    pub const KEY_KEYBOARD_MEDIA_PLAY_PAUSE: &str = "key.keyboard.media.play.pause";
+    #[doc = "Previous Track"]
+    pub const KEY_KEYBOARD_MEDIA_PREVIOUS_TRACK: &str = "key.keyboard.media.previous.track";
+    #[doc = "Record"]
+    pub const KEY_KEYBOARD_MEDIA_RECORD: &str = "key.keyboard.media.record";
+    #[doc = "Rewind"]
+    pub const KEY_KEYBOARD_MEDIA_REWIND: &str = "key.keyboard.media.rewind";
+    #[doc = "Media Select"]
+    pub const KEY_KEYBOARD_MEDIA_SELECT: &str = "key.keyboard.media.select";
+    #[doc = "Media Stop"]
+    pub const KEY_KEYBOARD_MEDIA_STOP: &str = "key.keyboard.media.stop";
     #[doc = "Menu"]
     pub const KEY_KEYBOARD_MENU: &str = "key.keyboard.menu";
     #[doc = "-"]
     pub const KEY_KEYBOARD_MINUS: &str = "key.keyboard.minus";
+    #[doc = "Mode"]
+    pub const KEY_KEYBOARD_MODE: &str = "key.keyboard.mode";
+    #[doc = "Mute"]
+    pub const KEY_KEYBOARD_MUTE: &str = "key.keyboard.mute";
+    #[doc = "New"]
+    pub const KEY_KEYBOARD_NEW: &str = "key.keyboard.new";
     #[doc = "Num Lock"]
     pub const KEY_KEYBOARD_NUM_LOCK: &str = "key.keyboard.num.lock";
+    #[doc = "Oper"]
+    pub const KEY_KEYBOARD_OPER: &str = "key.keyboard.oper";
+    #[doc = "Out"]
+    pub const KEY_KEYBOARD_OUT: &str = "key.keyboard.out";
     #[doc = "Page Down"]
     pub const KEY_KEYBOARD_PAGE_DOWN: &str = "key.keyboard.page.down";
     #[doc = "Page Up"]
     pub const KEY_KEYBOARD_PAGE_UP: &str = "key.keyboard.page.up";
+    #[doc = "Paste"]
+    pub const KEY_KEYBOARD_PASTE: &str = "key.keyboard.paste";
     #[doc = "Pause"]
     pub const KEY_KEYBOARD_PAUSE: &str = "key.keyboard.pause";
     #[doc = "."]
     pub const KEY_KEYBOARD_PERIOD: &str = "key.keyboard.period";
+    #[doc = "Power"]
+    pub const KEY_KEYBOARD_POWER: &str = "key.keyboard.power";
     #[doc = "Print Screen"]
     pub const KEY_KEYBOARD_PRINT_SCREEN: &str = "key.keyboard.print.screen";
+    #[doc = "Prior"]
+    pub const KEY_KEYBOARD_PRIOR: &str = "key.keyboard.prior";
     #[doc = "Right Arrow"]
     pub const KEY_KEYBOARD_RIGHT: &str = "key.keyboard.right";
     #[doc = "Right Alt"]
     pub const KEY_KEYBOARD_RIGHT_ALT: &str = "key.keyboard.right.alt";
     #[doc = "]"]
     pub const KEY_KEYBOARD_RIGHT_BRACKET: &str = "key.keyboard.right.bracket";
+    #[doc = "Right Command"]
+    pub const KEY_KEYBOARD_RIGHT_COMMAND: &str = "key.keyboard.right.command";
     #[doc = "Right Control"]
     pub const KEY_KEYBOARD_RIGHT_CONTROL: &str = "key.keyboard.right.control";
+    #[doc = "Right Meta"]
+    pub const KEY_KEYBOARD_RIGHT_META: &str = "key.keyboard.right.meta";
+    #[doc = "Right Option"]
+    pub const KEY_KEYBOARD_RIGHT_OPTION: &str = "key.keyboard.right.option";
     #[doc = "Right Shift"]
     pub const KEY_KEYBOARD_RIGHT_SHIFT: &str = "key.keyboard.right.shift";
     #[doc = "Right Win"]
     pub const KEY_KEYBOARD_RIGHT_WIN: &str = "key.keyboard.right.win";
+    #[doc = "Right Windows"]
+    pub const KEY_KEYBOARD_RIGHT_WINDOWS: &str = "key.keyboard.right.windows";
+    #[doc = "Save"]
+    pub const KEY_KEYBOARD_SAVE: &str = "key.keyboard.save";
     #[doc = "Scroll Lock"]
     pub const KEY_KEYBOARD_SCROLL_LOCK: &str = "key.keyboard.scroll.lock";
+    #[doc = "Select"]
+    pub const KEY_KEYBOARD_SELECT: &str = "key.keyboard.select";
     #[doc = ";"]
     pub const KEY_KEYBOARD_SEMICOLON: &str = "key.keyboard.semicolon";
+    #[doc = "Separator"]
+    pub const KEY_KEYBOARD_SEPARATOR: &str = "key.keyboard.separator";
     #[doc = "/"]
     pub const KEY_KEYBOARD_SLASH: &str = "key.keyboard.slash";
+    #[doc = "Sleep"]
+    pub const KEY_KEYBOARD_SLEEP: &str = "key.keyboard.sleep";
+    #[doc = "Soft Left"]
+    pub const KEY_KEYBOARD_SOFT_LEFT: &str = "key.keyboard.soft.left";
+    #[doc = "Soft Right"]
+    pub const KEY_KEYBOARD_SOFT_RIGHT: &str = "key.keyboard.soft.right";
     #[doc = "Space"]
     pub const KEY_KEYBOARD_SPACE: &str = "key.keyboard.space";
+    #[doc = "Stop"]
+    pub const KEY_KEYBOARD_STOP: &str = "key.keyboard.stop";
+    #[doc = "SysRq"]
+    pub const KEY_KEYBOARD_SYS_REQ: &str = "key.keyboard.sys.req";
     #[doc = "Tab"]
     pub const KEY_KEYBOARD_TAB: &str = "key.keyboard.tab";
+    #[doc = "Thousands Separator"]
+    pub const KEY_KEYBOARD_THOUSANDS_SEPARATOR: &str = "key.keyboard.thousands.separator";
+    #[doc = "Undo"]
+    pub const KEY_KEYBOARD_UNDO: &str = "key.keyboard.undo";
     #[doc = "Not Bound"]
     pub const KEY_KEYBOARD_UNKNOWN: &str = "key.keyboard.unknown";
     #[doc = "Up Arrow"]
     pub const KEY_KEYBOARD_UP: &str = "key.keyboard.up";
+    #[doc = "Volume Down"]
+    pub const KEY_KEYBOARD_VOLUME_DOWN: &str = "key.keyboard.volume.down";
+    #[doc = "Volume Up"]
+    pub const KEY_KEYBOARD_VOLUME_UP: &str = "key.keyboard.volume.up";
+    #[doc = "Wake"]
+    pub const KEY_KEYBOARD_WAKE: &str = "key.keyboard.wake";
     #[doc = "World 1"]
     pub const KEY_KEYBOARD_WORLD_1: &str = "key.keyboard.world.1";
     #[doc = "World 2"]
@@ -12298,6 +13010,9 @@ pub mod java {
     pub const MCO_CONFIGURE_WORLD_BUTTONS_EDIT: &str = "mco.configure.world.buttons.edit";
     #[doc = "Invite Player"]
     pub const MCO_CONFIGURE_WORLD_BUTTONS_INVITE: &str = "mco.configure.world.buttons.invite";
+    #[doc = "Invite Codes"]
+    pub const MCO_CONFIGURE_WORLD_BUTTONS_INVITE_CODES: &str =
+        "mco.configure.world.buttons.invite_codes";
     #[doc = "More options"]
     pub const MCO_CONFIGURE_WORLD_BUTTONS_MOREOPTIONS: &str =
         "mco.configure.world.buttons.moreoptions";
@@ -12325,7 +13040,7 @@ pub mod java {
     #[doc = "Switch Minigame"]
     pub const MCO_CONFIGURE_WORLD_BUTTONS_SWITCHMINIGAME: &str =
         "mco.configure.world.buttons.switchminigame";
-    #[doc = "You can temporarily close your Realm, preventing play while you make adjustments. Open it back up when you're ready. \n\nThis does not cancel your Realms Subscription."]
+    #[doc = "You can temporarily close your Realm, preventing play while you make adjustments. Open it back up when you're ready.\n\nThis does not cancel your Realms subscription."]
     pub const MCO_CONFIGURE_WORLD_CLOSE_QUESTION_LINE1: &str =
         "mco.configure.world.close.question.line1";
     #[doc = "Are you sure you want to continue?"]
@@ -12366,6 +13081,58 @@ pub mod java {
     #[doc = "Name"]
     pub const MCO_CONFIGURE_WORLD_INVITE_PROFILE_NAME: &str =
         "mco.configure.world.invite.profile.name";
+    #[doc = "Copy"]
+    pub const MCO_CONFIGURE_WORLD_INVITE_CODES_COPY: &str = "mco.configure.world.invite_codes.copy";
+    #[doc = "Create Invite Code"]
+    pub const MCO_CONFIGURE_WORLD_INVITE_CODES_CREATE: &str =
+        "mco.configure.world.invite_codes.create";
+    #[doc = "Delete"]
+    pub const MCO_CONFIGURE_WORLD_INVITE_CODES_DELETE: &str =
+        "mco.configure.world.invite_codes.delete";
+    #[doc = "Edit"]
+    pub const MCO_CONFIGURE_WORLD_INVITE_CODES_EDIT: &str = "mco.configure.world.invite_codes.edit";
+    #[doc = "Active"]
+    pub const MCO_CONFIGURE_WORLD_INVITE_CODES_EDIT_ACTIVE: &str =
+        "mco.configure.world.invite_codes.edit.active";
+    #[doc = "Expiration Date"]
+    pub const MCO_CONFIGURE_WORLD_INVITE_CODES_EDIT_EXPIRATION_DATE: &str =
+        "mco.configure.world.invite_codes.edit.expiration_date";
+    #[doc = "Expires: %s"]
+    pub const MCO_CONFIGURE_WORLD_INVITE_CODES_EDIT_EXPIRES: &str =
+        "mco.configure.world.invite_codes.edit.expires";
+    #[doc = "Edit Invite Code"]
+    pub const MCO_CONFIGURE_WORLD_INVITE_CODES_EDIT_TITLE: &str =
+        "mco.configure.world.invite_codes.edit.title";
+    #[doc = "12 hours"]
+    pub const MCO_CONFIGURE_WORLD_INVITE_CODES_EXPIRATION_12_HOURS: &str =
+        "mco.configure.world.invite_codes.expiration.12_hours";
+    #[doc = "1 day"]
+    pub const MCO_CONFIGURE_WORLD_INVITE_CODES_EXPIRATION_1_DAY: &str =
+        "mco.configure.world.invite_codes.expiration.1_day";
+    #[doc = "1 hour"]
+    pub const MCO_CONFIGURE_WORLD_INVITE_CODES_EXPIRATION_1_HOUR: &str =
+        "mco.configure.world.invite_codes.expiration.1_hour";
+    #[doc = "30 minutes"]
+    pub const MCO_CONFIGURE_WORLD_INVITE_CODES_EXPIRATION_30_MINUTES: &str =
+        "mco.configure.world.invite_codes.expiration.30_minutes";
+    #[doc = "6 hours"]
+    pub const MCO_CONFIGURE_WORLD_INVITE_CODES_EXPIRATION_6_HOURS: &str =
+        "mco.configure.world.invite_codes.expiration.6_hours";
+    #[doc = "7 days"]
+    pub const MCO_CONFIGURE_WORLD_INVITE_CODES_EXPIRATION_7_DAYS: &str =
+        "mco.configure.world.invite_codes.expiration.7_days";
+    #[doc = "Never"]
+    pub const MCO_CONFIGURE_WORLD_INVITE_CODES_EXPIRATION_NEVER: &str =
+        "mco.configure.world.invite_codes.expiration.never";
+    #[doc = "Loading invite codes"]
+    pub const MCO_CONFIGURE_WORLD_INVITE_CODES_LOADING: &str =
+        "mco.configure.world.invite_codes.loading";
+    #[doc = "You can add up to %s invite codes and share them so people can join your Realm"]
+    pub const MCO_CONFIGURE_WORLD_INVITE_CODES_SUBTITLE: &str =
+        "mco.configure.world.invite_codes.subtitle";
+    #[doc = "Invite Codes (%s/%s)"]
+    pub const MCO_CONFIGURE_WORLD_INVITE_CODES_TITLE: &str =
+        "mco.configure.world.invite_codes.title";
     #[doc = "Invited"]
     pub const MCO_CONFIGURE_WORLD_INVITED: &str = "mco.configure.world.invited";
     #[doc = "Invited (%s)"]
@@ -12414,6 +13181,11 @@ pub mod java {
     #[doc = "Region Preference Selection"]
     pub const MCO_CONFIGURE_WORLD_REGION_PREFERENCE_TITLE: &str =
         "mco.configure.world.region_preference.title";
+    #[doc = "Render Distance Limit"]
+    pub const MCO_CONFIGURE_WORLD_RENDERDISTANCE: &str = "mco.configure.world.renderDistance";
+    #[doc = "The maximum distance visible to Realm members. Higher values may impact performance."]
+    pub const MCO_CONFIGURE_WORLD_RENDERDISTANCE_TOOLTIP: &str =
+        "mco.configure.world.renderDistance.tooltip";
     #[doc = "Your world will be regenerated and your current world will be lost"]
     pub const MCO_CONFIGURE_WORLD_RESET_QUESTION_LINE1: &str =
         "mco.configure.world.reset.question.line1";
@@ -12445,6 +13217,12 @@ pub mod java {
     pub const MCO_CONFIGURE_WORLD_SETTINGS_EXPIRED: &str = "mco.configure.world.settings.expired";
     #[doc = "Settings"]
     pub const MCO_CONFIGURE_WORLD_SETTINGS_TITLE: &str = "mco.configure.world.settings.title";
+    #[doc = "Simulation Distance"]
+    pub const MCO_CONFIGURE_WORLD_SIMULATIONDISTANCE: &str =
+        "mco.configure.world.simulationDistance";
+    #[doc = "The range around players where the game loads and applies changes."]
+    pub const MCO_CONFIGURE_WORLD_SIMULATIONDISTANCE_TOOLTIP: &str =
+        "mco.configure.world.simulationDistance.tooltip";
     #[doc = "World %s"]
     pub const MCO_CONFIGURE_WORLD_SLOT: &str = "mco.configure.world.slot";
     #[doc = "Empty"]
@@ -12583,7 +13361,7 @@ pub mod java {
     pub const MCO_DOWNLOAD_EXTRACTING: &str = "mco.download.extracting";
     #[doc = "Download failed"]
     pub const MCO_DOWNLOAD_FAILED: &str = "mco.download.failed";
-    #[doc = "%s %%"]
+    #[doc = "%s%%"]
     pub const MCO_DOWNLOAD_PERCENT: &str = "mco.download.percent";
     #[doc = "Preparing download"]
     pub const MCO_DOWNLOAD_PREPARING: &str = "mco.download.preparing";
@@ -12601,7 +13379,7 @@ pub mod java {
     pub const MCO_ERROR_INVALID_SESSION_TITLE: &str = "mco.error.invalid.session.title";
     #[doc = "Client outdated"]
     pub const MCO_ERRORMESSAGE_6001: &str = "mco.errorMessage.6001";
-    #[doc = "Terms of service not accepted"]
+    #[doc = "Terms of Service not accepted"]
     pub const MCO_ERRORMESSAGE_6002: &str = "mco.errorMessage.6002";
     #[doc = "Download limit reached"]
     pub const MCO_ERRORMESSAGE_6003: &str = "mco.errorMessage.6003";
@@ -12712,6 +13490,30 @@ pub mod java {
         "mco.notification.visitUrl.message.default";
     #[doc = "Online Players"]
     pub const MCO_ONLINEPLAYERS: &str = "mco.onlinePlayers";
+    #[doc = "Your invited friends can play in your Realm for free, anytime - even when you're not online. Play with up to 10 at once!"]
+    pub const MCO_PDP_FRIENDS_DESCRIPTION: &str = "mco.pdp.friends.description";
+    #[doc = "A better way to play together"]
+    pub const MCO_PDP_FRIENDS_TITLE: &str = "mco.pdp.friends.title";
+    #[doc = "Explore the rotating library of minigames, adventure maps and more."]
+    pub const MCO_PDP_MINIGAMES_DESCRIPTION: &str = "mco.pdp.minigames.description";
+    #[doc = "Minigames - Free creator content"]
+    pub const MCO_PDP_MINIGAMES_TITLE: &str = "mco.pdp.minigames.title";
+    #[doc = "• Automatic backups"]
+    pub const MCO_PDP_PRIVATE_BACKUPS: &str = "mco.pdp.private.backups";
+    #[doc = "• Easy to set up, easy to manage"]
+    pub const MCO_PDP_PRIVATE_EASYTOMANAGE: &str = "mco.pdp.private.easyToManage";
+    #[doc = "• Private and secure"]
+    pub const MCO_PDP_PRIVATE_SECURE: &str = "mco.pdp.private.secure";
+    #[doc = "Personal server"]
+    pub const MCO_PDP_PRIVATE_TITLE: &str = "mco.pdp.private.title";
+    #[doc = "• Three world slots"]
+    pub const MCO_PDP_PRIVATE_WORLDSLOTS: &str = "mco.pdp.private.worldSlots";
+    #[doc = "Free 30-day trial!"]
+    pub const MCO_PDP_TRIAL_DESCRIPTION: &str = "mco.pdp.trial.description";
+    #[doc = "Your own server, always online"]
+    pub const MCO_PDP_TRIAL_TITLE: &str = "mco.pdp.trial.title";
+    #[doc = "Try for free"]
+    pub const MCO_PDP_TRYFORFREE: &str = "mco.pdp.tryForFree";
     #[doc = "Realm is closed"]
     pub const MCO_PLAY_BUTTON_REALM_CLOSED: &str = "mco.play.button.realm.closed";
     #[doc = "Question"]
@@ -12769,6 +13571,22 @@ pub mod java {
     pub const MCO_SELECTSERVER_EXPIRES_DAYS: &str = "mco.selectServer.expires.days";
     #[doc = "Expires soon"]
     pub const MCO_SELECTSERVER_EXPIRES_SOON: &str = "mco.selectServer.expires.soon";
+    #[doc = "Free trial"]
+    pub const MCO_SELECTSERVER_FREETRIAL: &str = "mco.selectServer.freeTrial";
+    #[doc = "Join Code"]
+    pub const MCO_SELECTSERVER_JOINCODE: &str = "mco.selectServer.joinCode";
+    #[doc = "Enter join code"]
+    pub const MCO_SELECTSERVER_JOINCODE_HINT: &str = "mco.selectServer.joinCode.hint";
+    #[doc = "The code you entered is invalid."]
+    pub const MCO_SELECTSERVER_JOINCODE_INVALID: &str = "mco.selectServer.joinCode.invalid";
+    #[doc = "Join Realm"]
+    pub const MCO_SELECTSERVER_JOINCODE_SELECT: &str = "mco.selectServer.joinCode.select";
+    #[doc = "Enter Join Code"]
+    pub const MCO_SELECTSERVER_JOINCODE_TITLE: &str = "mco.selectServer.joinCode.title";
+    #[doc = "Validating code"]
+    pub const MCO_SELECTSERVER_JOINCODE_VALIDATING: &str = "mco.selectServer.joinCode.validating";
+    #[doc = "Join Realm"]
+    pub const MCO_SELECTSERVER_JOINREALM: &str = "mco.selectServer.joinRealm";
     #[doc = "Leave Realm"]
     pub const MCO_SELECTSERVER_LEAVE: &str = "mco.selectServer.leave";
     #[doc = "Loading Realms List"]
@@ -12820,7 +13638,7 @@ pub mod java {
     pub const MCO_SNAPSHOT_PARENT_TOOLTIP: &str = "mco.snapshot.parent.tooltip";
     #[doc = "Start free Snapshot Realm"]
     pub const MCO_SNAPSHOT_START: &str = "mco.snapshot.start";
-    #[doc = "This is a Snapshot Realm that is paired to the subscription of your Realm '%s'. It will stay active for as long as its paired Realm is."]
+    #[doc = "This is a Snapshot Realm that is paired with the subscription of your Realm '%s'. It will stay active for as long as its paired Realm is."]
     pub const MCO_SNAPSHOT_SUBSCRIPTION_INFO: &str = "mco.snapshot.subscription.info";
     #[doc = "Use Snapshot Realms to get a sneak peek at upcoming versions of Minecraft, which might include new features and other changes.\n\nYou can find your normal Realms in the release version of the game."]
     pub const MCO_SNAPSHOT_TOOLTIP: &str = "mco.snapshot.tooltip";
@@ -12904,7 +13722,7 @@ pub mod java {
     pub const MCO_UPLOAD_FAILED_TOO_BIG_TITLE: &str = "mco.upload.failed.too_big.title";
     #[doc = "Hardcore worlds can't be uploaded!"]
     pub const MCO_UPLOAD_HARDCORE: &str = "mco.upload.hardcore";
-    #[doc = "%s %%"]
+    #[doc = "%s%%"]
     pub const MCO_UPLOAD_PERCENT: &str = "mco.upload.percent";
     #[doc = "Preparing your world"]
     pub const MCO_UPLOAD_PREPARING: &str = "mco.upload.preparing";
@@ -13064,8 +13882,10 @@ pub mod java {
     pub const MIRROR_LEFT_RIGHT: &str = "mirror.left_right";
     #[doc = "|"]
     pub const MIRROR_NONE: &str = "mirror.none";
-    #[doc = "Press %1$s to Dismount"]
+    #[doc = "Press %1$s to dismount"]
     pub const MOUNT_ONBOARD: &str = "mount.onboard";
+    #[doc = "Press %1$s to get up"]
+    pub const MOUNT_SIT: &str = "mount.sit";
     #[doc = "Applying resource pack"]
     pub const MULTIPLAYER_APPLYINGPACK: &str = "multiplayer.applyingPack";
     #[doc = "Do not notify again for this Code of Conduct"]
@@ -13081,7 +13901,7 @@ pub mod java {
     #[doc = "Run Command"]
     pub const MULTIPLAYER_CONFIRM_COMMAND_RUN_COMMAND: &str =
         "multiplayer.confirm_command.run_command";
-    #[doc = "You are trying to execute a command that will send chat messages using your name.\nIt can only be run from the chat screen\nCommand: %s"]
+    #[doc = "You are trying to execute a command that will send chat messages using your name.\nIt can only be run from the chat screen.\nCommand: %s"]
     pub const MULTIPLAYER_CONFIRM_COMMAND_SIGNATURE_REQUIRED: &str =
         "multiplayer.confirm_command.signature_required";
     #[doc = "Copy to Chat Screen"]
@@ -13759,6 +14579,11 @@ pub mod java {
     pub const OPTIONS_CONTROLS: &str = "options.controls";
     #[doc = "Credits & Attribution..."]
     pub const OPTIONS_CREDITS_AND_ATTRIBUTION: &str = "options.credits_and_attribution";
+    #[doc = "Right Click Emulation"]
+    pub const OPTIONS_CTRLCLICKEMULATESRIGHTCLICK: &str = "options.ctrlClickEmulatesRightClick";
+    #[doc = "When enabled, Control + left-click is treated as a right-click. Only applies on macOS."]
+    pub const OPTIONS_CTRLCLICKEMULATESRIGHTCLICK_TOOLTIP: &str =
+        "options.ctrlClickEmulatesRightClick.tooltip";
     #[doc = "See-Through Leaves"]
     pub const OPTIONS_CUTOUTLEAVES: &str = "options.cutoutLeaves";
     #[doc = "Allows you to see through gaps in leaves. Disabling improves performance."]
@@ -13777,6 +14602,10 @@ pub mod java {
     pub const OPTIONS_DARKNESSEFFECTSCALE: &str = "options.darknessEffectScale";
     #[doc = "Controls how much the Darkness effect pulses when a Warden or Sculk Shrieker gives it to you."]
     pub const OPTIONS_DARKNESSEFFECTSCALE_TOOLTIP: &str = "options.darknessEffectScale.tooltip";
+    #[doc = "Overrides the debug overlay with a different GUI scale than the rest of the game"]
+    pub const OPTIONS_DEBUGGUISCALE_TOOLTIP: &str = "options.debugGuiScale.tooltip";
+    #[doc = "Unchanged"]
+    pub const OPTIONS_DEBUGGUISCALE_UNCHANGED: &str = "options.debugGuiScale.unchanged";
     #[doc = "Difficulty"]
     pub const OPTIONS_DIFFICULTY: &str = "options.difficulty";
     #[doc = "Easy"]
@@ -13863,6 +14692,11 @@ pub mod java {
     pub const OPTIONS_FULLSCREEN_CURRENT: &str = "options.fullscreen.current";
     #[doc = "%sx%s@%s (%sbit)"]
     pub const OPTIONS_FULLSCREEN_ENTRY: &str = "options.fullscreen.entry";
+    #[doc = "Exclusive Fullscreen Mode"]
+    pub const OPTIONS_FULLSCREEN_EXCLUSIVE_MODE: &str = "options.fullscreen.exclusive.mode";
+    #[doc = "This setting only takes effect when Exclusive Fullscreen is enabled."]
+    pub const OPTIONS_FULLSCREEN_EXCLUSIVE_MODE_TOOLTIP: &str =
+        "options.fullscreen.exclusive.mode.tooltip";
     #[doc = "Fullscreen Resolution"]
     pub const OPTIONS_FULLSCREEN_RESOLUTION: &str = "options.fullscreen.resolution";
     #[doc = "Setting unavailable"]
@@ -13953,13 +14787,16 @@ pub mod java {
     pub const OPTIONS_HIDESPLASHTEXTS_TOOLTIP: &str = "options.hideSplashTexts.tooltip";
     #[doc = "Improved Transparency"]
     pub const OPTIONS_IMPROVEDTRANSPARENCY: &str = "options.improvedTransparency";
+    #[doc = "An experimental approach that uses an order-independent transparency algorithm to avoid graphical issues normally present when looking through multiple layers of translucent objects.\nThis will impact performance."]
+    pub const OPTIONS_IMPROVEDTRANSPARENCY_OIT_TOOLTIP: &str =
+        "options.improvedTransparency.oit.tooltip";
     #[doc = "An experimental approach that uses screen shaders for drawing weather, clouds, and particles behind translucent blocks and water.\nThis will impact GPU performance."]
     pub const OPTIONS_IMPROVEDTRANSPARENCY_TOOLTIP: &str = "options.improvedTransparency.tooltip";
     #[doc = "In-Game Notification"]
     pub const OPTIONS_INGAMENOTIFICATION: &str = "options.inGameNotification";
     #[doc = "Show Friend notifications in-game"]
     pub const OPTIONS_INGAMENOTIFICATION_TOOLTIP: &str = "options.inGameNotification.tooltip";
-    #[doc = "Reduce FPS when"]
+    #[doc = "Reduce fps when"]
     pub const OPTIONS_INACTIVITYFPSLIMIT: &str = "options.inactivityFpsLimit";
     #[doc = "AFK"]
     pub const OPTIONS_INACTIVITYFPSLIMIT_AFK: &str = "options.inactivityFpsLimit.afk";
@@ -13987,6 +14824,12 @@ pub mod java {
     pub const OPTIONS_KEY_TOGGLE: &str = "options.key.toggle";
     #[doc = "Language..."]
     pub const OPTIONS_LANGUAGE: &str = "options.language";
+    #[doc = "Translation file for %s was empty or missing. Restart your game and launcher, then try again."]
+    pub const OPTIONS_LANGUAGE_EMPTY_OR_MISSING_TRANSLATION: &str =
+        "options.language.empty_or_missing_translation";
+    #[doc = "Loading translations failed"]
+    pub const OPTIONS_LANGUAGE_LOAD_TRANSLATIONS_FAILED: &str =
+        "options.language.load_translations_failed";
     #[doc = "Change Language"]
     pub const OPTIONS_LANGUAGE_NARRATION: &str = "options.language.narration";
     #[doc = "Language"]
@@ -13995,8 +14838,13 @@ pub mod java {
     pub const OPTIONS_LANGUAGE_TOOLTIP: &str = "options.language.tooltip";
     #[doc = "(Language translations may not be 100%% accurate)"]
     pub const OPTIONS_LANGUAGEACCURACYWARNING: &str = "options.languageAccuracyWarning";
-    #[doc = "Language translations may not be 100%% accurate"]
+    #[doc = "Language translations may not be 100%% accurate."]
     pub const OPTIONS_LANGUAGEWARNING: &str = "options.languageWarning";
+    #[doc = "Menu/Dock Visibility"]
+    pub const OPTIONS_MACFULLSCREENMENUVISIBILITY: &str = "options.macFullscreenMenuVisibility";
+    #[doc = "Whether the macOS Menu bar and Dock can be revealed by moving the mouse to the edge of the screen while in non-exclusive fullscreen."]
+    pub const OPTIONS_MACFULLSCREENMENUVISIBILITY_TOOLTIP: &str =
+        "options.macFullscreenMenuVisibility.tooltip";
     #[doc = "Main Hand"]
     pub const OPTIONS_MAINHAND: &str = "options.mainHand";
     #[doc = "Left"]
@@ -14122,7 +14970,7 @@ pub mod java {
     #[doc = "Semi Blocking"]
     pub const OPTIONS_PRIORITIZECHUNKUPDATES_BYPLAYER: &str =
         "options.prioritizeChunkUpdates.byPlayer";
-    #[doc = "Some actions within a chunk will recompile the chunk immediately. This includes block placing & destroying."]
+    #[doc = "Some actions within a chunk will recompile the chunk immediately. This includes block placing and destroying."]
     pub const OPTIONS_PRIORITIZECHUNKUPDATES_BYPLAYER_TOOLTIP: &str =
         "options.prioritizeChunkUpdates.byPlayer.tooltip";
     #[doc = "Fully Blocking"]
@@ -14135,6 +14983,10 @@ pub mod java {
     #[doc = "Nearby chunks are compiled in parallel threads. This may result in brief visual holes when blocks are destroyed."]
     pub const OPTIONS_PRIORITIZECHUNKUPDATES_NONE_TOOLTIP: &str =
         "options.prioritizeChunkUpdates.none.tooltip";
+    #[doc = "Quit Shortcuts"]
+    pub const OPTIONS_QUITSHORTCUTS: &str = "options.quitShortcuts";
+    #[doc = "Whether keyboard shortcuts can close the game. When off, Alt + F4 on Windows and Linux, and Cmd + Q on macOS, will no longer quit the game."]
+    pub const OPTIONS_QUITSHORTCUTS_TOOLTIP: &str = "options.quitShortcuts.tooltip";
     #[doc = "Raw Input"]
     pub const OPTIONS_RAWMOUSEINPUT: &str = "options.rawMouseInput";
     #[doc = "Realms News & Invites"]
@@ -14266,17 +15118,78 @@ pub mod java {
     pub const OPTIONS_WEATHERRADIUS: &str = "options.weatherRadius";
     #[doc = "Radius of the area where rain and snow effects are visible. Very low performance impact."]
     pub const OPTIONS_WEATHERRADIUS_TOOLTIP: &str = "options.weatherRadius.tooltip";
+    #[doc = "Cannot allow commands in a demo world."]
+    pub const OPTIONS_WORLDOPTIONS_ALLOW_COMMANDS_DISABLED_DEMO_TOOLTIP: &str =
+        "options.worldOptions.allow_commands.disabled.demo.tooltip";
     #[doc = "Cannot allow commands in a hardcore world."]
     pub const OPTIONS_WORLDOPTIONS_ALLOW_COMMANDS_DISABLED_TOOLTIP: &str =
         "options.worldOptions.allow_commands.disabled.tooltip";
+    #[doc = "Allows the use of commands in this world."]
+    pub const OPTIONS_WORLDOPTIONS_ALLOW_COMMANDS_TOOLTIP: &str =
+        "options.worldOptions.allow_commands.tooltip";
     #[doc = "World Options..."]
     pub const OPTIONS_WORLDOPTIONS_BUTTON: &str = "options.worldOptions.button";
+    #[doc = "Cannot change the difficulty in a hardcore world."]
+    pub const OPTIONS_WORLDOPTIONS_DIFFICULTY_DISABLED_HARDCORE_TOOLTIP: &str =
+        "options.worldOptions.difficulty.disabled.hardcore.tooltip";
+    #[doc = "Difficulty is locked."]
+    pub const OPTIONS_WORLDOPTIONS_DIFFICULTY_DISABLED_LOCKED_TOOLTIP: &str =
+        "options.worldOptions.difficulty.disabled.locked.tooltip";
+    #[doc = "Changing the difficulty requires operator permissions."]
+    pub const OPTIONS_WORLDOPTIONS_DIFFICULTY_DISABLED_OPERATOR_TOOLTIP: &str =
+        "options.worldOptions.difficulty.disabled.operator.tooltip";
+    #[doc = "Default Game Mode"]
+    pub const OPTIONS_WORLDOPTIONS_GAME_MODE: &str = "options.worldOptions.game_mode";
     #[doc = "Changing the game mode requires operator permissions."]
     pub const OPTIONS_WORLDOPTIONS_GAME_MODE_DISABLED_OPERATOR_TOOLTIP: &str =
         "options.worldOptions.game_mode.disabled.operator.tooltip";
     #[doc = "Cannot change the game mode in a hardcore world."]
     pub const OPTIONS_WORLDOPTIONS_GAME_MODE_DISABLED_TOOLTIP: &str =
         "options.worldOptions.game_mode.disabled.tooltip";
+    #[doc = "Changes the default game mode of the world."]
+    pub const OPTIONS_WORLDOPTIONS_GAME_MODE_TOOLTIP: &str =
+        "options.worldOptions.game_mode.tooltip";
+    #[doc = "General"]
+    pub const OPTIONS_WORLDOPTIONS_GENERAL_TITLE: &str = "options.worldOptions.general.title";
+    #[doc = "Command Access"]
+    pub const OPTIONS_WORLDOPTIONS_GUEST_COMMAND_ACCESS: &str =
+        "options.worldOptions.guest.command_access";
+    #[doc = "Cannot change the command access of players joining your world when commands are not allowed."]
+    pub const OPTIONS_WORLDOPTIONS_GUEST_COMMAND_ACCESS_DISABLED_COMMANDS_TOOLTIP: &str =
+        "options.worldOptions.guest.command_access.disabled.commands.tooltip";
+    #[doc = "Cannot change the command access of players joining your world when the world's multiplayer scope is set to \"Off\"."]
+    pub const OPTIONS_WORLDOPTIONS_GUEST_COMMAND_ACCESS_DISABLED_SCOPE_TOOLTIP: &str =
+        "options.worldOptions.guest.command_access.disabled.scope.tooltip";
+    #[doc = "Controls whether players that join your world can use commands or not."]
+    pub const OPTIONS_WORLDOPTIONS_GUEST_COMMAND_ACCESS_TOOLTIP: &str =
+        "options.worldOptions.guest.command_access.tooltip";
+    #[doc = "Force Game Mode"]
+    pub const OPTIONS_WORLDOPTIONS_GUEST_FORCE_GAME_MODE: &str =
+        "options.worldOptions.guest.force_game_mode";
+    #[doc = "Other players can set their own game mode through commands."]
+    pub const OPTIONS_WORLDOPTIONS_GUEST_FORCE_GAME_MODE_OFF_COMMANDS_TOOLTIP: &str =
+        "options.worldOptions.guest.force_game_mode.off.commands.tooltip";
+    #[doc = "Cannot change this setting in a hardcore world."]
+    pub const OPTIONS_WORLDOPTIONS_GUEST_FORCE_GAME_MODE_OFF_HARDCORE_TOOLTIP: &str =
+        "options.worldOptions.guest.force_game_mode.off.hardcore.tooltip";
+    #[doc = "Cannot change this setting when the world's multiplayer scope is set to \"Off\"."]
+    pub const OPTIONS_WORLDOPTIONS_GUEST_FORCE_GAME_MODE_OFF_SCOPE_TOOLTIP: &str =
+        "options.worldOptions.guest.force_game_mode.off.scope.tooltip";
+    #[doc = "Other players will retain their current game mode regardless of the world's default game mode."]
+    pub const OPTIONS_WORLDOPTIONS_GUEST_FORCE_GAME_MODE_OFF_TOOLTIP: &str =
+        "options.worldOptions.guest.force_game_mode.off.tooltip";
+    #[doc = "Other players will be forced to play the world's default game mode."]
+    pub const OPTIONS_WORLDOPTIONS_GUEST_FORCE_GAME_MODE_ON_TOOLTIP: &str =
+        "options.worldOptions.guest.force_game_mode.on.tooltip";
+    #[doc = "Multiplayer"]
+    pub const OPTIONS_WORLDOPTIONS_MULTIPLAYER_TITLE: &str =
+        "options.worldOptions.multiplayer.title";
+    #[doc = "Personal Game Mode"]
+    pub const OPTIONS_WORLDOPTIONS_PERSONAL_GAME_MODE: &str =
+        "options.worldOptions.personal_game_mode";
+    #[doc = "Changes your game mode in this world."]
+    pub const OPTIONS_WORLDOPTIONS_PERSONAL_GAME_MODE_TOOLTIP: &str =
+        "options.worldOptions.personal_game_mode.tooltip";
     #[doc = "World Options"]
     pub const OPTIONS_WORLDOPTIONS_TITLE: &str = "options.worldOptions.title";
     #[doc = "Minecraft has run out of memory.\n\nThis could be caused by a bug in the game or by the Java Virtual Machine not being allocated enough memory.\n\nTo prevent world corruption, the current game has quit. We've tried to free up enough memory to let you go back to the main menu and back to playing, but this may not have worked.\n\nPlease restart the game if you see this message again."]
@@ -14291,7 +15204,7 @@ pub mod java {
     pub const PACK_DROPCONFIRM: &str = "pack.dropConfirm";
     #[doc = "Drag and drop files into this window to add packs"]
     pub const PACK_DROPINFO: &str = "pack.dropInfo";
-    #[doc = "The following entries were not valid packs and were not copied:\n %s"]
+    #[doc = "The following entries were not valid packs and were not copied:\n%s"]
     pub const PACK_DROPREJECTED_MESSAGE: &str = "pack.dropRejected.message";
     #[doc = "Non-pack entries"]
     pub const PACK_DROPREJECTED_TITLE: &str = "pack.dropRejected.title";
@@ -14597,9 +15510,9 @@ pub mod java {
     pub const POTION_WITHDURATION: &str = "potion.withDuration";
     #[doc = "Unknown predicate: %s"]
     pub const PREDICATE_UNKNOWN: &str = "predicate.unknown";
-    #[doc = "Could not find world with the provided identifier"]
+    #[doc = "Could not find a world with the provided identifier"]
     pub const QUICKPLAY_ERROR_INVALID_IDENTIFIER: &str = "quickplay.error.invalid_identifier";
-    #[doc = "Could not connect to Realm"]
+    #[doc = "Could not connect to this Realm"]
     pub const QUICKPLAY_ERROR_REALM_CONNECT: &str = "quickplay.error.realm_connect";
     #[doc = "Lacking permission to connect to this Realm"]
     pub const QUICKPLAY_ERROR_REALM_PERMISSION: &str = "quickplay.error.realm_permission";
@@ -14614,6 +15527,9 @@ pub mod java {
     #[doc = "Brazil"]
     pub const REALMS_CONFIGURATION_REGION_BRAZIL_SOUTH: &str =
         "realms.configuration.region.brazil_south";
+    #[doc = "Canada"]
+    pub const REALMS_CONFIGURATION_REGION_CANADA_CENTRAL: &str =
+        "realms.configuration.region.canada_central";
     #[doc = "India"]
     pub const REALMS_CONFIGURATION_REGION_CENTRAL_INDIA: &str =
         "realms.configuration.region.central_india";
@@ -14638,12 +15554,18 @@ pub mod java {
     #[doc = "South Korea"]
     pub const REALMS_CONFIGURATION_REGION_KOREA_CENTRAL: &str =
         "realms.configuration.region.korea_central";
+    #[doc = "Mexico"]
+    pub const REALMS_CONFIGURATION_REGION_MEXICO_CENTRAL: &str =
+        "realms.configuration.region.mexico_central";
     #[doc = "Illinois, USA"]
     pub const REALMS_CONFIGURATION_REGION_NORTH_CENTRAL_US: &str =
         "realms.configuration.region.north_central_us";
     #[doc = "Ireland"]
     pub const REALMS_CONFIGURATION_REGION_NORTH_EUROPE: &str =
         "realms.configuration.region.north_europe";
+    #[doc = "South Africa"]
+    pub const REALMS_CONFIGURATION_REGION_SOUTH_AFRICA_NORTH: &str =
+        "realms.configuration.region.south_africa_north";
     #[doc = "Texas, USA"]
     pub const REALMS_CONFIGURATION_REGION_SOUTH_CENTRAL_US: &str =
         "realms.configuration.region.south_central_us";
@@ -14667,6 +15589,8 @@ pub mod java {
     pub const REALMS_CONFIGURATION_REGION_WEST_US: &str = "realms.configuration.region.west_us";
     #[doc = "Washington, USA"]
     pub const REALMS_CONFIGURATION_REGION_WEST_US_2: &str = "realms.configuration.region.west_us_2";
+    #[doc = "Arizona, USA"]
+    pub const REALMS_CONFIGURATION_REGION_WEST_US_3: &str = "realms.configuration.region.west_us_3";
     #[doc = "Automatic (Realm owner ping)"]
     pub const REALMS_CONFIGURATION_REGION_PREFERENCE_AUTOMATIC_OWNER: &str =
         "realms.configuration.region_preference.automatic_owner";
@@ -14837,7 +15761,7 @@ pub mod java {
     pub const SELECTWORLD_COMMANDS: &str = "selectWorld.commands";
     #[doc = "Must be converted!"]
     pub const SELECTWORLD_CONVERSION: &str = "selectWorld.conversion";
-    #[doc = "This world must be opened in an older version (like 1.6.4) to be safely converted"]
+    #[doc = "This world must be opened in an older version (like 1.6.4) to be safely converted."]
     pub const SELECTWORLD_CONVERSION_TOOLTIP: &str = "selectWorld.conversion.tooltip";
     #[doc = "Create New World"]
     pub const SELECTWORLD_CREATE: &str = "selectWorld.create";
@@ -14867,7 +15791,7 @@ pub mod java {
     pub const SELECTWORLD_EDIT_BACKUPFAILED: &str = "selectWorld.edit.backupFailed";
     #[doc = "Open Backups Folder"]
     pub const SELECTWORLD_EDIT_BACKUPFOLDER: &str = "selectWorld.edit.backupFolder";
-    #[doc = "size: %s MB"]
+    #[doc = "Size: %s MB"]
     pub const SELECTWORLD_EDIT_BACKUPSIZE: &str = "selectWorld.edit.backupSize";
     #[doc = "Export World Generation Settings"]
     pub const SELECTWORLD_EDIT_EXPORT_WORLDGEN_SETTINGS: &str =
@@ -14975,7 +15899,7 @@ pub mod java {
     pub const SELECTWORLD_INCOMPATIBLE_TOOLTIP: &str = "selectWorld.incompatible.tooltip";
     #[doc = "Created by an incompatible version"]
     pub const SELECTWORLD_INCOMPATIBLE_SERIES: &str = "selectWorld.incompatible_series";
-    #[doc = "Unable to read or access folder where game worlds are saved!"]
+    #[doc = "Unable to read or access the folder where game worlds are saved!"]
     pub const SELECTWORLD_LOAD_FOLDER_ACCESS: &str = "selectWorld.load_folder_access";
     #[doc = "Loading World List"]
     pub const SELECTWORLD_LOADING_LIST: &str = "selectWorld.loading_list";
@@ -15075,8 +15999,14 @@ pub mod java {
     pub const SELECTWORLD_WORLD_GEN_SETTINGS_ACCESS: &str = "selectWorld.world_gen_settings_access";
     #[doc = "Loading the world requires taking a backup first"]
     pub const SELECTEWORLD_BACKUPREQUIREDTOOLTIP: &str = "selecteWorld.backupRequiredTooltip";
+    #[doc = "Back Text:"]
+    pub const SIGN_BACK_TEXT: &str = "sign.back_text";
+    #[doc = "Click actions are disabled for this sign"]
+    pub const SIGN_CLICK_ACTIONS_DISABLED: &str = "sign.click_actions_disabled";
     #[doc = "Edit Sign Message"]
     pub const SIGN_EDIT: &str = "sign.edit";
+    #[doc = "Front Text:"]
+    pub const SIGN_FRONT_TEXT: &str = "sign.front_text";
     #[doc = "No amount of rest can pass this night"]
     pub const SLEEP_NOT_POSSIBLE: &str = "sleep.not_possible";
     #[doc = "%s/%s players sleeping"]
@@ -15154,6 +16084,8 @@ pub mod java {
     pub const SOUNDCATEGORY_VOICE: &str = "soundCategory.voice";
     #[doc = "Weather"]
     pub const SOUNDCATEGORY_WEATHER: &str = "soundCategory.weather";
+    #[doc = "Unable to teleport. The other side is not generated yet."]
+    pub const SPECTATOR_CANNOT_TELEPORT: &str = "spectator.cannot_teleport";
     #[doc = "Close Menu"]
     pub const SPECTATORMENU_CLOSE: &str = "spectatorMenu.close";
     #[doc = "Next Page"]
@@ -15304,6 +16236,8 @@ pub mod java {
     pub const STAT_MINECRAFT_RAID_WIN: &str = "stat.minecraft.raid_win";
     #[doc = "Times Slept in a Bed"]
     pub const STAT_MINECRAFT_SLEEP_IN_BED: &str = "stat.minecraft.sleep_in_bed";
+    #[doc = "Times Slept in a Straw Bed"]
+    pub const STAT_MINECRAFT_SLEEP_IN_STRAW_BED: &str = "stat.minecraft.sleep_in_straw_bed";
     #[doc = "Sneak Time"]
     pub const STAT_MINECRAFT_SNEAK_TIME: &str = "stat.minecraft.sneak_time";
     #[doc = "Distance Sprinted"]
@@ -15414,7 +16348,7 @@ pub mod java {
     pub const STRUCTURE_BLOCK_MODE_INFO_SAVE: &str = "structure_block.mode_info.save";
     #[doc = "Relative Position"]
     pub const STRUCTURE_BLOCK_POSITION: &str = "structure_block.position";
-    #[doc = "relative Position x"]
+    #[doc = "relative position x"]
     pub const STRUCTURE_BLOCK_POSITION_X: &str = "structure_block.position.x";
     #[doc = "relative position y"]
     pub const STRUCTURE_BLOCK_POSITION_Y: &str = "structure_block.position.y";
@@ -15501,7 +16435,7 @@ pub mod java {
     #[doc = "Bubbles flow"]
     pub const SUBTITLES_BLOCK_BUBBLE_COLUMN_UPWARDS_AMBIENT: &str =
         "subtitles.block.bubble_column.upwards_ambient";
-    #[doc = "Bubbles woosh"]
+    #[doc = "Bubbles whoosh"]
     pub const SUBTITLES_BLOCK_BUBBLE_COLUMN_UPWARDS_INSIDE: &str =
         "subtitles.block.bubble_column.upwards_inside";
     #[doc = "Bubbles whirl"]
@@ -15671,6 +16605,8 @@ pub mod java {
     #[doc = "Stalactite crashes down"]
     pub const SUBTITLES_BLOCK_POINTED_DRIPSTONE_LAND: &str =
         "subtitles.block.pointed_dripstone.land";
+    #[doc = "Leaves rustling"]
+    pub const SUBTITLES_BLOCK_POPLAR_LEAVES_AMBIENT: &str = "subtitles.block.poplar_leaves.ambient";
     #[doc = "Portal whooshes"]
     pub const SUBTITLES_BLOCK_PORTAL_AMBIENT: &str = "subtitles.block.portal.ambient";
     #[doc = "Portal noise fades"]
@@ -15730,6 +16666,8 @@ pub mod java {
     pub const SUBTITLES_BLOCK_SHELF_SINGLE_SWAP: &str = "subtitles.block.shelf.single_swap";
     #[doc = "Item taken"]
     pub const SUBTITLES_BLOCK_SHELF_TAKE_ITEM: &str = "subtitles.block.shelf.take_item";
+    #[doc = "Something bounces on a Shelf Mushroom"]
+    pub const SUBTITLES_BLOCK_SHELF_MUSHROOM_BOUNCE: &str = "subtitles.block.shelf_mushroom.bounce";
     #[doc = "Shulker box closes"]
     pub const SUBTITLES_BLOCK_SHULKER_BOX_CLOSE: &str = "subtitles.block.shulker_box.close";
     #[doc = "Shulker box opens"]
@@ -15749,6 +16687,8 @@ pub mod java {
     pub const SUBTITLES_BLOCK_SNIFFER_EGG_PLOP: &str = "subtitles.block.sniffer_egg.plop";
     #[doc = "Sponge sucks"]
     pub const SUBTITLES_BLOCK_SPONGE_ABSORB: &str = "subtitles.block.sponge.absorb";
+    #[doc = "Straw Bed breaks"]
+    pub const SUBTITLES_BLOCK_STRAW_BED_BREAK_LEAVE: &str = "subtitles.block.straw_bed.break_leave";
     #[doc = "Berries pop"]
     pub const SUBTITLES_BLOCK_SWEET_BERRY_BUSH_PICK_BERRIES: &str =
         "subtitles.block.sweet_berry_bush.pick_berries";
@@ -16125,10 +17065,10 @@ pub mod java {
     #[doc = "Copper Golem can't place item"]
     pub const SUBTITLES_ENTITY_COPPER_GOLEM_ITEM_NO_DROP: &str =
         "subtitles.entity.copper_golem.item_no_drop";
-    #[doc = "Copper Golem is picking up item"]
+    #[doc = "Copper Golem is picking up an item"]
     pub const SUBTITLES_ENTITY_COPPER_GOLEM_NO_ITEM_GET: &str =
         "subtitles.entity.copper_golem.no_item_get";
-    #[doc = "Copper Golem can't pick up item"]
+    #[doc = "Copper Golem can't pick up an item"]
     pub const SUBTITLES_ENTITY_COPPER_GOLEM_NO_ITEM_NO_GET: &str =
         "subtitles.entity.copper_golem.no_item_no_get";
     #[doc = "Copper Golem appears"]
@@ -16190,6 +17130,14 @@ pub mod java {
     pub const SUBTITLES_ENTITY_CREEPER_HURT: &str = "subtitles.entity.creeper.hurt";
     #[doc = "Creeper hisses"]
     pub const SUBTITLES_ENTITY_CREEPER_PRIMED: &str = "subtitles.entity.creeper.primed";
+    #[doc = "Cushion breaks"]
+    pub const SUBTITLES_ENTITY_CUSHION_BREAK: &str = "subtitles.entity.cushion.break";
+    #[doc = "Gets up from Cushion"]
+    pub const SUBTITLES_ENTITY_CUSHION_GET_UP: &str = "subtitles.entity.cushion.get_up";
+    #[doc = "Cushion placed"]
+    pub const SUBTITLES_ENTITY_CUSHION_PLACE: &str = "subtitles.entity.cushion.place";
+    #[doc = "Sits on Cushion"]
+    pub const SUBTITLES_ENTITY_CUSHION_SIT: &str = "subtitles.entity.cushion.sit";
     #[doc = "Dolphin chirps"]
     pub const SUBTITLES_ENTITY_DOLPHIN_AMBIENT: &str = "subtitles.entity.dolphin.ambient";
     #[doc = "Dolphin whistles"]
@@ -16483,6 +17431,8 @@ pub mod java {
         "subtitles.entity.happy_ghast.harness_goggles_up";
     #[doc = "Happy Ghast hurts"]
     pub const SUBTITLES_ENTITY_HAPPY_GHAST_HURT: &str = "subtitles.entity.happy_ghast.hurt";
+    #[doc = "Wind rushes past"]
+    pub const SUBTITLES_ENTITY_HAPPY_GHAST_RIDING: &str = "subtitles.entity.happy_ghast.riding";
     #[doc = "Harness unequips"]
     pub const SUBTITLES_ENTITY_HAPPY_GHAST_UNEQUIP: &str = "subtitles.entity.happy_ghast.unequip";
     #[doc = "Hoglin growls"]
@@ -16663,6 +17613,8 @@ pub mod java {
     pub const SUBTITLES_ENTITY_NAUTILUS_HURT: &str = "subtitles.entity.nautilus.hurt";
     #[doc = "Nautilus hurts"]
     pub const SUBTITLES_ENTITY_NAUTILUS_HURT_LAND: &str = "subtitles.entity.nautilus.hurt_land";
+    #[doc = "Nautilus bubbles"]
+    pub const SUBTITLES_ENTITY_NAUTILUS_RIDING: &str = "subtitles.entity.nautilus.riding";
     #[doc = "Nautilus swims"]
     pub const SUBTITLES_ENTITY_NAUTILUS_SWIM: &str = "subtitles.entity.nautilus.swim";
     #[doc = "Painting broken"]
@@ -17727,7 +18679,7 @@ pub mod java {
         "telemetry.event.p2p_connection.description";
     #[doc = "Peer-to-peer Connection"]
     pub const TELEMETRY_EVENT_P2P_CONNECTION_TITLE: &str = "telemetry.event.p2p_connection.title";
-    #[doc = "Knowing the overall performance profile of Minecraft helps us tune and optimize the game for a wide range of machine specifications and operating systems. \nGame version is included to help us compare the performance profile for new versions of Minecraft."]
+    #[doc = "Knowing the overall performance profile of Minecraft helps us tune and optimize the game for a wide range of machine specifications and operating systems.\nGame version is included to help us compare the performance profile for new versions of Minecraft."]
     pub const TELEMETRY_EVENT_PERFORMANCE_METRICS_DESCRIPTION: &str =
         "telemetry.event.performance_metrics.description";
     #[doc = "Performance Metrics"]
@@ -17779,7 +18731,7 @@ pub mod java {
     #[doc = "Event Timestamp (UTC)"]
     pub const TELEMETRY_PROPERTY_EVENT_TIMESTAMP_UTC_TITLE: &str =
         "telemetry.property.event_timestamp_utc.title";
-    #[doc = "Frame Rate Samples (FPS)"]
+    #[doc = "Frame Rate Samples (fps)"]
     pub const TELEMETRY_PROPERTY_FRAME_RATE_SAMPLES_TITLE: &str =
         "telemetry.property.frame_rate_samples.title";
     #[doc = "Game Mode"]
@@ -17994,6 +18946,10 @@ pub mod java {
     pub const TEST_ERROR_VALUE_NOT_IN_BETWEEN: &str = "test.error.value_not_in_between";
     #[doc = "Wrong block entity type: %s"]
     pub const TEST_ERROR_WRONG_BLOCK_ENTITY: &str = "test.error.wrong_block_entity";
+    #[doc = "Player coordinates: [%s, %s, %s] in %s"]
+    pub const TEST_PLAYER_COORDINATES: &str = "test.player.coordinates";
+    #[doc = "Test coordinates: [%s, %s, %s] in %s"]
+    pub const TEST_RUN_COORDINATES: &str = "test.run.coordinates";
     #[doc = "Test structure missing %s block"]
     pub const TEST_BLOCK_ERROR_MISSING: &str = "test_block.error.missing";
     #[doc = "Too many %s blocks"]
@@ -18026,6 +18982,8 @@ pub mod java {
     pub const TEST_INSTANCE_ACTION_SAVE: &str = "test_instance.action.save";
     #[doc = "Environment: %s"]
     pub const TEST_INSTANCE_DESCRIPTION_BATCH: &str = "test_instance.description.batch";
+    #[doc = "Dimension: %s"]
+    pub const TEST_INSTANCE_DESCRIPTION_DIMENSION: &str = "test_instance.description.dimension";
     #[doc = "Failed: %s"]
     pub const TEST_INSTANCE_DESCRIPTION_FAILED: &str = "test_instance.description.failed";
     #[doc = "Function: %s"]
@@ -18202,6 +19160,9 @@ pub mod java {
     pub const TUTORIAL_SOCIALINTERACTIONS_TITLE: &str = "tutorial.socialInteractions.title";
     #[doc = "Netherite Upgrade"]
     pub const UPGRADE_MINECRAFT_NETHERITE_UPGRADE: &str = "upgrade.minecraft.netherite_upgrade";
+    #[doc = "The world folder seems to already contain some upgraded files. The game is unable to correctly upgrade your world."]
+    pub const UPGRADEWORLD_ABORTED_FILE_ALREADY_EXISTS: &str =
+        "upgradeWorld.aborted.file_already_exists";
     #[doc = "This may happen if another program accessed the world during the upgrade.\nIt may help to restart your computer and try again. If the issue persists, please consider reporting a bug."]
     pub const UPGRADEWORLD_ABORTED_MESSAGE: &str = "upgradeWorld.aborted.message";
     #[doc = "Report a Bug"]
@@ -19141,6 +20102,7 @@ pub mod java {
                 Some(ARGUMENT_SCOREBOARDDISPLAYSLOT_INVALID)
             }
             "ARGUMENT_STYLE_INVALID" => Some(ARGUMENT_STYLE_INVALID),
+            "ARGUMENT_SWING_ANIMATION_INVALID" => Some(ARGUMENT_SWING_ANIMATION_INVALID),
             "ARGUMENT_TIME_INVALID_TICK_COUNT" => Some(ARGUMENT_TIME_INVALID_TICK_COUNT),
             "ARGUMENT_TIME_INVALID_UNIT" => Some(ARGUMENT_TIME_INVALID_UNIT),
             "ARGUMENT_TIME_TICK_COUNT_TOO_LOW" => Some(ARGUMENT_TIME_TICK_COUNT_TOO_LOW),
@@ -19302,6 +20264,7 @@ pub mod java {
             "BIOME_MINECRAFT_CHERRY_GROVE" => Some(BIOME_MINECRAFT_CHERRY_GROVE),
             "BIOME_MINECRAFT_COLD_OCEAN" => Some(BIOME_MINECRAFT_COLD_OCEAN),
             "BIOME_MINECRAFT_CRIMSON_FOREST" => Some(BIOME_MINECRAFT_CRIMSON_FOREST),
+            "BIOME_MINECRAFT_DAPPLED_FOREST" => Some(BIOME_MINECRAFT_DAPPLED_FOREST),
             "BIOME_MINECRAFT_DARK_FOREST" => Some(BIOME_MINECRAFT_DARK_FOREST),
             "BIOME_MINECRAFT_DEEP_COLD_OCEAN" => Some(BIOME_MINECRAFT_DEEP_COLD_OCEAN),
             "BIOME_MINECRAFT_DEEP_DARK" => Some(BIOME_MINECRAFT_DEEP_DARK),
@@ -21123,6 +22086,8 @@ pub mod java {
             "BLOCK_MINECRAFT_BLACK_CARPET" => Some(BLOCK_MINECRAFT_BLACK_CARPET),
             "BLOCK_MINECRAFT_BLACK_CONCRETE" => Some(BLOCK_MINECRAFT_BLACK_CONCRETE),
             "BLOCK_MINECRAFT_BLACK_CONCRETE_POWDER" => Some(BLOCK_MINECRAFT_BLACK_CONCRETE_POWDER),
+            "BLOCK_MINECRAFT_BLACK_CONCRETE_SLAB" => Some(BLOCK_MINECRAFT_BLACK_CONCRETE_SLAB),
+            "BLOCK_MINECRAFT_BLACK_CONCRETE_STAIRS" => Some(BLOCK_MINECRAFT_BLACK_CONCRETE_STAIRS),
             "BLOCK_MINECRAFT_BLACK_GLAZED_TERRACOTTA" => {
                 Some(BLOCK_MINECRAFT_BLACK_GLAZED_TERRACOTTA)
             }
@@ -21133,6 +22098,8 @@ pub mod java {
             }
             "BLOCK_MINECRAFT_BLACK_TERRACOTTA" => Some(BLOCK_MINECRAFT_BLACK_TERRACOTTA),
             "BLOCK_MINECRAFT_BLACK_WOOL" => Some(BLOCK_MINECRAFT_BLACK_WOOL),
+            "BLOCK_MINECRAFT_BLACK_WOOL_SLAB" => Some(BLOCK_MINECRAFT_BLACK_WOOL_SLAB),
+            "BLOCK_MINECRAFT_BLACK_WOOL_STAIRS" => Some(BLOCK_MINECRAFT_BLACK_WOOL_STAIRS),
             "BLOCK_MINECRAFT_BLACKSTONE" => Some(BLOCK_MINECRAFT_BLACKSTONE),
             "BLOCK_MINECRAFT_BLACKSTONE_SLAB" => Some(BLOCK_MINECRAFT_BLACKSTONE_SLAB),
             "BLOCK_MINECRAFT_BLACKSTONE_STAIRS" => Some(BLOCK_MINECRAFT_BLACKSTONE_STAIRS),
@@ -21145,6 +22112,8 @@ pub mod java {
             "BLOCK_MINECRAFT_BLUE_CARPET" => Some(BLOCK_MINECRAFT_BLUE_CARPET),
             "BLOCK_MINECRAFT_BLUE_CONCRETE" => Some(BLOCK_MINECRAFT_BLUE_CONCRETE),
             "BLOCK_MINECRAFT_BLUE_CONCRETE_POWDER" => Some(BLOCK_MINECRAFT_BLUE_CONCRETE_POWDER),
+            "BLOCK_MINECRAFT_BLUE_CONCRETE_SLAB" => Some(BLOCK_MINECRAFT_BLUE_CONCRETE_SLAB),
+            "BLOCK_MINECRAFT_BLUE_CONCRETE_STAIRS" => Some(BLOCK_MINECRAFT_BLUE_CONCRETE_STAIRS),
             "BLOCK_MINECRAFT_BLUE_GLAZED_TERRACOTTA" => {
                 Some(BLOCK_MINECRAFT_BLUE_GLAZED_TERRACOTTA)
             }
@@ -21157,6 +22126,8 @@ pub mod java {
             }
             "BLOCK_MINECRAFT_BLUE_TERRACOTTA" => Some(BLOCK_MINECRAFT_BLUE_TERRACOTTA),
             "BLOCK_MINECRAFT_BLUE_WOOL" => Some(BLOCK_MINECRAFT_BLUE_WOOL),
+            "BLOCK_MINECRAFT_BLUE_WOOL_SLAB" => Some(BLOCK_MINECRAFT_BLUE_WOOL_SLAB),
+            "BLOCK_MINECRAFT_BLUE_WOOL_STAIRS" => Some(BLOCK_MINECRAFT_BLUE_WOOL_STAIRS),
             "BLOCK_MINECRAFT_BONE_BLOCK" => Some(BLOCK_MINECRAFT_BONE_BLOCK),
             "BLOCK_MINECRAFT_BOOKSHELF" => Some(BLOCK_MINECRAFT_BOOKSHELF),
             "BLOCK_MINECRAFT_BRAIN_CORAL" => Some(BLOCK_MINECRAFT_BRAIN_CORAL),
@@ -21175,6 +22146,8 @@ pub mod java {
             "BLOCK_MINECRAFT_BROWN_CARPET" => Some(BLOCK_MINECRAFT_BROWN_CARPET),
             "BLOCK_MINECRAFT_BROWN_CONCRETE" => Some(BLOCK_MINECRAFT_BROWN_CONCRETE),
             "BLOCK_MINECRAFT_BROWN_CONCRETE_POWDER" => Some(BLOCK_MINECRAFT_BROWN_CONCRETE_POWDER),
+            "BLOCK_MINECRAFT_BROWN_CONCRETE_SLAB" => Some(BLOCK_MINECRAFT_BROWN_CONCRETE_SLAB),
+            "BLOCK_MINECRAFT_BROWN_CONCRETE_STAIRS" => Some(BLOCK_MINECRAFT_BROWN_CONCRETE_STAIRS),
             "BLOCK_MINECRAFT_BROWN_GLAZED_TERRACOTTA" => {
                 Some(BLOCK_MINECRAFT_BROWN_GLAZED_TERRACOTTA)
             }
@@ -21187,6 +22160,8 @@ pub mod java {
             }
             "BLOCK_MINECRAFT_BROWN_TERRACOTTA" => Some(BLOCK_MINECRAFT_BROWN_TERRACOTTA),
             "BLOCK_MINECRAFT_BROWN_WOOL" => Some(BLOCK_MINECRAFT_BROWN_WOOL),
+            "BLOCK_MINECRAFT_BROWN_WOOL_SLAB" => Some(BLOCK_MINECRAFT_BROWN_WOOL_SLAB),
+            "BLOCK_MINECRAFT_BROWN_WOOL_STAIRS" => Some(BLOCK_MINECRAFT_BROWN_WOOL_STAIRS),
             "BLOCK_MINECRAFT_BUBBLE_COLUMN" => Some(BLOCK_MINECRAFT_BUBBLE_COLUMN),
             "BLOCK_MINECRAFT_BUBBLE_CORAL" => Some(BLOCK_MINECRAFT_BUBBLE_CORAL),
             "BLOCK_MINECRAFT_BUBBLE_CORAL_BLOCK" => Some(BLOCK_MINECRAFT_BUBBLE_CORAL_BLOCK),
@@ -21360,6 +22335,8 @@ pub mod java {
             "BLOCK_MINECRAFT_CYAN_CARPET" => Some(BLOCK_MINECRAFT_CYAN_CARPET),
             "BLOCK_MINECRAFT_CYAN_CONCRETE" => Some(BLOCK_MINECRAFT_CYAN_CONCRETE),
             "BLOCK_MINECRAFT_CYAN_CONCRETE_POWDER" => Some(BLOCK_MINECRAFT_CYAN_CONCRETE_POWDER),
+            "BLOCK_MINECRAFT_CYAN_CONCRETE_SLAB" => Some(BLOCK_MINECRAFT_CYAN_CONCRETE_SLAB),
+            "BLOCK_MINECRAFT_CYAN_CONCRETE_STAIRS" => Some(BLOCK_MINECRAFT_CYAN_CONCRETE_STAIRS),
             "BLOCK_MINECRAFT_CYAN_GLAZED_TERRACOTTA" => {
                 Some(BLOCK_MINECRAFT_CYAN_GLAZED_TERRACOTTA)
             }
@@ -21370,6 +22347,8 @@ pub mod java {
             }
             "BLOCK_MINECRAFT_CYAN_TERRACOTTA" => Some(BLOCK_MINECRAFT_CYAN_TERRACOTTA),
             "BLOCK_MINECRAFT_CYAN_WOOL" => Some(BLOCK_MINECRAFT_CYAN_WOOL),
+            "BLOCK_MINECRAFT_CYAN_WOOL_SLAB" => Some(BLOCK_MINECRAFT_CYAN_WOOL_SLAB),
+            "BLOCK_MINECRAFT_CYAN_WOOL_STAIRS" => Some(BLOCK_MINECRAFT_CYAN_WOOL_STAIRS),
             "BLOCK_MINECRAFT_DAMAGED_ANVIL" => Some(BLOCK_MINECRAFT_DAMAGED_ANVIL),
             "BLOCK_MINECRAFT_DANDELION" => Some(BLOCK_MINECRAFT_DANDELION),
             "BLOCK_MINECRAFT_DARK_OAK_BUTTON" => Some(BLOCK_MINECRAFT_DARK_OAK_BUTTON),
@@ -21555,6 +22534,8 @@ pub mod java {
             "BLOCK_MINECRAFT_GRAY_CARPET" => Some(BLOCK_MINECRAFT_GRAY_CARPET),
             "BLOCK_MINECRAFT_GRAY_CONCRETE" => Some(BLOCK_MINECRAFT_GRAY_CONCRETE),
             "BLOCK_MINECRAFT_GRAY_CONCRETE_POWDER" => Some(BLOCK_MINECRAFT_GRAY_CONCRETE_POWDER),
+            "BLOCK_MINECRAFT_GRAY_CONCRETE_SLAB" => Some(BLOCK_MINECRAFT_GRAY_CONCRETE_SLAB),
+            "BLOCK_MINECRAFT_GRAY_CONCRETE_STAIRS" => Some(BLOCK_MINECRAFT_GRAY_CONCRETE_STAIRS),
             "BLOCK_MINECRAFT_GRAY_GLAZED_TERRACOTTA" => {
                 Some(BLOCK_MINECRAFT_GRAY_GLAZED_TERRACOTTA)
             }
@@ -21565,6 +22546,8 @@ pub mod java {
             }
             "BLOCK_MINECRAFT_GRAY_TERRACOTTA" => Some(BLOCK_MINECRAFT_GRAY_TERRACOTTA),
             "BLOCK_MINECRAFT_GRAY_WOOL" => Some(BLOCK_MINECRAFT_GRAY_WOOL),
+            "BLOCK_MINECRAFT_GRAY_WOOL_SLAB" => Some(BLOCK_MINECRAFT_GRAY_WOOL_SLAB),
+            "BLOCK_MINECRAFT_GRAY_WOOL_STAIRS" => Some(BLOCK_MINECRAFT_GRAY_WOOL_STAIRS),
             "BLOCK_MINECRAFT_GREEN_BANNER" => Some(BLOCK_MINECRAFT_GREEN_BANNER),
             "BLOCK_MINECRAFT_GREEN_BED" => Some(BLOCK_MINECRAFT_GREEN_BED),
             "BLOCK_MINECRAFT_GREEN_CANDLE" => Some(BLOCK_MINECRAFT_GREEN_CANDLE),
@@ -21572,6 +22555,8 @@ pub mod java {
             "BLOCK_MINECRAFT_GREEN_CARPET" => Some(BLOCK_MINECRAFT_GREEN_CARPET),
             "BLOCK_MINECRAFT_GREEN_CONCRETE" => Some(BLOCK_MINECRAFT_GREEN_CONCRETE),
             "BLOCK_MINECRAFT_GREEN_CONCRETE_POWDER" => Some(BLOCK_MINECRAFT_GREEN_CONCRETE_POWDER),
+            "BLOCK_MINECRAFT_GREEN_CONCRETE_SLAB" => Some(BLOCK_MINECRAFT_GREEN_CONCRETE_SLAB),
+            "BLOCK_MINECRAFT_GREEN_CONCRETE_STAIRS" => Some(BLOCK_MINECRAFT_GREEN_CONCRETE_STAIRS),
             "BLOCK_MINECRAFT_GREEN_GLAZED_TERRACOTTA" => {
                 Some(BLOCK_MINECRAFT_GREEN_GLAZED_TERRACOTTA)
             }
@@ -21582,6 +22567,8 @@ pub mod java {
             }
             "BLOCK_MINECRAFT_GREEN_TERRACOTTA" => Some(BLOCK_MINECRAFT_GREEN_TERRACOTTA),
             "BLOCK_MINECRAFT_GREEN_WOOL" => Some(BLOCK_MINECRAFT_GREEN_WOOL),
+            "BLOCK_MINECRAFT_GREEN_WOOL_SLAB" => Some(BLOCK_MINECRAFT_GREEN_WOOL_SLAB),
+            "BLOCK_MINECRAFT_GREEN_WOOL_STAIRS" => Some(BLOCK_MINECRAFT_GREEN_WOOL_STAIRS),
             "BLOCK_MINECRAFT_GRINDSTONE" => Some(BLOCK_MINECRAFT_GRINDSTONE),
             "BLOCK_MINECRAFT_HANGING_ROOTS" => Some(BLOCK_MINECRAFT_HANGING_ROOTS),
             "BLOCK_MINECRAFT_HAY_BLOCK" => Some(BLOCK_MINECRAFT_HAY_BLOCK),
@@ -21664,6 +22651,12 @@ pub mod java {
             "BLOCK_MINECRAFT_LIGHT_BLUE_CONCRETE_POWDER" => {
                 Some(BLOCK_MINECRAFT_LIGHT_BLUE_CONCRETE_POWDER)
             }
+            "BLOCK_MINECRAFT_LIGHT_BLUE_CONCRETE_SLAB" => {
+                Some(BLOCK_MINECRAFT_LIGHT_BLUE_CONCRETE_SLAB)
+            }
+            "BLOCK_MINECRAFT_LIGHT_BLUE_CONCRETE_STAIRS" => {
+                Some(BLOCK_MINECRAFT_LIGHT_BLUE_CONCRETE_STAIRS)
+            }
             "BLOCK_MINECRAFT_LIGHT_BLUE_GLAZED_TERRACOTTA" => {
                 Some(BLOCK_MINECRAFT_LIGHT_BLUE_GLAZED_TERRACOTTA)
             }
@@ -21678,6 +22671,10 @@ pub mod java {
             }
             "BLOCK_MINECRAFT_LIGHT_BLUE_TERRACOTTA" => Some(BLOCK_MINECRAFT_LIGHT_BLUE_TERRACOTTA),
             "BLOCK_MINECRAFT_LIGHT_BLUE_WOOL" => Some(BLOCK_MINECRAFT_LIGHT_BLUE_WOOL),
+            "BLOCK_MINECRAFT_LIGHT_BLUE_WOOL_SLAB" => Some(BLOCK_MINECRAFT_LIGHT_BLUE_WOOL_SLAB),
+            "BLOCK_MINECRAFT_LIGHT_BLUE_WOOL_STAIRS" => {
+                Some(BLOCK_MINECRAFT_LIGHT_BLUE_WOOL_STAIRS)
+            }
             "BLOCK_MINECRAFT_LIGHT_GRAY_BANNER" => Some(BLOCK_MINECRAFT_LIGHT_GRAY_BANNER),
             "BLOCK_MINECRAFT_LIGHT_GRAY_BED" => Some(BLOCK_MINECRAFT_LIGHT_GRAY_BED),
             "BLOCK_MINECRAFT_LIGHT_GRAY_CANDLE" => Some(BLOCK_MINECRAFT_LIGHT_GRAY_CANDLE),
@@ -21688,6 +22685,12 @@ pub mod java {
             "BLOCK_MINECRAFT_LIGHT_GRAY_CONCRETE" => Some(BLOCK_MINECRAFT_LIGHT_GRAY_CONCRETE),
             "BLOCK_MINECRAFT_LIGHT_GRAY_CONCRETE_POWDER" => {
                 Some(BLOCK_MINECRAFT_LIGHT_GRAY_CONCRETE_POWDER)
+            }
+            "BLOCK_MINECRAFT_LIGHT_GRAY_CONCRETE_SLAB" => {
+                Some(BLOCK_MINECRAFT_LIGHT_GRAY_CONCRETE_SLAB)
+            }
+            "BLOCK_MINECRAFT_LIGHT_GRAY_CONCRETE_STAIRS" => {
+                Some(BLOCK_MINECRAFT_LIGHT_GRAY_CONCRETE_STAIRS)
             }
             "BLOCK_MINECRAFT_LIGHT_GRAY_GLAZED_TERRACOTTA" => {
                 Some(BLOCK_MINECRAFT_LIGHT_GRAY_GLAZED_TERRACOTTA)
@@ -21703,6 +22706,10 @@ pub mod java {
             }
             "BLOCK_MINECRAFT_LIGHT_GRAY_TERRACOTTA" => Some(BLOCK_MINECRAFT_LIGHT_GRAY_TERRACOTTA),
             "BLOCK_MINECRAFT_LIGHT_GRAY_WOOL" => Some(BLOCK_MINECRAFT_LIGHT_GRAY_WOOL),
+            "BLOCK_MINECRAFT_LIGHT_GRAY_WOOL_SLAB" => Some(BLOCK_MINECRAFT_LIGHT_GRAY_WOOL_SLAB),
+            "BLOCK_MINECRAFT_LIGHT_GRAY_WOOL_STAIRS" => {
+                Some(BLOCK_MINECRAFT_LIGHT_GRAY_WOOL_STAIRS)
+            }
             "BLOCK_MINECRAFT_LIGHT_WEIGHTED_PRESSURE_PLATE" => {
                 Some(BLOCK_MINECRAFT_LIGHT_WEIGHTED_PRESSURE_PLATE)
             }
@@ -21717,6 +22724,8 @@ pub mod java {
             "BLOCK_MINECRAFT_LIME_CARPET" => Some(BLOCK_MINECRAFT_LIME_CARPET),
             "BLOCK_MINECRAFT_LIME_CONCRETE" => Some(BLOCK_MINECRAFT_LIME_CONCRETE),
             "BLOCK_MINECRAFT_LIME_CONCRETE_POWDER" => Some(BLOCK_MINECRAFT_LIME_CONCRETE_POWDER),
+            "BLOCK_MINECRAFT_LIME_CONCRETE_SLAB" => Some(BLOCK_MINECRAFT_LIME_CONCRETE_SLAB),
+            "BLOCK_MINECRAFT_LIME_CONCRETE_STAIRS" => Some(BLOCK_MINECRAFT_LIME_CONCRETE_STAIRS),
             "BLOCK_MINECRAFT_LIME_GLAZED_TERRACOTTA" => {
                 Some(BLOCK_MINECRAFT_LIME_GLAZED_TERRACOTTA)
             }
@@ -21727,6 +22736,8 @@ pub mod java {
             }
             "BLOCK_MINECRAFT_LIME_TERRACOTTA" => Some(BLOCK_MINECRAFT_LIME_TERRACOTTA),
             "BLOCK_MINECRAFT_LIME_WOOL" => Some(BLOCK_MINECRAFT_LIME_WOOL),
+            "BLOCK_MINECRAFT_LIME_WOOL_SLAB" => Some(BLOCK_MINECRAFT_LIME_WOOL_SLAB),
+            "BLOCK_MINECRAFT_LIME_WOOL_STAIRS" => Some(BLOCK_MINECRAFT_LIME_WOOL_STAIRS),
             "BLOCK_MINECRAFT_LODESTONE" => Some(BLOCK_MINECRAFT_LODESTONE),
             "BLOCK_MINECRAFT_LOOM" => Some(BLOCK_MINECRAFT_LOOM),
             "BLOCK_MINECRAFT_MAGENTA_BANNER" => Some(BLOCK_MINECRAFT_MAGENTA_BANNER),
@@ -21738,6 +22749,10 @@ pub mod java {
             "BLOCK_MINECRAFT_MAGENTA_CONCRETE_POWDER" => {
                 Some(BLOCK_MINECRAFT_MAGENTA_CONCRETE_POWDER)
             }
+            "BLOCK_MINECRAFT_MAGENTA_CONCRETE_SLAB" => Some(BLOCK_MINECRAFT_MAGENTA_CONCRETE_SLAB),
+            "BLOCK_MINECRAFT_MAGENTA_CONCRETE_STAIRS" => {
+                Some(BLOCK_MINECRAFT_MAGENTA_CONCRETE_STAIRS)
+            }
             "BLOCK_MINECRAFT_MAGENTA_GLAZED_TERRACOTTA" => {
                 Some(BLOCK_MINECRAFT_MAGENTA_GLAZED_TERRACOTTA)
             }
@@ -21748,6 +22763,8 @@ pub mod java {
             }
             "BLOCK_MINECRAFT_MAGENTA_TERRACOTTA" => Some(BLOCK_MINECRAFT_MAGENTA_TERRACOTTA),
             "BLOCK_MINECRAFT_MAGENTA_WOOL" => Some(BLOCK_MINECRAFT_MAGENTA_WOOL),
+            "BLOCK_MINECRAFT_MAGENTA_WOOL_SLAB" => Some(BLOCK_MINECRAFT_MAGENTA_WOOL_SLAB),
+            "BLOCK_MINECRAFT_MAGENTA_WOOL_STAIRS" => Some(BLOCK_MINECRAFT_MAGENTA_WOOL_STAIRS),
             "BLOCK_MINECRAFT_MAGMA_BLOCK" => Some(BLOCK_MINECRAFT_MAGMA_BLOCK),
             "BLOCK_MINECRAFT_MANGROVE_BUTTON" => Some(BLOCK_MINECRAFT_MANGROVE_BUTTON),
             "BLOCK_MINECRAFT_MANGROVE_DOOR" => Some(BLOCK_MINECRAFT_MANGROVE_DOOR),
@@ -21852,9 +22869,14 @@ pub mod java {
             "BLOCK_MINECRAFT_ORANGE_CONCRETE_POWDER" => {
                 Some(BLOCK_MINECRAFT_ORANGE_CONCRETE_POWDER)
             }
+            "BLOCK_MINECRAFT_ORANGE_CONCRETE_SLAB" => Some(BLOCK_MINECRAFT_ORANGE_CONCRETE_SLAB),
+            "BLOCK_MINECRAFT_ORANGE_CONCRETE_STAIRS" => {
+                Some(BLOCK_MINECRAFT_ORANGE_CONCRETE_STAIRS)
+            }
             "BLOCK_MINECRAFT_ORANGE_GLAZED_TERRACOTTA" => {
                 Some(BLOCK_MINECRAFT_ORANGE_GLAZED_TERRACOTTA)
             }
+            "BLOCK_MINECRAFT_ORANGE_POPLAR_LEAVES" => Some(BLOCK_MINECRAFT_ORANGE_POPLAR_LEAVES),
             "BLOCK_MINECRAFT_ORANGE_SHULKER_BOX" => Some(BLOCK_MINECRAFT_ORANGE_SHULKER_BOX),
             "BLOCK_MINECRAFT_ORANGE_STAINED_GLASS" => Some(BLOCK_MINECRAFT_ORANGE_STAINED_GLASS),
             "BLOCK_MINECRAFT_ORANGE_STAINED_GLASS_PANE" => {
@@ -21863,6 +22885,8 @@ pub mod java {
             "BLOCK_MINECRAFT_ORANGE_TERRACOTTA" => Some(BLOCK_MINECRAFT_ORANGE_TERRACOTTA),
             "BLOCK_MINECRAFT_ORANGE_TULIP" => Some(BLOCK_MINECRAFT_ORANGE_TULIP),
             "BLOCK_MINECRAFT_ORANGE_WOOL" => Some(BLOCK_MINECRAFT_ORANGE_WOOL),
+            "BLOCK_MINECRAFT_ORANGE_WOOL_SLAB" => Some(BLOCK_MINECRAFT_ORANGE_WOOL_SLAB),
+            "BLOCK_MINECRAFT_ORANGE_WOOL_STAIRS" => Some(BLOCK_MINECRAFT_ORANGE_WOOL_STAIRS),
             "BLOCK_MINECRAFT_OXEYE_DAISY" => Some(BLOCK_MINECRAFT_OXEYE_DAISY),
             "BLOCK_MINECRAFT_OXIDIZED_CHISELED_COPPER" => {
                 Some(BLOCK_MINECRAFT_OXIDIZED_CHISELED_COPPER)
@@ -21932,6 +22956,8 @@ pub mod java {
             "BLOCK_MINECRAFT_PINK_CARPET" => Some(BLOCK_MINECRAFT_PINK_CARPET),
             "BLOCK_MINECRAFT_PINK_CONCRETE" => Some(BLOCK_MINECRAFT_PINK_CONCRETE),
             "BLOCK_MINECRAFT_PINK_CONCRETE_POWDER" => Some(BLOCK_MINECRAFT_PINK_CONCRETE_POWDER),
+            "BLOCK_MINECRAFT_PINK_CONCRETE_SLAB" => Some(BLOCK_MINECRAFT_PINK_CONCRETE_SLAB),
+            "BLOCK_MINECRAFT_PINK_CONCRETE_STAIRS" => Some(BLOCK_MINECRAFT_PINK_CONCRETE_STAIRS),
             "BLOCK_MINECRAFT_PINK_GLAZED_TERRACOTTA" => {
                 Some(BLOCK_MINECRAFT_PINK_GLAZED_TERRACOTTA)
             }
@@ -21944,6 +22970,8 @@ pub mod java {
             "BLOCK_MINECRAFT_PINK_TERRACOTTA" => Some(BLOCK_MINECRAFT_PINK_TERRACOTTA),
             "BLOCK_MINECRAFT_PINK_TULIP" => Some(BLOCK_MINECRAFT_PINK_TULIP),
             "BLOCK_MINECRAFT_PINK_WOOL" => Some(BLOCK_MINECRAFT_PINK_WOOL),
+            "BLOCK_MINECRAFT_PINK_WOOL_SLAB" => Some(BLOCK_MINECRAFT_PINK_WOOL_SLAB),
+            "BLOCK_MINECRAFT_PINK_WOOL_STAIRS" => Some(BLOCK_MINECRAFT_PINK_WOOL_STAIRS),
             "BLOCK_MINECRAFT_PISTON" => Some(BLOCK_MINECRAFT_PISTON),
             "BLOCK_MINECRAFT_PISTON_HEAD" => Some(BLOCK_MINECRAFT_PISTON_HEAD),
             "BLOCK_MINECRAFT_PITCHER_CROP" => Some(BLOCK_MINECRAFT_PITCHER_CROP),
@@ -22029,6 +23057,26 @@ pub mod java {
             "BLOCK_MINECRAFT_POLISHED_TUFF_SLAB" => Some(BLOCK_MINECRAFT_POLISHED_TUFF_SLAB),
             "BLOCK_MINECRAFT_POLISHED_TUFF_STAIRS" => Some(BLOCK_MINECRAFT_POLISHED_TUFF_STAIRS),
             "BLOCK_MINECRAFT_POLISHED_TUFF_WALL" => Some(BLOCK_MINECRAFT_POLISHED_TUFF_WALL),
+            "BLOCK_MINECRAFT_POPLAR_BUTTON" => Some(BLOCK_MINECRAFT_POPLAR_BUTTON),
+            "BLOCK_MINECRAFT_POPLAR_DOOR" => Some(BLOCK_MINECRAFT_POPLAR_DOOR),
+            "BLOCK_MINECRAFT_POPLAR_FENCE" => Some(BLOCK_MINECRAFT_POPLAR_FENCE),
+            "BLOCK_MINECRAFT_POPLAR_FENCE_GATE" => Some(BLOCK_MINECRAFT_POPLAR_FENCE_GATE),
+            "BLOCK_MINECRAFT_POPLAR_HANGING_SIGN" => Some(BLOCK_MINECRAFT_POPLAR_HANGING_SIGN),
+            "BLOCK_MINECRAFT_POPLAR_LEAVES" => Some(BLOCK_MINECRAFT_POPLAR_LEAVES),
+            "BLOCK_MINECRAFT_POPLAR_LOG" => Some(BLOCK_MINECRAFT_POPLAR_LOG),
+            "BLOCK_MINECRAFT_POPLAR_PLANKS" => Some(BLOCK_MINECRAFT_POPLAR_PLANKS),
+            "BLOCK_MINECRAFT_POPLAR_PRESSURE_PLATE" => Some(BLOCK_MINECRAFT_POPLAR_PRESSURE_PLATE),
+            "BLOCK_MINECRAFT_POPLAR_SAPLING" => Some(BLOCK_MINECRAFT_POPLAR_SAPLING),
+            "BLOCK_MINECRAFT_POPLAR_SHELF" => Some(BLOCK_MINECRAFT_POPLAR_SHELF),
+            "BLOCK_MINECRAFT_POPLAR_SIGN" => Some(BLOCK_MINECRAFT_POPLAR_SIGN),
+            "BLOCK_MINECRAFT_POPLAR_SLAB" => Some(BLOCK_MINECRAFT_POPLAR_SLAB),
+            "BLOCK_MINECRAFT_POPLAR_STAIRS" => Some(BLOCK_MINECRAFT_POPLAR_STAIRS),
+            "BLOCK_MINECRAFT_POPLAR_TRAPDOOR" => Some(BLOCK_MINECRAFT_POPLAR_TRAPDOOR),
+            "BLOCK_MINECRAFT_POPLAR_WALL_HANGING_SIGN" => {
+                Some(BLOCK_MINECRAFT_POPLAR_WALL_HANGING_SIGN)
+            }
+            "BLOCK_MINECRAFT_POPLAR_WALL_SIGN" => Some(BLOCK_MINECRAFT_POPLAR_WALL_SIGN),
+            "BLOCK_MINECRAFT_POPLAR_WOOD" => Some(BLOCK_MINECRAFT_POPLAR_WOOD),
             "BLOCK_MINECRAFT_POPPY" => Some(BLOCK_MINECRAFT_POPPY),
             "BLOCK_MINECRAFT_POTATOES" => Some(BLOCK_MINECRAFT_POTATOES),
             "BLOCK_MINECRAFT_POTENT_SULFUR" => Some(BLOCK_MINECRAFT_POTENT_SULFUR),
@@ -22077,6 +23125,7 @@ pub mod java {
                 Some(BLOCK_MINECRAFT_POTTED_PALE_OAK_SAPLING)
             }
             "BLOCK_MINECRAFT_POTTED_PINK_TULIP" => Some(BLOCK_MINECRAFT_POTTED_PINK_TULIP),
+            "BLOCK_MINECRAFT_POTTED_POPLAR_SAPLING" => Some(BLOCK_MINECRAFT_POTTED_POPLAR_SAPLING),
             "BLOCK_MINECRAFT_POTTED_POPPY" => Some(BLOCK_MINECRAFT_POTTED_POPPY),
             "BLOCK_MINECRAFT_POTTED_RED_MUSHROOM" => Some(BLOCK_MINECRAFT_POTTED_RED_MUSHROOM),
             "BLOCK_MINECRAFT_POTTED_RED_TULIP" => Some(BLOCK_MINECRAFT_POTTED_RED_TULIP),
@@ -22109,6 +23158,10 @@ pub mod java {
             "BLOCK_MINECRAFT_PURPLE_CONCRETE_POWDER" => {
                 Some(BLOCK_MINECRAFT_PURPLE_CONCRETE_POWDER)
             }
+            "BLOCK_MINECRAFT_PURPLE_CONCRETE_SLAB" => Some(BLOCK_MINECRAFT_PURPLE_CONCRETE_SLAB),
+            "BLOCK_MINECRAFT_PURPLE_CONCRETE_STAIRS" => {
+                Some(BLOCK_MINECRAFT_PURPLE_CONCRETE_STAIRS)
+            }
             "BLOCK_MINECRAFT_PURPLE_GLAZED_TERRACOTTA" => {
                 Some(BLOCK_MINECRAFT_PURPLE_GLAZED_TERRACOTTA)
             }
@@ -22119,6 +23172,8 @@ pub mod java {
             }
             "BLOCK_MINECRAFT_PURPLE_TERRACOTTA" => Some(BLOCK_MINECRAFT_PURPLE_TERRACOTTA),
             "BLOCK_MINECRAFT_PURPLE_WOOL" => Some(BLOCK_MINECRAFT_PURPLE_WOOL),
+            "BLOCK_MINECRAFT_PURPLE_WOOL_SLAB" => Some(BLOCK_MINECRAFT_PURPLE_WOOL_SLAB),
+            "BLOCK_MINECRAFT_PURPLE_WOOL_STAIRS" => Some(BLOCK_MINECRAFT_PURPLE_WOOL_STAIRS),
             "BLOCK_MINECRAFT_PURPUR_BLOCK" => Some(BLOCK_MINECRAFT_PURPUR_BLOCK),
             "BLOCK_MINECRAFT_PURPUR_PILLAR" => Some(BLOCK_MINECRAFT_PURPUR_PILLAR),
             "BLOCK_MINECRAFT_PURPUR_SLAB" => Some(BLOCK_MINECRAFT_PURPUR_SLAB),
@@ -22139,6 +23194,8 @@ pub mod java {
             "BLOCK_MINECRAFT_RED_CARPET" => Some(BLOCK_MINECRAFT_RED_CARPET),
             "BLOCK_MINECRAFT_RED_CONCRETE" => Some(BLOCK_MINECRAFT_RED_CONCRETE),
             "BLOCK_MINECRAFT_RED_CONCRETE_POWDER" => Some(BLOCK_MINECRAFT_RED_CONCRETE_POWDER),
+            "BLOCK_MINECRAFT_RED_CONCRETE_SLAB" => Some(BLOCK_MINECRAFT_RED_CONCRETE_SLAB),
+            "BLOCK_MINECRAFT_RED_CONCRETE_STAIRS" => Some(BLOCK_MINECRAFT_RED_CONCRETE_STAIRS),
             "BLOCK_MINECRAFT_RED_GLAZED_TERRACOTTA" => Some(BLOCK_MINECRAFT_RED_GLAZED_TERRACOTTA),
             "BLOCK_MINECRAFT_RED_MUSHROOM" => Some(BLOCK_MINECRAFT_RED_MUSHROOM),
             "BLOCK_MINECRAFT_RED_MUSHROOM_BLOCK" => Some(BLOCK_MINECRAFT_RED_MUSHROOM_BLOCK),
@@ -22148,11 +23205,13 @@ pub mod java {
             }
             "BLOCK_MINECRAFT_RED_NETHER_BRICK_WALL" => Some(BLOCK_MINECRAFT_RED_NETHER_BRICK_WALL),
             "BLOCK_MINECRAFT_RED_NETHER_BRICKS" => Some(BLOCK_MINECRAFT_RED_NETHER_BRICKS),
+            "BLOCK_MINECRAFT_RED_POPLAR_LEAVES" => Some(BLOCK_MINECRAFT_RED_POPLAR_LEAVES),
             "BLOCK_MINECRAFT_RED_SAND" => Some(BLOCK_MINECRAFT_RED_SAND),
             "BLOCK_MINECRAFT_RED_SANDSTONE" => Some(BLOCK_MINECRAFT_RED_SANDSTONE),
             "BLOCK_MINECRAFT_RED_SANDSTONE_SLAB" => Some(BLOCK_MINECRAFT_RED_SANDSTONE_SLAB),
             "BLOCK_MINECRAFT_RED_SANDSTONE_STAIRS" => Some(BLOCK_MINECRAFT_RED_SANDSTONE_STAIRS),
             "BLOCK_MINECRAFT_RED_SANDSTONE_WALL" => Some(BLOCK_MINECRAFT_RED_SANDSTONE_WALL),
+            "BLOCK_MINECRAFT_RED_SHRUB" => Some(BLOCK_MINECRAFT_RED_SHRUB),
             "BLOCK_MINECRAFT_RED_SHULKER_BOX" => Some(BLOCK_MINECRAFT_RED_SHULKER_BOX),
             "BLOCK_MINECRAFT_RED_STAINED_GLASS" => Some(BLOCK_MINECRAFT_RED_STAINED_GLASS),
             "BLOCK_MINECRAFT_RED_STAINED_GLASS_PANE" => {
@@ -22161,6 +23220,8 @@ pub mod java {
             "BLOCK_MINECRAFT_RED_TERRACOTTA" => Some(BLOCK_MINECRAFT_RED_TERRACOTTA),
             "BLOCK_MINECRAFT_RED_TULIP" => Some(BLOCK_MINECRAFT_RED_TULIP),
             "BLOCK_MINECRAFT_RED_WOOL" => Some(BLOCK_MINECRAFT_RED_WOOL),
+            "BLOCK_MINECRAFT_RED_WOOL_SLAB" => Some(BLOCK_MINECRAFT_RED_WOOL_SLAB),
+            "BLOCK_MINECRAFT_RED_WOOL_STAIRS" => Some(BLOCK_MINECRAFT_RED_WOOL_STAIRS),
             "BLOCK_MINECRAFT_REDSTONE_BLOCK" => Some(BLOCK_MINECRAFT_REDSTONE_BLOCK),
             "BLOCK_MINECRAFT_REDSTONE_LAMP" => Some(BLOCK_MINECRAFT_REDSTONE_LAMP),
             "BLOCK_MINECRAFT_REDSTONE_ORE" => Some(BLOCK_MINECRAFT_REDSTONE_ORE),
@@ -22196,6 +23257,7 @@ pub mod java {
             "BLOCK_MINECRAFT_SEA_PICKLE" => Some(BLOCK_MINECRAFT_SEA_PICKLE),
             "BLOCK_MINECRAFT_SEAGRASS" => Some(BLOCK_MINECRAFT_SEAGRASS),
             "BLOCK_MINECRAFT_SET_SPAWN" => Some(BLOCK_MINECRAFT_SET_SPAWN),
+            "BLOCK_MINECRAFT_SHELF_MUSHROOM" => Some(BLOCK_MINECRAFT_SHELF_MUSHROOM),
             "BLOCK_MINECRAFT_SHORT_DRY_GRASS" => Some(BLOCK_MINECRAFT_SHORT_DRY_GRASS),
             "BLOCK_MINECRAFT_SHORT_GRASS" => Some(BLOCK_MINECRAFT_SHORT_GRASS),
             "BLOCK_MINECRAFT_SHROOMLIGHT" => Some(BLOCK_MINECRAFT_SHROOMLIGHT),
@@ -22272,6 +23334,7 @@ pub mod java {
             "BLOCK_MINECRAFT_STONE_SLAB" => Some(BLOCK_MINECRAFT_STONE_SLAB),
             "BLOCK_MINECRAFT_STONE_STAIRS" => Some(BLOCK_MINECRAFT_STONE_STAIRS),
             "BLOCK_MINECRAFT_STONECUTTER" => Some(BLOCK_MINECRAFT_STONECUTTER),
+            "BLOCK_MINECRAFT_STRAW_BED" => Some(BLOCK_MINECRAFT_STRAW_BED),
             "BLOCK_MINECRAFT_STRIPPED_ACACIA_LOG" => Some(BLOCK_MINECRAFT_STRIPPED_ACACIA_LOG),
             "BLOCK_MINECRAFT_STRIPPED_ACACIA_WOOD" => Some(BLOCK_MINECRAFT_STRIPPED_ACACIA_WOOD),
             "BLOCK_MINECRAFT_STRIPPED_BAMBOO_BLOCK" => Some(BLOCK_MINECRAFT_STRIPPED_BAMBOO_BLOCK),
@@ -22299,6 +23362,8 @@ pub mod java {
             "BLOCK_MINECRAFT_STRIPPED_PALE_OAK_WOOD" => {
                 Some(BLOCK_MINECRAFT_STRIPPED_PALE_OAK_WOOD)
             }
+            "BLOCK_MINECRAFT_STRIPPED_POPLAR_LOG" => Some(BLOCK_MINECRAFT_STRIPPED_POPLAR_LOG),
+            "BLOCK_MINECRAFT_STRIPPED_POPLAR_WOOD" => Some(BLOCK_MINECRAFT_STRIPPED_POPLAR_WOOD),
             "BLOCK_MINECRAFT_STRIPPED_SPRUCE_LOG" => Some(BLOCK_MINECRAFT_STRIPPED_SPRUCE_LOG),
             "BLOCK_MINECRAFT_STRIPPED_SPRUCE_WOOD" => Some(BLOCK_MINECRAFT_STRIPPED_SPRUCE_WOOD),
             "BLOCK_MINECRAFT_STRIPPED_WARPED_HYPHAE" => {
@@ -22578,6 +23643,8 @@ pub mod java {
             "BLOCK_MINECRAFT_WHITE_CARPET" => Some(BLOCK_MINECRAFT_WHITE_CARPET),
             "BLOCK_MINECRAFT_WHITE_CONCRETE" => Some(BLOCK_MINECRAFT_WHITE_CONCRETE),
             "BLOCK_MINECRAFT_WHITE_CONCRETE_POWDER" => Some(BLOCK_MINECRAFT_WHITE_CONCRETE_POWDER),
+            "BLOCK_MINECRAFT_WHITE_CONCRETE_SLAB" => Some(BLOCK_MINECRAFT_WHITE_CONCRETE_SLAB),
+            "BLOCK_MINECRAFT_WHITE_CONCRETE_STAIRS" => Some(BLOCK_MINECRAFT_WHITE_CONCRETE_STAIRS),
             "BLOCK_MINECRAFT_WHITE_GLAZED_TERRACOTTA" => {
                 Some(BLOCK_MINECRAFT_WHITE_GLAZED_TERRACOTTA)
             }
@@ -22589,6 +23656,8 @@ pub mod java {
             "BLOCK_MINECRAFT_WHITE_TERRACOTTA" => Some(BLOCK_MINECRAFT_WHITE_TERRACOTTA),
             "BLOCK_MINECRAFT_WHITE_TULIP" => Some(BLOCK_MINECRAFT_WHITE_TULIP),
             "BLOCK_MINECRAFT_WHITE_WOOL" => Some(BLOCK_MINECRAFT_WHITE_WOOL),
+            "BLOCK_MINECRAFT_WHITE_WOOL_SLAB" => Some(BLOCK_MINECRAFT_WHITE_WOOL_SLAB),
+            "BLOCK_MINECRAFT_WHITE_WOOL_STAIRS" => Some(BLOCK_MINECRAFT_WHITE_WOOL_STAIRS),
             "BLOCK_MINECRAFT_WILDFLOWERS" => Some(BLOCK_MINECRAFT_WILDFLOWERS),
             "BLOCK_MINECRAFT_WITHER_ROSE" => Some(BLOCK_MINECRAFT_WITHER_ROSE),
             "BLOCK_MINECRAFT_WITHER_SKELETON_SKULL" => Some(BLOCK_MINECRAFT_WITHER_SKELETON_SKULL),
@@ -22604,9 +23673,14 @@ pub mod java {
             "BLOCK_MINECRAFT_YELLOW_CONCRETE_POWDER" => {
                 Some(BLOCK_MINECRAFT_YELLOW_CONCRETE_POWDER)
             }
+            "BLOCK_MINECRAFT_YELLOW_CONCRETE_SLAB" => Some(BLOCK_MINECRAFT_YELLOW_CONCRETE_SLAB),
+            "BLOCK_MINECRAFT_YELLOW_CONCRETE_STAIRS" => {
+                Some(BLOCK_MINECRAFT_YELLOW_CONCRETE_STAIRS)
+            }
             "BLOCK_MINECRAFT_YELLOW_GLAZED_TERRACOTTA" => {
                 Some(BLOCK_MINECRAFT_YELLOW_GLAZED_TERRACOTTA)
             }
+            "BLOCK_MINECRAFT_YELLOW_POPLAR_LEAVES" => Some(BLOCK_MINECRAFT_YELLOW_POPLAR_LEAVES),
             "BLOCK_MINECRAFT_YELLOW_SHULKER_BOX" => Some(BLOCK_MINECRAFT_YELLOW_SHULKER_BOX),
             "BLOCK_MINECRAFT_YELLOW_STAINED_GLASS" => Some(BLOCK_MINECRAFT_YELLOW_STAINED_GLASS),
             "BLOCK_MINECRAFT_YELLOW_STAINED_GLASS_PANE" => {
@@ -22614,6 +23688,8 @@ pub mod java {
             }
             "BLOCK_MINECRAFT_YELLOW_TERRACOTTA" => Some(BLOCK_MINECRAFT_YELLOW_TERRACOTTA),
             "BLOCK_MINECRAFT_YELLOW_WOOL" => Some(BLOCK_MINECRAFT_YELLOW_WOOL),
+            "BLOCK_MINECRAFT_YELLOW_WOOL_SLAB" => Some(BLOCK_MINECRAFT_YELLOW_WOOL_SLAB),
+            "BLOCK_MINECRAFT_YELLOW_WOOL_STAIRS" => Some(BLOCK_MINECRAFT_YELLOW_WOOL_STAIRS),
             "BLOCK_MINECRAFT_ZOMBIE_HEAD" => Some(BLOCK_MINECRAFT_ZOMBIE_HEAD),
             "BLOCK_MINECRAFT_ZOMBIE_WALL_HEAD" => Some(BLOCK_MINECRAFT_ZOMBIE_WALL_HEAD),
             "BOOK_BYAUTHOR" => Some(BOOK_BYAUTHOR),
@@ -22725,6 +23801,16 @@ pub mod java {
             "COLOR_MINECRAFT_RED" => Some(COLOR_MINECRAFT_RED),
             "COLOR_MINECRAFT_WHITE" => Some(COLOR_MINECRAFT_WHITE),
             "COLOR_MINECRAFT_YELLOW" => Some(COLOR_MINECRAFT_YELLOW),
+            "COMMAND_COMPUTE_RESULT_NAMED_EXACT" => Some(COMMAND_COMPUTE_RESULT_NAMED_EXACT),
+            "COMMAND_COMPUTE_RESULT_NAMED_INVALID" => Some(COMMAND_COMPUTE_RESULT_NAMED_INVALID),
+            "COMMAND_COMPUTE_RESULT_NAMED_ROUNDED" => Some(COMMAND_COMPUTE_RESULT_NAMED_ROUNDED),
+            "COMMAND_COMPUTE_RESULT_UNNAMED_EXACT" => Some(COMMAND_COMPUTE_RESULT_UNNAMED_EXACT),
+            "COMMAND_COMPUTE_RESULT_UNNAMED_INVALID" => {
+                Some(COMMAND_COMPUTE_RESULT_UNNAMED_INVALID)
+            }
+            "COMMAND_COMPUTE_RESULT_UNNAMED_ROUNDED" => {
+                Some(COMMAND_COMPUTE_RESULT_UNNAMED_ROUNDED)
+            }
             "COMMAND_CONTEXT_HERE" => Some(COMMAND_CONTEXT_HERE),
             "COMMAND_CONTEXT_PARSE_ERROR" => Some(COMMAND_CONTEXT_PARSE_ERROR),
             "COMMAND_EXCEPTION" => Some(COMMAND_EXCEPTION),
@@ -23071,6 +24157,7 @@ pub mod java {
             "COMMANDS_FILL_FAILED" => Some(COMMANDS_FILL_FAILED),
             "COMMANDS_FILL_SUCCESS" => Some(COMMANDS_FILL_SUCCESS),
             "COMMANDS_FILL_TOOBIG" => Some(COMMANDS_FILL_TOOBIG),
+            "COMMANDS_FILLBIOME_NO_CHANGES" => Some(COMMANDS_FILLBIOME_NO_CHANGES),
             "COMMANDS_FILLBIOME_SUCCESS" => Some(COMMANDS_FILLBIOME_SUCCESS),
             "COMMANDS_FILLBIOME_SUCCESS_COUNT" => Some(COMMANDS_FILLBIOME_SUCCESS_COUNT),
             "COMMANDS_FILLBIOME_TOOBIG" => Some(COMMANDS_FILLBIOME_TOOBIG),
@@ -23116,13 +24203,37 @@ pub mod java {
             }
             "COMMANDS_GAMEMODE_SUCCESS_OTHER" => Some(COMMANDS_GAMEMODE_SUCCESS_OTHER),
             "COMMANDS_GAMEMODE_SUCCESS_SELF" => Some(COMMANDS_GAMEMODE_SUCCESS_SELF),
+            "COMMANDS_GAMERULE_NOT_SET" => Some(COMMANDS_GAMERULE_NOT_SET),
             "COMMANDS_GAMERULE_QUERY" => Some(COMMANDS_GAMERULE_QUERY),
             "COMMANDS_GAMERULE_SET" => Some(COMMANDS_GAMERULE_SET),
             "COMMANDS_GIVE_FAILED_TOOMANYITEMS" => Some(COMMANDS_GIVE_FAILED_TOOMANYITEMS),
             "COMMANDS_GIVE_SUCCESS_MULTIPLE" => Some(COMMANDS_GIVE_SUCCESS_MULTIPLE),
             "COMMANDS_GIVE_SUCCESS_SINGLE" => Some(COMMANDS_GIVE_SUCCESS_SINGLE),
             "COMMANDS_HELP_FAILED" => Some(COMMANDS_HELP_FAILED),
+            "COMMANDS_ITEM_BLOCK_MODIFY_SUCCESS" => Some(COMMANDS_ITEM_BLOCK_MODIFY_SUCCESS),
+            "COMMANDS_ITEM_BLOCK_REPLACE_SUCCESS" => Some(COMMANDS_ITEM_BLOCK_REPLACE_SUCCESS),
+            "COMMANDS_ITEM_BLOCK_REPLACE_SUCCESS_KNOWN_ITEM" => {
+                Some(COMMANDS_ITEM_BLOCK_REPLACE_SUCCESS_KNOWN_ITEM)
+            }
             "COMMANDS_ITEM_BLOCK_SET_SUCCESS" => Some(COMMANDS_ITEM_BLOCK_SET_SUCCESS),
+            "COMMANDS_ITEM_ENTITY_MODIFY_SUCCESS_MULTIPLE" => {
+                Some(COMMANDS_ITEM_ENTITY_MODIFY_SUCCESS_MULTIPLE)
+            }
+            "COMMANDS_ITEM_ENTITY_MODIFY_SUCCESS_SINGLE" => {
+                Some(COMMANDS_ITEM_ENTITY_MODIFY_SUCCESS_SINGLE)
+            }
+            "COMMANDS_ITEM_ENTITY_REPLACE_SUCCESS_MULTIPLE" => {
+                Some(COMMANDS_ITEM_ENTITY_REPLACE_SUCCESS_MULTIPLE)
+            }
+            "COMMANDS_ITEM_ENTITY_REPLACE_SUCCESS_MULTIPLE_KNOWN_ITEM" => {
+                Some(COMMANDS_ITEM_ENTITY_REPLACE_SUCCESS_MULTIPLE_KNOWN_ITEM)
+            }
+            "COMMANDS_ITEM_ENTITY_REPLACE_SUCCESS_SINGLE" => {
+                Some(COMMANDS_ITEM_ENTITY_REPLACE_SUCCESS_SINGLE)
+            }
+            "COMMANDS_ITEM_ENTITY_REPLACE_SUCCESS_SINGLE_KNOWN_ITEM" => {
+                Some(COMMANDS_ITEM_ENTITY_REPLACE_SUCCESS_SINGLE_KNOWN_ITEM)
+            }
             "COMMANDS_ITEM_ENTITY_SET_SUCCESS_MULTIPLE" => {
                 Some(COMMANDS_ITEM_ENTITY_SET_SUCCESS_MULTIPLE)
             }
@@ -23130,12 +24241,22 @@ pub mod java {
                 Some(COMMANDS_ITEM_ENTITY_SET_SUCCESS_SINGLE)
             }
             "COMMANDS_ITEM_SOURCE_NO_SUCH_SLOT" => Some(COMMANDS_ITEM_SOURCE_NO_SUCH_SLOT),
+            "COMMANDS_ITEM_SOURCE_NO_SUCH_SLOT_UNNAMED" => {
+                Some(COMMANDS_ITEM_SOURCE_NO_SUCH_SLOT_UNNAMED)
+            }
             "COMMANDS_ITEM_SOURCE_NOT_A_CONTAINER" => Some(COMMANDS_ITEM_SOURCE_NOT_A_CONTAINER),
+            "COMMANDS_ITEM_TARGET_FAILED" => Some(COMMANDS_ITEM_TARGET_FAILED),
+            "COMMANDS_ITEM_TARGET_FAILED_KNOWN_ITEM" => {
+                Some(COMMANDS_ITEM_TARGET_FAILED_KNOWN_ITEM)
+            }
             "COMMANDS_ITEM_TARGET_NO_CHANGED_KNOWN_ITEM" => {
                 Some(COMMANDS_ITEM_TARGET_NO_CHANGED_KNOWN_ITEM)
             }
             "COMMANDS_ITEM_TARGET_NO_CHANGES" => Some(COMMANDS_ITEM_TARGET_NO_CHANGES),
             "COMMANDS_ITEM_TARGET_NO_SUCH_SLOT" => Some(COMMANDS_ITEM_TARGET_NO_SUCH_SLOT),
+            "COMMANDS_ITEM_TARGET_NO_SUCH_SLOT_UNNAMED" => {
+                Some(COMMANDS_ITEM_TARGET_NO_SUCH_SLOT_UNNAMED)
+            }
             "COMMANDS_ITEM_TARGET_NOT_A_CONTAINER" => Some(COMMANDS_ITEM_TARGET_NOT_A_CONTAINER),
             "COMMANDS_JFR_DUMP_FAILED" => Some(COMMANDS_JFR_DUMP_FAILED),
             "COMMANDS_JFR_START_FAILED" => Some(COMMANDS_JFR_START_FAILED),
@@ -23175,6 +24296,7 @@ pub mod java {
             "COMMANDS_PLACE_FEATURE_FAILED" => Some(COMMANDS_PLACE_FEATURE_FAILED),
             "COMMANDS_PLACE_FEATURE_INVALID" => Some(COMMANDS_PLACE_FEATURE_INVALID),
             "COMMANDS_PLACE_FEATURE_SUCCESS" => Some(COMMANDS_PLACE_FEATURE_SUCCESS),
+            "COMMANDS_PLACE_FEATURE_SUCCESS_INLINE" => Some(COMMANDS_PLACE_FEATURE_SUCCESS_INLINE),
             "COMMANDS_PLACE_JIGSAW_FAILED" => Some(COMMANDS_PLACE_JIGSAW_FAILED),
             "COMMANDS_PLACE_JIGSAW_INVALID" => Some(COMMANDS_PLACE_JIGSAW_INVALID),
             "COMMANDS_PLACE_JIGSAW_SUCCESS" => Some(COMMANDS_PLACE_JIGSAW_SUCCESS),
@@ -23187,6 +24309,29 @@ pub mod java {
             "COMMANDS_PLAYSOUND_FAILED" => Some(COMMANDS_PLAYSOUND_FAILED),
             "COMMANDS_PLAYSOUND_SUCCESS_MULTIPLE" => Some(COMMANDS_PLAYSOUND_SUCCESS_MULTIPLE),
             "COMMANDS_PLAYSOUND_SUCCESS_SINGLE" => Some(COMMANDS_PLAYSOUND_SUCCESS_SINGLE),
+            "COMMANDS_POSTEFFECT_ADD_FAILED" => Some(COMMANDS_POSTEFFECT_ADD_FAILED),
+            "COMMANDS_POSTEFFECT_ADD_SUCCESS_MULTIPLE" => {
+                Some(COMMANDS_POSTEFFECT_ADD_SUCCESS_MULTIPLE)
+            }
+            "COMMANDS_POSTEFFECT_ADD_SUCCESS_SINGLE" => {
+                Some(COMMANDS_POSTEFFECT_ADD_SUCCESS_SINGLE)
+            }
+            "COMMANDS_POSTEFFECT_CLEAR_FAILED" => Some(COMMANDS_POSTEFFECT_CLEAR_FAILED),
+            "COMMANDS_POSTEFFECT_CLEAR_SUCCESS_MULTIPLE" => {
+                Some(COMMANDS_POSTEFFECT_CLEAR_SUCCESS_MULTIPLE)
+            }
+            "COMMANDS_POSTEFFECT_CLEAR_SUCCESS_SINGLE" => {
+                Some(COMMANDS_POSTEFFECT_CLEAR_SUCCESS_SINGLE)
+            }
+            "COMMANDS_POSTEFFECT_LIST_EMPTY" => Some(COMMANDS_POSTEFFECT_LIST_EMPTY),
+            "COMMANDS_POSTEFFECT_LIST_SUCCESS" => Some(COMMANDS_POSTEFFECT_LIST_SUCCESS),
+            "COMMANDS_POSTEFFECT_REMOVE_FAILED" => Some(COMMANDS_POSTEFFECT_REMOVE_FAILED),
+            "COMMANDS_POSTEFFECT_REMOVE_SUCCESS_MULTIPLE" => {
+                Some(COMMANDS_POSTEFFECT_REMOVE_SUCCESS_MULTIPLE)
+            }
+            "COMMANDS_POSTEFFECT_REMOVE_SUCCESS_SINGLE" => {
+                Some(COMMANDS_POSTEFFECT_REMOVE_SUCCESS_SINGLE)
+            }
             "COMMANDS_PROFILE_FETCH_COPY_COMPONENT" => Some(COMMANDS_PROFILE_FETCH_COPY_COMPONENT),
             "COMMANDS_PROFILE_FETCH_FAILED_TO_SERIALIZE" => {
                 Some(COMMANDS_PROFILE_FETCH_FAILED_TO_SERIALIZE)
@@ -23585,6 +24730,8 @@ pub mod java {
             "COMMANDS_TIME_NO_DEFAULT_CLOCK" => Some(COMMANDS_TIME_NO_DEFAULT_CLOCK),
             "COMMANDS_TIME_NO_TIME_MARKER_FOUND" => Some(COMMANDS_TIME_NO_TIME_MARKER_FOUND),
             "COMMANDS_TIME_PAUSE" => Some(COMMANDS_TIME_PAUSE),
+            "COMMANDS_TIME_PAUSE_ALREADY_PAUSED" => Some(COMMANDS_TIME_PAUSE_ALREADY_PAUSED),
+            "COMMANDS_TIME_PAUSE_ALREADY_RUNNING" => Some(COMMANDS_TIME_PAUSE_ALREADY_RUNNING),
             "COMMANDS_TIME_QUERY" => Some(COMMANDS_TIME_QUERY),
             "COMMANDS_TIME_QUERY_ABSOLUTE" => Some(COMMANDS_TIME_QUERY_ABSOLUTE),
             "COMMANDS_TIME_QUERY_GAMETIME" => Some(COMMANDS_TIME_QUERY_GAMETIME),
@@ -23593,9 +24740,14 @@ pub mod java {
                 Some(COMMANDS_TIME_QUERY_TIMELINE_REPETITIONS)
             }
             "COMMANDS_TIME_RATE" => Some(COMMANDS_TIME_RATE),
+            "COMMANDS_TIME_RATE_ALREADY_SAME" => Some(COMMANDS_TIME_RATE_ALREADY_SAME),
             "COMMANDS_TIME_RESUME" => Some(COMMANDS_TIME_RESUME),
             "COMMANDS_TIME_SET" => Some(COMMANDS_TIME_SET),
             "COMMANDS_TIME_SET_ABSOLUTE" => Some(COMMANDS_TIME_SET_ABSOLUTE),
+            "COMMANDS_TIME_SET_ALREADY_AT_TIME" => Some(COMMANDS_TIME_SET_ALREADY_AT_TIME),
+            "COMMANDS_TIME_SET_ALREADY_AT_TIME_MARKER" => {
+                Some(COMMANDS_TIME_SET_ALREADY_AT_TIME_MARKER)
+            }
             "COMMANDS_TIME_SET_TIME_MARKER" => Some(COMMANDS_TIME_SET_TIME_MARKER),
             "COMMANDS_TIME_WRONG_TIMELINE_FOR_CLOCK" => {
                 Some(COMMANDS_TIME_WRONG_TIMELINE_FOR_CLOCK)
@@ -23908,6 +25060,7 @@ pub mod java {
             "DEATH_ATTACK_STING_ITEM" => Some(DEATH_ATTACK_STING_ITEM),
             "DEATH_ATTACK_STING_PLAYER" => Some(DEATH_ATTACK_STING_PLAYER),
             "DEATH_ATTACK_SULFURCUBEHOT" => Some(DEATH_ATTACK_SULFURCUBEHOT),
+            "DEATH_ATTACK_SULFURCUBEHOT_ITEM" => Some(DEATH_ATTACK_SULFURCUBEHOT_ITEM),
             "DEATH_ATTACK_SULFURCUBEHOT_PLAYER" => Some(DEATH_ATTACK_SULFURCUBEHOT_PLAYER),
             "DEATH_ATTACK_SWEETBERRYBUSH" => Some(DEATH_ATTACK_SWEETBERRYBUSH),
             "DEATH_ATTACK_SWEETBERRYBUSH_PLAYER" => Some(DEATH_ATTACK_SWEETBERRYBUSH_PLAYER),
@@ -23970,6 +25123,8 @@ pub mod java {
             "DEBUG_GAMEMODES_SELECT_NEXT" => Some(DEBUG_GAMEMODES_SELECT_NEXT),
             "DEBUG_HELP_HELP" => Some(DEBUG_HELP_HELP),
             "DEBUG_HELP_MESSAGE" => Some(DEBUG_HELP_MESSAGE),
+            "DEBUG_IMPROVEDTRANSPARENCY_OFF" => Some(DEBUG_IMPROVEDTRANSPARENCY_OFF),
+            "DEBUG_IMPROVEDTRANSPARENCY_ON" => Some(DEBUG_IMPROVEDTRANSPARENCY_ON),
             "DEBUG_INSPECT_CLIENT_BLOCK" => Some(DEBUG_INSPECT_CLIENT_BLOCK),
             "DEBUG_INSPECT_CLIENT_ENTITY" => Some(DEBUG_INSPECT_CLIENT_ENTITY),
             "DEBUG_INSPECT_HELP" => Some(DEBUG_INSPECT_HELP),
@@ -24206,6 +25361,7 @@ pub mod java {
             "ENTITY_MINECRAFT_CREAKING" => Some(ENTITY_MINECRAFT_CREAKING),
             "ENTITY_MINECRAFT_CREAKING_TRANSIENT" => Some(ENTITY_MINECRAFT_CREAKING_TRANSIENT),
             "ENTITY_MINECRAFT_CREEPER" => Some(ENTITY_MINECRAFT_CREEPER),
+            "ENTITY_MINECRAFT_CUSHION" => Some(ENTITY_MINECRAFT_CUSHION),
             "ENTITY_MINECRAFT_DARK_OAK_BOAT" => Some(ENTITY_MINECRAFT_DARK_OAK_BOAT),
             "ENTITY_MINECRAFT_DARK_OAK_CHEST_BOAT" => Some(ENTITY_MINECRAFT_DARK_OAK_CHEST_BOAT),
             "ENTITY_MINECRAFT_DOLPHIN" => Some(ENTITY_MINECRAFT_DOLPHIN),
@@ -24284,6 +25440,8 @@ pub mod java {
             "ENTITY_MINECRAFT_PILLAGER" => Some(ENTITY_MINECRAFT_PILLAGER),
             "ENTITY_MINECRAFT_PLAYER" => Some(ENTITY_MINECRAFT_PLAYER),
             "ENTITY_MINECRAFT_POLAR_BEAR" => Some(ENTITY_MINECRAFT_POLAR_BEAR),
+            "ENTITY_MINECRAFT_POPLAR_BOAT" => Some(ENTITY_MINECRAFT_POPLAR_BOAT),
+            "ENTITY_MINECRAFT_POPLAR_CHEST_BOAT" => Some(ENTITY_MINECRAFT_POPLAR_CHEST_BOAT),
             "ENTITY_MINECRAFT_POTION" => Some(ENTITY_MINECRAFT_POTION),
             "ENTITY_MINECRAFT_PUFFERFISH" => Some(ENTITY_MINECRAFT_PUFFERFISH),
             "ENTITY_MINECRAFT_RABBIT" => Some(ENTITY_MINECRAFT_RABBIT),
@@ -24466,15 +25624,40 @@ pub mod java {
             }
             "EVENT_MINECRAFT_RAID_VICTORY" => Some(EVENT_MINECRAFT_RAID_VICTORY),
             "EVENT_MINECRAFT_RAID_VICTORY_FULL" => Some(EVENT_MINECRAFT_RAID_VICTORY_FULL),
+            "FILLED_MAP_BAMBOO_CAMP_MAP" => Some(FILLED_MAP_BAMBOO_CAMP_MAP),
+            "FILLED_MAP_BAMBOO_JUNGLE_ABANDONED_CAMP" => {
+                Some(FILLED_MAP_BAMBOO_JUNGLE_ABANDONED_CAMP)
+            }
+            "FILLED_MAP_BIRCH_FOREST_ABANDONED_CAMP" => {
+                Some(FILLED_MAP_BIRCH_FOREST_ABANDONED_CAMP)
+            }
+            "FILLED_MAP_BIRCH_FOREST_CAMP_MAP" => Some(FILLED_MAP_BIRCH_FOREST_CAMP_MAP),
             "FILLED_MAP_BURIED_TREASURE" => Some(FILLED_MAP_BURIED_TREASURE),
+            "FILLED_MAP_CHERRY_GROVE_ABANDONED_CAMP" => {
+                Some(FILLED_MAP_CHERRY_GROVE_ABANDONED_CAMP)
+            }
+            "FILLED_MAP_CHERRY_GROVE_CAMP_MAP" => Some(FILLED_MAP_CHERRY_GROVE_CAMP_MAP),
+            "FILLED_MAP_DAPPLED_FOREST_ABANDONED_CAMP" => {
+                Some(FILLED_MAP_DAPPLED_FOREST_ABANDONED_CAMP)
+            }
+            "FILLED_MAP_DAPPLED_FOREST_CAMP_MAP" => Some(FILLED_MAP_DAPPLED_FOREST_CAMP_MAP),
             "FILLED_MAP_EXPLORER_JUNGLE" => Some(FILLED_MAP_EXPLORER_JUNGLE),
             "FILLED_MAP_EXPLORER_SWAMP" => Some(FILLED_MAP_EXPLORER_SWAMP),
+            "FILLED_MAP_FLOWER_FOREST_ABANDONED_CAMP" => {
+                Some(FILLED_MAP_FLOWER_FOREST_ABANDONED_CAMP)
+            }
+            "FILLED_MAP_FLOWER_FOREST_CAMP_MAP" => Some(FILLED_MAP_FLOWER_FOREST_CAMP_MAP),
             "FILLED_MAP_ID" => Some(FILLED_MAP_ID),
+            "FILLED_MAP_JUNGLE_TEMPLE" => Some(FILLED_MAP_JUNGLE_TEMPLE),
             "FILLED_MAP_LEVEL" => Some(FILLED_MAP_LEVEL),
             "FILLED_MAP_LOCKED" => Some(FILLED_MAP_LOCKED),
             "FILLED_MAP_MANSION" => Some(FILLED_MAP_MANSION),
             "FILLED_MAP_MONUMENT" => Some(FILLED_MAP_MONUMENT),
+            "FILLED_MAP_PALE_GARDEN_ABANDONED_CAMP" => Some(FILLED_MAP_PALE_GARDEN_ABANDONED_CAMP),
+            "FILLED_MAP_PALE_GARDEN_CAMP_MAP" => Some(FILLED_MAP_PALE_GARDEN_CAMP_MAP),
             "FILLED_MAP_SCALE" => Some(FILLED_MAP_SCALE),
+            "FILLED_MAP_SWAMP_ABANDONED_CAMP" => Some(FILLED_MAP_SWAMP_ABANDONED_CAMP),
+            "FILLED_MAP_SWAMP_CAMP_MAP" => Some(FILLED_MAP_SWAMP_CAMP_MAP),
             "FILLED_MAP_TRIAL_CHAMBERS" => Some(FILLED_MAP_TRIAL_CHAMBERS),
             "FILLED_MAP_UNKNOWN" => Some(FILLED_MAP_UNKNOWN),
             "FILLED_MAP_VILLAGE_DESERT" => Some(FILLED_MAP_VILLAGE_DESERT),
@@ -24482,6 +25665,10 @@ pub mod java {
             "FILLED_MAP_VILLAGE_SAVANNA" => Some(FILLED_MAP_VILLAGE_SAVANNA),
             "FILLED_MAP_VILLAGE_SNOWY" => Some(FILLED_MAP_VILLAGE_SNOWY),
             "FILLED_MAP_VILLAGE_TAIGA" => Some(FILLED_MAP_VILLAGE_TAIGA),
+            "FILLED_MAP_WINDSWEPT_FOREST_ABANDONED_CAMP" => {
+                Some(FILLED_MAP_WINDSWEPT_FOREST_ABANDONED_CAMP)
+            }
+            "FILLED_MAP_WINDSWEPT_FOREST_CAMP_MAP" => Some(FILLED_MAP_WINDSWEPT_FOREST_CAMP_MAP),
             "FLAT_WORLD_PRESET_MINECRAFT_BOTTOMLESS_PIT" => {
                 Some(FLAT_WORLD_PRESET_MINECRAFT_BOTTOMLESS_PIT)
             }
@@ -25161,10 +26348,13 @@ pub mod java {
             "ITEM_DURABILITY" => Some(ITEM_DURABILITY),
             "ITEM_DYED" => Some(ITEM_DYED),
             "ITEM_INTANGIBLE" => Some(ITEM_INTANGIBLE),
+            "ITEM_MINECRAFT_ABANDONED_CAMP_MAP" => Some(ITEM_MINECRAFT_ABANDONED_CAMP_MAP),
+            "ITEM_MINECRAFT_ABANDONED_CAMPSITE_MAP" => Some(ITEM_MINECRAFT_ABANDONED_CAMPSITE_MAP),
             "ITEM_MINECRAFT_ACACIA_BOAT" => Some(ITEM_MINECRAFT_ACACIA_BOAT),
             "ITEM_MINECRAFT_ACACIA_CHEST_BOAT" => Some(ITEM_MINECRAFT_ACACIA_CHEST_BOAT),
             "ITEM_MINECRAFT_ALLAY_SPAWN_EGG" => Some(ITEM_MINECRAFT_ALLAY_SPAWN_EGG),
             "ITEM_MINECRAFT_AMETHYST_SHARD" => Some(ITEM_MINECRAFT_AMETHYST_SHARD),
+            "ITEM_MINECRAFT_ANCIENT_CITY_MAP" => Some(ITEM_MINECRAFT_ANCIENT_CITY_MAP),
             "ITEM_MINECRAFT_ANGLER_POTTERY_SHARD" => Some(ITEM_MINECRAFT_ANGLER_POTTERY_SHARD),
             "ITEM_MINECRAFT_ANGLER_POTTERY_SHERD" => Some(ITEM_MINECRAFT_ANGLER_POTTERY_SHERD),
             "ITEM_MINECRAFT_APPLE" => Some(ITEM_MINECRAFT_APPLE),
@@ -25190,6 +26380,7 @@ pub mod java {
             "ITEM_MINECRAFT_BIRCH_BOAT" => Some(ITEM_MINECRAFT_BIRCH_BOAT),
             "ITEM_MINECRAFT_BIRCH_CHEST_BOAT" => Some(ITEM_MINECRAFT_BIRCH_CHEST_BOAT),
             "ITEM_MINECRAFT_BLACK_BUNDLE" => Some(ITEM_MINECRAFT_BLACK_BUNDLE),
+            "ITEM_MINECRAFT_BLACK_CUSHION" => Some(ITEM_MINECRAFT_BLACK_CUSHION),
             "ITEM_MINECRAFT_BLACK_DYE" => Some(ITEM_MINECRAFT_BLACK_DYE),
             "ITEM_MINECRAFT_BLACK_HARNESS" => Some(ITEM_MINECRAFT_BLACK_HARNESS),
             "ITEM_MINECRAFT_BLADE_POTTERY_SHARD" => Some(ITEM_MINECRAFT_BLADE_POTTERY_SHARD),
@@ -25198,6 +26389,7 @@ pub mod java {
             "ITEM_MINECRAFT_BLAZE_ROD" => Some(ITEM_MINECRAFT_BLAZE_ROD),
             "ITEM_MINECRAFT_BLAZE_SPAWN_EGG" => Some(ITEM_MINECRAFT_BLAZE_SPAWN_EGG),
             "ITEM_MINECRAFT_BLUE_BUNDLE" => Some(ITEM_MINECRAFT_BLUE_BUNDLE),
+            "ITEM_MINECRAFT_BLUE_CUSHION" => Some(ITEM_MINECRAFT_BLUE_CUSHION),
             "ITEM_MINECRAFT_BLUE_DYE" => Some(ITEM_MINECRAFT_BLUE_DYE),
             "ITEM_MINECRAFT_BLUE_EGG" => Some(ITEM_MINECRAFT_BLUE_EGG),
             "ITEM_MINECRAFT_BLUE_HARNESS" => Some(ITEM_MINECRAFT_BLUE_HARNESS),
@@ -25224,6 +26416,7 @@ pub mod java {
             "ITEM_MINECRAFT_BREWING_STAND" => Some(ITEM_MINECRAFT_BREWING_STAND),
             "ITEM_MINECRAFT_BRICK" => Some(ITEM_MINECRAFT_BRICK),
             "ITEM_MINECRAFT_BROWN_BUNDLE" => Some(ITEM_MINECRAFT_BROWN_BUNDLE),
+            "ITEM_MINECRAFT_BROWN_CUSHION" => Some(ITEM_MINECRAFT_BROWN_CUSHION),
             "ITEM_MINECRAFT_BROWN_DYE" => Some(ITEM_MINECRAFT_BROWN_DYE),
             "ITEM_MINECRAFT_BROWN_EGG" => Some(ITEM_MINECRAFT_BROWN_EGG),
             "ITEM_MINECRAFT_BROWN_HARNESS" => Some(ITEM_MINECRAFT_BROWN_HARNESS),
@@ -25236,6 +26429,14 @@ pub mod java {
             }
             "ITEM_MINECRAFT_BUNDLE_FULL" => Some(ITEM_MINECRAFT_BUNDLE_FULL),
             "ITEM_MINECRAFT_BUNDLE_FULLNESS" => Some(ITEM_MINECRAFT_BUNDLE_FULLNESS),
+            "ITEM_MINECRAFT_BURIED_ANCIENT_CITY_MAP" => {
+                Some(ITEM_MINECRAFT_BURIED_ANCIENT_CITY_MAP)
+            }
+            "ITEM_MINECRAFT_BURIED_MINESHAFT_MAP" => Some(ITEM_MINECRAFT_BURIED_MINESHAFT_MAP),
+            "ITEM_MINECRAFT_BURIED_TREASURE_MAP" => Some(ITEM_MINECRAFT_BURIED_TREASURE_MAP),
+            "ITEM_MINECRAFT_BURIED_TRIAL_CHAMBERS_MAP" => {
+                Some(ITEM_MINECRAFT_BURIED_TRIAL_CHAMBERS_MAP)
+            }
             "ITEM_MINECRAFT_BURN_POTTERY_SHARD" => Some(ITEM_MINECRAFT_BURN_POTTERY_SHARD),
             "ITEM_MINECRAFT_BURN_POTTERY_SHERD" => Some(ITEM_MINECRAFT_BURN_POTTERY_SHERD),
             "ITEM_MINECRAFT_CAMEL_HUSK_SPAWN_EGG" => Some(ITEM_MINECRAFT_CAMEL_HUSK_SPAWN_EGG),
@@ -25313,6 +26514,7 @@ pub mod java {
                 Some(ITEM_MINECRAFT_CROSSBOW_PROJECTILE_SINGLE)
             }
             "ITEM_MINECRAFT_CYAN_BUNDLE" => Some(ITEM_MINECRAFT_CYAN_BUNDLE),
+            "ITEM_MINECRAFT_CYAN_CUSHION" => Some(ITEM_MINECRAFT_CYAN_CUSHION),
             "ITEM_MINECRAFT_CYAN_DYE" => Some(ITEM_MINECRAFT_CYAN_DYE),
             "ITEM_MINECRAFT_CYAN_HARNESS" => Some(ITEM_MINECRAFT_CYAN_HARNESS),
             "ITEM_MINECRAFT_DANGER_POTTERY_SHARD" => Some(ITEM_MINECRAFT_DANGER_POTTERY_SHARD),
@@ -25323,6 +26525,8 @@ pub mod java {
             "ITEM_MINECRAFT_DEBUG_STICK_EMPTY" => Some(ITEM_MINECRAFT_DEBUG_STICK_EMPTY),
             "ITEM_MINECRAFT_DEBUG_STICK_SELECT" => Some(ITEM_MINECRAFT_DEBUG_STICK_SELECT),
             "ITEM_MINECRAFT_DEBUG_STICK_UPDATE" => Some(ITEM_MINECRAFT_DEBUG_STICK_UPDATE),
+            "ITEM_MINECRAFT_DESERT_PYRAMID_MAP" => Some(ITEM_MINECRAFT_DESERT_PYRAMID_MAP),
+            "ITEM_MINECRAFT_DESERT_VILLAGE_MAP" => Some(ITEM_MINECRAFT_DESERT_VILLAGE_MAP),
             "ITEM_MINECRAFT_DIAMOND" => Some(ITEM_MINECRAFT_DIAMOND),
             "ITEM_MINECRAFT_DIAMOND_AXE" => Some(ITEM_MINECRAFT_DIAMOND_AXE),
             "ITEM_MINECRAFT_DIAMOND_BOOTS" => Some(ITEM_MINECRAFT_DIAMOND_BOOTS),
@@ -25383,6 +26587,9 @@ pub mod java {
             "ITEM_MINECRAFT_FIRE_CHARGE" => Some(ITEM_MINECRAFT_FIRE_CHARGE),
             "ITEM_MINECRAFT_FIREWORK_ROCKET" => Some(ITEM_MINECRAFT_FIREWORK_ROCKET),
             "ITEM_MINECRAFT_FIREWORK_ROCKET_FLIGHT" => Some(ITEM_MINECRAFT_FIREWORK_ROCKET_FLIGHT),
+            "ITEM_MINECRAFT_FIREWORK_ROCKET_FLIGHT_DURATION" => {
+                Some(ITEM_MINECRAFT_FIREWORK_ROCKET_FLIGHT_DURATION)
+            }
             "ITEM_MINECRAFT_FIREWORK_ROCKET_MULTIPLE_STARS" => {
                 Some(ITEM_MINECRAFT_FIREWORK_ROCKET_MULTIPLE_STARS)
             }
@@ -25497,9 +26704,11 @@ pub mod java {
             "ITEM_MINECRAFT_GOLDEN_SPEAR" => Some(ITEM_MINECRAFT_GOLDEN_SPEAR),
             "ITEM_MINECRAFT_GOLDEN_SWORD" => Some(ITEM_MINECRAFT_GOLDEN_SWORD),
             "ITEM_MINECRAFT_GRAY_BUNDLE" => Some(ITEM_MINECRAFT_GRAY_BUNDLE),
+            "ITEM_MINECRAFT_GRAY_CUSHION" => Some(ITEM_MINECRAFT_GRAY_CUSHION),
             "ITEM_MINECRAFT_GRAY_DYE" => Some(ITEM_MINECRAFT_GRAY_DYE),
             "ITEM_MINECRAFT_GRAY_HARNESS" => Some(ITEM_MINECRAFT_GRAY_HARNESS),
             "ITEM_MINECRAFT_GREEN_BUNDLE" => Some(ITEM_MINECRAFT_GREEN_BUNDLE),
+            "ITEM_MINECRAFT_GREEN_CUSHION" => Some(ITEM_MINECRAFT_GREEN_CUSHION),
             "ITEM_MINECRAFT_GREEN_DYE" => Some(ITEM_MINECRAFT_GREEN_DYE),
             "ITEM_MINECRAFT_GREEN_HARNESS" => Some(ITEM_MINECRAFT_GREEN_HARNESS),
             "ITEM_MINECRAFT_GUARDIAN_SPAWN_EGG" => Some(ITEM_MINECRAFT_GUARDIAN_SPAWN_EGG),
@@ -25556,6 +26765,8 @@ pub mod java {
             "ITEM_MINECRAFT_ITEM_FRAME" => Some(ITEM_MINECRAFT_ITEM_FRAME),
             "ITEM_MINECRAFT_JUNGLE_BOAT" => Some(ITEM_MINECRAFT_JUNGLE_BOAT),
             "ITEM_MINECRAFT_JUNGLE_CHEST_BOAT" => Some(ITEM_MINECRAFT_JUNGLE_CHEST_BOAT),
+            "ITEM_MINECRAFT_JUNGLE_EXPLORER_MAP" => Some(ITEM_MINECRAFT_JUNGLE_EXPLORER_MAP),
+            "ITEM_MINECRAFT_JUNGLE_PYRAMID_MAP" => Some(ITEM_MINECRAFT_JUNGLE_PYRAMID_MAP),
             "ITEM_MINECRAFT_KNOWLEDGE_BOOK" => Some(ITEM_MINECRAFT_KNOWLEDGE_BOOK),
             "ITEM_MINECRAFT_LAPIS_LAZULI" => Some(ITEM_MINECRAFT_LAPIS_LAZULI),
             "ITEM_MINECRAFT_LAVA_BUCKET" => Some(ITEM_MINECRAFT_LAVA_BUCKET),
@@ -25567,12 +26778,15 @@ pub mod java {
             "ITEM_MINECRAFT_LEATHER_HORSE_ARMOR" => Some(ITEM_MINECRAFT_LEATHER_HORSE_ARMOR),
             "ITEM_MINECRAFT_LEATHER_LEGGINGS" => Some(ITEM_MINECRAFT_LEATHER_LEGGINGS),
             "ITEM_MINECRAFT_LIGHT_BLUE_BUNDLE" => Some(ITEM_MINECRAFT_LIGHT_BLUE_BUNDLE),
+            "ITEM_MINECRAFT_LIGHT_BLUE_CUSHION" => Some(ITEM_MINECRAFT_LIGHT_BLUE_CUSHION),
             "ITEM_MINECRAFT_LIGHT_BLUE_DYE" => Some(ITEM_MINECRAFT_LIGHT_BLUE_DYE),
             "ITEM_MINECRAFT_LIGHT_BLUE_HARNESS" => Some(ITEM_MINECRAFT_LIGHT_BLUE_HARNESS),
             "ITEM_MINECRAFT_LIGHT_GRAY_BUNDLE" => Some(ITEM_MINECRAFT_LIGHT_GRAY_BUNDLE),
+            "ITEM_MINECRAFT_LIGHT_GRAY_CUSHION" => Some(ITEM_MINECRAFT_LIGHT_GRAY_CUSHION),
             "ITEM_MINECRAFT_LIGHT_GRAY_DYE" => Some(ITEM_MINECRAFT_LIGHT_GRAY_DYE),
             "ITEM_MINECRAFT_LIGHT_GRAY_HARNESS" => Some(ITEM_MINECRAFT_LIGHT_GRAY_HARNESS),
             "ITEM_MINECRAFT_LIME_BUNDLE" => Some(ITEM_MINECRAFT_LIME_BUNDLE),
+            "ITEM_MINECRAFT_LIME_CUSHION" => Some(ITEM_MINECRAFT_LIME_CUSHION),
             "ITEM_MINECRAFT_LIME_DYE" => Some(ITEM_MINECRAFT_LIME_DYE),
             "ITEM_MINECRAFT_LIME_HARNESS" => Some(ITEM_MINECRAFT_LIME_HARNESS),
             "ITEM_MINECRAFT_LINGERING_POTION" => Some(ITEM_MINECRAFT_LINGERING_POTION),
@@ -25658,6 +26872,7 @@ pub mod java {
             "ITEM_MINECRAFT_LODESTONE_COMPASS" => Some(ITEM_MINECRAFT_LODESTONE_COMPASS),
             "ITEM_MINECRAFT_MACE" => Some(ITEM_MINECRAFT_MACE),
             "ITEM_MINECRAFT_MAGENTA_BUNDLE" => Some(ITEM_MINECRAFT_MAGENTA_BUNDLE),
+            "ITEM_MINECRAFT_MAGENTA_CUSHION" => Some(ITEM_MINECRAFT_MAGENTA_CUSHION),
             "ITEM_MINECRAFT_MAGENTA_DYE" => Some(ITEM_MINECRAFT_MAGENTA_DYE),
             "ITEM_MINECRAFT_MAGENTA_HARNESS" => Some(ITEM_MINECRAFT_MAGENTA_HARNESS),
             "ITEM_MINECRAFT_MAGMA_CREAM" => Some(ITEM_MINECRAFT_MAGMA_CREAM),
@@ -25671,6 +26886,7 @@ pub mod java {
             "ITEM_MINECRAFT_MINECART" => Some(ITEM_MINECRAFT_MINECART),
             "ITEM_MINECRAFT_MINER_POTTERY_SHARD" => Some(ITEM_MINECRAFT_MINER_POTTERY_SHARD),
             "ITEM_MINECRAFT_MINER_POTTERY_SHERD" => Some(ITEM_MINECRAFT_MINER_POTTERY_SHERD),
+            "ITEM_MINECRAFT_MINESHAFT_MAP" => Some(ITEM_MINECRAFT_MINESHAFT_MAP),
             "ITEM_MINECRAFT_MOJANG_BANNER_PATTERN" => Some(ITEM_MINECRAFT_MOJANG_BANNER_PATTERN),
             "ITEM_MINECRAFT_MOJANG_BANNER_PATTERN_DESC" => {
                 Some(ITEM_MINECRAFT_MOJANG_BANNER_PATTERN_DESC)
@@ -25776,10 +26992,13 @@ pub mod java {
             }
             "ITEM_MINECRAFT_OAK_BOAT" => Some(ITEM_MINECRAFT_OAK_BOAT),
             "ITEM_MINECRAFT_OAK_CHEST_BOAT" => Some(ITEM_MINECRAFT_OAK_CHEST_BOAT),
+            "ITEM_MINECRAFT_OCEAN_EXPLORER_MAP" => Some(ITEM_MINECRAFT_OCEAN_EXPLORER_MAP),
+            "ITEM_MINECRAFT_OCEAN_MONUMENT_MAP" => Some(ITEM_MINECRAFT_OCEAN_MONUMENT_MAP),
             "ITEM_MINECRAFT_OCELOT_SPAWN_EGG" => Some(ITEM_MINECRAFT_OCELOT_SPAWN_EGG),
             "ITEM_MINECRAFT_OMINOUS_BOTTLE" => Some(ITEM_MINECRAFT_OMINOUS_BOTTLE),
             "ITEM_MINECRAFT_OMINOUS_TRIAL_KEY" => Some(ITEM_MINECRAFT_OMINOUS_TRIAL_KEY),
             "ITEM_MINECRAFT_ORANGE_BUNDLE" => Some(ITEM_MINECRAFT_ORANGE_BUNDLE),
+            "ITEM_MINECRAFT_ORANGE_CUSHION" => Some(ITEM_MINECRAFT_ORANGE_CUSHION),
             "ITEM_MINECRAFT_ORANGE_DYE" => Some(ITEM_MINECRAFT_ORANGE_DYE),
             "ITEM_MINECRAFT_ORANGE_HARNESS" => Some(ITEM_MINECRAFT_ORANGE_HARNESS),
             "ITEM_MINECRAFT_PAINTING" => Some(ITEM_MINECRAFT_PAINTING),
@@ -25803,14 +27022,18 @@ pub mod java {
             "ITEM_MINECRAFT_PIGLIN_SPAWN_EGG" => Some(ITEM_MINECRAFT_PIGLIN_SPAWN_EGG),
             "ITEM_MINECRAFT_PILLAGER_SPAWN_EGG" => Some(ITEM_MINECRAFT_PILLAGER_SPAWN_EGG),
             "ITEM_MINECRAFT_PINK_BUNDLE" => Some(ITEM_MINECRAFT_PINK_BUNDLE),
+            "ITEM_MINECRAFT_PINK_CUSHION" => Some(ITEM_MINECRAFT_PINK_CUSHION),
             "ITEM_MINECRAFT_PINK_DYE" => Some(ITEM_MINECRAFT_PINK_DYE),
             "ITEM_MINECRAFT_PINK_HARNESS" => Some(ITEM_MINECRAFT_PINK_HARNESS),
             "ITEM_MINECRAFT_PITCHER_PLANT" => Some(ITEM_MINECRAFT_PITCHER_PLANT),
             "ITEM_MINECRAFT_PITCHER_POD" => Some(ITEM_MINECRAFT_PITCHER_POD),
+            "ITEM_MINECRAFT_PLAINS_VILLAGE_MAP" => Some(ITEM_MINECRAFT_PLAINS_VILLAGE_MAP),
             "ITEM_MINECRAFT_PLENTY_POTTERY_SHARD" => Some(ITEM_MINECRAFT_PLENTY_POTTERY_SHARD),
             "ITEM_MINECRAFT_PLENTY_POTTERY_SHERD" => Some(ITEM_MINECRAFT_PLENTY_POTTERY_SHERD),
             "ITEM_MINECRAFT_POISONOUS_POTATO" => Some(ITEM_MINECRAFT_POISONOUS_POTATO),
             "ITEM_MINECRAFT_POLAR_BEAR_SPAWN_EGG" => Some(ITEM_MINECRAFT_POLAR_BEAR_SPAWN_EGG),
+            "ITEM_MINECRAFT_POPLAR_BOAT" => Some(ITEM_MINECRAFT_POPLAR_BOAT),
+            "ITEM_MINECRAFT_POPLAR_CHEST_BOAT" => Some(ITEM_MINECRAFT_POPLAR_CHEST_BOAT),
             "ITEM_MINECRAFT_POPPED_CHORUS_FRUIT" => Some(ITEM_MINECRAFT_POPPED_CHORUS_FRUIT),
             "ITEM_MINECRAFT_PORKCHOP" => Some(ITEM_MINECRAFT_PORKCHOP),
             "ITEM_MINECRAFT_POTATO" => Some(ITEM_MINECRAFT_POTATO),
@@ -25876,6 +27099,7 @@ pub mod java {
             "ITEM_MINECRAFT_PUMPKIN_PIE" => Some(ITEM_MINECRAFT_PUMPKIN_PIE),
             "ITEM_MINECRAFT_PUMPKIN_SEEDS" => Some(ITEM_MINECRAFT_PUMPKIN_SEEDS),
             "ITEM_MINECRAFT_PURPLE_BUNDLE" => Some(ITEM_MINECRAFT_PURPLE_BUNDLE),
+            "ITEM_MINECRAFT_PURPLE_CUSHION" => Some(ITEM_MINECRAFT_PURPLE_CUSHION),
             "ITEM_MINECRAFT_PURPLE_DYE" => Some(ITEM_MINECRAFT_PURPLE_DYE),
             "ITEM_MINECRAFT_PURPLE_HARNESS" => Some(ITEM_MINECRAFT_PURPLE_HARNESS),
             "ITEM_MINECRAFT_QUARTZ" => Some(ITEM_MINECRAFT_QUARTZ),
@@ -25896,6 +27120,7 @@ pub mod java {
             "ITEM_MINECRAFT_RAW_IRON" => Some(ITEM_MINECRAFT_RAW_IRON),
             "ITEM_MINECRAFT_RECOVERY_COMPASS" => Some(ITEM_MINECRAFT_RECOVERY_COMPASS),
             "ITEM_MINECRAFT_RED_BUNDLE" => Some(ITEM_MINECRAFT_RED_BUNDLE),
+            "ITEM_MINECRAFT_RED_CUSHION" => Some(ITEM_MINECRAFT_RED_CUSHION),
             "ITEM_MINECRAFT_RED_DYE" => Some(ITEM_MINECRAFT_RED_DYE),
             "ITEM_MINECRAFT_RED_HARNESS" => Some(ITEM_MINECRAFT_RED_HARNESS),
             "ITEM_MINECRAFT_REDSTONE" => Some(ITEM_MINECRAFT_REDSTONE),
@@ -25912,6 +27137,7 @@ pub mod java {
             "ITEM_MINECRAFT_SALMON" => Some(ITEM_MINECRAFT_SALMON),
             "ITEM_MINECRAFT_SALMON_BUCKET" => Some(ITEM_MINECRAFT_SALMON_BUCKET),
             "ITEM_MINECRAFT_SALMON_SPAWN_EGG" => Some(ITEM_MINECRAFT_SALMON_SPAWN_EGG),
+            "ITEM_MINECRAFT_SAVANNA_VILLAGE_MAP" => Some(ITEM_MINECRAFT_SAVANNA_VILLAGE_MAP),
             "ITEM_MINECRAFT_SCRAPE_POTTERY_SHERD" => Some(ITEM_MINECRAFT_SCRAPE_POTTERY_SHERD),
             "ITEM_MINECRAFT_SCUTE" => Some(ITEM_MINECRAFT_SCUTE),
             "ITEM_MINECRAFT_SENTRY_ARMOR_TRIM_SMITHING_TEMPLATE" => {
@@ -26019,6 +27245,7 @@ pub mod java {
             }
             "ITEM_MINECRAFT_SNOW_GOLEM_SPAWN_EGG" => Some(ITEM_MINECRAFT_SNOW_GOLEM_SPAWN_EGG),
             "ITEM_MINECRAFT_SNOWBALL" => Some(ITEM_MINECRAFT_SNOWBALL),
+            "ITEM_MINECRAFT_SNOWY_VILLAGE_MAP" => Some(ITEM_MINECRAFT_SNOWY_VILLAGE_MAP),
             "ITEM_MINECRAFT_SPECTRAL_ARROW" => Some(ITEM_MINECRAFT_SPECTRAL_ARROW),
             "ITEM_MINECRAFT_SPIDER_EYE" => Some(ITEM_MINECRAFT_SPIDER_EYE),
             "ITEM_MINECRAFT_SPIDER_SPAWN_EGG" => Some(ITEM_MINECRAFT_SPIDER_SPAWN_EGG),
@@ -26118,6 +27345,7 @@ pub mod java {
             "ITEM_MINECRAFT_STONE_SHOVEL" => Some(ITEM_MINECRAFT_STONE_SHOVEL),
             "ITEM_MINECRAFT_STONE_SPEAR" => Some(ITEM_MINECRAFT_STONE_SPEAR),
             "ITEM_MINECRAFT_STONE_SWORD" => Some(ITEM_MINECRAFT_STONE_SWORD),
+            "ITEM_MINECRAFT_STRAW_BED" => Some(ITEM_MINECRAFT_STRAW_BED),
             "ITEM_MINECRAFT_STRAY_SPAWN_EGG" => Some(ITEM_MINECRAFT_STRAY_SPAWN_EGG),
             "ITEM_MINECRAFT_STRIDER_SPAWN_EGG" => Some(ITEM_MINECRAFT_STRIDER_SPAWN_EGG),
             "ITEM_MINECRAFT_STRING" => Some(ITEM_MINECRAFT_STRING),
@@ -26125,9 +27353,12 @@ pub mod java {
             "ITEM_MINECRAFT_SULFUR_CUBE_BUCKET" => Some(ITEM_MINECRAFT_SULFUR_CUBE_BUCKET),
             "ITEM_MINECRAFT_SULFUR_CUBE_SPAWN_EGG" => Some(ITEM_MINECRAFT_SULFUR_CUBE_SPAWN_EGG),
             "ITEM_MINECRAFT_SUSPICIOUS_STEW" => Some(ITEM_MINECRAFT_SUSPICIOUS_STEW),
+            "ITEM_MINECRAFT_SWAMP_EXPLORER_MAP" => Some(ITEM_MINECRAFT_SWAMP_EXPLORER_MAP),
+            "ITEM_MINECRAFT_SWAMP_HUT_MAP" => Some(ITEM_MINECRAFT_SWAMP_HUT_MAP),
             "ITEM_MINECRAFT_SWEET_BERRIES" => Some(ITEM_MINECRAFT_SWEET_BERRIES),
             "ITEM_MINECRAFT_TADPOLE_BUCKET" => Some(ITEM_MINECRAFT_TADPOLE_BUCKET),
             "ITEM_MINECRAFT_TADPOLE_SPAWN_EGG" => Some(ITEM_MINECRAFT_TADPOLE_SPAWN_EGG),
+            "ITEM_MINECRAFT_TAIGA_VILLAGE_MAP" => Some(ITEM_MINECRAFT_TAIGA_VILLAGE_MAP),
             "ITEM_MINECRAFT_TIDE_ARMOR_TRIM_SMITHING_TEMPLATE" => {
                 Some(ITEM_MINECRAFT_TIDE_ARMOR_TRIM_SMITHING_TEMPLATE)
             }
@@ -26217,6 +27448,7 @@ pub mod java {
             "ITEM_MINECRAFT_TORCHFLOWER_SEEDS" => Some(ITEM_MINECRAFT_TORCHFLOWER_SEEDS),
             "ITEM_MINECRAFT_TOTEM_OF_UNDYING" => Some(ITEM_MINECRAFT_TOTEM_OF_UNDYING),
             "ITEM_MINECRAFT_TRADER_LLAMA_SPAWN_EGG" => Some(ITEM_MINECRAFT_TRADER_LLAMA_SPAWN_EGG),
+            "ITEM_MINECRAFT_TRIAL_EXPLORER_MAP" => Some(ITEM_MINECRAFT_TRIAL_EXPLORER_MAP),
             "ITEM_MINECRAFT_TRIAL_KEY" => Some(ITEM_MINECRAFT_TRIAL_KEY),
             "ITEM_MINECRAFT_TRIDENT" => Some(ITEM_MINECRAFT_TRIDENT),
             "ITEM_MINECRAFT_TROPICAL_FISH" => Some(ITEM_MINECRAFT_TROPICAL_FISH),
@@ -26246,6 +27478,7 @@ pub mod java {
                 Some(ITEM_MINECRAFT_WARD_ARMOR_TRIM_SMITHING_TEMPLATE_NEW)
             }
             "ITEM_MINECRAFT_WARDEN_SPAWN_EGG" => Some(ITEM_MINECRAFT_WARDEN_SPAWN_EGG),
+            "ITEM_MINECRAFT_WARM_OCEAN_RUINS_MAP" => Some(ITEM_MINECRAFT_WARM_OCEAN_RUINS_MAP),
             "ITEM_MINECRAFT_WARPED_FUNGUS_ON_A_STICK" => {
                 Some(ITEM_MINECRAFT_WARPED_FUNGUS_ON_A_STICK)
             }
@@ -26259,6 +27492,7 @@ pub mod java {
             "ITEM_MINECRAFT_WHEAT" => Some(ITEM_MINECRAFT_WHEAT),
             "ITEM_MINECRAFT_WHEAT_SEEDS" => Some(ITEM_MINECRAFT_WHEAT_SEEDS),
             "ITEM_MINECRAFT_WHITE_BUNDLE" => Some(ITEM_MINECRAFT_WHITE_BUNDLE),
+            "ITEM_MINECRAFT_WHITE_CUSHION" => Some(ITEM_MINECRAFT_WHITE_CUSHION),
             "ITEM_MINECRAFT_WHITE_DYE" => Some(ITEM_MINECRAFT_WHITE_DYE),
             "ITEM_MINECRAFT_WHITE_HARNESS" => Some(ITEM_MINECRAFT_WHITE_HARNESS),
             "ITEM_MINECRAFT_WILD_ARMOR_TRIM_SMITHING_TEMPLATE" => {
@@ -26281,9 +27515,12 @@ pub mod java {
             "ITEM_MINECRAFT_WOODEN_SHOVEL" => Some(ITEM_MINECRAFT_WOODEN_SHOVEL),
             "ITEM_MINECRAFT_WOODEN_SPEAR" => Some(ITEM_MINECRAFT_WOODEN_SPEAR),
             "ITEM_MINECRAFT_WOODEN_SWORD" => Some(ITEM_MINECRAFT_WOODEN_SWORD),
+            "ITEM_MINECRAFT_WOODLAND_EXPLORER_MAP" => Some(ITEM_MINECRAFT_WOODLAND_EXPLORER_MAP),
+            "ITEM_MINECRAFT_WOODLAND_MANSION_MAP" => Some(ITEM_MINECRAFT_WOODLAND_MANSION_MAP),
             "ITEM_MINECRAFT_WRITABLE_BOOK" => Some(ITEM_MINECRAFT_WRITABLE_BOOK),
             "ITEM_MINECRAFT_WRITTEN_BOOK" => Some(ITEM_MINECRAFT_WRITTEN_BOOK),
             "ITEM_MINECRAFT_YELLOW_BUNDLE" => Some(ITEM_MINECRAFT_YELLOW_BUNDLE),
+            "ITEM_MINECRAFT_YELLOW_CUSHION" => Some(ITEM_MINECRAFT_YELLOW_CUSHION),
             "ITEM_MINECRAFT_YELLOW_DYE" => Some(ITEM_MINECRAFT_YELLOW_DYE),
             "ITEM_MINECRAFT_YELLOW_HARNESS" => Some(ITEM_MINECRAFT_YELLOW_HARNESS),
             "ITEM_MINECRAFT_ZOGLIN_SPAWN_EGG" => Some(ITEM_MINECRAFT_ZOGLIN_SPAWN_EGG),
@@ -26404,6 +27641,7 @@ pub mod java {
             "KEY_DEBUG_DUMPVERSION" => Some(KEY_DEBUG_DUMPVERSION),
             "KEY_DEBUG_FOCUSPAUSE" => Some(KEY_DEBUG_FOCUSPAUSE),
             "KEY_DEBUG_FPSCHARTS" => Some(KEY_DEBUG_FPSCHARTS),
+            "KEY_DEBUG_IMPROVEDTRANSPARENCY" => Some(KEY_DEBUG_IMPROVEDTRANSPARENCY),
             "KEY_DEBUG_LIGHTMAPTEXTURE" => Some(KEY_DEBUG_LIGHTMAPTEXTURE),
             "KEY_DEBUG_MODIFIER" => Some(KEY_DEBUG_MODIFIER),
             "KEY_DEBUG_NETWORKCHARTS" => Some(KEY_DEBUG_NETWORKCHARTS),
@@ -26432,17 +27670,50 @@ pub mod java {
             "KEY_HOTBAR_9" => Some(KEY_HOTBAR_9),
             "KEY_INVENTORY" => Some(KEY_INVENTORY),
             "KEY_JUMP" => Some(KEY_JUMP),
+            "KEY_KEYBOARD_AC_BACK" => Some(KEY_KEYBOARD_AC_BACK),
+            "KEY_KEYBOARD_AC_BOOKMARKS" => Some(KEY_KEYBOARD_AC_BOOKMARKS),
+            "KEY_KEYBOARD_AC_CLOSE" => Some(KEY_KEYBOARD_AC_CLOSE),
+            "KEY_KEYBOARD_AC_EXIT" => Some(KEY_KEYBOARD_AC_EXIT),
+            "KEY_KEYBOARD_AC_FORWARD" => Some(KEY_KEYBOARD_AC_FORWARD),
+            "KEY_KEYBOARD_AC_HOME" => Some(KEY_KEYBOARD_AC_HOME),
+            "KEY_KEYBOARD_AC_NEW" => Some(KEY_KEYBOARD_AC_NEW),
+            "KEY_KEYBOARD_AC_OPEN" => Some(KEY_KEYBOARD_AC_OPEN),
+            "KEY_KEYBOARD_AC_PRINT" => Some(KEY_KEYBOARD_AC_PRINT),
+            "KEY_KEYBOARD_AC_PROPERTIES" => Some(KEY_KEYBOARD_AC_PROPERTIES),
+            "KEY_KEYBOARD_AC_REFRESH" => Some(KEY_KEYBOARD_AC_REFRESH),
+            "KEY_KEYBOARD_AC_SAVE" => Some(KEY_KEYBOARD_AC_SAVE),
+            "KEY_KEYBOARD_AC_SEARCH" => Some(KEY_KEYBOARD_AC_SEARCH),
+            "KEY_KEYBOARD_AC_STOP" => Some(KEY_KEYBOARD_AC_STOP),
+            "KEY_KEYBOARD_AGAIN" => Some(KEY_KEYBOARD_AGAIN),
+            "KEY_KEYBOARD_ALTERNATE_ERASE" => Some(KEY_KEYBOARD_ALTERNATE_ERASE),
             "KEY_KEYBOARD_APOSTROPHE" => Some(KEY_KEYBOARD_APOSTROPHE),
+            "KEY_KEYBOARD_APPLICATION" => Some(KEY_KEYBOARD_APPLICATION),
             "KEY_KEYBOARD_BACKSLASH" => Some(KEY_KEYBOARD_BACKSLASH),
             "KEY_KEYBOARD_BACKSPACE" => Some(KEY_KEYBOARD_BACKSPACE),
+            "KEY_KEYBOARD_CALL" => Some(KEY_KEYBOARD_CALL),
+            "KEY_KEYBOARD_CANCEL" => Some(KEY_KEYBOARD_CANCEL),
             "KEY_KEYBOARD_CAPS_LOCK" => Some(KEY_KEYBOARD_CAPS_LOCK),
+            "KEY_KEYBOARD_CHANNEL_DOWN" => Some(KEY_KEYBOARD_CHANNEL_DOWN),
+            "KEY_KEYBOARD_CHANNEL_UP" => Some(KEY_KEYBOARD_CHANNEL_UP),
+            "KEY_KEYBOARD_CLEAR" => Some(KEY_KEYBOARD_CLEAR),
+            "KEY_KEYBOARD_CLEAR_AGAIN" => Some(KEY_KEYBOARD_CLEAR_AGAIN),
             "KEY_KEYBOARD_COMMA" => Some(KEY_KEYBOARD_COMMA),
+            "KEY_KEYBOARD_COPY" => Some(KEY_KEYBOARD_COPY),
+            "KEY_KEYBOARD_CRSEL" => Some(KEY_KEYBOARD_CRSEL),
+            "KEY_KEYBOARD_CURRENCY_SUBUNIT" => Some(KEY_KEYBOARD_CURRENCY_SUBUNIT),
+            "KEY_KEYBOARD_CURRENCY_UNIT" => Some(KEY_KEYBOARD_CURRENCY_UNIT),
+            "KEY_KEYBOARD_CUT" => Some(KEY_KEYBOARD_CUT),
+            "KEY_KEYBOARD_DECIMAL_SEPARATOR" => Some(KEY_KEYBOARD_DECIMAL_SEPARATOR),
             "KEY_KEYBOARD_DELETE" => Some(KEY_KEYBOARD_DELETE),
             "KEY_KEYBOARD_DOWN" => Some(KEY_KEYBOARD_DOWN),
             "KEY_KEYBOARD_END" => Some(KEY_KEYBOARD_END),
+            "KEY_KEYBOARD_END_CALL" => Some(KEY_KEYBOARD_END_CALL),
             "KEY_KEYBOARD_ENTER" => Some(KEY_KEYBOARD_ENTER),
+            "KEY_KEYBOARD_ENTER2" => Some(KEY_KEYBOARD_ENTER2),
             "KEY_KEYBOARD_EQUAL" => Some(KEY_KEYBOARD_EQUAL),
             "KEY_KEYBOARD_ESCAPE" => Some(KEY_KEYBOARD_ESCAPE),
+            "KEY_KEYBOARD_EXECUTE" => Some(KEY_KEYBOARD_EXECUTE),
+            "KEY_KEYBOARD_EXSEL" => Some(KEY_KEYBOARD_EXSEL),
             "KEY_KEYBOARD_F1" => Some(KEY_KEYBOARD_F1),
             "KEY_KEYBOARD_F10" => Some(KEY_KEYBOARD_F10),
             "KEY_KEYBOARD_F11" => Some(KEY_KEYBOARD_F11),
@@ -26468,10 +27739,23 @@ pub mod java {
             "KEY_KEYBOARD_F7" => Some(KEY_KEYBOARD_F7),
             "KEY_KEYBOARD_F8" => Some(KEY_KEYBOARD_F8),
             "KEY_KEYBOARD_F9" => Some(KEY_KEYBOARD_F9),
+            "KEY_KEYBOARD_FIND" => Some(KEY_KEYBOARD_FIND),
             "KEY_KEYBOARD_GRAVE_ACCENT" => Some(KEY_KEYBOARD_GRAVE_ACCENT),
+            "KEY_KEYBOARD_HELP" => Some(KEY_KEYBOARD_HELP),
             "KEY_KEYBOARD_HOME" => Some(KEY_KEYBOARD_HOME),
             "KEY_KEYBOARD_INSERT" => Some(KEY_KEYBOARD_INSERT),
+            "KEY_KEYBOARD_INTERNATIONAL1" => Some(KEY_KEYBOARD_INTERNATIONAL1),
+            "KEY_KEYBOARD_INTERNATIONAL2" => Some(KEY_KEYBOARD_INTERNATIONAL2),
+            "KEY_KEYBOARD_INTERNATIONAL3" => Some(KEY_KEYBOARD_INTERNATIONAL3),
+            "KEY_KEYBOARD_INTERNATIONAL4" => Some(KEY_KEYBOARD_INTERNATIONAL4),
+            "KEY_KEYBOARD_INTERNATIONAL5" => Some(KEY_KEYBOARD_INTERNATIONAL5),
+            "KEY_KEYBOARD_INTERNATIONAL6" => Some(KEY_KEYBOARD_INTERNATIONAL6),
+            "KEY_KEYBOARD_INTERNATIONAL7" => Some(KEY_KEYBOARD_INTERNATIONAL7),
+            "KEY_KEYBOARD_INTERNATIONAL8" => Some(KEY_KEYBOARD_INTERNATIONAL8),
+            "KEY_KEYBOARD_INTERNATIONAL9" => Some(KEY_KEYBOARD_INTERNATIONAL9),
             "KEY_KEYBOARD_KEYPAD_0" => Some(KEY_KEYBOARD_KEYPAD_0),
+            "KEY_KEYBOARD_KEYPAD_00" => Some(KEY_KEYBOARD_KEYPAD_00),
+            "KEY_KEYBOARD_KEYPAD_000" => Some(KEY_KEYBOARD_KEYPAD_000),
             "KEY_KEYBOARD_KEYPAD_1" => Some(KEY_KEYBOARD_KEYPAD_1),
             "KEY_KEYBOARD_KEYPAD_2" => Some(KEY_KEYBOARD_KEYPAD_2),
             "KEY_KEYBOARD_KEYPAD_3" => Some(KEY_KEYBOARD_KEYPAD_3),
@@ -26481,40 +27765,133 @@ pub mod java {
             "KEY_KEYBOARD_KEYPAD_7" => Some(KEY_KEYBOARD_KEYPAD_7),
             "KEY_KEYBOARD_KEYPAD_8" => Some(KEY_KEYBOARD_KEYPAD_8),
             "KEY_KEYBOARD_KEYPAD_9" => Some(KEY_KEYBOARD_KEYPAD_9),
+            "KEY_KEYBOARD_KEYPAD_A" => Some(KEY_KEYBOARD_KEYPAD_A),
             "KEY_KEYBOARD_KEYPAD_ADD" => Some(KEY_KEYBOARD_KEYPAD_ADD),
+            "KEY_KEYBOARD_KEYPAD_AMPERSAND" => Some(KEY_KEYBOARD_KEYPAD_AMPERSAND),
+            "KEY_KEYBOARD_KEYPAD_AT" => Some(KEY_KEYBOARD_KEYPAD_AT),
+            "KEY_KEYBOARD_KEYPAD_B" => Some(KEY_KEYBOARD_KEYPAD_B),
+            "KEY_KEYBOARD_KEYPAD_BACKSPACE" => Some(KEY_KEYBOARD_KEYPAD_BACKSPACE),
+            "KEY_KEYBOARD_KEYPAD_BINARY" => Some(KEY_KEYBOARD_KEYPAD_BINARY),
+            "KEY_KEYBOARD_KEYPAD_C" => Some(KEY_KEYBOARD_KEYPAD_C),
+            "KEY_KEYBOARD_KEYPAD_CLEAR" => Some(KEY_KEYBOARD_KEYPAD_CLEAR),
+            "KEY_KEYBOARD_KEYPAD_CLEAR_ENTRY" => Some(KEY_KEYBOARD_KEYPAD_CLEAR_ENTRY),
+            "KEY_KEYBOARD_KEYPAD_COLON" => Some(KEY_KEYBOARD_KEYPAD_COLON),
+            "KEY_KEYBOARD_KEYPAD_COMMA" => Some(KEY_KEYBOARD_KEYPAD_COMMA),
+            "KEY_KEYBOARD_KEYPAD_D" => Some(KEY_KEYBOARD_KEYPAD_D),
             "KEY_KEYBOARD_KEYPAD_DECIMAL" => Some(KEY_KEYBOARD_KEYPAD_DECIMAL),
             "KEY_KEYBOARD_KEYPAD_DIVIDE" => Some(KEY_KEYBOARD_KEYPAD_DIVIDE),
+            "KEY_KEYBOARD_KEYPAD_DOUBLE_AMPERSAND" => Some(KEY_KEYBOARD_KEYPAD_DOUBLE_AMPERSAND),
+            "KEY_KEYBOARD_KEYPAD_DOUBLE_VERTICAL_BAR" => {
+                Some(KEY_KEYBOARD_KEYPAD_DOUBLE_VERTICAL_BAR)
+            }
+            "KEY_KEYBOARD_KEYPAD_E" => Some(KEY_KEYBOARD_KEYPAD_E),
             "KEY_KEYBOARD_KEYPAD_ENTER" => Some(KEY_KEYBOARD_KEYPAD_ENTER),
             "KEY_KEYBOARD_KEYPAD_EQUAL" => Some(KEY_KEYBOARD_KEYPAD_EQUAL),
+            "KEY_KEYBOARD_KEYPAD_EQUALS_AS400" => Some(KEY_KEYBOARD_KEYPAD_EQUALS_AS400),
+            "KEY_KEYBOARD_KEYPAD_EXCLAMATION" => Some(KEY_KEYBOARD_KEYPAD_EXCLAMATION),
+            "KEY_KEYBOARD_KEYPAD_F" => Some(KEY_KEYBOARD_KEYPAD_F),
+            "KEY_KEYBOARD_KEYPAD_GREATER" => Some(KEY_KEYBOARD_KEYPAD_GREATER),
+            "KEY_KEYBOARD_KEYPAD_HASH" => Some(KEY_KEYBOARD_KEYPAD_HASH),
+            "KEY_KEYBOARD_KEYPAD_HEXADECIMAL" => Some(KEY_KEYBOARD_KEYPAD_HEXADECIMAL),
+            "KEY_KEYBOARD_KEYPAD_LEFT_BRACE" => Some(KEY_KEYBOARD_KEYPAD_LEFT_BRACE),
+            "KEY_KEYBOARD_KEYPAD_LEFT_PARENTHESIS" => Some(KEY_KEYBOARD_KEYPAD_LEFT_PARENTHESIS),
+            "KEY_KEYBOARD_KEYPAD_LESS" => Some(KEY_KEYBOARD_KEYPAD_LESS),
+            "KEY_KEYBOARD_KEYPAD_MEMORY_ADD" => Some(KEY_KEYBOARD_KEYPAD_MEMORY_ADD),
+            "KEY_KEYBOARD_KEYPAD_MEMORY_CLEAR" => Some(KEY_KEYBOARD_KEYPAD_MEMORY_CLEAR),
+            "KEY_KEYBOARD_KEYPAD_MEMORY_DIVIDE" => Some(KEY_KEYBOARD_KEYPAD_MEMORY_DIVIDE),
+            "KEY_KEYBOARD_KEYPAD_MEMORY_MULTIPLY" => Some(KEY_KEYBOARD_KEYPAD_MEMORY_MULTIPLY),
+            "KEY_KEYBOARD_KEYPAD_MEMORY_RECALL" => Some(KEY_KEYBOARD_KEYPAD_MEMORY_RECALL),
+            "KEY_KEYBOARD_KEYPAD_MEMORY_STORE" => Some(KEY_KEYBOARD_KEYPAD_MEMORY_STORE),
+            "KEY_KEYBOARD_KEYPAD_MEMORY_SUBTRACT" => Some(KEY_KEYBOARD_KEYPAD_MEMORY_SUBTRACT),
             "KEY_KEYBOARD_KEYPAD_MULTIPLY" => Some(KEY_KEYBOARD_KEYPAD_MULTIPLY),
+            "KEY_KEYBOARD_KEYPAD_OCTAL" => Some(KEY_KEYBOARD_KEYPAD_OCTAL),
+            "KEY_KEYBOARD_KEYPAD_PERCENT" => Some(KEY_KEYBOARD_KEYPAD_PERCENT),
+            "KEY_KEYBOARD_KEYPAD_PERIOD" => Some(KEY_KEYBOARD_KEYPAD_PERIOD),
+            "KEY_KEYBOARD_KEYPAD_PLUS_MINUS" => Some(KEY_KEYBOARD_KEYPAD_PLUS_MINUS),
+            "KEY_KEYBOARD_KEYPAD_POWER" => Some(KEY_KEYBOARD_KEYPAD_POWER),
+            "KEY_KEYBOARD_KEYPAD_RIGHT_BRACE" => Some(KEY_KEYBOARD_KEYPAD_RIGHT_BRACE),
+            "KEY_KEYBOARD_KEYPAD_RIGHT_PARENTHESIS" => Some(KEY_KEYBOARD_KEYPAD_RIGHT_PARENTHESIS),
+            "KEY_KEYBOARD_KEYPAD_SPACE" => Some(KEY_KEYBOARD_KEYPAD_SPACE),
             "KEY_KEYBOARD_KEYPAD_SUBTRACT" => Some(KEY_KEYBOARD_KEYPAD_SUBTRACT),
+            "KEY_KEYBOARD_KEYPAD_TAB" => Some(KEY_KEYBOARD_KEYPAD_TAB),
+            "KEY_KEYBOARD_KEYPAD_VERTICAL_BAR" => Some(KEY_KEYBOARD_KEYPAD_VERTICAL_BAR),
+            "KEY_KEYBOARD_KEYPAD_XOR" => Some(KEY_KEYBOARD_KEYPAD_XOR),
+            "KEY_KEYBOARD_LANG1" => Some(KEY_KEYBOARD_LANG1),
+            "KEY_KEYBOARD_LANG2" => Some(KEY_KEYBOARD_LANG2),
+            "KEY_KEYBOARD_LANG3" => Some(KEY_KEYBOARD_LANG3),
+            "KEY_KEYBOARD_LANG4" => Some(KEY_KEYBOARD_LANG4),
+            "KEY_KEYBOARD_LANG5" => Some(KEY_KEYBOARD_LANG5),
+            "KEY_KEYBOARD_LANG6" => Some(KEY_KEYBOARD_LANG6),
+            "KEY_KEYBOARD_LANG7" => Some(KEY_KEYBOARD_LANG7),
+            "KEY_KEYBOARD_LANG8" => Some(KEY_KEYBOARD_LANG8),
+            "KEY_KEYBOARD_LANG9" => Some(KEY_KEYBOARD_LANG9),
             "KEY_KEYBOARD_LEFT" => Some(KEY_KEYBOARD_LEFT),
             "KEY_KEYBOARD_LEFT_ALT" => Some(KEY_KEYBOARD_LEFT_ALT),
             "KEY_KEYBOARD_LEFT_BRACKET" => Some(KEY_KEYBOARD_LEFT_BRACKET),
+            "KEY_KEYBOARD_LEFT_COMMAND" => Some(KEY_KEYBOARD_LEFT_COMMAND),
             "KEY_KEYBOARD_LEFT_CONTROL" => Some(KEY_KEYBOARD_LEFT_CONTROL),
+            "KEY_KEYBOARD_LEFT_META" => Some(KEY_KEYBOARD_LEFT_META),
+            "KEY_KEYBOARD_LEFT_OPTION" => Some(KEY_KEYBOARD_LEFT_OPTION),
             "KEY_KEYBOARD_LEFT_SHIFT" => Some(KEY_KEYBOARD_LEFT_SHIFT),
             "KEY_KEYBOARD_LEFT_WIN" => Some(KEY_KEYBOARD_LEFT_WIN),
+            "KEY_KEYBOARD_LEFT_WINDOWS" => Some(KEY_KEYBOARD_LEFT_WINDOWS),
+            "KEY_KEYBOARD_MEDIA_EJECT" => Some(KEY_KEYBOARD_MEDIA_EJECT),
+            "KEY_KEYBOARD_MEDIA_FAST_FORWARD" => Some(KEY_KEYBOARD_MEDIA_FAST_FORWARD),
+            "KEY_KEYBOARD_MEDIA_NEXT_TRACK" => Some(KEY_KEYBOARD_MEDIA_NEXT_TRACK),
+            "KEY_KEYBOARD_MEDIA_PAUSE" => Some(KEY_KEYBOARD_MEDIA_PAUSE),
+            "KEY_KEYBOARD_MEDIA_PLAY" => Some(KEY_KEYBOARD_MEDIA_PLAY),
+            "KEY_KEYBOARD_MEDIA_PLAY_PAUSE" => Some(KEY_KEYBOARD_MEDIA_PLAY_PAUSE),
+            "KEY_KEYBOARD_MEDIA_PREVIOUS_TRACK" => Some(KEY_KEYBOARD_MEDIA_PREVIOUS_TRACK),
+            "KEY_KEYBOARD_MEDIA_RECORD" => Some(KEY_KEYBOARD_MEDIA_RECORD),
+            "KEY_KEYBOARD_MEDIA_REWIND" => Some(KEY_KEYBOARD_MEDIA_REWIND),
+            "KEY_KEYBOARD_MEDIA_SELECT" => Some(KEY_KEYBOARD_MEDIA_SELECT),
+            "KEY_KEYBOARD_MEDIA_STOP" => Some(KEY_KEYBOARD_MEDIA_STOP),
             "KEY_KEYBOARD_MENU" => Some(KEY_KEYBOARD_MENU),
             "KEY_KEYBOARD_MINUS" => Some(KEY_KEYBOARD_MINUS),
+            "KEY_KEYBOARD_MODE" => Some(KEY_KEYBOARD_MODE),
+            "KEY_KEYBOARD_MUTE" => Some(KEY_KEYBOARD_MUTE),
+            "KEY_KEYBOARD_NEW" => Some(KEY_KEYBOARD_NEW),
             "KEY_KEYBOARD_NUM_LOCK" => Some(KEY_KEYBOARD_NUM_LOCK),
+            "KEY_KEYBOARD_OPER" => Some(KEY_KEYBOARD_OPER),
+            "KEY_KEYBOARD_OUT" => Some(KEY_KEYBOARD_OUT),
             "KEY_KEYBOARD_PAGE_DOWN" => Some(KEY_KEYBOARD_PAGE_DOWN),
             "KEY_KEYBOARD_PAGE_UP" => Some(KEY_KEYBOARD_PAGE_UP),
+            "KEY_KEYBOARD_PASTE" => Some(KEY_KEYBOARD_PASTE),
             "KEY_KEYBOARD_PAUSE" => Some(KEY_KEYBOARD_PAUSE),
             "KEY_KEYBOARD_PERIOD" => Some(KEY_KEYBOARD_PERIOD),
+            "KEY_KEYBOARD_POWER" => Some(KEY_KEYBOARD_POWER),
             "KEY_KEYBOARD_PRINT_SCREEN" => Some(KEY_KEYBOARD_PRINT_SCREEN),
+            "KEY_KEYBOARD_PRIOR" => Some(KEY_KEYBOARD_PRIOR),
             "KEY_KEYBOARD_RIGHT" => Some(KEY_KEYBOARD_RIGHT),
             "KEY_KEYBOARD_RIGHT_ALT" => Some(KEY_KEYBOARD_RIGHT_ALT),
             "KEY_KEYBOARD_RIGHT_BRACKET" => Some(KEY_KEYBOARD_RIGHT_BRACKET),
+            "KEY_KEYBOARD_RIGHT_COMMAND" => Some(KEY_KEYBOARD_RIGHT_COMMAND),
             "KEY_KEYBOARD_RIGHT_CONTROL" => Some(KEY_KEYBOARD_RIGHT_CONTROL),
+            "KEY_KEYBOARD_RIGHT_META" => Some(KEY_KEYBOARD_RIGHT_META),
+            "KEY_KEYBOARD_RIGHT_OPTION" => Some(KEY_KEYBOARD_RIGHT_OPTION),
             "KEY_KEYBOARD_RIGHT_SHIFT" => Some(KEY_KEYBOARD_RIGHT_SHIFT),
             "KEY_KEYBOARD_RIGHT_WIN" => Some(KEY_KEYBOARD_RIGHT_WIN),
+            "KEY_KEYBOARD_RIGHT_WINDOWS" => Some(KEY_KEYBOARD_RIGHT_WINDOWS),
+            "KEY_KEYBOARD_SAVE" => Some(KEY_KEYBOARD_SAVE),
             "KEY_KEYBOARD_SCROLL_LOCK" => Some(KEY_KEYBOARD_SCROLL_LOCK),
+            "KEY_KEYBOARD_SELECT" => Some(KEY_KEYBOARD_SELECT),
             "KEY_KEYBOARD_SEMICOLON" => Some(KEY_KEYBOARD_SEMICOLON),
+            "KEY_KEYBOARD_SEPARATOR" => Some(KEY_KEYBOARD_SEPARATOR),
             "KEY_KEYBOARD_SLASH" => Some(KEY_KEYBOARD_SLASH),
+            "KEY_KEYBOARD_SLEEP" => Some(KEY_KEYBOARD_SLEEP),
+            "KEY_KEYBOARD_SOFT_LEFT" => Some(KEY_KEYBOARD_SOFT_LEFT),
+            "KEY_KEYBOARD_SOFT_RIGHT" => Some(KEY_KEYBOARD_SOFT_RIGHT),
             "KEY_KEYBOARD_SPACE" => Some(KEY_KEYBOARD_SPACE),
+            "KEY_KEYBOARD_STOP" => Some(KEY_KEYBOARD_STOP),
+            "KEY_KEYBOARD_SYS_REQ" => Some(KEY_KEYBOARD_SYS_REQ),
             "KEY_KEYBOARD_TAB" => Some(KEY_KEYBOARD_TAB),
+            "KEY_KEYBOARD_THOUSANDS_SEPARATOR" => Some(KEY_KEYBOARD_THOUSANDS_SEPARATOR),
+            "KEY_KEYBOARD_UNDO" => Some(KEY_KEYBOARD_UNDO),
             "KEY_KEYBOARD_UNKNOWN" => Some(KEY_KEYBOARD_UNKNOWN),
             "KEY_KEYBOARD_UP" => Some(KEY_KEYBOARD_UP),
+            "KEY_KEYBOARD_VOLUME_DOWN" => Some(KEY_KEYBOARD_VOLUME_DOWN),
+            "KEY_KEYBOARD_VOLUME_UP" => Some(KEY_KEYBOARD_VOLUME_UP),
+            "KEY_KEYBOARD_WAKE" => Some(KEY_KEYBOARD_WAKE),
             "KEY_KEYBOARD_WORLD_1" => Some(KEY_KEYBOARD_WORLD_1),
             "KEY_KEYBOARD_WORLD_2" => Some(KEY_KEYBOARD_WORLD_2),
             "KEY_LEFT" => Some(KEY_LEFT),
@@ -26666,6 +28043,9 @@ pub mod java {
             "MCO_CONFIGURE_WORLD_BUTTONS_DONE" => Some(MCO_CONFIGURE_WORLD_BUTTONS_DONE),
             "MCO_CONFIGURE_WORLD_BUTTONS_EDIT" => Some(MCO_CONFIGURE_WORLD_BUTTONS_EDIT),
             "MCO_CONFIGURE_WORLD_BUTTONS_INVITE" => Some(MCO_CONFIGURE_WORLD_BUTTONS_INVITE),
+            "MCO_CONFIGURE_WORLD_BUTTONS_INVITE_CODES" => {
+                Some(MCO_CONFIGURE_WORLD_BUTTONS_INVITE_CODES)
+            }
             "MCO_CONFIGURE_WORLD_BUTTONS_MOREOPTIONS" => {
                 Some(MCO_CONFIGURE_WORLD_BUTTONS_MOREOPTIONS)
             }
@@ -26721,6 +28101,56 @@ pub mod java {
             "MCO_CONFIGURE_WORLD_INVITE_PROFILE_NAME" => {
                 Some(MCO_CONFIGURE_WORLD_INVITE_PROFILE_NAME)
             }
+            "MCO_CONFIGURE_WORLD_INVITE_CODES_COPY" => Some(MCO_CONFIGURE_WORLD_INVITE_CODES_COPY),
+            "MCO_CONFIGURE_WORLD_INVITE_CODES_CREATE" => {
+                Some(MCO_CONFIGURE_WORLD_INVITE_CODES_CREATE)
+            }
+            "MCO_CONFIGURE_WORLD_INVITE_CODES_DELETE" => {
+                Some(MCO_CONFIGURE_WORLD_INVITE_CODES_DELETE)
+            }
+            "MCO_CONFIGURE_WORLD_INVITE_CODES_EDIT" => Some(MCO_CONFIGURE_WORLD_INVITE_CODES_EDIT),
+            "MCO_CONFIGURE_WORLD_INVITE_CODES_EDIT_ACTIVE" => {
+                Some(MCO_CONFIGURE_WORLD_INVITE_CODES_EDIT_ACTIVE)
+            }
+            "MCO_CONFIGURE_WORLD_INVITE_CODES_EDIT_EXPIRATION_DATE" => {
+                Some(MCO_CONFIGURE_WORLD_INVITE_CODES_EDIT_EXPIRATION_DATE)
+            }
+            "MCO_CONFIGURE_WORLD_INVITE_CODES_EDIT_EXPIRES" => {
+                Some(MCO_CONFIGURE_WORLD_INVITE_CODES_EDIT_EXPIRES)
+            }
+            "MCO_CONFIGURE_WORLD_INVITE_CODES_EDIT_TITLE" => {
+                Some(MCO_CONFIGURE_WORLD_INVITE_CODES_EDIT_TITLE)
+            }
+            "MCO_CONFIGURE_WORLD_INVITE_CODES_EXPIRATION_12_HOURS" => {
+                Some(MCO_CONFIGURE_WORLD_INVITE_CODES_EXPIRATION_12_HOURS)
+            }
+            "MCO_CONFIGURE_WORLD_INVITE_CODES_EXPIRATION_1_DAY" => {
+                Some(MCO_CONFIGURE_WORLD_INVITE_CODES_EXPIRATION_1_DAY)
+            }
+            "MCO_CONFIGURE_WORLD_INVITE_CODES_EXPIRATION_1_HOUR" => {
+                Some(MCO_CONFIGURE_WORLD_INVITE_CODES_EXPIRATION_1_HOUR)
+            }
+            "MCO_CONFIGURE_WORLD_INVITE_CODES_EXPIRATION_30_MINUTES" => {
+                Some(MCO_CONFIGURE_WORLD_INVITE_CODES_EXPIRATION_30_MINUTES)
+            }
+            "MCO_CONFIGURE_WORLD_INVITE_CODES_EXPIRATION_6_HOURS" => {
+                Some(MCO_CONFIGURE_WORLD_INVITE_CODES_EXPIRATION_6_HOURS)
+            }
+            "MCO_CONFIGURE_WORLD_INVITE_CODES_EXPIRATION_7_DAYS" => {
+                Some(MCO_CONFIGURE_WORLD_INVITE_CODES_EXPIRATION_7_DAYS)
+            }
+            "MCO_CONFIGURE_WORLD_INVITE_CODES_EXPIRATION_NEVER" => {
+                Some(MCO_CONFIGURE_WORLD_INVITE_CODES_EXPIRATION_NEVER)
+            }
+            "MCO_CONFIGURE_WORLD_INVITE_CODES_LOADING" => {
+                Some(MCO_CONFIGURE_WORLD_INVITE_CODES_LOADING)
+            }
+            "MCO_CONFIGURE_WORLD_INVITE_CODES_SUBTITLE" => {
+                Some(MCO_CONFIGURE_WORLD_INVITE_CODES_SUBTITLE)
+            }
+            "MCO_CONFIGURE_WORLD_INVITE_CODES_TITLE" => {
+                Some(MCO_CONFIGURE_WORLD_INVITE_CODES_TITLE)
+            }
             "MCO_CONFIGURE_WORLD_INVITED" => Some(MCO_CONFIGURE_WORLD_INVITED),
             "MCO_CONFIGURE_WORLD_INVITED_NUMBER" => Some(MCO_CONFIGURE_WORLD_INVITED_NUMBER),
             "MCO_CONFIGURE_WORLD_INVITES_NORMAL_TOOLTIP" => {
@@ -26757,6 +28187,10 @@ pub mod java {
             "MCO_CONFIGURE_WORLD_REGION_PREFERENCE_TITLE" => {
                 Some(MCO_CONFIGURE_WORLD_REGION_PREFERENCE_TITLE)
             }
+            "MCO_CONFIGURE_WORLD_RENDERDISTANCE" => Some(MCO_CONFIGURE_WORLD_RENDERDISTANCE),
+            "MCO_CONFIGURE_WORLD_RENDERDISTANCE_TOOLTIP" => {
+                Some(MCO_CONFIGURE_WORLD_RENDERDISTANCE_TOOLTIP)
+            }
             "MCO_CONFIGURE_WORLD_RESET_QUESTION_LINE1" => {
                 Some(MCO_CONFIGURE_WORLD_RESET_QUESTION_LINE1)
             }
@@ -26786,6 +28220,12 @@ pub mod java {
             }
             "MCO_CONFIGURE_WORLD_SETTINGS_EXPIRED" => Some(MCO_CONFIGURE_WORLD_SETTINGS_EXPIRED),
             "MCO_CONFIGURE_WORLD_SETTINGS_TITLE" => Some(MCO_CONFIGURE_WORLD_SETTINGS_TITLE),
+            "MCO_CONFIGURE_WORLD_SIMULATIONDISTANCE" => {
+                Some(MCO_CONFIGURE_WORLD_SIMULATIONDISTANCE)
+            }
+            "MCO_CONFIGURE_WORLD_SIMULATIONDISTANCE_TOOLTIP" => {
+                Some(MCO_CONFIGURE_WORLD_SIMULATIONDISTANCE_TOOLTIP)
+            }
             "MCO_CONFIGURE_WORLD_SLOT" => Some(MCO_CONFIGURE_WORLD_SLOT),
             "MCO_CONFIGURE_WORLD_SLOT_EMPTY" => Some(MCO_CONFIGURE_WORLD_SLOT_EMPTY),
             "MCO_CONFIGURE_WORLD_SLOT_SWITCH_QUESTION_LINE1" => {
@@ -26969,6 +28409,18 @@ pub mod java {
                 Some(MCO_NOTIFICATION_VISITURL_MESSAGE_DEFAULT)
             }
             "MCO_ONLINEPLAYERS" => Some(MCO_ONLINEPLAYERS),
+            "MCO_PDP_FRIENDS_DESCRIPTION" => Some(MCO_PDP_FRIENDS_DESCRIPTION),
+            "MCO_PDP_FRIENDS_TITLE" => Some(MCO_PDP_FRIENDS_TITLE),
+            "MCO_PDP_MINIGAMES_DESCRIPTION" => Some(MCO_PDP_MINIGAMES_DESCRIPTION),
+            "MCO_PDP_MINIGAMES_TITLE" => Some(MCO_PDP_MINIGAMES_TITLE),
+            "MCO_PDP_PRIVATE_BACKUPS" => Some(MCO_PDP_PRIVATE_BACKUPS),
+            "MCO_PDP_PRIVATE_EASYTOMANAGE" => Some(MCO_PDP_PRIVATE_EASYTOMANAGE),
+            "MCO_PDP_PRIVATE_SECURE" => Some(MCO_PDP_PRIVATE_SECURE),
+            "MCO_PDP_PRIVATE_TITLE" => Some(MCO_PDP_PRIVATE_TITLE),
+            "MCO_PDP_PRIVATE_WORLDSLOTS" => Some(MCO_PDP_PRIVATE_WORLDSLOTS),
+            "MCO_PDP_TRIAL_DESCRIPTION" => Some(MCO_PDP_TRIAL_DESCRIPTION),
+            "MCO_PDP_TRIAL_TITLE" => Some(MCO_PDP_TRIAL_TITLE),
+            "MCO_PDP_TRYFORFREE" => Some(MCO_PDP_TRYFORFREE),
             "MCO_PLAY_BUTTON_REALM_CLOSED" => Some(MCO_PLAY_BUTTON_REALM_CLOSED),
             "MCO_QUESTION" => Some(MCO_QUESTION),
             "MCO_RESET_WORLD_ADVENTURE" => Some(MCO_RESET_WORLD_ADVENTURE),
@@ -26999,6 +28451,14 @@ pub mod java {
             "MCO_SELECTSERVER_EXPIRES_DAY" => Some(MCO_SELECTSERVER_EXPIRES_DAY),
             "MCO_SELECTSERVER_EXPIRES_DAYS" => Some(MCO_SELECTSERVER_EXPIRES_DAYS),
             "MCO_SELECTSERVER_EXPIRES_SOON" => Some(MCO_SELECTSERVER_EXPIRES_SOON),
+            "MCO_SELECTSERVER_FREETRIAL" => Some(MCO_SELECTSERVER_FREETRIAL),
+            "MCO_SELECTSERVER_JOINCODE" => Some(MCO_SELECTSERVER_JOINCODE),
+            "MCO_SELECTSERVER_JOINCODE_HINT" => Some(MCO_SELECTSERVER_JOINCODE_HINT),
+            "MCO_SELECTSERVER_JOINCODE_INVALID" => Some(MCO_SELECTSERVER_JOINCODE_INVALID),
+            "MCO_SELECTSERVER_JOINCODE_SELECT" => Some(MCO_SELECTSERVER_JOINCODE_SELECT),
+            "MCO_SELECTSERVER_JOINCODE_TITLE" => Some(MCO_SELECTSERVER_JOINCODE_TITLE),
+            "MCO_SELECTSERVER_JOINCODE_VALIDATING" => Some(MCO_SELECTSERVER_JOINCODE_VALIDATING),
+            "MCO_SELECTSERVER_JOINREALM" => Some(MCO_SELECTSERVER_JOINREALM),
             "MCO_SELECTSERVER_LEAVE" => Some(MCO_SELECTSERVER_LEAVE),
             "MCO_SELECTSERVER_LOADING" => Some(MCO_SELECTSERVER_LOADING),
             "MCO_SELECTSERVER_MAPONLYSUPPORTEDFORVERSION" => {
@@ -27167,6 +28627,7 @@ pub mod java {
             "MIRROR_LEFT_RIGHT" => Some(MIRROR_LEFT_RIGHT),
             "MIRROR_NONE" => Some(MIRROR_NONE),
             "MOUNT_ONBOARD" => Some(MOUNT_ONBOARD),
+            "MOUNT_SIT" => Some(MOUNT_SIT),
             "MULTIPLAYER_APPLYINGPACK" => Some(MULTIPLAYER_APPLYINGPACK),
             "MULTIPLAYER_CODEOFCONDUCT_CHECK" => Some(MULTIPLAYER_CODEOFCONDUCT_CHECK),
             "MULTIPLAYER_CODEOFCONDUCT_TITLE" => Some(MULTIPLAYER_CODEOFCONDUCT_TITLE),
@@ -27611,6 +29072,10 @@ pub mod java {
             "OPTIONS_CLOUDS_FAST" => Some(OPTIONS_CLOUDS_FAST),
             "OPTIONS_CONTROLS" => Some(OPTIONS_CONTROLS),
             "OPTIONS_CREDITS_AND_ATTRIBUTION" => Some(OPTIONS_CREDITS_AND_ATTRIBUTION),
+            "OPTIONS_CTRLCLICKEMULATESRIGHTCLICK" => Some(OPTIONS_CTRLCLICKEMULATESRIGHTCLICK),
+            "OPTIONS_CTRLCLICKEMULATESRIGHTCLICK_TOOLTIP" => {
+                Some(OPTIONS_CTRLCLICKEMULATESRIGHTCLICK_TOOLTIP)
+            }
             "OPTIONS_CUTOUTLEAVES" => Some(OPTIONS_CUTOUTLEAVES),
             "OPTIONS_CUTOUTLEAVES_TOOLTIP" => Some(OPTIONS_CUTOUTLEAVES_TOOLTIP),
             "OPTIONS_DAMAGETILTSTRENGTH" => Some(OPTIONS_DAMAGETILTSTRENGTH),
@@ -27623,6 +29088,8 @@ pub mod java {
             }
             "OPTIONS_DARKNESSEFFECTSCALE" => Some(OPTIONS_DARKNESSEFFECTSCALE),
             "OPTIONS_DARKNESSEFFECTSCALE_TOOLTIP" => Some(OPTIONS_DARKNESSEFFECTSCALE_TOOLTIP),
+            "OPTIONS_DEBUGGUISCALE_TOOLTIP" => Some(OPTIONS_DEBUGGUISCALE_TOOLTIP),
+            "OPTIONS_DEBUGGUISCALE_UNCHANGED" => Some(OPTIONS_DEBUGGUISCALE_UNCHANGED),
             "OPTIONS_DIFFICULTY" => Some(OPTIONS_DIFFICULTY),
             "OPTIONS_DIFFICULTY_EASY" => Some(OPTIONS_DIFFICULTY_EASY),
             "OPTIONS_DIFFICULTY_EASY_INFO" => Some(OPTIONS_DIFFICULTY_EASY_INFO),
@@ -27672,6 +29139,10 @@ pub mod java {
             "OPTIONS_FULLSCREEN" => Some(OPTIONS_FULLSCREEN),
             "OPTIONS_FULLSCREEN_CURRENT" => Some(OPTIONS_FULLSCREEN_CURRENT),
             "OPTIONS_FULLSCREEN_ENTRY" => Some(OPTIONS_FULLSCREEN_ENTRY),
+            "OPTIONS_FULLSCREEN_EXCLUSIVE_MODE" => Some(OPTIONS_FULLSCREEN_EXCLUSIVE_MODE),
+            "OPTIONS_FULLSCREEN_EXCLUSIVE_MODE_TOOLTIP" => {
+                Some(OPTIONS_FULLSCREEN_EXCLUSIVE_MODE_TOOLTIP)
+            }
             "OPTIONS_FULLSCREEN_RESOLUTION" => Some(OPTIONS_FULLSCREEN_RESOLUTION),
             "OPTIONS_FULLSCREEN_UNAVAILABLE" => Some(OPTIONS_FULLSCREEN_UNAVAILABLE),
             "OPTIONS_GAMMA" => Some(OPTIONS_GAMMA),
@@ -27717,6 +29188,9 @@ pub mod java {
             "OPTIONS_HIDESPLASHTEXTS" => Some(OPTIONS_HIDESPLASHTEXTS),
             "OPTIONS_HIDESPLASHTEXTS_TOOLTIP" => Some(OPTIONS_HIDESPLASHTEXTS_TOOLTIP),
             "OPTIONS_IMPROVEDTRANSPARENCY" => Some(OPTIONS_IMPROVEDTRANSPARENCY),
+            "OPTIONS_IMPROVEDTRANSPARENCY_OIT_TOOLTIP" => {
+                Some(OPTIONS_IMPROVEDTRANSPARENCY_OIT_TOOLTIP)
+            }
             "OPTIONS_IMPROVEDTRANSPARENCY_TOOLTIP" => Some(OPTIONS_IMPROVEDTRANSPARENCY_TOOLTIP),
             "OPTIONS_INGAMENOTIFICATION" => Some(OPTIONS_INGAMENOTIFICATION),
             "OPTIONS_INGAMENOTIFICATION_TOOLTIP" => Some(OPTIONS_INGAMENOTIFICATION_TOOLTIP),
@@ -27737,11 +29211,21 @@ pub mod java {
             "OPTIONS_KEY_HOLD" => Some(OPTIONS_KEY_HOLD),
             "OPTIONS_KEY_TOGGLE" => Some(OPTIONS_KEY_TOGGLE),
             "OPTIONS_LANGUAGE" => Some(OPTIONS_LANGUAGE),
+            "OPTIONS_LANGUAGE_EMPTY_OR_MISSING_TRANSLATION" => {
+                Some(OPTIONS_LANGUAGE_EMPTY_OR_MISSING_TRANSLATION)
+            }
+            "OPTIONS_LANGUAGE_LOAD_TRANSLATIONS_FAILED" => {
+                Some(OPTIONS_LANGUAGE_LOAD_TRANSLATIONS_FAILED)
+            }
             "OPTIONS_LANGUAGE_NARRATION" => Some(OPTIONS_LANGUAGE_NARRATION),
             "OPTIONS_LANGUAGE_TITLE" => Some(OPTIONS_LANGUAGE_TITLE),
             "OPTIONS_LANGUAGE_TOOLTIP" => Some(OPTIONS_LANGUAGE_TOOLTIP),
             "OPTIONS_LANGUAGEACCURACYWARNING" => Some(OPTIONS_LANGUAGEACCURACYWARNING),
             "OPTIONS_LANGUAGEWARNING" => Some(OPTIONS_LANGUAGEWARNING),
+            "OPTIONS_MACFULLSCREENMENUVISIBILITY" => Some(OPTIONS_MACFULLSCREENMENUVISIBILITY),
+            "OPTIONS_MACFULLSCREENMENUVISIBILITY_TOOLTIP" => {
+                Some(OPTIONS_MACFULLSCREENMENUVISIBILITY_TOOLTIP)
+            }
             "OPTIONS_MAINHAND" => Some(OPTIONS_MAINHAND),
             "OPTIONS_MAINHAND_LEFT" => Some(OPTIONS_MAINHAND_LEFT),
             "OPTIONS_MAINHAND_RIGHT" => Some(OPTIONS_MAINHAND_RIGHT),
@@ -27820,6 +29304,8 @@ pub mod java {
             "OPTIONS_PRIORITIZECHUNKUPDATES_NONE_TOOLTIP" => {
                 Some(OPTIONS_PRIORITIZECHUNKUPDATES_NONE_TOOLTIP)
             }
+            "OPTIONS_QUITSHORTCUTS" => Some(OPTIONS_QUITSHORTCUTS),
+            "OPTIONS_QUITSHORTCUTS_TOOLTIP" => Some(OPTIONS_QUITSHORTCUTS_TOOLTIP),
             "OPTIONS_RAWMOUSEINPUT" => Some(OPTIONS_RAWMOUSEINPUT),
             "OPTIONS_REALMSNOTIFICATIONS" => Some(OPTIONS_REALMSNOTIFICATIONS),
             "OPTIONS_REALMSNOTIFICATIONS_BUTTON" => Some(OPTIONS_REALMSNOTIFICATIONS_BUTTON),
@@ -27887,15 +29373,74 @@ pub mod java {
             "OPTIONS_VSYNC" => Some(OPTIONS_VSYNC),
             "OPTIONS_WEATHERRADIUS" => Some(OPTIONS_WEATHERRADIUS),
             "OPTIONS_WEATHERRADIUS_TOOLTIP" => Some(OPTIONS_WEATHERRADIUS_TOOLTIP),
+            "OPTIONS_WORLDOPTIONS_ALLOW_COMMANDS_DISABLED_DEMO_TOOLTIP" => {
+                Some(OPTIONS_WORLDOPTIONS_ALLOW_COMMANDS_DISABLED_DEMO_TOOLTIP)
+            }
             "OPTIONS_WORLDOPTIONS_ALLOW_COMMANDS_DISABLED_TOOLTIP" => {
                 Some(OPTIONS_WORLDOPTIONS_ALLOW_COMMANDS_DISABLED_TOOLTIP)
             }
+            "OPTIONS_WORLDOPTIONS_ALLOW_COMMANDS_TOOLTIP" => {
+                Some(OPTIONS_WORLDOPTIONS_ALLOW_COMMANDS_TOOLTIP)
+            }
             "OPTIONS_WORLDOPTIONS_BUTTON" => Some(OPTIONS_WORLDOPTIONS_BUTTON),
+            "OPTIONS_WORLDOPTIONS_DIFFICULTY_DISABLED_HARDCORE_TOOLTIP" => {
+                Some(OPTIONS_WORLDOPTIONS_DIFFICULTY_DISABLED_HARDCORE_TOOLTIP)
+            }
+            "OPTIONS_WORLDOPTIONS_DIFFICULTY_DISABLED_LOCKED_TOOLTIP" => {
+                Some(OPTIONS_WORLDOPTIONS_DIFFICULTY_DISABLED_LOCKED_TOOLTIP)
+            }
+            "OPTIONS_WORLDOPTIONS_DIFFICULTY_DISABLED_OPERATOR_TOOLTIP" => {
+                Some(OPTIONS_WORLDOPTIONS_DIFFICULTY_DISABLED_OPERATOR_TOOLTIP)
+            }
+            "OPTIONS_WORLDOPTIONS_GAME_MODE" => Some(OPTIONS_WORLDOPTIONS_GAME_MODE),
             "OPTIONS_WORLDOPTIONS_GAME_MODE_DISABLED_OPERATOR_TOOLTIP" => {
                 Some(OPTIONS_WORLDOPTIONS_GAME_MODE_DISABLED_OPERATOR_TOOLTIP)
             }
             "OPTIONS_WORLDOPTIONS_GAME_MODE_DISABLED_TOOLTIP" => {
                 Some(OPTIONS_WORLDOPTIONS_GAME_MODE_DISABLED_TOOLTIP)
+            }
+            "OPTIONS_WORLDOPTIONS_GAME_MODE_TOOLTIP" => {
+                Some(OPTIONS_WORLDOPTIONS_GAME_MODE_TOOLTIP)
+            }
+            "OPTIONS_WORLDOPTIONS_GENERAL_TITLE" => Some(OPTIONS_WORLDOPTIONS_GENERAL_TITLE),
+            "OPTIONS_WORLDOPTIONS_GUEST_COMMAND_ACCESS" => {
+                Some(OPTIONS_WORLDOPTIONS_GUEST_COMMAND_ACCESS)
+            }
+            "OPTIONS_WORLDOPTIONS_GUEST_COMMAND_ACCESS_DISABLED_COMMANDS_TOOLTIP" => {
+                Some(OPTIONS_WORLDOPTIONS_GUEST_COMMAND_ACCESS_DISABLED_COMMANDS_TOOLTIP)
+            }
+            "OPTIONS_WORLDOPTIONS_GUEST_COMMAND_ACCESS_DISABLED_SCOPE_TOOLTIP" => {
+                Some(OPTIONS_WORLDOPTIONS_GUEST_COMMAND_ACCESS_DISABLED_SCOPE_TOOLTIP)
+            }
+            "OPTIONS_WORLDOPTIONS_GUEST_COMMAND_ACCESS_TOOLTIP" => {
+                Some(OPTIONS_WORLDOPTIONS_GUEST_COMMAND_ACCESS_TOOLTIP)
+            }
+            "OPTIONS_WORLDOPTIONS_GUEST_FORCE_GAME_MODE" => {
+                Some(OPTIONS_WORLDOPTIONS_GUEST_FORCE_GAME_MODE)
+            }
+            "OPTIONS_WORLDOPTIONS_GUEST_FORCE_GAME_MODE_OFF_COMMANDS_TOOLTIP" => {
+                Some(OPTIONS_WORLDOPTIONS_GUEST_FORCE_GAME_MODE_OFF_COMMANDS_TOOLTIP)
+            }
+            "OPTIONS_WORLDOPTIONS_GUEST_FORCE_GAME_MODE_OFF_HARDCORE_TOOLTIP" => {
+                Some(OPTIONS_WORLDOPTIONS_GUEST_FORCE_GAME_MODE_OFF_HARDCORE_TOOLTIP)
+            }
+            "OPTIONS_WORLDOPTIONS_GUEST_FORCE_GAME_MODE_OFF_SCOPE_TOOLTIP" => {
+                Some(OPTIONS_WORLDOPTIONS_GUEST_FORCE_GAME_MODE_OFF_SCOPE_TOOLTIP)
+            }
+            "OPTIONS_WORLDOPTIONS_GUEST_FORCE_GAME_MODE_OFF_TOOLTIP" => {
+                Some(OPTIONS_WORLDOPTIONS_GUEST_FORCE_GAME_MODE_OFF_TOOLTIP)
+            }
+            "OPTIONS_WORLDOPTIONS_GUEST_FORCE_GAME_MODE_ON_TOOLTIP" => {
+                Some(OPTIONS_WORLDOPTIONS_GUEST_FORCE_GAME_MODE_ON_TOOLTIP)
+            }
+            "OPTIONS_WORLDOPTIONS_MULTIPLAYER_TITLE" => {
+                Some(OPTIONS_WORLDOPTIONS_MULTIPLAYER_TITLE)
+            }
+            "OPTIONS_WORLDOPTIONS_PERSONAL_GAME_MODE" => {
+                Some(OPTIONS_WORLDOPTIONS_PERSONAL_GAME_MODE)
+            }
+            "OPTIONS_WORLDOPTIONS_PERSONAL_GAME_MODE_TOOLTIP" => {
+                Some(OPTIONS_WORLDOPTIONS_PERSONAL_GAME_MODE_TOOLTIP)
             }
             "OPTIONS_WORLDOPTIONS_TITLE" => Some(OPTIONS_WORLDOPTIONS_TITLE),
             "OUTOFMEMORY_MESSAGE" => Some(OUTOFMEMORY_MESSAGE),
@@ -28078,6 +29623,9 @@ pub mod java {
             "REALMS_CONFIGURATION_REGION_BRAZIL_SOUTH" => {
                 Some(REALMS_CONFIGURATION_REGION_BRAZIL_SOUTH)
             }
+            "REALMS_CONFIGURATION_REGION_CANADA_CENTRAL" => {
+                Some(REALMS_CONFIGURATION_REGION_CANADA_CENTRAL)
+            }
             "REALMS_CONFIGURATION_REGION_CENTRAL_INDIA" => {
                 Some(REALMS_CONFIGURATION_REGION_CENTRAL_INDIA)
             }
@@ -28099,11 +29647,17 @@ pub mod java {
             "REALMS_CONFIGURATION_REGION_KOREA_CENTRAL" => {
                 Some(REALMS_CONFIGURATION_REGION_KOREA_CENTRAL)
             }
+            "REALMS_CONFIGURATION_REGION_MEXICO_CENTRAL" => {
+                Some(REALMS_CONFIGURATION_REGION_MEXICO_CENTRAL)
+            }
             "REALMS_CONFIGURATION_REGION_NORTH_CENTRAL_US" => {
                 Some(REALMS_CONFIGURATION_REGION_NORTH_CENTRAL_US)
             }
             "REALMS_CONFIGURATION_REGION_NORTH_EUROPE" => {
                 Some(REALMS_CONFIGURATION_REGION_NORTH_EUROPE)
+            }
+            "REALMS_CONFIGURATION_REGION_SOUTH_AFRICA_NORTH" => {
+                Some(REALMS_CONFIGURATION_REGION_SOUTH_AFRICA_NORTH)
             }
             "REALMS_CONFIGURATION_REGION_SOUTH_CENTRAL_US" => {
                 Some(REALMS_CONFIGURATION_REGION_SOUTH_CENTRAL_US)
@@ -28124,6 +29678,7 @@ pub mod java {
             }
             "REALMS_CONFIGURATION_REGION_WEST_US" => Some(REALMS_CONFIGURATION_REGION_WEST_US),
             "REALMS_CONFIGURATION_REGION_WEST_US_2" => Some(REALMS_CONFIGURATION_REGION_WEST_US_2),
+            "REALMS_CONFIGURATION_REGION_WEST_US_3" => Some(REALMS_CONFIGURATION_REGION_WEST_US_3),
             "REALMS_CONFIGURATION_REGION_PREFERENCE_AUTOMATIC_OWNER" => {
                 Some(REALMS_CONFIGURATION_REGION_PREFERENCE_AUTOMATIC_OWNER)
             }
@@ -28372,7 +29927,10 @@ pub mod java {
             "SELECTWORLD_WORLD" => Some(SELECTWORLD_WORLD),
             "SELECTWORLD_WORLD_GEN_SETTINGS_ACCESS" => Some(SELECTWORLD_WORLD_GEN_SETTINGS_ACCESS),
             "SELECTEWORLD_BACKUPREQUIREDTOOLTIP" => Some(SELECTEWORLD_BACKUPREQUIREDTOOLTIP),
+            "SIGN_BACK_TEXT" => Some(SIGN_BACK_TEXT),
+            "SIGN_CLICK_ACTIONS_DISABLED" => Some(SIGN_CLICK_ACTIONS_DISABLED),
             "SIGN_EDIT" => Some(SIGN_EDIT),
+            "SIGN_FRONT_TEXT" => Some(SIGN_FRONT_TEXT),
             "SLEEP_NOT_POSSIBLE" => Some(SLEEP_NOT_POSSIBLE),
             "SLEEP_PLAYERS_SLEEPING" => Some(SLEEP_PLAYERS_SLEEPING),
             "SLEEP_SKIPPING_NIGHT" => Some(SLEEP_SKIPPING_NIGHT),
@@ -28416,6 +29974,7 @@ pub mod java {
             "SOUNDCATEGORY_UI" => Some(SOUNDCATEGORY_UI),
             "SOUNDCATEGORY_VOICE" => Some(SOUNDCATEGORY_VOICE),
             "SOUNDCATEGORY_WEATHER" => Some(SOUNDCATEGORY_WEATHER),
+            "SPECTATOR_CANNOT_TELEPORT" => Some(SPECTATOR_CANNOT_TELEPORT),
             "SPECTATORMENU_CLOSE" => Some(SPECTATORMENU_CLOSE),
             "SPECTATORMENU_NEXT_PAGE" => Some(SPECTATORMENU_NEXT_PAGE),
             "SPECTATORMENU_PREVIOUS_PAGE" => Some(SPECTATORMENU_PREVIOUS_PAGE),
@@ -28503,6 +30062,7 @@ pub mod java {
             "STAT_MINECRAFT_RAID_TRIGGER" => Some(STAT_MINECRAFT_RAID_TRIGGER),
             "STAT_MINECRAFT_RAID_WIN" => Some(STAT_MINECRAFT_RAID_WIN),
             "STAT_MINECRAFT_SLEEP_IN_BED" => Some(STAT_MINECRAFT_SLEEP_IN_BED),
+            "STAT_MINECRAFT_SLEEP_IN_STRAW_BED" => Some(STAT_MINECRAFT_SLEEP_IN_STRAW_BED),
             "STAT_MINECRAFT_SNEAK_TIME" => Some(STAT_MINECRAFT_SNEAK_TIME),
             "STAT_MINECRAFT_SPRINT_ONE_CM" => Some(STAT_MINECRAFT_SPRINT_ONE_CM),
             "STAT_MINECRAFT_STRIDER_ONE_CM" => Some(STAT_MINECRAFT_STRIDER_ONE_CM),
@@ -28718,6 +30278,7 @@ pub mod java {
             "SUBTITLES_BLOCK_POINTED_DRIPSTONE_LAND" => {
                 Some(SUBTITLES_BLOCK_POINTED_DRIPSTONE_LAND)
             }
+            "SUBTITLES_BLOCK_POPLAR_LEAVES_AMBIENT" => Some(SUBTITLES_BLOCK_POPLAR_LEAVES_AMBIENT),
             "SUBTITLES_BLOCK_PORTAL_AMBIENT" => Some(SUBTITLES_BLOCK_PORTAL_AMBIENT),
             "SUBTITLES_BLOCK_PORTAL_TRAVEL" => Some(SUBTITLES_BLOCK_PORTAL_TRAVEL),
             "SUBTITLES_BLOCK_PORTAL_TRIGGER" => Some(SUBTITLES_BLOCK_PORTAL_TRIGGER),
@@ -28758,6 +30319,7 @@ pub mod java {
             "SUBTITLES_BLOCK_SHELF_PLACE_ITEM" => Some(SUBTITLES_BLOCK_SHELF_PLACE_ITEM),
             "SUBTITLES_BLOCK_SHELF_SINGLE_SWAP" => Some(SUBTITLES_BLOCK_SHELF_SINGLE_SWAP),
             "SUBTITLES_BLOCK_SHELF_TAKE_ITEM" => Some(SUBTITLES_BLOCK_SHELF_TAKE_ITEM),
+            "SUBTITLES_BLOCK_SHELF_MUSHROOM_BOUNCE" => Some(SUBTITLES_BLOCK_SHELF_MUSHROOM_BOUNCE),
             "SUBTITLES_BLOCK_SHULKER_BOX_CLOSE" => Some(SUBTITLES_BLOCK_SHULKER_BOX_CLOSE),
             "SUBTITLES_BLOCK_SHULKER_BOX_OPEN" => Some(SUBTITLES_BLOCK_SHULKER_BOX_OPEN),
             "SUBTITLES_BLOCK_SIGN_WAXED_INTERACT_FAIL" => {
@@ -28769,6 +30331,7 @@ pub mod java {
             "SUBTITLES_BLOCK_SNIFFER_EGG_HATCH" => Some(SUBTITLES_BLOCK_SNIFFER_EGG_HATCH),
             "SUBTITLES_BLOCK_SNIFFER_EGG_PLOP" => Some(SUBTITLES_BLOCK_SNIFFER_EGG_PLOP),
             "SUBTITLES_BLOCK_SPONGE_ABSORB" => Some(SUBTITLES_BLOCK_SPONGE_ABSORB),
+            "SUBTITLES_BLOCK_STRAW_BED_BREAK_LEAVE" => Some(SUBTITLES_BLOCK_STRAW_BED_BREAK_LEAVE),
             "SUBTITLES_BLOCK_SWEET_BERRY_BUSH_PICK_BERRIES" => {
                 Some(SUBTITLES_BLOCK_SWEET_BERRY_BUSH_PICK_BERRIES)
             }
@@ -29048,6 +30611,10 @@ pub mod java {
             "SUBTITLES_ENTITY_CREEPER_DEATH" => Some(SUBTITLES_ENTITY_CREEPER_DEATH),
             "SUBTITLES_ENTITY_CREEPER_HURT" => Some(SUBTITLES_ENTITY_CREEPER_HURT),
             "SUBTITLES_ENTITY_CREEPER_PRIMED" => Some(SUBTITLES_ENTITY_CREEPER_PRIMED),
+            "SUBTITLES_ENTITY_CUSHION_BREAK" => Some(SUBTITLES_ENTITY_CUSHION_BREAK),
+            "SUBTITLES_ENTITY_CUSHION_GET_UP" => Some(SUBTITLES_ENTITY_CUSHION_GET_UP),
+            "SUBTITLES_ENTITY_CUSHION_PLACE" => Some(SUBTITLES_ENTITY_CUSHION_PLACE),
+            "SUBTITLES_ENTITY_CUSHION_SIT" => Some(SUBTITLES_ENTITY_CUSHION_SIT),
             "SUBTITLES_ENTITY_DOLPHIN_AMBIENT" => Some(SUBTITLES_ENTITY_DOLPHIN_AMBIENT),
             "SUBTITLES_ENTITY_DOLPHIN_AMBIENT_WATER" => {
                 Some(SUBTITLES_ENTITY_DOLPHIN_AMBIENT_WATER)
@@ -29229,6 +30796,7 @@ pub mod java {
                 Some(SUBTITLES_ENTITY_HAPPY_GHAST_HARNESS_GOGGLES_UP)
             }
             "SUBTITLES_ENTITY_HAPPY_GHAST_HURT" => Some(SUBTITLES_ENTITY_HAPPY_GHAST_HURT),
+            "SUBTITLES_ENTITY_HAPPY_GHAST_RIDING" => Some(SUBTITLES_ENTITY_HAPPY_GHAST_RIDING),
             "SUBTITLES_ENTITY_HAPPY_GHAST_UNEQUIP" => Some(SUBTITLES_ENTITY_HAPPY_GHAST_UNEQUIP),
             "SUBTITLES_ENTITY_HOGLIN_AMBIENT" => Some(SUBTITLES_ENTITY_HOGLIN_AMBIENT),
             "SUBTITLES_ENTITY_HOGLIN_ANGRY" => Some(SUBTITLES_ENTITY_HOGLIN_ANGRY),
@@ -29340,6 +30908,7 @@ pub mod java {
             "SUBTITLES_ENTITY_NAUTILUS_EAT" => Some(SUBTITLES_ENTITY_NAUTILUS_EAT),
             "SUBTITLES_ENTITY_NAUTILUS_HURT" => Some(SUBTITLES_ENTITY_NAUTILUS_HURT),
             "SUBTITLES_ENTITY_NAUTILUS_HURT_LAND" => Some(SUBTITLES_ENTITY_NAUTILUS_HURT_LAND),
+            "SUBTITLES_ENTITY_NAUTILUS_RIDING" => Some(SUBTITLES_ENTITY_NAUTILUS_RIDING),
             "SUBTITLES_ENTITY_NAUTILUS_SWIM" => Some(SUBTITLES_ENTITY_NAUTILUS_SWIM),
             "SUBTITLES_ENTITY_PAINTING_BREAK" => Some(SUBTITLES_ENTITY_PAINTING_BREAK),
             "SUBTITLES_ENTITY_PAINTING_PLACE" => Some(SUBTITLES_ENTITY_PAINTING_PLACE),
@@ -30229,6 +31798,8 @@ pub mod java {
             "TEST_ERROR_VALUE_NOT_EQUAL" => Some(TEST_ERROR_VALUE_NOT_EQUAL),
             "TEST_ERROR_VALUE_NOT_IN_BETWEEN" => Some(TEST_ERROR_VALUE_NOT_IN_BETWEEN),
             "TEST_ERROR_WRONG_BLOCK_ENTITY" => Some(TEST_ERROR_WRONG_BLOCK_ENTITY),
+            "TEST_PLAYER_COORDINATES" => Some(TEST_PLAYER_COORDINATES),
+            "TEST_RUN_COORDINATES" => Some(TEST_RUN_COORDINATES),
             "TEST_BLOCK_ERROR_MISSING" => Some(TEST_BLOCK_ERROR_MISSING),
             "TEST_BLOCK_ERROR_TOO_MANY" => Some(TEST_BLOCK_ERROR_TOO_MANY),
             "TEST_BLOCK_INVALID_TIMEOUT" => Some(TEST_BLOCK_INVALID_TIMEOUT),
@@ -30245,6 +31816,7 @@ pub mod java {
             "TEST_INSTANCE_ACTION_RUN" => Some(TEST_INSTANCE_ACTION_RUN),
             "TEST_INSTANCE_ACTION_SAVE" => Some(TEST_INSTANCE_ACTION_SAVE),
             "TEST_INSTANCE_DESCRIPTION_BATCH" => Some(TEST_INSTANCE_DESCRIPTION_BATCH),
+            "TEST_INSTANCE_DESCRIPTION_DIMENSION" => Some(TEST_INSTANCE_DESCRIPTION_DIMENSION),
             "TEST_INSTANCE_DESCRIPTION_FAILED" => Some(TEST_INSTANCE_DESCRIPTION_FAILED),
             "TEST_INSTANCE_DESCRIPTION_FUNCTION" => Some(TEST_INSTANCE_DESCRIPTION_FUNCTION),
             "TEST_INSTANCE_DESCRIPTION_INVALID_ID" => Some(TEST_INSTANCE_DESCRIPTION_INVALID_ID),
@@ -30342,6 +31914,9 @@ pub mod java {
             }
             "TUTORIAL_SOCIALINTERACTIONS_TITLE" => Some(TUTORIAL_SOCIALINTERACTIONS_TITLE),
             "UPGRADE_MINECRAFT_NETHERITE_UPGRADE" => Some(UPGRADE_MINECRAFT_NETHERITE_UPGRADE),
+            "UPGRADEWORLD_ABORTED_FILE_ALREADY_EXISTS" => {
+                Some(UPGRADEWORLD_ABORTED_FILE_ALREADY_EXISTS)
+            }
             "UPGRADEWORLD_ABORTED_MESSAGE" => Some(UPGRADEWORLD_ABORTED_MESSAGE),
             "UPGRADEWORLD_ABORTED_REPORTBUG" => Some(UPGRADEWORLD_ABORTED_REPORTBUG),
             "UPGRADEWORLD_ABORTED_TITLE" => Some(UPGRADEWORLD_ABORTED_TITLE),
@@ -30405,7 +31980,7 @@ pub mod java {
                 Some("Command set: %s, but command blocks are still disabled")
             }
             "advMode.setCommand.success" => Some("Command set: %s"),
-            "advMode.trackOutput" => Some("Track output"),
+            "advMode.trackOutput" => Some("Track Output"),
             "advMode.triggering" => Some("Triggering"),
             "advMode.type" => Some("Type"),
             "advancement.advancementNotFound" => Some("Unknown advancement: %s"),
@@ -30859,7 +32434,7 @@ pub mod java {
             "advancements.story.form_obsidian.description" => Some("Obtain a block of Obsidian"),
             "advancements.story.form_obsidian.title" => Some("Ice Bucket Challenge"),
             "advancements.story.iron_tools.description" => Some("Upgrade your Pickaxe"),
-            "advancements.story.iron_tools.title" => Some("Isn't It Iron Pick"),
+            "advancements.story.iron_tools.title" => Some("Isn't It Iron Pick?"),
             "advancements.story.lava_bucket.description" => Some("Fill a Bucket with lava"),
             "advancements.story.lava_bucket.title" => Some("Hot Stuff"),
             "advancements.story.mine_diamond.description" => Some("Acquire diamonds"),
@@ -30957,7 +32532,7 @@ pub mod java {
             "argument.entity.toomany" => {
                 Some("Only one entity is allowed, but the provided selector allows more than one")
             }
-            "argument.enum.invalid" => Some("Invalid value \"%s\""),
+            "argument.enum.invalid" => Some("Invalid value '%s'"),
             "argument.float.big" => Some("Float must not be more than %s: found %s"),
             "argument.float.low" => Some("Float must not be less than %s: found %s"),
             "argument.gamemode.invalid" => Some("Unknown game mode: %s"),
@@ -30993,9 +32568,9 @@ pub mod java {
             "argument.pos.missing.double" => Some("Expected a coordinate"),
             "argument.pos.missing.int" => Some("Expected a block position"),
             "argument.pos.mixed" => {
-                Some("Cannot mix world & local coordinates (everything must either use ^ or not)")
+                Some("Cannot mix world and local coordinates (everything must either use ^ or not)")
             }
-            "argument.pos.outofbounds" => Some("That position is outside the allowed boundaries."),
+            "argument.pos.outofbounds" => Some("That position is outside the allowed boundaries"),
             "argument.pos.outofworld" => Some("That position is out of this world!"),
             "argument.pos.unloaded" => Some("That position is not loaded"),
             "argument.pos2d.incomplete" => Some("Incomplete (expected 2 coordinates)"),
@@ -31023,6 +32598,7 @@ pub mod java {
             "argument.scoreHolder.empty" => Some("No relevant score holders could be found"),
             "argument.scoreboardDisplaySlot.invalid" => Some("Unknown display slot '%s'"),
             "argument.style.invalid" => Some("Invalid style: %s"),
+            "argument.swing_animation.invalid" => Some("Unknown swing animation type: %s"),
             "argument.time.invalid_tick_count" => Some("The tick count must be non-negative"),
             "argument.time.invalid_unit" => Some("Invalid unit"),
             "argument.time.tick_count_too_low" => {
@@ -31150,6 +32726,7 @@ pub mod java {
             "biome.minecraft.cherry_grove" => Some("Cherry Grove"),
             "biome.minecraft.cold_ocean" => Some("Cold Ocean"),
             "biome.minecraft.crimson_forest" => Some("Crimson Forest"),
+            "biome.minecraft.dappled_forest" => Some("Dappled Forest"),
             "biome.minecraft.dark_forest" => Some("Dark Forest"),
             "biome.minecraft.deep_cold_ocean" => Some("Deep Cold Ocean"),
             "biome.minecraft.deep_dark" => Some("Deep Dark"),
@@ -32111,12 +33688,16 @@ pub mod java {
             "block.minecraft.black_carpet" => Some("Black Carpet"),
             "block.minecraft.black_concrete" => Some("Black Concrete"),
             "block.minecraft.black_concrete_powder" => Some("Black Concrete Powder"),
+            "block.minecraft.black_concrete_slab" => Some("Black Concrete Slab"),
+            "block.minecraft.black_concrete_stairs" => Some("Black Concrete Stairs"),
             "block.minecraft.black_glazed_terracotta" => Some("Black Glazed Terracotta"),
             "block.minecraft.black_shulker_box" => Some("Black Shulker Box"),
             "block.minecraft.black_stained_glass" => Some("Black Stained Glass"),
             "block.minecraft.black_stained_glass_pane" => Some("Black Stained Glass Pane"),
             "block.minecraft.black_terracotta" => Some("Black Terracotta"),
             "block.minecraft.black_wool" => Some("Black Wool"),
+            "block.minecraft.black_wool_slab" => Some("Black Wool Slab"),
+            "block.minecraft.black_wool_stairs" => Some("Black Wool Stairs"),
             "block.minecraft.blackstone" => Some("Blackstone"),
             "block.minecraft.blackstone_slab" => Some("Blackstone Slab"),
             "block.minecraft.blackstone_stairs" => Some("Blackstone Stairs"),
@@ -32129,6 +33710,8 @@ pub mod java {
             "block.minecraft.blue_carpet" => Some("Blue Carpet"),
             "block.minecraft.blue_concrete" => Some("Blue Concrete"),
             "block.minecraft.blue_concrete_powder" => Some("Blue Concrete Powder"),
+            "block.minecraft.blue_concrete_slab" => Some("Blue Concrete Slab"),
+            "block.minecraft.blue_concrete_stairs" => Some("Blue Concrete Stairs"),
             "block.minecraft.blue_glazed_terracotta" => Some("Blue Glazed Terracotta"),
             "block.minecraft.blue_ice" => Some("Blue Ice"),
             "block.minecraft.blue_orchid" => Some("Blue Orchid"),
@@ -32137,6 +33720,8 @@ pub mod java {
             "block.minecraft.blue_stained_glass_pane" => Some("Blue Stained Glass Pane"),
             "block.minecraft.blue_terracotta" => Some("Blue Terracotta"),
             "block.minecraft.blue_wool" => Some("Blue Wool"),
+            "block.minecraft.blue_wool_slab" => Some("Blue Wool Slab"),
+            "block.minecraft.blue_wool_stairs" => Some("Blue Wool Stairs"),
             "block.minecraft.bone_block" => Some("Bone Block"),
             "block.minecraft.bookshelf" => Some("Bookshelf"),
             "block.minecraft.brain_coral" => Some("Brain Coral"),
@@ -32155,6 +33740,8 @@ pub mod java {
             "block.minecraft.brown_carpet" => Some("Brown Carpet"),
             "block.minecraft.brown_concrete" => Some("Brown Concrete"),
             "block.minecraft.brown_concrete_powder" => Some("Brown Concrete Powder"),
+            "block.minecraft.brown_concrete_slab" => Some("Brown Concrete Slab"),
+            "block.minecraft.brown_concrete_stairs" => Some("Brown Concrete Stairs"),
             "block.minecraft.brown_glazed_terracotta" => Some("Brown Glazed Terracotta"),
             "block.minecraft.brown_mushroom" => Some("Brown Mushroom"),
             "block.minecraft.brown_mushroom_block" => Some("Brown Mushroom Block"),
@@ -32163,6 +33750,8 @@ pub mod java {
             "block.minecraft.brown_stained_glass_pane" => Some("Brown Stained Glass Pane"),
             "block.minecraft.brown_terracotta" => Some("Brown Terracotta"),
             "block.minecraft.brown_wool" => Some("Brown Wool"),
+            "block.minecraft.brown_wool_slab" => Some("Brown Wool Slab"),
+            "block.minecraft.brown_wool_stairs" => Some("Brown Wool Stairs"),
             "block.minecraft.bubble_column" => Some("Bubble Column"),
             "block.minecraft.bubble_coral" => Some("Bubble Coral"),
             "block.minecraft.bubble_coral_block" => Some("Bubble Coral Block"),
@@ -32310,12 +33899,16 @@ pub mod java {
             "block.minecraft.cyan_carpet" => Some("Cyan Carpet"),
             "block.minecraft.cyan_concrete" => Some("Cyan Concrete"),
             "block.minecraft.cyan_concrete_powder" => Some("Cyan Concrete Powder"),
+            "block.minecraft.cyan_concrete_slab" => Some("Cyan Concrete Slab"),
+            "block.minecraft.cyan_concrete_stairs" => Some("Cyan Concrete Stairs"),
             "block.minecraft.cyan_glazed_terracotta" => Some("Cyan Glazed Terracotta"),
             "block.minecraft.cyan_shulker_box" => Some("Cyan Shulker Box"),
             "block.minecraft.cyan_stained_glass" => Some("Cyan Stained Glass"),
             "block.minecraft.cyan_stained_glass_pane" => Some("Cyan Stained Glass Pane"),
             "block.minecraft.cyan_terracotta" => Some("Cyan Terracotta"),
             "block.minecraft.cyan_wool" => Some("Cyan Wool"),
+            "block.minecraft.cyan_wool_slab" => Some("Cyan Wool Slab"),
+            "block.minecraft.cyan_wool_stairs" => Some("Cyan Wool Stairs"),
             "block.minecraft.damaged_anvil" => Some("Damaged Anvil"),
             "block.minecraft.dandelion" => Some("Dandelion"),
             "block.minecraft.dark_oak_button" => Some("Dark Oak Button"),
@@ -32461,12 +34054,16 @@ pub mod java {
             "block.minecraft.gray_carpet" => Some("Gray Carpet"),
             "block.minecraft.gray_concrete" => Some("Gray Concrete"),
             "block.minecraft.gray_concrete_powder" => Some("Gray Concrete Powder"),
+            "block.minecraft.gray_concrete_slab" => Some("Gray Concrete Slab"),
+            "block.minecraft.gray_concrete_stairs" => Some("Gray Concrete Stairs"),
             "block.minecraft.gray_glazed_terracotta" => Some("Gray Glazed Terracotta"),
             "block.minecraft.gray_shulker_box" => Some("Gray Shulker Box"),
             "block.minecraft.gray_stained_glass" => Some("Gray Stained Glass"),
             "block.minecraft.gray_stained_glass_pane" => Some("Gray Stained Glass Pane"),
             "block.minecraft.gray_terracotta" => Some("Gray Terracotta"),
             "block.minecraft.gray_wool" => Some("Gray Wool"),
+            "block.minecraft.gray_wool_slab" => Some("Gray Wool Slab"),
+            "block.minecraft.gray_wool_stairs" => Some("Gray Wool Stairs"),
             "block.minecraft.green_banner" => Some("Green Banner"),
             "block.minecraft.green_bed" => Some("Green Bed"),
             "block.minecraft.green_candle" => Some("Green Candle"),
@@ -32474,12 +34071,16 @@ pub mod java {
             "block.minecraft.green_carpet" => Some("Green Carpet"),
             "block.minecraft.green_concrete" => Some("Green Concrete"),
             "block.minecraft.green_concrete_powder" => Some("Green Concrete Powder"),
+            "block.minecraft.green_concrete_slab" => Some("Green Concrete Slab"),
+            "block.minecraft.green_concrete_stairs" => Some("Green Concrete Stairs"),
             "block.minecraft.green_glazed_terracotta" => Some("Green Glazed Terracotta"),
             "block.minecraft.green_shulker_box" => Some("Green Shulker Box"),
             "block.minecraft.green_stained_glass" => Some("Green Stained Glass"),
             "block.minecraft.green_stained_glass_pane" => Some("Green Stained Glass Pane"),
             "block.minecraft.green_terracotta" => Some("Green Terracotta"),
             "block.minecraft.green_wool" => Some("Green Wool"),
+            "block.minecraft.green_wool_slab" => Some("Green Wool Slab"),
+            "block.minecraft.green_wool_stairs" => Some("Green Wool Stairs"),
             "block.minecraft.grindstone" => Some("Grindstone"),
             "block.minecraft.hanging_roots" => Some("Hanging Roots"),
             "block.minecraft.hay_block" => Some("Hay Bale"),
@@ -32554,6 +34155,8 @@ pub mod java {
             "block.minecraft.light_blue_carpet" => Some("Light Blue Carpet"),
             "block.minecraft.light_blue_concrete" => Some("Light Blue Concrete"),
             "block.minecraft.light_blue_concrete_powder" => Some("Light Blue Concrete Powder"),
+            "block.minecraft.light_blue_concrete_slab" => Some("Light Blue Concrete Slab"),
+            "block.minecraft.light_blue_concrete_stairs" => Some("Light Blue Concrete Stairs"),
             "block.minecraft.light_blue_glazed_terracotta" => Some("Light Blue Glazed Terracotta"),
             "block.minecraft.light_blue_shulker_box" => Some("Light Blue Shulker Box"),
             "block.minecraft.light_blue_stained_glass" => Some("Light Blue Stained Glass"),
@@ -32562,6 +34165,8 @@ pub mod java {
             }
             "block.minecraft.light_blue_terracotta" => Some("Light Blue Terracotta"),
             "block.minecraft.light_blue_wool" => Some("Light Blue Wool"),
+            "block.minecraft.light_blue_wool_slab" => Some("Light Blue Wool Slab"),
+            "block.minecraft.light_blue_wool_stairs" => Some("Light Blue Wool Stairs"),
             "block.minecraft.light_gray_banner" => Some("Light Gray Banner"),
             "block.minecraft.light_gray_bed" => Some("Light Gray Bed"),
             "block.minecraft.light_gray_candle" => Some("Light Gray Candle"),
@@ -32569,6 +34174,8 @@ pub mod java {
             "block.minecraft.light_gray_carpet" => Some("Light Gray Carpet"),
             "block.minecraft.light_gray_concrete" => Some("Light Gray Concrete"),
             "block.minecraft.light_gray_concrete_powder" => Some("Light Gray Concrete Powder"),
+            "block.minecraft.light_gray_concrete_slab" => Some("Light Gray Concrete Slab"),
+            "block.minecraft.light_gray_concrete_stairs" => Some("Light Gray Concrete Stairs"),
             "block.minecraft.light_gray_glazed_terracotta" => Some("Light Gray Glazed Terracotta"),
             "block.minecraft.light_gray_shulker_box" => Some("Light Gray Shulker Box"),
             "block.minecraft.light_gray_stained_glass" => Some("Light Gray Stained Glass"),
@@ -32577,6 +34184,8 @@ pub mod java {
             }
             "block.minecraft.light_gray_terracotta" => Some("Light Gray Terracotta"),
             "block.minecraft.light_gray_wool" => Some("Light Gray Wool"),
+            "block.minecraft.light_gray_wool_slab" => Some("Light Gray Wool Slab"),
+            "block.minecraft.light_gray_wool_stairs" => Some("Light Gray Wool Stairs"),
             "block.minecraft.light_weighted_pressure_plate" => {
                 Some("Light Weighted Pressure Plate")
             }
@@ -32591,12 +34200,16 @@ pub mod java {
             "block.minecraft.lime_carpet" => Some("Lime Carpet"),
             "block.minecraft.lime_concrete" => Some("Lime Concrete"),
             "block.minecraft.lime_concrete_powder" => Some("Lime Concrete Powder"),
+            "block.minecraft.lime_concrete_slab" => Some("Lime Concrete Slab"),
+            "block.minecraft.lime_concrete_stairs" => Some("Lime Concrete Stairs"),
             "block.minecraft.lime_glazed_terracotta" => Some("Lime Glazed Terracotta"),
             "block.minecraft.lime_shulker_box" => Some("Lime Shulker Box"),
             "block.minecraft.lime_stained_glass" => Some("Lime Stained Glass"),
             "block.minecraft.lime_stained_glass_pane" => Some("Lime Stained Glass Pane"),
             "block.minecraft.lime_terracotta" => Some("Lime Terracotta"),
             "block.minecraft.lime_wool" => Some("Lime Wool"),
+            "block.minecraft.lime_wool_slab" => Some("Lime Wool Slab"),
+            "block.minecraft.lime_wool_stairs" => Some("Lime Wool Stairs"),
             "block.minecraft.lodestone" => Some("Lodestone"),
             "block.minecraft.loom" => Some("Loom"),
             "block.minecraft.magenta_banner" => Some("Magenta Banner"),
@@ -32606,12 +34219,16 @@ pub mod java {
             "block.minecraft.magenta_carpet" => Some("Magenta Carpet"),
             "block.minecraft.magenta_concrete" => Some("Magenta Concrete"),
             "block.minecraft.magenta_concrete_powder" => Some("Magenta Concrete Powder"),
+            "block.minecraft.magenta_concrete_slab" => Some("Magenta Concrete Slab"),
+            "block.minecraft.magenta_concrete_stairs" => Some("Magenta Concrete Stairs"),
             "block.minecraft.magenta_glazed_terracotta" => Some("Magenta Glazed Terracotta"),
             "block.minecraft.magenta_shulker_box" => Some("Magenta Shulker Box"),
             "block.minecraft.magenta_stained_glass" => Some("Magenta Stained Glass"),
             "block.minecraft.magenta_stained_glass_pane" => Some("Magenta Stained Glass Pane"),
             "block.minecraft.magenta_terracotta" => Some("Magenta Terracotta"),
             "block.minecraft.magenta_wool" => Some("Magenta Wool"),
+            "block.minecraft.magenta_wool_slab" => Some("Magenta Wool Slab"),
+            "block.minecraft.magenta_wool_stairs" => Some("Magenta Wool Stairs"),
             "block.minecraft.magma_block" => Some("Magma Block"),
             "block.minecraft.mangrove_button" => Some("Mangrove Button"),
             "block.minecraft.mangrove_door" => Some("Mangrove Door"),
@@ -32698,13 +34315,18 @@ pub mod java {
             "block.minecraft.orange_carpet" => Some("Orange Carpet"),
             "block.minecraft.orange_concrete" => Some("Orange Concrete"),
             "block.minecraft.orange_concrete_powder" => Some("Orange Concrete Powder"),
+            "block.minecraft.orange_concrete_slab" => Some("Orange Concrete Slab"),
+            "block.minecraft.orange_concrete_stairs" => Some("Orange Concrete Stairs"),
             "block.minecraft.orange_glazed_terracotta" => Some("Orange Glazed Terracotta"),
+            "block.minecraft.orange_poplar_leaves" => Some("Orange Poplar Leaves"),
             "block.minecraft.orange_shulker_box" => Some("Orange Shulker Box"),
             "block.minecraft.orange_stained_glass" => Some("Orange Stained Glass"),
             "block.minecraft.orange_stained_glass_pane" => Some("Orange Stained Glass Pane"),
             "block.minecraft.orange_terracotta" => Some("Orange Terracotta"),
             "block.minecraft.orange_tulip" => Some("Orange Tulip"),
             "block.minecraft.orange_wool" => Some("Orange Wool"),
+            "block.minecraft.orange_wool_slab" => Some("Orange Wool Slab"),
+            "block.minecraft.orange_wool_stairs" => Some("Orange Wool Stairs"),
             "block.minecraft.oxeye_daisy" => Some("Oxeye Daisy"),
             "block.minecraft.oxidized_chiseled_copper" => Some("Oxidized Chiseled Copper"),
             "block.minecraft.oxidized_copper" => Some("Oxidized Copper"),
@@ -32756,6 +34378,8 @@ pub mod java {
             "block.minecraft.pink_carpet" => Some("Pink Carpet"),
             "block.minecraft.pink_concrete" => Some("Pink Concrete"),
             "block.minecraft.pink_concrete_powder" => Some("Pink Concrete Powder"),
+            "block.minecraft.pink_concrete_slab" => Some("Pink Concrete Slab"),
+            "block.minecraft.pink_concrete_stairs" => Some("Pink Concrete Stairs"),
             "block.minecraft.pink_glazed_terracotta" => Some("Pink Glazed Terracotta"),
             "block.minecraft.pink_petals" => Some("Pink Petals"),
             "block.minecraft.pink_shulker_box" => Some("Pink Shulker Box"),
@@ -32764,6 +34388,8 @@ pub mod java {
             "block.minecraft.pink_terracotta" => Some("Pink Terracotta"),
             "block.minecraft.pink_tulip" => Some("Pink Tulip"),
             "block.minecraft.pink_wool" => Some("Pink Wool"),
+            "block.minecraft.pink_wool_slab" => Some("Pink Wool Slab"),
+            "block.minecraft.pink_wool_stairs" => Some("Pink Wool Stairs"),
             "block.minecraft.piston" => Some("Piston"),
             "block.minecraft.piston_head" => Some("Piston Head"),
             "block.minecraft.pitcher_crop" => Some("Pitcher Crop"),
@@ -32817,6 +34443,24 @@ pub mod java {
             "block.minecraft.polished_tuff_slab" => Some("Polished Tuff Slab"),
             "block.minecraft.polished_tuff_stairs" => Some("Polished Tuff Stairs"),
             "block.minecraft.polished_tuff_wall" => Some("Polished Tuff Wall"),
+            "block.minecraft.poplar_button" => Some("Poplar Button"),
+            "block.minecraft.poplar_door" => Some("Poplar Door"),
+            "block.minecraft.poplar_fence" => Some("Poplar Fence"),
+            "block.minecraft.poplar_fence_gate" => Some("Poplar Fence Gate"),
+            "block.minecraft.poplar_hanging_sign" => Some("Poplar Hanging Sign"),
+            "block.minecraft.poplar_leaves" => Some("Poplar Leaves"),
+            "block.minecraft.poplar_log" => Some("Poplar Log"),
+            "block.minecraft.poplar_planks" => Some("Poplar Planks"),
+            "block.minecraft.poplar_pressure_plate" => Some("Poplar Pressure Plate"),
+            "block.minecraft.poplar_sapling" => Some("Poplar Sapling"),
+            "block.minecraft.poplar_shelf" => Some("Poplar Shelf"),
+            "block.minecraft.poplar_sign" => Some("Poplar Sign"),
+            "block.minecraft.poplar_slab" => Some("Poplar Slab"),
+            "block.minecraft.poplar_stairs" => Some("Poplar Stairs"),
+            "block.minecraft.poplar_trapdoor" => Some("Poplar Trapdoor"),
+            "block.minecraft.poplar_wall_hanging_sign" => Some("Poplar Wall Hanging Sign"),
+            "block.minecraft.poplar_wall_sign" => Some("Poplar Wall Sign"),
+            "block.minecraft.poplar_wood" => Some("Poplar Wood"),
             "block.minecraft.poppy" => Some("Poppy"),
             "block.minecraft.potatoes" => Some("Potatoes"),
             "block.minecraft.potent_sulfur" => Some("Potent Sulfur"),
@@ -32849,6 +34493,7 @@ pub mod java {
             "block.minecraft.potted_oxeye_daisy" => Some("Potted Oxeye Daisy"),
             "block.minecraft.potted_pale_oak_sapling" => Some("Potted Pale Oak Sapling"),
             "block.minecraft.potted_pink_tulip" => Some("Potted Pink Tulip"),
+            "block.minecraft.potted_poplar_sapling" => Some("Potted Poplar Sapling"),
             "block.minecraft.potted_poppy" => Some("Potted Poppy"),
             "block.minecraft.potted_red_mushroom" => Some("Potted Red Mushroom"),
             "block.minecraft.potted_red_tulip" => Some("Potted Red Tulip"),
@@ -32877,12 +34522,16 @@ pub mod java {
             "block.minecraft.purple_carpet" => Some("Purple Carpet"),
             "block.minecraft.purple_concrete" => Some("Purple Concrete"),
             "block.minecraft.purple_concrete_powder" => Some("Purple Concrete Powder"),
+            "block.minecraft.purple_concrete_slab" => Some("Purple Concrete Slab"),
+            "block.minecraft.purple_concrete_stairs" => Some("Purple Concrete Stairs"),
             "block.minecraft.purple_glazed_terracotta" => Some("Purple Glazed Terracotta"),
             "block.minecraft.purple_shulker_box" => Some("Purple Shulker Box"),
             "block.minecraft.purple_stained_glass" => Some("Purple Stained Glass"),
             "block.minecraft.purple_stained_glass_pane" => Some("Purple Stained Glass Pane"),
             "block.minecraft.purple_terracotta" => Some("Purple Terracotta"),
             "block.minecraft.purple_wool" => Some("Purple Wool"),
+            "block.minecraft.purple_wool_slab" => Some("Purple Wool Slab"),
+            "block.minecraft.purple_wool_stairs" => Some("Purple Wool Stairs"),
             "block.minecraft.purpur_block" => Some("Purpur Block"),
             "block.minecraft.purpur_pillar" => Some("Purpur Pillar"),
             "block.minecraft.purpur_slab" => Some("Purpur Slab"),
@@ -32903,6 +34552,8 @@ pub mod java {
             "block.minecraft.red_carpet" => Some("Red Carpet"),
             "block.minecraft.red_concrete" => Some("Red Concrete"),
             "block.minecraft.red_concrete_powder" => Some("Red Concrete Powder"),
+            "block.minecraft.red_concrete_slab" => Some("Red Concrete Slab"),
+            "block.minecraft.red_concrete_stairs" => Some("Red Concrete Stairs"),
             "block.minecraft.red_glazed_terracotta" => Some("Red Glazed Terracotta"),
             "block.minecraft.red_mushroom" => Some("Red Mushroom"),
             "block.minecraft.red_mushroom_block" => Some("Red Mushroom Block"),
@@ -32910,17 +34561,21 @@ pub mod java {
             "block.minecraft.red_nether_brick_stairs" => Some("Red Nether Brick Stairs"),
             "block.minecraft.red_nether_brick_wall" => Some("Red Nether Brick Wall"),
             "block.minecraft.red_nether_bricks" => Some("Red Nether Bricks"),
+            "block.minecraft.red_poplar_leaves" => Some("Red Poplar Leaves"),
             "block.minecraft.red_sand" => Some("Red Sand"),
             "block.minecraft.red_sandstone" => Some("Red Sandstone"),
             "block.minecraft.red_sandstone_slab" => Some("Red Sandstone Slab"),
             "block.minecraft.red_sandstone_stairs" => Some("Red Sandstone Stairs"),
             "block.minecraft.red_sandstone_wall" => Some("Red Sandstone Wall"),
+            "block.minecraft.red_shrub" => Some("Red Shrub"),
             "block.minecraft.red_shulker_box" => Some("Red Shulker Box"),
             "block.minecraft.red_stained_glass" => Some("Red Stained Glass"),
             "block.minecraft.red_stained_glass_pane" => Some("Red Stained Glass Pane"),
             "block.minecraft.red_terracotta" => Some("Red Terracotta"),
             "block.minecraft.red_tulip" => Some("Red Tulip"),
             "block.minecraft.red_wool" => Some("Red Wool"),
+            "block.minecraft.red_wool_slab" => Some("Red Wool Slab"),
+            "block.minecraft.red_wool_stairs" => Some("Red Wool Stairs"),
             "block.minecraft.redstone_block" => Some("Block of Redstone"),
             "block.minecraft.redstone_lamp" => Some("Redstone Lamp"),
             "block.minecraft.redstone_ore" => Some("Redstone Ore"),
@@ -32954,6 +34609,7 @@ pub mod java {
             "block.minecraft.sea_pickle" => Some("Sea Pickle"),
             "block.minecraft.seagrass" => Some("Seagrass"),
             "block.minecraft.set_spawn" => Some("Respawn point set"),
+            "block.minecraft.shelf_mushroom" => Some("Shelf Mushroom"),
             "block.minecraft.short_dry_grass" => Some("Short Dry Grass"),
             "block.minecraft.short_grass" => Some("Short Grass"),
             "block.minecraft.shroomlight" => Some("Shroomlight"),
@@ -33024,6 +34680,7 @@ pub mod java {
             "block.minecraft.stone_slab" => Some("Stone Slab"),
             "block.minecraft.stone_stairs" => Some("Stone Stairs"),
             "block.minecraft.stonecutter" => Some("Stonecutter"),
+            "block.minecraft.straw_bed" => Some("Straw Bed"),
             "block.minecraft.stripped_acacia_log" => Some("Stripped Acacia Log"),
             "block.minecraft.stripped_acacia_wood" => Some("Stripped Acacia Wood"),
             "block.minecraft.stripped_bamboo_block" => Some("Block of Stripped Bamboo"),
@@ -33043,6 +34700,8 @@ pub mod java {
             "block.minecraft.stripped_oak_wood" => Some("Stripped Oak Wood"),
             "block.minecraft.stripped_pale_oak_log" => Some("Stripped Pale Oak Log"),
             "block.minecraft.stripped_pale_oak_wood" => Some("Stripped Pale Oak Wood"),
+            "block.minecraft.stripped_poplar_log" => Some("Stripped Poplar Log"),
+            "block.minecraft.stripped_poplar_wood" => Some("Stripped Poplar Wood"),
             "block.minecraft.stripped_spruce_log" => Some("Stripped Spruce Log"),
             "block.minecraft.stripped_spruce_wood" => Some("Stripped Spruce Wood"),
             "block.minecraft.stripped_warped_hyphae" => Some("Stripped Warped Hyphae"),
@@ -33246,6 +34905,8 @@ pub mod java {
             "block.minecraft.white_carpet" => Some("White Carpet"),
             "block.minecraft.white_concrete" => Some("White Concrete"),
             "block.minecraft.white_concrete_powder" => Some("White Concrete Powder"),
+            "block.minecraft.white_concrete_slab" => Some("White Concrete Slab"),
+            "block.minecraft.white_concrete_stairs" => Some("White Concrete Stairs"),
             "block.minecraft.white_glazed_terracotta" => Some("White Glazed Terracotta"),
             "block.minecraft.white_shulker_box" => Some("White Shulker Box"),
             "block.minecraft.white_stained_glass" => Some("White Stained Glass"),
@@ -33253,6 +34914,8 @@ pub mod java {
             "block.minecraft.white_terracotta" => Some("White Terracotta"),
             "block.minecraft.white_tulip" => Some("White Tulip"),
             "block.minecraft.white_wool" => Some("White Wool"),
+            "block.minecraft.white_wool_slab" => Some("White Wool Slab"),
+            "block.minecraft.white_wool_stairs" => Some("White Wool Stairs"),
             "block.minecraft.wildflowers" => Some("Wildflowers"),
             "block.minecraft.wither_rose" => Some("Wither Rose"),
             "block.minecraft.wither_skeleton_skull" => Some("Wither Skeleton Skull"),
@@ -33264,12 +34927,17 @@ pub mod java {
             "block.minecraft.yellow_carpet" => Some("Yellow Carpet"),
             "block.minecraft.yellow_concrete" => Some("Yellow Concrete"),
             "block.minecraft.yellow_concrete_powder" => Some("Yellow Concrete Powder"),
+            "block.minecraft.yellow_concrete_slab" => Some("Yellow Concrete Slab"),
+            "block.minecraft.yellow_concrete_stairs" => Some("Yellow Concrete Stairs"),
             "block.minecraft.yellow_glazed_terracotta" => Some("Yellow Glazed Terracotta"),
+            "block.minecraft.yellow_poplar_leaves" => Some("Yellow Poplar Leaves"),
             "block.minecraft.yellow_shulker_box" => Some("Yellow Shulker Box"),
             "block.minecraft.yellow_stained_glass" => Some("Yellow Stained Glass"),
             "block.minecraft.yellow_stained_glass_pane" => Some("Yellow Stained Glass Pane"),
             "block.minecraft.yellow_terracotta" => Some("Yellow Terracotta"),
             "block.minecraft.yellow_wool" => Some("Yellow Wool"),
+            "block.minecraft.yellow_wool_slab" => Some("Yellow Wool Slab"),
+            "block.minecraft.yellow_wool_stairs" => Some("Yellow Wool Stairs"),
             "block.minecraft.zombie_head" => Some("Zombie Head"),
             "block.minecraft.zombie_wall_head" => Some("Zombie Wall Head"),
             "book.byAuthor" => Some("by %1$s"),
@@ -33366,11 +35034,11 @@ pub mod java {
             "chat_restriction.chat_disabled_by_options.action" => {
                 Some("Go to the Chat Settings screen")
             }
-            "chat_restriction.disabled_by_launcher" => Some("Chat is restricted by the launcher"),
+            "chat_restriction.disabled_by_launcher" => Some("Chat is restricted by the launcher."),
             "chat_restriction.disabled_by_profile" => {
                 Some("Chat is restricted by profile settings.")
             }
-            "chat_restriction.disabled_by_profile.action" => Some("Go to your profile settings"),
+            "chat_restriction.disabled_by_profile.action" => Some("Go to Your Profile Settings"),
             "chat_screen.commands_not_allowed" => Some("Sending commands is not allowed"),
             "chat_screen.message" => Some("Message to send: %s"),
             "chat_screen.messages_not_allowed" => Some("Sending chat messages is not allowed"),
@@ -33403,6 +35071,16 @@ pub mod java {
             "color.minecraft.red" => Some("Red"),
             "color.minecraft.white" => Some("White"),
             "color.minecraft.yellow" => Some("Yellow"),
+            "command.compute.result.named.exact" => Some("%s returned value %s"),
+            "command.compute.result.named.invalid" => Some("%s returned invalid value (%s)"),
+            "command.compute.result.named.rounded" => Some("%s returned value %s (rounded to %s)"),
+            "command.compute.result.unnamed.exact" => Some("Number provider returned value %s"),
+            "command.compute.result.unnamed.invalid" => {
+                Some("Number provider returned invalid value (%s)")
+            }
+            "command.compute.result.unnamed.rounded" => {
+                Some("Number provider returned value %s (rounded to %s)")
+            }
             "command.context.here" => Some("<--[HERE]"),
             "command.context.parse_error" => Some("%s at position %s: %s"),
             "command.exception" => Some("Could not parse command: %s"),
@@ -33541,7 +35219,9 @@ pub mod java {
             }
             "commands.bossbar.get.value" => Some("Custom bossbar %s has a value of %s"),
             "commands.bossbar.get.visible.hidden" => Some("Custom bossbar %s is currently hidden"),
-            "commands.bossbar.get.visible.visible" => Some("Custom bossbar %s is currently shown"),
+            "commands.bossbar.get.visible.visible" => {
+                Some("Custom bossbar %s is currently visible")
+            }
             "commands.bossbar.list.bars.none" => Some("There are no custom bossbars active"),
             "commands.bossbar.list.bars.some" => Some("There are %s custom bossbar(s) active: %s"),
             "commands.bossbar.remove.success" => Some("Removed custom bossbar %s"),
@@ -33553,7 +35233,7 @@ pub mod java {
                 Some("Custom bossbar %s has changed maximum to %s")
             }
             "commands.bossbar.set.max.unchanged" => {
-                Some("Nothing changed. That's already the max of this bossbar")
+                Some("Nothing changed. That's already the maximum of this bossbar")
             }
             "commands.bossbar.set.name.success" => Some("Custom bossbar %s has been renamed"),
             "commands.bossbar.set.name.unchanged" => {
@@ -33783,6 +35463,7 @@ pub mod java {
             "commands.fill.toobig" => {
                 Some("Too many blocks in the specified area (maximum %s, but specified %s)")
             }
+            "commands.fillbiome.no_changes" => Some("No biome entries were changed"),
             "commands.fillbiome.success" => Some("Biomes set between %s, %s, %s and %s, %s, %s"),
             "commands.fillbiome.success.count" => {
                 Some("%s biome entry/entries set between %s, %s, %s and %s, %s, %s")
@@ -33846,26 +35527,56 @@ pub mod java {
             "commands.function.success.single.result" => Some("Function '%2$s' returned %1$s"),
             "commands.gamemode.success.other" => Some("Set %s's game mode to %s"),
             "commands.gamemode.success.self" => Some("Set own game mode to %s"),
-            "commands.gamerule.query" => Some("Gamerule %s is currently set to: %s"),
-            "commands.gamerule.set" => Some("Gamerule %s is now set to: %s"),
+            "commands.gamerule.not_set" => Some("Game rule %s is already set to %s"),
+            "commands.gamerule.query" => Some("Game rule %s is currently set to %s"),
+            "commands.gamerule.set" => Some("Game rule %s is now set to %s"),
             "commands.give.failed.toomanyitems" => Some("Can't give more than %s of %s"),
             "commands.give.success.multiple" => Some("Gave %s %s to %s players"),
             "commands.give.success.single" => Some("Gave %s %s to %s"),
             "commands.help.failed" => Some("Unknown command or insufficient permissions"),
+            "commands.item.block.modify.success" => Some("Modified %s slot(s) at %s, %s, %s"),
+            "commands.item.block.replace.success" => Some("Replaced %s slot(s) at %s, %s, %s"),
+            "commands.item.block.replace.success.known_item" => {
+                Some("Replaced %s slot(s) at %s, %s, %s with %s")
+            }
             "commands.item.block.set.success" => Some("Replaced a slot at %s, %s, %s with %s"),
+            "commands.item.entity.modify.success.multiple" => {
+                Some("Modified slot(s) on %s entities")
+            }
+            "commands.item.entity.modify.success.single" => Some("Modified %s slot(s) on %s"),
+            "commands.item.entity.replace.success.multiple" => {
+                Some("Replaced slot(s) on %s entities")
+            }
+            "commands.item.entity.replace.success.multiple.known_item" => {
+                Some("Replaced slot(s) on %s entities with %s")
+            }
+            "commands.item.entity.replace.success.single" => Some("Replaced %s slot(s) on %s"),
+            "commands.item.entity.replace.success.single.known_item" => {
+                Some("Replaced %s slot(s) on %s with %s")
+            }
             "commands.item.entity.set.success.multiple" => {
                 Some("Replaced a slot on %s entities with %s")
             }
             "commands.item.entity.set.success.single" => Some("Replaced a slot on %s with %s"),
             "commands.item.source.no_such_slot" => Some("The source does not have slot %s"),
+            "commands.item.source.no_such_slot.unnamed" => {
+                Some("The source does not have specified slots")
+            }
             "commands.item.source.not_a_container" => {
                 Some("Source position %s, %s, %s is not a container")
+            }
+            "commands.item.target.failed" => Some("No targets accepted items into specified slots"),
+            "commands.item.target.failed.known_item" => {
+                Some("No targets accepted item %s into specified slots")
             }
             "commands.item.target.no_changed.known_item" => {
                 Some("No targets accepted item %s into slot %s")
             }
             "commands.item.target.no_changes" => Some("No targets accepted item into slot %s"),
             "commands.item.target.no_such_slot" => Some("The target does not have slot %s"),
+            "commands.item.target.no_such_slot.unnamed" => {
+                Some("The target does not have specified slots")
+            }
             "commands.item.target.not_a_container" => {
                 Some("Target position %s, %s, %s is not a container")
             }
@@ -33873,7 +35584,7 @@ pub mod java {
             "commands.jfr.start.failed" => Some("Failed to start JFR profiling"),
             "commands.jfr.started" => Some("JFR profiling started"),
             "commands.jfr.stopped" => Some("JFR profiling stopped and dumped to %s"),
-            "commands.kick.owner.failed" => Some("Cannot kick server owner in LAN game"),
+            "commands.kick.owner.failed" => Some("Cannot kick the server owner in a LAN game"),
             "commands.kick.singleplayer.failed" => {
                 Some("Cannot kick in an offline singleplayer game")
             }
@@ -33897,7 +35608,7 @@ pub mod java {
             "commands.locate.structure.success" => Some("The nearest %s is at %s (%s blocks away)"),
             "commands.message.display.incoming" => Some("%s whispers to you: %s"),
             "commands.message.display.outgoing" => Some("You whisper to %s: %s"),
-            "commands.op.failed" => Some("Nothing changed. The player already is an operator"),
+            "commands.op.failed" => Some("Nothing changed. The player is already an operator"),
             "commands.op.success" => Some("Made %s a server operator"),
             "commands.pardon.failed" => Some("Nothing changed. The player isn't banned"),
             "commands.pardon.success" => Some("Unbanned %s"),
@@ -33910,15 +35621,16 @@ pub mod java {
             "commands.perf.notRunning" => Some("The performance profiler hasn't started"),
             "commands.perf.reportFailed" => Some("Failed to create debug report"),
             "commands.perf.reportSaved" => Some("Created debug report in %s"),
-            "commands.perf.started" => {
-                Some("Started 10 second performance profiling run (use '/perf stop' to stop early)")
-            }
+            "commands.perf.started" => Some(
+                "Started a 10-second performance profiling run (use '/perf stop' to stop early)",
+            ),
             "commands.perf.stopped" => Some(
                 "Stopped performance profiling after %s second(s) and %s tick(s) (%s tick(s) per second)",
             ),
             "commands.place.feature.failed" => Some("Failed to place feature"),
             "commands.place.feature.invalid" => Some("There is no feature with type \"%s\""),
             "commands.place.feature.success" => Some("Placed \"%s\" at %s, %s, %s"),
+            "commands.place.feature.success.inline" => Some("Placed feature at %s, %s, %s"),
             "commands.place.jigsaw.failed" => Some("Failed to generate jigsaw"),
             "commands.place.jigsaw.invalid" => Some("There is no template pool with type \"%s\""),
             "commands.place.jigsaw.success" => Some("Generated jigsaw at %s, %s, %s"),
@@ -33931,6 +35643,29 @@ pub mod java {
             "commands.playsound.failed" => Some("The sound is too far away to be heard"),
             "commands.playsound.success.multiple" => Some("Played sound %s to %s players"),
             "commands.playsound.success.single" => Some("Played sound %s to %s"),
+            "commands.posteffect.add.failed" => {
+                Some("Player already has the specified post effect")
+            }
+            "commands.posteffect.add.success.multiple" => {
+                Some("Added post effect %s to %s players")
+            }
+            "commands.posteffect.add.success.single" => Some("Added post effect %s to %s"),
+            "commands.posteffect.clear.failed" => {
+                Some("Player does not have any post effects to remove")
+            }
+            "commands.posteffect.clear.success.multiple" => {
+                Some("Removed all post effects from %s players")
+            }
+            "commands.posteffect.clear.success.single" => Some("Removed all post effects from %s"),
+            "commands.posteffect.list.empty" => Some("Player %s does not have any post effects"),
+            "commands.posteffect.list.success" => Some("Player %s has %s post effects: %s"),
+            "commands.posteffect.remove.failed" => {
+                Some("Player does not have the specified post effect")
+            }
+            "commands.posteffect.remove.success.multiple" => {
+                Some("Removed post effect %s from %s players")
+            }
+            "commands.posteffect.remove.success.single" => Some("Removed post effect %s from %s"),
             "commands.profile_fetch.copy_component" => Some("Copy Component"),
             "commands.profile_fetch.failed_to_serialize" => Some("Failed to serialize profile: %s"),
             "commands.profile_fetch.give_item" => Some("Give Item"),
@@ -33951,10 +35686,10 @@ pub mod java {
             "commands.publish.started.online" => Some("Online game hosted"),
             "commands.publish.success" => Some("Multiplayer game is now hosted on port %s"),
             "commands.random.error.range_too_large" => {
-                Some("The range of the random value must be at most 2147483646")
+                Some("The range of the random value must be at most 2147483647")
             }
             "commands.random.error.range_too_small" => {
-                Some("The range of the random value must be at least 2")
+                Some("The range of the random value must be at least 1")
             }
             "commands.random.reset.all.success" => Some("Reset %s random sequence(s)"),
             "commands.random.reset.success" => Some("Reset random sequence %s"),
@@ -34120,7 +35855,7 @@ pub mod java {
                 Some("The player idle timeout is now disabled")
             }
             "commands.setworldspawn.failure.not_overworld" => {
-                Some("Can only set the world spawn for overworld")
+                Some("Can only set the world spawn for the Overworld")
             }
             "commands.setworldspawn.success" => {
                 Some("Set the world spawn point to %s, %s, %s [%s]")
@@ -34166,11 +35901,11 @@ pub mod java {
             "commands.stopsound.success.sourceless.any" => Some("Stopped all sounds"),
             "commands.stopsound.success.sourceless.sound" => Some("Stopped sound '%s'"),
             "commands.stopwatch.already_exists" => Some("Stopwatch '%s' already exists"),
-            "commands.stopwatch.create.success" => Some("Created Stopwatch '%s'"),
+            "commands.stopwatch.create.success" => Some("Created stopwatch '%s'"),
             "commands.stopwatch.does_not_exist" => Some("Stopwatch '%s' does not exist"),
             "commands.stopwatch.query" => Some("Stopwatch '%s' has run for %ss"),
-            "commands.stopwatch.remove.success" => Some("Removed Stopwatch '%s'"),
-            "commands.stopwatch.restart.success" => Some("Restarted Stopwatch '%s'"),
+            "commands.stopwatch.remove.success" => Some("Removed stopwatch '%s'"),
+            "commands.stopwatch.restart.success" => Some("Restarted stopwatch '%s'"),
             "commands.summon.failed" => Some("Unable to summon entity"),
             "commands.summon.failed.peaceful" => {
                 Some("Monsters cannot be summoned in Peaceful difficulty")
@@ -34187,9 +35922,11 @@ pub mod java {
             "commands.tag.add.success.multiple" => Some("Added tag '%s' to %s entities"),
             "commands.tag.add.success.single" => Some("Added tag '%s' to %s"),
             "commands.tag.list.multiple.empty" => Some("There are no tags on the %s entities"),
-            "commands.tag.list.multiple.success" => Some("The %s entities have %s total tags: %s"),
+            "commands.tag.list.multiple.success" => {
+                Some("The %s entities have %s total tag(s): %s")
+            }
             "commands.tag.list.single.empty" => Some("%s has no tags"),
-            "commands.tag.list.single.success" => Some("%s has %s tags: %s"),
+            "commands.tag.list.single.success" => Some("%s has %s tag(s): %s"),
             "commands.tag.remove.failed" => Some("Target does not have this tag"),
             "commands.tag.remove.success.multiple" => Some("Removed tag '%s' from %s entities"),
             "commands.tag.remove.success.single" => Some("Removed tag '%s' from %s"),
@@ -34337,6 +36074,8 @@ pub mod java {
                 Some("Time marker %s does not exist for clock %s")
             }
             "commands.time.pause" => Some("Paused clock %s"),
+            "commands.time.pause.already_paused" => Some("Clock %s is already paused"),
+            "commands.time.pause.already_running" => Some("Clock %s is already running"),
             "commands.time.query" => Some("The time is %s"),
             "commands.time.query.absolute" => Some("Clock %s is at %s tick(s)"),
             "commands.time.query.gametime" => Some("The game time is %s tick(s)"),
@@ -34345,9 +36084,16 @@ pub mod java {
                 Some("Timeline %s has passed %s repetition(s)")
             }
             "commands.time.rate" => Some("Clock %s will now advance at %sx normal rate"),
+            "commands.time.rate.already_same" => {
+                Some("Clock %s is already advancing at %sx normal rate")
+            }
             "commands.time.resume" => Some("Resumed clock %s"),
             "commands.time.set" => Some("Set the time to %s"),
             "commands.time.set.absolute" => Some("Set %s to %s tick(s)"),
+            "commands.time.set.already_at_time" => Some("Clock %s is already set to %s tick(s)"),
+            "commands.time.set.already_at_time_marker" => {
+                Some("Clock %s is already at time marker %s")
+            }
             "commands.time.set.time_marker" => Some("Set %s to time marker %s"),
             "commands.time.wrong_timeline_for_clock" => {
                 Some("Timeline %s is not valid for clock %s")
@@ -34398,7 +36144,7 @@ pub mod java {
             "commands.waypoint.modify.style" => Some("Waypoint style changed"),
             "commands.weather.set.clear" => Some("Set the weather to clear"),
             "commands.weather.set.rain" => Some("Set the weather to rain"),
-            "commands.weather.set.thunder" => Some("Set the weather to rain & thunder"),
+            "commands.weather.set.thunder" => Some("Set the weather to rain and thunder"),
             "commands.whitelist.add.failed" => Some("Player is already whitelisted"),
             "commands.whitelist.add.success" => Some("Added %s to the whitelist"),
             "commands.whitelist.alreadyOff" => Some("Whitelist is already turned off"),
@@ -34442,7 +36188,7 @@ pub mod java {
                 Some("World border cannot be smaller than 1 block wide")
             }
             "commands.worldborder.set.grow" => {
-                Some("Growing the world border to %s blocks wide over %s seconds")
+                Some("Growing the world border to %s block(s) wide over %s second(s)")
             }
             "commands.worldborder.set.immediate" => {
                 Some("Set the world border to %s block(s) wide")
@@ -34521,7 +36267,7 @@ pub mod java {
             "container.repair.cost" => Some("Enchantment Cost: %1$s"),
             "container.repair.expensive" => Some("Too Expensive!"),
             "container.shulkerBox" => Some("Shulker Box"),
-            "container.shulkerBox.itemCount" => Some("%s x%s"),
+            "container.shulkerBox.itemCount" => Some("%s x %s"),
             "container.shulkerBox.more" => Some("and %s more..."),
             "container.shulkerBox.unknownContents" => Some("???????"),
             "container.smoker" => Some("Smoker"),
@@ -34598,7 +36344,7 @@ pub mod java {
             "datapackFailure.safeMode.failed.description" => {
                 Some("This world contains invalid or corrupted save data.")
             }
-            "datapackFailure.safeMode.failed.title" => Some("Failed to load world in Safe Mode."),
+            "datapackFailure.safeMode.failed.title" => Some("Failed to load world in Safe Mode"),
             "datapackFailure.title" => Some(
                 "Errors in the currently selected data pack(s) prevented the world from loading.\nYou can either try to load it with only the vanilla data pack (\"Safe Mode\"), or go back to the title screen and fix it manually.",
             ),
@@ -34720,6 +36466,9 @@ pub mod java {
             "death.attack.sting.item" => Some("%1$s was stung to death by %2$s using %3$s"),
             "death.attack.sting.player" => Some("%1$s was stung to death by %2$s"),
             "death.attack.sulfurCubeHot" => Some("%1$s died because not just the floor is lava"),
+            "death.attack.sulfurCubeHot.item" => {
+                Some("%2$s showed %1$s that not just the floor is lava using %3$s")
+            }
             "death.attack.sulfurCubeHot.player" => {
                 Some("%2$s showed %1$s that not just the floor is lava")
             }
@@ -34798,6 +36547,8 @@ pub mod java {
             "debug.gamemodes.select_next" => Some("%s Next"),
             "debug.help.help" => Some("F3 + Q = Show this list"),
             "debug.help.message" => Some("Key bindings:"),
+            "debug.improvedTransparency.off" => Some("Improved transparency: disabled"),
+            "debug.improvedTransparency.on" => Some("Improved transparency: enabled"),
             "debug.inspect.client.block" => Some("Copied client-side block data to clipboard"),
             "debug.inspect.client.entity" => Some("Copied client-side entity data to clipboard"),
             "debug.inspect.help" => Some("F3 + I = Copy entity or block data to clipboard"),
@@ -34806,7 +36557,7 @@ pub mod java {
             "debug.options.category.renderer" => Some("Debug Renderers"),
             "debug.options.category.text" => Some("Debug Screen Text"),
             "debug.options.help" => Some("F3 + F6 = Edit debug options"),
-            "debug.options.notAllowed.tooltip" => Some("Not visible when debug info is reduced"),
+            "debug.options.notAllowed.tooltip" => Some("Not visible when debug info is reduced."),
             "debug.options.profile.default" => Some("Default profile"),
             "debug.options.profile.performance" => Some("Performance profile"),
             "debug.options.search" => Some("Search..."),
@@ -34905,7 +36656,7 @@ pub mod java {
             "editGamerule.inGame.discardChanges.message" => {
                 Some("Are you sure you want to discard your pending game rule changes?")
             }
-            "editGamerule.inGame.discardChanges.title" => Some("Game rule Changes"),
+            "editGamerule.inGame.discardChanges.title" => Some("Game Rule Changes"),
             "editGamerule.inGame.downloadingGamerules" => Some("Retrieving game rules..."),
             "editGamerule.title" => Some("Edit Game Rules"),
             "effect.duration.infinite" => Some("∞"),
@@ -35040,6 +36791,7 @@ pub mod java {
             "entity.minecraft.creaking" => Some("Creaking"),
             "entity.minecraft.creaking_transient" => Some("Creaking"),
             "entity.minecraft.creeper" => Some("Creeper"),
+            "entity.minecraft.cushion" => Some("Cushion"),
             "entity.minecraft.dark_oak_boat" => Some("Dark Oak Boat"),
             "entity.minecraft.dark_oak_chest_boat" => Some("Dark Oak Boat with Chest"),
             "entity.minecraft.dolphin" => Some("Dolphin"),
@@ -35118,6 +36870,8 @@ pub mod java {
             "entity.minecraft.pillager" => Some("Pillager"),
             "entity.minecraft.player" => Some("Player"),
             "entity.minecraft.polar_bear" => Some("Polar Bear"),
+            "entity.minecraft.poplar_boat" => Some("Poplar Boat"),
+            "entity.minecraft.poplar_chest_boat" => Some("Poplar Boat with Chest"),
             "entity.minecraft.potion" => Some("Potion"),
             "entity.minecraft.pufferfish" => Some("Pufferfish"),
             "entity.minecraft.rabbit" => Some("Rabbit"),
@@ -35226,15 +36980,30 @@ pub mod java {
             "event.minecraft.raid.raiders_remaining" => Some("Raiders Remaining: %s"),
             "event.minecraft.raid.victory" => Some("Victory"),
             "event.minecraft.raid.victory.full" => Some("Raid - Victory"),
+            "filled_map.bamboo_camp_map" => Some("Bamboo Camp Map"),
+            "filled_map.bamboo_jungle_abandoned_camp" => Some("Bamboo Jungle Abandoned Camp Map"),
+            "filled_map.birch_forest_abandoned_camp" => Some("Birch Forest Abandoned Camp Map"),
+            "filled_map.birch_forest_camp_map" => Some("Birch Forest Camp Map"),
             "filled_map.buried_treasure" => Some("Buried Treasure Map"),
+            "filled_map.cherry_grove_abandoned_camp" => Some("Cherry Grove Abandoned Camp Map"),
+            "filled_map.cherry_grove_camp_map" => Some("Cherry Grove Camp Map"),
+            "filled_map.dappled_forest_abandoned_camp" => Some("Dappled Forest Abandoned Camp Map"),
+            "filled_map.dappled_forest_camp_map" => Some("Dappled Forest Camp Map"),
             "filled_map.explorer_jungle" => Some("Jungle Explorer Map"),
             "filled_map.explorer_swamp" => Some("Swamp Explorer Map"),
+            "filled_map.flower_forest_abandoned_camp" => Some("Flower Forest Abandoned Camp Map"),
+            "filled_map.flower_forest_camp_map" => Some("Flower Forest Camp Map"),
             "filled_map.id" => Some("ID #%s"),
+            "filled_map.jungle_temple" => Some("Jungle Temple Map"),
             "filled_map.level" => Some("(Level %s/%s)"),
             "filled_map.locked" => Some("Locked"),
             "filled_map.mansion" => Some("Woodland Explorer Map"),
             "filled_map.monument" => Some("Ocean Explorer Map"),
+            "filled_map.pale_garden_abandoned_camp" => Some("Pale Garden Abandoned Camp Map"),
+            "filled_map.pale_garden_camp_map" => Some("Pale Garden Camp Map"),
             "filled_map.scale" => Some("Scaling at 1:%s"),
+            "filled_map.swamp_abandoned_camp" => Some("Swamp Abandoned Camp Map"),
+            "filled_map.swamp_camp_map" => Some("Swamp Camp Map"),
             "filled_map.trial_chambers" => Some("Trial Explorer Map"),
             "filled_map.unknown" => Some("Unknown Map"),
             "filled_map.village_desert" => Some("Desert Village Map"),
@@ -35242,6 +37011,10 @@ pub mod java {
             "filled_map.village_savanna" => Some("Savanna Village Map"),
             "filled_map.village_snowy" => Some("Snowy Village Map"),
             "filled_map.village_taiga" => Some("Taiga Village Map"),
+            "filled_map.windswept_forest_abandoned_camp" => {
+                Some("Windswept Forest Abandoned Camp Map")
+            }
+            "filled_map.windswept_forest_camp_map" => Some("Windswept Forest Camp Map"),
             "flat_world_preset.minecraft.bottomless_pit" => Some("Bottomless Pit"),
             "flat_world_preset.minecraft.classic_flat" => Some("Classic Flat"),
             "flat_world_preset.minecraft.desert" => Some("Desert"),
@@ -35292,7 +37065,7 @@ pub mod java {
             "gamerule.doDaylightCycle" => Some("Advance time of day"),
             "gamerule.doEntityDrops" => Some("Drop entity equipment"),
             "gamerule.doEntityDrops.description" => Some(
-                "Controls drops from minecarts (including inventories), item frames, boats, etc.",
+                "Controls drops from Minecarts (including inventories), Item Frames, Boats, etc.",
             ),
             "gamerule.doFireTick" => Some("Update fire"),
             "gamerule.doImmediateRespawn" => Some("Respawn immediately"),
@@ -35370,7 +37143,7 @@ pub mod java {
             "gamerule.minecraft.elytra_movement_check" => Some("Do elytra movement check"),
             "gamerule.minecraft.fire_spread_radius_around_player" => Some("Fire spread radius"),
             "gamerule.minecraft.fire_spread_radius_around_player.description" => {
-                Some("The radius in blocks around a player in which fire can spread")
+                Some("The radius in blocks around a player in which fire can spread.")
             }
             "gamerule.minecraft.player_movement_check" => Some("Do player movement check"),
             "gamerule.minecraft.raids" => Some("Do raids"),
@@ -35420,7 +37193,7 @@ pub mod java {
             ),
             "gamerule.spawnChunkRadius" => Some("Spawn chunk radius"),
             "gamerule.spawnChunkRadius.description" => {
-                Some("The amount of chunks that stay loaded around the overworld spawn position.")
+                Some("The amount of chunks that stay loaded around the Overworld spawn position.")
             }
             "gamerule.spawnMonsters" => Some("Spawn Monsters"),
             "gamerule.spawnMonsters.description" => {
@@ -35747,7 +37520,7 @@ pub mod java {
                 Some("Friends List is not working right now.\n\nTry again later.")
             }
             "gui.friends.error.unauthorized" => {
-                Some("Invalid token supplied. Restart your game and launcher, then try again")
+                Some("Invalid token supplied. Restart your game and launcher, then try again.")
             }
             "gui.friends.error.unavailable.message" => Some(
                 "The Friends List service is currently unavailable. Please check your connection and try again later.",
@@ -35878,7 +37651,7 @@ pub mod java {
             "gui.recipebook.toggleRecipes.smeltable" => Some("Showing Smeltable"),
             "gui.recipebook.toggleRecipes.smokable" => Some("Showing Smokable"),
             "gui.remove" => Some("Remove"),
-            "gui.report_to_server" => Some("Report To Server"),
+            "gui.report_to_server" => Some("Report to Server"),
             "gui.selectWorld.search" => Some("Search..."),
             "gui.socialInteractions.blocking_hint" => Some("Manage with Microsoft account"),
             "gui.socialInteractions.empty_blocked" => Some("No blocked players in chat"),
@@ -35953,10 +37726,13 @@ pub mod java {
             "item.durability" => Some("Durability: %s / %s"),
             "item.dyed" => Some("Dyed"),
             "item.intangible" => Some("Intangible"),
+            "item.minecraft.abandoned_camp_map" => Some("Abandoned Camp Map"),
+            "item.minecraft.abandoned_campsite_map" => Some("Abandoned Campsite Map"),
             "item.minecraft.acacia_boat" => Some("Acacia Boat"),
             "item.minecraft.acacia_chest_boat" => Some("Acacia Boat with Chest"),
             "item.minecraft.allay_spawn_egg" => Some("Allay Spawn Egg"),
             "item.minecraft.amethyst_shard" => Some("Amethyst Shard"),
+            "item.minecraft.ancient_city_map" => Some("Ancient City Map"),
             "item.minecraft.angler_pottery_shard" => Some("Angler Pottery Shard"),
             "item.minecraft.angler_pottery_sherd" => Some("Angler Pottery Sherd"),
             "item.minecraft.apple" => Some("Apple"),
@@ -35982,6 +37758,7 @@ pub mod java {
             "item.minecraft.birch_boat" => Some("Birch Boat"),
             "item.minecraft.birch_chest_boat" => Some("Birch Boat with Chest"),
             "item.minecraft.black_bundle" => Some("Black Bundle"),
+            "item.minecraft.black_cushion" => Some("Black Cushion"),
             "item.minecraft.black_dye" => Some("Black Dye"),
             "item.minecraft.black_harness" => Some("Black Harness"),
             "item.minecraft.blade_pottery_shard" => Some("Blade Pottery Shard"),
@@ -35990,6 +37767,7 @@ pub mod java {
             "item.minecraft.blaze_rod" => Some("Blaze Rod"),
             "item.minecraft.blaze_spawn_egg" => Some("Blaze Spawn Egg"),
             "item.minecraft.blue_bundle" => Some("Blue Bundle"),
+            "item.minecraft.blue_cushion" => Some("Blue Cushion"),
             "item.minecraft.blue_dye" => Some("Blue Dye"),
             "item.minecraft.blue_egg" => Some("Blue Egg"),
             "item.minecraft.blue_harness" => Some("Blue Harness"),
@@ -36012,6 +37790,7 @@ pub mod java {
             "item.minecraft.brewing_stand" => Some("Brewing Stand"),
             "item.minecraft.brick" => Some("Brick"),
             "item.minecraft.brown_bundle" => Some("Brown Bundle"),
+            "item.minecraft.brown_cushion" => Some("Brown Cushion"),
             "item.minecraft.brown_dye" => Some("Brown Dye"),
             "item.minecraft.brown_egg" => Some("Brown Egg"),
             "item.minecraft.brown_harness" => Some("Brown Harness"),
@@ -36022,6 +37801,10 @@ pub mod java {
             "item.minecraft.bundle.empty.description" => Some("Can hold a mixed stack of items"),
             "item.minecraft.bundle.full" => Some("Full"),
             "item.minecraft.bundle.fullness" => Some("%s/%s"),
+            "item.minecraft.buried_ancient_city_map" => Some("Buried Ancient City Map"),
+            "item.minecraft.buried_mineshaft_map" => Some("Buried Mineshaft Map"),
+            "item.minecraft.buried_treasure_map" => Some("Buried Treasure Map"),
+            "item.minecraft.buried_trial_chambers_map" => Some("Buried Trial Chambers Map"),
             "item.minecraft.burn_pottery_shard" => Some("Burn Pottery Shard"),
             "item.minecraft.burn_pottery_sherd" => Some("Burn Pottery Sherd"),
             "item.minecraft.camel_husk_spawn_egg" => Some("Camel Husk Spawn Egg"),
@@ -36087,6 +37870,7 @@ pub mod java {
             "item.minecraft.crossbow.projectile.multiple" => Some("Projectile: %s x %s"),
             "item.minecraft.crossbow.projectile.single" => Some("Projectile: %s"),
             "item.minecraft.cyan_bundle" => Some("Cyan Bundle"),
+            "item.minecraft.cyan_cushion" => Some("Cyan Cushion"),
             "item.minecraft.cyan_dye" => Some("Cyan Dye"),
             "item.minecraft.cyan_harness" => Some("Cyan Harness"),
             "item.minecraft.danger_pottery_shard" => Some("Danger Pottery Shard"),
@@ -36097,6 +37881,8 @@ pub mod java {
             "item.minecraft.debug_stick.empty" => Some("%s has no properties"),
             "item.minecraft.debug_stick.select" => Some("selected \"%s\" (%s)"),
             "item.minecraft.debug_stick.update" => Some("\"%s\" to %s"),
+            "item.minecraft.desert_pyramid_map" => Some("Desert Pyramid Map"),
+            "item.minecraft.desert_village_map" => Some("Desert Village Map"),
             "item.minecraft.diamond" => Some("Diamond"),
             "item.minecraft.diamond_axe" => Some("Diamond Axe"),
             "item.minecraft.diamond_boots" => Some("Diamond Boots"),
@@ -36145,6 +37931,7 @@ pub mod java {
             "item.minecraft.fire_charge" => Some("Fire Charge"),
             "item.minecraft.firework_rocket" => Some("Firework Rocket"),
             "item.minecraft.firework_rocket.flight" => Some("Flight Duration:"),
+            "item.minecraft.firework_rocket.flight_duration" => Some("Flight Duration: %s"),
             "item.minecraft.firework_rocket.multiple_stars" => Some("%s x %s"),
             "item.minecraft.firework_rocket.single_star" => Some("%s"),
             "item.minecraft.firework_star" => Some("Firework Star"),
@@ -36223,9 +38010,11 @@ pub mod java {
             "item.minecraft.golden_spear" => Some("Golden Spear"),
             "item.minecraft.golden_sword" => Some("Golden Sword"),
             "item.minecraft.gray_bundle" => Some("Gray Bundle"),
+            "item.minecraft.gray_cushion" => Some("Gray Cushion"),
             "item.minecraft.gray_dye" => Some("Gray Dye"),
             "item.minecraft.gray_harness" => Some("Gray Harness"),
             "item.minecraft.green_bundle" => Some("Green Bundle"),
+            "item.minecraft.green_cushion" => Some("Green Cushion"),
             "item.minecraft.green_dye" => Some("Green Dye"),
             "item.minecraft.green_harness" => Some("Green Harness"),
             "item.minecraft.guardian_spawn_egg" => Some("Guardian Spawn Egg"),
@@ -36270,6 +38059,8 @@ pub mod java {
             "item.minecraft.item_frame" => Some("Item Frame"),
             "item.minecraft.jungle_boat" => Some("Jungle Boat"),
             "item.minecraft.jungle_chest_boat" => Some("Jungle Boat with Chest"),
+            "item.minecraft.jungle_explorer_map" => Some("Jungle Explorer Map"),
+            "item.minecraft.jungle_pyramid_map" => Some("Jungle Pyramid Map"),
             "item.minecraft.knowledge_book" => Some("Knowledge Book"),
             "item.minecraft.lapis_lazuli" => Some("Lapis Lazuli"),
             "item.minecraft.lava_bucket" => Some("Lava Bucket"),
@@ -36281,12 +38072,15 @@ pub mod java {
             "item.minecraft.leather_horse_armor" => Some("Leather Horse Armor"),
             "item.minecraft.leather_leggings" => Some("Leather Pants"),
             "item.minecraft.light_blue_bundle" => Some("Light Blue Bundle"),
+            "item.minecraft.light_blue_cushion" => Some("Light Blue Cushion"),
             "item.minecraft.light_blue_dye" => Some("Light Blue Dye"),
             "item.minecraft.light_blue_harness" => Some("Light Blue Harness"),
             "item.minecraft.light_gray_bundle" => Some("Light Gray Bundle"),
+            "item.minecraft.light_gray_cushion" => Some("Light Gray Cushion"),
             "item.minecraft.light_gray_dye" => Some("Light Gray Dye"),
             "item.minecraft.light_gray_harness" => Some("Light Gray Harness"),
             "item.minecraft.lime_bundle" => Some("Lime Bundle"),
+            "item.minecraft.lime_cushion" => Some("Lime Cushion"),
             "item.minecraft.lime_dye" => Some("Lime Dye"),
             "item.minecraft.lime_harness" => Some("Lime Harness"),
             "item.minecraft.lingering_potion" => Some("Lingering Potion"),
@@ -36348,6 +38142,7 @@ pub mod java {
             "item.minecraft.lodestone_compass" => Some("Lodestone Compass"),
             "item.minecraft.mace" => Some("Mace"),
             "item.minecraft.magenta_bundle" => Some("Magenta Bundle"),
+            "item.minecraft.magenta_cushion" => Some("Magenta Cushion"),
             "item.minecraft.magenta_dye" => Some("Magenta Dye"),
             "item.minecraft.magenta_harness" => Some("Magenta Harness"),
             "item.minecraft.magma_cream" => Some("Magma Cream"),
@@ -36361,6 +38156,7 @@ pub mod java {
             "item.minecraft.minecart" => Some("Minecart"),
             "item.minecraft.miner_pottery_shard" => Some("Miner Pottery Shard"),
             "item.minecraft.miner_pottery_sherd" => Some("Miner Pottery Sherd"),
+            "item.minecraft.mineshaft_map" => Some("Mineshaft Map"),
             "item.minecraft.mojang_banner_pattern" => Some("Banner Pattern"),
             "item.minecraft.mojang_banner_pattern.desc" => Some("Thing"),
             "item.minecraft.mojang_banner_pattern.new" => Some("Thing Banner Pattern"),
@@ -36440,10 +38236,13 @@ pub mod java {
             "item.minecraft.netherite_upgrade_smithing_template.new" => Some("Netherite Upgrade"),
             "item.minecraft.oak_boat" => Some("Oak Boat"),
             "item.minecraft.oak_chest_boat" => Some("Oak Boat with Chest"),
+            "item.minecraft.ocean_explorer_map" => Some("Ocean Explorer Map"),
+            "item.minecraft.ocean_monument_map" => Some("Ocean Monument Map"),
             "item.minecraft.ocelot_spawn_egg" => Some("Ocelot Spawn Egg"),
             "item.minecraft.ominous_bottle" => Some("Ominous Bottle"),
             "item.minecraft.ominous_trial_key" => Some("Ominous Trial Key"),
             "item.minecraft.orange_bundle" => Some("Orange Bundle"),
+            "item.minecraft.orange_cushion" => Some("Orange Cushion"),
             "item.minecraft.orange_dye" => Some("Orange Dye"),
             "item.minecraft.orange_harness" => Some("Orange Harness"),
             "item.minecraft.painting" => Some("Painting"),
@@ -36463,14 +38262,18 @@ pub mod java {
             "item.minecraft.piglin_spawn_egg" => Some("Piglin Spawn Egg"),
             "item.minecraft.pillager_spawn_egg" => Some("Pillager Spawn Egg"),
             "item.minecraft.pink_bundle" => Some("Pink Bundle"),
+            "item.minecraft.pink_cushion" => Some("Pink Cushion"),
             "item.minecraft.pink_dye" => Some("Pink Dye"),
             "item.minecraft.pink_harness" => Some("Pink Harness"),
             "item.minecraft.pitcher_plant" => Some("Pitcher Plant"),
             "item.minecraft.pitcher_pod" => Some("Pitcher Pod"),
+            "item.minecraft.plains_village_map" => Some("Plains Village Map"),
             "item.minecraft.plenty_pottery_shard" => Some("Plenty Pottery Shard"),
             "item.minecraft.plenty_pottery_sherd" => Some("Plenty Pottery Sherd"),
             "item.minecraft.poisonous_potato" => Some("Poisonous Potato"),
             "item.minecraft.polar_bear_spawn_egg" => Some("Polar Bear Spawn Egg"),
+            "item.minecraft.poplar_boat" => Some("Poplar Boat"),
+            "item.minecraft.poplar_chest_boat" => Some("Poplar Boat with Chest"),
             "item.minecraft.popped_chorus_fruit" => Some("Popped Chorus Fruit"),
             "item.minecraft.porkchop" => Some("Raw Porkchop"),
             "item.minecraft.potato" => Some("Potato"),
@@ -36516,6 +38319,7 @@ pub mod java {
             "item.minecraft.pumpkin_pie" => Some("Pumpkin Pie"),
             "item.minecraft.pumpkin_seeds" => Some("Pumpkin Seeds"),
             "item.minecraft.purple_bundle" => Some("Purple Bundle"),
+            "item.minecraft.purple_cushion" => Some("Purple Cushion"),
             "item.minecraft.purple_dye" => Some("Purple Dye"),
             "item.minecraft.purple_harness" => Some("Purple Harness"),
             "item.minecraft.quartz" => Some("Nether Quartz"),
@@ -36532,6 +38336,7 @@ pub mod java {
             "item.minecraft.raw_iron" => Some("Raw Iron"),
             "item.minecraft.recovery_compass" => Some("Recovery Compass"),
             "item.minecraft.red_bundle" => Some("Red Bundle"),
+            "item.minecraft.red_cushion" => Some("Red Cushion"),
             "item.minecraft.red_dye" => Some("Red Dye"),
             "item.minecraft.red_harness" => Some("Red Harness"),
             "item.minecraft.redstone" => Some("Redstone Dust"),
@@ -36544,6 +38349,7 @@ pub mod java {
             "item.minecraft.salmon" => Some("Raw Salmon"),
             "item.minecraft.salmon_bucket" => Some("Bucket of Salmon"),
             "item.minecraft.salmon_spawn_egg" => Some("Salmon Spawn Egg"),
+            "item.minecraft.savanna_village_map" => Some("Savanna Village Map"),
             "item.minecraft.scrape_pottery_sherd" => Some("Scrape Pottery Sherd"),
             "item.minecraft.scute" => Some("Scute"),
             "item.minecraft.sentry_armor_trim_smithing_template" => Some("Smithing Template"),
@@ -36619,6 +38425,7 @@ pub mod java {
             "item.minecraft.snout_armor_trim_smithing_template.new" => Some("Snout Armor Trim"),
             "item.minecraft.snow_golem_spawn_egg" => Some("Snow Golem Spawn Egg"),
             "item.minecraft.snowball" => Some("Snowball"),
+            "item.minecraft.snowy_village_map" => Some("Snowy Village Map"),
             "item.minecraft.spectral_arrow" => Some("Spectral Arrow"),
             "item.minecraft.spider_eye" => Some("Spider Eye"),
             "item.minecraft.spider_spawn_egg" => Some("Spider Spawn Egg"),
@@ -36678,6 +38485,7 @@ pub mod java {
             "item.minecraft.stone_shovel" => Some("Stone Shovel"),
             "item.minecraft.stone_spear" => Some("Stone Spear"),
             "item.minecraft.stone_sword" => Some("Stone Sword"),
+            "item.minecraft.straw_bed" => Some("Straw Bed"),
             "item.minecraft.stray_spawn_egg" => Some("Stray Spawn Egg"),
             "item.minecraft.strider_spawn_egg" => Some("Strider Spawn Egg"),
             "item.minecraft.string" => Some("String"),
@@ -36685,9 +38493,12 @@ pub mod java {
             "item.minecraft.sulfur_cube_bucket" => Some("Bucket of Sulfur Cube"),
             "item.minecraft.sulfur_cube_spawn_egg" => Some("Sulfur Cube Spawn Egg"),
             "item.minecraft.suspicious_stew" => Some("Suspicious Stew"),
+            "item.minecraft.swamp_explorer_map" => Some("Swamp Explorer Map"),
+            "item.minecraft.swamp_hut_map" => Some("Swamp Hut Map"),
             "item.minecraft.sweet_berries" => Some("Sweet Berries"),
             "item.minecraft.tadpole_bucket" => Some("Bucket of Tadpole"),
             "item.minecraft.tadpole_spawn_egg" => Some("Tadpole Spawn Egg"),
+            "item.minecraft.taiga_village_map" => Some("Taiga Village Map"),
             "item.minecraft.tide_armor_trim_smithing_template" => Some("Smithing Template"),
             "item.minecraft.tide_armor_trim_smithing_template.new" => Some("Tide Armor Trim"),
             "item.minecraft.tipped_arrow" => Some("Tipped Arrow"),
@@ -36727,6 +38538,7 @@ pub mod java {
             "item.minecraft.torchflower_seeds" => Some("Torchflower Seeds"),
             "item.minecraft.totem_of_undying" => Some("Totem of Undying"),
             "item.minecraft.trader_llama_spawn_egg" => Some("Trader Llama Spawn Egg"),
+            "item.minecraft.trial_explorer_map" => Some("Trial Explorer Map"),
             "item.minecraft.trial_key" => Some("Trial Key"),
             "item.minecraft.trident" => Some("Trident"),
             "item.minecraft.tropical_fish" => Some("Tropical Fish"),
@@ -36744,6 +38556,7 @@ pub mod java {
             "item.minecraft.ward_armor_trim_smithing_template" => Some("Smithing Template"),
             "item.minecraft.ward_armor_trim_smithing_template.new" => Some("Ward Armor Trim"),
             "item.minecraft.warden_spawn_egg" => Some("Warden Spawn Egg"),
+            "item.minecraft.warm_ocean_ruins_map" => Some("Warm Ocean Ruins Map"),
             "item.minecraft.warped_fungus_on_a_stick" => Some("Warped Fungus on a Stick"),
             "item.minecraft.water_bucket" => Some("Water Bucket"),
             "item.minecraft.wayfinder_armor_trim_smithing_template" => Some("Smithing Template"),
@@ -36753,6 +38566,7 @@ pub mod java {
             "item.minecraft.wheat" => Some("Wheat"),
             "item.minecraft.wheat_seeds" => Some("Wheat Seeds"),
             "item.minecraft.white_bundle" => Some("White Bundle"),
+            "item.minecraft.white_cushion" => Some("White Cushion"),
             "item.minecraft.white_dye" => Some("White Dye"),
             "item.minecraft.white_harness" => Some("White Harness"),
             "item.minecraft.wild_armor_trim_smithing_template" => Some("Smithing Template"),
@@ -36769,9 +38583,12 @@ pub mod java {
             "item.minecraft.wooden_shovel" => Some("Wooden Shovel"),
             "item.minecraft.wooden_spear" => Some("Wooden Spear"),
             "item.minecraft.wooden_sword" => Some("Wooden Sword"),
+            "item.minecraft.woodland_explorer_map" => Some("Woodland Explorer Map"),
+            "item.minecraft.woodland_mansion_map" => Some("Woodland Mansion Map"),
             "item.minecraft.writable_book" => Some("Book and Quill"),
             "item.minecraft.written_book" => Some("Written Book"),
             "item.minecraft.yellow_bundle" => Some("Yellow Bundle"),
+            "item.minecraft.yellow_cushion" => Some("Yellow Cushion"),
             "item.minecraft.yellow_dye" => Some("Yellow Dye"),
             "item.minecraft.yellow_harness" => Some("Yellow Harness"),
             "item.minecraft.zoglin_spawn_egg" => Some("Zoglin Spawn Egg"),
@@ -36885,7 +38702,8 @@ pub mod java {
             "key.debug.dumpDynamicTextures" => Some("Dump Dynamic Textures"),
             "key.debug.dumpVersion" => Some("Dump Version Info"),
             "key.debug.focusPause" => Some("Toggle Lost Focus Pause"),
-            "key.debug.fpsCharts" => Some("FPS Charts"),
+            "key.debug.fpsCharts" => Some("Fps Charts"),
+            "key.debug.improvedTransparency" => Some("Toggle Improved Transparency"),
             "key.debug.lightmapTexture" => Some("Lightmap Texture"),
             "key.debug.modifier" => Some("Debug Modifier Key"),
             "key.debug.networkCharts" => Some("Network Charts"),
@@ -36914,17 +38732,50 @@ pub mod java {
             "key.hotbar.9" => Some("Hotbar Slot 9"),
             "key.inventory" => Some("Open/Close Inventory"),
             "key.jump" => Some("Jump"),
+            "key.keyboard.ac.back" => Some("AC Back"),
+            "key.keyboard.ac.bookmarks" => Some("AC Favorites"),
+            "key.keyboard.ac.close" => Some("AC Close"),
+            "key.keyboard.ac.exit" => Some("AC Exit"),
+            "key.keyboard.ac.forward" => Some("AC Forward"),
+            "key.keyboard.ac.home" => Some("AC Home"),
+            "key.keyboard.ac.new" => Some("AC New"),
+            "key.keyboard.ac.open" => Some("AC Open"),
+            "key.keyboard.ac.print" => Some("AC Print"),
+            "key.keyboard.ac.properties" => Some("AC Properties"),
+            "key.keyboard.ac.refresh" => Some("AC Refresh"),
+            "key.keyboard.ac.save" => Some("AC Save"),
+            "key.keyboard.ac.search" => Some("AC Search"),
+            "key.keyboard.ac.stop" => Some("AC Stop"),
+            "key.keyboard.again" => Some("Again"),
+            "key.keyboard.alternate.erase" => Some("Alternate Erase"),
             "key.keyboard.apostrophe" => Some("'"),
+            "key.keyboard.application" => Some("Application"),
             "key.keyboard.backslash" => Some("\\"),
             "key.keyboard.backspace" => Some("Backspace"),
+            "key.keyboard.call" => Some("Call"),
+            "key.keyboard.cancel" => Some("Cancel"),
             "key.keyboard.caps.lock" => Some("Caps Lock"),
+            "key.keyboard.channel.down" => Some("Channel Down"),
+            "key.keyboard.channel.up" => Some("Channel Up"),
+            "key.keyboard.clear" => Some("Clear"),
+            "key.keyboard.clear.again" => Some("Clear Again"),
             "key.keyboard.comma" => Some(","),
+            "key.keyboard.copy" => Some("Copy"),
+            "key.keyboard.crsel" => Some("CrSel"),
+            "key.keyboard.currency.subunit" => Some("Currency Subunit"),
+            "key.keyboard.currency.unit" => Some("Currency Unit"),
+            "key.keyboard.cut" => Some("Cut"),
+            "key.keyboard.decimal.separator" => Some("Decimal Separator"),
             "key.keyboard.delete" => Some("Delete"),
             "key.keyboard.down" => Some("Down Arrow"),
             "key.keyboard.end" => Some("End"),
+            "key.keyboard.end.call" => Some("End Call"),
             "key.keyboard.enter" => Some("Enter"),
+            "key.keyboard.enter2" => Some("Enter 2"),
             "key.keyboard.equal" => Some("="),
             "key.keyboard.escape" => Some("Escape"),
+            "key.keyboard.execute" => Some("Execute"),
+            "key.keyboard.exsel" => Some("ExSel"),
             "key.keyboard.f1" => Some("F1"),
             "key.keyboard.f10" => Some("F10"),
             "key.keyboard.f11" => Some("F11"),
@@ -36950,10 +38801,23 @@ pub mod java {
             "key.keyboard.f7" => Some("F7"),
             "key.keyboard.f8" => Some("F8"),
             "key.keyboard.f9" => Some("F9"),
+            "key.keyboard.find" => Some("Find"),
             "key.keyboard.grave.accent" => Some("`"),
+            "key.keyboard.help" => Some("Help"),
             "key.keyboard.home" => Some("Home"),
             "key.keyboard.insert" => Some("Insert"),
+            "key.keyboard.international1" => Some("International 1"),
+            "key.keyboard.international2" => Some("International 2"),
+            "key.keyboard.international3" => Some("International 3"),
+            "key.keyboard.international4" => Some("International 4"),
+            "key.keyboard.international5" => Some("International 5"),
+            "key.keyboard.international6" => Some("International 6"),
+            "key.keyboard.international7" => Some("International 7"),
+            "key.keyboard.international8" => Some("International 8"),
+            "key.keyboard.international9" => Some("International 9"),
             "key.keyboard.keypad.0" => Some("Keypad 0"),
+            "key.keyboard.keypad.00" => Some("Keypad 00"),
+            "key.keyboard.keypad.000" => Some("Keypad 000"),
             "key.keyboard.keypad.1" => Some("Keypad 1"),
             "key.keyboard.keypad.2" => Some("Keypad 2"),
             "key.keyboard.keypad.3" => Some("Keypad 3"),
@@ -36963,40 +38827,131 @@ pub mod java {
             "key.keyboard.keypad.7" => Some("Keypad 7"),
             "key.keyboard.keypad.8" => Some("Keypad 8"),
             "key.keyboard.keypad.9" => Some("Keypad 9"),
+            "key.keyboard.keypad.a" => Some("Keypad A"),
             "key.keyboard.keypad.add" => Some("Keypad +"),
+            "key.keyboard.keypad.ampersand" => Some("Keypad &"),
+            "key.keyboard.keypad.at" => Some("Keypad @"),
+            "key.keyboard.keypad.b" => Some("Keypad B"),
+            "key.keyboard.keypad.backspace" => Some("Keypad Backspace"),
+            "key.keyboard.keypad.binary" => Some("Keypad Binary"),
+            "key.keyboard.keypad.c" => Some("Keypad C"),
+            "key.keyboard.keypad.clear" => Some("Keypad Clear"),
+            "key.keyboard.keypad.clear.entry" => Some("Keypad Clear Entry"),
+            "key.keyboard.keypad.colon" => Some("Keypad :"),
+            "key.keyboard.keypad.comma" => Some("Keypad ,"),
+            "key.keyboard.keypad.d" => Some("Keypad D"),
             "key.keyboard.keypad.decimal" => Some("Keypad Decimal"),
             "key.keyboard.keypad.divide" => Some("Keypad /"),
+            "key.keyboard.keypad.double.ampersand" => Some("Keypad &&"),
+            "key.keyboard.keypad.double.vertical.bar" => Some("Keypad ||"),
+            "key.keyboard.keypad.e" => Some("Keypad E"),
             "key.keyboard.keypad.enter" => Some("Keypad Enter"),
             "key.keyboard.keypad.equal" => Some("Keypad ="),
+            "key.keyboard.keypad.equals.as400" => Some("Keypad = (AS400)"),
+            "key.keyboard.keypad.exclamation" => Some("Keypad !"),
+            "key.keyboard.keypad.f" => Some("Keypad F"),
+            "key.keyboard.keypad.greater" => Some("Keypad >"),
+            "key.keyboard.keypad.hash" => Some("Keypad #"),
+            "key.keyboard.keypad.hexadecimal" => Some("Keypad Hexadecimal"),
+            "key.keyboard.keypad.left.brace" => Some("Keypad {"),
+            "key.keyboard.keypad.left.parenthesis" => Some("Keypad ("),
+            "key.keyboard.keypad.less" => Some("Keypad <"),
+            "key.keyboard.keypad.memory.add" => Some("Keypad M+"),
+            "key.keyboard.keypad.memory.clear" => Some("Keypad MC"),
+            "key.keyboard.keypad.memory.divide" => Some("Keypad M/"),
+            "key.keyboard.keypad.memory.multiply" => Some("Keypad M*"),
+            "key.keyboard.keypad.memory.recall" => Some("Keypad MR"),
+            "key.keyboard.keypad.memory.store" => Some("Keypad MS"),
+            "key.keyboard.keypad.memory.subtract" => Some("Keypad M-"),
             "key.keyboard.keypad.multiply" => Some("Keypad *"),
+            "key.keyboard.keypad.octal" => Some("Keypad Octal"),
+            "key.keyboard.keypad.percent" => Some("Keypad %"),
+            "key.keyboard.keypad.period" => Some("Keypad ."),
+            "key.keyboard.keypad.plus.minus" => Some("Keypad ±"),
+            "key.keyboard.keypad.power" => Some("Keypad ^"),
+            "key.keyboard.keypad.right.brace" => Some("Keypad }"),
+            "key.keyboard.keypad.right.parenthesis" => Some("Keypad )"),
+            "key.keyboard.keypad.space" => Some("Keypad Space"),
             "key.keyboard.keypad.subtract" => Some("Keypad -"),
+            "key.keyboard.keypad.tab" => Some("Keypad Tab"),
+            "key.keyboard.keypad.vertical.bar" => Some("Keypad |"),
+            "key.keyboard.keypad.xor" => Some("Keypad XOR"),
+            "key.keyboard.lang1" => Some("Language 1"),
+            "key.keyboard.lang2" => Some("Language 2"),
+            "key.keyboard.lang3" => Some("Language 3"),
+            "key.keyboard.lang4" => Some("Language 4"),
+            "key.keyboard.lang5" => Some("Language 5"),
+            "key.keyboard.lang6" => Some("Language 6"),
+            "key.keyboard.lang7" => Some("Language 7"),
+            "key.keyboard.lang8" => Some("Language 8"),
+            "key.keyboard.lang9" => Some("Language 9"),
             "key.keyboard.left" => Some("Left Arrow"),
             "key.keyboard.left.alt" => Some("Left Alt"),
             "key.keyboard.left.bracket" => Some("["),
+            "key.keyboard.left.command" => Some("Left Command"),
             "key.keyboard.left.control" => Some("Left Control"),
+            "key.keyboard.left.meta" => Some("Left Meta"),
+            "key.keyboard.left.option" => Some("Left Option"),
             "key.keyboard.left.shift" => Some("Left Shift"),
             "key.keyboard.left.win" => Some("Left Win"),
+            "key.keyboard.left.windows" => Some("Left Windows"),
+            "key.keyboard.media.eject" => Some("Eject"),
+            "key.keyboard.media.fast.forward" => Some("Fast Forward"),
+            "key.keyboard.media.next.track" => Some("Next Track"),
+            "key.keyboard.media.pause" => Some("Media Pause"),
+            "key.keyboard.media.play" => Some("Media Play"),
+            "key.keyboard.media.play.pause" => Some("Play/Pause"),
+            "key.keyboard.media.previous.track" => Some("Previous Track"),
+            "key.keyboard.media.record" => Some("Record"),
+            "key.keyboard.media.rewind" => Some("Rewind"),
+            "key.keyboard.media.select" => Some("Media Select"),
+            "key.keyboard.media.stop" => Some("Media Stop"),
             "key.keyboard.menu" => Some("Menu"),
             "key.keyboard.minus" => Some("-"),
+            "key.keyboard.mode" => Some("Mode"),
+            "key.keyboard.mute" => Some("Mute"),
+            "key.keyboard.new" => Some("New"),
             "key.keyboard.num.lock" => Some("Num Lock"),
+            "key.keyboard.oper" => Some("Oper"),
+            "key.keyboard.out" => Some("Out"),
             "key.keyboard.page.down" => Some("Page Down"),
             "key.keyboard.page.up" => Some("Page Up"),
+            "key.keyboard.paste" => Some("Paste"),
             "key.keyboard.pause" => Some("Pause"),
             "key.keyboard.period" => Some("."),
+            "key.keyboard.power" => Some("Power"),
             "key.keyboard.print.screen" => Some("Print Screen"),
+            "key.keyboard.prior" => Some("Prior"),
             "key.keyboard.right" => Some("Right Arrow"),
             "key.keyboard.right.alt" => Some("Right Alt"),
             "key.keyboard.right.bracket" => Some("]"),
+            "key.keyboard.right.command" => Some("Right Command"),
             "key.keyboard.right.control" => Some("Right Control"),
+            "key.keyboard.right.meta" => Some("Right Meta"),
+            "key.keyboard.right.option" => Some("Right Option"),
             "key.keyboard.right.shift" => Some("Right Shift"),
             "key.keyboard.right.win" => Some("Right Win"),
+            "key.keyboard.right.windows" => Some("Right Windows"),
+            "key.keyboard.save" => Some("Save"),
             "key.keyboard.scroll.lock" => Some("Scroll Lock"),
+            "key.keyboard.select" => Some("Select"),
             "key.keyboard.semicolon" => Some(";"),
+            "key.keyboard.separator" => Some("Separator"),
             "key.keyboard.slash" => Some("/"),
+            "key.keyboard.sleep" => Some("Sleep"),
+            "key.keyboard.soft.left" => Some("Soft Left"),
+            "key.keyboard.soft.right" => Some("Soft Right"),
             "key.keyboard.space" => Some("Space"),
+            "key.keyboard.stop" => Some("Stop"),
+            "key.keyboard.sys.req" => Some("SysRq"),
             "key.keyboard.tab" => Some("Tab"),
+            "key.keyboard.thousands.separator" => Some("Thousands Separator"),
+            "key.keyboard.undo" => Some("Undo"),
             "key.keyboard.unknown" => Some("Not Bound"),
             "key.keyboard.up" => Some("Up Arrow"),
+            "key.keyboard.volume.down" => Some("Volume Down"),
+            "key.keyboard.volume.up" => Some("Volume Up"),
+            "key.keyboard.wake" => Some("Wake"),
             "key.keyboard.world.1" => Some("World 1"),
             "key.keyboard.world.2" => Some("World 2"),
             "key.left" => Some("Strafe Left"),
@@ -37164,6 +39119,7 @@ pub mod java {
             "mco.configure.world.buttons.done" => Some("Done"),
             "mco.configure.world.buttons.edit" => Some("Settings"),
             "mco.configure.world.buttons.invite" => Some("Invite Player"),
+            "mco.configure.world.buttons.invite_codes" => Some("Invite Codes"),
             "mco.configure.world.buttons.moreoptions" => Some("More options"),
             "mco.configure.world.buttons.newworld" => Some("New World"),
             "mco.configure.world.buttons.open" => Some("Reopen Realm"),
@@ -37176,7 +39132,7 @@ pub mod java {
             "mco.configure.world.buttons.subscription" => Some("Subscription"),
             "mco.configure.world.buttons.switchminigame" => Some("Switch Minigame"),
             "mco.configure.world.close.question.line1" => Some(
-                "You can temporarily close your Realm, preventing play while you make adjustments. Open it back up when you're ready. \n\nThis does not cancel your Realms Subscription.",
+                "You can temporarily close your Realm, preventing play while you make adjustments. Open it back up when you're ready.\n\nThis does not cancel your Realms subscription.",
             ),
             "mco.configure.world.close.question.line2" => {
                 Some("Are you sure you want to continue?")
@@ -37207,6 +39163,26 @@ pub mod java {
             "mco.configure.world.forceGameMode" => Some("Force Game Mode"),
             "mco.configure.world.invite.narration" => Some("You have %s new invite(s)"),
             "mco.configure.world.invite.profile.name" => Some("Name"),
+            "mco.configure.world.invite_codes.copy" => Some("Copy"),
+            "mco.configure.world.invite_codes.create" => Some("Create Invite Code"),
+            "mco.configure.world.invite_codes.delete" => Some("Delete"),
+            "mco.configure.world.invite_codes.edit" => Some("Edit"),
+            "mco.configure.world.invite_codes.edit.active" => Some("Active"),
+            "mco.configure.world.invite_codes.edit.expiration_date" => Some("Expiration Date"),
+            "mco.configure.world.invite_codes.edit.expires" => Some("Expires: %s"),
+            "mco.configure.world.invite_codes.edit.title" => Some("Edit Invite Code"),
+            "mco.configure.world.invite_codes.expiration.12_hours" => Some("12 hours"),
+            "mco.configure.world.invite_codes.expiration.1_day" => Some("1 day"),
+            "mco.configure.world.invite_codes.expiration.1_hour" => Some("1 hour"),
+            "mco.configure.world.invite_codes.expiration.30_minutes" => Some("30 minutes"),
+            "mco.configure.world.invite_codes.expiration.6_hours" => Some("6 hours"),
+            "mco.configure.world.invite_codes.expiration.7_days" => Some("7 days"),
+            "mco.configure.world.invite_codes.expiration.never" => Some("Never"),
+            "mco.configure.world.invite_codes.loading" => Some("Loading invite codes"),
+            "mco.configure.world.invite_codes.subtitle" => Some(
+                "You can add up to %s invite codes and share them so people can join your Realm",
+            ),
+            "mco.configure.world.invite_codes.title" => Some("Invite Codes (%s/%s)"),
             "mco.configure.world.invited" => Some("Invited"),
             "mco.configure.world.invited.number" => Some("Invited (%s)"),
             "mco.configure.world.invites.normal.tooltip" => Some("Normal User"),
@@ -37237,6 +39213,10 @@ pub mod java {
             "mco.configure.world.pvp" => Some("PVP"),
             "mco.configure.world.region_preference" => Some("Region Preference"),
             "mco.configure.world.region_preference.title" => Some("Region Preference Selection"),
+            "mco.configure.world.renderDistance" => Some("Render Distance Limit"),
+            "mco.configure.world.renderDistance.tooltip" => Some(
+                "The maximum distance visible to Realm members. Higher values may impact performance.",
+            ),
             "mco.configure.world.reset.question.line1" => {
                 Some("Your world will be regenerated and your current world will be lost")
             }
@@ -37268,6 +39248,10 @@ pub mod java {
                 Some("You cannot edit settings of an expired Realm")
             }
             "mco.configure.world.settings.title" => Some("Settings"),
+            "mco.configure.world.simulationDistance" => Some("Simulation Distance"),
+            "mco.configure.world.simulationDistance.tooltip" => {
+                Some("The range around players where the game loads and applies changes.")
+            }
             "mco.configure.world.slot" => Some("World %s"),
             "mco.configure.world.slot.empty" => Some("Empty"),
             "mco.configure.world.slot.switch.question.line1" => {
@@ -37354,7 +39338,7 @@ pub mod java {
             "mco.download.downloading" => Some("Downloading"),
             "mco.download.extracting" => Some("Extracting"),
             "mco.download.failed" => Some("Download failed"),
-            "mco.download.percent" => Some("%s %%"),
+            "mco.download.percent" => Some("%s%%"),
             "mco.download.preparing" => Some("Preparing download"),
             "mco.download.resourcePack.fail" => Some("Failed to download resource pack!"),
             "mco.download.speed" => Some("(%s/s)"),
@@ -37363,7 +39347,7 @@ pub mod java {
             "mco.error.invalid.session.message" => Some("Please try restarting Minecraft"),
             "mco.error.invalid.session.title" => Some("Invalid Session"),
             "mco.errorMessage.6001" => Some("Client outdated"),
-            "mco.errorMessage.6002" => Some("Terms of service not accepted"),
+            "mco.errorMessage.6002" => Some("Terms of Service not accepted"),
             "mco.errorMessage.6003" => Some("Download limit reached"),
             "mco.errorMessage.6004" => Some("Upload limit reached"),
             "mco.errorMessage.6005" => Some("World locked"),
@@ -37433,6 +39417,22 @@ pub mod java {
             "mco.notification.visitUrl.buttonText.default" => Some("Open Link"),
             "mco.notification.visitUrl.message.default" => Some("Please visit the link below"),
             "mco.onlinePlayers" => Some("Online Players"),
+            "mco.pdp.friends.description" => Some(
+                "Your invited friends can play in your Realm for free, anytime - even when you're not online. Play with up to 10 at once!",
+            ),
+            "mco.pdp.friends.title" => Some("A better way to play together"),
+            "mco.pdp.minigames.description" => {
+                Some("Explore the rotating library of minigames, adventure maps and more.")
+            }
+            "mco.pdp.minigames.title" => Some("Minigames - Free creator content"),
+            "mco.pdp.private.backups" => Some("• Automatic backups"),
+            "mco.pdp.private.easyToManage" => Some("• Easy to set up, easy to manage"),
+            "mco.pdp.private.secure" => Some("• Private and secure"),
+            "mco.pdp.private.title" => Some("Personal server"),
+            "mco.pdp.private.worldSlots" => Some("• Three world slots"),
+            "mco.pdp.trial.description" => Some("Free 30-day trial!"),
+            "mco.pdp.trial.title" => Some("Your own server, always online"),
+            "mco.pdp.tryForFree" => Some("Try for free"),
             "mco.play.button.realm.closed" => Some("Realm is closed"),
             "mco.question" => Some("Question"),
             "mco.reset.world.adventure" => Some("Adventures"),
@@ -37463,6 +39463,14 @@ pub mod java {
             "mco.selectServer.expires.day" => Some("Expires in a day"),
             "mco.selectServer.expires.days" => Some("Expires in %s days"),
             "mco.selectServer.expires.soon" => Some("Expires soon"),
+            "mco.selectServer.freeTrial" => Some("Free trial"),
+            "mco.selectServer.joinCode" => Some("Join Code"),
+            "mco.selectServer.joinCode.hint" => Some("Enter join code"),
+            "mco.selectServer.joinCode.invalid" => Some("The code you entered is invalid."),
+            "mco.selectServer.joinCode.select" => Some("Join Realm"),
+            "mco.selectServer.joinCode.title" => Some("Enter Join Code"),
+            "mco.selectServer.joinCode.validating" => Some("Validating code"),
+            "mco.selectServer.joinRealm" => Some("Join Realm"),
             "mco.selectServer.leave" => Some("Leave Realm"),
             "mco.selectServer.loading" => Some("Loading Realms List"),
             "mco.selectServer.mapOnlySupportedForVersion" => Some("This map is unsupported in %s"),
@@ -37502,7 +39510,7 @@ pub mod java {
             }
             "mco.snapshot.start" => Some("Start free Snapshot Realm"),
             "mco.snapshot.subscription.info" => Some(
-                "This is a Snapshot Realm that is paired to the subscription of your Realm '%s'. It will stay active for as long as its paired Realm is.",
+                "This is a Snapshot Realm that is paired with the subscription of your Realm '%s'. It will stay active for as long as its paired Realm is.",
             ),
             "mco.snapshot.tooltip" => Some(
                 "Use Snapshot Realms to get a sneak peek at upcoming versions of Minecraft, which might include new features and other changes.\n\nYou can find your normal Realms in the release version of the game.",
@@ -37557,7 +39565,7 @@ pub mod java {
             }
             "mco.upload.failed.too_big.title" => Some("World too big"),
             "mco.upload.hardcore" => Some("Hardcore worlds can't be uploaded!"),
-            "mco.upload.percent" => Some("%s %%"),
+            "mco.upload.percent" => Some("%s%%"),
             "mco.upload.preparing" => Some("Preparing your world"),
             "mco.upload.select.world.none" => Some("No singleplayer worlds found!"),
             "mco.upload.select.world.subtitle" => {
@@ -37652,7 +39660,8 @@ pub mod java {
             "mirror.front_back" => Some("↑ ↓"),
             "mirror.left_right" => Some("← →"),
             "mirror.none" => Some("|"),
-            "mount.onboard" => Some("Press %1$s to Dismount"),
+            "mount.onboard" => Some("Press %1$s to dismount"),
+            "mount.sit" => Some("Press %1$s to get up"),
             "multiplayer.applyingPack" => Some("Applying resource pack"),
             "multiplayer.codeOfConduct.check" => {
                 Some("Do not notify again for this Code of Conduct")
@@ -37666,7 +39675,7 @@ pub mod java {
             ),
             "multiplayer.confirm_command.run_command" => Some("Run Command"),
             "multiplayer.confirm_command.signature_required" => Some(
-                "You are trying to execute a command that will send chat messages using your name.\nIt can only be run from the chat screen\nCommand: %s",
+                "You are trying to execute a command that will send chat messages using your name.\nIt can only be run from the chat screen.\nCommand: %s",
             ),
             "multiplayer.confirm_command.suggest_command" => Some("Copy to Chat Screen"),
             "multiplayer.confirm_command.title" => Some("Confirm Command Execution"),
@@ -38081,6 +40090,10 @@ pub mod java {
             "options.clouds.fast" => Some("Fast"),
             "options.controls" => Some("Controls..."),
             "options.credits_and_attribution" => Some("Credits & Attribution..."),
+            "options.ctrlClickEmulatesRightClick" => Some("Right Click Emulation"),
+            "options.ctrlClickEmulatesRightClick.tooltip" => Some(
+                "When enabled, Control + left-click is treated as a right-click. Only applies on macOS.",
+            ),
             "options.cutoutLeaves" => Some("See-Through Leaves"),
             "options.cutoutLeaves.tooltip" => {
                 Some("Allows you to see through gaps in leaves. Disabling improves performance.")
@@ -38097,6 +40110,10 @@ pub mod java {
             "options.darknessEffectScale.tooltip" => Some(
                 "Controls how much the Darkness effect pulses when a Warden or Sculk Shrieker gives it to you.",
             ),
+            "options.debugGuiScale.tooltip" => Some(
+                "Overrides the debug overlay with a different GUI scale than the rest of the game",
+            ),
+            "options.debugGuiScale.unchanged" => Some("Unchanged"),
             "options.difficulty" => Some("Difficulty"),
             "options.difficulty.easy" => Some("Easy"),
             "options.difficulty.easy.info" => Some(
@@ -38158,6 +40175,10 @@ pub mod java {
             "options.fullscreen" => Some("Fullscreen"),
             "options.fullscreen.current" => Some("Current"),
             "options.fullscreen.entry" => Some("%sx%s@%s (%sbit)"),
+            "options.fullscreen.exclusive.mode" => Some("Exclusive Fullscreen Mode"),
+            "options.fullscreen.exclusive.mode.tooltip" => {
+                Some("This setting only takes effect when Exclusive Fullscreen is enabled.")
+            }
             "options.fullscreen.resolution" => Some("Fullscreen Resolution"),
             "options.fullscreen.unavailable" => Some("Setting unavailable"),
             "options.gamma" => Some("Brightness"),
@@ -38229,12 +40250,15 @@ pub mod java {
                 Some("Hides the yellow splash text in the main menu.")
             }
             "options.improvedTransparency" => Some("Improved Transparency"),
+            "options.improvedTransparency.oit.tooltip" => Some(
+                "An experimental approach that uses an order-independent transparency algorithm to avoid graphical issues normally present when looking through multiple layers of translucent objects.\nThis will impact performance.",
+            ),
             "options.improvedTransparency.tooltip" => Some(
                 "An experimental approach that uses screen shaders for drawing weather, clouds, and particles behind translucent blocks and water.\nThis will impact GPU performance.",
             ),
             "options.inGameNotification" => Some("In-Game Notification"),
             "options.inGameNotification.tooltip" => Some("Show Friend notifications in-game"),
-            "options.inactivityFpsLimit" => Some("Reduce FPS when"),
+            "options.inactivityFpsLimit" => Some("Reduce fps when"),
             "options.inactivityFpsLimit.afk" => Some("AFK"),
             "options.inactivityFpsLimit.afk.tooltip" => Some(
                 "Limits framerate to 30 when the game is not getting any player input for more than a minute. Further limits it to 10 after 9 more minutes.",
@@ -38253,13 +40277,21 @@ pub mod java {
             "options.key.hold" => Some("Hold"),
             "options.key.toggle" => Some("Toggle"),
             "options.language" => Some("Language..."),
+            "options.language.empty_or_missing_translation" => Some(
+                "Translation file for %s was empty or missing. Restart your game and launcher, then try again.",
+            ),
+            "options.language.load_translations_failed" => Some("Loading translations failed"),
             "options.language.narration" => Some("Change Language"),
             "options.language.title" => Some("Language"),
             "options.language.tooltip" => Some("Change Language"),
             "options.languageAccuracyWarning" => {
                 Some("(Language translations may not be 100%% accurate)")
             }
-            "options.languageWarning" => Some("Language translations may not be 100%% accurate"),
+            "options.languageWarning" => Some("Language translations may not be 100%% accurate."),
+            "options.macFullscreenMenuVisibility" => Some("Menu/Dock Visibility"),
+            "options.macFullscreenMenuVisibility.tooltip" => Some(
+                "Whether the macOS Menu bar and Dock can be revealed by moving the mouse to the edge of the screen while in non-exclusive fullscreen.",
+            ),
             "options.mainHand" => Some("Main Hand"),
             "options.mainHand.left" => Some("Left"),
             "options.mainHand.right" => Some("Right"),
@@ -38334,7 +40366,7 @@ pub mod java {
             "options.prioritizeChunkUpdates" => Some("Chunk Builder"),
             "options.prioritizeChunkUpdates.byPlayer" => Some("Semi Blocking"),
             "options.prioritizeChunkUpdates.byPlayer.tooltip" => Some(
-                "Some actions within a chunk will recompile the chunk immediately. This includes block placing & destroying.",
+                "Some actions within a chunk will recompile the chunk immediately. This includes block placing and destroying.",
             ),
             "options.prioritizeChunkUpdates.nearby" => Some("Fully Blocking"),
             "options.prioritizeChunkUpdates.nearby.tooltip" => Some(
@@ -38343,6 +40375,10 @@ pub mod java {
             "options.prioritizeChunkUpdates.none" => Some("Threaded"),
             "options.prioritizeChunkUpdates.none.tooltip" => Some(
                 "Nearby chunks are compiled in parallel threads. This may result in brief visual holes when blocks are destroyed.",
+            ),
+            "options.quitShortcuts" => Some("Quit Shortcuts"),
+            "options.quitShortcuts.tooltip" => Some(
+                "Whether keyboard shortcuts can close the game. When off, Alt + F4 on Windows and Linux, and Cmd + Q on macOS, will no longer quit the game.",
             ),
             "options.rawMouseInput" => Some("Raw Input"),
             "options.realmsNotifications" => Some("Realms News & Invites"),
@@ -38437,15 +40473,66 @@ pub mod java {
             "options.weatherRadius.tooltip" => Some(
                 "Radius of the area where rain and snow effects are visible. Very low performance impact.",
             ),
+            "options.worldOptions.allow_commands.disabled.demo.tooltip" => {
+                Some("Cannot allow commands in a demo world.")
+            }
             "options.worldOptions.allow_commands.disabled.tooltip" => {
                 Some("Cannot allow commands in a hardcore world.")
             }
+            "options.worldOptions.allow_commands.tooltip" => {
+                Some("Allows the use of commands in this world.")
+            }
             "options.worldOptions.button" => Some("World Options..."),
+            "options.worldOptions.difficulty.disabled.hardcore.tooltip" => {
+                Some("Cannot change the difficulty in a hardcore world.")
+            }
+            "options.worldOptions.difficulty.disabled.locked.tooltip" => {
+                Some("Difficulty is locked.")
+            }
+            "options.worldOptions.difficulty.disabled.operator.tooltip" => {
+                Some("Changing the difficulty requires operator permissions.")
+            }
+            "options.worldOptions.game_mode" => Some("Default Game Mode"),
             "options.worldOptions.game_mode.disabled.operator.tooltip" => {
                 Some("Changing the game mode requires operator permissions.")
             }
             "options.worldOptions.game_mode.disabled.tooltip" => {
                 Some("Cannot change the game mode in a hardcore world.")
+            }
+            "options.worldOptions.game_mode.tooltip" => {
+                Some("Changes the default game mode of the world.")
+            }
+            "options.worldOptions.general.title" => Some("General"),
+            "options.worldOptions.guest.command_access" => Some("Command Access"),
+            "options.worldOptions.guest.command_access.disabled.commands.tooltip" => Some(
+                "Cannot change the command access of players joining your world when commands are not allowed.",
+            ),
+            "options.worldOptions.guest.command_access.disabled.scope.tooltip" => Some(
+                "Cannot change the command access of players joining your world when the world's multiplayer scope is set to \"Off\".",
+            ),
+            "options.worldOptions.guest.command_access.tooltip" => {
+                Some("Controls whether players that join your world can use commands or not.")
+            }
+            "options.worldOptions.guest.force_game_mode" => Some("Force Game Mode"),
+            "options.worldOptions.guest.force_game_mode.off.commands.tooltip" => {
+                Some("Other players can set their own game mode through commands.")
+            }
+            "options.worldOptions.guest.force_game_mode.off.hardcore.tooltip" => {
+                Some("Cannot change this setting in a hardcore world.")
+            }
+            "options.worldOptions.guest.force_game_mode.off.scope.tooltip" => Some(
+                "Cannot change this setting when the world's multiplayer scope is set to \"Off\".",
+            ),
+            "options.worldOptions.guest.force_game_mode.off.tooltip" => Some(
+                "Other players will retain their current game mode regardless of the world's default game mode.",
+            ),
+            "options.worldOptions.guest.force_game_mode.on.tooltip" => {
+                Some("Other players will be forced to play the world's default game mode.")
+            }
+            "options.worldOptions.multiplayer.title" => Some("Multiplayer"),
+            "options.worldOptions.personal_game_mode" => Some("Personal Game Mode"),
+            "options.worldOptions.personal_game_mode.tooltip" => {
+                Some("Changes your game mode in this world.")
             }
             "options.worldOptions.title" => Some("World Options"),
             "outOfMemory.message" => Some(
@@ -38457,7 +40544,7 @@ pub mod java {
             "pack.dropConfirm" => Some("Do you want to add the following packs to Minecraft?"),
             "pack.dropInfo" => Some("Drag and drop files into this window to add packs"),
             "pack.dropRejected.message" => {
-                Some("The following entries were not valid packs and were not copied:\n %s")
+                Some("The following entries were not valid packs and were not copied:\n%s")
             }
             "pack.dropRejected.title" => Some("Non-pack entries"),
             "pack.folderInfo" => Some("(Place pack files here)"),
@@ -38618,9 +40705,9 @@ pub mod java {
             "potion.withDuration" => Some("%s (%s)"),
             "predicate.unknown" => Some("Unknown predicate: %s"),
             "quickplay.error.invalid_identifier" => {
-                Some("Could not find world with the provided identifier")
+                Some("Could not find a world with the provided identifier")
             }
-            "quickplay.error.realm_connect" => Some("Could not connect to Realm"),
+            "quickplay.error.realm_connect" => Some("Could not connect to this Realm"),
             "quickplay.error.realm_permission" => {
                 Some("Lacking permission to connect to this Realm")
             }
@@ -38628,6 +40715,7 @@ pub mod java {
             "realms.configuration.region.australia_east" => Some("New South Wales, Australia"),
             "realms.configuration.region.australia_southeast" => Some("Victoria, Australia"),
             "realms.configuration.region.brazil_south" => Some("Brazil"),
+            "realms.configuration.region.canada_central" => Some("Canada"),
             "realms.configuration.region.central_india" => Some("India"),
             "realms.configuration.region.central_us" => Some("Iowa, USA"),
             "realms.configuration.region.east_asia" => Some("Hong Kong"),
@@ -38637,8 +40725,10 @@ pub mod java {
             "realms.configuration.region.japan_east" => Some("Eastern Japan"),
             "realms.configuration.region.japan_west" => Some("Western Japan"),
             "realms.configuration.region.korea_central" => Some("South Korea"),
+            "realms.configuration.region.mexico_central" => Some("Mexico"),
             "realms.configuration.region.north_central_us" => Some("Illinois, USA"),
             "realms.configuration.region.north_europe" => Some("Ireland"),
+            "realms.configuration.region.south_africa_north" => Some("South Africa"),
             "realms.configuration.region.south_central_us" => Some("Texas, USA"),
             "realms.configuration.region.southeast_asia" => Some("Singapore"),
             "realms.configuration.region.sweden_central" => Some("Sweden"),
@@ -38648,6 +40738,7 @@ pub mod java {
             "realms.configuration.region.west_europe" => Some("Netherlands"),
             "realms.configuration.region.west_us" => Some("California, USA"),
             "realms.configuration.region.west_us_2" => Some("Washington, USA"),
+            "realms.configuration.region.west_us_3" => Some("Arizona, USA"),
             "realms.configuration.region_preference.automatic_owner" => {
                 Some("Automatic (Realm owner ping)")
             }
@@ -38765,7 +40856,7 @@ pub mod java {
             "selectWorld.commands" => Some("Commands"),
             "selectWorld.conversion" => Some("Must be converted!"),
             "selectWorld.conversion.tooltip" => Some(
-                "This world must be opened in an older version (like 1.6.4) to be safely converted",
+                "This world must be opened in an older version (like 1.6.4) to be safely converted.",
             ),
             "selectWorld.create" => Some("Create New World"),
             "selectWorld.customizeType" => Some("Customize"),
@@ -38781,7 +40872,7 @@ pub mod java {
             "selectWorld.edit.backupCreated" => Some("Backed up: %s"),
             "selectWorld.edit.backupFailed" => Some("Backup failed"),
             "selectWorld.edit.backupFolder" => Some("Open Backups Folder"),
-            "selectWorld.edit.backupSize" => Some("size: %s MB"),
+            "selectWorld.edit.backupSize" => Some("Size: %s MB"),
             "selectWorld.edit.export_worldgen_settings" => Some("Export World Generation Settings"),
             "selectWorld.edit.export_worldgen_settings.failure" => Some("Export failed"),
             "selectWorld.edit.export_worldgen_settings.success" => Some("Exported"),
@@ -38857,7 +40948,7 @@ pub mod java {
             ),
             "selectWorld.incompatible_series" => Some("Created by an incompatible version"),
             "selectWorld.load_folder_access" => {
-                Some("Unable to read or access folder where game worlds are saved!")
+                Some("Unable to read or access the folder where game worlds are saved!")
             }
             "selectWorld.loading_list" => Some("Loading World List"),
             "selectWorld.locked" => Some("Locked by another running instance of Minecraft."),
@@ -38934,7 +41025,10 @@ pub mod java {
             "selecteWorld.backupRequiredTooltip" => {
                 Some("Loading the world requires taking a backup first")
             }
+            "sign.back_text" => Some("Back Text:"),
+            "sign.click_actions_disabled" => Some("Click actions are disabled for this sign"),
             "sign.edit" => Some("Edit Sign Message"),
+            "sign.front_text" => Some("Front Text:"),
             "sleep.not_possible" => Some("No amount of rest can pass this night"),
             "sleep.players_sleeping" => Some("%s/%s players sleeping"),
             "sleep.skipping_night" => Some("Sleeping through this night"),
@@ -38978,6 +41072,9 @@ pub mod java {
             "soundCategory.ui" => Some("UI"),
             "soundCategory.voice" => Some("Narrator/Voice"),
             "soundCategory.weather" => Some("Weather"),
+            "spectator.cannot_teleport" => {
+                Some("Unable to teleport. The other side is not generated yet.")
+            }
             "spectatorMenu.close" => Some("Close Menu"),
             "spectatorMenu.next_page" => Some("Next Page"),
             "spectatorMenu.previous_page" => Some("Previous Page"),
@@ -39057,6 +41154,7 @@ pub mod java {
             "stat.minecraft.raid_trigger" => Some("Raids Triggered"),
             "stat.minecraft.raid_win" => Some("Raids Won"),
             "stat.minecraft.sleep_in_bed" => Some("Times Slept in a Bed"),
+            "stat.minecraft.sleep_in_straw_bed" => Some("Times Slept in a Straw Bed"),
             "stat.minecraft.sneak_time" => Some("Sneak Time"),
             "stat.minecraft.sprint_one_cm" => Some("Distance Sprinted"),
             "stat.minecraft.strider_one_cm" => Some("Distance by Strider"),
@@ -39111,7 +41209,7 @@ pub mod java {
             "structure_block.mode_info.load" => Some("Load Mode - Load from file"),
             "structure_block.mode_info.save" => Some("Save Mode - Write to file"),
             "structure_block.position" => Some("Relative Position"),
-            "structure_block.position.x" => Some("relative Position x"),
+            "structure_block.position.x" => Some("relative position x"),
             "structure_block.position.y" => Some("relative position y"),
             "structure_block.position.z" => Some("relative position z"),
             "structure_block.save_failure" => Some("Unable to save structure '%s'"),
@@ -39154,7 +41252,7 @@ pub mod java {
             "subtitles.block.brewing_stand.brew" => Some("Brewing Stand bubbles"),
             "subtitles.block.bubble_column.bubble_pop" => Some("Bubbles pop"),
             "subtitles.block.bubble_column.upwards_ambient" => Some("Bubbles flow"),
-            "subtitles.block.bubble_column.upwards_inside" => Some("Bubbles woosh"),
+            "subtitles.block.bubble_column.upwards_inside" => Some("Bubbles whoosh"),
             "subtitles.block.bubble_column.whirlpool_ambient" => Some("Bubbles whirl"),
             "subtitles.block.bubble_column.whirlpool_inside" => Some("Bubbles zoom"),
             "subtitles.block.button.click" => Some("Button clicks"),
@@ -39236,6 +41334,7 @@ pub mod java {
                 Some("Water drips into Cauldron")
             }
             "subtitles.block.pointed_dripstone.land" => Some("Stalactite crashes down"),
+            "subtitles.block.poplar_leaves.ambient" => Some("Leaves rustling"),
             "subtitles.block.portal.ambient" => Some("Portal whooshes"),
             "subtitles.block.portal.travel" => Some("Portal noise fades"),
             "subtitles.block.portal.trigger" => Some("Portal noise intensifies"),
@@ -39262,6 +41361,9 @@ pub mod java {
             "subtitles.block.shelf.place_item" => Some("Item placed"),
             "subtitles.block.shelf.single_swap" => Some("Item swaps"),
             "subtitles.block.shelf.take_item" => Some("Item taken"),
+            "subtitles.block.shelf_mushroom.bounce" => {
+                Some("Something bounces on a Shelf Mushroom")
+            }
             "subtitles.block.shulker_box.close" => Some("Shulker box closes"),
             "subtitles.block.shulker_box.open" => Some("Shulker box opens"),
             "subtitles.block.sign.waxed_interact_fail" => Some("Sign wobbles"),
@@ -39271,6 +41373,7 @@ pub mod java {
             "subtitles.block.sniffer_egg.hatch" => Some("Sniffer Egg hatches"),
             "subtitles.block.sniffer_egg.plop" => Some("Sniffer plops"),
             "subtitles.block.sponge.absorb" => Some("Sponge sucks"),
+            "subtitles.block.straw_bed.break_leave" => Some("Straw Bed breaks"),
             "subtitles.block.sweet_berry_bush.pick_berries" => Some("Berries pop"),
             "subtitles.block.trapdoor.close" => Some("Trapdoor closes"),
             "subtitles.block.trapdoor.open" => Some("Trapdoor opens"),
@@ -39444,9 +41547,11 @@ pub mod java {
             "subtitles.entity.copper_golem.hurt" => Some("Copper Golem hurts"),
             "subtitles.entity.copper_golem.item_drop" => Some("Copper Golem is placing an item"),
             "subtitles.entity.copper_golem.item_no_drop" => Some("Copper Golem can't place item"),
-            "subtitles.entity.copper_golem.no_item_get" => Some("Copper Golem is picking up item"),
+            "subtitles.entity.copper_golem.no_item_get" => {
+                Some("Copper Golem is picking up an item")
+            }
             "subtitles.entity.copper_golem.no_item_no_get" => {
-                Some("Copper Golem can't pick up item")
+                Some("Copper Golem can't pick up an item")
             }
             "subtitles.entity.copper_golem.spawn" => Some("Copper Golem appears"),
             "subtitles.entity.copper_golem.spin" => Some("Copper Golem's head spins"),
@@ -39474,6 +41579,10 @@ pub mod java {
             "subtitles.entity.creeper.death" => Some("Creeper dies"),
             "subtitles.entity.creeper.hurt" => Some("Creeper hurts"),
             "subtitles.entity.creeper.primed" => Some("Creeper hisses"),
+            "subtitles.entity.cushion.break" => Some("Cushion breaks"),
+            "subtitles.entity.cushion.get_up" => Some("Gets up from Cushion"),
+            "subtitles.entity.cushion.place" => Some("Cushion placed"),
+            "subtitles.entity.cushion.sit" => Some("Sits on Cushion"),
             "subtitles.entity.dolphin.ambient" => Some("Dolphin chirps"),
             "subtitles.entity.dolphin.ambient_water" => Some("Dolphin whistles"),
             "subtitles.entity.dolphin.attack" => Some("Dolphin attacks"),
@@ -39609,6 +41718,7 @@ pub mod java {
             "subtitles.entity.happy_ghast.harness_goggles_down" => Some("Happy Ghast is ready"),
             "subtitles.entity.happy_ghast.harness_goggles_up" => Some("Happy Ghast stops"),
             "subtitles.entity.happy_ghast.hurt" => Some("Happy Ghast hurts"),
+            "subtitles.entity.happy_ghast.riding" => Some("Wind rushes past"),
             "subtitles.entity.happy_ghast.unequip" => Some("Harness unequips"),
             "subtitles.entity.hoglin.ambient" => Some("Hoglin growls"),
             "subtitles.entity.hoglin.angry" => Some("Hoglin growls angrily"),
@@ -39698,6 +41808,7 @@ pub mod java {
             "subtitles.entity.nautilus.eat" => Some("Nautilus eats"),
             "subtitles.entity.nautilus.hurt" => Some("Nautilus hurts"),
             "subtitles.entity.nautilus.hurt_land" => Some("Nautilus hurts"),
+            "subtitles.entity.nautilus.riding" => Some("Nautilus bubbles"),
             "subtitles.entity.nautilus.swim" => Some("Nautilus swims"),
             "subtitles.entity.painting.break" => Some("Painting broken"),
             "subtitles.entity.painting.place" => Some("Painting placed"),
@@ -40203,7 +42314,7 @@ pub mod java {
             ),
             "telemetry.event.p2p_connection.title" => Some("Peer-to-peer Connection"),
             "telemetry.event.performance_metrics.description" => Some(
-                "Knowing the overall performance profile of Minecraft helps us tune and optimize the game for a wide range of machine specifications and operating systems. \nGame version is included to help us compare the performance profile for new versions of Minecraft.",
+                "Knowing the overall performance profile of Minecraft helps us tune and optimize the game for a wide range of machine specifications and operating systems.\nGame version is included to help us compare the performance profile for new versions of Minecraft.",
             ),
             "telemetry.event.performance_metrics.title" => Some("Performance Metrics"),
             "telemetry.event.required" => Some("%s (Required)"),
@@ -40235,7 +42346,7 @@ pub mod java {
             "telemetry.property.client_modded.title" => Some("Client Modded"),
             "telemetry.property.dedicated_memory_kb.title" => Some("Dedicated Memory (kB)"),
             "telemetry.property.event_timestamp_utc.title" => Some("Event Timestamp (UTC)"),
-            "telemetry.property.frame_rate_samples.title" => Some("Frame Rate Samples (FPS)"),
+            "telemetry.property.frame_rate_samples.title" => Some("Frame Rate Samples (fps)"),
             "telemetry.property.game_mode.title" => Some("Game Mode"),
             "telemetry.property.game_version.title" => Some("Game Version"),
             "telemetry.property.launcher_name.title" => Some("Launcher Name"),
@@ -40371,6 +42482,8 @@ pub mod java {
                 Some("Expected %s to be in between %s and %s: was %s")
             }
             "test.error.wrong_block_entity" => Some("Wrong block entity type: %s"),
+            "test.player.coordinates" => Some("Player coordinates: [%s, %s, %s] in %s"),
+            "test.run.coordinates" => Some("Test coordinates: [%s, %s, %s] in %s"),
             "test_block.error.missing" => Some("Test structure missing %s block"),
             "test_block.error.too_many" => Some("Too many %s blocks"),
             "test_block.invalid_timeout" => {
@@ -40391,6 +42504,7 @@ pub mod java {
             "test_instance.action.run" => Some("Load and Run"),
             "test_instance.action.save" => Some("Save Structure"),
             "test_instance.description.batch" => Some("Environment: %s"),
+            "test_instance.description.dimension" => Some("Dimension: %s"),
             "test_instance.description.failed" => Some("Failed: %s"),
             "test_instance.description.function" => Some("Function: %s"),
             "test_instance.description.invalid_id" => Some("Invalid test ID"),
@@ -40496,6 +42610,9 @@ pub mod java {
             "tutorial.socialInteractions.description" => Some("Press %s to open"),
             "tutorial.socialInteractions.title" => Some("Social Interactions"),
             "upgrade.minecraft.netherite_upgrade" => Some("Netherite Upgrade"),
+            "upgradeWorld.aborted.file_already_exists" => Some(
+                "The world folder seems to already contain some upgraded files. The game is unable to correctly upgrade your world.",
+            ),
             "upgradeWorld.aborted.message" => Some(
                 "This may happen if another program accessed the world during the upgrade.\nIt may help to restart your computer and try again. If the issue persists, please consider reporting a bug.",
             ),

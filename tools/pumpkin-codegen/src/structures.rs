@@ -640,6 +640,30 @@ fn structure_key_to_token(key: &str) -> TokenStream {
         "ancient_city" => quote!(StructureKeys::AncientCity),
         "trail_ruins" => quote!(StructureKeys::TrailRuins),
         "trial_chambers" => quote!(StructureKeys::TrialChambers),
+        "abandoned_camp_bamboo_jungle" => quote!(StructureKeys::AbandonedCampBambooJungle),
+        "abandoned_camp_birch_forest" => quote!(StructureKeys::AbandonedCampBirchForest),
+        "abandoned_camp_cherry_grove" => quote!(StructureKeys::AbandonedCampCherryGrove),
+        "abandoned_camp_dappled_forest" => quote!(StructureKeys::AbandonedCampDappledForest),
+        "abandoned_camp_flower_forest" => quote!(StructureKeys::AbandonedCampFlowerForest),
+        "abandoned_camp_forest" => quote!(StructureKeys::AbandonedCampForest),
+        "abandoned_camp_meadow" => quote!(StructureKeys::AbandonedCampMeadow),
+        "abandoned_camp_old_growth_birch_forest" => {
+            quote!(StructureKeys::AbandonedCampOldGrowthBirchForest)
+        }
+        "abandoned_camp_old_growth_pine_taiga" => {
+            quote!(StructureKeys::AbandonedCampOldGrowthPineTaiga)
+        }
+        "abandoned_camp_old_growth_spruce_taiga" => {
+            quote!(StructureKeys::AbandonedCampOldGrowthSpruceTaiga)
+        }
+        "abandoned_camp_pale_garden" => quote!(StructureKeys::AbandonedCampPaleGarden),
+        "abandoned_camp_savanna" => quote!(StructureKeys::AbandonedCampSavanna),
+        "abandoned_camp_snowy_taiga" => quote!(StructureKeys::AbandonedCampSnowyTaiga),
+        "abandoned_camp_sparse_jungle" => quote!(StructureKeys::AbandonedCampSparseJungle),
+        "abandoned_camp_swamp" => quote!(StructureKeys::AbandonedCampSwamp),
+        "abandoned_camp_taiga" => quote!(StructureKeys::AbandonedCampTaiga),
+        "abandoned_camp_windswept_forest" => quote!(StructureKeys::AbandonedCampWindsweptForest),
+        "abandoned_camp_wooded_badlands" => quote!(StructureKeys::AbandonedCampWoodedBadlands),
         _ => panic!("Unknown structure key: {stripped}"),
     }
 }
@@ -679,10 +703,10 @@ fn generation_step_to_token(step: &str) -> TokenStream {
     }
 }
 
-/// Reads structure and structure_set files from 26.2 datapack and emits the complete structures `TokenStream`.
+/// Reads structure and structure_set files from 26.3 datapack and emits the complete structures `TokenStream`.
 pub fn build() -> TokenStream {
     let structures_dir =
-        std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/worldgen/structure");
+        std::path::Path::new("../../assets/datapacks/26_3/data/minecraft/worldgen/structure");
     let mut structures_json: BTreeMap<String, StructureStruct> = BTreeMap::new();
     let mut s_entries: Vec<_> = fs::read_dir(structures_dir)
         .expect("Missing worldgen/structure directory")
@@ -700,7 +724,7 @@ pub fn build() -> TokenStream {
     }
 
     let structure_sets_dir =
-        std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/worldgen/structure_set");
+        std::path::Path::new("../../assets/datapacks/26_3/data/minecraft/worldgen/structure_set");
     let mut structure_sets_json: BTreeMap<String, StructureSetStruct> = BTreeMap::new();
     let mut ss_entries: Vec<_> = fs::read_dir(structure_sets_dir)
         .expect("Missing worldgen/structure_set directory")
@@ -821,6 +845,24 @@ pub fn build() -> TokenStream {
             AncientCity,
             TrailRuins,
             TrialChambers,
+            AbandonedCampBambooJungle,
+            AbandonedCampBirchForest,
+            AbandonedCampCherryGrove,
+            AbandonedCampDappledForest,
+            AbandonedCampFlowerForest,
+            AbandonedCampForest,
+            AbandonedCampMeadow,
+            AbandonedCampOldGrowthBirchForest,
+            AbandonedCampOldGrowthPineTaiga,
+            AbandonedCampOldGrowthSpruceTaiga,
+            AbandonedCampPaleGarden,
+            AbandonedCampSavanna,
+            AbandonedCampSnowyTaiga,
+            AbandonedCampSparseJungle,
+            AbandonedCampSwamp,
+            AbandonedCampTaiga,
+            AbandonedCampWindsweptForest,
+            AbandonedCampWoodedBadlands,
         }
 
         impl StructureKeys {

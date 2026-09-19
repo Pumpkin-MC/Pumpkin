@@ -86,6 +86,7 @@ mod tests {
             JavaMinecraftVersion::V_1_21_5,
             JavaMinecraftVersion::V_26_1,
             JavaMinecraftVersion::V_26_2,
+            JavaMinecraftVersion::V_26_3,
         ];
 
         for version in versions {
@@ -143,6 +144,7 @@ mod tests {
             JavaMinecraftVersion::V_1_21_5,
             JavaMinecraftVersion::V_26_1,
             JavaMinecraftVersion::V_26_2,
+            JavaMinecraftVersion::V_26_3,
         ];
 
         for version in versions {

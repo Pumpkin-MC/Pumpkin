@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:crafting_dye",
+  "dye": "#minecraft:dyes",
+  "group": "dyed_armor",
+  "result": {
+    "id": "minecraft:leather_leggings"
+  },
+  "target": "minecraft:leather_leggings"
+}

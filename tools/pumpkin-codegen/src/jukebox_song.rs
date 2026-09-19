@@ -17,7 +17,7 @@ struct JukeboxSongData {
 
 /// Generates the `TokenStream` for the `JukeboxSong` enum and its length, comparator, and name methods.
 pub fn build() -> TokenStream {
-    let dir = std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/jukebox_song");
+    let dir = std::path::Path::new("../../assets/datapacks/26_3/data/minecraft/jukebox_song");
     let mut song_data: BTreeMap<String, JukeboxSongData> = BTreeMap::new();
     let mut entries: Vec<_> = fs::read_dir(dir)
         .expect("Missing jukebox_song directory")

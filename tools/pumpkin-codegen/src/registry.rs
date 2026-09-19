@@ -7,7 +7,7 @@ use std::fs;
 use crate::version::JavaMinecraftVersion;
 
 /// The newest protocol version whose registry data is used as the fallback for unknown versions.
-const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_2;
+const LATEST_VERSION: JavaMinecraftVersion = JavaMinecraftVersion::V_26_3;
 
 /// Generates the `TokenStream` for the `Registry` and `StaticRegistry` structs, version-keyed
 /// static registry data, and the `Registry::get_synced` method.
@@ -30,6 +30,7 @@ pub(crate) fn build() -> TokenStream {
         ("1_21_11", "V_1_21_11"),
         ("26_1", "V_26_1"),
         ("26_2", "V_26_2"),
+        ("26_3", "V_26_3"),
     ];
 
     let version_mapping = [
@@ -60,6 +61,7 @@ pub(crate) fn build() -> TokenStream {
         (JavaMinecraftVersion::V_1_21_11, "V_1_21_11"),
         (JavaMinecraftVersion::V_26_1, "V_26_1"),
         (JavaMinecraftVersion::V_26_2, "V_26_2"),
+        (JavaMinecraftVersion::V_26_3, "V_26_3"),
     ];
 
     const SYNCED_REGISTRIES: &[&str] = &[
@@ -92,6 +94,9 @@ pub(crate) fn build() -> TokenStream {
         "test_environment",
         "test_instance",
         "sulfur_cube_archetype",
+        "decorated_pot_pattern",
+        "block_transformer",
+        "worldgen/block_state_provider",
     ];
 
     let process_version = |ver_folder: &str| -> TokenStream {
@@ -180,10 +185,17 @@ pub(crate) fn build() -> TokenStream {
                         }
 
                         let nbt_tag = json_to_nbt_tag(entry_data);
-                        let bytes = if let pumpkin_nbt::tag::NbtTag::Compound(compound) = nbt_tag {
-                            pumpkin_nbt::Nbt::from(compound).write_unnamed()
-                        } else {
-                            Vec::new().into()
+                        let bytes = match nbt_tag {
+                            pumpkin_nbt::tag::NbtTag::Compound(compound) => {
+                                pumpkin_nbt::Nbt::from(compound).write_unnamed()
+                            }
+                            other => {
+                                let mut bytes = Vec::new();
+                                let mut writer =
+                                    pumpkin_nbt::serializer::NbtWriteHelperJava::new(&mut bytes);
+                                let _ = other.serialize(&mut writer);
+                                bytes.into()
+                            }
                         };
                         let byte_literal = Literal::byte_string(&bytes);
 
@@ -226,7 +238,7 @@ pub(crate) fn build() -> TokenStream {
         });
     }
 
-    let latest_registry = format_ident!("REGISTRY_V_26_2");
+    let latest_registry = format_ident!("REGISTRY_V_26_3");
 
     quote! {
         use pumpkin_util::resource_location::ResourceLocation;

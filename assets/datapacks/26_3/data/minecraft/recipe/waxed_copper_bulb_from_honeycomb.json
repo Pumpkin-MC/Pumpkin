@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "redstone",
+  "group": "waxed_copper_bulb",
+  "ingredients": [
+    "minecraft:copper_bulb",
+    "minecraft:honeycomb"
+  ],
+  "result": {
+    "id": "minecraft:waxed_copper_bulb"
+  }
+}

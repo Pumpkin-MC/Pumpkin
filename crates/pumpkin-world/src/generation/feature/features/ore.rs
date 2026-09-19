@@ -211,7 +211,7 @@ impl OreFeature {
         target: &OreTarget,
         pos: &BlockPos,
     ) -> bool {
-        if !target.target.test(state, random) {
+        if !target.target.test(state, pos.0.y, random) {
             return false;
         }
         if Self::should_not_discard(random, discard_chance) {

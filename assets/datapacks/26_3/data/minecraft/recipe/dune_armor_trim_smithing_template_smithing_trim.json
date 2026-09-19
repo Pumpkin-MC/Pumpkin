@@ -1,0 +1,7 @@
+{
+  "type": "minecraft:smithing_trim",
+  "addition": "#minecraft:trim_materials",
+  "base": "#minecraft:trimmable_armor",
+  "pattern": "minecraft:dune",
+  "template": "minecraft:dune_armor_trim_smithing_template"
+}

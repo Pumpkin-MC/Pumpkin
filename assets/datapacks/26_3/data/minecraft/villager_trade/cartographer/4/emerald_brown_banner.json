@@ -1,0 +1,24 @@
+{
+  "gives": {
+    "id": "minecraft:brown_banner"
+  },
+  "max_uses": 12,
+  "merchant_predicate": {
+    "type": "minecraft:entity_properties",
+    "entity": "this",
+    "predicate": {
+      "minecraft:predicates": {
+        "minecraft:villager/variant": [
+          "minecraft:plains",
+          "minecraft:jungle"
+        ]
+      }
+    }
+  },
+  "reputation_discount": 0.05,
+  "wants": {
+    "count": 2,
+    "id": "minecraft:emerald"
+  },
+  "xp": 15
+}
