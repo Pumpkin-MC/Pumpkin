@@ -28,6 +28,7 @@ macro_rules! impl_block_entity_for_chest {
                         ItemStack::EMPTY.clone()
                     })),
                     dirty: std::sync::atomic::AtomicBool::new(false),
+                    comparator_dirty: std::sync::atomic::AtomicBool::new(false),
                     viewers: $crate::block::viewer::ViewerCountTracker::new(),
                     loot_table: StdMutex::new(loot_table_key),
                     loot_table_seed,
@@ -40,7 +41,7 @@ macro_rules! impl_block_entity_for_chest {
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .is_some();
                 if !has_loot_table {
-                    pumpkin_world::inventory::sync_read_items_from_nbt(
+                    pumpkin_inventory::sync_read_items_from_nbt(
                         nbt,
                         chest
                             .items
@@ -53,7 +54,7 @@ macro_rules! impl_block_entity_for_chest {
             }
 
             fn write_nbt(&self, nbt: &mut pumpkin_nbt::compound::NbtCompound) {
-                use pumpkin_world::inventory::Inventory;
+                use pumpkin_inventory::Inventory;
 
                 let loot_table_key = {
                     let guard = self
@@ -84,10 +85,18 @@ macro_rules! impl_block_entity_for_chest {
                 );
             }
 
-            fn get_inventory(
-                self: Arc<Self>,
-            ) -> Option<Arc<dyn pumpkin_world::inventory::Inventory>> {
+            fn get_inventory(self: Arc<Self>) -> Option<Arc<dyn pumpkin_inventory::Inventory>> {
                 Some(self)
+            }
+
+            fn is_comparator_dirty(&self) -> bool {
+                self.comparator_dirty
+                    .load(std::sync::atomic::Ordering::Relaxed)
+            }
+
+            fn clear_comparator_dirty(&self) {
+                self.comparator_dirty
+                    .store(false, std::sync::atomic::Ordering::Relaxed);
             }
 
             fn is_dirty(&self) -> bool {
@@ -108,7 +117,7 @@ macro_rules! impl_block_entity_for_chest {
                     .is_some();
                 if !has_loot_table {
                     if let Ok(items) = self.items.try_read() {
-                        pumpkin_world::inventory::sync_write_items_to_nbt(&*items, &mut nbt);
+                        pumpkin_inventory::sync_write_items_to_nbt(&*items, &mut nbt);
                     }
                 }
                 Some(nbt)
@@ -140,7 +149,7 @@ macro_rules! impl_block_entity_for_chest {
 #[macro_export]
 macro_rules! impl_inventory_for_chest {
     ($struct_name:ty) => {
-        impl pumpkin_world::inventory::Inventory for $struct_name {
+        impl pumpkin_inventory::Inventory for $struct_name {
             fn size(&self) -> usize {
                 Self::INVENTORY_SIZE
             }
@@ -204,6 +213,8 @@ macro_rules! impl_inventory_for_chest {
 
             fn mark_dirty(&self) {
                 self.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
+                self.comparator_dirty
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
             }
 
             fn as_any(&self) -> &dyn std::any::Any {
@@ -217,14 +228,14 @@ macro_rules! impl_inventory_for_chest {
 #[macro_export]
 macro_rules! impl_clearable_for_chest {
     ($struct_name:ty) => {
-        impl pumpkin_world::inventory::Clearable for $struct_name {
+        impl pumpkin_inventory::Clearable for $struct_name {
             fn clear(&self) {
                 let mut items = self
                     .items
                     .write()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
                 items.fill_with(|| ItemStack::EMPTY.clone());
-                <$struct_name as pumpkin_world::inventory::Inventory>::mark_dirty(self);
+                <$struct_name as pumpkin_inventory::Inventory>::mark_dirty(self);
             }
         }
     };
@@ -304,6 +315,7 @@ macro_rules! impl_chest_helper_methods {
                     position,
                     items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
                     dirty: AtomicBool::new(false),
+                    comparator_dirty: AtomicBool::new(false),
                     viewers: $crate::block::viewer::ViewerCountTracker::new(),
                     loot_table: StdMutex::new(None),
                     loot_table_seed: 0,

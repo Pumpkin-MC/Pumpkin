@@ -159,9 +159,14 @@ pub fn build() -> TokenStream {
         value: "../../assets/viabackwards/data/mappings-26.2to26.1.nbt",
         child: Some(&node_1_21_11),
     };
+    let node_26_2 = MappingNode {
+        version: JavaMinecraftVersion::V_26_2,
+        value: "../../assets/viabackwards/data/mappings-26.3to26.2.nbt",
+        child: Some(&node_26_1),
+    };
 
     let remapper: Remapper<_, Option<Vec<u16>>> = Remapper {
-        version: JavaMinecraftVersion::V_26_2,
+        version: JavaMinecraftVersion::V_26_3,
         remapper: |first, second| match (first, second) {
             (Some(first), Some(second)) => Some(
                 first
@@ -182,7 +187,7 @@ pub fn build() -> TokenStream {
         },
     };
 
-    let all_mappings = remapper.process(&node_26_1);
+    let all_mappings = remapper.process(&node_26_2);
     let mapping_size = all_mappings
         .iter()
         .flat_map(|(_, mapping)| {
@@ -267,13 +272,30 @@ pub fn build() -> TokenStream {
     }
 }
 
+/// Builds old-id → latest-id. Several latest items may share one old id (new
+/// items fallback to a similar existing item). Keep the first writer: original
+/// items have lower ids than later fallbacks, so a 1.21.6 diamond sword maps
+/// back to diamond sword instead of diamond spear.
 fn reverse_mapping(mapping: &[u16], mapped_size: usize) -> Vec<u16> {
     let mut result = vec![0u16; mapped_size];
     for (new_id, old_id) in mapping.iter().enumerate() {
         let old_id = *old_id as usize;
-        if old_id != 0 && old_id < mapped_size {
+        if old_id != 0 && old_id < mapped_size && result[old_id] == 0 {
             result[old_id] = new_id as u16;
         }
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::reverse_mapping;
+
+    #[test]
+    fn reverse_mapping_prefers_original_item_over_later_fallback() {
+        // Latest ids: 2 = original sword, 4 = spear that ViaBackwards aliases to the same old id.
+        let mapping = vec![0, 1, 5, 3, 5];
+        let reversed = reverse_mapping(&mapping, 8);
+        assert_eq!(reversed[5], 2);
+    }
 }

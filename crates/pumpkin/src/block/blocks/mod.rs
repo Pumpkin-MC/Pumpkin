@@ -63,6 +63,7 @@ pub mod lectern;
 pub mod shelf;
 pub mod signs;
 pub mod skull_block;
+pub mod straw_bed;
 pub mod wither_skull;
 
 // Lighting, heat & fire
@@ -99,6 +100,7 @@ pub mod grass_block;
 pub mod ice;
 pub mod infested;
 pub mod mud;
+pub mod netherrack;
 pub mod nylium;
 pub mod powder_snow;
 pub mod rooted_dirt;

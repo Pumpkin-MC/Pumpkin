@@ -112,6 +112,7 @@ data/*
 # project's configurations
 pumpkin.toml
 nethernet-key.der
+.pumpkin-server-id
 
 
 *.local.nbt
@@ -151,6 +152,7 @@ whitelist.json
 .console_history
 bukkit.yml
 commands.yml
+/config/
 help.yml
 permissions.yml
 spigot.yml

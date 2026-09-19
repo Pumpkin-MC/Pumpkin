@@ -9,7 +9,7 @@ use crate::version::JavaMinecraftVersion;
 /// `remap_data_component_type_id_for_version`/`remap_data_component_type_id_from_version` functions.
 pub fn build() -> TokenStream {
     let remapper: Remapper<_, Option<Vec<u32>>> = Remapper {
-        version: JavaMinecraftVersion::V_26_2,
+        version: JavaMinecraftVersion::V_26_3,
         remapper: |first, second| match (first, second) {
             (Some(first), Some(second)) => Some(
                 first
@@ -132,7 +132,7 @@ fn reverse_mapping(mapping: &[u32], mapped_size: usize) -> Vec<u32> {
     let mut result = vec![0u32; mapped_size];
     for (new_id, old_id) in mapping.iter().enumerate() {
         let old_id = *old_id as usize;
-        if old_id != 0 && old_id < mapped_size {
+        if old_id != 0 && old_id < mapped_size && result[old_id] == 0 {
             result[old_id] = new_id as u32;
         }
     }

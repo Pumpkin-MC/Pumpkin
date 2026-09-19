@@ -233,7 +233,7 @@ pub fn generate_loot_with_context(
 pub use generate_loot as generate_chest_loot;
 
 pub fn fill_chest_inventory(
-    inventory: &std::sync::Arc<dyn pumpkin_world::inventory::Inventory>,
+    inventory: &std::sync::Arc<dyn pumpkin_inventory::Inventory>,
     table: &LootTable,
     seed: i64,
 ) {

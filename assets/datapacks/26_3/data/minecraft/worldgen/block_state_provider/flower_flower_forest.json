@@ -1,0 +1,22 @@
+{
+  "type": "minecraft:noise",
+  "noise": {
+    "base_amplitude": 0.955388882960065,
+    "base_octave": 0
+  },
+  "scale": 0.020833334,
+  "seed": 2345,
+  "states": [
+    "minecraft:dandelion",
+    "minecraft:poppy",
+    "minecraft:allium",
+    "minecraft:azure_bluet",
+    "minecraft:red_tulip",
+    "minecraft:orange_tulip",
+    "minecraft:white_tulip",
+    "minecraft:pink_tulip",
+    "minecraft:oxeye_daisy",
+    "minecraft:cornflower",
+    "minecraft:lily_of_the_valley"
+  ]
+}

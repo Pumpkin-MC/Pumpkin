@@ -59,7 +59,7 @@ impl OcelotEntity {
             // Goal 1: PanicGoal (EscapeDangerGoal)
             goal_selector.add_goal(1, EscapeDangerGoal::new(1.5));
             // Goal 3: OcelotTemptGoal
-            goal_selector.add_goal(3, Box::new(TemptGoal::new(0.6, TEMPT_ITEMS)));
+            goal_selector.add_goal(3, Box::new(TemptGoal::new(0.6, TEMPT_ITEMS, true)));
             // Goal 4: OcelotAvoidEntityGoal (when not trusting)
             goal_selector.add_goal(
                 4,

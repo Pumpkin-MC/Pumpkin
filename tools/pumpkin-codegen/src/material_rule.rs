@@ -539,9 +539,9 @@ pub fn resolve_rule(
 /// Reads material_rule files and resolves conditions from material_condition folder.
 pub fn build() -> TokenStream {
     let rule_dir =
-        std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/worldgen/material_rule");
+        std::path::Path::new("../../assets/datapacks/26_3/data/minecraft/worldgen/material_rule");
     let cond_dir = std::path::Path::new(
-        "../../assets/datapacks/26_2/data/minecraft/worldgen/material_condition",
+        "../../assets/datapacks/26_3/data/minecraft/worldgen/material_condition",
     );
 
     let top_level_rules = [
@@ -598,6 +598,21 @@ pub fn build() -> TokenStream {
         }
 
         impl MaterialRule {
+            #[must_use]
+            pub fn from_name(name: &str) -> Option<&'static Self> {
+                let name = name.strip_prefix("minecraft:").unwrap_or(name);
+                match name {
+                    "overworld" | "amplified" | "large_biomes" => Some(&OVERWORLD),
+                    "nether" => Some(&NETHER),
+                    "end" => Some(&END),
+                    "bedrock_floor" => Some(&BEDROCK_FLOOR),
+                    "bedrock_roof" => Some(&BEDROCK_ROOF),
+                    "overworld_caves" => Some(&OVERWORLD_CAVES),
+                    "overworld_floating_islands" => Some(&OVERWORLD_FLOATING_ISLANDS),
+                    _ => None,
+                }
+            }
+
             #[must_use]
             pub fn from_dimension(dimension: &Dimension) -> &'static Self {
                 if dimension == &Dimension::OVERWORLD {

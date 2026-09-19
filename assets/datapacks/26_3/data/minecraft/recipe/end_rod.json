@@ -1,0 +1,15 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "key": {
+    "#": "minecraft:popped_chorus_fruit",
+    "/": "minecraft:blaze_rod"
+  },
+  "pattern": [
+    "/",
+    "#"
+  ],
+  "result": {
+    "count": 4,
+    "id": "minecraft:end_rod"
+  }
+}

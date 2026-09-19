@@ -1,0 +1,21 @@
+{
+  "assets": {
+    "angry": "minecraft:entity/wolf/wolf_spotted_angry",
+    "tame": "minecraft:entity/wolf/wolf_spotted_tame",
+    "wild": "minecraft:entity/wolf/wolf_spotted"
+  },
+  "baby_assets": {
+    "angry": "minecraft:entity/wolf/wolf_spotted_angry_baby",
+    "tame": "minecraft:entity/wolf/wolf_spotted_tame_baby",
+    "wild": "minecraft:entity/wolf/wolf_spotted_baby"
+  },
+  "spawn_conditions": [
+    {
+      "condition": {
+        "type": "minecraft:biome",
+        "biomes": "#minecraft:is_savanna"
+      },
+      "priority": 1
+    }
+  ]
+}

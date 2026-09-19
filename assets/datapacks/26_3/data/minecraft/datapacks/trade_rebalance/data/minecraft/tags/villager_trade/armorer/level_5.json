@@ -1,0 +1,21 @@
+{
+  "replace": true,
+  "values": [
+    "minecraft:armorer/5/emerald_and_diamond_diamond_chestplate_desert",
+    "minecraft:armorer/5/emerald_and_diamond_diamond_leggings_desert",
+    "minecraft:armorer/5/emerald_and_diamond_diamond_leggings_plains",
+    "minecraft:armorer/5/emerald_and_diamond_diamond_boots_plains",
+    "minecraft:armorer/5/emerald_and_diamond_diamond_helmet_savanna",
+    "minecraft:armorer/5/emerald_and_diamond_diamond_chestplate_savanna",
+    "minecraft:armorer/5/emerald_and_diamond_diamond_boots_snow",
+    "minecraft:armorer/5/emerald_and_diamond_diamond_helmet_snow",
+    "minecraft:armorer/5/emerald_chainmail_helmet_jungle",
+    "minecraft:armorer/5/emerald_chainmail_boots_jungle",
+    "minecraft:armorer/5/emerald_chainmail_helmet_swamp",
+    "minecraft:armorer/5/emerald_chainmail_boots_swamp",
+    "minecraft:armorer/5/emerald_and_diamond_diamond_chestplate_taiga",
+    "minecraft:armorer/5/emerald_and_diamond_diamond_leggings_taiga",
+    "minecraft:armorer/5/diamond_block_emerald_taiga",
+    "minecraft:armorer/5/iron_block_emerald_non_taiga"
+  ]
+}

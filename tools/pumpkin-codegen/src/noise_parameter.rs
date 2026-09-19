@@ -3,6 +3,30 @@ use std::{collections::BTreeMap, fs};
 use proc_macro2::TokenStream;
 use pumpkin_util::DoublePerlinNoiseParametersCodec;
 use quote::{format_ident, quote};
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct NoiseParameterJson {
+    #[serde(rename = "firstOctave")]
+    first_octave: Option<i32>,
+    amplitudes: Option<Vec<f64>>,
+    amplitude_modifiers: Option<Vec<f64>>,
+    base_octave: Option<i32>,
+    octave_count: Option<usize>,
+}
+
+impl From<NoiseParameterJson> for DoublePerlinNoiseParametersCodec {
+    fn from(raw: NoiseParameterJson) -> Self {
+        Self {
+            first_octave: raw.first_octave.or(raw.base_octave).unwrap_or(-7),
+            amplitudes: raw
+                .amplitudes
+                .or(raw.amplitude_modifiers)
+                .or_else(|| raw.octave_count.map(|n| vec![1.0; n.max(1)]))
+                .unwrap_or_else(|| vec![1.0]),
+        }
+    }
+}
 
 fn collect_noise_files(
     base: &std::path::Path,
@@ -27,14 +51,16 @@ fn collect_noise_files(
             let key = format!("minecraft:{rel_str}");
             let content = fs::read_to_string(&path).expect("Failed to read noise file");
             let param: DoublePerlinNoiseParametersCodec =
-                serde_json::from_str(&content).expect("Failed to parse noise parameter JSON");
+                serde_json::from_str::<NoiseParameterJson>(&content)
+                    .expect("Failed to parse noise parameter JSON")
+                    .into();
             result.insert(key, param);
         }
     }
 }
 
 pub fn build() -> TokenStream {
-    let dir = std::path::Path::new("../../assets/datapacks/26_2/data/minecraft/worldgen/noise");
+    let dir = std::path::Path::new("../../assets/datapacks/26_3/data/minecraft/worldgen/noise");
     let mut json: BTreeMap<String, DoublePerlinNoiseParametersCodec> = BTreeMap::new();
     collect_noise_files(dir, dir, &mut json);
 

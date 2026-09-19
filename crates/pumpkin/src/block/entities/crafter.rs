@@ -3,12 +3,10 @@ use crate::world::World;
 use pumpkin_data::block_properties::CrafterLikeProperties;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_inventory::crafting::recipes::RecipeInputInventory;
+use pumpkin_inventory::{Clearable, Inventory, sync_read_items_from_nbt, sync_write_items_to_nbt};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::inventory::{
-    Clearable, Inventory, sync_read_items_from_nbt, sync_write_items_to_nbt,
-};
 use pumpkin_world::world::BlockFlags;
 use std::any::Any;
 use std::array::from_fn;
@@ -23,6 +21,7 @@ pub struct CrafterBlockEntity {
     pub crafting_ticks_remaining: AtomicI32,
     pub triggered: AtomicBool,
     pub dirty: AtomicBool,
+    pub comparator_dirty: AtomicBool,
 }
 
 impl BlockEntity for CrafterBlockEntity {
@@ -69,6 +68,7 @@ impl BlockEntity for CrafterBlockEntity {
                     .map_or_else(|| nbt.get_bool("triggered").unwrap_or(false), |t| t != 0),
             ),
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
         };
 
         sync_read_items_from_nbt(
@@ -126,6 +126,14 @@ impl BlockEntity for CrafterBlockEntity {
         Some(self)
     }
 
+    fn is_comparator_dirty(&self) -> bool {
+        self.comparator_dirty.load(Ordering::Relaxed)
+    }
+
+    fn clear_comparator_dirty(&self) {
+        self.comparator_dirty.store(false, Ordering::Relaxed);
+    }
+
     fn is_dirty(&self) -> bool {
         self.dirty.load(Ordering::Relaxed)
     }
@@ -176,6 +184,7 @@ impl CrafterBlockEntity {
             crafting_ticks_remaining: AtomicI32::new(0),
             triggered: AtomicBool::new(false),
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
         }
     }
 
@@ -318,6 +327,7 @@ impl Inventory for CrafterBlockEntity {
 
     fn mark_dirty(&self) {
         self.dirty.store(true, Ordering::Relaxed);
+        self.comparator_dirty.store(true, Ordering::Relaxed);
     }
 
     fn as_any(&self) -> &dyn Any {

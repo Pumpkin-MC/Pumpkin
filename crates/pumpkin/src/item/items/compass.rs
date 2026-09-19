@@ -1,5 +1,6 @@
 use std::any::Any;
 
+use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
@@ -30,7 +31,7 @@ impl ItemBehaviour for CompassItem {
         _cursor_pos: Vector3<f32>,
         block: &Block,
         _server: &Server,
-    ) {
+    ) -> BlockActionResult {
         if block.id == Block::LODESTONE.id && item.item.id == Item::COMPASS.id {
             let world = player.world();
             world.play_sound(
@@ -60,6 +61,9 @@ impl ItemBehaviour for CompassItem {
             if !was_added && !lodestone_compass.is_empty() {
                 world.drop_stack(&player.position().to_block_pos(), lodestone_compass);
             }
+            BlockActionResult::Success
+        } else {
+            BlockActionResult::Pass
         }
     }
 

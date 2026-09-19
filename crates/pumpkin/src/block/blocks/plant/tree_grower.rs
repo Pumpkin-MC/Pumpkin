@@ -92,6 +92,17 @@ impl TreeGrower {
         shortest: None,
     };
 
+    pub const POPLAR: Self = Self {
+        trees: &[
+            (FeatureKey::RedPoplar, 1),
+            (FeatureKey::OrangePoplar, 1),
+            (FeatureKey::YellowPoplar, 1),
+        ],
+        mega_trees: &[],
+        flower_trees: &[],
+        shortest: Some(FeatureKey::RedPoplar),
+    };
+
     #[must_use]
     pub fn for_block(block: &Block) -> Option<&'static Self> {
         match block.name {
@@ -103,6 +114,7 @@ impl TreeGrower {
             "dark_oak_sapling" => Some(&Self::DARK_OAK),
             "pale_oak_sapling" => Some(&Self::PALE_OAK),
             "cherry_sapling" => Some(&Self::CHERRY),
+            "poplar_sapling" => Some(&Self::POPLAR),
             "azalea" | "flowering_azalea" => Some(&Self::AZALEA),
             "mangrove_propagule" => Some(&Self::MANGROVE),
             _ => None,
