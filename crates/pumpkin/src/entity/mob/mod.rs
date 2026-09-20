@@ -1659,7 +1659,6 @@ pub trait RangedAttackMob: Mob + Send + Sync {
     fn perform_ranged_attack(&self, target: &Arc<dyn EntityBase>, power: f32);
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
