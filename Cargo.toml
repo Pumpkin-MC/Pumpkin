@@ -150,7 +150,7 @@ serde_json = { version = "1.0", default-features = false, features = ["std"] }
 tempfile = { version = "3.27.0", default-features = false }
 proc-macro-error2 = { version = "2", default-features = false }
 aes = { version = "0.9", default-features = false }
-async-compression = { version = "0.4.46", default-features = false }
+async-compression = { version = "0.4.47", default-features = false }
 base64 = { version = "0.23.1", default-features = false, features = ["std"] }
 bitflags = { version = "2.13.2", default-features = false, features = ["std"] }
 cesu8 = { version = "1.1", default-features = false }
@@ -235,12 +235,12 @@ hyper = { version = "^1.11", default-features = false }
 axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }
 webrtc = { version = "0.20.5" }
 async-trait = "0.1"
-wit-bindgen = { version = "0.61", default-features = false, features = ["macros"] }
+wit-bindgen = { version = "0.62", default-features = false, features = ["macros"] }
 
 postcard = { version = "1.1", default-features = false, features = ["alloc"] }
 tracing-serde-structured = { version = "0.4", default-features = false }
-wasmparser = { version = "0.258", default-features = false }
-wasm-encoder = { version = "0.258", default-features = false, features = ["component-model", "std"] }
+wasmparser = { version = "0.259", default-features = false }
+wasm-encoder = { version = "0.259", default-features = false, features = ["component-model", "std"] }
 webpki-root-certs = { version = "1.0.9", default-features = false }
 # ring-only: must match the provider the rest of the tree (wasmtime-wasi-http, rtc) uses
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }

@@ -1,8 +1,6 @@
 use std::io::{Read, Write};
 
-use pumpkin_data::block_state_remap::remap_block_state_for_version;
 use pumpkin_data::entity::EntityType;
-use pumpkin_data::entity_id_remap::remap_entity_id_for_version;
 use pumpkin_data::packet::clientbound::play::ADD_ENTITY;
 use pumpkin_macros::java_packet;
 use pumpkin_util::{math::vector3::Vector3, version::JavaMinecraftVersion};
@@ -12,98 +10,6 @@ use crate::{
     codec::lp_vector_3d::LpVector3d,
     ser::{NetworkReadExt, NetworkWriteExt, ReadingError, WritingError},
 };
-
-const fn remap_object_type_for_version(entity_id: u16, _version: JavaMinecraftVersion) -> u8 {
-    if entity_id == EntityType::OAK_BOAT.id
-        || entity_id == EntityType::SPRUCE_BOAT.id
-        || entity_id == EntityType::BIRCH_BOAT.id
-        || entity_id == EntityType::JUNGLE_BOAT.id
-        || entity_id == EntityType::ACACIA_BOAT.id
-        || entity_id == EntityType::DARK_OAK_BOAT.id
-        || entity_id == EntityType::MANGROVE_BOAT.id
-        || entity_id == EntityType::CHERRY_BOAT.id
-        || entity_id == EntityType::PALE_OAK_BOAT.id
-        || entity_id == EntityType::BAMBOO_RAFT.id
-        || entity_id == EntityType::OAK_CHEST_BOAT.id
-        || entity_id == EntityType::SPRUCE_CHEST_BOAT.id
-        || entity_id == EntityType::BIRCH_CHEST_BOAT.id
-        || entity_id == EntityType::JUNGLE_CHEST_BOAT.id
-        || entity_id == EntityType::ACACIA_CHEST_BOAT.id
-        || entity_id == EntityType::DARK_OAK_CHEST_BOAT.id
-        || entity_id == EntityType::MANGROVE_CHEST_BOAT.id
-        || entity_id == EntityType::CHERRY_CHEST_BOAT.id
-        || entity_id == EntityType::PALE_OAK_CHEST_BOAT.id
-        || entity_id == EntityType::BAMBOO_CHEST_RAFT.id
-    {
-        1
-    } else if entity_id == EntityType::ITEM.id {
-        2
-    } else if entity_id == EntityType::AREA_EFFECT_CLOUD.id {
-        3
-    } else if entity_id == EntityType::MINECART.id
-        || entity_id == EntityType::CHEST_MINECART.id
-        || entity_id == EntityType::COMMAND_BLOCK_MINECART.id
-        || entity_id == EntityType::FURNACE_MINECART.id
-        || entity_id == EntityType::HOPPER_MINECART.id
-        || entity_id == EntityType::SPAWNER_MINECART.id
-        || entity_id == EntityType::TNT_MINECART.id
-    {
-        10
-    } else if entity_id == EntityType::TNT.id {
-        50
-    } else if entity_id == EntityType::END_CRYSTAL.id {
-        51
-    } else if entity_id == EntityType::ARROW.id {
-        60
-    } else if entity_id == EntityType::SNOWBALL.id {
-        61
-    } else if entity_id == EntityType::EGG.id {
-        62
-    } else if entity_id == EntityType::FIREBALL.id {
-        63
-    } else if entity_id == EntityType::SMALL_FIREBALL.id {
-        64
-    } else if entity_id == EntityType::ENDER_PEARL.id {
-        65
-    } else if entity_id == EntityType::WITHER_SKULL.id {
-        66
-    } else if entity_id == EntityType::SHULKER_BULLET.id {
-        67
-    } else if entity_id == EntityType::LLAMA_SPIT.id {
-        68
-    } else if entity_id == EntityType::FALLING_BLOCK.id {
-        70
-    } else if entity_id == EntityType::ITEM_FRAME.id || entity_id == EntityType::GLOW_ITEM_FRAME.id
-    {
-        71
-    } else if entity_id == EntityType::EYE_OF_ENDER.id {
-        72
-    } else if entity_id == EntityType::SPLASH_POTION.id
-        || entity_id == EntityType::LINGERING_POTION.id
-    {
-        73
-    } else if entity_id == EntityType::EXPERIENCE_BOTTLE.id {
-        75
-    } else if entity_id == EntityType::FIREWORK_ROCKET.id {
-        76
-    } else if entity_id == EntityType::LEASH_KNOT.id {
-        77
-    } else if entity_id == EntityType::ARMOR_STAND.id {
-        78
-    } else if entity_id == EntityType::EVOKER_FANGS.id {
-        79
-    } else if entity_id == EntityType::FISHING_BOBBER.id {
-        90
-    } else if entity_id == EntityType::SPECTRAL_ARROW.id {
-        91
-    } else if entity_id == EntityType::DRAGON_FIREBALL.id {
-        93
-    } else if entity_id == EntityType::TRIDENT.id {
-        94
-    } else {
-        entity_id as u8
-    }
-}
 
 const ROTATION_FACTOR: f32 = 256.0 / 360.0;
 const VELOCITY_FACTOR: f64 = 8000.0;
@@ -252,11 +158,9 @@ impl ClientPacket for CSpawnEntity {
         }
 
         if v1_14 {
-            let remapped_type = remap_entity_id_for_version(self.r#type.0 as u16, *version);
-            write.write_var_int(&VarInt(remapped_type as i32))?;
+            write.write_var_int(&self.r#type)?;
         } else {
-            let object_type = remap_object_type_for_version(self.r#type.0 as u16, *version);
-            write.write_u8(object_type)?;
+            write.write_u8(self.r#type.0 as u8)?;
         }
 
         if v1_9 {
@@ -280,13 +184,7 @@ impl ClientPacket for CSpawnEntity {
             write.write_u8(self.head_yaw)?;
         }
 
-        let mut data = if self.r#type.0 == i32::from(EntityType::FALLING_BLOCK.id) {
-            u16::try_from(self.data.0).map_or(self.data, |state_id| {
-                VarInt(i32::from(remap_block_state_for_version(state_id, *version)))
-            })
-        } else {
-            self.data
-        };
+        let mut data = self.data;
 
         if !v1_14 && data.0 == 0 {
             if self.r#type.0 == i32::from(EntityType::CHEST_MINECART.id) {
