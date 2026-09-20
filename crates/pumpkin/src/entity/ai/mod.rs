@@ -1,3 +1,4 @@
+pub mod brain;
 pub mod control;
 pub mod goal;
 pub mod pathfinder;

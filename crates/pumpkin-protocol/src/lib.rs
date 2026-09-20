@@ -9,7 +9,7 @@ use std::{
 
 use aes::cipher::BlockSizeUser;
 use bytes::Bytes;
-use codec::var_int::VarInt;
+pub use codec::var_int::VarInt;
 use hybrid_array::{Array, sizes::U1};
 use pumpkin_util::{
     resource_location::ResourceLocation,

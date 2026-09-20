@@ -20,7 +20,7 @@ use tokio::{
     net::UdpSocket,
     sync::{Mutex, mpsc},
 };
-use tracing::trace;
+use tracing::{debug, trace};
 
 pub struct StatusResponder {
     ipv4: Arc<UdpSocket>,
@@ -78,7 +78,7 @@ impl StatusResponder {
                 } else if let Some(client_protocol) = raknet_protocol_version(packet) {
                     self.reject_legacy_raknet(server, &self.ipv4, client, client_protocol).await
                 } else {
-                    trace!(
+                    debug!(
                         %client,
                         length,
                         kind = ice_packet_kind(packet),
