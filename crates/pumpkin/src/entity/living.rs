@@ -2273,11 +2273,12 @@ impl LivingEntity {
     fn drop_loot(&self, params: &LootContextParameters) {
         let resource_name = self.get_entity().entity_type.resource_name;
         let key = format!("minecraft:entities/{resource_name}");
-        if let Some(loot_table) = pumpkin_data::loot_table::get_loot_table(&key) {
+        let world = self.entity.world.load();
+        if let Some(loot_table) = world.get_loot_table(&key) {
             let seed: i64 = rand::random();
             let pos = self.entity.block_pos.load();
-            for stack in crate::world::loot::generate_loot_with_context(loot_table, seed, params) {
-                self.entity.world.load().drop_stack(&pos, stack);
+            for stack in crate::world::loot::generate_loot_from_handle(&loot_table, seed, params) {
+                world.drop_stack(&pos, stack);
             }
         }
     }

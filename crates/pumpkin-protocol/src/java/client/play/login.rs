@@ -426,7 +426,10 @@ mod tests {
 
         let mut slice = &serialized[..];
         let packet_id = slice.get_var_int().expect("packet_id").0;
-        assert_eq!(packet_id, 0x28, "1.20 login packet ID must be 0x28");
+        assert_eq!(
+            packet_id, 0x32,
+            "Login packet ID must match native 26.3 packet ID"
+        );
 
         let entity_id = slice.get_i32_be().expect("entity_id");
         assert_eq!(entity_id, 42);

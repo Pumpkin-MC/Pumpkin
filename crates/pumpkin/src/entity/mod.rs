@@ -42,7 +42,7 @@ use pumpkin_protocol::{
     codec::var_ulong::VarULong,
     java::client::play::{
         CEntityPositionSync, CEntityVelocity, CPlayerPosition, CSetEntityMetadata, CSetPassengers,
-        CSpawnEntity, CSpawnLivingEntity, Metadata, MetadataSerializer,
+        CSpawnEntity, Metadata, MetadataSerializer,
     },
 };
 use pumpkin_util::math::vector3::Axis;
@@ -90,6 +90,7 @@ pub mod passive;
 pub mod player;
 pub mod projectile;
 pub mod projectile_deflection;
+pub mod spawn_util;
 pub mod synched_entity_data;
 pub mod tnt;
 pub mod r#type;
@@ -441,33 +442,17 @@ pub trait EntityBase: Send + Sync + std::any::Any {
     fn send_java_spawn_packet(&self, client: &JavaClient) {
         let entity = self.get_entity();
         let version = client.version.load();
-        let is_mob = entity.entity_type.mob || self.get_mob().is_some();
         let metadata = self.java_spawn_metadata(version);
-        if version < JavaMinecraftVersion::V_1_19 && is_mob {
-            let spawn_packet = entity.create_spawn_living_packet(metadata.clone());
-            if let Ok(data) = client.serialize_packet(&spawn_packet) {
-                client.try_enqueue_packet(data);
-            }
-            if version >= JavaMinecraftVersion::V_1_15
-                && let Some(meta) = metadata
-            {
-                let meta_packet = CSetEntityMetadata::new(entity.entity_id.into(), meta);
-                if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
-                    client.try_enqueue_packet(meta_data);
-                }
-            }
-        } else {
-            let spawn_packet = entity.create_spawn_packet();
-            if let Ok(data) = client.serialize_packet(&spawn_packet) {
-                client.try_enqueue_packet(data);
-            }
-            if let Some(meta) = metadata
-                && (version >= JavaMinecraftVersion::V_1_9 || meta.last().copied() == Some(127))
-            {
-                let meta_packet = CSetEntityMetadata::new(entity.entity_id.into(), meta);
-                if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
-                    client.try_enqueue_packet(meta_data);
-                }
+        let spawn_packet = entity.create_spawn_packet();
+        if let Ok(data) = client.serialize_packet(&spawn_packet) {
+            client.try_enqueue_packet(data);
+        }
+        if let Some(meta) = metadata
+            && (version >= JavaMinecraftVersion::V_1_9 || meta.last().copied() == Some(127))
+        {
+            let meta_packet = CSetEntityMetadata::new(entity.entity_id.into(), meta);
+            if let Ok(meta_data) = client.serialize_packet(&meta_packet) {
+                client.try_enqueue_packet(meta_data);
             }
         }
     }
@@ -2484,9 +2469,6 @@ impl Entity {
         )
     }
 
-    pub fn create_spawn_living_packet(&self, metadata: Option<Box<[u8]>>) -> CSpawnLivingEntity {
-        CSpawnLivingEntity::from_spawn_entity(&self.create_spawn_packet(), metadata)
-    }
     pub fn width(&self) -> f32 {
         self.entity_dimension.load().width
     }

@@ -1353,7 +1353,7 @@ mod tests {
     #[test]
     fn load_26_3_template() {
         let bytes = include_bytes!(
-            "../../../../../../assets/datapacks/26_3/data/minecraft/structure/igloo/top.nbt"
+            "../../../../../../assets/datapack/data/minecraft/structure/igloo/top.nbt"
         );
         let template = StructureTemplate::from_nbt_bytes(bytes).expect("failed to load template");
 
