@@ -5092,6 +5092,9 @@ impl World {
             .iter()
             .any(|e| e.get_entity().entity_uuid == base_entity.entity_uuid);
         if already_exists {
+            for owned in entity.get_owned_entities() {
+                self.remove_entity(owned.as_ref());
+            }
             return;
         }
 
