@@ -27,7 +27,7 @@ fn encoded(entity: &dyn BlockEntity, id: DataComponent) -> Option<NbtTag> {
 fn bundled_table_entities_preserve_placement_and_replacement()
 -> Result<(), Box<dyn std::error::Error>> {
     let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../assets/datapacks/26_2/data/minecraft/loot_table/blocks");
+        .join("../../assets/datapack/data/minecraft/loot_table/blocks");
     let mut tested = 0;
     for entry in std::fs::read_dir(directory)? {
         let entry = entry?;
@@ -290,16 +290,51 @@ fn skull_profile_and_sound_survive_replacement() -> Result<(), Box<dyn std::erro
 /// All four pot faces keep their documented back, left, right, front order through replacement.
 #[test]
 fn pot_faces_survive_replacement() -> Result<(), Box<dyn std::error::Error>> {
-    let faces = ["angler", "archer", "arms_up", "blade"]
-        .into_iter()
-        .map(|face| NbtTag::String(format!("minecraft:{face}_pottery_sherd").into()))
-        .collect();
     round_trip_payload(
         "decorated_pot",
         "minecraft:decorated_pot",
         "sherds",
         DataComponent::PotDecorations,
-        NbtTag::List(faces),
+        pot_face_templates(),
+    )
+}
+
+/// Supplies distinct named faces, including a stack count and retained item component patch.
+fn pot_face_templates() -> NbtTag {
+    let mut faces = NbtCompound::new();
+    for (face, item) in [
+        ("back", "angler"),
+        ("left", "archer"),
+        ("right", "arms_up"),
+        ("front", "blade"),
+    ] {
+        let mut template = NbtCompound::new();
+        template.put_string("id", format!("minecraft:{item}_pottery_sherd"));
+        if face == "back" {
+            template.put_int("count", 3);
+            let mut patch = NbtCompound::new();
+            patch.put_int("minecraft:repair_cost", 7);
+            patch.put_compound("!minecraft:custom_name", NbtCompound::new());
+            template.put_compound("components", patch);
+        }
+        faces.put_compound(face, template);
+    }
+    NbtTag::Compound(faces)
+}
+
+/// A missing pot face remains absent across placement and saving while an explicit brick remains present.
+#[test]
+fn pot_absent_faces_survive_replacement() -> Result<(), Box<dyn std::error::Error>> {
+    let mut brick = NbtCompound::new();
+    brick.put_string("id", "minecraft:brick".into());
+    let mut faces = NbtCompound::new();
+    faces.put_compound("front", brick);
+    round_trip_payload(
+        "decorated_pot",
+        "minecraft:decorated_pot",
+        "sherds",
+        DataComponent::PotDecorations,
+        NbtTag::Compound(faces),
     )
 }
 
@@ -459,11 +494,7 @@ fn custom_chunk_tags_omit_retained_additions() -> Result<(), Box<dyn std::error:
         }
         .write_data(),
     );
-    let pot_decorations = NbtTag::List(
-        ["angler", "archer", "arms_up", "blade"]
-            .map(|name| NbtTag::String(format!("minecraft:{name}_pottery_sherd").into()))
-            .into(),
-    );
+    let pot_decorations = pot_face_templates();
     for (id, field, expected) in [
         ("beacon", "CustomName", name.write_data()),
         ("skull", "custom_name", name.write_data()),

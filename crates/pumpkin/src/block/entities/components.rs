@@ -111,7 +111,12 @@ impl BlockEntityComponents {
                 id,
                 DataComponent::BannerPatterns | DataComponent::PotDecorations | DataComponent::Bees
             ) {
-                if let Some(value) = read_data(id, &NbtTag::List(Vec::new())) {
+                let empty = if id == DataComponent::PotDecorations {
+                    NbtTag::Compound(NbtCompound::new())
+                } else {
+                    NbtTag::List(Vec::new())
+                };
+                if let Some(value) = read_data(id, &empty) {
                     set_component(&mut values, value);
                 }
             } else if !matches!(id, DataComponent::Lock | DataComponent::ContainerLoot) {
