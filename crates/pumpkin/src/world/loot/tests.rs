@@ -101,6 +101,39 @@ const COPY_TABLE: LootTable = LootTable {
     pools: &[pool(&[entry(&[COPY_ALL])])],
 };
 
+/// Bundled loot still copies selected components through the shared static/dynamic lookup handle.
+#[test]
+fn bundled_loot_handle_preserves_component_selection() -> Result<(), Box<dyn std::error::Error>> {
+    let handle = get_loot_table("minecraft:blocks/chest").ok_or("Missing chest loot table")?;
+    let source = source();
+    let drops = handle.generate_loot_with_context(
+        42,
+        &LootContextParameters {
+            block_entity: Some(source.clone()),
+            ..Default::default()
+        },
+    );
+    let [stack] = drops.as_slice() else {
+        return Err("Expected one chest drop".into());
+    };
+    assert_eq!(stack.item, &Item::CHEST);
+    assert_eq!(stack.item_count, 1);
+    assert_eq!(
+        stack
+            .get_data_component::<CustomNameImpl>()
+            .map(|name| &name.name),
+        Some(&TextComponent::text("Snapshot 0").bold())
+    );
+    assert!(
+        !stack
+            .patch
+            .iter()
+            .any(|(id, _)| *id == DataComponent::RepairCost)
+    );
+    assert_eq!(source.collections.load(Ordering::Relaxed), 1);
+    Ok(())
+}
+
 /// Omitted inclusion permits all, empty inclusion permits none, and exclusions win.
 #[test]
 fn component_filters_distinguish_absent_and_empty_lists() {
