@@ -299,6 +299,28 @@ pub struct World {
     pub entity_tracker: entity_tracker::EntityTracker,
 }
 
+/// Whether `block` is still a block that `block_entity` belongs to.
+///
+/// Mirrors the check vanilla makes before every block entity tick, `BlockEntityType.isValid`
+/// against the state at the block entity's position.
+fn block_entity_matches_block(block: &Block, block_entity: &dyn BlockEntity) -> bool {
+    let block_entity_type = block.default_state.block_entity_type;
+    if block_entity_type == u16::MAX {
+        return false;
+    }
+    // Both sides index the same table, and a block entity's resource location is the
+    // namespaced form of the name held there.
+    pumpkin_data::block_properties::BLOCK_ENTITY_TYPES
+        .get(block_entity_type as usize)
+        .is_some_and(|name| {
+            block_entity
+                .resource_location()
+                .split(':')
+                .next_back()
+                .is_some_and(|short_name| short_name == *name)
+        })
+}
+
 #[derive(Clone, Copy)]
 pub(crate) enum BlockBreakingProgress {
     Start { stage: i32, speed: f32 },
@@ -1643,6 +1665,15 @@ impl World {
         block_entities.par_chunks(16).for_each(|batch| {
             let _guard = be_handle.enter();
             for be in batch {
+                // A block entity can outlive the block it belongs to -- a `fill` over a
+                // daylight detector leaves air behind, for one -- and ticking it then reads
+                // the wrong block's state through its own property type, which panics.
+                // Vanilla guards every block entity tick the same way, in the ticking
+                // wrapper `LevelChunk` binds to it, and skips the tick when the state no
+                // longer matches the block entity's type.
+                if !block_entity_matches_block(self.get_block(&be.get_position()), be.as_ref()) {
+                    continue;
+                }
                 be.tick(self);
             }
         });
@@ -6431,6 +6462,15 @@ impl World {
             self.block_entities
                 .remove_if(&chunk_pos, |_, entities| entities.is_empty());
             self.level.read_chunk_sync(&chunk_pos, |chunk| {
+                // Saving a block entity leaves its NBT on the chunk, and that copy is what
+                // a chunk is loaded from and what `migrate_pending_block_entities` turns
+                // back into a live block entity. Leaving it behind resurrects the block
+                // entity at a position its block no longer occupies.
+                chunk
+                    .pending_block_entities
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .remove(block_pos);
                 chunk.mark_dirty(true);
             });
         }
@@ -7582,8 +7622,33 @@ mod tests {
     use uuid::Uuid;
 
     use super::{
-        World, bedrock_block_breaking_rate, bedrock_chest_block_actor, merge_entity_records,
+        World, bedrock_block_breaking_rate, bedrock_chest_block_actor, block_entity_matches_block,
+        merge_entity_records,
     };
+
+    #[test]
+    fn a_block_entity_is_only_ticked_against_its_own_block() {
+        use crate::block::entities::daylight_detector::DaylightDetectorBlockEntity;
+
+        let position = BlockPos::new(0, 0, 0);
+        let detector = DaylightDetectorBlockEntity::new(position);
+
+        // Its own block still matches.
+        assert!(block_entity_matches_block(
+            &Block::DAYLIGHT_DETECTOR,
+            &detector
+        ));
+
+        // Whatever replaced it does not. Air is the case a `fill` leaves behind, and it is
+        // what used to be read as daylight detector properties and panic.
+        for block in [&Block::AIR, &Block::STONE, &Block::CHEST] {
+            assert!(
+                !block_entity_matches_block(block, &detector),
+                "{} should not tick a daylight detector",
+                block.name
+            );
+        }
+    }
 
     fn record(uuid: Option<Uuid>, id: &str) -> NbtCompound {
         let mut nbt = NbtCompound::new();
