@@ -10,7 +10,7 @@ use super::{
 };
 use crate::chunk::io::Dirtiable;
 use crate::level::{Level, LoadedChunkChange, SyncChunk};
-use dashmap::DashMap;
+use dashmap::{DashMap, DashSet};
 use pumpkin_config::lighting::LightingEngineConfig;
 use pumpkin_util::math::vector2::Vector2;
 use slotmap::Key;
@@ -56,6 +56,7 @@ pub struct GenerationSchedule {
     send_level: Arc<LevelChannel>,
 
     public_chunk_map: Arc<DashMap<Vector2<i32>, SyncChunk>>,
+    chunks_with_scheduled_ticks: Arc<DashSet<Vector2<i32>>>,
     loaded_chunk_changes: Arc<crossbeam::queue::SegQueue<LoadedChunkChange>>,
     chunk_map: HashMap<ChunkPos, ChunkHolder>,
     unload_chunks: HashSetType<ChunkPos>,
@@ -81,6 +82,19 @@ pub struct GenerationSchedule {
 
 impl GenerationSchedule {
     fn publish_chunk(&self, pos: ChunkPos, chunk: SyncChunk) -> Option<SyncChunk> {
+        // Ticks read back from disk have nothing else to register them: the drain loop only
+        // visits chunks listed in `chunks_with_scheduled_ticks`, and the entry is dropped
+        // when the chunk unloads. Without this, a block saved with a tick still pending --
+        // an active sculk sensor, a powered observer, flowing fluid -- never gets that tick
+        // and stays in that state for good.
+        //
+        // This is the moment vanilla registers a chunk's tick containers with the level, in
+        // the `full` chunk status task via `LevelChunk.registerTickContainerInLevel`. The
+        // entry goes in before the chunk is published, so the chunk is never visible to the
+        // drain loop without it.
+        if chunk.block_ticks.has_ticks() || chunk.fluid_ticks.has_ticks() {
+            self.chunks_with_scheduled_ticks.insert(pos);
+        }
         let previous = self.public_chunk_map.insert(pos, chunk);
         if previous.is_none() {
             self.loaded_chunk_changes
@@ -92,6 +106,11 @@ impl GenerationSchedule {
     fn unpublish_chunk(&self, pos: ChunkPos) -> Option<SyncChunk> {
         let removed = self.public_chunk_map.remove(&pos).map(|(_, chunk)| chunk);
         if removed.is_some() {
+            // Paired with the registration in `publish_chunk`, the way vanilla pairs
+            // `LevelChunk.registerTickContainerInLevel` with its unregister. Both run on
+            // this thread, so a chunk that unloads and comes back cannot have its fresh
+            // entry removed by the drain loop racing against the publish.
+            self.chunks_with_scheduled_ticks.remove(&pos);
             self.loaded_chunk_changes
                 .push(LoadedChunkChange::Unloaded(pos));
         }
@@ -155,6 +174,7 @@ impl GenerationSchedule {
                     last_high_priority: Vec::new(),
                     send_level: level_channel,
                     public_chunk_map: level_sched.loaded_chunks.clone(),
+                    chunks_with_scheduled_ticks: level_sched.chunks_with_scheduled_ticks.clone(),
                     loaded_chunk_changes: level_sched.loaded_chunk_changes.clone(),
                     unload_chunks: HashSetType::default(),
                     waiting_for_chunks: HashSetType::default(),

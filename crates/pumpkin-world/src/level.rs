@@ -595,9 +595,12 @@ impl Level {
                 if !chunk.block_ticks.has_ticks() && !chunk.fluid_ticks.has_ticks() {
                     self.chunks_with_scheduled_ticks.remove(&pos);
                 }
-            } else {
-                self.chunks_with_scheduled_ticks.remove(&pos); // Chunk unloaded
             }
+            // A position whose chunk is not loaded is left alone rather than removed here:
+            // the chunk may be in the middle of being published on another thread, and
+            // dropping the entry it just added would lose its restored ticks again. The
+            // entry is removed when the chunk is unpublished instead, so that adding and
+            // removing both happen on the thread that owns the chunk's lifetime.
         }
 
         ticks.block_ticks.sort_unstable();
@@ -971,7 +974,7 @@ impl Level {
             })
             .is_some()
         {
-            self.chunks_with_scheduled_ticks.insert(chunk_pos);
+            self.register_scheduled_ticks(chunk_pos);
         }
     }
 
@@ -998,6 +1001,21 @@ impl Level {
             })
             .is_some()
         {
+            self.register_scheduled_ticks(chunk_pos);
+        }
+    }
+
+    /// Notes that `chunk_pos` has ticks waiting, so the drain loop visits it.
+    ///
+    /// The entry is added after the reference to the chunk was released, so the chunk is
+    /// looked up again -- through the entry API, which holds this position's shard lock for
+    /// as long as `occupied` lives. That keeps the check and the registration together: a
+    /// chunk publishing or unpublishing concurrently cannot slip between them, so this
+    /// neither leaves an entry behind for a chunk that has gone nor removes the entry a
+    /// publish has just made for one that came back.
+    fn register_scheduled_ticks(&self, chunk_pos: Vector2<i32>) {
+        let occupied = self.loaded_chunks.entry(chunk_pos);
+        if matches!(&occupied, Entry::Occupied(_)) {
             self.chunks_with_scheduled_ticks.insert(chunk_pos);
         }
     }
