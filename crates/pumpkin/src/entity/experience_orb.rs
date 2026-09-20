@@ -11,6 +11,13 @@ use crate::{server::Server, world::World};
 
 use super::{Entity, EntityBase, living::LivingEntity, player::Player};
 
+fn apply_water_buoyancy(mut velocity: Vector3<f64>) -> Vector3<f64> {
+    velocity.x *= 0.99;
+    velocity.y = (velocity.y + 5.0e-4).min(0.06);
+    velocity.z *= 0.99;
+    velocity
+}
+
 pub struct ExperienceOrbEntity {
     entity: Entity,
     amount: u32,
@@ -81,8 +88,9 @@ impl EntityBase for ExperienceOrbEntity {
             .load()
             .is_space_empty(bounding_box.expand(-1.0e-7, -1.0e-7, -1.0e-7));
         self.entity.no_physics.store(no_physics, Ordering::Relaxed);
-        // TODO: isSubmergedIn
-        if !no_physics {
+        if entity.touching_water.load(Ordering::SeqCst) && entity.water_height.load() > 0.1 {
+            velo = apply_water_buoyancy(velo);
+        } else if !no_physics {
             velo.y -= self.get_gravity();
         }
 
@@ -151,7 +159,7 @@ mod tests {
 
     #[test]
     fn water_buoyancy_stops_accelerating_at_upward_threshold() {
-        let velocity = apply_water_buoyancy(Vector3::new(0.0, 0.06, 0.0));
+        let velocity = apply_water_buoyancy(Vector3::new(0.0, 0.0598, 0.0));
 
         assert_eq!(velocity.y, 0.06);
     }
