@@ -195,6 +195,14 @@ pub mod enchantment;
 #[cfg(feature = "enchantment")]
 pub use enchantment::*;
 
+#[cfg(feature = "enchantment")]
+#[rustfmt::skip]
+#[path = "generated/enchantment_provider.rs"]
+pub mod enchantment_provider;
+
+#[cfg(feature = "enchantment")]
+pub use enchantment_provider::EnchantmentProvider;
+
 #[cfg(feature = "entity")]
 pub mod entity {
     #[cfg(feature = "entity_pose")]

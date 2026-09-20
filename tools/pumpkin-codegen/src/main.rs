@@ -42,6 +42,7 @@ mod data_component;
 mod dimension;
 mod dye_color;
 mod effect;
+mod enchantment_providers;
 mod enchantments;
 mod entity_pose;
 mod entity_status;
@@ -144,6 +145,7 @@ pub fn main() {
         ),
         (recipes::build, "recipes.rs"),
         (enchantments::build, "enchantment.rs"),
+        (enchantment_providers::build, "enchantment_provider.rs"),
         (data_component::build, "data_component.rs"),
         (attributes::build, "attributes.rs"),
         (environment_attribute::build, "environment_attribute.rs"),

@@ -1,5 +1,6 @@
 pub mod effects;
 pub mod helper;
+pub mod provider;
 pub mod selection;
 
 pub use effects::*;
