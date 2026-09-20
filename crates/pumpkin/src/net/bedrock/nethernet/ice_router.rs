@@ -4,7 +4,8 @@ use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
 };
 
-use tokio::{net::UdpSocket, sync::mpsc};
+use tokio::net::UdpSocket;
+use tokio::sync::mpsc;
 use tracing::trace;
 
 use crate::{STOP_INTERRUPT, net::bedrock::status::IceSocket};
@@ -143,7 +144,11 @@ async fn run(
                             trace!(%remote, %internal, %error, "Failed to route inbound NetherNet ICE packet");
                         }
                     } else {
-                        trace!(%remote, length, "Dropped unroutable NetherNet ICE packet");
+                        trace!(
+                            %remote,
+                            length,
+                            "Dropped unroutable NetherNet ICE packet"
+                        );
                     }
                 }
                 Err(error) => trace!(%error, "Failed to receive NetherNet ICE packet"),

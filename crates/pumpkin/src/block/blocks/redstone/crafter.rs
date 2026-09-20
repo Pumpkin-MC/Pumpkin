@@ -14,10 +14,10 @@ use crate::entity::Entity;
 use crate::entity::item::ItemEntity;
 use crate::world::World;
 use pumpkin_data::block_properties::{CrafterLikeProperties, HorizontalFacing, Orientation};
+use pumpkin_data::data_component_impl::UseRemainderImpl;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
-use pumpkin_data::recipe_remainder::get_recipe_remainder_id;
 use pumpkin_data::translation;
 use pumpkin_data::world::WorldEvent;
 use pumpkin_data::{Block, BlockDirection, BlockStateId, FacingExt};
@@ -151,8 +151,11 @@ impl CrafterBlock {
             for i in 0..CrafterBlockEntity::INVENTORY_SIZE {
                 let stack = crafter.get_stack(i);
                 if !stack.is_empty()
-                    && let Some(remainder_id) = get_recipe_remainder_id(stack.item.id)
-                    && let Some(remainder_item) = Item::from_id(remainder_id)
+                    && let Some(remainder) = stack.get_data_component::<UseRemainderImpl>()
+                    && let Some(remainder_item) = remainder
+                        .remainder
+                        .as_deref()
+                        .and_then(Item::from_registry_key)
                 {
                     let mut remainder_stack = ItemStack::new(1, remainder_item);
                     Self::dispense_item(

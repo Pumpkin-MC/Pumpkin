@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:ore",
+  "discard_chance_on_air_exposure": 0.0,
+  "size": 33,
+  "targets": [
+    {
+      "state": "minecraft:gravel",
+      "target": {
+        "predicate_type": "minecraft:tag_match",
+        "tag": "minecraft:base_stone_overworld"
+      }
+    }
+  ]
+}
