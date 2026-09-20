@@ -2129,7 +2129,10 @@ impl Player {
     }
 
     pub fn is_flying(&self) -> bool {
-        self.abilities.try_lock().is_ok_and(|a| a.flying)
+        self.abilities
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .flying
     }
 
     pub fn set_sprinting(&self, is_sprinting: bool) {
@@ -2138,7 +2141,11 @@ impl Player {
 
     #[must_use]
     pub fn get_block_speed_factor(&self) -> f32 {
-        self.living_entity.get_block_speed_factor()
+        if self.is_flying() || self.get_entity().is_fall_flying() {
+            1.0
+        } else {
+            self.living_entity.get_block_speed_factor()
+        }
     }
 
     fn is_sleeping(&self) -> bool {
@@ -2193,6 +2200,31 @@ impl Player {
             .world
             .load()
             .is_space_empty(aabb.contract_all(1.0E-7))
+    }
+
+    #[must_use]
+    pub fn can_glide(&self) -> bool {
+        self.living_entity.can_glide(self)
+    }
+
+    #[must_use]
+    pub fn can_start_fall_flying(&self) -> bool {
+        !self.get_entity().is_fall_flying() && self.can_glide() && !self.is_in_liquid()
+    }
+
+    pub fn start_fall_flying(&self) {
+        self.get_entity().set_fall_flying(true);
+    }
+
+    pub fn stop_fall_flying(&self) {
+        self.living_entity.stop_fall_flying();
+    }
+
+    #[must_use]
+    pub fn is_in_liquid(&self) -> bool {
+        let entity = self.get_entity();
+        entity.touching_water.load(Ordering::Relaxed)
+            || entity.touching_lava.load(Ordering::Relaxed)
     }
 
     #[must_use]
@@ -2882,6 +2914,13 @@ impl Player {
         }
         self.last_attacked_ticks.fetch_add(1, Ordering::Relaxed);
 
+        let glide_position = self.get_entity().is_fall_flying().then(|| {
+            (
+                self.get_entity().pos.load(),
+                self.get_entity().world.load_full(),
+                self.teleport_id_count.load(Ordering::Relaxed),
+            )
+        });
         self.living_entity.tick(self, server);
 
         self.breath_manager.tick(self);
@@ -2911,6 +2950,12 @@ impl Player {
 
         // Vanilla updates pose in PlayerEntity#tick after super.tick().
         self.update_player_pose();
+        if let Some((position, world, teleport_id)) = glide_position
+            && Arc::ptr_eq(&world, &self.get_entity().world.load_full())
+            && self.teleport_id_count.load(Ordering::Relaxed) == teleport_id
+        {
+            self.get_entity().set_pos(position);
+        }
         self.check_inventory_advancements();
         if let Ok(mut adv) = self.advancements.try_lock() {
             adv.flush_dirty(self, true);
@@ -3443,19 +3488,8 @@ impl Player {
             return statistics::CustomStatistic::FlyOneCm;
         }
 
-        if entity.fall_flying.load(Ordering::Relaxed) {
-            return statistics::CustomStatistic::AviateOneCm;
-        }
-
         if entity.swimming.load(Ordering::Relaxed) {
             return statistics::CustomStatistic::SwimOneCm;
-        }
-
-        let pos = entity.block_pos.load();
-        let world = entity.world.load_full();
-        let block = world.get_block(&pos);
-        if block.has_tag(&pumpkin_data::tag::Block::MINECRAFT_CLIMBABLE) {
-            return statistics::CustomStatistic::ClimbOneCm;
         }
 
         if entity.touching_water.load(Ordering::Relaxed) {
@@ -3463,6 +3497,15 @@ impl Player {
                 return statistics::CustomStatistic::WalkUnderWaterOneCm;
             }
             return statistics::CustomStatistic::WalkOnWaterOneCm;
+        }
+
+        self.living_entity.check_climbing_for(self);
+        if self.living_entity.climbing.load(Ordering::Relaxed) {
+            return statistics::CustomStatistic::ClimbOneCm;
+        }
+
+        if !entity.on_ground.load(Ordering::Relaxed) && entity.is_fall_flying() {
+            return statistics::CustomStatistic::AviateOneCm;
         }
 
         if entity.sneaking.load(Ordering::Relaxed) {
@@ -6787,6 +6830,14 @@ impl EntityBase for Player {
 
     fn is_spectator(&self) -> bool {
         self.gamemode.load() == GameMode::Spectator
+    }
+
+    fn get_block_speed_factor(&self) -> f32 {
+        Self::get_block_speed_factor(self)
+    }
+
+    fn get_gravity(&self) -> f64 {
+        self.living_entity.get_gravity()
     }
 
     fn set_on_fire_for_ticks(&self, ticks: u32) {
