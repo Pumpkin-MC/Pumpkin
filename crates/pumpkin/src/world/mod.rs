@@ -5093,7 +5093,7 @@ impl World {
             .any(|e| e.get_entity().entity_uuid == base_entity.entity_uuid);
         if already_exists {
             for owned in entity.get_owned_entities() {
-                self.remove_entity(owned.as_ref());
+                self.remove_lookup_only_entity(owned.as_ref());
             }
             return;
         }
@@ -5117,6 +5117,17 @@ impl World {
         self.lookup_only_entities.rcu(|current_entities| {
             let mut new_entities = (**current_entities).clone();
             new_entities.push(entity.clone());
+            new_entities
+        });
+    }
+
+    /// Undoes `add_entity_lookup_only`: no `SpawnState` or entity tracker involved, since those were never told about it either.
+    fn remove_lookup_only_entity(&self, entity: &dyn EntityBase) {
+        let base_entity = entity.get_entity();
+        base_entity.removed.store(true, Ordering::Release);
+        self.lookup_only_entities.rcu(|current_entities| {
+            let mut new_entities = (**current_entities).clone();
+            new_entities.retain(|e| e.get_entity().entity_uuid != base_entity.entity_uuid);
             new_entities
         });
     }
@@ -5146,7 +5157,7 @@ impl World {
         });
 
         for owned in entity.get_owned_entities() {
-            self.remove_entity(owned.as_ref());
+            self.remove_lookup_only_entity(owned.as_ref());
         }
     }
 
@@ -5183,7 +5194,7 @@ impl World {
             self.entity_tracker.remove_entity(entity.as_ref(), self);
             self.spawn_state.load().remove_entity(self, entity.as_ref());
             for owned in entity.get_owned_entities() {
-                self.remove_entity(owned.as_ref());
+                self.remove_lookup_only_entity(owned.as_ref());
             }
         }
 
