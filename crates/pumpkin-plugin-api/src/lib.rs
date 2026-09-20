@@ -170,7 +170,9 @@ pub use statistics_wit::{CustomStatistic, StatisticCategory};
 pub use team::{PlayerTeamExt, ScoreboardTeamExt, Team, TeamSettingsBuilder};
 pub use wit::pumpkin::plugin::attributes::{Attribute, AttributeModifier, ModifierOperation};
 pub use wit::pumpkin::plugin::item_stack::{ItemAttributeModifier, ItemStack};
-pub use wit::pumpkin::plugin::player::Player;
+pub use wit::pumpkin::plugin::player::{
+    BedrockMinecraftVersion, BedrockPlayer, JavaMinecraftVersion, JavaPlayer, Player,
+};
 pub use wit::pumpkin::plugin::scoreboard::{CollisionRule, NametagVisibility, TeamSettings};
 pub use wit::pumpkin::plugin::server::Dimension;
 pub use wit::pumpkin::plugin::world::{
@@ -199,7 +201,7 @@ pub mod java_dialog {
 pub mod logging;
 
 #[allow(clippy::too_many_arguments, missing_docs)]
-mod wit {
+pub mod wit {
     wit_bindgen::generate!({
         skip: ["init-plugin"],
         path: "../pumpkin-plugin-wit/v0.1",

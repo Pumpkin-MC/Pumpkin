@@ -311,6 +311,7 @@ use super::combat::{self, AttackType, player_attack_sound};
 use super::hunger::HungerManager;
 use super::item::ItemEntity;
 use super::living::LivingEntity;
+use super::mob::warden_spawn_tracker::WardenSpawnTracker;
 use super::{Entity, EntityBase, NBTStorage, NBTStorageInit};
 use pumpkin_data::potion::Effect;
 const MAX_CACHED_SIGNATURES: u8 = 128; // Vanilla: 128
@@ -525,6 +526,7 @@ pub struct Player {
     pub fishing_bobber: AtomicI32,
     pub bedrock_skin: arc_swap::ArcSwap<pumpkin_protocol::bedrock::client::Skin>,
     pub seen_credits: AtomicBool,
+    pub warden_spawn_tracker: std::sync::Mutex<WardenSpawnTracker>,
     pub score: AtomicI32,
     pub spawn_extra_particles_on_fall: AtomicBool,
     pub post_effects: std::sync::Mutex<Vec<String>>,
@@ -827,6 +829,7 @@ impl Player {
             fishing_bobber: AtomicI32::new(-1),
             bedrock_skin: ArcSwap::new(Arc::new(bedrock_skin)),
             seen_credits: AtomicBool::new(false),
+            warden_spawn_tracker: std::sync::Mutex::new(WardenSpawnTracker::default()),
             score: AtomicI32::new(0),
             spawn_extra_particles_on_fall: AtomicBool::new(false),
             post_effects: std::sync::Mutex::new(Vec::new()),
@@ -2712,6 +2715,10 @@ impl Player {
         {
             *xp -= 1;
         }
+        self.warden_spawn_tracker
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .tick();
         if let Ok(listener) = self.chunk_listener.try_lock()
             && let Ok(mut sender) = self.chunk_sender.try_lock()
         {
@@ -6854,6 +6861,13 @@ impl EntityBase for Player {
         }
 
         nbt.put_bool("seenCredits", self.seen_credits.load(Ordering::Relaxed));
+        nbt.put_compound(
+            "warden_spawn_tracker",
+            self.warden_spawn_tracker
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .to_nbt(),
+        );
         nbt.put_bool(
             "spawn_extra_particles_on_fall",
             self.spawn_extra_particles_on_fall.load(Ordering::Relaxed),
@@ -6975,6 +6989,13 @@ impl EntityBase for Player {
             nbt.get_bool("seenCredits").unwrap_or(false),
             Ordering::Relaxed,
         );
+        *self
+            .warden_spawn_tracker
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = nbt
+            .get_compound("warden_spawn_tracker")
+            .map(WardenSpawnTracker::from_nbt)
+            .unwrap_or_default();
         self.spawn_extra_particles_on_fall.store(
             nbt.get_bool("spawn_extra_particles_on_fall")
                 .unwrap_or(false),

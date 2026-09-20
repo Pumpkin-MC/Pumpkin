@@ -1,0 +1,32 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_pink_concrete": {
+      "conditions": {
+        "items": [
+          {
+            "items": "minecraft:pink_concrete"
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipes": "minecraft:pink_concrete_slab_from_pink_concrete_stonecutting"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_the_recipe",
+      "has_pink_concrete"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "minecraft:pink_concrete_slab_from_pink_concrete_stonecutting"
+    ]
+  }
+}

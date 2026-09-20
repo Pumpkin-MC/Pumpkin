@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:unpacked",
+  "author": {
+    "color": "gray",
+    "translate": "painting.minecraft.unpacked.author"
+  },
+  "height": 4,
+  "title": {
+    "color": "yellow",
+    "translate": "painting.minecraft.unpacked.title"
+  },
+  "width": 4
+}

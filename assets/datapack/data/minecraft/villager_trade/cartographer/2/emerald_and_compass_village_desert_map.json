@@ -1,0 +1,46 @@
+{
+  "additional_wants": {
+    "id": "minecraft:compass"
+  },
+  "given_item_modifier": [
+    {
+      "type": "minecraft:exploration_map",
+      "decoration": "minecraft:village_desert",
+      "destination": "#minecraft:on_desert_village_maps",
+      "search_radius": 100
+    },
+    {
+      "type": "minecraft:filtered",
+      "item_filter": {
+        "predicates": {
+          "minecraft:map_id": {}
+        }
+      },
+      "on_fail": {
+        "type": "minecraft:discard"
+      }
+    }
+  ],
+  "gives": {
+    "id": "minecraft:desert_village_map"
+  },
+  "max_uses": 12,
+  "merchant_predicate": {
+    "type": "minecraft:entity_properties",
+    "entity": "this",
+    "predicate": {
+      "minecraft:predicates": {
+        "minecraft:villager/variant": [
+          "minecraft:savanna",
+          "minecraft:jungle"
+        ]
+      }
+    }
+  },
+  "reputation_discount": 0.2,
+  "wants": {
+    "count": 8,
+    "id": "minecraft:emerald"
+  },
+  "xp": 5
+}

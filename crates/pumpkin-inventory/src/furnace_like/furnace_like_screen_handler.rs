@@ -5,7 +5,7 @@ use crate::{
     inventory::Inventory,
     window_property::{ExperienceContainer, PropertyDelegate},
 };
-use pumpkin_data::fuels::is_fuel;
+use pumpkin_data::data_component_impl::CookingFuelImpl;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::recipes::{CookingRecipeKind, CookingRecipeType};
 use pumpkin_data::screen::WindowType;
@@ -123,8 +123,8 @@ impl FurnaceLikeScreenHandler {
     }
 
     #[must_use]
-    pub const fn is_fuel(&self, item_stack: &ItemStack) -> bool {
-        is_fuel(item_stack.item.id)
+    pub fn is_fuel(&self, item_stack: &ItemStack) -> bool {
+        item_stack.get_data_component::<CookingFuelImpl>().is_some()
     }
 
     #[must_use]
