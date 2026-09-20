@@ -310,14 +310,15 @@ struct EntryFunctionJson {
 }
 
 #[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
 struct CopyComponentsStruct {
     source: String,
     #[serde(default, deserialize_with = "deserialize_component_filter")]
     include: Option<Vec<String>>,
     #[serde(default, deserialize_with = "deserialize_component_filter")]
     exclude: Option<Vec<String>>,
-    #[serde(default)]
-    conditions: Vec<ConditionStruct>,
+    #[serde(default, deserialize_with = "deserialize_component_condition")]
+    condition: LootCondition,
 }
 
 /// Normalizes filter names and validates registry membership, rejecting null filters and asset-loading errors.
@@ -369,7 +370,6 @@ impl TryFrom<EntryFunctionJson> for EntryFunctionStruct {
                     copy.source
                 ));
             }
-            validate_component_conditions(&copy.conditions)?;
             Some(copy)
         } else {
             None
@@ -384,74 +384,131 @@ impl TryFrom<EntryFunctionJson> for EntryFunctionStruct {
     }
 }
 
-/// Reject condition details that the existing compact runtime representation cannot preserve.
-fn validate_component_conditions(conditions: &[ConditionStruct]) -> Result<(), String> {
-    for condition in conditions {
-        let parameters = [
-            condition.enchantment.is_some(),
-            condition.chance.is_some(),
-            condition.unenchanted_chance.is_some(),
-            condition.enchanted_chance.is_some(),
-            condition.chances.is_some(),
-            condition.predicate.is_some(),
-            condition.term.is_some(),
-            condition.terms.is_some(),
-        ]
-        .into_iter()
-        .filter(|present| *present)
-        .count();
-        let valid = condition.remaining.is_empty()
-            && match condition.condition.as_str() {
-                "minecraft:survives_explosion" | "minecraft:killed_by_player" => parameters == 0,
-                "minecraft:random_chance" => parameters == 1 && condition.chance.is_some(),
-                "minecraft:match_tool" => {
-                    parameters == 1
-                        && condition
-                            .predicate
-                            .as_ref()
-                            .is_some_and(component_tool_predicate_is_supported)
-                }
-                "minecraft:all_of" | "minecraft:any_of" => {
-                    if parameters == 1
-                        && let Some(terms) = &condition.terms
-                    {
-                        validate_component_conditions(terms)?;
-                        condition.condition == "minecraft:all_of"
-                            || (!terms.is_empty()
-                                && terms.iter().all(|term| {
-                                    matches!(
-                                        parse_condition(term),
-                                        LootCondition::SilkTouch | LootCondition::Shears
-                                    )
-                                }))
-                    } else {
-                        false
-                    }
-                }
-                "minecraft:inverted" => {
-                    if parameters == 1
-                        && let Some(term) = &condition.term
-                    {
-                        validate_component_conditions(std::slice::from_ref(term.as_ref()))?;
-                        matches!(
-                            parse_condition(term),
-                            LootCondition::SilkTouch | LootCondition::SilkTouchOrShears
-                        )
-                    } else {
-                        false
-                    }
-                }
-                // Enchantment-dependent conditions discard the selected enchantment in the existing representation.
-                _ => false,
-            };
-        if !valid {
-            return Err(format!(
-                "unsupported or malformed copy_components condition: {}",
-                condition.condition
-            ));
-        }
+/// Resolves a copy predicate before generation, rejecting missing references and unsupported details.
+fn deserialize_component_condition<'de, D>(deserializer: D) -> Result<LootCondition, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let condition = ConditionValue::deserialize(deserializer)?;
+    parse_component_condition(&condition, 0, &read_component_predicate)
+        .map_err(serde::de::Error::custom)
+}
+
+/// Reads a bundled predicate without accepting paths outside the vanilla predicate directory.
+fn read_component_predicate(name: &str) -> Result<ConditionValue, String> {
+    let identifier = Identifier::parse(name).map_err(|error| error.to_string())?;
+    let relative = identifier.path();
+    if !identifier.is_vanilla()
+        || relative.is_empty()
+        || relative
+            .split('/')
+            .any(|part| matches!(part, "" | "." | ".."))
+    {
+        return Err(format!(
+            "unsupported copy_components predicate reference: {name}"
+        ));
     }
-    Ok(())
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../assets/datapack/data/minecraft/predicate")
+        .join(format!("{relative}.json"));
+    let content = fs::read_to_string(&path)
+        .map_err(|error| format!("cannot read copy_components predicate {name}: {error}"))?;
+    serde_json::from_str(&content)
+        .map_err(|error| format!("invalid copy_components predicate {name}: {error}"))
+}
+
+/// Converts supported predicates exactly, bounding nested and cyclic references before recursion.
+fn parse_component_condition(
+    value: &ConditionValue,
+    depth: usize,
+    read: &impl Fn(&str) -> Result<ConditionValue, String>,
+) -> Result<LootCondition, String> {
+    if depth >= 32 {
+        return Err("copy_components predicate nesting exceeds 32 levels".to_owned());
+    }
+    let condition = match value {
+        ConditionValue::Inline(condition) => condition,
+        ConditionValue::Reference(name) => {
+            return parse_component_condition(&read(name)?, depth + 1, read);
+        }
+    };
+    let parameters = [
+        condition.enchantment.is_some(),
+        condition.chance.is_some(),
+        condition.unenchanted_chance.is_some(),
+        condition.enchanted_chance.is_some(),
+        condition.chances.is_some(),
+        condition.predicate.is_some(),
+        condition.term.is_some(),
+        condition.terms.is_some(),
+    ]
+    .into_iter()
+    .filter(|present| *present)
+    .count();
+    let invalid = || {
+        format!(
+            "unsupported or malformed copy_components condition: {}",
+            condition.condition
+        )
+    };
+    if !condition.remaining.is_empty() {
+        return Err(invalid());
+    }
+    match condition.condition.as_str() {
+        "minecraft:survives_explosion" | "minecraft:killed_by_player" if parameters == 0 => {
+            Ok(parse_condition(condition))
+        }
+        "minecraft:random_chance" if parameters == 1 && condition.chance.is_some() => {
+            Ok(parse_condition(condition))
+        }
+        "minecraft:match_tool"
+            if parameters == 1
+                && condition
+                    .predicate
+                    .as_ref()
+                    .is_some_and(component_tool_predicate_is_supported) =>
+        {
+            Ok(parse_condition(condition))
+        }
+        "minecraft:all_of" | "minecraft:any_of" if parameters == 1 => {
+            let terms = condition.terms.as_ref().ok_or_else(invalid)?;
+            let parsed = terms
+                .iter()
+                .map(|term| parse_component_condition(term, depth + 1, read))
+                .collect::<Result<Vec<_>, _>>()?;
+            if condition.condition == "minecraft:all_of" {
+                Ok(match parsed.as_slice() {
+                    [] => LootCondition::None,
+                    [only] => *only,
+                    _ => LootCondition::AllOf(Box::leak(parsed.into_boxed_slice())),
+                })
+            } else if !parsed.is_empty()
+                && parsed
+                    .iter()
+                    .all(|term| matches!(term, LootCondition::SilkTouch | LootCondition::Shears))
+            {
+                let silk = parsed.contains(&LootCondition::SilkTouch);
+                let shears = parsed.contains(&LootCondition::Shears);
+                Ok(match (silk, shears) {
+                    (true, true) => LootCondition::SilkTouchOrShears,
+                    (true, false) => LootCondition::SilkTouch,
+                    _ => LootCondition::Shears,
+                })
+            } else {
+                Err(invalid())
+            }
+        }
+        "minecraft:inverted" if parameters == 1 => {
+            let term = condition.term.as_ref().ok_or_else(invalid)?;
+            match parse_component_condition(term, depth + 1, read)? {
+                LootCondition::SilkTouch => Ok(LootCondition::NoSilkTouch),
+                LootCondition::SilkTouchOrShears => Ok(LootCondition::NoSilkTouchOrShears),
+                _ => Err(invalid()),
+            }
+        }
+        // Enchantment-dependent predicates discard the selected enchantment in this representation.
+        _ => Err(invalid()),
+    }
 }
 
 #[derive(Deserialize)]
@@ -533,10 +590,11 @@ struct PoolEntryJson {
 struct PoolEntryStruct {
     entry_type: String,
     name: Option<String>,
+    items: Option<String>,
     value: Option<LootTableValue>,
     weight: i32,
     functions: Vec<EntryFunctionStruct>,
-    conditions: Vec<ConditionStruct>,
+    condition: Option<ConditionValue>,
     children: Vec<PoolEntryStruct>,
 }
 
@@ -567,7 +625,7 @@ impl TryFrom<PoolEntryJson> for PoolEntryStruct {
                     entry.entry_type
                 ));
             }
-            if has_count_modifier && copy.conditions.iter().any(component_condition_uses_random) {
+            if has_count_modifier && component_condition_uses_random(copy.condition) {
                 return Err(
                     "unsupported random copy_components conditions with count or bonus functions: their relative order is not represented"
                         .to_owned(),
@@ -577,24 +635,23 @@ impl TryFrom<PoolEntryJson> for PoolEntryStruct {
         Ok(Self {
             entry_type: entry.entry_type,
             name: entry.name,
+            items: entry.items,
             value: entry.value,
             weight: entry.weight,
             functions: entry.functions,
-            conditions: entry.conditions,
+            condition: entry.condition,
             children: entry.children,
         })
     }
 }
 
 /// Detects RNG use in validated copy predicates, including predicates nested in conjunctions.
-fn component_condition_uses_random(condition: &ConditionStruct) -> bool {
-    matches!(
-        condition.condition.as_str(),
-        "minecraft:random_chance" | "minecraft:survives_explosion"
-    ) || condition
-        .terms
-        .as_ref()
-        .is_some_and(|terms| terms.iter().any(component_condition_uses_random))
+fn component_condition_uses_random(condition: LootCondition) -> bool {
+    match condition {
+        LootCondition::RandomChance { .. } | LootCondition::SurvivesExplosion => true,
+        LootCondition::AllOf(terms) => terms.iter().copied().any(component_condition_uses_random),
+        _ => false,
+    }
 }
 
 fn default_weight() -> i32 {
@@ -953,7 +1010,7 @@ fn function_to_tokens(function: &CopyComponentsStruct) -> TokenStream {
     let source = LitStr::new(&function.source, Span::call_site());
     let include = component_filter_to_tokens(function.include.as_deref());
     let exclude = component_filter_to_tokens(function.exclude.as_deref());
-    let condition = condition_to_tokens(combine_conditions(&function.conditions));
+    let condition = condition_to_tokens(function.condition);
     quote! {
         LootFunction::CopyComponents {
             source: #source,
@@ -1143,7 +1200,7 @@ mod tests {
     #[test]
     fn bundled_shulker_retains_component_function() -> Result<(), Box<dyn std::error::Error>> {
         let table: ChestLootTableJson = serde_json::from_str(include_str!(
-            "../../../assets/datapacks/26_2/data/minecraft/loot_table/blocks/shulker_box.json"
+            "../../../assets/datapack/data/minecraft/loot_table/blocks/shulker_box.json"
         ))?;
         let mut tokens = TokenStream::new();
         emit_table("SHULKER_BOX", &table, &mut tokens);
@@ -1157,7 +1214,7 @@ mod tests {
     #[test]
     fn copy_components_requires_a_source() {
         let parsed = serde_json::from_str::<EntryFunctionStruct>(
-            r#"{"function":"minecraft:copy_components","include":["minecraft:custom_name"]}"#,
+            r#"{"type":"minecraft:copy_components","include":["minecraft:custom_name"]}"#,
         );
         assert!(parsed.is_err());
     }
@@ -1167,10 +1224,10 @@ mod tests {
     fn copy_components_distinguishes_absent_and_empty_filters()
     -> Result<(), Box<dyn std::error::Error>> {
         let unrestricted: EntryFunctionStruct = serde_json::from_str(
-            r#"{"function":"minecraft:copy_components","source":"block_entity"}"#,
+            r#"{"type":"minecraft:copy_components","source":"block_entity"}"#,
         )?;
         let empty: EntryFunctionStruct = serde_json::from_str(
-            r#"{"function":"minecraft:copy_components","source":"block_entity","include":[],"exclude":[]}"#,
+            r#"{"type":"minecraft:copy_components","source":"block_entity","include":[],"exclude":[]}"#,
         )?;
         let unrestricted = unrestricted
             .copy_components
@@ -1196,14 +1253,14 @@ mod tests {
     fn copy_components_retains_filters_and_conditions() -> Result<(), Box<dyn std::error::Error>> {
         let function: EntryFunctionStruct = serde_json::from_str(
             r#"{
-                "function":"minecraft:copy_components",
+                "type":"minecraft:copy_components",
                 "source":"block_entity",
                 "include":["custom_name","minecraft:container"],
                 "exclude":["minecraft:container"],
-                "conditions":[
-                    {"condition":"minecraft:random_chance","chance":0.25},
-                    {"condition":"minecraft:killed_by_player"}
-                ]
+                "condition":{"type":"minecraft:all_of","terms":[
+                    {"type":"minecraft:random_chance","chance":0.25},
+                    {"type":"minecraft:killed_by_player"}
+                ]}
             }"#,
         )?;
         let copy = function
@@ -1224,7 +1281,7 @@ mod tests {
             Some(["minecraft:container".to_owned()].as_slice())
         );
         assert_eq!(
-            combine_conditions(&copy.conditions),
+            copy.condition,
             LootCondition::AllOf(&[
                 LootCondition::RandomChance { chance: 0.25 },
                 LootCondition::KilledByPlayer,
@@ -1246,13 +1303,15 @@ mod tests {
             r#"{"source":"block_entity","include":null}"#,
             r#"{"source":"block_entity","exclude":[2]}"#,
             r#"{"source":"block_entity","include":["Minecraft:CustomName"]}"#,
-            r#"{"source":"block_entity","conditions":[{}]}"#,
-            r#"{"source":"block_entity","conditions":[{"condition":"minecraft:random_chance"}]}"#,
-            r#"{"source":"block_entity","conditions":[{"condition":"minecraft:all_of","terms":[{"condition":"unknown"}]}]}"#,
-            r#"{"source":"block_entity","conditions":[{"condition":"minecraft:any_of","terms":[{"condition":"minecraft:random_chance","chance":0.5}]}]}"#,
+            r#"{"source":"block_entity","condition":null}"#,
+            r#"{"source":"block_entity","conditions":[]}"#,
+            r#"{"source":"block_entity","condition":{"type":"minecraft:all_of","terms":[{}]}}"#,
+            r#"{"source":"block_entity","condition":{"type":"minecraft:all_of","terms":[{"type":"minecraft:random_chance"}]}}"#,
+            r#"{"source":"block_entity","condition":{"type":"minecraft:all_of","terms":[{"type":"minecraft:all_of","terms":[{"type":"unknown"}]}]}}"#,
+            r#"{"source":"block_entity","condition":{"type":"minecraft:all_of","terms":[{"type":"minecraft:any_of","terms":[{"type":"minecraft:random_chance","chance":0.5}]}]}}"#,
         ] {
             let json = format!(
-                "{{\"function\":\"minecraft:copy_components\",{}",
+                "{{\"type\":\"minecraft:copy_components\",{}",
                 &definition[1..]
             );
             assert!(
@@ -1268,7 +1327,7 @@ mod tests {
         for filter in ["include", "exclude"] {
             for name in ["minecraft:not_a_real_component", "example:custom_name"] {
                 let mut definition = serde_json::json!({
-                    "function": "minecraft:copy_components",
+                    "type": "minecraft:copy_components",
                     "source": "block_entity"
                 });
                 definition[filter] = serde_json::json!([name]);
@@ -1295,7 +1354,7 @@ mod tests {
             let definition = serde_json::json!({"pools": [{"rolls": 1, "entries": [{
                 "type": "minecraft:loot_table",
                 "value": value,
-                "functions": [{"function": "minecraft:copy_components", "source": "block_entity"}]
+                "modifier": [{"type": "minecraft:copy_components", "source": "block_entity"}]
             }]}]});
             let error = serde_json::from_value::<ChestLootTableJson>(definition)
                 .err()
@@ -1312,30 +1371,30 @@ mod tests {
     #[test]
     fn random_component_copies_reject_count_and_bonus_combinations() {
         let modifiers = [
-            serde_json::json!({"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 1, "max": 2}}),
-            serde_json::json!({"function": "minecraft:set_count", "count": 0}),
-            serde_json::json!({"function": "minecraft:apply_bonus", "formula": "minecraft:ore_drops"}),
-            serde_json::json!({"function": "minecraft:enchanted_count_increase", "count": 1}),
+            serde_json::json!({"type": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 1, "max": 2}}),
+            serde_json::json!({"type": "minecraft:set_count", "count": 0}),
+            serde_json::json!({"type": "minecraft:apply_bonus", "formula": "minecraft:ore_drops"}),
+            serde_json::json!({"type": "minecraft:enchanted_count_increase", "count": 1}),
         ];
         let conditions = [
-            serde_json::json!({"condition": "minecraft:random_chance", "chance": 0.5}),
-            serde_json::json!({"condition": "minecraft:survives_explosion"}),
-            serde_json::json!({"condition": "minecraft:all_of", "terms": [
-                {"condition": "minecraft:killed_by_player"},
-                {"condition": "minecraft:random_chance", "chance": 0.5}
+            serde_json::json!({"type": "minecraft:random_chance", "chance": 0.5}),
+            serde_json::json!({"type": "minecraft:survives_explosion"}),
+            serde_json::json!({"type": "minecraft:all_of", "terms": [
+                {"type": "minecraft:killed_by_player"},
+                {"type": "minecraft:random_chance", "chance": 0.5}
             ]}),
         ];
         for modifier in &modifiers {
             for condition in &conditions {
                 let copy = serde_json::json!({
-                    "function": "minecraft:copy_components", "source": "block_entity", "conditions": [condition]
+                    "type": "minecraft:copy_components", "source": "block_entity", "condition":{"type":"minecraft:all_of","terms":[condition]}
                 });
                 for functions in [
                     serde_json::json!([copy, modifier]),
                     serde_json::json!([modifier, copy]),
                 ] {
                     let definition = serde_json::json!({
-                        "type": "minecraft:item", "name": "minecraft:chest", "functions": functions
+                        "type": "minecraft:item", "name": "minecraft:chest", "modifier": functions
                     });
                     let error = serde_json::from_value::<PoolEntryStruct>(definition)
                         .err()
@@ -1356,25 +1415,25 @@ mod tests {
     fn representable_component_function_combinations_remain_supported()
     -> Result<(), Box<dyn std::error::Error>> {
         for functions in [
-            serde_json::json!([{"function": "minecraft:copy_components", "source": "block_entity", "conditions": [
-                {"condition": "minecraft:random_chance", "chance": 0.5}
-            ]}]),
+            serde_json::json!([{"type": "minecraft:copy_components", "source": "block_entity", "condition":{"type":"minecraft:all_of","terms":[
+                {"type": "minecraft:random_chance", "chance": 0.5}
+            ]}}]),
             serde_json::json!([
-                {"function": "minecraft:copy_components", "source": "block_entity", "conditions": [
-                    {"condition": "minecraft:killed_by_player"}
-                ]},
-                {"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 1, "max": 2}}
+                {"type": "minecraft:copy_components", "source": "block_entity", "condition":{"type":"minecraft:all_of","terms":[
+                    {"type": "minecraft:killed_by_player"}
+                ]}},
+                {"type": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 1, "max": 2}}
             ]),
         ] {
             let _: PoolEntryStruct = serde_json::from_value(serde_json::json!({
-                "type": "minecraft:item", "name": "minecraft:chest", "functions": functions
+                "type": "minecraft:item", "name": "minecraft:chest", "modifier": functions
             }))?;
         }
         let _: ChestLootTableJson =
             serde_json::from_value(serde_json::json!({"pools": [{"rolls": 1, "entries": [{
                 "type": "minecraft:loot_table", "value": {"pools": [{"rolls": 1, "entries": [{
-                    "type": "minecraft:item", "name": "minecraft:chest", "functions": [{
-                        "function": "minecraft:copy_components", "source": "block_entity"
+                    "type": "minecraft:item", "name": "minecraft:chest", "modifier": [{
+                        "type": "minecraft:copy_components", "source": "block_entity"
                     }]
                 }]}]}
             }]}]}))?;
@@ -1386,23 +1445,23 @@ mod tests {
     fn copy_components_rejects_unrepresented_condition_details()
     -> Result<(), Box<dyn std::error::Error>> {
         for condition in [
-            r#"{"condition":"minecraft:match_tool","predicate":{"items":"minecraft:shears","count":2}}"#,
-            r#"{"condition":"minecraft:match_tool","predicate":{"items":["minecraft:shears","minecraft:stick"]}}"#,
-            r#"{"condition":"minecraft:match_tool","predicate":{"items":"minecraft:not_shears"}}"#,
-            r#"{"condition":"minecraft:match_tool","predicate":{"predicates":{"minecraft:enchantments":[{"enchantments":"minecraft:silk_touch","levels":{"min":2}}]}}}"#,
-            r#"{"condition":"minecraft:match_tool","predicate":{"predicates":{"minecraft:enchantments":[{"enchantments":"minecraft:silk_touch","levels":{"min":1,"max":1}}]}}}"#,
-            r#"{"condition":"minecraft:match_tool","predicate":{"predicates":{"unsupported":"minecraft:silk_touch"}}}"#,
-            r#"{"condition":"minecraft:inverted","term":{"condition":"minecraft:match_tool","predicate":{"items":"minecraft:shears"}}}"#,
-            r#"{"condition":"minecraft:any_of","terms":[{"condition":"minecraft:any_of","terms":[{"condition":"minecraft:match_tool","predicate":{"items":"minecraft:shears"}},{"condition":"minecraft:match_tool","predicate":{"predicates":{"minecraft:enchantments":[{"enchantments":"minecraft:silk_touch","levels":{"min":1}}]}}}]},{"condition":"minecraft:match_tool","predicate":{"predicates":{"minecraft:enchantments":[{"enchantments":"minecraft:silk_touch","levels":{"min":1}}]}}}]}"#,
-            r#"{"condition":"minecraft:table_bonus","enchantment":"minecraft:silk_touch","chances":[0.0,1.0]}"#,
-            r#"{"condition":"minecraft:random_chance_with_enchanted_bonus","enchantment":"minecraft:fortune","unenchanted_chance":0.0,"enchanted_chance":1.0}"#,
-            r#"{"condition":"minecraft:random_chance","chance":0.5,"predicate":{"items":"minecraft:shears"}}"#,
-            r#"{"condition":"minecraft:killed_by_player","unsupported":true}"#,
+            r#"{"type":"minecraft:match_tool","predicate":{"items":"minecraft:shears","count":2}}"#,
+            r#"{"type":"minecraft:match_tool","predicate":{"items":["minecraft:shears","minecraft:stick"]}}"#,
+            r#"{"type":"minecraft:match_tool","predicate":{"items":"minecraft:not_shears"}}"#,
+            r#"{"type":"minecraft:match_tool","predicate":{"predicates":{"minecraft:enchantments":[{"enchantments":"minecraft:silk_touch","levels":{"min":2}}]}}}"#,
+            r#"{"type":"minecraft:match_tool","predicate":{"predicates":{"minecraft:enchantments":[{"enchantments":"minecraft:silk_touch","levels":{"min":1,"max":1}}]}}}"#,
+            r#"{"type":"minecraft:match_tool","predicate":{"predicates":{"unsupported":"minecraft:silk_touch"}}}"#,
+            r#"{"type":"minecraft:inverted","term":{"type":"minecraft:match_tool","predicate":{"items":"minecraft:shears"}}}"#,
+            r#"{"type":"minecraft:any_of","terms":[{"type":"minecraft:any_of","terms":[{"type":"minecraft:match_tool","predicate":{"items":"minecraft:shears"}},{"type":"minecraft:match_tool","predicate":{"predicates":{"minecraft:enchantments":[{"enchantments":"minecraft:silk_touch","levels":{"min":1}}]}}}]},{"type":"minecraft:match_tool","predicate":{"predicates":{"minecraft:enchantments":[{"enchantments":"minecraft:silk_touch","levels":{"min":1}}]}}}]}"#,
+            r#"{"type":"minecraft:table_bonus","enchantment":"minecraft:silk_touch","chances":[0.0,1.0]}"#,
+            r#"{"type":"minecraft:random_chance_with_enchanted_bonus","enchantment":"minecraft:fortune","unenchanted_chance":0.0,"enchanted_chance":1.0}"#,
+            r#"{"type":"minecraft:random_chance","chance":0.5,"predicate":{"items":"minecraft:shears"}}"#,
+            r#"{"type":"minecraft:killed_by_player","unsupported":true}"#,
         ] {
             let function = serde_json::json!({
-                "function": "minecraft:copy_components",
+                "type": "minecraft:copy_components",
                 "source": "block_entity",
-                "conditions": [serde_json::from_str::<serde_json::Value>(condition)?],
+                "condition":{"type":"minecraft:all_of","terms":[serde_json::from_str::<serde_json::Value>(condition)?]},
             });
             assert!(
                 serde_json::from_value::<EntryFunctionStruct>(function).is_err(),
@@ -1417,46 +1476,46 @@ mod tests {
     fn copy_components_retains_supported_tool_conditions() -> Result<(), Box<dyn std::error::Error>>
     {
         let silk = serde_json::json!({
-            "condition": "minecraft:match_tool",
+            "type": "minecraft:match_tool",
             "predicate": { "predicates": { "minecraft:enchantments": [{
                 "enchantments": "minecraft:silk_touch", "levels": { "min": 1 }
             }] } },
         });
         let shears = serde_json::json!({
-            "condition": "minecraft:match_tool",
+            "type": "minecraft:match_tool",
             "predicate": { "items": "minecraft:shears" },
         });
         let either = serde_json::json!({
-            "condition": "minecraft:any_of", "terms": [silk.clone(), shears.clone()],
+            "type": "minecraft:any_of", "terms": [silk.clone(), shears.clone()],
         });
         for (condition, expected) in [
             (silk.clone(), LootCondition::SilkTouch),
             (shears.clone(), LootCondition::Shears),
             (either.clone(), LootCondition::SilkTouchOrShears),
             (
-                serde_json::json!({ "condition": "minecraft:any_of", "terms": [silk.clone(), silk.clone()] }),
+                serde_json::json!({ "type": "minecraft:any_of", "terms": [silk.clone(), silk.clone()] }),
                 LootCondition::SilkTouch,
             ),
             (
-                serde_json::json!({ "condition": "minecraft:any_of", "terms": [shears.clone(), shears] }),
+                serde_json::json!({ "type": "minecraft:any_of", "terms": [shears.clone(), shears] }),
                 LootCondition::Shears,
             ),
             (
-                serde_json::json!({ "condition": "minecraft:inverted", "term": silk }),
+                serde_json::json!({ "type": "minecraft:inverted", "term": silk }),
                 LootCondition::NoSilkTouch,
             ),
             (
-                serde_json::json!({ "condition": "minecraft:inverted", "term": either }),
+                serde_json::json!({ "type": "minecraft:inverted", "term": either }),
                 LootCondition::NoSilkTouchOrShears,
             ),
         ] {
             let function: EntryFunctionStruct = serde_json::from_value(serde_json::json!({
-                "function": "minecraft:copy_components", "source": "block_entity", "conditions": [condition],
+                "type": "minecraft:copy_components", "source": "block_entity", "condition":{"type":"minecraft:all_of","terms":[condition]},
             }))?;
             let copy = function
                 .copy_components
                 .ok_or("missing component function")?;
-            assert_eq!(combine_conditions(&copy.conditions), expected);
+            assert_eq!(copy.condition, expected);
         }
         Ok(())
     }
@@ -1466,11 +1525,11 @@ mod tests {
     fn copying_preserves_order_and_legacy_count_fields() -> Result<(), Box<dyn std::error::Error>> {
         let source = r#"{
             "type":"minecraft:item","name":"minecraft:diamond","weight":3,
-            "functions":[
-                {"function":"minecraft:copy_components","source":"block_entity","include":["minecraft:custom_name"]},
-                {"function":"minecraft:set_count","count":{"type":"minecraft:uniform","min":2,"max":4}},
-                {"function":"minecraft:apply_bonus","formula":"minecraft:uniform_bonus_count","parameters":{"bonusMultiplier":2}},
-                {"function":"minecraft:copy_components","source":"block_entity","include":["minecraft:container"]}
+            "modifier":[
+                {"type":"minecraft:copy_components","source":"block_entity","include":["minecraft:custom_name"]},
+                {"type":"minecraft:set_count","count":{"type":"minecraft:uniform","min":2,"max":4}},
+                {"type":"minecraft:apply_bonus","formula":"minecraft:uniform_bonus_count","parameters":{"bonusMultiplier":2}},
+                {"type":"minecraft:copy_components","source":"block_entity","include":["minecraft:container"]}
             ]
         }"#;
         let mut entry: PoolEntryStruct = serde_json::from_str(source)?;
@@ -1527,11 +1586,137 @@ mod tests {
         Ok(())
     }
 
+    /// Named predicates preserve tool selection through direct, disjunctive, and inverted copies.
+    #[test]
+    fn copy_components_resolves_bundled_predicates() -> Result<(), Box<dyn std::error::Error>> {
+        for (condition, expected) in [
+            (
+                serde_json::json!("tool/can_silk_touch"),
+                LootCondition::SilkTouch,
+            ),
+            (
+                serde_json::json!("minecraft:tool/can_shear"),
+                LootCondition::Shears,
+            ),
+            (
+                serde_json::json!({"type": "minecraft:any_of", "terms": [
+                    "minecraft:tool/can_silk_touch", "minecraft:tool/can_shear"
+                ]}),
+                LootCondition::SilkTouchOrShears,
+            ),
+            (
+                serde_json::json!({"type": "minecraft:inverted", "term": "minecraft:tool/can_silk_touch"}),
+                LootCondition::NoSilkTouch,
+            ),
+        ] {
+            let entry: PoolEntryStruct = serde_json::from_value(serde_json::json!({
+                "type": "minecraft:item", "name": "minecraft:chest",
+                "modifier": {"type": "minecraft:copy_components", "source": "block_entity", "condition": condition}
+            }))?;
+            let [function] = entry.functions.as_slice() else {
+                return Err("expected one modifier".into());
+            };
+            let copy = function.copy_components.as_ref().ok_or("missing copy")?;
+            assert_eq!(copy.condition, expected);
+        }
+        Ok(())
+    }
+
+    /// Invalid references and unsupported referenced predicates cannot become unconditional copies.
+    #[test]
+    fn copy_components_rejects_invalid_predicate_references() {
+        for reference in [
+            "minecraft:missing_copy_predicate",
+            "minecraft:block/fast_cooking",
+            "example:tool/can_silk_touch",
+            "minecraft:../tool/can_silk_touch",
+            "minecraft:/tool/can_silk_touch",
+            "minecraft:",
+        ] {
+            let function = serde_json::json!({
+                "type": "minecraft:copy_components", "source": "block_entity", "condition": reference,
+            });
+            assert!(
+                serde_json::from_value::<EntryFunctionStruct>(function).is_err(),
+                "{reference}"
+            );
+        }
+    }
+
+    /// Cyclic named predicates fail at the recursion bound, including cycles through inline terms.
+    #[test]
+    fn copy_components_bounds_predicate_reference_cycles() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let root = ConditionValue::Reference("minecraft:cycle".to_owned());
+        for nested in [false, true] {
+            let read = |_: &str| {
+                if nested {
+                    serde_json::from_value(serde_json::json!({
+                        "type": "minecraft:all_of", "terms": ["minecraft:cycle"]
+                    }))
+                    .map_err(|error| error.to_string())
+                } else {
+                    Ok(root.clone())
+                }
+            };
+            let error = parse_component_condition(&root, 0, &read)
+                .err()
+                .ok_or("cycle accepted")?;
+            assert!(error.contains("nesting exceeds"), "{error}");
+        }
+        Ok(())
+    }
+
+    /// Resolved random predicates still participate in count-order validation; reader errors propagate.
+    #[test]
+    fn copy_components_retains_named_random_predicates() -> Result<(), Box<dyn std::error::Error>> {
+        let root = ConditionValue::Reference("minecraft:random".to_owned());
+        let read = |_: &str| {
+            serde_json::from_value(
+                serde_json::json!({"type": "minecraft:random_chance", "chance": 0.25}),
+            )
+            .map_err(|error| error.to_string())
+        };
+        let condition = parse_component_condition(&root, 0, &read)?;
+        assert_eq!(condition, LootCondition::RandomChance { chance: 0.25 });
+        assert!(component_condition_uses_random(condition));
+        assert_eq!(
+            parse_component_condition(&root, 0, &|_| Err("invalid predicate file".to_owned())),
+            Err("invalid predicate file".to_owned())
+        );
+        Ok(())
+    }
+
+    /// Modern tag items and named entry conditions survive validation alongside component modifiers.
+    #[test]
+    fn tag_copy_preserves_items_and_named_entry_condition() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let entry: PoolEntryStruct = serde_json::from_value(serde_json::json!({
+            "type": "minecraft:tag", "items": "#minecraft:logs", "condition": "minecraft:tool/can_silk_touch",
+            "modifier": {"type": "minecraft:copy_components", "source": "block_entity"}
+        }))?;
+        assert_eq!(entry.items.as_deref(), Some("#minecraft:logs"));
+        assert_eq!(
+            condition_of(entry.condition.as_ref()),
+            LootCondition::SilkTouch
+        );
+        let mut generated = Vec::new();
+        extract_entries(&entry, LootCondition::None, &mut generated, &mut 0);
+        assert!(!generated.is_empty());
+        assert!(
+            generated
+                .iter()
+                .all(|entry| entry.functions.len() == 1
+                    && entry.condition == LootCondition::SilkTouch)
+        );
+        Ok(())
+    }
+
     /// Every bundled component-copying block table must retain its supported function after generation.
     #[test]
     fn bundled_component_tables_generate_without_loss() -> Result<(), Box<dyn std::error::Error>> {
         let base = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../assets/datapacks/26_2/data/minecraft/loot_table/blocks");
+            .join("../../assets/datapack/data/minecraft/loot_table/blocks");
         let mut component_tables = 0;
         for entry in fs::read_dir(base)? {
             let entry = entry?;
@@ -1543,8 +1728,12 @@ mod tests {
             let table: ChestLootTableJson = serde_json::from_str(&content)?;
             let mut generated = TokenStream::new();
             emit_table("BLOCK", &table, &mut generated);
-            assert!(
-                generated.to_string().contains("CopyComponents"),
+            assert_eq!(
+                generated
+                    .to_string()
+                    .matches("LootFunction :: CopyComponents")
+                    .count(),
+                content.matches("\"minecraft:copy_components\"").count(),
                 "{}",
                 entry.path().display()
             );
