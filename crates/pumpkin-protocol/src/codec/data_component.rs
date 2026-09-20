@@ -329,7 +329,7 @@ impl DataComponentCodec<Self> for CustomNameImpl {
     /// Reads structured text, rejecting missing or malformed payloads instead of clearing the name.
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let tag = seq
-            .get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?
+            .get_nbt_with_version(&pumpkin_data::packet::CURRENT_MC_VERSION)?
             .ok_or_else(|| ReadingError::Message("Missing custom name".into()))?;
         Self::read_data(&tag).ok_or_else(|| ReadingError::Message("Invalid custom name".into()))
     }
@@ -2658,7 +2658,7 @@ impl DataComponentCodec<Self> for BannerPatternsImpl {
     /// Writes registered pattern holders using the registry order sent during configuration.
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
         seq.write_var_int(&VarInt::from(self.layers.len() as i32))?;
-        let registry = pumpkin_data::registry::REGISTRY_V_26_2
+        let registry = pumpkin_data::registry::REGISTRY_V_26_3
             .iter()
             .find(|registry| registry.registry_id == "banner_pattern")
             .ok_or_else(|| WritingError::Message("Missing banner pattern registry".into()))?;
@@ -2684,7 +2684,7 @@ impl DataComponentCodec<Self> for BannerPatternsImpl {
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let len = usize::try_from(seq.get_var_int()?.0)
             .map_err(|_| ReadingError::Message("Negative banner layer count".into()))?;
-        let registry = pumpkin_data::registry::REGISTRY_V_26_2
+        let registry = pumpkin_data::registry::REGISTRY_V_26_3
             .iter()
             .find(|registry| registry.registry_id == "banner_pattern")
             .ok_or_else(|| ReadingError::Message("Missing banner pattern registry".into()))?;
@@ -2731,30 +2731,120 @@ impl DataComponentCodec<Self> for BaseColorImpl {
 }
 
 impl DataComponentCodec<Self> for PotDecorationsImpl {
-    /// Writes four item registry IDs in back, left, right, front order.
+    /// Writes four optional complete templates in back, left, right, front order.
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        seq.write_var_int(&VarInt(4))?;
-        for item in self.decorations {
-            seq.write_var_int(&VarInt(i32::from(item.id)))?;
+        for face in &self.decorations {
+            seq.write_bool(face.is_some())?;
+            if let Some(face) = face {
+                serialize_pot_decoration(face, seq)?;
+            }
         }
         Ok(())
     }
 
-    /// Reads at most four registered items; unspecified faces remain plain brick.
+    /// Reads exactly four optional templates without replacing missing faces with bricks.
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let len = seq.get_var_int()?.0;
-        if !(0..=4).contains(&len) {
-            return Err(ReadingError::Message("Invalid pot decoration count".into()));
-        }
         let mut decorations = Self::EMPTY.decorations;
-        for face in decorations.iter_mut().take(len as usize) {
-            let id = u16::try_from(seq.get_var_int()?.0)
-                .map_err(|_| ReadingError::Message("Invalid pot decoration item ID".into()))?;
-            *face = pumpkin_data::item::Item::from_id(id)
-                .ok_or_else(|| ReadingError::Message("Unknown pot decoration item ID".into()))?;
+        for face in &mut decorations {
+            if seq.get_bool()? {
+                *face = Some(deserialize_pot_decoration(seq)?);
+            }
         }
         Ok(Self { decorations })
     }
+}
+
+/// Encodes an item-first pot template with a bounded patch and no component payload lengths.
+fn serialize_pot_decoration(
+    face: &PotDecoration,
+    seq: &mut impl NetworkWriteExt,
+) -> Result<(), WritingError> {
+    if face.count <= 0 || face.item.id == pumpkin_data::item::Item::AIR.id || face.patch.len() > 256
+    {
+        return Err(WritingError::Message(
+            "Invalid pot decoration template".into(),
+        ));
+    }
+    let mut seen = [false; 256];
+    let mut additions = 0;
+    for (id, value) in &face.patch {
+        if std::mem::replace(&mut seen[usize::from(id.to_id())], true) {
+            return Err(WritingError::Message(
+                "Duplicate pot decoration component".into(),
+            ));
+        }
+        if let Some(value) = value {
+            if value.get_self_enum() != *id {
+                return Err(WritingError::Message(
+                    "Mismatched pot decoration component".into(),
+                ));
+            }
+            additions += 1;
+        }
+    }
+    seq.write_var_int(&VarInt(i32::from(face.item.id)))?;
+    seq.write_var_int(&VarInt(face.count))?;
+    seq.write_var_int(&VarInt(additions))?;
+    seq.write_var_int(&VarInt(face.patch.len() as i32 - additions))?;
+    for (id, value) in &face.patch {
+        if let Some(value) = value {
+            seq.write_var_int(&VarInt(i32::from(id.to_id())))?;
+            serialize(*id, value.as_ref(), seq)?;
+        }
+    }
+    for (id, value) in &face.patch {
+        if value.is_none() {
+            seq.write_var_int(&VarInt(i32::from(id.to_id())))?;
+        }
+    }
+    Ok(())
+}
+
+/// Decodes a positive-count pot template, rejecting unknown IDs and oversized or duplicate patches.
+fn deserialize_pot_decoration(
+    seq: &mut impl NetworkReadExt,
+) -> Result<PotDecoration, ReadingError> {
+    let id = u16::try_from(seq.get_var_int()?.0)
+        .map_err(|_| ReadingError::Message("Invalid pot decoration item ID".into()))?;
+    let item = pumpkin_data::item::Item::from_id(id)
+        .ok_or_else(|| ReadingError::Message("Unknown pot decoration item ID".into()))?;
+    if item.id == pumpkin_data::item::Item::AIR.id {
+        return Err(ReadingError::Message(
+            "Pot decoration item cannot be air".into(),
+        ));
+    }
+    let count = seq.get_var_int()?.0;
+    if count <= 0 {
+        return Err(ReadingError::Message(
+            "Invalid pot decoration item count".into(),
+        ));
+    }
+    let additions = seq.get_var_int()?.0;
+    let removals = seq.get_var_int()?.0;
+    let total = additions
+        .checked_add(removals)
+        .filter(|total| additions >= 0 && removals >= 0 && *total <= 256)
+        .ok_or_else(|| ReadingError::Message("Invalid pot decoration component count".into()))?;
+    let mut patch = Vec::with_capacity(total as usize);
+    let mut seen = [false; 256];
+    for index in 0..total {
+        let id = u8::try_from(seq.get_var_int()?.0)
+            .ok()
+            .and_then(DataComponent::try_from_id)
+            .ok_or_else(|| ReadingError::Message("Unknown pot decoration component ID".into()))?;
+        if std::mem::replace(&mut seen[usize::from(id.to_id())], true) {
+            return Err(ReadingError::Message(
+                "Duplicate pot decoration component".into(),
+            ));
+        }
+        let value = if index < additions {
+            Some(deserialize(id, seq)?)
+        } else {
+            None
+        };
+        patch.push((id, value));
+    }
+    Ok(PotDecoration { item, count, patch })
 }
 
 impl DataComponentCodec<Self> for ContainerImpl {
@@ -2859,7 +2949,7 @@ impl DataComponentCodec<Self> for BeesImpl {
             let entity_type = EntityType::from_raw(id)
                 .ok_or_else(|| ReadingError::Message("Unknown hive occupant entity ID".into()))?;
             let Some(NbtTag::Compound(mut entity_data)) =
-                seq.get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?
+                seq.get_nbt_with_version(&pumpkin_data::packet::CURRENT_MC_VERSION)?
             else {
                 return Err(ReadingError::Message(
                     "Hive occupant entity data must be a compound".into(),
@@ -2899,7 +2989,7 @@ impl DataComponentCodec<Self> for LockImpl {
     /// Reads the fallback predicate compound, rejecting missing or malformed lock data.
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let tag = seq
-            .get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?
+            .get_nbt_with_version(&pumpkin_data::packet::CURRENT_MC_VERSION)?
             .ok_or_else(|| ReadingError::Message("Missing lock predicate".into()))?;
         Self::read_data(&tag).ok_or_else(|| ReadingError::Message("Invalid lock predicate".into()))
     }
@@ -2914,7 +3004,7 @@ impl DataComponentCodec<Self> for ContainerLootImpl {
     /// Reads deferred loot metadata without generating or consuming the referenced loot.
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let tag = seq
-            .get_nbt_with_version(&JavaMinecraftVersion::V_26_2)?
+            .get_nbt_with_version(&pumpkin_data::packet::CURRENT_MC_VERSION)?
             .ok_or_else(|| ReadingError::Message("Missing container loot".into()))?;
         Self::read_data(&tag).ok_or_else(|| ReadingError::Message("Invalid container loot".into()))
     }
