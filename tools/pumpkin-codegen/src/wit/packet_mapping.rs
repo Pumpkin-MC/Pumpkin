@@ -293,12 +293,12 @@ fn convert_value(
         "VarUInt" => match mode {
             MappingMode::Serialize => {
                 format!(
-                    "pumpkin_protocol::codec::var_uint::VarUInt({}.try_into().unwrap())",
+                    "pumpkin_protocol::codec::var_uint::VarUInt({}.try_into().ok()?)",
                     src
                 )
             }
             MappingMode::Deserialize | MappingMode::ToWit => {
-                format!("{}.0.try_into().unwrap()", src)
+                format!("{}.0.try_into().ok()?", src)
             }
             MappingMode::Downcast => String::new(),
         },
@@ -325,26 +325,26 @@ fn convert_value(
                 } else {
                     if is_ref {
                         prep.push_str(&format!(
-                            "{}let var_long_{} = {}({}.try_into().unwrap());\n",
+                            "{}let var_long_{} = {}({}.try_into().ok()?);\n",
                             prep_prefix, tmp, path, src
                         ));
                         format!("&var_long_{}", tmp)
                     } else {
-                        format!("{}({}.try_into().unwrap())", path, src)
+                        format!("{}({}.try_into().ok()?)", path, src)
                     }
                 }
             } else if mode == MappingMode::Deserialize {
                 if is_slice {
                     format!("{}.iter().map(|v| v.0 as _).collect()", src)
                 } else {
-                    format!("{}.0.try_into().unwrap()", src)
+                    format!("{}.0.try_into().ok()?", src)
                 }
             } else {
                 // ToWit
                 if is_slice {
                     format!("{}.iter().map(|v| v.0 as _).collect()", src)
                 } else {
-                    format!("{}.0.try_into().unwrap()", src)
+                    format!("{}.0.try_into().ok()?", src)
                 }
             }
         }
@@ -508,12 +508,12 @@ fn convert_value(
                 } else {
                     if is_ref {
                         prep.push_str(&format!(
-                            "{}let val_{} = {}.try_into().unwrap();\n",
+                            "{}let val_{} = {}.try_into().ok()?;\n",
                             prep_prefix, tmp, src
                         ));
                         format!("&val_{}", tmp)
                     } else {
-                        format!("{}.try_into().unwrap()", src)
+                        format!("{}.try_into().ok()?", src)
                     }
                 }
             }
@@ -525,9 +525,9 @@ fn convert_value(
                         format!("{}.iter().map(|v| *v as _).collect()", src)
                     }
                 } else if type_ident == "VarInt" {
-                    format!("{}.0.try_into().unwrap()", src)
+                    format!("{}.0.try_into().ok()?", src)
                 } else {
-                    format!("{}.try_into().unwrap()", src)
+                    format!("{}.try_into().ok()?", src)
                 }
             }
             MappingMode::Downcast => String::new(),
@@ -768,9 +768,9 @@ fn emit_struct_output(
             output.push_str("            };\n");
             output.push_str("            let mut buf = Vec::new();\n");
             if attr_name == "java_packet" {
-                output.push_str("            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();\n");
+                output.push_str("            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).ok()?;\n");
             } else {
-                output.push_str("            crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();\n");
+                output.push_str("            crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).ok()?;\n");
             }
             output.push_str("            Some(buf.into())\n");
             output.push_str("        }\n");
@@ -825,12 +825,17 @@ fn emit_struct_output(
                 side, rust_path_prefix, struct_name_with_lt
             ));
             output.push_str(&format!("    fn to_wit(&self) -> {} {{\n", wit_type));
-            output.push_str(prep_code);
+            // `to_wit` is infallible, so an overflow becomes a default instead of a panic.
+            output.push_str(
+                &prep_code.replace(".try_into().ok()?", ".try_into().unwrap_or_default()"),
+            );
             output.push_str(&format!(
                 "        {}::{}(crate::plugin::loader::wasm::wasm_host::wit::v0_1::pumpkin::plugin::{}::{} {{\n",
                 variant_prefix, wit_case, packet_ns, wit_case
             ));
-            output.push_str(field_inits);
+            output.push_str(
+                &field_inits.replace(".try_into().ok()?", ".try_into().unwrap_or_default()"),
+            );
             output.push_str("        })\n");
             output.push_str("    }\n");
             output.push_str("}\n\n");
@@ -898,9 +903,9 @@ fn process_enum(
             output.push_str("            };\n");
             output.push_str("            let mut buf = Vec::new();\n");
             if attr_name == "java_packet" {
-                output.push_str("            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).unwrap();\n");
+                output.push_str("            crate::net::java::JavaClient::write_packet_for_version(&p, version, &mut buf).ok()?;\n");
             } else {
-                output.push_str("            crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).unwrap();\n");
+                output.push_str("            crate::net::bedrock::BedrockClient::write_raw_packet(&p, &mut buf).ok()?;\n");
             }
             output.push_str("            Some(buf.into())\n");
             output.push_str("        }\n");
@@ -969,7 +974,9 @@ fn process_enum(
             output.push_str("        match self {\n");
             for v in &e.variants {
                 if let Some(arm) = generate_to_wit_arm(v, variant_prefix, &wit_case, &wit_ns) {
-                    output.push_str(&arm);
+                    output.push_str(
+                        &arm.replace(".try_into().ok()?", ".try_into().unwrap_or_default()"),
+                    );
                 } else {
                     return;
                 }

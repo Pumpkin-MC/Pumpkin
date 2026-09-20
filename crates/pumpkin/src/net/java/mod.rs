@@ -36,7 +36,7 @@ use pumpkin_protocol::{
         packet_decoder::TCPNetworkDecoder,
         packet_encoder::TCPNetworkEncoder,
     },
-    ser::{NetworkWriteExt, WritingError},
+    ser::{NetworkReadExt, NetworkWriteExt, WritingError},
 };
 use pumpkin_util::text::TextComponent;
 use pumpkin_util::version::JavaMinecraftVersion;
@@ -76,9 +76,83 @@ use crate::plugin::api::events::world::chunk_send::ChunkSend;
 use crate::plugin::player::player_custom_payload::PlayerCustomPayloadEvent;
 use crate::{error::PumpkinError, server::Server};
 
+fn frame_packet(packet_id: i32, payload: &[u8]) -> Result<Bytes, WritingError> {
+    let mut buf = Vec::with_capacity(payload.len() + 5);
+    buf.write_var_int(&VarInt(packet_id))?;
+    buf.extend_from_slice(payload);
+    Ok(buf.into())
+}
+
+/// Already in the client's numbering, so these skip `PacketSentEvent`.
+pub(crate) fn frame_reply_packets(replies: &[(i32, Bytes)]) -> Vec<Bytes> {
+    let mut out = Vec::with_capacity(replies.len());
+    for (id, payload) in replies {
+        match frame_packet(*id, payload) {
+            Ok(packet) => out.push(packet),
+            Err(err) => warn!("Failed to write reply packet {id}: {err}"),
+        }
+    }
+    out
+}
+
+/// Runs a `PacketSentEvent` so a plugin can retarget the packet; `None` if cancelled.
+pub(crate) fn translate_outbound_packet(
+    server: &Arc<Server>,
+    player: Option<Arc<Player>>,
+    connection_id: u64,
+    version: JavaMinecraftVersion,
+    state: ConnectionState,
+    data: Bytes,
+) -> Option<(Bytes, Vec<Bytes>)> {
+    // Stands in for the typed packet, which the raw byte path does not have.
+    struct RawSentPacket;
+
+    if !server
+        .plugin_manager
+        .has_handlers::<crate::plugin::server::packet::PacketSentEvent>()
+    {
+        return Some((data, Vec::new()));
+    }
+
+    let mut cursor: &[u8] = &data;
+    let Ok(packet_id) = cursor.get_var_int() else {
+        return Some((data, Vec::new()));
+    };
+    let payload = data.slice(data.len() - cursor.len()..);
+
+    let mut event = crate::plugin::server::packet::PacketSentEvent::new(
+        player,
+        connection_id,
+        version,
+        state,
+        packet_id.0,
+        payload,
+        Arc::new(RawSentPacket),
+    );
+    server.plugin_manager.fire_blocking(server, &mut event);
+
+    if event.cancelled {
+        return None;
+    }
+
+    let Ok(translated) = frame_packet(event.packet_id, &event.payload) else {
+        return Some((data, Vec::new()));
+    };
+    let mut extra = Vec::with_capacity(event.extra_packets.len());
+    for (id, payload) in &event.extra_packets {
+        match frame_packet(*id, payload) {
+            Ok(packet) => extra.push(packet),
+            Err(err) => warn!("Failed to write extra packet {id}: {err}"),
+        }
+    }
+    Some((translated, extra))
+}
+
 pub struct JavaClient {
     pub id: u64,
     pub version: AtomicCell<JavaMinecraftVersion>,
+    /// Used to fire `PacketSentEvent` on the outgoing path.
+    pub server: std::sync::Weak<Server>,
     /// The client's game profile information. Direct field (lock-free).
     pub gameprofile: GameProfile,
     /// The client's configuration settings. Lock-free `ArcSwap`.
@@ -239,6 +313,7 @@ impl JavaClient {
 
         Self {
             id: pending.id,
+            server: pending.server.clone(),
             gameprofile,
             config: ArcSwap::from_pointee(config),
             server_address: pending.server_address,
@@ -511,20 +586,36 @@ impl JavaClient {
             return;
         }
 
-        let packet_len = packet_data.len();
-        let prev_bytes = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
-        let new_bytes = prev_bytes.saturating_add(packet_len);
-
-        if new_bytes > MAX_PENDING_BYTES {
-            decrement_pending_bytes(&self.pending_bytes, packet_len);
-            if !self.close_token.is_cancelled() {
-                warn!(
-                    "Client {} outbound packet buffer overflow ({} bytes > {} bytes). Closing connection.",
-                    self.id, new_bytes, MAX_PENDING_BYTES
-                );
-                self.close();
-            }
+        let Some((packet_data, extra)) = self.translate_outbound(packet_data) else {
             return;
+        };
+
+        for packet in std::iter::once(packet_data).chain(extra) {
+            if !self.enqueue_normal(packet) {
+                return;
+            }
+        }
+    }
+
+    fn translate_outbound(&self, data: Bytes) -> Option<(Bytes, Vec<Bytes>)> {
+        match self.server.upgrade() {
+            Some(server) => translate_outbound_packet(
+                &server,
+                self.player.load_full().as_ref().clone(),
+                self.id,
+                self.version.load(),
+                self.connection_state.load(),
+                data,
+            ),
+            None => Some((data, Vec::new())),
+        }
+    }
+
+    /// Returns `false` when the packet was dropped and the connection closed.
+    fn enqueue_normal(&self, packet_data: Bytes) -> bool {
+        let packet_len = packet_data.len();
+        if !self.reserve_pending_bytes(packet_len) {
+            return false;
         }
 
         if let Err(err) = self
@@ -542,7 +633,52 @@ impl JavaClient {
                 // unknown state
                 self.close();
             }
+            return false;
         }
+        true
+    }
+
+    /// Returns `false` when the packet was dropped and the connection closed.
+    fn enqueue_priority(&self, packet_data: Bytes) -> bool {
+        let packet_len = packet_data.len();
+        if !self.reserve_pending_bytes(packet_len) {
+            return false;
+        }
+
+        if let Err(err) = self
+            .outgoing_packet_priority_send
+            .send(OutgoingPacket::normal(packet_data))
+        {
+            decrement_pending_bytes(&self.pending_bytes, packet_len);
+            if !self.close_token.is_cancelled() {
+                warn!(
+                    "Failed to add high-priority packet to the outgoing packet queue for client {}: {}",
+                    self.id, err
+                );
+                self.close();
+            }
+            return false;
+        }
+        true
+    }
+
+    /// Returns `false` when the outgoing buffer is full and the connection was closed.
+    fn reserve_pending_bytes(&self, packet_len: usize) -> bool {
+        let prev_bytes = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
+        let new_bytes = prev_bytes.saturating_add(packet_len);
+
+        if new_bytes > MAX_PENDING_BYTES {
+            decrement_pending_bytes(&self.pending_bytes, packet_len);
+            if !self.close_token.is_cancelled() {
+                warn!(
+                    "Client {} outbound packet buffer overflow ({} bytes > {} bytes). Closing connection.",
+                    self.id, new_bytes, MAX_PENDING_BYTES
+                );
+                self.close();
+            }
+            return false;
+        }
+        true
     }
 
     pub async fn await_close_interrupt(&self) {
@@ -594,12 +730,17 @@ impl JavaClient {
             _ => None,
         };
 
-        if let Some(data) = serialized {
-            let packet_len = data.len();
-            let _ = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
-            let _ = self
-                .outgoing_packet_priority_send
-                .send(OutgoingPacket::normal(data));
+        // The kick reason is an ordinary packet and needs retargeting like any other.
+        if let Some(data) = serialized
+            && let Some((data, extra)) = self.translate_outbound(data)
+        {
+            for packet in std::iter::once(data).chain(extra) {
+                let packet_len = packet.len();
+                let _ = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
+                let _ = self
+                    .outgoing_packet_priority_send
+                    .send(OutgoingPacket::normal(packet));
+            }
         }
         let reason_text = reason.clone().get_text();
         warn!("Closing connection for {}: {reason_text}", self.id);
@@ -642,19 +783,25 @@ impl JavaClient {
             return;
         }
 
-        let packet_len = packet.len();
-        let prev_bytes = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
-        let new_bytes = prev_bytes.saturating_add(packet_len);
+        let Some((packet, mut extra)) = self.translate_outbound(packet) else {
+            return;
+        };
 
-        if new_bytes > MAX_PENDING_BYTES {
-            decrement_pending_bytes(&self.pending_bytes, packet_len);
-            if !self.close_token.is_cancelled() {
-                warn!(
-                    "Client {} outbound packet buffer overflow ({} bytes > {} bytes). Closing connection.",
-                    self.id, new_bytes, MAX_PENDING_BYTES
-                );
-                self.close();
+        // Only the last packet of the group carries the completion signal.
+        let packet = match extra.pop() {
+            Some(last) => {
+                for packet in std::iter::once(packet).chain(extra) {
+                    if !self.enqueue_priority(packet) {
+                        return;
+                    }
+                }
+                last
             }
+            None => packet,
+        };
+
+        let packet_len = packet.len();
+        if !self.reserve_pending_bytes(packet_len) {
             return;
         }
 
@@ -884,18 +1031,35 @@ impl JavaClient {
     ) -> Result<(), Box<dyn PumpkinError>> {
         let version = self.version.load();
 
-        let mut event = crate::plugin::server::packet::PacketReceivedEvent::new(
-            player.clone(),
-            packet.id,
-            packet.payload.clone(),
-        );
-        server.plugin_manager.fire_blocking(server, &mut event);
-        if event.cancelled {
-            return Ok(());
-        }
+        let (packet_id, payload_bytes) = if server
+            .plugin_manager
+            .has_handlers::<crate::plugin::server::packet::PacketReceivedEvent>(
+        ) {
+            let mut event = crate::plugin::server::packet::PacketReceivedEvent::new(
+                Some(player.clone()),
+                self.id,
+                version,
+                ConnectionState::Play,
+                packet.id,
+                packet.payload.clone(),
+            );
+            server.plugin_manager.fire_blocking(server, &mut event);
+            // Replies go out even if the handler cancels the packet.
+            for reply in frame_reply_packets(&event.reply_packets) {
+                if !self.enqueue_normal(reply) {
+                    return Ok(());
+                }
+            }
+            if event.cancelled {
+                return Ok(());
+            }
+            (event.packet_id, event.payload)
+        } else {
+            (packet.id, packet.payload.clone())
+        };
 
-        let mut payload = &event.payload[..];
-        match event.packet_id {
+        let mut payload = &payload_bytes[..];
+        match packet_id {
             id if id == SConfirmTeleport::to_id(version) => {
                 self.handle_confirm_teleport(
                     player,
@@ -1365,9 +1529,29 @@ impl JavaClient {
                 self.handle_configuration_acknowledged(player);
             }
             _ => {
-                warn!("Failed to handle player packet id {}", event.packet_id);
+                warn!("Failed to handle player packet id {}", packet_id);
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reply_packets_keep_their_order_and_are_framed_with_their_id() {
+        let replies = [
+            (0x11, Bytes::from_static(&[1, 2])),
+            (0x80, Bytes::from_static(&[3])),
+            (0x12, Bytes::new()),
+        ];
+        let framed = frame_reply_packets(&replies);
+        assert_eq!(framed.len(), 3);
+        assert_eq!(&framed[0][..], &[0x11, 1, 2]);
+        // 0x80 is a two byte var int.
+        assert_eq!(&framed[1][..], &[0x80, 0x01, 3]);
+        assert_eq!(&framed[2][..], &[0x12]);
     }
 }

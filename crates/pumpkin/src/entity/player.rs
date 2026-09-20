@@ -2614,7 +2614,10 @@ impl Player {
                 }
                 ClientPlatform::Bedrock(client) => {
                     let mut event = crate::plugin::server::packet::PacketReceivedEvent::new(
-                        player_arc.clone(),
+                        Some(player_arc.clone()),
+                        player_arc.connection_id(),
+                        player_arc.client.java_version(),
+                        pumpkin_protocol::ConnectionState::Play,
                         packet.id,
                         packet.payload.clone(),
                     );
@@ -3078,6 +3081,11 @@ impl Player {
         progress.clamp(0.0, 1.0)
     }
 
+    /// Zero for Bedrock, which has no per-connection id.
+    fn connection_id(&self) -> u64 {
+        self.client.java().map_or(0, |client| client.id)
+    }
+
     pub async fn fire_packet_sent<P: Send + Sync + std::any::Any>(
         self: &Arc<Self>,
         packet: P,
@@ -3086,8 +3094,15 @@ impl Player {
     ) -> bool {
         let server = self.world().server.upgrade();
         if let Some(server) = server {
-            let mut event =
-                PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(packet));
+            let mut event = PacketSentEvent::new(
+                Some(self.clone()),
+                self.connection_id(),
+                self.client.java_version(),
+                pumpkin_protocol::ConnectionState::Play,
+                packet_id,
+                payload,
+                Arc::new(packet),
+            );
             server.plugin_manager.fire(&server, &mut event).await;
             return event.cancelled;
         }
@@ -3103,7 +3118,15 @@ impl Player {
         // In the future we should make all packets 'static or have a way to represent raw packets in WIT
         struct RawPacket;
 
-        let mut event = PacketSentEvent::new(self.clone(), packet_id, payload, Arc::new(RawPacket));
+        let mut event = PacketSentEvent::new(
+            Some(self.clone()),
+            self.connection_id(),
+            self.client.java_version(),
+            pumpkin_protocol::ConnectionState::Play,
+            packet_id,
+            payload,
+            Arc::new(RawPacket),
+        );
         if let Some(server) = self.world().server.upgrade() {
             server.plugin_manager.fire(&server, &mut event).await;
         }

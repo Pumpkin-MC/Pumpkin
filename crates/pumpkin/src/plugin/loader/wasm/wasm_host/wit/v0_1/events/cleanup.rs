@@ -223,10 +223,14 @@ pub fn cleanup_event(event: &Event, state: &mut PluginHostState) {
         Event::ServerTickStartEvent(_) => {}
         Event::ServerTickEndEvent(_) => {}
         Event::PacketReceivedEvent(data) => {
-            cleanup_player(state, &data.player);
+            if let Some(player) = &data.player {
+                cleanup_player(state, player);
+            }
         }
         Event::PacketSentEvent(data) => {
-            cleanup_player(state, &data.player);
+            if let Some(player) = &data.player {
+                cleanup_player(state, player);
+            }
         }
         Event::ChunkLoadEvent(data) => {
             cleanup_world(state, &data.target_world);

@@ -581,6 +581,7 @@ impl PumpkinServer {
                                 client_addr,
                                 client_id,
                                 packet_limiter,
+                                Arc::downgrade(&server_clone),
                             );
                             let login_result = pending.handle_login_sequence(&server_clone).await;
 

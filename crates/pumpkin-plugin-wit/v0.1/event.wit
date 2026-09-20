@@ -356,18 +356,34 @@ interface event {
     }
 
     record packet-received-event-data {
-        player: player,
+        // None in login and configuration state, where no player exists yet.
+        player: option<player>,
+        // Same value before and after the login handover.
+        connection-id: u64,
+        protocol-version: s32,
+        // 0 handshake, 1 status, 2 login, 3 transfer, 4 config, 5 play.
+        connection-state: u8,
         packet: serverbound-packet,
         packet-id: s32,
         raw-payload: list<u8>,
+        // Written once the handler returns, even if cancelled, and not fired back through packet-sent-event.
+        reply-packets: list<tuple<s32, list<u8>>>,
         cancelled: bool
     }
 
     record packet-sent-event-data {
-        player: player,
+        // None in login and configuration state, where no player exists yet.
+        player: option<player>,
+        // Same value before and after the login handover.
+        connection-id: u64,
+        protocol-version: s32,
+        // 0 handshake, 1 status, 2 login, 3 transfer, 4 config, 5 play.
+        connection-state: u8,
         packet: clientbound-packet,
         packet-id: s32,
         raw-payload: list<u8>,
+        // Written right after this packet, in order, and not fired back here.
+        extra-packets: list<tuple<s32, list<u8>>>,
         cancelled: bool
     }
 

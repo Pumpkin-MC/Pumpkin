@@ -56,6 +56,8 @@ const HANDSHAKE_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_se
 
 pub struct PendingConnection {
     pub id: u64,
+    /// Fires packet events before any `Player` exists.
+    pub server: std::sync::Weak<Server>,
     pub address: SocketAddr,
     pub server_address: String,
     pub version: AtomicCell<JavaMinecraftVersion>,
@@ -78,10 +80,12 @@ impl PendingConnection {
         address: SocketAddr,
         id: u64,
         packet_limiter: PacketRateLimiter,
+        server: std::sync::Weak<Server>,
     ) -> Self {
         let (read, write) = tcp_stream.into_split();
         Self {
             id,
+            server,
             address,
             server_address: String::new(),
             version: AtomicCell::new(CURRENT_MC_VERSION),
@@ -174,9 +178,29 @@ impl PendingConnection {
             error!("Failed to write packet: {err:?}");
             return;
         }
-        let payload = Bytes::from(packet_buf);
-        if let Err(err) = self.network_writer.write_packet(payload).await {
-            warn!("Failed to send packet to client {}: {}", self.id, err);
+        let mut payload = Bytes::from(packet_buf);
+        let mut extra = Vec::new();
+        if let Some(server) = self.server.upgrade() {
+            match crate::net::java::translate_outbound_packet(
+                &server,
+                None,
+                self.id,
+                self.version.load(),
+                self.connection_state.load(),
+                payload,
+            ) {
+                Some((translated, queued)) => {
+                    payload = translated;
+                    extra = queued;
+                }
+                None => return,
+            }
+        }
+        for packet in std::iter::once(payload).chain(extra) {
+            if let Err(err) = self.network_writer.write_packet(packet).await {
+                warn!("Failed to send packet to client {}: {}", self.id, err);
+                break;
+            }
         }
         let _ = self.network_writer.flush().await;
     }
@@ -223,6 +247,12 @@ impl PendingConnection {
                 return PacketHandlerResult::Stop;
             }
 
+            let (packet, replies) = self.translate_inbound_packet(server, packet);
+            self.write_reply_packets(replies).await;
+            let Some(packet) = packet else {
+                continue;
+            };
+
             match self.handle_packet(server, &packet).await {
                 Ok(result) => {
                     if let Some(result) = result {
@@ -240,6 +270,61 @@ impl PendingConnection {
             }
         }
         PacketHandlerResult::Stop
+    }
+
+    /// Handshake and status packets pass through untouched; `None` means a handler cancelled it.
+    fn translate_inbound_packet(
+        &self,
+        server: &Arc<Server>,
+        packet: RawPacket,
+    ) -> (Option<RawPacket>, Vec<Bytes>) {
+        let state = self.connection_state.load();
+        if !matches!(
+            state,
+            ConnectionState::Login | ConnectionState::Transfer | ConnectionState::Config
+        ) {
+            return (Some(packet), Vec::new());
+        }
+        if !server
+            .plugin_manager
+            .has_handlers::<crate::plugin::server::packet::PacketReceivedEvent>()
+        {
+            return (Some(packet), Vec::new());
+        }
+        let mut event = crate::plugin::server::packet::PacketReceivedEvent::new(
+            None,
+            self.id,
+            self.version.load(),
+            state,
+            packet.id,
+            packet.payload,
+        );
+        server.plugin_manager.fire_blocking(server, &mut event);
+        let replies = crate::net::java::frame_reply_packets(&event.reply_packets);
+        if event.cancelled {
+            return (None, replies);
+        }
+        (
+            Some(RawPacket {
+                id: event.packet_id,
+                payload: event.payload,
+            }),
+            replies,
+        )
+    }
+
+    /// Writes replies straight to the socket without firing `PacketSentEvent`.
+    async fn write_reply_packets(&mut self, replies: Vec<Bytes>) {
+        if replies.is_empty() {
+            return;
+        }
+        for reply in replies {
+            if let Err(err) = self.network_writer.write_packet(reply).await {
+                warn!("Failed to send reply packet to client {}: {}", self.id, err);
+                break;
+            }
+        }
+        let _ = self.network_writer.flush().await;
     }
 
     pub async fn handle_packet(

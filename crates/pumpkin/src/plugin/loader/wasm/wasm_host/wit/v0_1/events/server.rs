@@ -26,23 +26,47 @@ use crate::plugin::{
     },
 };
 
+const fn connection_state_code(state: pumpkin_protocol::ConnectionState) -> u8 {
+    match state {
+        pumpkin_protocol::ConnectionState::HandShake => 0,
+        pumpkin_protocol::ConnectionState::Status => 1,
+        pumpkin_protocol::ConnectionState::Login => 2,
+        pumpkin_protocol::ConnectionState::Transfer => 3,
+        pumpkin_protocol::ConnectionState::Config => 4,
+        pumpkin_protocol::ConnectionState::Play => 5,
+    }
+}
+
 impl ToFromWasmEvent for PacketReceivedEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player_res = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player_res = self.player.as_ref().map(|player| {
+            state
+                .add_player(player.clone())
+                .expect("failed to add player resource")
+        });
 
-        let packet = match self.player.client.as_ref() {
-            ClientPlatform::Java(client) => {
-                let version = client.version.load();
+        // Only Java connections reach this path before a player exists.
+        let packet = match self.player.as_ref().map(|p| p.client.as_ref()) {
+            Some(ClientPlatform::Java(_)) | None => {
+                let version = self.version;
                 generated_packets::deserialize_java_serverbound_packet(
                     self.packet_id,
                     &self.payload,
                     version,
                 )
-                .map_or(ServerboundPacket::Unknown, ServerboundPacket::Java)
+                .map_or_else(
+                    || {
+                        tracing::debug!(
+                            packet_id = self.packet_id,
+                            ?version,
+                            "serverbound packet has no typed plugin view"
+                        );
+                        ServerboundPacket::Unknown
+                    },
+                    ServerboundPacket::Java,
+                )
             }
-            ClientPlatform::Bedrock(_) => {
+            Some(ClientPlatform::Bedrock(_)) => {
                 generated_packets::deserialize_bedrock_serverbound_packet(
                     self.packet_id,
                     &self.payload,
@@ -53,9 +77,17 @@ impl ToFromWasmEvent for PacketReceivedEvent {
 
         Event::PacketReceivedEvent(PacketReceivedEventData {
             player: player_res,
+            connection_id: self.connection_id,
+            protocol_version: self.version.protocol_version(),
+            connection_state: connection_state_code(self.state),
             packet,
             packet_id: self.packet_id,
             raw_payload: self.payload.to_vec(),
+            reply_packets: self
+                .reply_packets
+                .iter()
+                .map(|(id, payload)| (*id, payload.to_vec()))
+                .collect(),
             cancelled: self.cancelled,
         })
     }
@@ -65,6 +97,11 @@ impl ToFromWasmEvent for PacketReceivedEvent {
         if let Event::PacketReceivedEvent(data) = event {
             self.packet_id = data.packet_id;
             self.payload = data.raw_payload.into();
+            self.reply_packets = data
+                .reply_packets
+                .into_iter()
+                .map(|(id, payload)| (id, payload.into()))
+                .collect();
             self.cancelled = data.cancelled;
         }
     }
@@ -84,26 +121,37 @@ impl ToFromWasmEvent for PacketReceivedEvent {
 
 impl ToFromWasmEvent for PacketSentEvent {
     fn to_wasm_event(&self, state: &mut PluginHostState) -> Event {
-        let player_res = state
-            .add_player(self.player.clone())
-            .expect("failed to add player resource");
+        let player_res = self.player.as_ref().map(|player| {
+            state
+                .add_player(player.clone())
+                .expect("failed to add player resource")
+        });
 
-        let packet = match self.player.client.as_ref() {
-            ClientPlatform::Java(_) => {
-                generated_packets::clientbound_java_any_to_wit(self.packet.as_ref())
-                    .map_or(ClientboundPacket::Unknown, ClientboundPacket::Java)
-            }
-            ClientPlatform::Bedrock(_) => {
+        // Only Java connections reach this path before a player exists.
+        let packet = match self.player.as_ref().map(|p| p.client.as_ref()) {
+            Some(ClientPlatform::Bedrock(_)) => {
                 generated_packets::clientbound_bedrock_any_to_wit(self.packet.as_ref())
                     .map_or(ClientboundPacket::Unknown, ClientboundPacket::Bedrock)
+            }
+            Some(ClientPlatform::Java(_)) | None => {
+                generated_packets::clientbound_java_any_to_wit(self.packet.as_ref())
+                    .map_or(ClientboundPacket::Unknown, ClientboundPacket::Java)
             }
         };
 
         Event::PacketSentEvent(PacketSentEventData {
             player: player_res,
+            connection_id: self.connection_id,
+            protocol_version: self.version.protocol_version(),
+            connection_state: connection_state_code(self.state),
             packet,
             packet_id: self.packet_id,
             raw_payload: self.payload.iter().copied().collect(),
+            extra_packets: self
+                .extra_packets
+                .iter()
+                .map(|(id, payload)| (*id, payload.to_vec()))
+                .collect(),
             cancelled: self.cancelled,
         })
     }
@@ -111,7 +159,13 @@ impl ToFromWasmEvent for PacketSentEvent {
     fn apply_wasm_event(&mut self, event: Event, state: &mut PluginHostState) {
         cleanup_event(&event, state);
         if let Event::PacketSentEvent(data) = event {
+            self.packet_id = data.packet_id;
             self.payload = data.raw_payload.into();
+            self.extra_packets = data
+                .extra_packets
+                .into_iter()
+                .map(|(id, payload)| (id, payload.into()))
+                .collect();
             self.cancelled = data.cancelled;
         }
     }

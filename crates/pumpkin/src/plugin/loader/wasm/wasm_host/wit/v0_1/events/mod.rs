@@ -13,6 +13,7 @@ use crate::{
     entity::player::Player,
     plugin::{
         BoxFuture, EventHandler, Payload,
+        api::events::server::packet::{PacketReceivedEvent, PacketSentEvent},
         loader::wasm::wasm_host::{
             PluginInstance, WasmPlugin,
             state::{PlayerResource, PluginHostState, TextComponentResource, WorldResource},
@@ -230,6 +231,16 @@ pub(super) fn consume_world(
         .provider
 }
 
+/// Cancels a packet event whose handler trapped, so a half translated packet is never sent.
+fn fail_closed<E: 'static>(event: &mut E) {
+    let any = event as &mut dyn std::any::Any;
+    if let Some(sent) = any.downcast_mut::<PacketSentEvent>() {
+        sent.cancelled = true;
+    } else if let Some(received) = any.downcast_mut::<PacketReceivedEvent>() {
+        received.cancelled = true;
+    }
+}
+
 impl<E: Payload + ToFromWasmEvent + Clone + 'static> EventHandler<E> for WasmPluginEventHandler {
     fn handle<'a>(&'a self, server: &'a Arc<Server>, event: &'a E) -> BoxFuture<'a, ()> {
         Box::pin(async {
@@ -323,8 +334,58 @@ impl<E: Payload + ToFromWasmEvent + Clone + 'static> EventHandler<E> for WasmPlu
                 Ok(returned_event) => *event = returned_event,
                 Err(error) => {
                     tracing::error!(handler_id, %error, "Blocking Wasm event handler failed");
+                    fail_closed(event);
                 }
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::plugin::api::events::player::player_animation::PlayerAnimationEvent;
+    use pumpkin_protocol::ConnectionState;
+    use pumpkin_util::version::JavaMinecraftVersion;
+
+    #[test]
+    fn failed_packet_sent_handler_cancels_the_packet() {
+        let mut sent = PacketSentEvent::new(
+            None,
+            1,
+            JavaMinecraftVersion::V_1_21_4,
+            ConnectionState::Play,
+            7,
+            bytes::Bytes::from_static(&[1, 2, 3]),
+            Arc::new(()),
+        );
+        fail_closed(&mut sent);
+        assert!(sent.cancelled);
+    }
+
+    #[test]
+    fn failed_packet_received_handler_cancels_the_packet() {
+        let mut received = PacketReceivedEvent::new(
+            None,
+            1,
+            JavaMinecraftVersion::V_1_21_4,
+            ConnectionState::Login,
+            0,
+            bytes::Bytes::from_static(&[1, 2, 3]),
+        );
+        received
+            .reply_packets
+            .push((7, bytes::Bytes::from_static(&[9])));
+        fail_closed(&mut received);
+        assert!(received.cancelled);
+        // A cancelled packet is still answered.
+        assert_eq!(received.reply_packets.len(), 1);
+    }
+
+    #[test]
+    fn failed_handler_leaves_other_events_alone() {
+        let mut event: Option<PlayerAnimationEvent> = None;
+        fail_closed(&mut event);
+        assert!(event.is_none());
     }
 }
