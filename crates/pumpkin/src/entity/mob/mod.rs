@@ -163,13 +163,34 @@ impl MobEntity {
         }
     }
 
+    fn navigation_for_entity_type(entity_type: &EntityType) -> Navigator {
+        const WATER_BOUND_ENTITY_IDS: [u16; 8] = [
+            EntityType::COD.id,
+            EntityType::SALMON.id,
+            EntityType::TROPICAL_FISH.id,
+            EntityType::PUFFERFISH.id,
+            EntityType::SQUID.id,
+            EntityType::GLOW_SQUID.id,
+            EntityType::DOLPHIN.id,
+            EntityType::TADPOLE.id,
+        ];
+
+        if WATER_BOUND_ENTITY_IDS.contains(&entity_type.id) {
+            Navigator::water_bound(entity_type.id == EntityType::DOLPHIN.id)
+        } else {
+            Navigator::default()
+        }
+    }
+
     #[must_use]
     pub fn new(entity: Entity) -> Self {
+        let navigator = Self::navigation_for_entity_type(entity.entity_type);
+
         Self {
             living_entity: LivingEntity::new(entity),
             goals_selector: std::sync::Mutex::new(GoalSelector::default()),
             target_selector: std::sync::Mutex::new(GoalSelector::default()),
-            navigator: std::sync::Mutex::new(Navigator::default()),
+            navigator: std::sync::Mutex::new(navigator),
             target: std::sync::Mutex::new(None),
             look_control: std::sync::Mutex::new(LookControl::default()),
             sensing: std::sync::Mutex::new(Sensing::default()),
