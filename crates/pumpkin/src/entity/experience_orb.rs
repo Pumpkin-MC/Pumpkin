@@ -135,3 +135,25 @@ impl EntityBase for ExperienceOrbEntity {
         self
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn water_buoyancy_lifts_sinking_orb_and_adds_horizontal_drag() {
+        let velocity = apply_water_buoyancy(Vector3::new(0.2, -0.03, -0.4));
+
+        assert!((velocity.x - 0.198).abs() < 1.0e-12);
+        assert!((velocity.y - -0.0295).abs() < 1.0e-12);
+        assert!((velocity.z - -0.396).abs() < 1.0e-12);
+    }
+
+    #[test]
+    fn water_buoyancy_stops_accelerating_at_upward_threshold() {
+        let velocity = apply_water_buoyancy(Vector3::new(0.0, 0.06, 0.0));
+
+        assert_eq!(velocity.y, 0.06);
+    }
+}
