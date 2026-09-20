@@ -164,7 +164,7 @@ impl MobEntity {
     }
 
     fn navigation_for_entity_type(entity_type: &EntityType) -> Navigator {
-        const WATER_BOUND_ENTITY_IDS: [u16; 8] = [
+        const WATER_BOUND_ENTITY_IDS: [u16; 9] = [
             EntityType::COD.id,
             EntityType::SALMON.id,
             EntityType::TROPICAL_FISH.id,
@@ -173,6 +173,7 @@ impl MobEntity {
             EntityType::GLOW_SQUID.id,
             EntityType::DOLPHIN.id,
             EntityType::TADPOLE.id,
+            EntityType::AXOLOTL.id,
         ];
 
         if WATER_BOUND_ENTITY_IDS.contains(&entity_type.id) {
