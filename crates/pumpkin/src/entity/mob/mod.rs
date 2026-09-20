@@ -765,6 +765,13 @@ impl MobEntity {
         }
     }
 }
+/// Experience an animal is worth when it dies.
+///
+/// Vanilla's `Animal.getBaseExperienceReward` is `1 + random.nextInt(3)`, rolled at the
+/// moment of death, so the value differs from one animal to the next.
+fn animal_experience_reward() -> u32 {
+    rand::random_range(1..4)
+}
 
 pub trait Mob: EntityBase + Send + Sync {
     fn get_random(&self) -> rand::rngs::ThreadRng {
@@ -1241,6 +1248,14 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn get_base_experience_reward(&self) -> u32 {
+        // Vanilla rolls this per death for animals rather than reading a fixed value --
+        // `Animal.getBaseExperienceReward` returns `1 + random.nextInt(3)`. The extracted
+        // constant is a single sample of that draw taken when the data was generated, so
+        // every cow was worth the same amount forever, and a different amount from every
+        // sheep, purely by the luck of that one roll.
+        if self.as_animal().is_some() {
+            return animal_experience_reward();
+        }
         self.get_entity().entity_type.experience_reward
     }
 
@@ -1657,4 +1672,29 @@ pub trait PathAwareEntity: Mob + Send + Sync {
 
 pub trait RangedAttackMob: Mob + Send + Sync {
     fn perform_ranged_attack(&self, target: &Arc<dyn EntityBase>, power: f32);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::animal_experience_reward;
+
+    #[test]
+    fn an_animal_is_worth_a_fresh_roll_of_one_to_three() {
+        // The point of the roll is that it is not the same number every time: the extracted
+        // `experience_reward` was one sample of it baked into the generated data, so every
+        // cow was worth exactly as much as every other cow, forever.
+        let rolls: Vec<u32> = (0..512).map(|_| animal_experience_reward()).collect();
+
+        assert!(
+            rolls.iter().all(|reward| (1..=3).contains(reward)),
+            "vanilla's range is 1..=3, got {:?}",
+            rolls.iter().min().zip(rolls.iter().max())
+        );
+        for expected in 1..=3 {
+            assert!(
+                rolls.contains(&expected),
+                "{expected} never came up in 512 rolls, which means it is not being rolled"
+            );
+        }
+    }
 }
