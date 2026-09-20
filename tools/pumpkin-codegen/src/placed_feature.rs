@@ -6,8 +6,7 @@ use std::collections::BTreeMap;
 use std::fs;
 
 fn load_placed_features() -> BTreeMap<String, Value> {
-    let dir =
-        std::path::Path::new("../../assets/datapacks/26_3/data/minecraft/worldgen/placed_feature");
+    let dir = std::path::Path::new("../../assets/datapack/data/minecraft/worldgen/placed_feature");
     let mut map = BTreeMap::new();
     let mut entries: Vec<_> = fs::read_dir(dir)
         .expect("Missing worldgen/placed_feature directory")

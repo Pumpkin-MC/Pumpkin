@@ -108,7 +108,7 @@ struct_excessive_bools = "allow"
 unused_async_trait_impl = "allow"
 
 [workspace.package]
-version = "0.1.0+26.3-26.51"
+version = "0.2.0+26.3-26.51"
 edition = "2024"
 rust-version = "1.96"
 license = "GPL-3.0"

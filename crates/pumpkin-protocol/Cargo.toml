@@ -22,7 +22,7 @@ cesu8.workspace = true
 
 uuid.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["net", "io-util"] }
+tokio = { workspace = true, features = ["io-util", "sync"] }
 bytes.workspace = true
 
 # encryption

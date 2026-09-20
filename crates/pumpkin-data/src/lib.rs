@@ -274,20 +274,11 @@ pub mod tag;
 #[path = "generated/noise_router.rs"]
 pub mod noise_router;
 
-#[cfg(feature = "composter")]
-#[rustfmt::skip]
-#[path = "generated/composter_increase_chance.rs"]
-pub mod composter_increase_chance;
 
 #[cfg(feature = "flower_pot")]
 #[rustfmt::skip]
 #[path = "generated/flower_pot_transformations.rs"]
 pub mod flower_pot_transformations;
-
-#[cfg(feature = "fuels")]
-#[rustfmt::skip]
-#[path = "generated/fuels.rs"]
-pub mod fuels;
 
 #[cfg(feature = "effect")]
 #[rustfmt::skip]
@@ -314,10 +305,6 @@ pub mod potion;
 #[path = "generated/potion_brewing.rs"]
 pub mod potion_brewing;
 
-#[cfg(feature = "recipe_remainder")]
-#[rustfmt::skip]
-#[path = "generated/recipe_remainder.rs"]
-pub mod recipe_remainder;
 
 #[cfg(feature = "block")]
 mod block_direction;

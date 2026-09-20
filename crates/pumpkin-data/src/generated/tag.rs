@@ -7,7 +7,6 @@ pub enum RegistryKey {
     Block,
     DamageType,
     Dialog,
-    DimensionType,
     Enchantment,
     EntityType,
     Fluid,
@@ -31,7 +30,6 @@ impl RegistryKey {
         Self::Block,
         Self::DamageType,
         Self::Dialog,
-        Self::DimensionType,
         Self::Enchantment,
         Self::EntityType,
         Self::Fluid,
@@ -54,7 +52,6 @@ impl RegistryKey {
         Self::Block,
         Self::DamageType,
         Self::Dialog,
-        Self::DimensionType,
         Self::Enchantment,
         Self::EntityType,
         Self::Fluid,
@@ -79,31 +76,8 @@ impl RegistryKey {
         }
     }
     #[must_use]
-    pub const fn is_valid_for_version(&self, version: JavaMinecraftVersion) -> bool {
-        if !self.is_network_synced() {
-            return false;
-        }
-        match self {
-            Self::Block | Self::Item | Self::Fluid => {
-                (version as u32) >= (JavaMinecraftVersion::V_1_13 as u32)
-            }
-            Self::EntityType => (version as u32) >= (JavaMinecraftVersion::V_1_14 as u32),
-            Self::GameEvent => (version as u32) >= (JavaMinecraftVersion::V_1_17 as u32),
-            Self::WorldgenBiome => (version as u32) >= (JavaMinecraftVersion::V_1_18 as u32),
-            Self::BannerPattern
-            | Self::Instrument
-            | Self::PaintingVariant
-            | Self::PointOfInterestType => {
-                (version as u32) >= (JavaMinecraftVersion::V_1_19 as u32)
-            }
-            Self::DamageType => (version as u32) >= (JavaMinecraftVersion::V_1_20 as u32),
-            Self::Enchantment | Self::Potion => {
-                (version as u32) >= (JavaMinecraftVersion::V_1_20_5 as u32)
-            }
-            Self::Dialog => (version as u32) >= (JavaMinecraftVersion::V_1_21_6 as u32),
-            Self::Timeline => (version as u32) >= (JavaMinecraftVersion::V_1_21_11 as u32),
-            _ => (version as u32) >= (JavaMinecraftVersion::V_26_1 as u32),
-        }
+    pub const fn is_valid_for_version(&self, _version: JavaMinecraftVersion) -> bool {
+        self.is_network_synced()
     }
     #[must_use]
     pub fn from_string(s: &str) -> Option<Self> {
@@ -112,7 +86,6 @@ impl RegistryKey {
             "block" => Some(Self::Block),
             "damage_type" => Some(Self::DamageType),
             "dialog" => Some(Self::Dialog),
-            "dimension_type" => Some(Self::DimensionType),
             "enchantment" => Some(Self::Enchantment),
             "entity_type" => Some(Self::EntityType),
             "fluid" => Some(Self::Fluid),
@@ -139,7 +112,6 @@ impl RegistryKey {
             Self::Block => "block",
             Self::DamageType => "damage_type",
             Self::Dialog => "dialog",
-            Self::DimensionType => "dimension_type",
             Self::Enchantment => "enchantment",
             Self::EntityType => "entity_type",
             Self::Fluid => "fluid",
@@ -30598,208 +30570,38 @@ pub mod WorldgenWorldPreset {
     );
 }
 static WORLDGENWORLDPRESET_TAGS: phf::Map<&'static str, &'static Tag> = phf::phf_map! { "minecraft:extended" => & WorldgenWorldPreset :: MINECRAFT_EXTENDED , "minecraft:normal" => & WorldgenWorldPreset :: MINECRAFT_NORMAL };
-#[allow(non_snake_case, unreachable_patterns)]
-const fn get_tags_V_1_13(
-    key: RegistryKey,
-) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
-    match key {
-        _ => None,
-    }
-}
-#[allow(non_snake_case, unreachable_patterns)]
-const fn get_tags_V_1_14(
-    key: RegistryKey,
-) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
-    match key {
-        _ => None,
-    }
-}
-#[allow(non_snake_case, unreachable_patterns)]
-const fn get_tags_V_1_15(
-    key: RegistryKey,
-) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
-    match key {
-        _ => None,
-    }
-}
-#[allow(non_snake_case, unreachable_patterns)]
-const fn get_tags_V_1_16(
-    key: RegistryKey,
-) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
-    match key {
-        _ => None,
-    }
-}
-#[allow(non_snake_case, unreachable_patterns)]
-const fn get_tags_V_1_16_2(
-    key: RegistryKey,
-) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
-    match key {
-        _ => None,
-    }
-}
-#[allow(non_snake_case, unreachable_patterns)]
-const fn get_tags_V_1_17(
-    key: RegistryKey,
-) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
-    match key {
-        _ => None,
-    }
-}
-#[allow(non_snake_case, unreachable_patterns)]
-const fn get_tags_V_1_18(
-    key: RegistryKey,
-) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
-    match key {
-        _ => None,
-    }
-}
-#[allow(non_snake_case, unreachable_patterns)]
-const fn get_tags_V_1_19(
-    key: RegistryKey,
-) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
-    match key {
-        _ => None,
-    }
-}
-#[allow(non_snake_case, unreachable_patterns)]
-const fn get_tags_V_1_20(
-    key: RegistryKey,
-) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
-    match key {
-        _ => None,
-    }
-}
-#[allow(non_snake_case, unreachable_patterns)]
-const fn get_tags_V_1_20_2(
-    key: RegistryKey,
-) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
-    match key {
-        _ => None,
-    }
-}
-#[allow(non_snake_case, unreachable_patterns)]
-const fn get_tags_V_1_21(
-    key: RegistryKey,
-) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
-    match key {
-        _ => None,
-    }
-}
-#[allow(non_snake_case, unreachable_patterns)]
-const fn get_tags_V_1_21_2(
-    key: RegistryKey,
-) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
-    match key {
-        _ => None,
-    }
-}
-#[allow(non_snake_case, unreachable_patterns)]
-const fn get_tags_V_1_21_4(
-    key: RegistryKey,
-) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
-    match key {
-        _ => None,
-    }
-}
-#[allow(non_snake_case, unreachable_patterns)]
-const fn get_tags_V_1_21_5(
-    key: RegistryKey,
-) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
-    match key {
-        _ => None,
-    }
-}
-#[allow(non_snake_case, unreachable_patterns)]
-const fn get_tags_V_1_21_6(
-    key: RegistryKey,
-) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
-    match key {
-        _ => None,
-    }
-}
-#[allow(non_snake_case, unreachable_patterns)]
-const fn get_tags_V_1_21_7(
-    key: RegistryKey,
-) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
-    match key {
-        _ => None,
-    }
-}
-#[allow(non_snake_case, unreachable_patterns)]
-const fn get_tags_V_1_21_9(
-    key: RegistryKey,
-) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
-    match key {
-        _ => None,
-    }
-}
-#[allow(non_snake_case, unreachable_patterns)]
-const fn get_tags_V_1_21_11(
-    key: RegistryKey,
-) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
-    match key {
-        _ => None,
-    }
-}
-#[allow(non_snake_case, unreachable_patterns)]
-const fn get_tags_V_26_1(
-    key: RegistryKey,
-) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
-    match key {
-        _ => None,
-    }
-}
-#[allow(non_snake_case, unreachable_patterns)]
-const fn get_tags_V_26_2(
-    key: RegistryKey,
-) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
-    match key {
-        _ => None,
-    }
-}
-#[allow(unreachable_patterns)]
 #[must_use]
-pub const fn get_latest_map(
-    key: RegistryKey,
-) -> Option<&'static phf::Map<&'static str, &'static Tag>> {
+pub const fn get_latest_map(key: RegistryKey) -> &'static phf::Map<&'static str, &'static Tag> {
     match key {
-        RegistryKey::BannerPattern => Some(&BANNERPATTERN_TAGS),
-        RegistryKey::Block => Some(&BLOCK_TAGS),
-        RegistryKey::DamageType => Some(&DAMAGETYPE_TAGS),
-        RegistryKey::Dialog => Some(&DIALOG_TAGS),
-        RegistryKey::Enchantment => Some(&ENCHANTMENT_TAGS),
-        RegistryKey::EntityType => Some(&ENTITYTYPE_TAGS),
-        RegistryKey::Fluid => Some(&FLUID_TAGS),
-        RegistryKey::GameEvent => Some(&GAMEEVENT_TAGS),
-        RegistryKey::Instrument => Some(&INSTRUMENT_TAGS),
-        RegistryKey::Item => Some(&ITEM_TAGS),
-        RegistryKey::PaintingVariant => Some(&PAINTINGVARIANT_TAGS),
-        RegistryKey::PointOfInterestType => Some(&POINTOFINTERESTTYPE_TAGS),
-        RegistryKey::Potion => Some(&POTION_TAGS),
-        RegistryKey::Timeline => Some(&TIMELINE_TAGS),
-        RegistryKey::VillagerTrade => Some(&VILLAGERTRADE_TAGS),
-        RegistryKey::WorldgenBiome => Some(&WORLDGENBIOME_TAGS),
-        RegistryKey::WorldgenConfiguredFeature => Some(&WORLDGENCONFIGUREDFEATURE_TAGS),
-        RegistryKey::WorldgenFlatLevelGeneratorPreset => {
-            Some(&WORLDGENFLATLEVELGENERATORPRESET_TAGS)
-        }
-        RegistryKey::WorldgenStructure => Some(&WORLDGENSTRUCTURE_TAGS),
-        RegistryKey::WorldgenWorldPreset => Some(&WORLDGENWORLDPRESET_TAGS),
-        _ => None,
+        RegistryKey::BannerPattern => &BANNERPATTERN_TAGS,
+        RegistryKey::Block => &BLOCK_TAGS,
+        RegistryKey::DamageType => &DAMAGETYPE_TAGS,
+        RegistryKey::Dialog => &DIALOG_TAGS,
+        RegistryKey::Enchantment => &ENCHANTMENT_TAGS,
+        RegistryKey::EntityType => &ENTITYTYPE_TAGS,
+        RegistryKey::Fluid => &FLUID_TAGS,
+        RegistryKey::GameEvent => &GAMEEVENT_TAGS,
+        RegistryKey::Instrument => &INSTRUMENT_TAGS,
+        RegistryKey::Item => &ITEM_TAGS,
+        RegistryKey::PaintingVariant => &PAINTINGVARIANT_TAGS,
+        RegistryKey::PointOfInterestType => &POINTOFINTERESTTYPE_TAGS,
+        RegistryKey::Potion => &POTION_TAGS,
+        RegistryKey::Timeline => &TIMELINE_TAGS,
+        RegistryKey::VillagerTrade => &VILLAGERTRADE_TAGS,
+        RegistryKey::WorldgenBiome => &WORLDGENBIOME_TAGS,
+        RegistryKey::WorldgenConfiguredFeature => &WORLDGENCONFIGUREDFEATURE_TAGS,
+        RegistryKey::WorldgenFlatLevelGeneratorPreset => &WORLDGENFLATLEVELGENERATORPRESET_TAGS,
+        RegistryKey::WorldgenStructure => &WORLDGENSTRUCTURE_TAGS,
+        RegistryKey::WorldgenWorldPreset => &WORLDGENWORLDPRESET_TAGS,
     }
 }
 #[must_use]
 pub fn get_tag_values(tag_category: RegistryKey, tag: &str) -> Option<&'static [&'static str]> {
-    get_latest_map(tag_category)
-        .and_then(|m| m.get(tag))
-        .map(|t| t.0)
+    get_latest_map(tag_category).get(tag).map(|t| t.0)
 }
 #[must_use]
 pub fn get_tag_ids(tag_category: RegistryKey, tag: &str) -> Option<&'static [u16]> {
-    get_latest_map(tag_category)
-        .and_then(|m| m.get(tag))
-        .map(|t| t.1)
+    get_latest_map(tag_category).get(tag).map(|t| t.1)
 }
 #[must_use]
 pub const fn get_registry_key_tags(
@@ -30809,48 +30611,7 @@ pub const fn get_registry_key_tags(
     if !tag_category.is_valid_for_version(version) {
         return None;
     }
-    match version {
-        JavaMinecraftVersion::V_1_13 => get_tags_V_1_13(tag_category),
-        JavaMinecraftVersion::V_1_13_1 => get_tags_V_1_13(tag_category),
-        JavaMinecraftVersion::V_1_13_2 => get_tags_V_1_13(tag_category),
-        JavaMinecraftVersion::V_1_14 => get_tags_V_1_14(tag_category),
-        JavaMinecraftVersion::V_1_14_1 => get_tags_V_1_14(tag_category),
-        JavaMinecraftVersion::V_1_14_2 => get_tags_V_1_14(tag_category),
-        JavaMinecraftVersion::V_1_14_3 => get_tags_V_1_14(tag_category),
-        JavaMinecraftVersion::V_1_14_4 => get_tags_V_1_14(tag_category),
-        JavaMinecraftVersion::V_1_15 => get_tags_V_1_15(tag_category),
-        JavaMinecraftVersion::V_1_15_1 => get_tags_V_1_15(tag_category),
-        JavaMinecraftVersion::V_1_15_2 => get_tags_V_1_15(tag_category),
-        JavaMinecraftVersion::V_1_16 => get_tags_V_1_16(tag_category),
-        JavaMinecraftVersion::V_1_16_1 => get_tags_V_1_16(tag_category),
-        JavaMinecraftVersion::V_1_16_2 => get_tags_V_1_16_2(tag_category),
-        JavaMinecraftVersion::V_1_16_3 => get_tags_V_1_16_2(tag_category),
-        JavaMinecraftVersion::V_1_16_4 => get_tags_V_1_16_2(tag_category),
-        JavaMinecraftVersion::V_1_17 => get_tags_V_1_17(tag_category),
-        JavaMinecraftVersion::V_1_17_1 => get_tags_V_1_17(tag_category),
-        JavaMinecraftVersion::V_1_18 => get_tags_V_1_18(tag_category),
-        JavaMinecraftVersion::V_1_18_2 => get_tags_V_1_18(tag_category),
-        JavaMinecraftVersion::V_1_19 => get_tags_V_1_19(tag_category),
-        JavaMinecraftVersion::V_1_19_1 => get_tags_V_1_19(tag_category),
-        JavaMinecraftVersion::V_1_19_3 => get_tags_V_1_19(tag_category),
-        JavaMinecraftVersion::V_1_19_4 => get_tags_V_1_20(tag_category),
-        JavaMinecraftVersion::V_1_20 => get_tags_V_1_20(tag_category),
-        JavaMinecraftVersion::V_1_20_2 => get_tags_V_1_20_2(tag_category),
-        JavaMinecraftVersion::V_1_20_3 => get_tags_V_1_20_2(tag_category),
-        JavaMinecraftVersion::V_1_20_5 => get_tags_V_1_21(tag_category),
-        JavaMinecraftVersion::V_1_21 => get_tags_V_1_21(tag_category),
-        JavaMinecraftVersion::V_1_21_2 => get_tags_V_1_21_2(tag_category),
-        JavaMinecraftVersion::V_1_21_4 => get_tags_V_1_21_4(tag_category),
-        JavaMinecraftVersion::V_1_21_5 => get_tags_V_1_21_5(tag_category),
-        JavaMinecraftVersion::V_1_21_6 => get_tags_V_1_21_6(tag_category),
-        JavaMinecraftVersion::V_1_21_7 => get_tags_V_1_21_7(tag_category),
-        JavaMinecraftVersion::V_1_21_9 => get_tags_V_1_21_9(tag_category),
-        JavaMinecraftVersion::V_1_21_11 => get_tags_V_1_21_11(tag_category),
-        JavaMinecraftVersion::V_26_1 => get_tags_V_26_1(tag_category),
-        JavaMinecraftVersion::V_26_2 => get_tags_V_26_2(tag_category),
-        JavaMinecraftVersion::V_26_3 => get_latest_map(tag_category),
-        _ => get_latest_map(tag_category),
-    }
+    Some(get_latest_map(tag_category))
 }
 pub trait Taggable {
     fn tag_key() -> RegistryKey;

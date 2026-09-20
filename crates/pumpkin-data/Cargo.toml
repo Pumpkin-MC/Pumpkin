@@ -37,11 +37,9 @@ default = [
     "noise_router",
     "composter",
     "flower_pot",
-    "fuels",
     "effect",
     "structures",
     "potion",
-    "recipe_remainder",
     "material_rule",
     "noise_settings",
     "advancement",
@@ -96,11 +94,9 @@ tag = []
 noise_router = []
 composter = []
 flower_pot = []
-fuels = []
 effect = []
 structures = []
 potion = ["potion_brewing"]
-recipe_remainder = []
 material_rule = []
 noise_settings = []
 chunk_gen_settings = ["noise_settings", "material_rule"]
