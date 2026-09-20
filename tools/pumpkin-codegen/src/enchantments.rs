@@ -21,6 +21,10 @@ pub struct Enchantment {
     pub description: TextComponent,
     /// Optional exclusive-set tag; enchantments in the same set are mutually incompatible.
     pub exclusive_set: Option<String>,
+    /// Optional tag of the items this enchantment is offered on. Narrower than
+    /// `supported_items`, which stays the set the enchantment may be applied to at all:
+    /// sharpness supports every sharp weapon but is only offered on melee ones.
+    pub primary_items: Option<String>,
     /// Maximum level this enchantment can reach.
     pub max_level: i32,
     /// Equipment slots this enchantment's attribute modifiers apply to.
@@ -1147,63 +1151,59 @@ pub fn build() -> TokenStream {
             }
         };
 
-        if let Some(exclusive_set) = &enchantment.exclusive_set {
-            let exclusive_set = format_ident!(
-                "{}",
-                exclusive_set
-                    .strip_prefix("#")
-                    .unwrap()
-                    .replace([':', '/'], "_")
-                    .to_uppercase()
-            );
-            variants.extend([quote! {
-                pub const #format_name: Self = Self {
-                    id: #id,
-                    name: #name,
-                    registry_key: #raw_name,
-                    description: #translate,
-                    anvil_cost: #anvil_cost,
-                    supported_items: &ItemTag::#supported_items,
-                    exclusive_set: Some(&EnchantmentTag::#exclusive_set),
-                    max_level: #max_level,
-                    slots: &[#(#slots),*],
-                    weight: #weight,
-                    min_cost: Cost {
-                        base: #min_cost_base,
-                        per_level_above_first: #min_cost_per_level,
-                    },
-                    max_cost: Cost {
-                        base: #max_cost_base,
-                        per_level_above_first: #max_cost_per_level,
-                    },
-                    effects: #effects_tokens,
-                };
-            }]);
-        } else {
-            variants.extend([quote! {
-                pub const #format_name: Self = Self {
-                    id: #id,
-                    name: #name,
-                    description: #translate,
-                    registry_key: #raw_name,
-                    anvil_cost: #anvil_cost,
-                    supported_items: &ItemTag::#supported_items,
-                    exclusive_set: None,
-                    max_level: #max_level,
-                    slots: &[#(#slots),*],
-                    weight: #weight,
-                    min_cost: Cost {
-                        base: #min_cost_base,
-                        per_level_above_first: #min_cost_per_level,
-                    },
-                    max_cost: Cost {
-                        base: #max_cost_base,
-                        per_level_above_first: #max_cost_per_level,
-                    },
-                    effects: #effects_tokens,
-                };
-            }]);
-        }
+        let exclusive_set_value = enchantment.exclusive_set.as_ref().map_or_else(
+            || quote! { None },
+            |exclusive_set| {
+                let tag = format_ident!(
+                    "{}",
+                    exclusive_set
+                        .strip_prefix("#")
+                        .unwrap()
+                        .replace([':', '/'], "_")
+                        .to_uppercase()
+                );
+                quote! { Some(&EnchantmentTag::#tag) }
+            },
+        );
+        let primary_items_value = enchantment.primary_items.as_ref().map_or_else(
+            || quote! { None },
+            |primary_items| {
+                let tag = format_ident!(
+                    "{}",
+                    primary_items
+                        .strip_prefix("#")
+                        .unwrap()
+                        .replace([':', '/'], "_")
+                        .to_uppercase()
+                );
+                quote! { Some(&ItemTag::#tag) }
+            },
+        );
+
+        variants.extend([quote! {
+            pub const #format_name: Self = Self {
+                id: #id,
+                name: #name,
+                registry_key: #raw_name,
+                description: #translate,
+                anvil_cost: #anvil_cost,
+                supported_items: &ItemTag::#supported_items,
+                primary_items: #primary_items_value,
+                exclusive_set: #exclusive_set_value,
+                max_level: #max_level,
+                slots: &[#(#slots),*],
+                weight: #weight,
+                min_cost: Cost {
+                    base: #min_cost_base,
+                    per_level_above_first: #min_cost_per_level,
+                },
+                max_cost: Cost {
+                    base: #max_cost_base,
+                    per_level_above_first: #max_cost_per_level,
+                },
+                effects: #effects_tokens,
+            };
+        }]);
 
         name_to_type.extend(quote! { #name | #raw_name => Some(&Self::#format_name), });
         id_to_type.extend(quote! { #id => Some(&Self::#format_name), });
@@ -1591,6 +1591,9 @@ pub fn build() -> TokenStream {
             pub description: &'static str, // TODO use TextComponent
             pub anvil_cost: u32,
             pub supported_items: &'static Tag,
+            /// Items this enchantment is offered on, when that is narrower than
+            /// `supported_items`. `None` means every supported item is also a primary one.
+            pub primary_items: Option<&'static Tag>,
             pub exclusive_set: Option<&'static Tag>,
             pub max_level: i32,
             pub slots: &'static [AttributeModifierSlot],
