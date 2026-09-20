@@ -245,6 +245,11 @@ pub trait EntityBase: Send + Sync + std::any::Any {
         0.0
     }
 
+    /// Extra entities (e.g. multipart-mob hitboxes) removed together with this one.
+    fn get_owned_entities(&self) -> Vec<Arc<dyn EntityBase>> {
+        Vec::new()
+    }
+
     fn get_mob(&self) -> Option<&dyn mob::Mob> {
         None
     }

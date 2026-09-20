@@ -869,6 +869,13 @@ impl Mob for EnderDragonEntity {
     fn get_mob_gravity(&self) -> f64 {
         0.0
     }
+
+    fn get_owned_entities(&self) -> Vec<Arc<dyn EntityBase>> {
+        self.parts
+            .iter()
+            .map(|part| part.clone() as Arc<dyn EntityBase>)
+            .collect()
+    }
 }
 
 pub trait Vector3Ext {

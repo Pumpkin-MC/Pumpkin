@@ -5128,6 +5128,10 @@ impl World {
             new_entities.retain(|e| e.get_entity().entity_uuid != base_entity.entity_uuid);
             new_entities
         });
+
+        for owned in entity.get_owned_entities() {
+            self.remove_entity(owned.as_ref());
+        }
     }
 
     pub async fn remove_entities_in_chunks(
