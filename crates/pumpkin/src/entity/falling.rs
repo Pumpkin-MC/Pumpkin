@@ -1,8 +1,11 @@
 use pumpkin_data::Block;
+use pumpkin_data::BlockId;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::damage::DamageType;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_data::tag::{self, Taggable};
+use pumpkin_data::world::WorldEvent;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_world::world::BlockFlags;
 use std::sync::{Arc, atomic::Ordering};
@@ -62,6 +65,20 @@ impl EntityBase for FallingEntity {
             let landing_pos = self.entity.block_pos.load();
             let mut state_id = self.block_state_id;
             let block = Block::from_state_id(state_id);
+
+            if shatters_on_landing(block) {
+                world.sync_world_event(
+                    WorldEvent::ParticlesDestroyBlock,
+                    landing_pos,
+                    i32::from(state_id.as_u16()),
+                );
+                if let Some(sound) = shatter_sound(block) {
+                    world.play_sound(sound, SoundCategory::Blocks, &landing_pos.to_f64());
+                }
+                self.entity.remove();
+                return;
+            }
+
             if block.has_tag(&tag::Block::MINECRAFT_CONCRETE_POWDERS)
                 && FallingBlock::should_solidify(&**world, &landing_pos)
                 && let Some(name) = block.name.strip_suffix("_powder")
@@ -105,5 +122,51 @@ impl EntityBase for FallingEntity {
 
     fn cast_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+fn shatters_on_landing(block: &Block) -> bool {
+    block.id == BlockId::SUSPICIOUS_SAND || block.id == BlockId::SUSPICIOUS_GRAVEL
+}
+
+fn shatter_sound(block: &Block) -> Option<Sound> {
+    if block.id == BlockId::SUSPICIOUS_SAND {
+        Some(Sound::BlockSuspiciousSandBreak)
+    } else if block.id == BlockId::SUSPICIOUS_GRAVEL {
+        Some(Sound::BlockSuspiciousGravelBreak)
+    } else {
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn suspicious_blocks_shatter_with_their_sound() {
+        assert!(shatters_on_landing(&Block::SUSPICIOUS_SAND));
+        assert!(shatters_on_landing(&Block::SUSPICIOUS_GRAVEL));
+        assert_eq!(
+            shatter_sound(&Block::SUSPICIOUS_SAND),
+            Some(Sound::BlockSuspiciousSandBreak)
+        );
+        assert_eq!(
+            shatter_sound(&Block::SUSPICIOUS_GRAVEL),
+            Some(Sound::BlockSuspiciousGravelBreak)
+        );
+    }
+
+    #[test]
+    fn ordinary_falling_blocks_place_themselves() {
+        for block in [
+            &Block::SAND,
+            &Block::GRAVEL,
+            &Block::RED_SAND,
+            &Block::WHITE_CONCRETE_POWDER,
+        ] {
+            assert!(!shatters_on_landing(block));
+            assert_eq!(shatter_sound(block), None);
+        }
     }
 }
