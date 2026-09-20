@@ -1,8 +1,14 @@
 use std::sync::{Arc, Weak};
 
+use crate::enchantment::provider::enchant_from_provider;
+use crate::world::raid::Raid;
+use pumpkin_data::EnchantmentProvider;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::Difficulty;
 
 use crate::entity::{
     Entity,
@@ -115,6 +121,23 @@ impl PatrollingMonster for VindicatorEntity {
 }
 
 impl Raider for VindicatorEntity {
+    /// Vanilla's `Vindicator.applyRaidBuffs`: always an iron axe, enchanted when the roll
+    /// against the raid's odds comes off. The stronger provider takes over past the wave
+    /// count a normal-difficulty raid would have.
+    fn apply_raid_buffs(&self, wave: i32, _is_captain: bool, enchant_odds: f32) {
+        let mut axe = ItemStack::new(1, &Item::IRON_AXE);
+        let mut rng = rand::rng();
+        if rand::RngExt::random::<f32>(&mut rng) <= enchant_odds {
+            let provider = if wave > Raid::get_num_groups(Difficulty::Normal) {
+                &EnchantmentProvider::RAID_VINDICATOR_POST_WAVE_5
+            } else {
+                &EnchantmentProvider::RAID_VINDICATOR
+            };
+            enchant_from_provider(&mut rng, &mut axe, provider, 0.0);
+        }
+        self.equip_main_hand(axe);
+    }
+
     fn get_raider_data(&self) -> &RaiderData {
         &self.raider_data
     }

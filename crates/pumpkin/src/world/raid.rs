@@ -139,6 +139,21 @@ impl Raid {
         }
     }
 
+    /// How likely a raider's equipment is to come enchanted, by raid omen level.
+    ///
+    /// Mirrors vanilla's `Raid.getEnchantOdds`: nothing below omen level 2, then a quarter
+    /// of the way up for each level after it.
+    #[must_use]
+    pub const fn get_enchant_odds(&self) -> f32 {
+        match self.raid_omen_level {
+            2 => 0.1,
+            3 => 0.25,
+            4 => 0.5,
+            5 => 0.75,
+            _ => 0.0,
+        }
+    }
+
     #[must_use]
     pub const fn get_num_groups(difficulty: Difficulty) -> i32 {
         match difficulty {
@@ -354,7 +369,7 @@ impl Raid {
                     }
                     raider.set_wave(group_number);
                     raider.set_can_join_raid(true);
-                    raider.apply_raid_buffs(group_number, false);
+                    raider.apply_raid_buffs(group_number, false, self.get_enchant_odds());
                 }
 
                 self.join_raid(group_number, uuid, &entity_base);
@@ -381,7 +396,7 @@ impl Raid {
                         {
                             raider.set_wave(group_number);
                             raider.set_can_join_raid(true);
-                            raider.apply_raid_buffs(group_number, false);
+                            raider.apply_raid_buffs(group_number, false, self.get_enchant_odds());
                         }
                         self.join_raid(group_number, rider_uuid, &rider_base);
                         world.spawn_entity_non_save(rider_base);
@@ -747,5 +762,41 @@ impl Raids {
                 raid.remove_all_players(world);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Raid;
+    use pumpkin_util::Difficulty;
+    use pumpkin_util::math::position::BlockPos;
+
+    fn raid_at_omen_level(level: i32) -> Raid {
+        let mut raid = Raid::new(0, BlockPos::new(0, 0, 0), Difficulty::Normal);
+        raid.set_raid_omen_level(level);
+        raid
+    }
+
+    #[test]
+    fn enchant_odds_follow_the_raid_omen_level() {
+        // Vanilla's table. Level 1 is the ordinary raid and gives nothing away for free;
+        // everything above it is a quarter of the way further up.
+        for (omen_level, expected) in [(0, 0.0), (1, 0.0), (2, 0.1), (3, 0.25), (4, 0.5), (5, 0.75)]
+        {
+            assert!(
+                (raid_at_omen_level(omen_level).get_enchant_odds() - expected).abs() < f32::EPSILON,
+                "omen level {omen_level} should give odds of {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_wave_thresholds_raiders_check_are_three_and_five() {
+        // `apply_raid_buffs` picks a provider by comparing the wave against these, so they
+        // are what decides when raiders start arriving with better gear.
+        assert_eq!(Raid::get_num_groups(Difficulty::Easy), 3);
+        assert_eq!(Raid::get_num_groups(Difficulty::Normal), 5);
+        assert_eq!(Raid::get_num_groups(Difficulty::Hard), 7);
+        assert_eq!(Raid::get_num_groups(Difficulty::Peaceful), 0);
     }
 }

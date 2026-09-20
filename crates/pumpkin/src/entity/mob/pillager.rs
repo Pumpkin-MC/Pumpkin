@@ -3,12 +3,17 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
+use crate::enchantment::provider::enchant_from_provider;
+use crate::world::raid::Raid;
+use pumpkin_data::EnchantmentProvider;
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::sound::Sound;
 use pumpkin_data::tracked_data;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
+use pumpkin_util::Difficulty;
 
 use crate::entity::{
     Entity, EntityBase,
@@ -224,6 +229,27 @@ impl PatrollingMonster for PillagerEntity {
 }
 
 impl Raider for PillagerEntity {
+    /// Vanilla's `Pillager.applyRaidBuffs`: a crossbow, but only handed over when the roll
+    /// against the raid's odds comes off *and* the wave is far enough in for a provider to
+    /// exist. Early waves leave the pillager with the crossbow it spawned with.
+    fn apply_raid_buffs(&self, wave: i32, _is_captain: bool, enchant_odds: f32) {
+        let mut rng = rand::rng();
+        if rand::RngExt::random::<f32>(&mut rng) > enchant_odds {
+            return;
+        }
+        let provider = if wave > Raid::get_num_groups(Difficulty::Normal) {
+            &EnchantmentProvider::RAID_PILLAGER_POST_WAVE_5
+        } else if wave > Raid::get_num_groups(Difficulty::Easy) {
+            &EnchantmentProvider::RAID_PILLAGER_POST_WAVE_3
+        } else {
+            return;
+        };
+
+        let mut crossbow = ItemStack::new(1, &Item::CROSSBOW);
+        enchant_from_provider(&mut rng, &mut crossbow, provider, 0.0);
+        self.equip_main_hand(crossbow);
+    }
+
     fn get_raider_data(&self) -> &RaiderData {
         &self.raider_data
     }

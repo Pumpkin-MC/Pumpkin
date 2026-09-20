@@ -105,7 +105,22 @@ pub trait Raider: PatrollingMonster {
 
     fn get_celebrate_sound(&self) -> Sound;
 
-    fn apply_raid_buffs(&self, _wave: i32, _is_captain: bool) {}
+    /// Gives this raider the equipment its wave of the raid calls for.
+    ///
+    /// `enchant_odds` is the raid's, from `Raid::get_enchant_odds`, and is the chance the
+    /// equipment comes enchanted. Most raider types have nothing to do here -- vanilla
+    /// leaves the ravager, evoker, witch and illusioner overrides empty -- so the default
+    /// is to do nothing.
+    fn apply_raid_buffs(&self, _wave: i32, _is_captain: bool, _enchant_odds: f32) {}
+
+    /// Puts `stack` in this raider's main hand and tells watchers about it.
+    fn equip_main_hand(&self, stack: ItemStack) {
+        let living = &self.get_mob_entity().living_entity;
+        if let Ok(mut equipment) = living.entity_equipment.try_lock() {
+            equipment.put(&EquipmentSlot::MAIN_HAND, stack.clone());
+        }
+        living.send_equipment_changes(&[(EquipmentSlot::MAIN_HAND, stack)]);
+    }
 
     fn write_raider_nbt(&self, nbt: &mut NbtCompound) {
         self.write_patrol_nbt(nbt);
