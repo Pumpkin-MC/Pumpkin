@@ -1,0 +1,21 @@
+{
+  "assets": {
+    "angry": "minecraft:entity/wolf/wolf_snowy_angry",
+    "tame": "minecraft:entity/wolf/wolf_snowy_tame",
+    "wild": "minecraft:entity/wolf/wolf_snowy"
+  },
+  "baby_assets": {
+    "angry": "minecraft:entity/wolf/wolf_snowy_angry_baby",
+    "tame": "minecraft:entity/wolf/wolf_snowy_tame_baby",
+    "wild": "minecraft:entity/wolf/wolf_snowy_baby"
+  },
+  "spawn_conditions": [
+    {
+      "condition": {
+        "type": "minecraft:biome",
+        "biomes": "minecraft:grove"
+      },
+      "priority": 1
+    }
+  ]
+}

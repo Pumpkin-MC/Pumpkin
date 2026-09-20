@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:randomized_int",
+  "property": "age",
+  "source": {
+    "id": "minecraft:mangrove_propagule",
+    "properties": {
+      "age": "0",
+      "hanging": "true",
+      "stage": "0",
+      "waterlogged": "false"
+    }
+  },
+  "values": {
+    "type": "minecraft:uniform",
+    "max_inclusive": 4,
+    "min_inclusive": 0
+  }
+}

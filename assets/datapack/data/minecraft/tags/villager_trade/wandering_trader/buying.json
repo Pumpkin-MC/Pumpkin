@@ -1,0 +1,10 @@
+{
+  "values": [
+    "minecraft:wandering_trader/water_bottle_emerald",
+    "minecraft:wandering_trader/water_bucket_emerald",
+    "minecraft:wandering_trader/milk_bucket_emerald",
+    "minecraft:wandering_trader/fermented_spider_eye_emerald",
+    "minecraft:wandering_trader/baked_potato_emerald",
+    "minecraft:wandering_trader/hay_block_emerald"
+  ]
+}

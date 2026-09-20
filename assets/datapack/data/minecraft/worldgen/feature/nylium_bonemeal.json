@@ -1,0 +1,382 @@
+{
+  "type": "minecraft:overlay",
+  "features": [
+    {
+      "feature": {
+        "type": "minecraft:overlay",
+        "features": {
+          "feature": {
+            "type": "minecraft:simple_block",
+            "to_place": {
+              "type": "minecraft:weighted",
+              "entries": [
+                {
+                  "data": "minecraft:crimson_roots",
+                  "weight": 87
+                },
+                {
+                  "data": "minecraft:crimson_fungus",
+                  "weight": 11
+                },
+                {
+                  "data": "minecraft:warped_fungus",
+                  "weight": 1
+                }
+              ]
+            }
+          },
+          "placement": [
+            {
+              "type": "minecraft:count",
+              "count": 9
+            },
+            {
+              "type": "minecraft:offset",
+              "x": {
+                "type": "minecraft:trapezoid",
+                "max": 2,
+                "min": -2,
+                "plateau": 0
+              },
+              "y": {
+                "type": "minecraft:trapezoid",
+                "max": 0,
+                "min": 0,
+                "plateau": 0
+              },
+              "z": {
+                "type": "minecraft:trapezoid",
+                "max": 2,
+                "min": -2,
+                "plateau": 0
+              }
+            },
+            {
+              "type": "minecraft:block_predicate_filter",
+              "predicate": {
+                "type": "minecraft:matching_block_tag",
+                "tag": "minecraft:air"
+              }
+            }
+          ]
+        }
+      },
+      "placement": [
+        {
+          "type": "minecraft:block_predicate_filter",
+          "predicate": {
+            "type": "minecraft:matching_blocks",
+            "blocks": "minecraft:crimson_nylium",
+            "offset": [
+              0,
+              -1,
+              0
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "feature": {
+        "type": "minecraft:overlay",
+        "features": [
+          {
+            "feature": {
+              "type": "minecraft:simple_block",
+              "to_place": {
+                "type": "minecraft:weighted",
+                "entries": [
+                  {
+                    "data": "minecraft:warped_roots",
+                    "weight": 85
+                  },
+                  {
+                    "data": "minecraft:crimson_roots",
+                    "weight": 1
+                  },
+                  {
+                    "data": "minecraft:warped_fungus",
+                    "weight": 13
+                  },
+                  {
+                    "data": "minecraft:crimson_fungus",
+                    "weight": 1
+                  }
+                ]
+              }
+            },
+            "placement": [
+              {
+                "type": "minecraft:count",
+                "count": 9
+              },
+              {
+                "type": "minecraft:offset",
+                "x": {
+                  "type": "minecraft:trapezoid",
+                  "max": 2,
+                  "min": -2,
+                  "plateau": 0
+                },
+                "y": {
+                  "type": "minecraft:trapezoid",
+                  "max": 0,
+                  "min": 0,
+                  "plateau": 0
+                },
+                "z": {
+                  "type": "minecraft:trapezoid",
+                  "max": 2,
+                  "min": -2,
+                  "plateau": 0
+                }
+              },
+              {
+                "type": "minecraft:block_predicate_filter",
+                "predicate": {
+                  "type": "minecraft:matching_block_tag",
+                  "tag": "minecraft:air"
+                }
+              }
+            ]
+          },
+          {
+            "feature": {
+              "type": "minecraft:simple_block",
+              "to_place": {
+                "id": "minecraft:nether_sprouts"
+              }
+            },
+            "placement": [
+              {
+                "type": "minecraft:count",
+                "count": 9
+              },
+              {
+                "type": "minecraft:offset",
+                "x": {
+                  "type": "minecraft:trapezoid",
+                  "max": 2,
+                  "min": -2,
+                  "plateau": 0
+                },
+                "y": {
+                  "type": "minecraft:trapezoid",
+                  "max": 0,
+                  "min": 0,
+                  "plateau": 0
+                },
+                "z": {
+                  "type": "minecraft:trapezoid",
+                  "max": 2,
+                  "min": -2,
+                  "plateau": 0
+                }
+              },
+              {
+                "type": "minecraft:block_predicate_filter",
+                "predicate": {
+                  "type": "minecraft:matching_block_tag",
+                  "tag": "minecraft:air"
+                }
+              }
+            ]
+          },
+          {
+            "feature": {
+              "type": "minecraft:weighted_random_selector",
+              "features": [
+                {
+                  "data": {
+                    "feature": {
+                      "type": "minecraft:block_column",
+                      "allowed_placement": {
+                        "type": "minecraft:matching_block_tag",
+                        "tag": "minecraft:air"
+                      },
+                      "direction": "up",
+                      "layers": [
+                        {
+                          "height": {
+                            "type": "minecraft:weighted_list",
+                            "distribution": [
+                              {
+                                "data": {
+                                  "type": "minecraft:uniform",
+                                  "max_inclusive": 1,
+                                  "min_inclusive": 0
+                                },
+                                "weight": 10
+                              },
+                              {
+                                "data": {
+                                  "type": "minecraft:uniform",
+                                  "max_inclusive": 3,
+                                  "min_inclusive": 1
+                                },
+                                "weight": 2
+                              },
+                              {
+                                "data": 0,
+                                "weight": 3
+                              }
+                            ]
+                          },
+                          "provider": {
+                            "id": "minecraft:twisting_vines_plant"
+                          }
+                        },
+                        {
+                          "height": 1,
+                          "provider": {
+                            "type": "minecraft:randomized_int",
+                            "property": "age",
+                            "source": {
+                              "id": "minecraft:twisting_vines",
+                              "properties": {
+                                "age": "0"
+                              }
+                            },
+                            "values": {
+                              "type": "minecraft:uniform",
+                              "max_inclusive": 25,
+                              "min_inclusive": 17
+                            }
+                          }
+                        }
+                      ],
+                      "prioritize_tip": true
+                    },
+                    "placement": [
+                      {
+                        "type": "minecraft:block_predicate_filter",
+                        "predicate": {
+                          "type": "minecraft:all_of",
+                          "predicates": [
+                            {
+                              "type": "minecraft:matching_block_tag",
+                              "tag": "minecraft:air"
+                            },
+                            {
+                              "type": "minecraft:matching_blocks",
+                              "blocks": [
+                                "minecraft:netherrack",
+                                "minecraft:warped_nylium",
+                                "minecraft:warped_wart_block"
+                              ],
+                              "offset": [
+                                0,
+                                -1,
+                                0
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "type": "minecraft:count",
+                        "count": 9
+                      },
+                      {
+                        "type": "minecraft:offset",
+                        "x": {
+                          "type": "minecraft:uniform",
+                          "max_inclusive": 3,
+                          "min_inclusive": -3
+                        },
+                        "y": {
+                          "type": "minecraft:uniform",
+                          "max_inclusive": 1,
+                          "min_inclusive": -1
+                        },
+                        "z": {
+                          "type": "minecraft:uniform",
+                          "max_inclusive": 3,
+                          "min_inclusive": -3
+                        }
+                      },
+                      {
+                        "type": "minecraft:offset",
+                        "x": 0,
+                        "y": -1,
+                        "z": 0
+                      },
+                      {
+                        "type": "minecraft:environment_scan",
+                        "direction_of_search": "down",
+                        "max_steps": 32,
+                        "target_condition": {
+                          "type": "minecraft:not",
+                          "predicate": {
+                            "type": "minecraft:matching_block_tag",
+                            "tag": "minecraft:air"
+                          }
+                        }
+                      },
+                      {
+                        "type": "minecraft:offset",
+                        "x": 0,
+                        "y": 1,
+                        "z": 0
+                      },
+                      {
+                        "type": "minecraft:block_predicate_filter",
+                        "predicate": {
+                          "type": "minecraft:all_of",
+                          "predicates": [
+                            {
+                              "type": "minecraft:matching_block_tag",
+                              "tag": "minecraft:air"
+                            },
+                            {
+                              "type": "minecraft:matching_blocks",
+                              "blocks": [
+                                "minecraft:netherrack",
+                                "minecraft:warped_nylium",
+                                "minecraft:warped_wart_block"
+                              ],
+                              "offset": [
+                                0,
+                                -1,
+                                0
+                              ]
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "weight": 1
+                },
+                {
+                  "data": {
+                    "feature": {
+                      "type": "minecraft:no_op"
+                    },
+                    "placement": []
+                  },
+                  "weight": 7
+                }
+              ]
+            },
+            "placement": []
+          }
+        ]
+      },
+      "placement": [
+        {
+          "type": "minecraft:block_predicate_filter",
+          "predicate": {
+            "type": "minecraft:matching_blocks",
+            "blocks": "minecraft:warped_nylium",
+            "offset": [
+              0,
+              -1,
+              0
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

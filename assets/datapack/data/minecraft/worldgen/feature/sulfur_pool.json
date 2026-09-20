@@ -1,0 +1,76 @@
+{
+  "type": "minecraft:sequence",
+  "features": [
+    {
+      "feature": {
+        "type": "minecraft:lake",
+        "barrier": {
+          "id": "minecraft:sulfur"
+        },
+        "can_place_feature": {
+          "type": "minecraft:not",
+          "predicate": {
+            "type": "minecraft:matching_blocks",
+            "blocks": "minecraft:sulfur_spike"
+          }
+        },
+        "can_replace_with_air_or_fluid": {
+          "type": "minecraft:not",
+          "predicate": {
+            "type": "minecraft:matching_block_tag",
+            "tag": "minecraft:features_cannot_replace"
+          }
+        },
+        "can_replace_with_barrier": {
+          "type": "minecraft:not",
+          "predicate": {
+            "type": "minecraft:matching_block_tag",
+            "tag": "minecraft:lava_pool_stone_cannot_replace"
+          }
+        },
+        "fluid": {
+          "id": "minecraft:water",
+          "properties": {
+            "level": "0"
+          }
+        }
+      },
+      "placement": []
+    },
+    {
+      "feature": {
+        "type": "minecraft:simple_block",
+        "to_place": {
+          "id": "minecraft:potent_sulfur",
+          "properties": {
+            "potent_sulfur_state": "wet"
+          }
+        }
+      },
+      "placement": [
+        {
+          "type": "minecraft:environment_scan",
+          "direction_of_search": "down",
+          "max_steps": 4,
+          "target_condition": {
+            "type": "minecraft:all_of",
+            "predicates": [
+              {
+                "type": "minecraft:solid"
+              },
+              {
+                "type": "minecraft:matching_fluids",
+                "fluids": "minecraft:water",
+                "offset": [
+                  0,
+                  1,
+                  0
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

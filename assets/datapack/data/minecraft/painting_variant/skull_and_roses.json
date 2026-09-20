@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:skull_and_roses",
+  "author": {
+    "color": "gray",
+    "translate": "painting.minecraft.skull_and_roses.author"
+  },
+  "height": 2,
+  "title": {
+    "color": "yellow",
+    "translate": "painting.minecraft.skull_and_roses.title"
+  },
+  "width": 2
+}
