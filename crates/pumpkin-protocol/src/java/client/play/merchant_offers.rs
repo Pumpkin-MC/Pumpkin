@@ -338,7 +338,7 @@ mod tests {
                 true,
             );
             packet
-                .write_packet_data(&mut Vec::new(), &JavaMinecraftVersion::V_26_2)
+                .write_packet_data(&mut Vec::new(), &JavaMinecraftVersion::V_26_3)
                 .unwrap();
         }
     }
