@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:simple_block",
+  "to_place": {
+    "id": "minecraft:sweet_berry_bush",
+    "properties": {
+      "age": "3"
+    }
+  }
+}

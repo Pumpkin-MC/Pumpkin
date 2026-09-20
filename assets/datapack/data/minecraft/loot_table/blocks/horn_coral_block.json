@@ -1,0 +1,28 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "entries": [
+        {
+          "type": "minecraft:alternatives",
+          "children": [
+            {
+              "type": "minecraft:item",
+              "condition": "minecraft:tool/can_silk_touch",
+              "name": "minecraft:horn_coral_block"
+            },
+            {
+              "type": "minecraft:item",
+              "condition": {
+                "type": "minecraft:survives_explosion"
+              },
+              "name": "minecraft:dead_horn_coral_block"
+            }
+          ]
+        }
+      ],
+      "rolls": 1
+    }
+  ],
+  "random_sequence": "minecraft:blocks/horn_coral_block"
+}

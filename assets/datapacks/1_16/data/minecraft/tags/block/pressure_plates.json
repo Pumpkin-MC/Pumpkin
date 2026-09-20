@@ -1,9 +1,0 @@
-{
-  "replace": false,
-  "values": [
-    "minecraft:light_weighted_pressure_plate",
-    "minecraft:heavy_weighted_pressure_plate",
-    "#minecraft:wooden_pressure_plates",
-    "#minecraft:stone_pressure_plates"
-  ]
-}
