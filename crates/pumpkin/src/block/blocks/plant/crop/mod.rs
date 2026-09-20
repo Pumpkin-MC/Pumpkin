@@ -74,6 +74,10 @@ trait CropBlockBase: PlantBlockBase {
     }
 
     fn random_tick(&self, world: &Arc<World>, pos: &BlockPos) {
+        if !has_enough_light(world, pos) {
+            return;
+        }
+
         let (block, state) = world.get_block_and_state_id(pos);
         let age = self.get_age(state, block);
         if age < self.max_age() {
@@ -101,6 +105,11 @@ trait CropBlockBase: PlantBlockBase {
             }
         }
     }
+}
+
+#[must_use]
+pub fn has_enough_light(world: &World, pos: &BlockPos) -> bool {
+    world.get_raw_brightness(pos, 0) >= 9
 }
 
 pub fn get_available_moisture(world: &World, pos: &BlockPos, block: &Block) -> f32 {
