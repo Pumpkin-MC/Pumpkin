@@ -136,7 +136,6 @@ impl EntityBase for ExperienceOrbEntity {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
