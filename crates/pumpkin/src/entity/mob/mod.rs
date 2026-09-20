@@ -70,6 +70,7 @@ pub mod spider;
 pub mod vex;
 pub mod vindicator;
 pub mod warden;
+pub mod warden_spawn_tracker;
 pub mod witch;
 pub mod zoglin;
 pub mod zombie;
@@ -875,6 +876,12 @@ pub trait Mob: EntityBase + Send + Sync {
     }
 
     fn set_saddled(&self, _saddled: bool) {}
+
+    fn check_spawn_obstruction(&self, world: &World) -> bool {
+        let bounding_box = self.get_entity().bounding_box.load();
+        !world.contains_any_liquid(bounding_box)
+            && world.get_entities_at_box(&bounding_box).is_empty()
+    }
 
     /// Per-mob tick hook called each tick before AI runs. Override for mob-specific logic.
     fn mob_tick(&self, _caller: &dyn EntityBase) {}

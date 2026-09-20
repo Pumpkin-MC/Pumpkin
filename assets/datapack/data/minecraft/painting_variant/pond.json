@@ -1,0 +1,13 @@
+{
+  "asset_id": "minecraft:pond",
+  "author": {
+    "color": "gray",
+    "translate": "painting.minecraft.pond.author"
+  },
+  "height": 4,
+  "title": {
+    "color": "yellow",
+    "translate": "painting.minecraft.pond.title"
+  },
+  "width": 3
+}

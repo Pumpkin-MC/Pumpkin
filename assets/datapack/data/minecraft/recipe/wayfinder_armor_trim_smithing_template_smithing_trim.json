@@ -1,0 +1,7 @@
+{
+  "type": "minecraft:smithing_trim",
+  "addition": "#minecraft:trim_materials",
+  "base": "#minecraft:trimmable_armor",
+  "pattern": "minecraft:wayfinder",
+  "template": "minecraft:wayfinder_armor_trim_smithing_template"
+}

@@ -1,6 +1,0 @@
-{
-  "ambient_sound": "minecraft:entity.cow_moody.ambient",
-  "death_sound": "minecraft:entity.cow_moody.death",
-  "hurt_sound": "minecraft:entity.cow_moody.hurt",
-  "step_sound": "minecraft:entity.cow_moody.step"
-}

@@ -1,0 +1,23 @@
+{
+  "values": [
+    "minecraft:barrier",
+    "minecraft:bedrock",
+    "minecraft:end_portal",
+    "minecraft:end_portal_frame",
+    "minecraft:end_gateway",
+    "minecraft:command_block",
+    "minecraft:repeating_command_block",
+    "minecraft:chain_command_block",
+    "minecraft:structure_block",
+    "minecraft:jigsaw",
+    "minecraft:moving_piston",
+    "minecraft:obsidian",
+    "minecraft:crying_obsidian",
+    "minecraft:end_stone",
+    "minecraft:iron_bars",
+    "minecraft:respawn_anchor",
+    "minecraft:reinforced_deepslate",
+    "minecraft:test_block",
+    "minecraft:test_instance_block"
+  ]
+}
