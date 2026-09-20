@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:smelting",
+  "cookingtime": 200,
+  "experience": 0.1,
+  "ingredient": "minecraft:netherrack",
+  "result": {
+    "id": "minecraft:nether_brick"
+  }
+}

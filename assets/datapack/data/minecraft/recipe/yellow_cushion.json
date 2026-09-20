@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "group": "cushion",
+  "key": {
+    "#": "minecraft:yellow_wool_slab"
+  },
+  "pattern": [
+    "###"
+  ],
+  "result": {
+    "id": "minecraft:yellow_cushion"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:ore",
+  "discard_chance_on_air_exposure": 0.0,
+  "size": 64,
+  "targets": [
+    {
+      "state": "minecraft:diorite",
+      "target": {
+        "predicate_type": "minecraft:tag_match",
+        "tag": "minecraft:base_stone_overworld"
+      }
+    }
+  ]
+}

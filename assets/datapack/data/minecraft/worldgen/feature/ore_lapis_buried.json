@@ -1,0 +1,83 @@
+{
+  "type": "minecraft:ore",
+  "discard_chance_on_air_exposure": 1.0,
+  "size": 7,
+  "targets": [
+    {
+      "state": "minecraft:lapis_ore",
+      "target": {
+        "predicate_type": "minecraft:any_of",
+        "rules": [
+          {
+            "predicate_type": "minecraft:all_of",
+            "rules": [
+              {
+                "predicate_type": "minecraft:tag_match",
+                "tag": "minecraft:height_specific_ore_replaceables"
+              },
+              {
+                "max_inclusive": 2031,
+                "min_inclusive": 0,
+                "predicate_type": "minecraft:height_match"
+              }
+            ]
+          },
+          {
+            "predicate_type": "minecraft:all_of",
+            "rules": [
+              {
+                "predicate_type": "minecraft:not",
+                "rule": {
+                  "predicate_type": "minecraft:tag_match",
+                  "tag": "minecraft:height_specific_ore_replaceables"
+                }
+              },
+              {
+                "predicate_type": "minecraft:tag_match",
+                "tag": "minecraft:stone_ore_replaceables"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "state": "minecraft:deepslate_lapis_ore",
+      "target": {
+        "predicate_type": "minecraft:any_of",
+        "rules": [
+          {
+            "predicate_type": "minecraft:all_of",
+            "rules": [
+              {
+                "predicate_type": "minecraft:tag_match",
+                "tag": "minecraft:height_specific_ore_replaceables"
+              },
+              {
+                "max_inclusive": 8,
+                "min_inclusive": -2032,
+                "predicate_type": "minecraft:height_match"
+              }
+            ]
+          },
+          {
+            "predicate_type": "minecraft:all_of",
+            "rules": [
+              {
+                "predicate_type": "minecraft:not",
+                "rule": {
+                  "predicate_type": "minecraft:tag_match",
+                  "tag": "minecraft:height_specific_ore_replaceables"
+                }
+              },
+              {
+                "predicate_type": "minecraft:tag_match",
+                "tag": "minecraft:deepslate_ore_replaceables"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
