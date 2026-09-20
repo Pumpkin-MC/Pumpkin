@@ -1658,3 +1658,31 @@ pub trait PathAwareEntity: Mob + Send + Sync {
 pub trait RangedAttackMob: Mob + Send + Sync {
     fn perform_ranged_attack(&self, target: &Arc<dyn EntityBase>, power: f32);
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::entity::EntityType;
+
+    #[test]
+    fn aquatic_mobs_do_not_use_ground_navigation() {
+        for entity_type in [
+            &EntityType::COD,
+            &EntityType::SALMON,
+            &EntityType::TROPICAL_FISH,
+            &EntityType::PUFFERFISH,
+            &EntityType::SQUID,
+            &EntityType::GLOW_SQUID,
+            &EntityType::DOLPHIN,
+            &EntityType::TADPOLE,
+        ] {
+            let navigator = MobEntity::navigation_for_entity_type(entity_type);
+            assert!(
+                !navigator.can_navigate_ground(),
+                "{} should use water-bound navigation",
+                entity_type.resource_name
+            );
+        }
+    }
+}
