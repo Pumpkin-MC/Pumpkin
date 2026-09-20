@@ -1696,6 +1696,7 @@ mod tests {
             &EntityType::GLOW_SQUID,
             &EntityType::DOLPHIN,
             &EntityType::TADPOLE,
+            &EntityType::AXOLOTL,
         ] {
             let navigator = MobEntity::navigation_for_entity_type(entity_type);
             assert!(
