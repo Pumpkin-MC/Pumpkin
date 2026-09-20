@@ -77,7 +77,6 @@ use pumpkin_data::{
     item_stack::ItemStack,
     particle::Particle,
     sound::{Sound, SoundCategory},
-    sound_id_remap::remap_sound_id_for_version,
     world::{RAW, WorldEvent},
 };
 use pumpkin_data::{
@@ -4091,12 +4090,8 @@ impl World {
         } else {
             Particle::ExplosionEmitter
         };
+        let sound = IdOr::<SoundEvent>::Id(Sound::EntityGenericExplode as u16);
         for player in self.players.load().iter() {
-            let mut sound_id = Sound::EntityGenericExplode as u16;
-            if let ClientPlatform::Java(java_client) = player.client.as_ref() {
-                sound_id = remap_sound_id_for_version(sound_id, java_client.version.load());
-            }
-            let sound = IdOr::<SoundEvent>::Id(sound_id);
             if player.position().squared_distance_to_vec(&position) > 4096.0 {
                 continue;
             }
@@ -4106,7 +4101,7 @@ impl World {
                 block_count as i32,
                 None,
                 VarInt(particle as i32),
-                sound,
+                sound.clone(),
             ));
         }
     }
@@ -7277,6 +7272,23 @@ impl World {
                 .plugin_manager
                 .fire_blocking(&server, &mut unload_event);
         }
+    }
+
+    #[must_use]
+    pub fn get_loot_table(&self, key: &str) -> Option<crate::world::loot::LootTableHandle> {
+        self.server.upgrade().map_or_else(
+            || {
+                let full_key = if key.contains(':') {
+                    key.to_string()
+                } else {
+                    format!("minecraft:{key}")
+                };
+                pumpkin_data::loot_table::get_loot_table(key)
+                    .or_else(|| pumpkin_data::loot_table::get_loot_table(&full_key))
+                    .map(crate::world::loot::LootTableHandle::Static)
+            },
+            |server| server.datapack_manager.get_loot_table(key),
+        )
     }
 
     pub fn generate_loot(&self, loot_table: String) {

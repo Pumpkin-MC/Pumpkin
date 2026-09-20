@@ -22,19 +22,7 @@ struct RawTrackedField {
 
 /// Generates the `TokenStream` for `TrackedId`, `TrackedData`, and all per-entity tracking modules.
 pub(crate) fn build() -> TokenStream {
-    let assets = [
-        (JavaMinecraftVersion::V_1_21, "1_21_tracked_data.json"),
-        (JavaMinecraftVersion::V_1_21_2, "1_21_2_tracked_data.json"),
-        (JavaMinecraftVersion::V_1_21_4, "1_21_4_tracked_data.json"),
-        (JavaMinecraftVersion::V_1_21_5, "1_21_5_tracked_data.json"),
-        (JavaMinecraftVersion::V_1_21_6, "1_21_6_tracked_data.json"),
-        (JavaMinecraftVersion::V_1_21_7, "1_21_7_tracked_data.json"),
-        (JavaMinecraftVersion::V_1_21_9, "1_21_9_tracked_data.json"),
-        (JavaMinecraftVersion::V_1_21_11, "1_21_11_tracked_data.json"),
-        (JavaMinecraftVersion::V_26_1, "26_1_tracked_data.json"),
-        (JavaMinecraftVersion::V_26_2, "26_2_tracked_data.json"),
-        (JavaMinecraftVersion::V_26_3, "26_3_tracked_data.json"),
-    ];
+    let assets = [(JavaMinecraftVersion::V_26_3, "26_3_tracked_data.json")];
 
     let mut raw_versions = BTreeMap::new();
     for (ver, file) in assets {
@@ -83,7 +71,7 @@ pub(crate) fn build() -> TokenStream {
         panic!("No tracked data asset files found in assets/tracked_data");
     }
 
-    let tracked_id_struct = generate_tracked_id_struct(&versions);
+    let tracked_id_struct = generate_tracked_id_struct();
     let tracked_data_struct = generate_tracked_data_struct();
     let entity_modules = generate_entity_modules(&versions, &entity_aliases);
 
@@ -99,49 +87,22 @@ pub(crate) fn build() -> TokenStream {
     }
 }
 
-/// Generates the `TrackedId` struct definition with one `u8` field per supported version.
-fn generate_tracked_id_struct<T>(versions: &BTreeMap<JavaMinecraftVersion, T>) -> TokenStream {
-    let mut struct_fields = TokenStream::new();
-    for ver in versions.keys() {
-        let ident = ver.to_field_ident();
-        struct_fields.extend(quote! {
-            pub #ident: u8,
-        });
-    }
-
-    let latest_field_ident = if versions.contains_key(&LATEST_VERSION) {
-        LATEST_VERSION.to_field_ident()
-    } else {
-        versions.keys().last().unwrap().to_field_ident()
-    };
-
-    let mut match_arms = TokenStream::new();
-    for ver in versions.keys() {
-        let ident = ver.to_field_ident();
-        match_arms.extend(quote! {
-            #ver => self.#ident,
-        });
-    }
-
+/// Generates the `TrackedId` struct definition for Minecraft 26.3.
+fn generate_tracked_id_struct() -> TokenStream {
     quote! {
         #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-        pub struct TrackedId {
-            #struct_fields
-        }
+        pub struct TrackedId(pub u8);
 
         impl TrackedId {
             #[must_use]
-            pub const fn get(&self, version: &JavaMinecraftVersion) -> u8 {
-                match version {
-                    #match_arms
-                    _ => self.#latest_field_ident,
-                }
+            pub const fn get(&self, _version: &JavaMinecraftVersion) -> u8 {
+                self.0
             }
         }
 
         impl From<TrackedId> for u8 {
             fn from(id: TrackedId) -> u8 {
-                id.#latest_field_ident
+                id.0
             }
         }
     }
@@ -163,8 +124,8 @@ fn generate_tracked_data_struct() -> TokenStream {
             }
 
             #[must_use]
-            pub const fn get(&self, version: &JavaMinecraftVersion) -> u8 {
-                self.id.get(version)
+            pub const fn get(&self, _version: &JavaMinecraftVersion) -> u8 {
+                self.id.0
             }
         }
     }
@@ -201,28 +162,22 @@ fn generate_entity_modules(
             let field_ident = format_ident!("{}", field_upper);
             defined_idents.insert(field_upper.clone());
 
-            let mut id_fields = TokenStream::new();
-            let mut latest_type = String::new();
-
-            for (ver, entities) in versions {
-                let ver_ident = ver.to_field_ident();
-                let field_info = entities
-                    .get(entity)
-                    .and_then(|f| lookup_tracked_field(f, field));
-                let id = field_info.map_or(255u8, |info| info.id);
-                if let Some(info) = field_info {
-                    latest_type = canonicalize_field_type(&info.r#type);
-                }
-                id_fields.extend(quote! {
-                    #ver_ident: #id,
-                });
-            }
+            let field_info = versions
+                .get(&LATEST_VERSION)
+                .or_else(|| versions.values().next_back())
+                .and_then(|entities| entities.get(entity))
+                .and_then(|f| lookup_tracked_field(f, field));
+            let id = field_info.map_or(255u8, |info| info.id);
+            let latest_type = field_info.map_or_else(
+                || "byte".to_string(),
+                |info| canonicalize_field_type(&info.r#type),
+            );
 
             let type_const_ident = format_ident!("{}", latest_type.to_uppercase());
 
             field_consts.extend(quote! {
                 pub const #field_ident: TrackedData = TrackedData {
-                    id: TrackedId { #id_fields },
+                    id: TrackedId(#id),
                     r#type: MetaDataType::#type_const_ident,
                 };
             });
@@ -667,13 +622,7 @@ mod tests {
             .split("pub const")
             .next()
             .expect("constant body");
-        assert!(
-            !flags.contains("v1_21 : 255u8"),
-            "1.21.x Yarn LIVING_FLAGS (index 8) should merge into DATA_LIVING_ENTITY_FLAGS, got {flags}"
-        );
-        assert!(flags.contains("v1_21 : 8u8"));
-        assert!(flags.contains("v1_21_11 : 8u8"));
-        assert!(flags.contains("v26_1 : 8u8"));
+        assert!(flags.contains("TrackedId (8u8)"));
     }
 
     fn field_body(generated: &str, module: &str, field: &str) -> String {
@@ -695,17 +644,10 @@ mod tests {
     fn living_health_and_air_merge_yarn_names() {
         let generated = build().to_string();
         let health = field_body(&generated, "living_entity", "DATA_HEALTH_ID");
-        assert!(
-            !health.contains("v1_21 : 255u8"),
-            "1.21.x Yarn HEALTH should merge into DATA_HEALTH_ID, got {health}"
-        );
-        assert!(health.contains("v1_21 : 9u8"));
+        assert!(health.contains("TrackedId (9u8)"));
 
         let air = field_body(&generated, "entity", "DATA_AIR_SUPPLY_ID");
-        assert!(
-            !air.contains("v1_21 : 255u8"),
-            "1.21.x Yarn AIR should merge into DATA_AIR_SUPPLY_ID, got {air}"
-        );
+        assert!(!air.contains("TrackedId (255u8)"));
     }
 
     #[test]
@@ -713,24 +655,13 @@ mod tests {
         let generated = build().to_string();
 
         let boat_hurt = field_body(&generated, "boat", "DATA_ID_HURT");
-        assert!(
-            !boat_hurt.contains("v1_21_11 : 255u8"),
-            "boat_entity DAMAGE_WOBBLE_TICKS should merge into boat::DATA_ID_HURT, got {boat_hurt}"
-        );
-        assert!(boat_hurt.contains("v1_21_11 : 8u8"));
-        assert!(boat_hurt.contains("v26_2 : 8u8"));
+        assert!(boat_hurt.contains("TrackedId (8u8)"));
 
         let baby = field_body(&generated, "ageable_mob", "DATA_BABY_ID");
-        assert!(
-            !baby.contains("v1_21 : 255u8"),
-            "passive_entity CHILD should merge into ageable_mob::DATA_BABY_ID, got {baby}"
-        );
+        assert!(!baby.contains("TrackedId (255u8)"));
 
         let item = field_body(&generated, "item", "DATA_ITEM");
-        assert!(
-            !item.contains("v1_21_11 : 255u8"),
-            "Yarn STACK/ITEM should merge into item::DATA_ITEM, got {item}"
-        );
+        assert!(!item.contains("TrackedId (255u8)"));
     }
 
     #[test]
