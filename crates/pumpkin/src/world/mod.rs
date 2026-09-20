@@ -5100,6 +5100,16 @@ impl World {
         });
     }
 
+    /// Registers an entity for `get_entity_by_id` only, no tracking or spawn packet (e.g. ender dragon hitbox parts).
+    #[expect(clippy::needless_pass_by_value)]
+    pub fn add_entity_lookup_only(&self, entity: Arc<dyn EntityBase>) {
+        self.entities.rcu(|current_entities| {
+            let mut new_entities = (**current_entities).clone();
+            new_entities.push(entity.clone());
+            new_entities
+        });
+    }
+
     pub fn remove_entity(&self, entity: &dyn EntityBase) {
         let base_entity = entity.get_entity();
         if base_entity
