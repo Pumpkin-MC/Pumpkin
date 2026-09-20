@@ -59,6 +59,9 @@ impl VarLong {
             let byte = read.get_u8()?;
             val |= (i64::from(byte) & 0x7F) << (i * 7);
             if byte & 0x80 == 0 {
+                if i == Self::MAX_SIZE.get() - 1 && byte & 0x7F > 0x01 {
+                    return Err(ReadingError::TooLarge("VarLong".to_string()));
+                }
                 return Ok(Self(val));
             }
         }
@@ -115,6 +118,12 @@ impl PacketRead for VarLong {
             val |= ((byte & 0x7F) as u64) << shift;
 
             if (byte & 0x80) == 0 {
+                if shift == 63 && (byte & 0x7F) > 0x01 {
+                    return Err(Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "VarLong is too big (overflow)",
+                    ));
+                }
                 break;
             }
 
@@ -144,5 +153,43 @@ impl PacketWrite for VarLong {
 
         (val as u8).write(writer)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decode_rejects_final_byte_payload_overflow() {
+        let minus_one = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x01];
+        assert_eq!(
+            VarLong::decode(&mut minus_one.as_slice()).unwrap(),
+            VarLong(-1)
+        );
+
+        let mut overflow = [0xFF; 10];
+        overflow[9] = 0x7F;
+        assert!(VarLong::decode(&mut overflow.as_slice()).is_err());
+
+        let mut high_bit = [0x80; 10];
+        high_bit[9] = 0x02;
+        assert!(VarLong::decode(&mut high_bit.as_slice()).is_err());
+    }
+
+    #[test]
+    fn packet_read_round_trips_and_rejects_overflow() {
+        for value in [i64::MIN, -2, -1, 0, 1, 2, i64::MAX] {
+            let mut encoded = Vec::new();
+            VarLong(value).write(&mut encoded).unwrap();
+            assert_eq!(
+                VarLong::read(&mut encoded.as_slice()).unwrap(),
+                VarLong(value)
+            );
+        }
+
+        let mut overflow = [0xFF; 10];
+        overflow[9] = 0x03;
+        assert!(VarLong::read(&mut overflow.as_slice()).is_err());
     }
 }
