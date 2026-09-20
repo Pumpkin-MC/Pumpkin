@@ -1384,7 +1384,7 @@ impl Player {
             } else {
                 DamageType::PLAYER_ATTACK
             },
-            None,
+            Some(self.living_entity.entity.pos.load()),
             Some(self),
             Some(self),
         ) {
@@ -1483,7 +1483,7 @@ impl Player {
                                 other_victim.as_ref(),
                                 sweep_damage,
                                 DamageType::PLAYER_ATTACK,
-                                None,
+                                Some(self.living_entity.entity.pos.load()),
                                 Some(self),
                                 Some(self),
                             );
