@@ -250,11 +250,14 @@ impl Context {
 
     /// Reloads (resends) all commands for all currently online players.
     pub fn reload_commands_for_everyone(&self) {
-        for world in self.server.worlds.load().iter() {
-            for player in world.players.load().iter() {
-                self.reload_commands_for(player);
+        let server = self.server.clone();
+        self.server.spawn_task(async move {
+            for world in server.worlds.load().iter() {
+                for player in world.players.load().iter() {
+                    reload_commands_for(&server, player);
+                }
             }
-        }
+        });
     }
 
     /// Reloads (resends) all commands for a particular player on the server.
@@ -262,16 +265,7 @@ impl Context {
     /// # Arguments
     /// - `player`: The player for which the commands will be reloaded.
     pub fn reload_commands_for(&self, player: &Arc<Player>) {
-        let command_dispatcher = self.server.command_dispatcher.load();
-        if let ClientPlatform::Bedrock(_) = player.client.as_ref() {
-            client_suggestions::send_bedrock_commands_packet(
-                player,
-                &self.server,
-                &command_dispatcher,
-            );
-        } else {
-            client_suggestions::send_c_commands_packet(player, &self.server, &command_dispatcher);
-        }
+        reload_commands_for(&self.server, player);
     }
 
     /// Register a permission for this plugin
@@ -411,5 +405,14 @@ impl Context {
             Level::INFO
         };
         plugin_log!(level, &self.metadata.name, "{}", message);
+    }
+}
+
+fn reload_commands_for(server: &Arc<Server>, player: &Arc<Player>) {
+    let command_dispatcher = server.command_dispatcher.load();
+    if let ClientPlatform::Bedrock(_) = player.client.as_ref() {
+        client_suggestions::send_bedrock_commands_packet(player, server, &command_dispatcher);
+    } else {
+        client_suggestions::send_c_commands_packet(player, server, &command_dispatcher);
     }
 }
