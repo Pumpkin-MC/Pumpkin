@@ -84,9 +84,16 @@ pub(crate) trait PressurePlate {
 
         // Allow placement on blocks with solid top face (full blocks, upside-down slabs, etc.)
         // and on fences/fence gates which have a solid top in vanilla
+        // But not on open fence gates
+        let is_fence = floor.has_tag(&tag::Block::MINECRAFT_FENCES);
+        let is_fence_gate = floor.has_tag(&tag::Block::MINECRAFT_FENCE_GATES);
+
         floor_state.is_side_solid(BlockDirection::Up)
-            || floor.has_tag(&tag::Block::MINECRAFT_FENCES)
-            || floor.has_tag(&tag::Block::MINECRAFT_FENCE_GATES)
+            || is_fence
+            || (is_fence_gate && 
+                // Check if fence gate is closed
+                !pumpkin_data::block_properties::OakFenceGateLikeProperties::from_state_id(floor_state.id)
+            )
     }
 
     fn get_redstone_output(&self, block: &Block, state: BlockStateId) -> u8;
