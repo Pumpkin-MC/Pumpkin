@@ -1,9 +1,6 @@
 use std::io::Write;
 
-use pumpkin_data::{
-    packet::clientbound::play::SOUND_ENTITY, sound::SoundCategory,
-    sound_id_remap::remap_sound_id_for_version,
-};
+use pumpkin_data::{packet::clientbound::play::SOUND_ENTITY, sound::SoundCategory};
 use pumpkin_macros::java_packet;
 use pumpkin_util::version::JavaMinecraftVersion;
 
@@ -61,18 +58,13 @@ impl ClientPacket for CEntitySoundEffect {
         version: &JavaMinecraftVersion,
     ) -> Result<(), WritingError> {
         if *version >= JavaMinecraftVersion::V_1_19_3 {
-            let sound_event = match &self.sound_event {
-                IdOr::Id(id) => IdOr::Id(remap_sound_id_for_version(*id, *version)),
-                IdOr::Value(value) => IdOr::Value(value.clone()),
-            };
-
-            crate::IdOr::<crate::SoundEvent>::write(&sound_event, &mut write, |w, e| {
+            crate::IdOr::<crate::SoundEvent>::write(&self.sound_event, &mut write, |w, e| {
                 w.write_string(&e.sound_name)?;
                 w.write_option(&e.range, |w2, r| w2.write_f32(*r))
             })?;
         } else {
             let sound_id = match &self.sound_event {
-                IdOr::Id(id) => remap_sound_id_for_version(*id, *version),
+                IdOr::Id(id) => *id,
                 IdOr::Value(_) => 0,
             };
             write.write_var_int(&VarInt(i32::from(sound_id)))?;
@@ -102,64 +94,14 @@ mod tests {
     use std::io::Cursor;
 
     use pumpkin_data::sound::SoundCategory;
-    use pumpkin_data::sound_id_remap::remap_sound_id_for_version;
     use pumpkin_util::version::JavaMinecraftVersion;
 
     use crate::{ClientPacket, IdOr, SoundEvent, VarInt};
 
     use super::CEntitySoundEffect;
 
-    fn first_remapped_sound_id(version: JavaMinecraftVersion) -> u16 {
-        (0..=u16::MAX)
-            .find(|id| remap_sound_id_for_version(*id, version) != *id)
-            .expect("sound remap table should contain at least one changed id")
-    }
-
     fn first_var_int(bytes: Vec<u8>) -> VarInt {
         VarInt::decode(&mut Cursor::new(bytes)).unwrap()
-    }
-
-    #[test]
-    fn numeric_sound_id_remaps_for_1_21_11() {
-        let sound_id = first_remapped_sound_id(JavaMinecraftVersion::V_1_21_11);
-        let packet = CEntitySoundEffect::new(
-            IdOr::Id(sound_id),
-            SoundCategory::Players,
-            VarInt(123),
-            1.0,
-            1.0,
-            42,
-        );
-        let mut bytes = Vec::new();
-
-        packet
-            .write_packet_data(&mut bytes, &JavaMinecraftVersion::V_1_21_11)
-            .unwrap();
-
-        assert_eq!(
-            first_var_int(bytes),
-            VarInt::from(remap_sound_id_for_version(sound_id, JavaMinecraftVersion::V_1_21_11) + 1)
-        );
-    }
-
-    #[test]
-    fn numeric_sound_id_stays_latest_for_26_2() {
-        let sound_id = first_remapped_sound_id(JavaMinecraftVersion::V_1_21_11);
-        let packet = CEntitySoundEffect::new(
-            IdOr::Id(sound_id),
-            SoundCategory::Players,
-            VarInt(123),
-            1.0,
-            1.0,
-            42,
-        );
-        let mut bytes = Vec::new();
-
-        packet
-            .write_packet_data(&mut bytes, &JavaMinecraftVersion::V_26_2)
-            .unwrap();
-
-        assert_eq!(first_var_int(bytes), VarInt::from(sound_id + 1));
     }
 
     #[test]
