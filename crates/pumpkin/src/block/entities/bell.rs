@@ -25,7 +25,7 @@ impl BellBlockEntity {
     const RAIDER_DETECTION_RANGE: f64 = 32.0;
     const RAIDER_GLOWING_RANGE: f64 = 48.0;
     const RESONANCE_TICKS: i32 = 40;
-    const GLOWING_TICKS: i32 = 60;
+    const GLOWING_TICKS: i32 = 180;
 
     #[must_use]
     pub const fn new(position: BlockPos) -> Self {
@@ -55,6 +55,10 @@ impl BellBlockEntity {
         BoundingBox::from_block(position).expand_all(Self::RAIDER_GLOWING_RANGE)
     }
 
+    fn entity_within_range(position: &BlockPos, entity_pos: &pumpkin_util::math::vector3::Vector3<f64>, range: f64) -> bool {
+        position.to_centered_f64().squared_distance_to_vec(entity_pos) <= range * range
+    }
+
     const fn resonance_effect() -> Effect {
         Effect {
             effect_type: &StatusEffect::GLOWING,
@@ -77,6 +81,11 @@ impl BellBlockEntity {
             .iter()
             .any(|entity| {
                 entity.get_entity().is_alive()
+                    && Self::entity_within_range(
+                        &self.position,
+                        &entity.get_entity().pos.load(),
+                        Self::RAIDER_DETECTION_RANGE,
+                    )
                     && entity
                         .get_mob()
                         .is_some_and(|mob| mob.as_raider().is_some())
@@ -87,6 +96,11 @@ impl BellBlockEntity {
         let effect = Self::resonance_effect();
         for entity in world.get_entities_at_box(&Self::glowing_search_box(&self.position)) {
             if entity.get_entity().is_alive()
+                && Self::entity_within_range(
+                    &self.position,
+                    &entity.get_entity().pos.load(),
+                    Self::RAIDER_GLOWING_RANGE,
+                )
                 && entity
                     .get_mob()
                     .is_some_and(|mob| mob.as_raider().is_some())
@@ -158,6 +172,7 @@ impl BlockEntity for BellBlockEntity {
 mod tests {
     use super::*;
     use pumpkin_data::effect::StatusEffect;
+    use pumpkin_util::math::vector3::Vector3;
 
     #[test]
     fn search_boxes_and_resonance_effect_match_vanilla_ranges() {
@@ -172,7 +187,22 @@ mod tests {
 
         let effect = BellBlockEntity::resonance_effect();
         assert_eq!(effect.effect_type.id, StatusEffect::GLOWING.id);
-        assert_eq!(effect.duration, 60);
+        assert_eq!(effect.duration, 180);
+    }
+
+    #[test]
+    fn raider_range_is_spherical() {
+        let position = BlockPos::new(0, 0, 0);
+        assert!(BellBlockEntity::entity_within_range(
+            &position,
+            &Vector3::new(32.5, 0.5, 0.5),
+            BellBlockEntity::RAIDER_DETECTION_RANGE,
+        ));
+        assert!(!BellBlockEntity::entity_within_range(
+            &position,
+            &Vector3::new(32.5, 32.5, 0.5),
+            BellBlockEntity::RAIDER_DETECTION_RANGE,
+        ));
     }
 
     #[test]
