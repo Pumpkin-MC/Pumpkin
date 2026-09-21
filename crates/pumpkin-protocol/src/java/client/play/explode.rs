@@ -145,9 +145,6 @@ impl ClientPacket for CExplosion {
                     write.write_option(&range, |w, r| w.write_f32_be(*r))?;
                 }
             }
-
-            // Block count: 0
-            write.write_var_int(&VarInt(0))?;
         }
 
         Ok(())
@@ -180,6 +177,39 @@ mod tests {
         let mut cursor = Cursor::new(bytes);
         cursor.seek(SeekFrom::Start(33)).unwrap();
         VarInt::decode(&mut cursor).unwrap()
+    }
+
+    fn layout_len(version: JavaMinecraftVersion) -> usize {
+        let packet = CExplosion::new(
+            Vector3::new(0.0, 0.0, 0.0),
+            4.0,
+            0,
+            Some(Vector3::new(1.0, 2.0, 3.0)),
+            VarInt(Particle::Explosion as i32),
+            IdOr::Id(0),
+        );
+        let mut bytes = Vec::new();
+        packet.write_packet_data(&mut bytes, &version).unwrap();
+        bytes.len()
+    }
+
+    #[test]
+    fn explosion_layout_for_1_21_5() {
+        // center, optional knockback (present), particle id, sound id
+        assert_eq!(
+            layout_len(JavaMinecraftVersion::V_1_21_5),
+            24 + 1 + 24 + 1 + 1
+        );
+    }
+
+    #[test]
+    fn explosion_layout_for_1_21() {
+        // center, radius, record count, knockback, block interaction,
+        // small particle, particle, sound id
+        assert_eq!(
+            layout_len(JavaMinecraftVersion::V_1_21),
+            24 + 4 + 1 + 12 + 1 + 1 + 1 + 1
+        );
     }
 
     #[test]
