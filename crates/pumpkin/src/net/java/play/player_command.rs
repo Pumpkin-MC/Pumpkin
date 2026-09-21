@@ -65,11 +65,29 @@ impl JavaClient {
                 self.handle_player_input(
                     player,
                     &SPlayerInput {
-                        input: SPlayerInput::SNEAK,
+                        input: sneak_input(&command.action),
                     },
                     server,
                 );
             }
         }
+    }
+}
+
+const fn sneak_input(action: &Action) -> i8 {
+    match action {
+        Action::StartSneaking => SPlayerInput::SNEAK,
+        _ => 0,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Action, SPlayerInput, sneak_input};
+
+    #[test]
+    fn stop_sneaking_clears_the_sneak_flag() {
+        assert_eq!(sneak_input(&Action::StartSneaking), SPlayerInput::SNEAK);
+        assert_eq!(sneak_input(&Action::StopSneaking), 0);
     }
 }
