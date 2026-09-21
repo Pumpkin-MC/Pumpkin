@@ -30,7 +30,6 @@ use pumpkin_util::GameMode;
 use pumpkin_util::math::vector2::Vector2;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::math::{get_section_cord, pack_degrees};
-use pumpkin_util::version::JavaMinecraftVersion;
 use rustc_hash::FxHashSet;
 use uuid::Uuid;
 
@@ -462,27 +461,25 @@ impl TrackedEntity {
 
             if let ClientPlatform::Java(client) = player.client.as_ref() {
                 let version = client.version.load();
-                if version >= JavaMinecraftVersion::V_1_21 {
-                    let mut buf = Vec::new();
-                    for meta in [
-                        Metadata::new(
-                            pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMISATION,
-                            skin_parts,
-                        ),
-                        Metadata::new(
-                            pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMIZATION_ID,
-                            skin_parts,
-                        ),
-                    ] {
-                        let _ = meta.write(&mut buf, &version);
-                    }
-                    buf.put_u8(255);
-                    let meta_packet = CSetEntityMetadata::new(target_id.into(), buf.into());
-                    if let Ok(packet_data) =
-                        JavaClient::serialize_packet_for_version(&meta_packet, version)
-                    {
-                        client.try_enqueue_packet(packet_data);
-                    }
+                let mut buf = Vec::new();
+                for meta in [
+                    Metadata::new(
+                        pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMISATION,
+                        skin_parts,
+                    ),
+                    Metadata::new(
+                        pumpkin_data::tracked_data::player::PLAYER_MODE_CUSTOMIZATION_ID,
+                        skin_parts,
+                    ),
+                ] {
+                    let _ = meta.write(&mut buf, &version);
+                }
+                buf.put_u8(255);
+                let meta_packet = CSetEntityMetadata::new(target_id.into(), buf.into());
+                if let Ok(packet_data) =
+                    JavaClient::serialize_packet_for_version(&meta_packet, version)
+                {
+                    client.try_enqueue_packet(packet_data);
                 }
 
                 let head_yaw = target_entity.head_yaw.load();
@@ -521,13 +518,11 @@ impl TrackedEntity {
 
         if let ClientPlatform::Java(client) = player.client.as_ref() {
             let version = client.version.load();
-            // TODO: Support older versions
-            if version >= JavaMinecraftVersion::V_1_21
-                && let Some(non_default) = self
-                    .entity
-                    .get_entity()
-                    .synched_data
-                    .get_non_default_values_for_version(&version)
+            if let Some(non_default) = self
+                .entity
+                .get_entity()
+                .synched_data
+                .get_non_default_values_for_version(&version)
             {
                 let packet = CSetEntityMetadata::new(self.entity_id.into(), non_default);
                 if let Ok(packet_data) = JavaClient::serialize_packet_for_version(&packet, version)
