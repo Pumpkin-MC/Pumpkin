@@ -90,10 +90,14 @@ pub(crate) trait PressurePlate {
 
         floor_state.is_side_solid(BlockDirection::Up)
             || is_fence
-            || (is_fence_gate && 
-                // Check if fence gate is closed
-                !pumpkin_data::block_properties::OakFenceGateLikeProperties::from_state_id(floor_state.id)
-            )
+            || (is_fence_gate && {
+                // Check if fence gate is closed (open = false)
+                let props =
+                    pumpkin_data::block_properties::OakFenceGateLikeProperties::from_state_id(
+                        floor_state.id,
+                    );
+                !props.r#open
+            })
     }
 
     fn get_redstone_output(&self, block: &Block, state: BlockStateId) -> u8;
