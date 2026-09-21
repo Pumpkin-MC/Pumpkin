@@ -60,7 +60,7 @@ fn collect_noise_files(
 }
 
 pub fn build() -> TokenStream {
-    let dir = std::path::Path::new("../../assets/datapacks/26_3/data/minecraft/worldgen/noise");
+    let dir = std::path::Path::new("../../assets/datapack/data/minecraft/worldgen/noise");
     let mut json: BTreeMap<String, DoublePerlinNoiseParametersCodec> = BTreeMap::new();
     collect_noise_files(dir, dir, &mut json);
 

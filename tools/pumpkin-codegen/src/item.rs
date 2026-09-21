@@ -96,6 +96,10 @@ pub struct ItemComponents {
     pub chicken_variant: Option<serde_json::Value>,
     #[serde(rename = "minecraft:container")]
     pub container: Option<serde_json::Value>,
+    #[serde(rename = "minecraft:compostable")]
+    pub compostable: Option<CompostableComponent>,
+    #[serde(rename = "minecraft:cooking_fuel")]
+    pub cooking_fuel: Option<CookingFuelComponent>,
     #[serde(rename = "minecraft:damage_type")]
     pub damage_type: Option<String>,
     #[serde(rename = "minecraft:debug_stick_state")]
@@ -162,7 +166,9 @@ pub struct ItemComponents {
     #[serde(rename = "minecraft:use_effects")]
     pub use_effects: Option<serde_json::Value>,
     #[serde(rename = "minecraft:use_remainder")]
-    pub use_remainder: Option<serde_json::Value>,
+    pub use_remainder: Option<UseRemainderComponent>,
+    #[serde(rename = "minecraft:waxed")]
+    pub waxed: Option<serde_json::Value>,
     #[serde(rename = "minecraft:writable_book_content")]
     pub writable_book_content: Option<serde_json::Value>,
 }
@@ -186,6 +192,16 @@ pub struct SwingAnimationComponent {
 #[derive(Deserialize)]
 pub struct EnchantableComponent {
     pub value: i32,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct CompostableComponent {
+    pub layers: String,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct UseRemainderComponent {
+    pub id: String,
 }
 
 impl ToTokens for ItemComponents {
@@ -811,6 +827,63 @@ impl ToTokens for ItemComponents {
         if self.brewing_fuel.is_some() {
             tokens.extend(quote! { (BrewingFuel, &BrewingFuelImpl), });
         }
+        if let Some(compostable) = &self.compostable {
+            let layers = compostable
+                .layers
+                .strip_prefix("minecraft:")
+                .unwrap_or(&compostable.layers);
+            let chance = match layers {
+                "compostable/low" => 0.3,
+                "compostable/low_medium" => 0.5,
+                "compostable/medium" => 0.65,
+                "compostable/medium_high" => 0.85,
+                "compostable/always_add_one" => 1.0,
+                _ => panic!("Unknown compostable layers: {}", compostable.layers),
+            };
+            let chance_lit = LitFloat::new(&format!("{chance:?}f32"), Span::call_site());
+            tokens.extend(quote! {
+                (Compostable, &CompostableImpl { chance: #chance_lit }),
+            });
+        }
+        if let Some(fuel) = &self.cooking_fuel {
+            let burn_time_tokens = match &fuel.burn_time {
+                serde_json::Value::Number(n) => {
+                    let val = n.as_i64().unwrap_or(0) as i32;
+                    let val_lit = LitInt::new(&val.to_string(), Span::call_site());
+                    quote! { crate::data_component_impl::IntProvider::Inline(#val_lit) }
+                }
+                serde_json::Value::String(s) => {
+                    let s_lit = LitStr::new(s, Span::call_site());
+                    quote! { crate::data_component_impl::IntProvider::Id(std::borrow::Cow::Borrowed(#s_lit)) }
+                }
+                _ => quote! { crate::data_component_impl::IntProvider::Inline(0) },
+            };
+
+            let speed_multiplier_tokens = match &fuel.speed_multiplier {
+                Some(serde_json::Value::Number(n)) => {
+                    let val = n.as_f64().unwrap_or(1.0) as f32;
+                    let val_lit = LitFloat::new(&format!("{val:?}f32"), Span::call_site());
+                    quote! { crate::data_component_impl::FloatProvider::Inline(#val_lit) }
+                }
+                Some(serde_json::Value::String(s)) => {
+                    let s_lit = LitStr::new(s, Span::call_site());
+                    quote! { crate::data_component_impl::FloatProvider::Id(std::borrow::Cow::Borrowed(#s_lit)) }
+                }
+                _ => {
+                    quote! { crate::data_component_impl::FloatProvider::Id(std::borrow::Cow::Borrowed("minecraft:cooking/speed_default")) }
+                }
+            };
+
+            tokens.extend(quote! {
+                (CookingFuel, &CookingFuelImpl {
+                    burn_time: #burn_time_tokens,
+                    speed_multiplier: #speed_multiplier_tokens,
+                }),
+            });
+        }
+        if self.waxed.is_some() {
+            tokens.extend(quote! { (Waxed, &WaxedImpl), });
+        }
         if self.enchantment_glint_override.is_some() {
             tokens.extend(quote! { (EnchantmentGlintOverride, &EnchantmentGlintOverrideImpl), });
         }
@@ -1010,8 +1083,15 @@ impl ToTokens for ItemComponents {
             tokens.extend(quote! { (UseEffects, &UseEffectsImpl), });
         }
         if self.use_remainder.is_some() {
-            tokens.extend(quote! { (UseRemainder, &UseRemainderImpl), });
+            let remainder = self.use_remainder.as_ref().unwrap();
+            let id = LitStr::new(&remainder.id, Span::call_site());
+            tokens.extend(quote! {
+                (UseRemainder, &UseRemainderImpl {
+                    remainder: Some(Cow::Borrowed(#id)),
+                }),
+            });
         }
+
         if self.writable_book_content.is_some() {
             tokens.extend(
                 quote! { (WritableBookContent, &WritableBookContentImpl { pages: Vec::new() }), },
@@ -1276,6 +1356,13 @@ pub struct DamageResistantComponent {
 pub enum StringOrList {
     String(String),
     List(Vec<String>),
+}
+
+#[derive(Deserialize, Clone)]
+pub struct CookingFuelComponent {
+    pub burn_time: serde_json::Value,
+    #[serde(default)]
+    pub speed_multiplier: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize, Clone)]
