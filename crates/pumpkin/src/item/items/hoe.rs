@@ -1,3 +1,4 @@
+use crate::block::registry::BlockActionResult;
 use crate::entity::player::Player;
 use crate::item::{ItemBehaviour, ItemMetadata};
 use crate::server::Server;
@@ -29,7 +30,7 @@ impl ItemBehaviour for HoeItem {
         _cursor_pos: Vector3<f32>,
         block: &Block,
         _server: &Server,
-    ) {
+    ) -> BlockActionResult {
         let world = player.world();
         let get_block = |dx: i8, dy: i8, dz: i8| {
             let check_pos = BlockPos(location.0 + Vector3::new(dx as i32, dy as i32, dz as i32));
@@ -49,10 +50,10 @@ impl ItemBehaviour for HoeItem {
             world.set_block_state(&location, result.new_state_id, BlockFlags::NOTIFY_ALL);
 
             if let Some(loot_key) = result.entry.loot
-                && let Some(loot_table) = pumpkin_data::loot_table::get_loot_table(loot_key)
+                && let Some(loot_table) = world.get_loot_table(loot_key)
             {
                 let seed = rand::random::<i64>();
-                let drops = crate::world::loot::generate_loot(loot_table, seed);
+                let drops = loot_table.generate_loot(seed);
                 for drop_stack in drops {
                     if result.entry.drop_strategy == Some(DropStrategy::ClickedFace) {
                         world.drop_stack_from_face(&location, face, drop_stack);
@@ -65,7 +66,9 @@ impl ItemBehaviour for HoeItem {
             if player.gamemode.load() != GameMode::Creative {
                 let _ = item.damage_item(i32::from(result.entry.item_damage_per_use));
             }
+            return BlockActionResult::Success;
         }
+        BlockActionResult::Pass
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

@@ -12,13 +12,13 @@ use crate::block::{
 use crate::block::entities::brewing_stand::BrewingStandBlockEntity;
 use pumpkin_data::BlockState;
 use pumpkin_data::translation;
+use pumpkin_inventory::Inventory;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
     InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::inventory::Inventory;
 
 struct BrewingScreenFactory(
     Arc<dyn Inventory>,
@@ -85,21 +85,7 @@ impl BlockBehaviour for BrewingStandBlock {
     }
 
     fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
-        if let Some(block_entity) = args.world.get_block_entity(args.position)
-            && let Some(inventory) = block_entity.get_inventory()
-        {
-            let mut bottles = 0u8;
-            // Bottle slots are 0, 1, 2 in brewing stands
-            for slot in 0..3 {
-                let stack = inventory.get_stack(slot);
-                if !stack.is_empty() {
-                    bottles += 1;
-                }
-            }
-            Some(bottles)
-        } else {
-            None
-        }
+        crate::block::container_comparator_output(&args)
     }
 
     fn is_pathfindable(&self, _state: &BlockState, _computation_type: PathComputationType) -> bool {

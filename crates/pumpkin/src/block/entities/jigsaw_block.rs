@@ -99,7 +99,8 @@ impl JigsawBlockEntity {
                 chunk_z: position.chunk_position().y,
                 random: RandomGenerator::Xoroshiro(Xoroshiro::from_seed(rand::rng().next_u64())),
                 sea_level: 63,
-                min_y: -64,
+                min_y: world.dimension.min_y,
+                height: world.dimension.height as u16,
                 height_sampler: None,
                 structure_key: None,
             };

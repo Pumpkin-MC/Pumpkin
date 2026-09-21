@@ -1,4 +1,7 @@
+pub mod context_provider_loader;
+pub mod damage_type_loader;
 pub mod function_loader;
+pub mod loot_table_loader;
 pub mod recipe_loader;
 pub mod test_loader;
 
@@ -8,17 +11,30 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use tracing::{info, warn};
 
+use pumpkin_data::damage::DamageType;
 use pumpkin_data::registry::RegistryEntryData;
+use pumpkin_nbt::tag::NbtTag;
 use pumpkin_nbt::{NbtCompound, nbt_compress::read_gzip_compound_tag};
 use pumpkin_protocol::codec::recipe::DynamicRecipe;
+use pumpkin_util::loot_table::DynamicLootTable;
 
 use crate::command::context::command_source::CommandSource;
 use crate::server::Server;
 use crate::server::recipe::RecipeManager;
+use crate::world::loot::LootTableHandle;
 
+use self::context_provider_loader::ContextProviderRegistry;
+use self::damage_type_loader::{DamageTypeDefinition, DamageTypeEntry, DamageTypeRegistry};
 use self::test_loader::{
     TestInstance, TestInstanceRegistry, load_test_instances_from_dir, to_registry_entry,
 };
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct KnownPackData {
+    pub namespace: String,
+    pub id: String,
+    pub version: String,
+}
 
 #[derive(Clone, Debug)]
 pub struct LoadedDatapack {
@@ -29,6 +45,7 @@ pub struct LoadedDatapack {
     pub root_path: PathBuf,
     pub recipe_count: usize,
     pub function_count: usize,
+    pub known_packs: Vec<KnownPackData>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -55,6 +72,10 @@ pub struct DatapackManager {
     functions: RwLock<HashMap<String, Arc<[String]>>>,
     function_tags: RwLock<HashMap<String, Vec<String>>>,
     test_instances: RwLock<TestInstanceRegistry>,
+    context_int_providers: RwLock<ContextProviderRegistry>,
+    context_float_providers: RwLock<ContextProviderRegistry>,
+    damage_types: RwLock<DamageTypeRegistry>,
+    loot_tables: RwLock<HashMap<String, Arc<DynamicLootTable>>>,
 }
 
 fn share_function_bodies(
@@ -80,6 +101,10 @@ impl DatapackManager {
             functions: RwLock::new(HashMap::new()),
             function_tags: RwLock::new(HashMap::new()),
             test_instances: RwLock::new(HashMap::new()),
+            context_int_providers: RwLock::new(HashMap::new()),
+            context_float_providers: RwLock::new(HashMap::new()),
+            damage_types: RwLock::new(HashMap::new()),
+            loot_tables: RwLock::new(HashMap::new()),
         }
     }
 
@@ -95,6 +120,10 @@ impl DatapackManager {
         let mut all_functions: HashMap<String, Vec<String>> = HashMap::new();
         let mut all_function_tags: HashMap<String, Vec<String>> = HashMap::new();
         let mut all_test_instances: TestInstanceRegistry = HashMap::new();
+        let mut all_context_int_providers: ContextProviderRegistry = HashMap::new();
+        let mut all_context_float_providers: ContextProviderRegistry = HashMap::new();
+        let mut all_damage_type_defs: HashMap<String, DamageTypeDefinition> = HashMap::new();
+        let mut all_loot_tables: HashMap<String, Arc<DynamicLootTable>> = HashMap::new();
 
         // Embedded test instances are compile-time constants and always load,
         // so on-disk packs can override them by id.
@@ -102,59 +131,25 @@ impl DatapackManager {
         if embedded_count > 0 {
             info!("Loaded {embedded_count} embedded test instance(s)");
         }
-        if datapacks_dir.is_dir() {
-            match fs::read_dir(&datapacks_dir) {
-                Ok(entries) => {
-                    for entry in entries.flatten() {
-                        let pack_path = entry.path();
-                        let file_name = entry.file_name().to_string_lossy().to_string();
+        let mut acc = PackContentAccumulators {
+            recipes: &mut all_recipes,
+            functions: &mut all_functions,
+            function_tags: &mut all_function_tags,
+            test_instances: &mut all_test_instances,
+            damage_types: &mut all_damage_type_defs,
+            context_int_providers: &mut all_context_int_providers,
+            context_float_providers: &mut all_context_float_providers,
+            loot_tables: &mut all_loot_tables,
+        };
 
-                        if file_name.starts_with('.') || !pack_path.is_dir() {
-                            continue;
-                        }
+        scan_datapacks_dir(
+            &datapacks_dir,
+            enabled_packs,
+            &mut acc,
+            &mut loaded_packs_vec,
+        );
 
-                        let pack_id = format!("file/{file_name}");
-                        let is_enabled = enabled_packs
-                            .iter()
-                            .any(|p| p == &pack_id || p == &file_name);
-                        if !is_enabled {
-                            continue;
-                        }
-
-                        let (description, pack_format) = read_pack_mcmeta(&pack_path);
-
-                        let (pack_recipe_count, pack_function_count, pack_test_instance_count) =
-                            load_pack_contents(
-                                &pack_path,
-                                &mut all_recipes,
-                                &mut all_functions,
-                                &mut all_function_tags,
-                                &mut all_test_instances,
-                            );
-
-                        info!(
-                            "Loaded datapack '{file_name}': {pack_recipe_count} recipe(s), {pack_function_count} function(s), {pack_test_instance_count} test instance(s)"
-                        );
-
-                        loaded_packs_vec.push(LoadedDatapack {
-                            id: pack_id,
-                            name: file_name,
-                            description,
-                            pack_format,
-                            root_path: pack_path,
-                            recipe_count: pack_recipe_count,
-                            function_count: pack_function_count,
-                        });
-                    }
-                }
-                Err(error) => {
-                    warn!(
-                        "Failed to read datapacks directory '{}': {error}",
-                        datapacks_dir.display()
-                    );
-                }
-            }
-        }
+        let damage_type_registry = build_damage_type_registry(all_damage_type_defs);
 
         recipe_manager.set_recipes(all_recipes);
         *self
@@ -174,6 +169,22 @@ impl DatapackManager {
             .test_instances
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = all_test_instances;
+        *self
+            .context_int_providers
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = all_context_int_providers;
+        *self
+            .context_float_providers
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = all_context_float_providers;
+        *self
+            .damage_types
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = damage_type_registry;
+        *self
+            .loot_tables
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = all_loot_tables;
     }
 
     pub fn get_loaded_packs(&self) -> Vec<LoadedDatapack> {
@@ -210,6 +221,162 @@ impl DatapackManager {
         names
     }
 
+    #[must_use]
+    pub fn get_context_int_provider(&self, id: &str) -> Option<NbtTag> {
+        self.context_int_providers
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(id)
+            .cloned()
+    }
+
+    #[must_use]
+    pub fn get_context_float_provider(&self, id: &str) -> Option<NbtTag> {
+        self.context_float_providers
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(id)
+            .cloned()
+    }
+
+    #[must_use]
+    pub fn get_context_int_provider_names(&self) -> Vec<String> {
+        let providers = self
+            .context_int_providers
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut names: Vec<_> = providers.keys().cloned().collect();
+        names.sort_unstable();
+        names
+    }
+
+    #[must_use]
+    pub fn get_context_float_provider_names(&self) -> Vec<String> {
+        let providers = self
+            .context_float_providers
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut names: Vec<_> = providers.keys().cloned().collect();
+        names.sort_unstable();
+        names
+    }
+
+    pub fn insert_context_int_provider(&self, id: String, tag: NbtTag) {
+        self.context_int_providers
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(id, tag);
+    }
+
+    pub fn insert_context_float_provider(&self, id: String, tag: NbtTag) {
+        self.context_float_providers
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(id, tag);
+    }
+
+    #[must_use]
+    pub fn get_loot_table(&self, key: &str) -> Option<LootTableHandle> {
+        let full_key = if key.contains(':') {
+            key.to_string()
+        } else {
+            format!("minecraft:{key}")
+        };
+
+        let guard = self
+            .loot_tables
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+        if let Some(table) = guard.get(&full_key).or_else(|| guard.get(key)) {
+            return Some(LootTableHandle::Dynamic(table.clone()));
+        }
+
+        pumpkin_data::loot_table::get_loot_table(key)
+            .or_else(|| pumpkin_data::loot_table::get_loot_table(&full_key))
+            .map(LootTableHandle::Static)
+    }
+
+    #[must_use]
+    pub fn get_loot_table_names(&self) -> Vec<String> {
+        let guard = self
+            .loot_tables
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut names: Vec<_> = guard.keys().cloned().collect();
+        names.sort_unstable();
+        names
+    }
+
+    pub fn insert_loot_table(&self, key: String, table: Arc<DynamicLootTable>) {
+        self.loot_tables
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(key, table);
+    }
+
+    #[must_use]
+    pub fn get_damage_type(&self, id: &str) -> Option<DamageType> {
+        let guard = self
+            .damage_types
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let full_id = if id.contains(':') {
+            id.to_string()
+        } else {
+            format!("minecraft:{id}")
+        };
+        guard
+            .get(&full_id)
+            .or_else(|| guard.get(id))
+            .map(|e| e.damage_type)
+    }
+
+    #[must_use]
+    pub fn get_damage_type_names(&self) -> Vec<String> {
+        let guard = self
+            .damage_types
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut names: Vec<_> = guard.keys().cloned().collect();
+        names.sort_unstable();
+        names
+    }
+
+    #[must_use]
+    pub fn get_damage_type_registry_map(&self) -> HashMap<String, DamageTypeEntry> {
+        self.damage_types
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    #[must_use]
+    pub fn get_all_damage_type_registry_entries(&self) -> Vec<RegistryEntryData> {
+        let guard = self
+            .damage_types
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut entries: Vec<RegistryEntryData> = guard
+            .values()
+            .map(DamageTypeEntry::to_registry_entry)
+            .collect();
+        entries.sort_by(|a, b| a.entry_id.cmp(&b.entry_id));
+        entries
+    }
+
+    #[must_use]
+    pub fn merge_damage_type_entries(
+        &self,
+        vanilla_entries: &[RegistryEntryData],
+    ) -> Vec<RegistryEntryData> {
+        let guard = self
+            .damage_types
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        merge_damage_type_entries(vanilla_entries, &guard)
+    }
+
     /// Returns datapack test instances in the protocol's synced-registry entry format.
     /// The vanilla Test Instance Block renderer resolves required/padding/base rotation
     /// through this registry using the controller's `data.test` resource key.
@@ -224,6 +391,119 @@ impl DatapackManager {
             .collect();
         entries.sort_unstable_by(|left, right| left.entry_id.cmp(&right.entry_id));
         entries
+    }
+
+    /// Returns the list of known packs for client configuration / pack synchronization,
+    /// matching vanilla's `server.getResourceManager().listPacks().flatMap(p -> p.location().knownPackInfo().stream())`.
+    pub fn get_known_packs<'a>(
+        &self,
+        server: &Server,
+        server_version: &'a str,
+        loaded_packs: &'a [LoadedDatapack],
+    ) -> Vec<pumpkin_protocol::KnownPack<'a>> {
+        use pumpkin_protocol::KnownPack;
+
+        let mut known_packs = Vec::new();
+
+        // 1. Primary vanilla core pack
+        known_packs.push(KnownPack {
+            namespace: "minecraft",
+            id: "core",
+            version: server_version,
+        });
+
+        // 2. Built-in feature packs that are enabled
+        let enabled_packs = Self::get_enabled_packs(server);
+        for pack_name in &enabled_packs {
+            let id: &'static str = match pack_name.as_str() {
+                "trade_rebalance" => "trade_rebalance",
+                "minecart_improvements" => "minecart_improvements",
+                "redstone_experiments" => "redstone_experiments",
+                "bundle" => "bundle",
+                _ => continue,
+            };
+            let pack = KnownPack {
+                namespace: "minecraft",
+                id,
+                version: server_version,
+            };
+            if !known_packs
+                .iter()
+                .any(|p| p.namespace == pack.namespace && p.id == pack.id)
+            {
+                known_packs.push(pack);
+            }
+        }
+
+        // 3. Loaded packs with known_pack info from pack.mcmeta
+        for pack in loaded_packs {
+            for kp in &pack.known_packs {
+                let p = KnownPack {
+                    namespace: &kp.namespace,
+                    id: &kp.id,
+                    version: &kp.version,
+                };
+                if !known_packs.iter().any(|existing| {
+                    existing.namespace == p.namespace
+                        && existing.id == p.id
+                        && existing.version == p.version
+                }) {
+                    known_packs.push(p);
+                }
+            }
+        }
+
+        known_packs
+    }
+
+    /// Returns the enabled world feature flags (e.g. `minecraft:vanilla`, `minecraft:trade_rebalance`,
+    /// `minecraft:minecart_improvements`, `minecraft:redstone_experiments`, `minecraft:bundle`).
+    #[must_use]
+    pub fn get_enabled_features(&self, server: &Server) -> Vec<&'static str> {
+        let enabled_packs = Self::get_enabled_packs(server);
+        Self::resolve_enabled_features(&enabled_packs)
+    }
+
+    /// Resolves enabled feature flag names given a list of enabled pack names.
+    #[must_use]
+    pub fn resolve_enabled_features(enabled_packs: &[String]) -> Vec<&'static str> {
+        let mut features = vec!["minecraft:vanilla"];
+
+        for pack_name in enabled_packs {
+            let feature: &'static str = match pack_name.as_str() {
+                "trade_rebalance" | "file/trade_rebalance" => "minecraft:trade_rebalance",
+                "minecart_improvements" | "file/minecart_improvements" => {
+                    "minecraft:minecart_improvements"
+                }
+                "redstone_experiments" | "file/redstone_experiments" => {
+                    "minecraft:redstone_experiments"
+                }
+                "bundle" | "file/bundle" => "minecraft:bundle",
+                _ => {
+                    if let Some(stripped) = pack_name.strip_prefix("file/") {
+                        match stripped {
+                            "trade_rebalance" => "minecraft:trade_rebalance",
+                            "minecart_improvements" => "minecraft:minecart_improvements",
+                            "redstone_experiments" => "minecraft:redstone_experiments",
+                            "bundle" => "minecraft:bundle",
+                            _ => continue,
+                        }
+                    } else {
+                        continue;
+                    }
+                }
+            };
+            if !features.contains(&feature) {
+                features.push(feature);
+            }
+        }
+
+        features
+    }
+
+    #[must_use]
+    pub fn is_feature_enabled(&self, server: &Server, feature: &str) -> bool {
+        self.get_enabled_features(server).contains(&feature)
     }
 
     /// Loads a Java Edition structure NBT from the currently enabled datapacks.
@@ -520,7 +800,7 @@ impl DatapackManager {
                 .get_world_path()
                 .join("datapacks")
                 .join(stripped);
-            let (desc, format) = read_pack_mcmeta(&pack_path);
+            let (desc, format, _) = read_pack_mcmeta(&pack_path);
             (resolved_name.clone(), stripped.to_string(), desc, format)
         } else {
             (
@@ -746,19 +1026,153 @@ fn parse_structure_resource_location(resource_location: &str) -> Result<(&str, &
     Ok((namespace, path))
 }
 
-/// Loads recipes, functions, function tags, and test instances from a single
-/// datapack directory, returning per-pack counts as `(recipes, functions, test_instances)`.
+fn build_damage_type_registry(
+    mut all_damage_type_defs: HashMap<String, DamageTypeDefinition>,
+) -> DamageTypeRegistry {
+    let mut damage_type_registry: DamageTypeRegistry = HashMap::new();
+    let mut next_custom_id = 51u8;
+    let mut static_map: HashMap<String, &'static DamageType> = HashMap::new();
+    let mut names = Vec::new();
+
+    let mut sorted_ids: Vec<String> = all_damage_type_defs.keys().cloned().collect();
+    sorted_ids.sort();
+
+    for id in sorted_ids {
+        let Some(def) = all_damage_type_defs.remove(&id) else {
+            continue;
+        };
+        let path = id.split_once(':').map_or(id.as_str(), |(_, p)| p);
+        let numeric_id = pumpkin_data::damage::DamageType::from_name(path)
+            .or_else(|| pumpkin_data::damage::DamageType::from_name(&id))
+            .map_or_else(
+                || {
+                    let nid = next_custom_id;
+                    next_custom_id = next_custom_id.saturating_add(1);
+                    nid
+                },
+                |vanilla_dt| vanilla_dt.id,
+            );
+
+        let dt = damage_type_loader::to_damage_type(numeric_id, &def);
+        let nbt_data = damage_type_loader::to_registry_nbt_bytes(&def);
+        let leaked_dt = Box::leak(Box::new(dt));
+        static_map.insert(id.clone(), leaked_dt);
+        static_map.insert(path.to_string(), leaked_dt);
+        names.push(id.clone());
+
+        damage_type_registry.insert(
+            id.clone(),
+            DamageTypeEntry {
+                id,
+                numeric_id,
+                definition: def,
+                damage_type: dt,
+                nbt_data,
+            },
+        );
+    }
+
+    pumpkin_command::argument_types::resource::register_dynamic_damage_types(
+        Box::new(move |req_id: &str| static_map.get(req_id).copied()),
+        names,
+    );
+
+    damage_type_registry
+}
+
+struct PackContentAccumulators<'a> {
+    recipes: &'a mut Vec<DynamicRecipe>,
+    functions: &'a mut HashMap<String, Vec<String>>,
+    function_tags: &'a mut HashMap<String, Vec<String>>,
+    test_instances: &'a mut TestInstanceRegistry,
+    damage_types: &'a mut HashMap<String, DamageTypeDefinition>,
+    context_int_providers: &'a mut ContextProviderRegistry,
+    context_float_providers: &'a mut ContextProviderRegistry,
+    loot_tables: &'a mut HashMap<String, Arc<DynamicLootTable>>,
+}
+
+#[derive(Default, Clone, Copy)]
+struct PackContentCounts {
+    recipes: usize,
+    functions: usize,
+    test_instances: usize,
+    damage_types: usize,
+    int_providers: usize,
+    float_providers: usize,
+    loot_tables: usize,
+}
+
+fn scan_datapacks_dir(
+    datapacks_dir: &Path,
+    enabled_packs: &[String],
+    acc: &mut PackContentAccumulators<'_>,
+    loaded_packs_vec: &mut Vec<LoadedDatapack>,
+) {
+    if !datapacks_dir.is_dir() {
+        return;
+    }
+    let entries = match fs::read_dir(datapacks_dir) {
+        Ok(entries) => entries,
+        Err(error) => {
+            warn!(
+                "Failed to read datapacks directory '{}': {error}",
+                datapacks_dir.display()
+            );
+            return;
+        }
+    };
+
+    for entry in entries.flatten() {
+        let pack_path = entry.path();
+        let file_name = entry.file_name().to_string_lossy().to_string();
+
+        if file_name.starts_with('.') || !pack_path.is_dir() {
+            continue;
+        }
+
+        let pack_id = format!("file/{file_name}");
+        let is_enabled = enabled_packs
+            .iter()
+            .any(|p| p == &pack_id || p == &file_name);
+        if !is_enabled {
+            continue;
+        }
+
+        let (description, pack_format, known_packs) = read_pack_mcmeta(&pack_path);
+        let counts = load_pack_contents(&pack_path, acc);
+
+        info!(
+            "Loaded datapack '{file_name}': {} recipe(s), {} function(s), {} test instance(s), {} damage type(s), {} int provider(s), {} float provider(s), {} loot table(s)",
+            counts.recipes,
+            counts.functions,
+            counts.test_instances,
+            counts.damage_types,
+            counts.int_providers,
+            counts.float_providers,
+            counts.loot_tables,
+        );
+
+        loaded_packs_vec.push(LoadedDatapack {
+            id: pack_id,
+            name: file_name,
+            description,
+            pack_format,
+            root_path: pack_path,
+            recipe_count: counts.recipes,
+            function_count: counts.functions,
+            known_packs,
+        });
+    }
+}
+
+/// Loads recipes, functions, function tags, test instances, damage types, context number providers,
+/// and loot tables from a single datapack directory, returning per-pack counts as [`PackContentCounts`].
 fn load_pack_contents(
     pack_path: &Path,
-    all_recipes: &mut Vec<DynamicRecipe>,
-    all_functions: &mut HashMap<String, Vec<String>>,
-    all_function_tags: &mut HashMap<String, Vec<String>>,
-    all_test_instances: &mut TestInstanceRegistry,
-) -> (usize, usize, usize) {
+    acc: &mut PackContentAccumulators<'_>,
+) -> PackContentCounts {
     let data_dir = pack_path.join("data");
-    let mut pack_recipe_count = 0;
-    let mut pack_function_count = 0;
-    let mut pack_test_instance_count = 0;
+    let mut counts = PackContentCounts::default();
 
     if data_dir.is_dir()
         && let Ok(ns_entries) = fs::read_dir(&data_dir)
@@ -777,8 +1191,8 @@ fn load_pack_contents(
                     load_recipes_from_dir(
                         &namespace,
                         &recipe_dir,
-                        all_recipes,
-                        &mut pack_recipe_count,
+                        acc.recipes,
+                        &mut counts.recipes,
                     );
                 }
             }
@@ -787,9 +1201,9 @@ fn load_pack_contents(
             for fn_sub in ["function", "functions"] {
                 let fn_dir = ns_path.join(fn_sub);
                 if fn_dir.is_dir() {
-                    let before = all_functions.len();
-                    function_loader::load_functions_from_dir(&namespace, &fn_dir, all_functions);
-                    pack_function_count += all_functions.len() - before;
+                    let before = acc.functions.len();
+                    function_loader::load_functions_from_dir(&namespace, &fn_dir, acc.functions);
+                    counts.functions += acc.functions.len() - before;
                 }
             }
 
@@ -799,29 +1213,129 @@ fn load_pack_contents(
                 function_loader::load_function_tags_from_dir(
                     &namespace,
                     &tags_dir,
-                    all_function_tags,
+                    acc.function_tags,
                 );
             }
             // Load game test instances
             let test_instance_dir = ns_path.join("test_instance");
             if test_instance_dir.is_dir() {
-                pack_test_instance_count += load_test_instances_from_dir(
+                counts.test_instances += load_test_instances_from_dir(
                     &namespace,
                     &test_instance_dir,
-                    all_test_instances,
+                    acc.test_instances,
                 );
+            }
+
+            // Load damage types
+            for dt_sub in ["damage_type", "damage_types"] {
+                let dt_dir = ns_path.join(dt_sub);
+                if dt_dir.is_dir() {
+                    counts.damage_types += damage_type_loader::load_damage_types_from_dir(
+                        &namespace,
+                        &dt_dir,
+                        acc.damage_types,
+                    );
+                }
+            }
+
+            // Load context int providers
+            for int_sub in ["context_int_provider", "context_int_providers"] {
+                let provider_dir = ns_path.join(int_sub);
+                if provider_dir.is_dir() {
+                    counts.int_providers +=
+                        context_provider_loader::load_context_providers_from_dir(
+                            &namespace,
+                            &provider_dir,
+                            acc.context_int_providers,
+                        );
+                }
+            }
+
+            // Load context float providers
+            for float_sub in ["context_float_provider", "context_float_providers"] {
+                let provider_dir = ns_path.join(float_sub);
+                if provider_dir.is_dir() {
+                    counts.float_providers +=
+                        context_provider_loader::load_context_providers_from_dir(
+                            &namespace,
+                            &provider_dir,
+                            acc.context_float_providers,
+                        );
+                }
+            }
+
+            // Load loot tables
+            for lt_sub in ["loot_table", "loot_tables"] {
+                let lt_dir = ns_path.join(lt_sub);
+                if lt_dir.is_dir() {
+                    counts.loot_tables += loot_table_loader::load_loot_tables_from_dir(
+                        &namespace,
+                        &lt_dir,
+                        acc.loot_tables,
+                    );
+                }
             }
         }
     }
 
-    (
-        pack_recipe_count,
-        pack_function_count,
-        pack_test_instance_count,
-    )
+    counts
 }
 
-fn read_pack_mcmeta(pack_path: &Path) -> (String, u32) {
+#[must_use]
+pub fn clone_registry_entry(entry: &RegistryEntryData) -> RegistryEntryData {
+    RegistryEntryData {
+        entry_id: entry.entry_id.clone(),
+        data: entry.data.clone(),
+    }
+}
+
+#[must_use]
+pub fn merge_damage_type_entries<S: std::hash::BuildHasher>(
+    vanilla_entries: &[RegistryEntryData],
+    custom_entries: &HashMap<String, DamageTypeEntry, S>,
+) -> Vec<RegistryEntryData> {
+    if custom_entries.is_empty() {
+        return vanilla_entries.iter().map(clone_registry_entry).collect();
+    }
+
+    let mut merged = Vec::with_capacity(vanilla_entries.len() + custom_entries.len());
+    let mut overridden = std::collections::HashSet::new();
+
+    for entry in vanilla_entries {
+        let full_id = if entry.entry_id.contains(':') {
+            entry.entry_id.clone()
+        } else {
+            format!("minecraft:{}", entry.entry_id)
+        };
+
+        if let Some(custom) = custom_entries
+            .get(&full_id)
+            .or_else(|| custom_entries.get(&entry.entry_id))
+        {
+            let mut reg_entry = custom.to_registry_entry();
+            reg_entry.entry_id.clone_from(&entry.entry_id);
+            merged.push(reg_entry);
+            overridden.insert(full_id);
+            overridden.insert(entry.entry_id.clone());
+        } else {
+            merged.push(clone_registry_entry(entry));
+        }
+    }
+
+    let mut sorted_custom: Vec<&DamageTypeEntry> = custom_entries
+        .values()
+        .filter(|e| !overridden.contains(&e.id))
+        .collect();
+    sorted_custom.sort_by_key(|e| e.numeric_id);
+
+    for custom in sorted_custom {
+        merged.push(custom.to_registry_entry());
+    }
+
+    merged
+}
+
+fn read_pack_mcmeta(pack_path: &Path) -> (String, u32, Vec<KnownPackData>) {
     let mcmeta_path = pack_path.join("pack.mcmeta");
     if let Ok(content) = fs::read_to_string(mcmeta_path)
         && let Ok(val) = serde_json::from_str::<serde_json::Value>(&content)
@@ -838,34 +1352,80 @@ fn read_pack_mcmeta(pack_path: &Path) -> (String, u32) {
             .and_then(|p| p.get("pack_format"))
             .and_then(serde_json::Value::as_u64)
             .unwrap_or(61) as u32;
-        return (description, pack_format);
+
+        let mut known_packs = Vec::new();
+        let parse_item = |item: &serde_json::Value| -> Option<KnownPackData> {
+            let ns = item.get("namespace").and_then(serde_json::Value::as_str)?;
+            let id = item.get("id").and_then(serde_json::Value::as_str)?;
+            let ver = item.get("version").and_then(serde_json::Value::as_str)?;
+            Some(KnownPackData {
+                namespace: ns.to_string(),
+                id: id.to_string(),
+                version: ver.to_string(),
+            })
+        };
+
+        if let Some(packs_array) = val.get("known_packs").and_then(serde_json::Value::as_array) {
+            for item in packs_array {
+                if let Some(kp) = parse_item(item) {
+                    known_packs.push(kp);
+                }
+            }
+        } else if let Some(item) = val.get("known_pack") {
+            if let Some(kp) = parse_item(item) {
+                known_packs.push(kp);
+            }
+        } else if let Some(pack_obj) = pack {
+            if let Some(packs_array) = pack_obj
+                .get("known_packs")
+                .and_then(serde_json::Value::as_array)
+            {
+                for item in packs_array {
+                    if let Some(kp) = parse_item(item) {
+                        known_packs.push(kp);
+                    }
+                }
+            } else if let Some(item) = pack_obj.get("known_pack")
+                && let Some(kp) = parse_item(item)
+            {
+                known_packs.push(kp);
+            }
+        }
+
+        return (description, pack_format, known_packs);
     }
-    (String::new(), 61)
+    (String::new(), 61, Vec::new())
 }
 
-fn load_recipes_from_dir(
+fn load_recipes_recursive(
     namespace: &str,
-    dir: &Path,
+    base_dir: &Path,
+    current_dir: &Path,
     all_recipes: &mut Vec<DynamicRecipe>,
     count: &mut usize,
 ) {
-    let Ok(entries) = fs::read_dir(dir) else {
+    let Ok(entries) = fs::read_dir(current_dir) else {
         return;
     };
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
-            load_recipes_from_dir(namespace, &path, all_recipes, count);
+            load_recipes_recursive(namespace, base_dir, &path, all_recipes, count);
         } else if path
             .extension()
             .is_some_and(|ext| ext.eq_ignore_ascii_case("json"))
         {
-            let stem = path
-                .file_stem()
-                .map(|s| s.to_string_lossy().to_string())
-                .unwrap_or_default();
+            let Ok(relative_path) = path.strip_prefix(base_dir) else {
+                continue;
+            };
+
+            let recipe_name = relative_path
+                .with_extension("")
+                .to_string_lossy()
+                .replace('\\', "/");
+
             if let Ok(content) = fs::read_to_string(&path)
-                && let Some(recipe) = recipe_loader::parse_recipe(namespace, &stem, &content)
+                && let Some(recipe) = recipe_loader::parse_recipe(namespace, &recipe_name, &content)
             {
                 all_recipes.push(recipe);
                 *count += 1;
@@ -874,6 +1434,14 @@ fn load_recipes_from_dir(
     }
 }
 
+fn load_recipes_from_dir(
+    namespace: &str,
+    dir: &Path,
+    all_recipes: &mut Vec<DynamicRecipe>,
+    count: &mut usize,
+) {
+    load_recipes_recursive(namespace, dir, dir, all_recipes, count);
+}
 #[cfg(test)]
 mod tests {
     use super::DatapackManager;
@@ -944,6 +1512,89 @@ mod tests {
                 .visit_function_lines("#test:missing", |_| {})
                 .expect_err("unknown function tag must fail"),
             "Unknown function tag: #test:missing"
+        );
+    }
+
+    #[test]
+    fn read_pack_mcmeta_parses_known_packs() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let pack_path = temp_dir.path();
+
+        // 1. Test root known_packs array
+        let mcmeta_content = r#"{
+            "pack": {
+                "description": "Test Pack",
+                "pack_format": 61
+            },
+            "known_packs": [
+                {
+                    "namespace": "example",
+                    "id": "content",
+                    "version": "1.0.0"
+                }
+            ]
+        }"#;
+        std::fs::write(pack_path.join("pack.mcmeta"), mcmeta_content).unwrap();
+
+        let (desc, format, known_packs) = super::read_pack_mcmeta(pack_path);
+        assert_eq!(desc, "Test Pack");
+        assert_eq!(format, 61);
+        assert_eq!(known_packs.len(), 1);
+        assert_eq!(known_packs[0].namespace, "example");
+        assert_eq!(known_packs[0].id, "content");
+        assert_eq!(known_packs[0].version, "1.0.0");
+
+        // 2. Test nested pack.known_packs
+        let mcmeta_content_nested = r#"{
+            "pack": {
+                "description": "Nested Pack",
+                "pack_format": 61,
+                "known_packs": [
+                    {
+                        "namespace": "nested",
+                        "id": "pack",
+                        "version": "2.0.0"
+                    }
+                ]
+            }
+        }"#;
+        std::fs::write(pack_path.join("pack.mcmeta"), mcmeta_content_nested).unwrap();
+
+        let (_, _, known_packs) = super::read_pack_mcmeta(pack_path);
+        assert_eq!(known_packs.len(), 1);
+        assert_eq!(known_packs[0].namespace, "nested");
+        assert_eq!(known_packs[0].id, "pack");
+        assert_eq!(known_packs[0].version, "2.0.0");
+    }
+
+    #[test]
+    fn resolve_enabled_features_works() {
+        // Default only vanilla
+        let default_features = DatapackManager::resolve_enabled_features(&[]);
+        assert_eq!(default_features, ["minecraft:vanilla"]);
+
+        // With minecart improvements
+        let minecart_features =
+            DatapackManager::resolve_enabled_features(&["file/minecart_improvements".to_string()]);
+        assert_eq!(
+            minecart_features,
+            ["minecraft:vanilla", "minecraft:minecart_improvements"]
+        );
+
+        // Multiple experimental features
+        let multi_features = DatapackManager::resolve_enabled_features(&[
+            "trade_rebalance".to_string(),
+            "redstone_experiments".to_string(),
+            "file/bundle".to_string(),
+        ]);
+        assert_eq!(
+            multi_features,
+            [
+                "minecraft:vanilla",
+                "minecraft:trade_rebalance",
+                "minecraft:redstone_experiments",
+                "minecraft:bundle"
+            ]
         );
     }
 }

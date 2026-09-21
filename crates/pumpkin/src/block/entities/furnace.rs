@@ -1,4 +1,4 @@
-use pumpkin_world::inventory::Inventory;
+use pumpkin_inventory::Inventory;
 
 use std::{
     array::from_fn,
@@ -22,6 +22,7 @@ use crate::{
 pub struct FurnaceBlockEntity {
     pub position: BlockPos,
     pub dirty: AtomicBool,
+    pub comparator_dirty: AtomicBool,
 
     pub cooking_time_spent: AtomicU16,
     pub cooking_total_time: AtomicU16,
@@ -44,6 +45,7 @@ impl FurnaceBlockEntity {
         Self {
             position,
             dirty: AtomicBool::new(false),
+            comparator_dirty: AtomicBool::new(false),
             items: RwLock::new(from_fn(|_| ItemStack::EMPTY.clone())),
             cooking_total_time: AtomicU16::new(0),
             cooking_time_spent: AtomicU16::new(0),

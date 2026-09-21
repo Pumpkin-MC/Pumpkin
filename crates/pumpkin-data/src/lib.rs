@@ -254,86 +254,6 @@ pub mod fluid;
 #[path = "generated/block.rs"]
 pub mod block_properties;
 
-#[cfg(feature = "block")]
-#[rustfmt::skip]
-#[path = "generated/block_state_remap.rs"]
-pub mod block_state_remap;
-
-#[cfg(feature = "item_id_remap")]
-#[rustfmt::skip]
-#[path = "generated/item_id_remap.rs"]
-pub mod item_id_remap;
-
-#[cfg(feature = "entity_id_remap")]
-#[rustfmt::skip]
-#[path = "generated/entity_id_remap.rs"]
-pub mod entity_id_remap;
-
-#[cfg(feature = "sound_id_remap")]
-#[rustfmt::skip]
-#[path = "generated/sound_id_remap.rs"]
-pub mod sound_id_remap;
-
-#[cfg(feature = "particle_id_remap")]
-#[rustfmt::skip]
-#[path = "generated/particle_id_remap.rs"]
-pub mod particle_id_remap;
-
-#[cfg(feature = "menu_id_remap")]
-#[rustfmt::skip]
-#[path = "generated/menu_id_remap.rs"]
-pub mod menu_id_remap;
-
-#[cfg(feature = "recipe_serializer_id_remap")]
-#[rustfmt::skip]
-#[path = "generated/recipe_serializer_id_remap.rs"]
-pub mod recipe_serializer_id_remap;
-
-#[cfg(feature = "argument_type_id_remap")]
-#[rustfmt::skip]
-#[path = "generated/argument_type_id_remap.rs"]
-pub mod argument_type_id_remap;
-
-#[cfg(feature = "attribute_id_remap")]
-#[rustfmt::skip]
-#[path = "generated/attribute_id_remap.rs"]
-pub mod attribute_id_remap;
-
-#[cfg(feature = "block_entity_type_id_remap")]
-#[rustfmt::skip]
-#[path = "generated/block_entity_type_id_remap.rs"]
-pub mod block_entity_type_id_remap;
-
-#[cfg(feature = "custom_stat_id_remap")]
-#[rustfmt::skip]
-#[path = "generated/custom_stat_id_remap.rs"]
-pub mod custom_stat_id_remap;
-
-#[cfg(feature = "data_component_type_id_remap")]
-#[rustfmt::skip]
-#[path = "generated/data_component_type_id_remap.rs"]
-pub mod data_component_type_id_remap;
-
-#[cfg(feature = "enchantment_id_remap")]
-#[rustfmt::skip]
-#[path = "generated/enchantment_id_remap.rs"]
-pub mod enchantment_id_remap;
-
-#[cfg(feature = "environment_attribute_id_remap")]
-#[rustfmt::skip]
-#[path = "generated/environment_attribute_id_remap.rs"]
-pub mod environment_attribute_id_remap;
-
-#[cfg(feature = "painting_variant_id_remap")]
-#[rustfmt::skip]
-#[path = "generated/painting_variant_id_remap.rs"]
-pub mod painting_variant_id_remap;
-
-#[cfg(feature = "slot_display_id_remap")]
-#[rustfmt::skip]
-#[path = "generated/slot_display_id_remap.rs"]
-pub mod slot_display_id_remap;
-
 #[cfg(feature = "bedrock_creative")]
 #[rustfmt::skip]
 #[path = "generated/bedrock_creative.rs"]
@@ -354,20 +274,11 @@ pub mod tag;
 #[path = "generated/noise_router.rs"]
 pub mod noise_router;
 
-#[cfg(feature = "composter")]
-#[rustfmt::skip]
-#[path = "generated/composter_increase_chance.rs"]
-pub mod composter_increase_chance;
 
 #[cfg(feature = "flower_pot")]
 #[rustfmt::skip]
 #[path = "generated/flower_pot_transformations.rs"]
 pub mod flower_pot_transformations;
-
-#[cfg(feature = "fuels")]
-#[rustfmt::skip]
-#[path = "generated/fuels.rs"]
-pub mod fuels;
 
 #[cfg(feature = "effect")]
 #[rustfmt::skip]
@@ -394,10 +305,6 @@ pub mod potion;
 #[path = "generated/potion_brewing.rs"]
 pub mod potion_brewing;
 
-#[cfg(feature = "recipe_remainder")]
-#[rustfmt::skip]
-#[path = "generated/recipe_remainder.rs"]
-pub mod recipe_remainder;
 
 #[cfg(feature = "block")]
 mod block_direction;
@@ -415,7 +322,7 @@ pub use block_rotation::{Mirror, Rotation, transform_block_properties, transform
 #[cfg(feature = "block")]
 pub use block_state::{BlockState, BlockStateId};
 #[cfg(feature = "block")]
-pub use blocks::{Block, BlockId};
+pub use blocks::{Block, BlockId, SpawnFloorPredicate};
 
 #[cfg(feature = "material_rule")]
 #[rustfmt::skip]
