@@ -73,14 +73,20 @@ impl BlockBehaviour for EnderChestBlock {
     }
 
     fn normal_use(&self, args: NormalUseArgs<'_>) -> BlockActionResult {
-        if let Some(_factory) = self.get_screen_handler_factory(GetScreenHandlerFactoryArgs {
+        if let Some(factory) = self.get_screen_handler_factory(GetScreenHandlerFactoryArgs {
             server: args.server,
             world: args.world,
             block: args.block,
             position: args.position,
             player: args.player,
         }) {
-            args.player.open_ender_chest(Some(*args.position));
+            args.player.increment_stat(
+                pumpkin_data::statistic::StatisticCategory::Custom,
+                pumpkin_data::statistic::CustomStatistic::OpenEnderchest as i32,
+                1,
+            );
+            args.player
+                .open_handled_screen(factory.as_ref(), Some(*args.position));
             // TODO: PiglinBrain.onGuardedBlockInteracted(serverWorld, player, true);
         }
 
