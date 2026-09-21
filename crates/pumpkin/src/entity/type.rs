@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
 use pumpkin_data::entity::EntityType;
+use pumpkin_data::item::Item;
+use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::Taggable;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
@@ -304,7 +306,11 @@ pub fn from_type(
         id if id == EntityType::LIGHTNING_BOLT.id => Arc::new(LightningBoltEntity::new(entity)),
         id if id == EntityType::MARKER.id => MarkerEntity::new(entity),
         id if id == EntityType::INTERACTION.id => InteractionEntity::new(entity),
-        id if id == EntityType::FIREWORK_ROCKET.id => Arc::new(FireworkRocketEntity::new(entity)),
+        id if id == EntityType::FIREWORK_ROCKET.id => Arc::new(FireworkRocketEntity::new(
+            entity,
+            None,
+            ItemStack::new(1, &Item::FIREWORK_ROCKET),
+        )),
         id if id == EntityType::SPLASH_POTION.id => Arc::new(SplashPotionEntity::new(entity)),
         id if id == EntityType::LINGERING_POTION.id => Arc::new(LingeringPotionEntity::new(entity)),
         id if id == EntityType::LLAMA_SPIT.id => Arc::new(LlamaSpitEntity::new(entity)),

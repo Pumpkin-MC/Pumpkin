@@ -15,6 +15,7 @@ use pumpkin_nbt::{serializer::NbtWriteHelperJava, tag::NbtTag};
 use pumpkin_util::version::JavaMinecraftVersion;
 
 const MAX_STATUS_EFFECTS: usize = 128;
+const MAX_CHARGED_PROJECTILES: usize = 1024;
 
 #[must_use]
 pub fn data_to_proto_sound(id_or: &IdOr<SoundEvent>) -> crate::IdOr<crate::SoundEvent> {
@@ -1294,8 +1295,6 @@ fn deserialize_item_stack_template(
         let id = DataComponent::try_from_id(id_val as u8)
             .ok_or_else(|| ReadingError::Message(format!("Unknown component ID: {id_val}")))?;
 
-        let _byte_len = seq.get_var_int()?;
-
         let component_impl = deserialize(id, seq)?;
         patch.push((id, Some(component_impl)));
     }
@@ -1727,11 +1726,15 @@ impl DataComponentCodec<Self> for EnchantmentGlintOverrideImpl {
 }
 
 impl DataComponentCodec<Self> for IntangibleProjectileImpl {
-    fn serialize(&self, _seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        Ok(())
+    fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        seq.write_nbt(NbtTag::Compound(pumpkin_nbt::compound::NbtCompound::new()))
     }
 
-    fn deserialize(_seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+    fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
+        seq.get_compound_nbt_with_version(&JavaMinecraftVersion::V_26_3)?
+            .ok_or_else(|| {
+                ReadingError::Message("Expected intangible projectile compound".into())
+            })?;
         Ok(Self)
     }
 }
@@ -2214,22 +2217,39 @@ impl DataComponentCodec<Self> for MapPostProcessingImpl {
 
 impl DataComponentCodec<Self> for ChargedProjectilesImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
+        if self.projectiles.len() > MAX_CHARGED_PROJECTILES {
+            return Err(WritingError::Message("Too many charged projectiles".into()));
+        }
         seq.write_var_int(&VarInt::from(self.projectiles.len() as i32))?;
-        for _ in &self.projectiles {
-            seq.write_var_int(&VarInt(0))?;
-            seq.write_var_int(&VarInt(0))?;
-            seq.write_var_int(&VarInt(0))?;
-            seq.write_var_int(&VarInt(0))?;
+        for projectile in &self.projectiles {
+            let stack = pumpkin_data::item_stack::ItemStack::read_item_stack(projectile)
+                .filter(|stack| !stack.is_empty())
+                .ok_or_else(|| {
+                    WritingError::Message("Charged projectile must be non-empty".into())
+                })?;
+            serialize_item_stack_template(&stack, seq)?;
         }
         Ok(())
     }
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
-        let len = seq.get_var_int()?.0 as usize;
-        let mut projectiles = Vec::with_capacity(len);
+        let len = seq.get_var_int()?.0;
+        if len < 0 || len as usize > MAX_CHARGED_PROJECTILES {
+            return Err(ReadingError::Message(
+                "Invalid charged projectile count".into(),
+            ));
+        }
+        let mut projectiles = Vec::new();
         for _ in 0..len {
-            let _ = deserialize_item_stack_template(seq)?;
-            projectiles.push(pumpkin_nbt::compound::NbtCompound::new());
+            let stack = deserialize_item_stack_template(seq)?;
+            if stack.is_empty() {
+                return Err(ReadingError::Message(
+                    "Charged projectile must be non-empty".into(),
+                ));
+            }
+            let mut projectile = pumpkin_nbt::compound::NbtCompound::new();
+            stack.write_item_stack(&mut projectile);
+            projectiles.push(projectile);
         }
         Ok(Self { projectiles })
     }

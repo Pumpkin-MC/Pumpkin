@@ -307,6 +307,7 @@ impl DispenserBlock {
     // Fire charges and wind charges share these values.
     const FIREBALL_PROJECTILE_POWER: f64 = 1.0;
     const FIREBALL_PROJECTILE_UNCERTAINTY: f64 = 6.666_666_5;
+    const ROCKET_DISPENSE_OFFSET: f64 = 0.500_009_999_999_747_4;
     const FIREWORK_PROJECTILE_POWER: f64 = 0.5;
     const FIREWORK_PROJECTILE_UNCERTAINTY: f64 = 1.0;
 
@@ -746,21 +747,19 @@ impl DispenserBlock {
     }
 
     fn dispense_firework_rocket(ctx: &DispenseContext<'_>, item: &mut ItemStack) {
-        let _ = item.split(1);
+        let dispensed = item.split(1);
         let facing = to_normal(ctx.facing);
-        // Vanilla spawns fireworks closer to the dispenser face and slightly above center.
         let position = ctx
             .position
             .to_centered_f64()
-            .add(&(facing * (0.7 * 0.5125)))
-            .add(&Vector3::new(0.0, 0.08, 0.0));
+            .add(&(facing * Self::ROCKET_DISPENSE_OFFSET));
         let entity = Entity::new(ctx.world.clone(), position, &EntityType::FIREWORK_ROCKET);
-        let rocket = FireworkRocketEntity::new(entity);
+        let rocket = FireworkRocketEntity::new_shot_at_angle(entity, dispensed);
 
         // `FireworkRocketEntity` does not expose its inner projectile, so replicate
         // `ThrownItemEntity::set_velocity` here.
         let deviation = 0.017_227_5 * Self::FIREWORK_PROJECTILE_UNCERTAINTY;
-        let velocity = Vector3::new(facing.x, facing.y + 0.1, facing.z)
+        let velocity = Vector3::new(facing.x, facing.y, facing.z)
             .normalize()
             .add_raw(
                 triangle(&mut rng(), 0.0, deviation),
@@ -779,7 +778,8 @@ impl DispenserBlock {
             velocity.y.atan2(velocity.horizontal_length()) as f32 * 57.295_776,
         );
 
-        Self::finish_projectile_launch(ctx, Arc::new(rocket), WorldEvent::SoundFireworkShoot);
+        rocket.spawn(ctx.world);
+        Self::play_dispense_effects(ctx, WorldEvent::SoundFireworkShoot);
     }
 
     fn dispense_empty_bucket(

@@ -19,6 +19,8 @@ use pumpkin_data::data_component_impl::EquipmentSlot;
 use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityStatus;
 use pumpkin_data::fluid::Fluid;
+use pumpkin_data::game_event::GameEvent;
+use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
 use pumpkin_data::tracked_data;
@@ -1357,6 +1359,18 @@ impl Entity {
         let sin_pitch = pitch_rad.sin();
 
         Vector3::new(sin_yaw * cos_pitch, -sin_pitch, cos_yaw * cos_pitch)
+    }
+
+    #[must_use]
+    pub fn calculate_view_vector(pitch: f32, yaw: f32) -> Vector3<f64> {
+        let pitch = pitch.to_radians();
+        let yaw = -yaw.to_radians();
+        let horizontal = pumpkin_util::math::cos(pitch);
+        Vector3::new(
+            f64::from(pumpkin_util::math::sin(yaw) * horizontal),
+            f64::from(-pumpkin_util::math::sin(pitch)),
+            f64::from(pumpkin_util::math::cos(yaw) * horizontal),
+        )
     }
 
     /// Changes this entity's pitch and yaw to look at target
@@ -3364,6 +3378,40 @@ impl Entity {
             &je_packet,
             &be_packet,
         );
+    }
+
+    pub fn drop_all_leash_connections(&self) -> bool {
+        let world = self.world.load();
+        let bounds = self.bounding_box.load();
+        let center = (bounds.min + bounds.max) * 0.5;
+        let search_box = BoundingBox::new(center, center).expand(16.0, 16.0, 16.0);
+        let mut dropped = false;
+        for target in world.get_all_at_box(&search_box) {
+            let entity = target.get_entity();
+            let attached = entity
+                .leashed_to
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .as_ref()
+                .is_some_and(|holder| holder.get_entity().entity_id == self.entity_id);
+            if !attached && entity.entity_id != self.entity_id {
+                continue;
+            }
+            if entity.is_leashed() {
+                entity.unleash();
+                if !entity.is_leashed() {
+                    world.spawn_entity(Arc::new(ItemEntity::new(
+                        Self::new(world.clone(), entity.pos.load(), &EntityType::ITEM),
+                        ItemStack::new(1, &Item::LEAD),
+                    )));
+                    dropped = true;
+                }
+            }
+        }
+        if dropped {
+            world.emit_game_event(GameEvent::Shear.name(), self.pos.load());
+        }
+        dropped
     }
 
     pub fn tick_leash(&self) {

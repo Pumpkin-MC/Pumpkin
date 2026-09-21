@@ -6391,6 +6391,16 @@ impl Player {
         self.tick_counter.load(Ordering::Relaxed) - self.item_use_start_time.load(Ordering::Relaxed)
     }
 
+    pub fn get_hand_holding_item_angle(&self, item: &pumpkin_data::item::Item) -> Vector3<f64> {
+        let inventory = self.inventory();
+        let off_hand_only = inventory.off_hand_item().item.id == item.id
+            && inventory.held_item().item.id != item.id;
+        let main_arm = self.config.load().main_hand;
+        let right_arm = (main_arm == Hand::Right) != off_hand_only;
+        let offset = if right_arm { 80.0 } else { -80.0 };
+        Entity::calculate_view_vector(0.0, self.get_entity().yaw.load() + offset) * 0.5
+    }
+
     /// Find arrow in inventory (main hand, offhand, or inventory slots)
     pub fn find_arrow(&self) -> Option<usize> {
         use pumpkin_data::item::Item;

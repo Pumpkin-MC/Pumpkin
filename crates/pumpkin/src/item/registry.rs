@@ -37,6 +37,17 @@ impl ItemRegistry {
     }
 
     pub fn on_use_with_rotation(&self, stack: &ItemStack, player: &Player, yaw: f32, pitch: f32) {
+        self.on_use_in_hand(stack, player, pumpkin_util::Hand::Right, yaw, pitch);
+    }
+
+    pub fn on_use_in_hand(
+        &self,
+        stack: &ItemStack,
+        player: &Player,
+        hand: pumpkin_util::Hand,
+        yaw: f32,
+        pitch: f32,
+    ) {
         let item = stack.item;
         let cooldown = stack.get_use_cooldown();
         let cooldown_group = cooldown
@@ -49,7 +60,7 @@ impl ItemRegistry {
 
         let pumpkin_item = self.get_pumpkin_item(item.id);
         if let Some(pumpkin_item) = pumpkin_item {
-            pumpkin_item.normal_use_with_rotation(item, player, yaw, pitch);
+            pumpkin_item.normal_use_in_hand(item, player, hand, yaw, pitch);
         }
 
         if let Some(cooldown) = cooldown {
