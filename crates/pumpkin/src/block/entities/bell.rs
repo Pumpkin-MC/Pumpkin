@@ -55,8 +55,15 @@ impl BellBlockEntity {
         BoundingBox::from_block(position).expand_all(Self::RAIDER_GLOWING_RANGE)
     }
 
-    fn entity_within_range(position: &BlockPos, entity_pos: &pumpkin_util::math::vector3::Vector3<f64>, range: f64) -> bool {
-        position.to_centered_f64().squared_distance_to_vec(entity_pos) <= range * range
+    fn entity_within_range(
+        position: &BlockPos,
+        entity_pos: &pumpkin_util::math::vector3::Vector3<f64>,
+        range: f64,
+    ) -> bool {
+        position
+            .to_centered_f64()
+            .squared_distance_to_vec(entity_pos)
+            <= range * range
     }
 
     const fn resonance_effect() -> Effect {
