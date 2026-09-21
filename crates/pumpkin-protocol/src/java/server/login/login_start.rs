@@ -19,7 +19,8 @@ impl<'a> ServerPacket<'a> for SLoginStart {
         let mut uuid = None;
 
         if version >= &JavaMinecraftVersion::V_1_19 {
-            if version <= &JavaMinecraftVersion::V_1_19_3 {
+            // 1.19.3 dropped the signature data, only 1.19 and 1.19.1/2 send it
+            if version < &JavaMinecraftVersion::V_1_19_3 {
                 let has_signature_data = read.get_bool()?;
                 if has_signature_data {
                     let _expires_at = read.get_i64_be()?;
@@ -62,7 +63,7 @@ impl crate::ClientPacket for SLoginStart {
         use crate::ser::NetworkWriteExt;
         write.write_string_bounded(&self.name, 16)?;
         if version >= &JavaMinecraftVersion::V_1_19 {
-            if version <= &JavaMinecraftVersion::V_1_19_3 {
+            if version < &JavaMinecraftVersion::V_1_19_3 {
                 write.write_bool(false)?;
             }
             if version >= &JavaMinecraftVersion::V_1_20_2 {
@@ -73,5 +74,45 @@ impl crate::ClientPacket for SLoginStart {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ClientPacket;
+
+    #[test]
+    fn the_writer_and_the_reader_agree_on_every_version() {
+        let uuid = uuid::Uuid::from_u128(0x0102_0304_0506_0708_090a_0b0c_0d0e_0f10);
+        for version in [
+            JavaMinecraftVersion::V_1_16_2,
+            JavaMinecraftVersion::V_1_18_2,
+            JavaMinecraftVersion::V_1_19,
+            JavaMinecraftVersion::V_1_19_1,
+            JavaMinecraftVersion::V_1_19_3,
+            JavaMinecraftVersion::V_1_19_4,
+            JavaMinecraftVersion::V_1_20,
+            JavaMinecraftVersion::V_1_20_2,
+        ] {
+            let packet = SLoginStart {
+                name: "Notch".into(),
+                uuid,
+            };
+            let mut bytes = Vec::new();
+            packet
+                .write_packet_data(&mut bytes, &version)
+                .expect("write");
+
+            let mut read = &bytes[..];
+            let back = SLoginStart::read(&mut read, &version).expect("read");
+            assert_eq!(&*back.name, "Notch", "{version}");
+            assert!(read.is_empty(), "{version}: whole payload consumed");
+
+            // Below 1.19.1 the uuid does not travel and the server derives an offline one.
+            if version >= JavaMinecraftVersion::V_1_19_1 {
+                assert_eq!(back.uuid, uuid, "{version}");
+            }
+        }
     }
 }
