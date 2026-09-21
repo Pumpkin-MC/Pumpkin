@@ -25,7 +25,7 @@ impl BellBlockEntity {
     const RAIDER_DETECTION_RANGE: f64 = 32.0;
     const RAIDER_GLOWING_RANGE: f64 = 48.0;
     const RESONANCE_TICKS: i32 = 40;
-    const GLOWING_TICKS: i32 = 180;
+    const GLOWING_TICKS: i32 = 60;
 
     #[must_use]
     pub const fn new(position: BlockPos) -> Self {
@@ -194,7 +194,7 @@ mod tests {
 
         let effect = BellBlockEntity::resonance_effect();
         assert_eq!(effect.effect_type.id, StatusEffect::GLOWING.id);
-        assert_eq!(effect.duration, 180);
+        assert_eq!(effect.duration, 60);
     }
 
     #[test]
