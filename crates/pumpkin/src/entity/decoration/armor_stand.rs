@@ -186,12 +186,31 @@ impl ArmorStandEntity {
         self.rotation.store(packed.to_owned());
     }
 
+    fn drop_equipment(&self) {
+        let entity = self.get_entity();
+        let stacks = {
+            let mut equipment = self
+                .living_entity
+                .entity_equipment
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            take_non_empty_equipment(&mut equipment)
+        };
+        let world = entity.world.load();
+        let block_pos = entity.block_pos.load();
+
+        for stack in stacks {
+            world.drop_stack(&block_pos, stack);
+        }
+    }
+
     fn break_and_drop_items(&self) {
         let entity = self.get_entity();
         //let name = entity.custom_name.unwrap_or(entity.get_name());
 
         //TODO: i am stupid! let armor_stand_item = ItemStack::new_with_component(1, &Item::ARMOR_STAND, vec![(DataComponent::CustomName, self.get_custom_name())]);
         let armor_stand_item = ItemStack::new(1, &Item::ARMOR_STAND);
+        self.drop_equipment();
         entity
             .world
             .load()
@@ -314,6 +333,16 @@ impl ArmorStandEntity {
     fn is_slot_insertion_disabled(&self, slot: &EquipmentSlot) -> bool {
         self.disabled_slots.load(Ordering::Relaxed) & Self::slot_bit(slot, 16) != 0
     }
+}
+
+fn take_non_empty_equipment(
+    equipment: &mut pumpkin_inventory::entity_equipment::EntityEquipment,
+) -> Vec<ItemStack> {
+    equipment
+        .equipment
+        .drain()
+        .filter_map(|(_, stack)| (!stack.is_empty()).then_some(stack))
+        .collect()
 }
 
 fn item_equipment_slot(item_stack: &ItemStack) -> EquipmentSlot {
@@ -508,6 +537,7 @@ impl EntityBase for ArmorStandEntity {
             || damage_type == DamageType::BAD_RESPAWN_POINT;
 
         if is_explosion {
+            self.drop_equipment();
             Self::on_break(entity);
             entity.remove();
             return false;
@@ -702,5 +732,21 @@ mod tests {
 
         assert_eq!(new_stand_stack.item_count, 1);
         assert_eq!(held.item_count, 4);
+    }
+
+    #[test]
+    fn taking_equipment_drains_non_empty_stacks() {
+        let mut equipment = pumpkin_inventory::entity_equipment::EntityEquipment::new();
+        equipment.put(
+            &EquipmentSlot::HEAD,
+            ItemStack::new(1, &Item::DIAMOND_HELMET),
+        );
+        equipment.put(&EquipmentSlot::FEET, ItemStack::EMPTY.clone());
+
+        let stacks = take_non_empty_equipment(&mut equipment);
+
+        assert_eq!(stacks.len(), 1);
+        assert_eq!(stacks[0].item.id, Item::DIAMOND_HELMET.id);
+        assert!(equipment.equipment.is_empty());
     }
 }

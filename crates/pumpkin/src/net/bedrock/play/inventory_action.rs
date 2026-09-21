@@ -447,6 +447,9 @@ impl BedrockClient {
                 let Some(server) = world.server.upgrade() else {
                     return;
                 };
+                if player.is_spectator() {
+                    return;
+                }
 
                 let mut event = PlayerInteractEntityEvent::new(
                     player,
