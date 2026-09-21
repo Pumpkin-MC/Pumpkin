@@ -6,6 +6,7 @@ use uuid::Uuid;
 ///
 /// Includes their UUID, name, permission level, and whether they bypass the player limit.
 #[derive(Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct Op {
     /// The UUID of the operator.
     pub uuid: Uuid,
