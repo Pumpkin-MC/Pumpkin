@@ -465,6 +465,66 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn blob_status_sends_each_requested_payload_once()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use pumpkin_protocol::bedrock::{
+            client::client_cache_miss_response::{CClientCacheMissResponse, MissingBlobData},
+            server::client_cache_blob_status::SClientCacheBlobStatus,
+        };
+
+        let client = blob_test_client().await?;
+        let mut outgoing = client
+            .outgoing_packet_queue_recv
+            .lock()
+            .await
+            .take()
+            .ok_or("missing queue")?;
+        for miss_hashes in [vec![1; 4096], vec![2, 1, 2, 1]] {
+            client
+                .blob_cache
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .extend([(1, vec![1; 1024]), (2, vec![2; 1024]), (3, vec![3])]);
+            let expected_hashes = if miss_hashes[0] == 1 {
+                vec![1]
+            } else {
+                vec![2, 1]
+            };
+            let expected = client.serialize_packet(&CClientCacheMissResponse {
+                missing_blobs: expected_hashes
+                    .iter()
+                    .map(|hash| MissingBlobData {
+                        blob_id: *hash,
+                        blob_data: vec![*hash as u8; 1024],
+                    })
+                    .collect(),
+            })?;
+
+            client.handle_client_cache_blob_status(SClientCacheBlobStatus {
+                hit_hashes: vec![],
+                miss_hashes,
+            });
+
+            let response = outgoing.try_recv()?;
+            assert_eq!(response.data.len(), expected.len());
+            assert_eq!(response.data, expected);
+            assert!(outgoing.try_recv().is_err());
+            assert_eq!(client.pending_bytes.load(Ordering::Relaxed), expected.len());
+            crate::net::decrement_pending_bytes(&client.pending_bytes, expected.len());
+            let cache = client
+                .blob_cache
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            for hash in expected_hashes {
+                assert!(!cache.contains_key(&hash), "serviced miss remains cached");
+            }
+            assert_eq!(cache.get(&3), Some(&vec![3]));
+        }
+        client.close().await;
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn blob_status_keeps_payloads_when_enqueue_fails()
     -> Result<(), Box<dyn std::error::Error>> {
         use pumpkin_protocol::bedrock::server::client_cache_blob_status::SClientCacheBlobStatus;
@@ -505,7 +565,7 @@ mod tests {
 
             client.handle_client_cache_blob_status(SClientCacheBlobStatus {
                 hit_hashes: vec![1],
-                miss_hashes: vec![2],
+                miss_hashes: vec![2, 2],
             });
 
             assert!(outgoing.try_recv().is_err(), "failed response was queued");
@@ -552,7 +612,7 @@ mod tests {
         let encoder = client.network_writer.write().await;
         client.handle_client_cache_blob_status(SClientCacheBlobStatus {
             hit_hashes: vec![],
-            miss_hashes: vec![1],
+            miss_hashes: vec![1, 1],
         });
         drop(encoder);
         assert!(outgoing.try_recv().is_err());
@@ -567,7 +627,7 @@ mod tests {
 
         client.handle_client_cache_blob_status(SClientCacheBlobStatus {
             hit_hashes: vec![],
-            miss_hashes: vec![1],
+            miss_hashes: vec![1, 1],
         });
         let response = outgoing.try_recv()?;
         assert_eq!(
