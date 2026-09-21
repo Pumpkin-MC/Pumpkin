@@ -1,4 +1,5 @@
 use crate::command::{
+    CommandSource,
     argument_types::argument_type::{ArgumentType, JavaClientArgumentType},
     context::command_context::CommandContext,
     errors::command_syntax_error::CommandSyntaxError,
@@ -10,7 +11,7 @@ use crate::command::{
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct TeamArgumentType;
 
-impl ArgumentType for TeamArgumentType {
+impl ArgumentType<CommandSource> for TeamArgumentType {
     type Item = String;
 
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {

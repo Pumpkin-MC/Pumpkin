@@ -13,7 +13,7 @@ use pumpkin_data::tag::Block::MINECRAFT_PREVENT_MOB_SPAWNING_INSIDE;
 use pumpkin_data::tag::Fluid::{MINECRAFT_LAVA, MINECRAFT_WATER};
 use pumpkin_data::tag::Taggable;
 use pumpkin_data::tag::WorldgenBiome::MINECRAFT_REDUCE_WATER_AMBIENT_SPAWNS;
-use pumpkin_data::{Block, BlockDirection, BlockState};
+use pumpkin_data::{Block, BlockDirection, BlockState, SpawnFloorPredicate};
 use pumpkin_util::GameMode;
 use pumpkin_util::math::get_section_cord;
 use pumpkin_util::math::position::BlockPos;
@@ -1018,8 +1018,7 @@ pub fn is_spawn_position_ok(
             let down = world.get_block_state(&block_pos.down());
             let up = world.get_block_state(&block_pos.up());
             let cur = world.get_block_state(block_pos);
-            let is_valid_spawn_below =
-                down.is_side_solid(BlockDirection::Up) && down.luminance < 14;
+            let is_valid_spawn_below = is_valid_spawn_floor(down, entity_type);
 
             if is_valid_spawn_below {
                 is_valid_empty_spawn_block(cur, entity_type)
@@ -1060,8 +1059,7 @@ pub fn is_spawn_position_ok_cache(
             let down = GenerationCache::get_block_state(cache, &down_pos).to_state();
             let up = GenerationCache::get_block_state(cache, &up_pos).to_state();
 
-            let is_valid_spawn_below =
-                down.is_side_solid(BlockDirection::Up) && down.luminance < 14;
+            let is_valid_spawn_below = is_valid_spawn_floor(down, entity_type);
 
             if is_valid_spawn_below {
                 is_valid_empty_spawn_block(state, entity_type)
@@ -1091,6 +1089,22 @@ pub fn is_valid_empty_spawn_block(
     !is_block_dangerous(entity_type, state)
 }
 
+#[must_use]
+fn is_valid_spawn_floor(state: &'static BlockState, entity_type: &'static EntityType) -> bool {
+    match Block::from_state_id(state.id).spawn_floor_predicate() {
+        SpawnFloorPredicate::Default => {
+            state.is_side_solid(BlockDirection::Up) && state.luminance < 14
+        }
+        SpawnFloorPredicate::Never => false,
+        SpawnFloorPredicate::Always => true,
+        SpawnFloorPredicate::OcelotOrParrot => {
+            entity_type == &EntityType::OCELOT || entity_type == &EntityType::PARROT
+        }
+        SpawnFloorPredicate::PolarBear => entity_type == &EntityType::POLAR_BEAR,
+        SpawnFloorPredicate::FireImmune => entity_type.fire_immune,
+    }
+}
+
 fn is_block_dangerous(entity_type: &'static EntityType, state: &'static BlockState) -> bool {
     let block = Block::from_state_id(state.id);
     if !entity_type.fire_immune && is_burning_block(block) {
@@ -1109,4 +1123,32 @@ fn is_burning_block(block: &Block) -> bool {
         || block.id == Block::LAVA_CAULDRON.id
         || block.id == Block::CAMPFIRE.id
         || block.id == Block::SOUL_CAMPFIRE.id
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn vanilla_spawn_floor_predicates_are_preserved() {
+        for (block, entity_type, expected) in [
+            (&Block::BEDROCK, &EntityType::CREEPER, false),
+            (&Block::STONE, &EntityType::CREEPER, true),
+            (&Block::GLASS, &EntityType::CREEPER, false),
+            (&Block::OAK_LEAVES, &EntityType::OCELOT, true),
+            (&Block::OAK_LEAVES, &EntityType::CREEPER, false),
+            (&Block::ICE, &EntityType::POLAR_BEAR, true),
+            (&Block::ICE, &EntityType::CREEPER, false),
+            (&Block::MAGMA_BLOCK, &EntityType::BLAZE, true),
+            (&Block::MAGMA_BLOCK, &EntityType::CREEPER, false),
+            (&Block::JACK_O_LANTERN, &EntityType::CREEPER, true),
+        ] {
+            assert_eq!(
+                is_valid_spawn_floor(block.default_state, entity_type),
+                expected,
+                "{}",
+                block.name
+            );
+        }
+    }
 }

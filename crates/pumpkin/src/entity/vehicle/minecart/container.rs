@@ -9,14 +9,12 @@ use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
     InventoryPlayer, ScreenHandlerFactory, SharedScreenHandler,
 };
+use pumpkin_inventory::{Clearable, Inventory};
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::math::vector3::Vector3;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::inventory::{Clearable, Inventory};
 
 use crate::entity::{Entity, player::Player};
-use crate::world::loot::fill_chest_inventory;
-use pumpkin_data::loot_table::get_loot_table;
 
 pub(super) struct MinecartInventory {
     items: RwLock<Vec<ItemStack>>,
@@ -98,7 +96,7 @@ impl MinecartInventory {
         let Some((loot_table, seed)) = loot_table else {
             return;
         };
-        let Some(table) = get_loot_table(&loot_table) else {
+        let Some(table) = crate::world::loot::get_loot_table(&loot_table) else {
             *self
                 .loot_table
                 .lock()
@@ -107,7 +105,7 @@ impl MinecartInventory {
         };
 
         let inventory: Arc<dyn Inventory> = self.clone();
-        fill_chest_inventory(&inventory, table, seed);
+        crate::world::loot::fill_chest_inventory_handle(&inventory, &table, seed);
     }
 }
 
@@ -273,8 +271,8 @@ mod tests {
     use super::MinecartInventory;
     use pumpkin_data::item::Item;
     use pumpkin_data::item_stack::ItemStack;
+    use pumpkin_inventory::Inventory;
     use pumpkin_nbt::compound::NbtCompound;
-    use pumpkin_world::inventory::Inventory;
 
     #[test]
     fn deferred_mineshaft_loot_is_preserved_until_unpacked() {

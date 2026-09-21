@@ -657,6 +657,41 @@ mod test {
     }
 
     #[test]
+    fn read_26_x_world_gen_settings_layout() {
+        let temp_dir = TempDir::new().unwrap();
+        write_level_dat(temp_dir.path(), converted_level_dat(None));
+
+        let data_dir = temp_dir
+            .path()
+            .join("dimensions")
+            .join("minecraft")
+            .join("overworld")
+            .join("data")
+            .join("minecraft");
+        fs::create_dir_all(&data_dir).unwrap();
+
+        let mut settings = NbtCompound::new();
+        settings.put_long("seed", -2_016_744_919_588_476_706);
+        let mut data = NbtCompound::new();
+        data.put_compound("data", settings);
+        let mut root = NbtCompound::new();
+        root.put_compound("Data", data);
+
+        write_gzip_compound_tag(
+            root,
+            File::create(data_dir.join("world_gen_settings.dat")).unwrap(),
+        )
+        .unwrap();
+
+        let level_data = AnvilLevelInfo.read_world_info(temp_dir.path()).unwrap();
+
+        assert_eq!(
+            level_data.world_gen_settings.seed,
+            -2_016_744_919_588_476_706
+        );
+    }
+
+    #[test]
     fn rewrite_level_dat_keeps_unmanaged_tags() {
         let temp_dir = TempDir::new().unwrap();
         write_level_dat(temp_dir.path(), converted_level_dat(Some(42)));

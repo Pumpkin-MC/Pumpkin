@@ -11,8 +11,8 @@
 
 use std::{any::Any, sync::Arc};
 
+use crate::inventory::Inventory;
 use pumpkin_data::{item_stack::ItemStack, screen::WindowType};
-use pumpkin_world::inventory::Inventory;
 
 use crate::{
     player::player_inventory::PlayerInventory,

@@ -79,7 +79,7 @@ impl EntityArgumentType {
     }
 }
 
-impl ArgumentType for EntityArgumentType {
+impl ArgumentType<CommandSource> for EntityArgumentType {
     type Item = EntitySelector;
 
     fn parse(&self, reader: &mut StringReader) -> Result<Self::Item, CommandSyntaxError> {
@@ -126,7 +126,7 @@ impl EntityArgumentType {
         self,
         reader: &mut StringReader,
         allow_selectors: bool,
-    ) -> Result<<Self as ArgumentType>::Item, CommandSyntaxError> {
+    ) -> Result<<Self as ArgumentType<CommandSource>>::Item, CommandSyntaxError> {
         let selector = {
             let parser = EntitySelectorParser::new(reader, allow_selectors);
             parser.parse_and_consume()?

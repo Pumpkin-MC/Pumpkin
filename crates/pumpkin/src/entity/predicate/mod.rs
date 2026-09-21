@@ -27,7 +27,7 @@ impl EntityPredicate<'_> {
                 // TODO: implement
                 false
             }
-            EntityPredicate::ExceptCreativeOrSpectator => entity
+            EntityPredicate::ExceptCreativeOrSpectator => !entity
                 .get_player()
                 .is_some_and(|player| player.is_spectator() || player.is_creative()),
             EntityPredicate::ExceptSpectator => !entity.is_spectator(),

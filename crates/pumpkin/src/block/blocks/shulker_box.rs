@@ -13,6 +13,7 @@ use crate::block::{
 use crate::block::entities::shulker_box::ShulkerBoxBlockEntity;
 use pumpkin_data::BlockStateId;
 use pumpkin_data::translation;
+use pumpkin_inventory::Inventory;
 use pumpkin_inventory::generic_container_screen_handler::create_generic_9x3;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
@@ -20,7 +21,6 @@ use pumpkin_inventory::screen_handler::{
 };
 use pumpkin_macros::pumpkin_block_from_tag;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::inventory::Inventory;
 
 struct ShulkerBoxScreenFactory(Arc<dyn Inventory>);
 
@@ -100,15 +100,7 @@ impl BlockBehaviour for ShulkerBoxBlock {
     }
 
     fn get_comparator_output(&self, args: GetComparatorOutputArgs<'_>) -> Option<u8> {
-        if let Some(block_entity) = args.world.get_block_entity(args.position)
-            && let Some(inventory) = block_entity.get_inventory()
-        {
-            Some(crate::block::calculate_comparator_output(
-                inventory.as_ref(),
-            ))
-        } else {
-            None
-        }
+        crate::block::container_comparator_output(&args)
     }
 }
 

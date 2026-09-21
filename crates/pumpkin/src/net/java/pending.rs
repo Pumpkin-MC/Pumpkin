@@ -68,6 +68,7 @@ pub struct PendingConnection {
     pub brand: Option<String>,
     pub packet_limiter: PacketRateLimiter,
     pub verify_token: Option<[u8; 4]>,
+    pub vine_challenge: Option<[u8; 16]>,
 }
 
 impl PendingConnection {
@@ -93,6 +94,7 @@ impl PendingConnection {
             brand: None,
             packet_limiter,
             verify_token: None,
+            vine_challenge: None,
         }
     }
 
@@ -246,7 +248,7 @@ impl PendingConnection {
         packet: &RawPacket,
     ) -> Result<Option<PacketHandlerResult>, ReadingError> {
         match self.connection_state.load() {
-            ConnectionState::HandShake => self.handle_handshake_packet(packet).await,
+            ConnectionState::HandShake => self.handle_handshake_packet(server, packet).await,
             ConnectionState::Status => self.handle_status_packet(server, packet).await,
             ConnectionState::Login | ConnectionState::Transfer => {
                 self.handle_login_packet(server, packet).await
@@ -258,16 +260,20 @@ impl PendingConnection {
 
     async fn handle_handshake_packet(
         &mut self,
+        server: &Arc<Server>,
         packet: &RawPacket,
     ) -> Result<Option<PacketHandlerResult>, ReadingError> {
         debug!("Handling handshake group");
         let mut payload = &packet.payload[..];
         match packet.id {
             0 => {
-                self.handle_handshake(pumpkin_protocol::java::server::handshake::SHandShake::read(
-                    &mut payload,
-                    &self.version.load(),
-                )?)
+                self.handle_handshake(
+                    server,
+                    pumpkin_protocol::java::server::handshake::SHandShake::read(
+                        &mut payload,
+                        &self.version.load(),
+                    )?,
+                )
                 .await;
                 Ok(None)
             }
@@ -418,7 +424,7 @@ impl PendingConnection {
                 }
             }
             id if id == SKnownPacks::to_id(version) => {
-                self.handle_known_packs().await;
+                self.handle_known_packs(server).await;
                 Ok(None)
             }
             id if id == SConfigResourcePack::to_id(version) => {
@@ -507,19 +513,33 @@ impl PendingConnection {
             match packet.response_result() {
                 ResourcePackResponseResult::Downloaded
                 | ResourcePackResponseResult::DownloadSuccess
-                | ResourcePackResponseResult::Accepted
                 | ResourcePackResponseResult::Discarded
-                | ResourcePackResponseResult::Unknown(_) => {}
+                | ResourcePackResponseResult::Unknown(_) => {
+                    if self.version.load() >= JavaMinecraftVersion::V_1_20_5 {
+                        self.send_known_packs(server).await;
+                    } else {
+                        self.handle_known_packs(server).await;
+                    }
+                }
+                ResourcePackResponseResult::Accepted => {}
                 ResourcePackResponseResult::Declined => {
                     if resource_config.force {
                         self.kick(TextComponent::text("Required resource pack was declined"))
                             .await;
+                    } else if self.version.load() >= JavaMinecraftVersion::V_1_20_5 {
+                        self.send_known_packs(server).await;
+                    } else {
+                        self.handle_known_packs(server).await;
                     }
                 }
                 ResourcePackResponseResult::DownloadFail => {
                     if resource_config.force {
                         self.kick(TextComponent::text("Failed to download resource pack"))
                             .await;
+                    } else if self.version.load() >= JavaMinecraftVersion::V_1_20_5 {
+                        self.send_known_packs(server).await;
+                    } else {
+                        self.handle_known_packs(server).await;
                     }
                 }
                 ResourcePackResponseResult::InvalidUrl => {

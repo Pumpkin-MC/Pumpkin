@@ -266,6 +266,8 @@ impl JavaClient {
                     let stack = player.inventory().held_item();
                     server.item_registry.on_spear_jab(&stack, player);
                 }
+                // The block being mined does not change, so there is nothing to update
+                Status::ChangeDestroyDirection => {}
             },
             Err(_) => self.try_kick(&TextComponent::text("Invalid status")),
         }
