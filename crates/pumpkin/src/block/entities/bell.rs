@@ -17,6 +17,7 @@ pub struct BellBlockEntity {
     pub ring_ticks: AtomicCell<i32>,
     pub ringing: AtomicCell<bool>,
     resonating: AtomicCell<bool>,
+    resonance_triggered: AtomicCell<bool>,
     resonate_time: AtomicCell<i32>,
 }
 
@@ -35,6 +36,7 @@ impl BellBlockEntity {
             ring_ticks: AtomicCell::new(0),
             resonate_time: AtomicCell::new(0),
             resonating: AtomicCell::new(false),
+            resonance_triggered: AtomicCell::new(false),
             ringing: AtomicCell::new(false),
         }
     }
@@ -44,6 +46,7 @@ impl BellBlockEntity {
             self.ring_ticks.store(0);
         } else {
             self.ringing.store(true);
+            self.resonance_triggered.store(false);
         }
     }
 
@@ -80,6 +83,15 @@ impl BellBlockEntity {
 
     const fn resonance_finished(resonate_time: i32) -> bool {
         resonate_time >= Self::RESONANCE_TICKS
+    }
+
+    const fn should_start_resonance(
+        ring_ticks: i32,
+        resonate_time: i32,
+        resonating: bool,
+        resonance_triggered: bool,
+    ) -> bool {
+        ring_ticks >= 5 && resonate_time == 0 && !resonating && !resonance_triggered
     }
 
     fn raiders_hear_bell(&self, world: &World) -> bool {
@@ -136,12 +148,16 @@ impl BlockEntity for BellBlockEntity {
         if self.ring_ticks.load() >= 50 {
             self.ringing.store(false);
             self.ring_ticks.store(0);
+            self.resonance_triggered.store(false);
         }
-        if self.ring_ticks.load() >= 5
-            && self.resonate_time.load() == 0
-            && !self.resonating.load()
-            && self.raiders_hear_bell(world)
+        if Self::should_start_resonance(
+            self.ring_ticks.load(),
+            self.resonate_time.load(),
+            self.resonating.load(),
+            self.resonance_triggered.load(),
+        ) && self.raiders_hear_bell(world)
         {
+            self.resonance_triggered.store(true);
             self.resonating.store(true);
             world.play_sound_fine(
                 Sound::BlockBellResonate,
@@ -216,5 +232,21 @@ mod tests {
     fn resonance_finishes_at_forty_ticks() {
         assert!(!BellBlockEntity::resonance_finished(39));
         assert!(BellBlockEntity::resonance_finished(40));
+    }
+
+    #[test]
+    fn resonance_latch_blocks_a_second_trigger_during_one_ring() {
+        assert!(BellBlockEntity::should_start_resonance(5, 0, false, false));
+        assert!(!BellBlockEntity::should_start_resonance(5, 0, false, true));
+    }
+
+    #[test]
+    fn starting_a_new_ring_clears_the_resonance_latch() {
+        let bell = BellBlockEntity::new(BlockPos::new(0, 0, 0));
+        bell.resonance_triggered.store(true);
+
+        bell.activate(HorizontalFacing::North);
+
+        assert!(!bell.resonance_triggered.load());
     }
 }
