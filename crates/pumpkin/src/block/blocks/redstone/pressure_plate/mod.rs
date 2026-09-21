@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId};
+use pumpkin_data::tag::Taggable;
+use pumpkin_data::{Block, BlockDirection, BlockState, BlockStateId, tag};
 use pumpkin_util::math::{boundingbox::BoundingBox, position::BlockPos};
 use pumpkin_world::{tick::TickPriority, world::BlockFlags};
 
@@ -78,8 +79,14 @@ pub(crate) trait PressurePlate {
     }
 
     fn can_pressure_plate_place_at(world: &World, block_pos: &BlockPos) -> bool {
-        let floor = world.get_block_state(&block_pos.down());
-        floor.is_side_solid(BlockDirection::Up)
+        let floor = world.get_block(&block_pos.down());
+        let floor_state = world.get_block_state(&block_pos.down());
+
+        // Allow placement on blocks with solid top face (full blocks, upside-down slabs, etc.)
+        // and on fences/fence gates which have a solid top in vanilla
+        floor_state.is_side_solid(BlockDirection::Up)
+            || floor.has_tag(&tag::Block::MINECRAFT_FENCES)
+            || floor.has_tag(&tag::Block::MINECRAFT_FENCE_GATES)
     }
 
     fn get_redstone_output(&self, block: &Block, state: BlockStateId) -> u8;
