@@ -44,7 +44,7 @@ impl ItemBehaviour for EndCrystalItem {
 
         if !world.get_block_state(&location).is_air()
             || !world
-                .get_entities_at_box(&BoundingBox::new(
+                .get_all_at_box(&BoundingBox::new(
                     Vector3::new(location_vec.x, location_vec.y, location_vec.z),
                     Vector3::new(
                         location_vec.x + 1.0,
