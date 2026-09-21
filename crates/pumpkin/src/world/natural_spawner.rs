@@ -568,7 +568,10 @@ pub fn spawn_mobs_for_chunk_generation(
     let zo = chunk_z << 4;
 
     while rand::random::<f32>() < biome.creature_spawn_probability {
-        let Some(spawner_data) = creatures.choose(&mut rand::rng()) else {
+        let Some(spawner_data) = creatures
+            .choose_weighted(&mut rand::rng(), |s| s.weight)
+            .ok()
+        else {
             continue;
         };
 
@@ -945,7 +948,8 @@ pub fn get_random_spawn_mob_at(
             id if id == MobCategory::MISC.id => biome.spawners.misc,
             _ => biome.spawners.misc,
         }
-        .choose(&mut rng())
+        .choose_weighted(&mut rng(), |s| s.weight)
+        .ok()
     }
 }
 
@@ -1150,5 +1154,27 @@ mod tests {
                 block.name
             );
         }
+    }
+
+    #[test]
+    fn vanilla_spawn_weights_are_preserved() {
+        // Nether wastes in vanilla: zombified piglin 100, ghast 50, piglin 15,
+        // magma cube 2, enderman 1. A uniform pick would make endermen 34x too common.
+        let weights: Vec<_> = Biome::NETHER_WASTES
+            .spawners
+            .monster
+            .iter()
+            .map(|s| (s.r#type, s.weight))
+            .collect();
+        assert_eq!(
+            weights,
+            [
+                ("minecraft:ghast", 50),
+                ("minecraft:zombified_piglin", 100),
+                ("minecraft:magma_cube", 2),
+                ("minecraft:enderman", 1),
+                ("minecraft:piglin", 15),
+            ]
+        );
     }
 }
