@@ -8,9 +8,12 @@ services:
       - "25565:25565"
       - "19132:19132/udp"
     volumes:
-      - ./data:/pumpkin
-      # Use the following, if you want to make your config immutable
-      #- ./config:/pumpkin/config:ro
+      - pumpkin-data:/pumpkin
+      # Linux bind-mount alternative (replace the named volume above):
+      # The host directory must be writable by UID/GID 2613.
+      # - ./data:/pumpkin
+      # Use the following if you want to make your config immutable.
+      # - ./pumpkin.toml:/pumpkin/pumpkin.toml:ro
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
@@ -19,3 +22,6 @@ services:
     cap_drop:
       - ALL
     read_only: true
+
+volumes:
+  pumpkin-data:
