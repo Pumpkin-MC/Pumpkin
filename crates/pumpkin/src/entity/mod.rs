@@ -4054,6 +4054,19 @@ impl Entity {
                             PositionFlag::XRot,
                         ],
                     ));
+
+                    world.broadcast_to_chunk_except(
+                        chunk_pos,
+                        &[player.get_entity().entity_uuid],
+                        &CEntityPositionSync::new(
+                            passenger_entity.entity_id.into(),
+                            dismount_pos,
+                            passenger_entity.velocity.load(),
+                            passenger_entity.yaw.load(),
+                            passenger_entity.pitch.load(),
+                            passenger_entity.on_ground.load(Ordering::SeqCst),
+                        ),
+                    );
                 }
 
                 // Vanilla: setSneaking(false) after dismount via sneak input
