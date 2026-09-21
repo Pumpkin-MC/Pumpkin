@@ -121,6 +121,8 @@ struct Spawner {
     min_count: i32,
     /// Maximum number of entities in a spawn group.
     max_count: i32,
+    /// Relative spawn weight within the spawn group.
+    weight: i32,
 }
 
 impl<'de> Deserialize<'de> for Spawner {
@@ -134,6 +136,12 @@ impl<'de> Deserialize<'de> for Spawner {
             max_count: Option<i32>,
             #[serde(default)]
             count: Option<Value>,
+            #[serde(default = "default_weight")]
+            weight: i32,
+        }
+
+        fn default_weight() -> i32 {
+            1
         }
 
         let raw = Raw::deserialize(deserializer)?;
@@ -159,6 +167,7 @@ impl<'de> Deserialize<'de> for Spawner {
             r#type: raw.r#type,
             min_count,
             max_count,
+            weight: raw.weight,
         })
     }
 }
@@ -169,11 +178,13 @@ impl Spawner {
         let r#type = &self.r#type;
         let min_count = &self.min_count;
         let max_count = &self.max_count;
+        let weight = &self.weight;
         quote! {
             Spawner {
                 r#type: #r#type,
                 min_count: #min_count,
                 max_count: #max_count,
+                weight: #weight,
             }
         }
     }
@@ -540,6 +551,7 @@ pub fn build() -> TokenStream {
             pub r#type: &'static str,
             pub min_count: i32,
             pub max_count: i32,
+            pub weight: i32,
         }
 
         impl PartialEq for Biome {
