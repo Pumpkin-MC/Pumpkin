@@ -233,15 +233,14 @@ pub enum ArgumentType {
     ResourceOrTagKey { identifier: Identifier },
     Resource { identifier: Identifier },
     ResourceKey { identifier: Identifier },
-    ResourceSelector,
+    ResourceSelector { identifier: Identifier },
     TemplateMirror,
     TemplateRotation,
     Heightmap,
     LootTable,
     LootPredicate,
     LootModifier,
-    // 26.3 inserted five argument types before `dialog` and one more before
-    // `uuid`; core does not model those, so both need their id spelled out.
+    // 26.3 inserted unmodeled variants before these, so the ids need spelling out
     Dialog = 58,
     Uuid = 61,
 }
@@ -408,6 +407,9 @@ impl ArgumentType {
                 }
                 Self::Resource { identifier } => Self::write_with_identifier(identifier, write),
                 Self::ResourceKey { identifier } => Self::write_with_identifier(identifier, write),
+                Self::ResourceSelector { identifier } => {
+                    Self::write_with_identifier(identifier, write)
+                }
                 _ => Ok(()),
             }
         } else {
@@ -548,9 +550,30 @@ mod tests {
             ArgumentType::String(StringProtoArgBehavior::SingleWord).to_id(&version),
             5
         );
-        assert_eq!(ArgumentType::ResourceSelector.to_id(&version), 48);
+        assert_eq!(
+            ArgumentType::ResourceSelector {
+                identifier: Identifier::vanilla_static("test_instance")
+            }
+            .to_id(&version),
+            48
+        );
         assert_eq!(ArgumentType::LootModifier.to_id(&version), 54);
         assert_eq!(ArgumentType::Dialog.to_id(&version), 58);
         assert_eq!(ArgumentType::Uuid.to_id(&version), 61);
+    }
+
+    #[test]
+    fn resource_selector_writes_its_registry() {
+        let identifier = Identifier::vanilla_static("test_instance");
+        let parser = ArgumentType::ResourceSelector { identifier };
+        let mut bytes = Vec::new();
+        parser
+            .write_to_buffer(&mut bytes, &JavaMinecraftVersion::V_26_3)
+            .unwrap();
+
+        let mut expected = Vec::new();
+        expected.write_var_int(&VarInt(48)).unwrap();
+        expected.write_string("minecraft:test_instance").unwrap();
+        assert_eq!(bytes, expected);
     }
 }
