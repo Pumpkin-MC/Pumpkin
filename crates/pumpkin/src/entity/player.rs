@@ -5646,7 +5646,9 @@ impl Player {
             world.emit_game_event_with_source(
                 pumpkin_data::game_event::GameEvent::ContainerClose.name(),
                 position.to_centered_f64(),
-                world.get_entity_by_uuid(self.gameprofile.id),
+                world
+                    .get_player_by_uuid(self.gameprofile.id)
+                    .map(|p| p as Arc<dyn EntityBase>),
             );
         }
         self.open_container_pos.store(None);
