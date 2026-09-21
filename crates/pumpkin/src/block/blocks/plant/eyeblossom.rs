@@ -7,6 +7,10 @@ use pumpkin_data::{
     particle::Particle,
     sound::{Sound, SoundCategory},
 };
+use pumpkin_protocol::{
+    codec::var_int::VarInt,
+    ser::{NetworkWriteExt, WritingError},
+};
 use pumpkin_util::{
     Difficulty,
     math::{position::BlockPos, vector3::Vector3},
@@ -130,15 +134,9 @@ pub fn try_changing_state(world: &Arc<World>, current_block: &Block, pos: &Block
 
     world.set_block_state(pos, new_block.default_state.id, BlockFlags::NOTIFY_ALL);
 
-    world.spawn_particle(
-        pos.to_centered_f64(),
-        Vector3::new(0.0, 0.0, 0.0),
-        0.0,
-        1,
-        Particle::Trail,
-    );
-
     let mut rng = rand::rng();
+    spawn_transform_particle(world, pos, is_open, &mut rng);
+
     for dx in -EYEBLOSSOM_XZ_RANGE..=EYEBLOSSOM_XZ_RANGE {
         for dy in -EYEBLOSSOM_Y_RANGE..=EYEBLOSSOM_Y_RANGE {
             for dz in -EYEBLOSSOM_XZ_RANGE..=EYEBLOSSOM_XZ_RANGE {
@@ -169,4 +167,76 @@ pub fn try_changing_state(world: &Arc<World>, current_block: &Block, pos: &Block
     }
 
     true
+}
+
+const OPEN_PARTICLE_COLOR: i32 = 16_545_810;
+const CLOSED_PARTICLE_COLOR: i32 = 6_250_335;
+
+/// trail particles need a target, colour and duration or the client desyncs
+fn spawn_transform_particle(
+    world: &Arc<World>,
+    pos: &BlockPos,
+    was_open: bool,
+    rng: &mut impl RngExt,
+) {
+    let center = pos.to_centered_f64();
+    let scale = 0.5 + rng.random::<f64>();
+    let target = Vector3::new(
+        center.x + (rng.random::<f64>() - 0.5) * scale,
+        center.y + (rng.random::<f64>() + 1.0) * scale,
+        center.z + (rng.random::<f64>() - 0.5) * scale,
+    );
+    let color = if was_open {
+        CLOSED_PARTICLE_COLOR
+    } else {
+        OPEN_PARTICLE_COLOR
+    };
+
+    let Ok(data) = trail_particle_data(target, color, (20.0 * scale) as i32) else {
+        return;
+    };
+
+    world.spawn_particle_with_data(
+        Particle::Trail,
+        center,
+        1,
+        Vector3::new(0.0, 0.0, 0.0),
+        0.0,
+        &data,
+    );
+}
+
+fn trail_particle_data(
+    target: Vector3<f64>,
+    color: i32,
+    duration: i32,
+) -> Result<Vec<u8>, WritingError> {
+    let mut data = Vec::with_capacity(3 * 8 + 4 + 2);
+    data.write_f64_be(target.x)?;
+    data.write_f64_be(target.y)?;
+    data.write_f64_be(target.z)?;
+    data.write_i32_be(color)?;
+    data.write_var_int(&VarInt(duration))?;
+    Ok(data)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{OPEN_PARTICLE_COLOR, trail_particle_data};
+    use pumpkin_protocol::ser::NetworkReadExt;
+    use pumpkin_util::math::vector3::Vector3;
+
+    #[test]
+    fn trail_particle_carries_its_target_colour_and_duration()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let data = trail_particle_data(Vector3::new(1.0, 2.0, 3.0), OPEN_PARTICLE_COLOR, 20)?;
+        let mut read = &data[..];
+        assert_eq!(read.get_f64_be()?, 1.0);
+        assert_eq!(read.get_f64_be()?, 2.0);
+        assert_eq!(read.get_f64_be()?, 3.0);
+        assert_eq!(read.get_i32_be()?, OPEN_PARTICLE_COLOR);
+        assert_eq!(read.get_var_int()?.0, 20);
+        assert!(read.is_empty());
+        Ok(())
+    }
 }

@@ -1361,6 +1361,29 @@ impl World {
         self.broadcast_packet_all(&packet);
     }
 
+    /// Spawns a particle with option data (block state, colour, trail target, etc).
+    pub fn spawn_particle_with_data(
+        &self,
+        particle: pumpkin_data::particle::Particle,
+        pos: Vector3<f64>,
+        count: i32,
+        offset: Vector3<f32>,
+        max_speed: f32,
+        data: &[u8],
+    ) {
+        let packet = CParticle::new(
+            false,
+            false,
+            pos,
+            offset,
+            max_speed,
+            count,
+            (particle.to_id() as i32).into(),
+            data,
+        );
+        self.broadcast_packet_all(&packet);
+    }
+
     /// Spawns a cluster of particles in the world for all players in range.
     pub fn spawn_particles(
         &self,
