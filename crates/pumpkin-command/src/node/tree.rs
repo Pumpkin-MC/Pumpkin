@@ -248,6 +248,12 @@ impl<S: CommandSource> Tree<S> {
         }
     }
 
+    pub fn remove_root_child(&mut self, name: &str) -> Option<CommandNodeId> {
+        let node = self[ROOT_NODE_ID].children_mut_ref().remove(name)?;
+        self.command_node_mappings.remove(name);
+        Some(CommandNodeId(node.0))
+    }
+
     /// Gets the children of a given node in the tree.
     #[must_use]
     pub fn get_children(&self, node: NodeId) -> Vec<NodeId> {

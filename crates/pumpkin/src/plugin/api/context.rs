@@ -241,7 +241,7 @@ impl Context {
         let source = self.metadata.name.clone();
         self.server.command_dispatcher.rcu(|dispatcher| {
             let mut new_dispatcher = (**dispatcher).clone();
-            new_dispatcher.deactivate_commands_from_source(&source);
+            new_dispatcher.remove_commands_from_source(&source);
             Arc::new(new_dispatcher)
         });
 
@@ -272,6 +272,11 @@ impl Context {
         } else {
             client_suggestions::send_c_commands_packet(player, &self.server, &command_dispatcher);
         }
+    }
+
+    pub(crate) fn unregister_permissions(&self) {
+        self.permission_manager
+            .unregister_namespace(&self.metadata.name);
     }
 
     /// Register a permission for this plugin
