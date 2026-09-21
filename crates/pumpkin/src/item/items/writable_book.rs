@@ -9,6 +9,10 @@ use pumpkin_protocol::java::client::play::COpenBook;
 
 pub struct WritableBookItem;
 
+const fn should_send_open_book(item: &Item) -> bool {
+    item.id == Item::WRITTEN_BOOK.id
+}
+
 impl ItemMetadata for WritableBookItem {
     fn ids() -> Box<[u16]> {
         Box::new([Item::WRITABLE_BOOK.id, Item::WRITTEN_BOOK.id])
@@ -16,8 +20,10 @@ impl ItemMetadata for WritableBookItem {
 }
 
 impl ItemBehaviour for WritableBookItem {
-    fn normal_use(&self, _item: &Item, player: &Player) {
-        player.try_send_client_packet(&COpenBook::new(VarInt(0)));
+    fn normal_use(&self, item: &Item, player: &Player) {
+        if should_send_open_book(item) {
+            player.try_send_client_packet(&COpenBook::new(VarInt(0)));
+        }
         player.world().play_sound(
             Sound::ItemBookPageTurn,
             SoundCategory::Players,
@@ -27,5 +33,17 @@ impl ItemBehaviour for WritableBookItem {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_send_open_book;
+    use pumpkin_data::item::Item;
+
+    #[test]
+    fn only_written_books_request_the_open_book_packet() {
+        assert!(!should_send_open_book(&Item::WRITABLE_BOOK));
+        assert!(should_send_open_book(&Item::WRITTEN_BOOK));
     }
 }
