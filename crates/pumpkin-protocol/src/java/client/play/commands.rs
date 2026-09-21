@@ -240,8 +240,10 @@ pub enum ArgumentType {
     LootTable,
     LootPredicate,
     LootModifier,
-    Dialog,
-    Uuid,
+    // 26.3 inserted five argument types before `dialog` and one more before
+    // `uuid`; core does not model those, so both need their id spelled out.
+    Dialog = 58,
+    Uuid = 61,
 }
 
 impl ArgumentType {
@@ -531,5 +533,24 @@ impl SuggestionProviders {
             Self::AvailableSounds => "minecraft:available_sounds",
             Self::SummonableEntities => "minecraft:summonable_entities",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn argument_type_ids_match_the_26_3_registry() {
+        let version = JavaMinecraftVersion::V_26_3;
+        assert_eq!(ArgumentType::Bool.to_id(&version), 0);
+        assert_eq!(
+            ArgumentType::String(StringProtoArgBehavior::SingleWord).to_id(&version),
+            5
+        );
+        assert_eq!(ArgumentType::ResourceSelector.to_id(&version), 48);
+        assert_eq!(ArgumentType::LootModifier.to_id(&version), 54);
+        assert_eq!(ArgumentType::Dialog.to_id(&version), 58);
+        assert_eq!(ArgumentType::Uuid.to_id(&version), 61);
     }
 }
