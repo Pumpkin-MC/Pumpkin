@@ -3390,8 +3390,10 @@ version = "0.2.0+26.3-26.51"
 dependencies = [
  "proc-macro-error2",
  "proc-macro2",
+ "pumpkin",
  "quote",
  "syn 3.0.5",
+ "tokio",
 ]
 
 [[package]]

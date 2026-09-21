@@ -14,5 +14,9 @@ quote.workspace = true
 proc-macro2.workspace = true
 proc-macro-error2.workspace = true
 
+[dev-dependencies]
+pumpkin = { path = "../pumpkin" }
+tokio = { workspace = true, features = ["rt-multi-thread", "time"] }
+
 [lints]
 workspace = true
