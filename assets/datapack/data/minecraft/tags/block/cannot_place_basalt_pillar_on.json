@@ -1,0 +1,14 @@
+{
+  "values": [
+    "minecraft:lava",
+    "minecraft:bedrock",
+    "minecraft:magma_block",
+    "minecraft:soul_sand",
+    "minecraft:nether_bricks",
+    "minecraft:nether_brick_fence",
+    "minecraft:nether_brick_stairs",
+    "minecraft:nether_wart",
+    "minecraft:chest",
+    "minecraft:spawner"
+  ]
+}

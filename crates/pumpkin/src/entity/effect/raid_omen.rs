@@ -10,6 +10,9 @@ impl MobEffect for RaidOmenMobEffect {
 
     fn apply_effect_tick(&self, living: &LivingEntity, _amplifier: u8) {
         let world = living.entity.world.load();
+        if !world.dimension.can_start_raid {
+            return;
+        }
         if let Some(entity) = world.get_entity_by_id(living.entity.entity_id)
             && let Some(player) = entity.get_player()
             && !player.is_spectator()

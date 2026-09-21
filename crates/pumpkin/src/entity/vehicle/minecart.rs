@@ -22,11 +22,11 @@ use pumpkin_data::entity::EntityType;
 use pumpkin_data::item::Item;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::tag::{self, Taggable};
+use pumpkin_inventory::Inventory;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_util::GameMode;
 use pumpkin_util::math::position::BlockPos;
 use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::inventory::Inventory;
 
 use crate::entity::vehicle::vehicle::VehicleEntity;
 use chest::ChestMinecart;
@@ -184,6 +184,22 @@ impl EntityBase for MinecartEntity {
             if is_activator_rail && let MinecartKind::Hopper(minecart) = &self.kind {
                 minecart.set_enabled(!powered);
             }
+        } else if block.id == Block::DETECTOR_RAIL.id
+            && let Some(server) = world.server.upgrade()
+        {
+            world.block_registry.on_entity_collision(
+                block,
+                &world,
+                self,
+                &block_pos,
+                world.get_block_state(&block_pos),
+                &server,
+            );
+        }
+
+        if is_powered_rail || is_activator_rail {
+            let props = PoweredRailLikeProperties::from_state_id(state_id);
+            let powered = props.powered;
 
             if powered {
                 if is_powered_rail {

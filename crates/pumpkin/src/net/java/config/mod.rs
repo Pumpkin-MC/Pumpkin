@@ -11,7 +11,7 @@ use crate::{
 use core::str;
 use pumpkin_data::registry::Registry;
 use pumpkin_protocol::{
-    ConnectionState, KnownPack,
+    ConnectionState,
     java::{
         client::config::{CFeatureFlags, CFinishConfig, CKnownPacks, CRegistryData, CUpdateTags},
         server::config::{
@@ -20,7 +20,7 @@ use pumpkin_protocol::{
         },
     },
 };
-use pumpkin_util::{Hand, text::TextComponent};
+use pumpkin_util::{Hand, text::TextComponent, version::JavaMinecraftVersion};
 use tracing::{debug, trace, warn};
 
 const BRAND_CHANNEL_PREFIX: &str = "minecraft:brand";

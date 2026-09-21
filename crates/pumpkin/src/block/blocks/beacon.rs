@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use pumpkin_data::translation;
+use pumpkin_inventory::Inventory;
 use pumpkin_inventory::beacon_screen_handler::create_beacon_handler;
 use pumpkin_inventory::player::player_inventory::PlayerInventory;
 use pumpkin_inventory::screen_handler::{
@@ -9,7 +10,6 @@ use pumpkin_inventory::screen_handler::{
 };
 use pumpkin_macros::pumpkin_block;
 use pumpkin_util::text::TextComponent;
-use pumpkin_world::inventory::Inventory;
 
 use crate::block::registry::BlockActionResult;
 use crate::block::{BlockBehaviour, GetScreenHandlerFactoryArgs, NormalUseArgs};

@@ -2,7 +2,6 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Weak};
 
 use pumpkin_data::attributes::Attributes;
-use pumpkin_data::dimension::Dimension;
 use pumpkin_data::entity::EntityType;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
@@ -122,7 +121,7 @@ impl HoglinEntity {
     pub fn is_converting(&self, world: &World) -> bool {
         !self.is_immune_to_zombification()
             && !self.mob_entity.is_no_ai()
-            && world.dimension.minecraft_name != Dimension::THE_NETHER.minecraft_name
+            && world.dimension.piglins_zombify
     }
 
     fn convert_to_zoglin(&self) {

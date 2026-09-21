@@ -100,7 +100,7 @@ impl TextComponentBase {
     /// Converts this component to an NBT compound tag for the latest Minecraft version.
     #[must_use]
     pub fn to_nbt_compound(&self) -> pumpkin_nbt::NbtCompound {
-        self.to_nbt_compound_for_version(&JavaMinecraftVersion::V_26_2)
+        self.to_nbt_compound_for_version(&JavaMinecraftVersion::V_26_3)
     }
 
     /// Converts this component to an NBT compound tag for a specific Minecraft version.
@@ -220,29 +220,33 @@ impl TextComponentBase {
             match click {
                 ClickEvent::OpenUrl { url } => {
                     click_tag.put_string("action", "open_url".to_string());
-                    click_tag.put_string("url", url.to_string());
-                    if *version < JavaMinecraftVersion::V_1_16 {
+                    if *version >= JavaMinecraftVersion::V_1_21_5 {
+                        click_tag.put_string("url", url.to_string());
+                    } else {
                         click_tag.put_string("value", url.to_string());
                     }
                 }
                 ClickEvent::OpenFile { path } => {
                     click_tag.put_string("action", "open_file".to_string());
-                    click_tag.put_string("path", path.to_string());
-                    if *version < JavaMinecraftVersion::V_1_16 {
+                    if *version >= JavaMinecraftVersion::V_1_21_5 {
+                        click_tag.put_string("path", path.to_string());
+                    } else {
                         click_tag.put_string("value", path.to_string());
                     }
                 }
                 ClickEvent::RunCommand { command } => {
                     click_tag.put_string("action", "run_command".to_string());
-                    click_tag.put_string("command", command.to_string());
-                    if *version < JavaMinecraftVersion::V_1_16 {
+                    if *version >= JavaMinecraftVersion::V_1_21_5 {
+                        click_tag.put_string("command", command.to_string());
+                    } else {
                         click_tag.put_string("value", command.to_string());
                     }
                 }
                 ClickEvent::SuggestCommand { command } => {
                     click_tag.put_string("action", "suggest_command".to_string());
-                    click_tag.put_string("command", command.to_string());
-                    if *version < JavaMinecraftVersion::V_1_16 {
+                    if *version >= JavaMinecraftVersion::V_1_21_5 {
+                        click_tag.put_string("command", command.to_string());
+                    } else {
                         click_tag.put_string("value", command.to_string());
                     }
                 }
@@ -250,10 +254,9 @@ impl TextComponentBase {
                     click_tag.put_string("action", "change_page".to_string());
                     if *version >= JavaMinecraftVersion::V_1_21_6 {
                         click_tag.put_int("page", *page as i32);
-                    } else {
+                    } else if *version >= JavaMinecraftVersion::V_1_21_5 {
                         click_tag.put_string("page", page.to_string());
-                    }
-                    if *version < JavaMinecraftVersion::V_1_16 {
+                    } else {
                         click_tag.put_string("value", page.to_string());
                     }
                 }
@@ -587,11 +590,12 @@ impl TextComponentBase {
                         "action".to_string(),
                         serde_json::Value::String("open_url".to_string()),
                     );
-                    click_map.insert(
-                        "url".to_string(),
-                        serde_json::Value::String(url.to_string()),
-                    );
-                    if *version < JavaMinecraftVersion::V_1_16 {
+                    if *version >= JavaMinecraftVersion::V_1_21_5 {
+                        click_map.insert(
+                            "url".to_string(),
+                            serde_json::Value::String(url.to_string()),
+                        );
+                    } else {
                         click_map.insert(
                             "value".to_string(),
                             serde_json::Value::String(url.to_string()),
@@ -603,11 +607,12 @@ impl TextComponentBase {
                         "action".to_string(),
                         serde_json::Value::String("open_file".to_string()),
                     );
-                    click_map.insert(
-                        "path".to_string(),
-                        serde_json::Value::String(path.to_string()),
-                    );
-                    if *version < JavaMinecraftVersion::V_1_16 {
+                    if *version >= JavaMinecraftVersion::V_1_21_5 {
+                        click_map.insert(
+                            "path".to_string(),
+                            serde_json::Value::String(path.to_string()),
+                        );
+                    } else {
                         click_map.insert(
                             "value".to_string(),
                             serde_json::Value::String(path.to_string()),
@@ -619,11 +624,12 @@ impl TextComponentBase {
                         "action".to_string(),
                         serde_json::Value::String("run_command".to_string()),
                     );
-                    click_map.insert(
-                        "command".to_string(),
-                        serde_json::Value::String(command.to_string()),
-                    );
-                    if *version < JavaMinecraftVersion::V_1_16 {
+                    if *version >= JavaMinecraftVersion::V_1_21_5 {
+                        click_map.insert(
+                            "command".to_string(),
+                            serde_json::Value::String(command.to_string()),
+                        );
+                    } else {
                         click_map.insert(
                             "value".to_string(),
                             serde_json::Value::String(command.to_string()),
@@ -635,11 +641,12 @@ impl TextComponentBase {
                         "action".to_string(),
                         serde_json::Value::String("suggest_command".to_string()),
                     );
-                    click_map.insert(
-                        "command".to_string(),
-                        serde_json::Value::String(command.to_string()),
-                    );
-                    if *version < JavaMinecraftVersion::V_1_16 {
+                    if *version >= JavaMinecraftVersion::V_1_21_5 {
+                        click_map.insert(
+                            "command".to_string(),
+                            serde_json::Value::String(command.to_string()),
+                        );
+                    } else {
                         click_map.insert(
                             "value".to_string(),
                             serde_json::Value::String(command.to_string()),
@@ -653,13 +660,12 @@ impl TextComponentBase {
                     );
                     if *version >= JavaMinecraftVersion::V_1_21_6 {
                         click_map.insert("page".to_string(), serde_json::json!(*page as i32));
-                    } else {
+                    } else if *version >= JavaMinecraftVersion::V_1_21_5 {
                         click_map.insert(
                             "page".to_string(),
                             serde_json::Value::String(page.to_string()),
                         );
-                    }
-                    if *version < JavaMinecraftVersion::V_1_16 {
+                    } else {
                         click_map.insert(
                             "value".to_string(),
                             serde_json::Value::String(page.to_string()),
@@ -933,8 +939,48 @@ impl TextComponentBase {
     /// A formatted string ready for console output.
     #[must_use]
     pub fn to_pretty_console(self) -> String {
+        self.to_pretty_console_inner(&Style::default())
+    }
+
+    #[expect(clippy::wrong_self_convention)]
+    fn to_pretty_console_inner(self, current_styles: &Style) -> String {
         fn osc8_link(url: &str, text: &str) -> String {
             format!("\x1b]8;;{url}\x1b\\{text}\x1b]8;;\x1b\\")
+        }
+        /// Prioritizes `a`.
+        fn combine_styles(a: Style, b: &Style) -> Style {
+            let mut style = Style::default();
+            if let Some(color) = a.color {
+                style.color = Some(color);
+            } else {
+                style.color = b.color;
+            }
+            if let Some(bold) = a.bold {
+                style.bold = Some(bold);
+            } else {
+                style.bold = b.bold;
+            }
+            if let Some(italic) = a.italic {
+                style.italic = Some(italic);
+            } else {
+                style.italic = b.italic;
+            }
+            if let Some(underlined) = a.underlined {
+                style.underlined = Some(underlined);
+            } else {
+                style.underlined = b.underlined;
+            }
+            if let Some(strikethrough) = a.strikethrough {
+                style.strikethrough = Some(strikethrough);
+            } else {
+                style.strikethrough = b.strikethrough;
+            }
+            if let Some(click_event) = a.click_event {
+                style.click_event = Some(click_event);
+            } else {
+                style.click_event.clone_from(&b.click_event);
+            }
+            style
         }
 
         let mut text = match *self.content {
@@ -958,7 +1004,7 @@ impl TextComponentBase {
                 .get_string("name")
                 .map_or_else(|| "player_sprite".to_string(), ToString::to_string),
         };
-        let style = self.style;
+        let style = combine_styles(*self.style, current_styles);
         let color = style.color;
         if let Some(color) = color {
             text = color.console_color(&text).to_string();
@@ -983,7 +1029,7 @@ impl TextComponentBase {
         }
 
         for child in self.extra {
-            text += &*child.to_pretty_console();
+            text += &*child.to_pretty_console_inner(&style);
         }
         text
     }
@@ -1547,7 +1593,7 @@ impl TextComponent {
     /// A boxed byte slice containing the NBT-encoded component.
     #[must_use]
     pub fn encode(&self) -> Box<[u8]> {
-        self.encode_for_version(&JavaMinecraftVersion::V_26_2)
+        self.encode_for_version(&JavaMinecraftVersion::V_26_3)
     }
 
     /// Encodes this component into a byte array using NBT serialization for a specific Minecraft version.
@@ -2023,7 +2069,9 @@ pub enum TextContent {
 /// Tests for the text component implementations.
 #[cfg(test)]
 mod test {
+    use crate::text::click::ClickEvent;
     use crate::text::{TextComponent, color::NamedColor, hover::HoverEvent};
+    use crate::version::JavaMinecraftVersion;
     use std::borrow::Cow;
 
     #[test]
@@ -2095,5 +2143,42 @@ mod test {
             .to_nbt_compound();
         let hover = compound.get_compound("hover_event").unwrap();
         assert!(hover.get_int("count").is_none());
+    }
+
+    #[test]
+    fn click_event_uses_legacy_value_before_1_21_5() {
+        let compound = TextComponent::text("link")
+            .click_event(ClickEvent::OpenUrl {
+                url: Cow::Borrowed("https://example.com"),
+            })
+            .0
+            .to_nbt_compound_for_version(&JavaMinecraftVersion::V_1_21_4);
+        let click = compound.get_compound("clickEvent").unwrap();
+        assert_eq!(click.get_string("action"), Some("open_url"));
+        assert_eq!(click.get_string("value"), Some("https://example.com"));
+        assert!(click.get_string("url").is_none());
+
+        let suggest = TextComponent::text("name")
+            .click_event(ClickEvent::SuggestCommand {
+                command: Cow::Borrowed("/tell name"),
+            })
+            .0
+            .to_nbt_compound_for_version(&JavaMinecraftVersion::V_1_21_4);
+        let click = suggest.get_compound("clickEvent").unwrap();
+        assert_eq!(click.get_string("command"), None);
+        assert_eq!(click.get_string("value"), Some("/tell name"));
+    }
+
+    #[test]
+    fn click_event_uses_modern_keys_from_1_21_5() {
+        let compound = TextComponent::text("link")
+            .click_event(ClickEvent::OpenUrl {
+                url: Cow::Borrowed("https://example.com"),
+            })
+            .0
+            .to_nbt_compound_for_version(&JavaMinecraftVersion::V_1_21_5);
+        let click = compound.get_compound("click_event").unwrap();
+        assert_eq!(click.get_string("url"), Some("https://example.com"));
+        assert!(click.get_string("value").is_none());
     }
 }

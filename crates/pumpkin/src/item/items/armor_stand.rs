@@ -1,3 +1,4 @@
+use crate::block::registry::BlockActionResult;
 use std::sync::Arc;
 
 use crate::entity::Entity;
@@ -33,9 +34,9 @@ impl ItemBehaviour for ArmorStandItem {
         _cursor_pos: Vector3<f32>,
         _block: &Block,
         _server: &Server,
-    ) {
+    ) -> BlockActionResult {
         if face == BlockDirection::Down {
-            return;
+            return BlockActionResult::Fail;
         }
 
         let world = player.world();
@@ -82,6 +83,9 @@ impl ItemBehaviour for ArmorStandItem {
 
             world.spawn_entity(Arc::new(armor_stand));
             item.decrement_unless_creative(player.gamemode.load(), 1);
+            BlockActionResult::Success
+        } else {
+            BlockActionResult::Fail
         }
     }
 

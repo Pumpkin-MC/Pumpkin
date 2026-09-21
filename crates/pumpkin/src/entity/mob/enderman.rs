@@ -398,7 +398,7 @@ impl Mob for EndermanEntity {
     }
 
     fn set_mob_target(&self, target: Option<Arc<dyn EntityBase>>) {
-        self.set_target(target);
+        self.set_target(self.as_valid_target(target));
     }
 
     // TODO: sunlight avoidance, carried block drop on death, angerable system, ambient sound override
