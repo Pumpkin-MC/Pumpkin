@@ -127,7 +127,7 @@ fn resolve_condition(value: &ConditionValue) -> LootCondition {
         ConditionValue::Inline(cond) => parse_condition(cond),
         ConditionValue::Reference(name) => {
             let relative = name.strip_prefix("minecraft:").unwrap_or(name);
-            let path = Path::new("../../assets/datapacks/26_3/data/minecraft/predicate")
+            let path = Path::new("../../assets/datapack/data/minecraft/predicate")
                 .join(format!("{relative}.json"));
             fs::read_to_string(&path)
                 .ok()
@@ -465,7 +465,7 @@ fn extract_entries_with_depth(
             if let Some(tag_name) = tag_name_opt {
                 let tag_name = tag_name.strip_prefix('#').unwrap_or(tag_name);
                 let tag_rel = tag_name.strip_prefix("minecraft:").unwrap_or(tag_name);
-                let tag_path = Path::new("../../assets/datapacks/26_3/data/minecraft/tags/item")
+                let tag_path = Path::new("../../assets/datapack/data/minecraft/tags/item")
                     .join(format!("{tag_rel}.json"));
                 if let Ok(content) = fs::read_to_string(&tag_path) {
                     #[derive(Deserialize)]
@@ -490,7 +490,7 @@ fn extract_entries_with_depth(
         "minecraft:loot_table" => match &entry.value {
             Some(LootTableValue::Reference(table_name)) => {
                 let table_rel = table_name.strip_prefix("minecraft:").unwrap_or(table_name);
-                let table_path = Path::new("../../assets/datapacks/26_3/data/minecraft/loot_table")
+                let table_path = Path::new("../../assets/datapack/data/minecraft/loot_table")
                     .join(format!("{table_rel}.json"));
                 if let Ok(content) = fs::read_to_string(&table_path) {
                     if let Ok(nested_table) = serde_json::from_str::<ChestLootTableJson>(&content) {
@@ -534,9 +534,8 @@ fn extract_entries_with_depth(
             None => {
                 if let Some(name) = &entry.name {
                     let table_rel = name.strip_prefix("minecraft:").unwrap_or(name);
-                    let table_path =
-                        Path::new("../../assets/datapacks/26_3/data/minecraft/loot_table")
-                            .join(format!("{table_rel}.json"));
+                    let table_path = Path::new("../../assets/datapack/data/minecraft/loot_table")
+                        .join(format!("{table_rel}.json"));
                     if let Ok(content) = fs::read_to_string(&table_path) {
                         if let Ok(nested_table) =
                             serde_json::from_str::<ChestLootTableJson>(&content)
@@ -765,11 +764,11 @@ fn collect_json_files(base: &Path, dir: &Path) -> Vec<(String, ChestLootTableJso
     result
 }
 
-/// Read every loot JSON from `../../assets/datapacks/26_3/data/minecraft/loot_table/` (recursively)
+/// Read every loot JSON from `../../assets/datapack/data/minecraft/loot_table/` (recursively)
 /// and emit a `pumpkin-data/src/generated/chest_loot.rs` with static constants
 /// and a `get_chest_loot_table(key) -> Option<&'static ChestLootTable>` function.
 pub fn build() -> TokenStream {
-    let base = Path::new("../../assets/datapacks/26_3/data/minecraft/loot_table");
+    let base = Path::new("../../assets/datapack/data/minecraft/loot_table");
 
     // Collect all JSON files recursively, sorted for deterministic output.
     let mut files: Vec<(String, ChestLootTableJson)> = collect_json_files(base, base);

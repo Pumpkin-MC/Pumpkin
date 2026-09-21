@@ -50,9 +50,7 @@ pub(crate) fn build() -> TokenStream {
     ];
 
     let process_version = |ver_folder: &str| -> TokenStream {
-        let base_path = std::path::Path::new("../../assets/datapacks")
-            .join(ver_folder)
-            .join("data/minecraft");
+        let base_path = std::path::Path::new("../../assets/datapack/data/minecraft");
 
         let mut data: IndexMap<String, IndexMap<String, Value>> = IndexMap::new();
 

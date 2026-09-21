@@ -26,7 +26,7 @@ pub(crate) fn build() -> TokenStream {
 
     let mut raw_versions = BTreeMap::new();
     for (ver, file) in assets {
-        let path = format!("../../assets/tracked_data/{file}");
+        let path = "../../assets/tracked_data.json".to_string();
         if let Ok(content) = fs::read_to_string(&path) {
             if let Ok(parsed) = serde_json::from_str::<
                 BTreeMap<String, BTreeMap<String, RawTrackedField>>,

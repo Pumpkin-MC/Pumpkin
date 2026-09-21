@@ -99,7 +99,7 @@ pub(crate) fn build() -> TokenStream {
     // Parse available packet files into a BTreeMap keyed by JavaMinecraftVersion
     let mut versions = BTreeMap::new();
     for (ver, file) in assets {
-        let path = format!("../../assets/packet/{file}");
+        let path = "../../assets/packets.json".to_string();
 
         let content = fs::read_to_string(&path)
             .unwrap_or_else(|_| panic!("Failed to read packet JSON file: {path}"));

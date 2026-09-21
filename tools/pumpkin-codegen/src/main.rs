@@ -36,7 +36,6 @@ mod block_transformer;
 mod carver;
 mod chunk_status;
 mod chunk_view_lut;
-mod composter_increase_chance;
 mod configured_feature;
 mod damage_type;
 mod data_component;
@@ -50,7 +49,6 @@ mod entity_type;
 mod environment_attribute;
 mod flower_pot_transformations;
 mod fluid;
-mod fuels;
 mod game_event;
 mod game_rules;
 mod item;
@@ -69,7 +67,6 @@ mod particle;
 mod placed_feature;
 mod potion;
 mod potion_brewing;
-mod recipe_remainder;
 mod recipes;
 mod registry;
 mod scoreboard_slot;
@@ -145,20 +142,14 @@ pub fn main() {
             flower_pot_transformations::build,
             "flower_pot_transformations.rs",
         ),
-        (
-            composter_increase_chance::build,
-            "composter_increase_chance.rs",
-        ),
         (recipes::build, "recipes.rs"),
         (enchantments::build, "enchantment.rs"),
-        (fuels::build, "fuels.rs"),
         (data_component::build, "data_component.rs"),
         (attributes::build, "attributes.rs"),
         (environment_attribute::build, "environment_attribute.rs"),
         (effect::build, "effect.rs"),
         (potion::build, "potion.rs"),
         (potion_brewing::build, "potion_brewing.rs"),
-        (recipe_remainder::build, "recipe_remainder.rs"),
         (placed_feature::build_enum, "placed_feature.rs"),
         (placed_feature::build, "placed_features_generated.rs"),
         (configured_feature::build_enum, "configured_feature.rs"),
