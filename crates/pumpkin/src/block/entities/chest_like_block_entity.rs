@@ -255,6 +255,10 @@ macro_rules! impl_viewer_count_listener_for_chest {
                 _position: &pumpkin_util::math::position::BlockPos,
             ) {
                 self.play_sound(world, pumpkin_data::sound::Sound::BlockChestOpen);
+                world.emit_game_event(
+                    pumpkin_data::game_event::GameEvent::ContainerOpen.name(),
+                    position.to_centered_f64(),
+                );
             }
 
             fn on_container_close(
@@ -263,6 +267,10 @@ macro_rules! impl_viewer_count_listener_for_chest {
                 _position: &pumpkin_util::math::position::BlockPos,
             ) {
                 self.play_sound(world, pumpkin_data::sound::Sound::BlockChestClose);
+                world.emit_game_event(
+                    pumpkin_data::game_event::GameEvent::ContainerClose.name(),
+                    position.to_centered_f64(),
+                );
             }
 
             fn on_viewer_count_update(
