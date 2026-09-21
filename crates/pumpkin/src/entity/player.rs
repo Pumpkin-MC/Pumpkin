@@ -5596,6 +5596,7 @@ impl Player {
     }
 
     pub fn on_handled_screen_closed(&self) {
+        let closed_container_pos = self.open_container_pos.load();
         let current_screen_handler: Arc<std::sync::Mutex<dyn ScreenHandler>> = self
             .current_screen_handler
             .lock()
@@ -5639,6 +5640,15 @@ impl Player {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner) =
             self.player_screen_handler.clone();
+        if let Some(position) = closed_container_pos
+            && !matches!(window_type, Some(WindowType::Anvil))
+        {
+            world.emit_game_event_with_source(
+                pumpkin_data::game_event::GameEvent::ContainerClose.name(),
+                position.to_centered_f64(),
+                world.get_entity_by_uuid(self.gameprofile.id),
+            );
+        }
         self.open_container_pos.store(None);
     }
 
@@ -5769,6 +5779,15 @@ impl Player {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner) = screen_handler;
             self.open_container_pos.store(block_pos);
+            if let Some(position) = block_pos
+                && !matches!(window_type, WindowType::Anvil)
+            {
+                self.world().emit_game_event_with_source(
+                    pumpkin_data::game_event::GameEvent::ContainerOpen.name(),
+                    position.to_centered_f64(),
+                    self.world().get_entity_by_uuid(self.gameprofile.id),
+                );
+            }
             Some(self.screen_handler_sync_id.load(Ordering::Relaxed))
         } else {
             //TODO: Send message if spectator

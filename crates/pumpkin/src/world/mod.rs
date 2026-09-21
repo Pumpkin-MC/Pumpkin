@@ -7044,9 +7044,19 @@ impl World {
     }
 
     pub fn emit_game_event(&self, event_key: impl Into<String>, position: Vector3<f64>) {
+        self.emit_game_event_with_source(event_key, position, None);
+    }
+
+    pub fn emit_game_event_with_source(
+        &self,
+        event_key: impl Into<String>,
+        position: Vector3<f64>,
+        source_entity: Option<Arc<dyn EntityBase>>,
+    ) {
         let mut event = crate::plugin::api::events::world::generic_game::GenericGameEvent::new(
             event_key.into(),
             position,
+            source_entity,
         );
         if let Some(server) = self.server.upgrade() {
             server.plugin_manager.fire_blocking(&server, &mut event);
