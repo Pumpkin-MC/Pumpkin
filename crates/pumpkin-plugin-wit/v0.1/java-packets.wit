@@ -561,7 +561,7 @@ interface java-packets {
   record c-login-success {
     uuid: uuid,
     username: string,
-    properties: list<property>,
+    properties: list<profile-property>,
     strict-error-handling: bool,
     session-id: uuid,
   }
@@ -1142,7 +1142,7 @@ interface java-packets {
   }
   record player-action-add-player {
     name: string,
-    properties: list<property>,
+    properties: list<profile-property>,
   }
   variant player-action {
     add-player(player-action-add-player),
@@ -1489,6 +1489,11 @@ interface java-packets {
     id: s32,
     value: f64,
     modifiers: list<attribute-modifier>,
+  }
+  record profile-property {
+    name: string,
+    value: string,
+    signature: option<string>,
   }
   record attribute-modifier {
     id: string,
