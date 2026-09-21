@@ -1,6 +1,5 @@
 use std::any::Any;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 
 use crate::block::registry::BlockActionResult;
 use crate::entity::Entity;
@@ -55,10 +54,7 @@ impl ItemBehaviour for HangingEntityItem {
             }
 
             let entity = Entity::new(world.clone(), pos, &EntityType::PAINTING);
-            entity
-                .data
-                .store(i32::from(face.to_index()), Ordering::Relaxed);
-            let painting = Arc::new(PaintingEntity::new(entity));
+            let painting = Arc::new(PaintingEntity::new_facing(entity, face));
             world.play_sound(Sound::EntityPaintingPlace, SoundCategory::Blocks, &pos);
             world.spawn_entity(painting);
         } else {

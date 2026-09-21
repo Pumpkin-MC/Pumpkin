@@ -27,6 +27,17 @@ fn facing_from_nbt(nbt: &NbtCompound) -> BlockDirection {
     facing_from_horizontal(nbt.get_byte("facing").unwrap_or(0) as u8)
 }
 
+const DEFAULT_FACING: BlockDirection = BlockDirection::South;
+
+// Paintings only hang on walls; a vertical facing fails `HangingEntity.setDirection` client side.
+const fn data_for_facing(facing: BlockDirection) -> i32 {
+    if facing.is_horizontal() {
+        facing.to_index() as i32
+    } else {
+        DEFAULT_FACING.to_index() as i32
+    }
+}
+
 const fn facing_to_horizontal(direction: BlockDirection) -> u8 {
     match direction {
         BlockDirection::West => 1,
@@ -41,7 +52,14 @@ pub struct PaintingEntity {
 }
 
 impl PaintingEntity {
-    pub const fn new(entity: Entity) -> Self {
+    pub fn new(entity: Entity) -> Self {
+        Self::new_facing(entity, DEFAULT_FACING)
+    }
+
+    pub fn new_facing(entity: Entity, facing: BlockDirection) -> Self {
+        entity
+            .data
+            .store(data_for_facing(facing), Ordering::Relaxed);
         Self { entity }
     }
 }
@@ -117,6 +135,34 @@ mod tests {
         let mut with_facing = NbtCompound::new();
         with_facing.put_byte("facing", 1);
         assert_eq!(facing_from_nbt(&with_facing), BlockDirection::West);
+    }
+
+    #[test]
+    fn a_new_painting_faces_horizontally() {
+        let data = data_for_facing(DEFAULT_FACING);
+        assert_eq!(data, i32::from(BlockDirection::South.to_index()));
+        assert!(
+            BlockDirection::from_index(data as u8)
+                .expect("a valid index")
+                .is_horizontal()
+        );
+
+        for vertical in [BlockDirection::Up, BlockDirection::Down] {
+            assert_eq!(data_for_facing(vertical), data, "{vertical:?}");
+        }
+
+        for wall in [
+            BlockDirection::North,
+            BlockDirection::South,
+            BlockDirection::West,
+            BlockDirection::East,
+        ] {
+            assert_eq!(
+                data_for_facing(wall),
+                i32::from(wall.to_index()),
+                "{wall:?}"
+            );
+        }
     }
 
     #[test]
