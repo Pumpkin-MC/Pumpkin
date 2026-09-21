@@ -29,8 +29,10 @@ thiserror.workspace = true
 criterion = { workspace = true, features = ["html_reports"] }
 
 [features]
-default = []
+default = ["translations"]
 codegen = ["dep:syn", "dep:quote", "dep:proc-macro2"]
+# without this, translation keys are left for the client to resolve instead of the server
+translations = []
 
 [[bench]]
 name = "perlin"

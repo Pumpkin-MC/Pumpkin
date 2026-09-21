@@ -17,5 +17,9 @@ rustc-hash.workspace = true
 serde_json.workspace = true
 tracing.workspace = true
 
+[dev-dependencies]
+# The error message tests compare rendered English, so they need the tables.
+pumpkin-util = { workspace = true, features = ["translations"] }
+
 [lints]
 workspace = true
