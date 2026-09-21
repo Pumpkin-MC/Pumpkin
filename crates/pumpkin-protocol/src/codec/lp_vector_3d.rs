@@ -59,14 +59,21 @@ impl LpVector3d {
     }
 
     pub fn read<R: std::io::Read>(reader: &mut R) -> Result<Self, ReadingError> {
-        let mut low_16 = [0u8; 2];
+        // A zero vector is a single zero byte, so we can't read two bytes up front.
+        let mut first = [0u8; 1];
         reader
-            .read_exact(&mut low_16)
+            .read_exact(&mut first)
             .map_err(|e| ReadingError::Message(e.to_string()))?;
 
-        if low_16[0] == 0 && low_16[1] == 0 {
+        if first[0] == 0 {
             return Ok(Self(Vector3::new(0.0, 0.0, 0.0)));
         }
+
+        let mut second = [0u8; 1];
+        reader
+            .read_exact(&mut second)
+            .map_err(|e| ReadingError::Message(e.to_string()))?;
+        let low_16 = [first[0], second[0]];
 
         let mut mid_32 = [0u8; 4];
         reader
@@ -157,6 +164,22 @@ mod tests {
         assert_eq!(encode_legacy_velocity_component(-0.5), -4000);
         assert_eq!(encode_legacy_velocity_component(4.0), 31200);
         assert_eq!(encode_legacy_velocity_component(-4.0), -31200);
+    }
+
+    #[test]
+    fn zero_vector_reads_back_the_single_byte_it_wrote() -> Result<(), Box<dyn std::error::Error>> {
+        let mut buf = Vec::new();
+        LpVector3d(Vector3::new(0.0, 0.0, 0.0)).write(&mut buf)?;
+        assert_eq!(buf, vec![0x00]);
+
+        buf.push(0x01);
+        let mut reader = buf.as_slice();
+        assert_eq!(
+            LpVector3d::read(&mut reader)?,
+            LpVector3d(Vector3::new(0.0, 0.0, 0.0))
+        );
+        assert_eq!(reader, [0x01]);
+        Ok(())
     }
 
     #[test]
