@@ -2,8 +2,11 @@ use crate::block::entities::BlockEntity;
 use crate::world::World;
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::block_properties::HorizontalFacing;
+use pumpkin_data::effect::StatusEffect;
+use pumpkin_data::potion::Effect;
 use pumpkin_data::sound::{Sound, SoundCategory};
 use pumpkin_nbt::compound::NbtCompound;
+use pumpkin_util::math::boundingbox::BoundingBox;
 use pumpkin_util::math::position::BlockPos;
 use std::any::Any;
 use std::sync::Arc;
@@ -19,6 +22,11 @@ pub struct BellBlockEntity {
 
 impl BellBlockEntity {
     pub const ID: &'static str = "minecraft:bell";
+    const RAIDER_DETECTION_RANGE: f64 = 32.0;
+    const RAIDER_GLOWING_RANGE: f64 = 48.0;
+    const RESONANCE_TICKS: i32 = 40;
+    const GLOWING_TICKS: i32 = 60;
+
     #[must_use]
     pub const fn new(position: BlockPos) -> Self {
         Self {
@@ -38,10 +46,55 @@ impl BellBlockEntity {
             self.ringing.store(true);
         }
     }
-    pub const fn raiders_hear_bell(&self) -> bool {
-        //TODO
 
-        false
+    fn raider_search_box(position: &BlockPos) -> BoundingBox {
+        BoundingBox::from_block(position).expand_all(Self::RAIDER_DETECTION_RANGE)
+    }
+
+    fn glowing_search_box(position: &BlockPos) -> BoundingBox {
+        BoundingBox::from_block(position).expand_all(Self::RAIDER_GLOWING_RANGE)
+    }
+
+    const fn resonance_effect() -> Effect {
+        Effect {
+            effect_type: &StatusEffect::GLOWING,
+            duration: Self::GLOWING_TICKS,
+            amplifier: 0,
+            ambient: false,
+            show_particles: true,
+            show_icon: true,
+            blend: false,
+        }
+    }
+
+    const fn resonance_finished(resonate_time: i32) -> bool {
+        resonate_time >= Self::RESONANCE_TICKS
+    }
+
+    fn raiders_hear_bell(&self, world: &World) -> bool {
+        world
+            .get_entities_at_box(&Self::raider_search_box(&self.position))
+            .iter()
+            .any(|entity| {
+                entity.get_entity().is_alive()
+                    && entity
+                        .get_mob()
+                        .is_some_and(|mob| mob.as_raider().is_some())
+            })
+    }
+
+    fn make_raiders_glowing(&self, world: &World) {
+        let effect = Self::resonance_effect();
+        for entity in world.get_entities_at_box(&Self::glowing_search_box(&self.position)) {
+            if entity.get_entity().is_alive()
+                && entity
+                    .get_mob()
+                    .is_some_and(|mob| mob.as_raider().is_some())
+                && let Some(living) = entity.get_living_entity()
+            {
+                living.add_effect(effect.clone());
+            }
+        }
     }
 }
 
@@ -63,7 +116,10 @@ impl BlockEntity for BellBlockEntity {
             self.ringing.store(false);
             self.ring_ticks.store(0);
         }
-        if self.ring_ticks.load() >= 5 && self.resonate_time.load() == 0 && self.raiders_hear_bell()
+        if self.ring_ticks.load() >= 5
+            && self.resonate_time.load() == 0
+            && !self.resonating.load()
+            && self.raiders_hear_bell(world)
         {
             self.resonating.store(true);
             world.play_sound_fine(
@@ -76,10 +132,11 @@ impl BlockEntity for BellBlockEntity {
         }
 
         if self.resonating.load() {
-            if self.resonate_time.load() < 40 {
-                self.resonate_time.fetch_add(1);
-            } else {
+            let resonate_time = self.resonate_time.fetch_add(1) + 1;
+            if Self::resonance_finished(resonate_time) {
                 self.resonating.store(false);
+                self.resonate_time.store(0);
+                self.make_raiders_glowing(world);
             }
         }
     }
@@ -94,5 +151,33 @@ impl BlockEntity for BellBlockEntity {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pumpkin_data::effect::StatusEffect;
+
+    #[test]
+    fn search_boxes_and_resonance_effect_match_vanilla_ranges() {
+        let position = BlockPos::new(10, 20, 30);
+        let raider_box = BellBlockEntity::raider_search_box(&position);
+        let glowing_box = BellBlockEntity::glowing_search_box(&position);
+
+        assert_eq!(raider_box.min.x, -22.0);
+        assert_eq!(raider_box.max.x, 43.0);
+        assert_eq!(glowing_box.min.x, -38.0);
+        assert_eq!(glowing_box.max.x, 59.0);
+
+        let effect = BellBlockEntity::resonance_effect();
+        assert_eq!(effect.effect_type.id, StatusEffect::GLOWING.id);
+        assert_eq!(effect.duration, 60);
+    }
+
+    #[test]
+    fn resonance_finishes_at_forty_ticks() {
+        assert!(!BellBlockEntity::resonance_finished(39));
+        assert!(BellBlockEntity::resonance_finished(40));
     }
 }
