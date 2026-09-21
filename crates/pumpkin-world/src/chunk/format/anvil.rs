@@ -15,7 +15,7 @@ use tokio::{
     io::{AsyncSeekExt, AsyncWrite, AsyncWriteExt, BufWriter},
     sync::Mutex,
 };
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
 
 use crate::chunk::{
     ChunkParsingError, ChunkReadingError, ChunkSerializingError, ChunkWritingError,
@@ -584,20 +584,28 @@ impl<S: SingleChunkDataSerializer + 'static> ChunkSerializer for AnvilChunkFile<
             let bytes_offset = (sector_offset - 2) * SECTOR_BYTES;
             let bytes_count = sector_count * SECTOR_BYTES;
 
-            if bytes_offset + bytes_count > raw_file_bytes.len() {
-                return Err(ChunkReadingError::ParsingError(
-                    ChunkParsingError::ErrorDeserializingChunk(format!(
-                        "Not enough bytes available for the chunk {} ({} vs {})",
-                        i,
-                        bytes_count,
-                        raw_file_bytes.len().saturating_sub(bytes_offset)
-                    )),
-                ));
+            let available = raw_file_bytes.len().saturating_sub(bytes_offset);
+            if available < 5 {
+                warn!(
+                    "Chunk {} header is truncated: expected {} but read {}",
+                    i, bytes_count, available
+                );
+                continue;
             }
+            let bytes_count = bytes_count.min(available);
 
-            let serialized_data = AnvilChunkData::from_bytes(
+            let serialized_data = match AnvilChunkData::from_bytes(
                 raw_file_bytes.slice(bytes_offset..bytes_offset + bytes_count),
-            )?;
+            ) {
+                Ok(data) => data,
+                Err(e) => {
+                    warn!(
+                        "Chunk {} is unreadable and will be treated as missing: {:?}",
+                        i, e
+                    );
+                    continue;
+                }
+            };
 
             chunk_file.chunks_data[i] = Some(AnvilChunkMetadata {
                 serialized_data,
