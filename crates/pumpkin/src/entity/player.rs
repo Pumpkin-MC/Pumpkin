@@ -1089,7 +1089,7 @@ impl Player {
     }
 
     /// Opens the player's ender chest screen.
-    pub fn open_ender_chest(self: &Arc<Self>) -> Option<u8> {
+    pub fn open_ender_chest(self: &Arc<Self>, block_pos: Option<BlockPos>) -> Option<u8> {
         self.increment_stat(
             pumpkin_data::statistic::StatisticCategory::Custom,
             pumpkin_data::statistic::CustomStatistic::OpenEnderchest as i32,
@@ -1101,7 +1101,7 @@ impl Player {
                 inventory: inventory.clone(),
                 tracker: None,
             },
-            None,
+            block_pos,
         )
     }
 

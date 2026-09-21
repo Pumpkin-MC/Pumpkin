@@ -3027,7 +3027,7 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
         plugin
             .store
             .pump_blocking(&mut host, move || {
-                player.open_ender_chest();
+                player.open_ender_chest(None);
             })
             .await
     }
