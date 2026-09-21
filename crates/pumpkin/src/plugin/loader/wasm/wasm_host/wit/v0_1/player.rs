@@ -1626,9 +1626,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         pitch: f32,
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
-        let sound_name = format!("{sound:?}").to_lowercase().replace('_', ".");
-        let sound_data = pumpkin_data::sound::Sound::from_name(&sound_name)
-            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown sound: {sound_name}")))?;
+        let sound_data = super::world::from_wit_sound(sound)?;
         let internal_category = super::world::from_wit_sound_category(category);
         let pos = player.position();
         player.play_sound(
@@ -1652,9 +1650,7 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         pitch: f32,
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
-        let sound_name = format!("{sound:?}").to_lowercase().replace('_', ".");
-        let sound_data = pumpkin_data::sound::Sound::from_name(&sound_name)
-            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown sound: {sound_name}")))?;
+        let sound_data = super::world::from_wit_sound(sound)?;
         let internal_category = super::world::from_wit_sound_category(category);
         player.play_sound(
             sound_data as u16,
@@ -1674,10 +1670,10 @@ impl pumpkin::plugin::player::HostPlayer for PluginHostState {
         category: Option<pumpkin::plugin::sounds::SoundCategory>,
     ) -> wasmtime::Result<()> {
         let player = player_from_resource(self, &player)?;
-        let sound_rl = sound.and_then(|s| {
-            let sound_name = format!("{s:?}").to_lowercase().replace('_', ".");
-            pumpkin_data::sound::Sound::from_name(&sound_name).map(|s| s.to_name().into())
-        });
+        let sound_rl = sound
+            .map(super::world::from_wit_sound)
+            .transpose()?
+            .map(|s| s.to_name().into());
         let cat = category.map(super::world::from_wit_sound_category);
         player.stop_sound(sound_rl, cat);
         Ok(())
@@ -3259,6 +3255,21 @@ impl pumpkin::plugin::player::HostPlayerWithStore<PluginHostState> for HasSelf<P
         plugin
             .store
             .pump_blocking(&mut host, move || runtime.block_on(player.respawn()))
+            .await
+    }
+
+    async fn close_gui(
+        mut host: Access<'_, PluginHostState, Self>,
+        player: Resource<Player>,
+    ) -> wasmtime::Result<()> {
+        let (player, plugin) = {
+            let state = host.get();
+            (player_from_resource(state, &player)?, plugin_from_state(state)?)
+        };
+
+        plugin
+            .store
+            .pump_blocking(&mut host, move || player.close_handled_screen())
             .await
     }
 

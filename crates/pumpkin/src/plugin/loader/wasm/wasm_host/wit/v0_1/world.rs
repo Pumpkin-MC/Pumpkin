@@ -814,9 +814,7 @@ impl pumpkin::plugin::world::HostWorld for PluginHostState {
         pitch: f32,
     ) -> wasmtime::Result<()> {
         let world_ref = self.get_world_res(&world)?;
-        let sound_name = format!("{sound:?}").to_lowercase().replace('_', ".");
-        let sound_data = pumpkin_data::sound::Sound::from_name(&sound_name)
-            .ok_or_else(|| wasmtime::Error::msg(format!("Unknown sound: {sound_name}")))?;
+        let sound_data = from_wit_sound(sound)?;
 
         let internal_category = from_wit_sound_category(category);
 
@@ -2375,6 +2373,15 @@ impl pumpkin_world::generation::generator::CustomChunkGenerator for WasmChunkGen
     }
 }
 
+pub fn from_wit_sound(
+    sound: pumpkin::plugin::sounds::Sound,
+) -> wasmtime::Result<pumpkin_data::sound::Sound> {
+    pumpkin_data::sound::Sound::slice()
+        .get(sound as usize)
+        .copied()
+        .ok_or_else(|| wasmtime::Error::msg(format!("Unknown sound: {sound:?}")))
+}
+
 #[must_use]
 pub const fn from_wit_sound_category(
     category: pumpkin::plugin::sounds::SoundCategory,
@@ -2427,6 +2434,27 @@ pub(crate) fn to_wit_biome(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn wit_sound_enum_follows_the_sound_registry_order() {
+        let wit = include_str!("../../../../../../../../pumpkin-plugin-wit/v0.1/sounds.wit");
+        let block = wit
+            .split("enum sound {")
+            .nth(1)
+            .and_then(|rest| rest.split('}').next())
+            .unwrap_or_default();
+        let wit_names: Vec<&str> = block
+            .lines()
+            .map(str::trim)
+            .filter(|line| line.ends_with(',') && !line.starts_with("//"))
+            .map(|line| line.trim_end_matches(','))
+            .collect();
+        let registry: Vec<String> = pumpkin_data::sound::Sound::slice()
+            .iter()
+            .map(|sound| sound.to_name().replace(['_', '.'], "-"))
+            .collect();
+        assert_eq!(wit_names, registry);
+    }
+
     use super::*;
 
     #[test]
