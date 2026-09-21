@@ -424,9 +424,8 @@ impl BedrockClient {
             }
             TransactionData::UseItemOnEntity(data) => {
                 let action = match data.action_type.0 {
-                    // Bedrock does not distinguish an entity hit position here. ItemInteract is
-                    // therefore exposed as the general Interact action rather than InteractAt.
-                    0 | 2 => ActionType::Interact,
+                    0 => ActionType::Interact,
+                    2 => ActionType::InteractAt,
                     1 => ActionType::Attack,
                     action => {
                         tracing::warn!("invalid UseItemOnEntity action type {action}");
@@ -453,7 +452,7 @@ impl BedrockClient {
                     player,
                     target.clone(),
                     action,
-                    None,
+                    (action == ActionType::InteractAt).then(|| data.click_position.to_f64()),
                     player.get_entity().is_sneaking(),
                 );
                 server.plugin_manager.fire_blocking(&server, &mut event);
@@ -466,7 +465,17 @@ impl BedrockClient {
                         let mut stack = player.inventory().held_item();
                         let item_id = stack.item.id;
                         let before = stack.clone();
-                        if !event.target.interact(player, &mut stack) {
+                        let interacted = if event.action == ActionType::InteractAt {
+                            match event.target_position {
+                                Some(position) => {
+                                    event.target.interact_at(player, &mut stack, position)
+                                }
+                                None => event.target.interact(player, &mut stack),
+                            }
+                        } else {
+                            event.target.interact(player, &mut stack)
+                        };
+                        if !interacted {
                             server
                                 .item_registry
                                 .use_on_entity(&mut stack, player, event.target);
