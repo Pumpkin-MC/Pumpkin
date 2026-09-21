@@ -424,6 +424,7 @@ impl WorldInfoWriter for AnvilLevelInfo {
         let mut level_data = info.clone();
         level_data.last_played = since_the_epoch.as_millis() as i64;
         stamp_current_version(&mut level_data);
+        std::fs::create_dir_all(level_folder)?;
 
         // ── Write level.dat ───────────────────────────────────────────────────
         let path = level_folder.join(LEVEL_DAT_FILE_NAME);
