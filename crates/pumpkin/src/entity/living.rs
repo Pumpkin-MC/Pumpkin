@@ -2737,9 +2737,9 @@ impl LivingEntity {
         self.entity
             .fall_flying
             .store(nbt.get_bool("FallFlying").unwrap_or(false), Relaxed);
-        let sleeping_pos = nbt.get_int_array("sleeping_pos").and_then(|pos| {
-            (pos.len() == 3).then(|| BlockPos::new(pos[0], pos[1], pos[2]))
-        });
+        let sleeping_pos = nbt
+            .get_int_array("sleeping_pos")
+            .and_then(|pos| (pos.len() == 3).then(|| BlockPos::new(pos[0], pos[1], pos[2])));
         self.sleeping_pos.store(sleeping_pos);
         if sleeping_pos.is_some() {
             self.entity.set_pose(EntityPose::Sleeping);
