@@ -1,7 +1,9 @@
 use pumpkin_data::packet::clientbound::login::{GAME_PROFILE, LOGIN_FINISHED};
 use pumpkin_util::version::JavaMinecraftVersion;
 
-use crate::{ClientPacket, Property as ProfileProperty, packet::MultiVersionJavaPacket, ser::NetworkWriteExt};
+use crate::{
+    ClientPacket, Property as ProfileProperty, packet::MultiVersionJavaPacket, ser::NetworkWriteExt,
+};
 
 /// Sent by the server to signal a successful login and transition to the configuration phase
 ///
