@@ -4050,7 +4050,7 @@ impl Player {
 
                 self.send_health();
 
-                new_world.send_world_info(&player, position, yaw, pitch);
+                new_world.send_world_info(&player);
 
                 if let ClientPlatform::Java(java_client) = player.client.as_ref() {
                     let center_chunk = player.get_entity().chunk_pos.load();
@@ -4060,6 +4060,11 @@ impl Player {
                         .await;
                     java_client.send_chunks(&[chunk]).await;
                 }
+
+                new_world
+                    .entity_tracker
+                    .add_entity(&(player.clone() as Arc<dyn EntityBase>), &new_world);
+                new_world.pair_new_player_with_tracked_entities(&player);
 
                 player.request_teleport(position, yaw, pitch);
 
