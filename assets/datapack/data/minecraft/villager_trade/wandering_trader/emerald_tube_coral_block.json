@@ -1,0 +1,11 @@
+{
+  "gives": {
+    "id": "minecraft:tube_coral_block"
+  },
+  "max_uses": 8,
+  "reputation_discount": 0.05,
+  "wants": {
+    "count": 3,
+    "id": "minecraft:emerald"
+  }
+}

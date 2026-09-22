@@ -1,8 +1,0 @@
-{
-  "asset_id": "minecraft:flow",
-  "template_item": "minecraft:flow_armor_trim_smithing_template",
-  "description": {
-    "translate": "trim_pattern.minecraft.flow"
-  },
-  "decal": false
-}

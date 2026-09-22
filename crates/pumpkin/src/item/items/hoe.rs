@@ -50,10 +50,10 @@ impl ItemBehaviour for HoeItem {
             world.set_block_state(&location, result.new_state_id, BlockFlags::NOTIFY_ALL);
 
             if let Some(loot_key) = result.entry.loot
-                && let Some(loot_table) = pumpkin_data::loot_table::get_loot_table(loot_key)
+                && let Some(loot_table) = world.get_loot_table(loot_key)
             {
                 let seed = rand::random::<i64>();
-                let drops = crate::world::loot::generate_loot(loot_table, seed);
+                let drops = loot_table.generate_loot(seed);
                 for drop_stack in drops {
                     if result.entry.drop_strategy == Some(DropStrategy::ClickedFace) {
                         world.drop_stack_from_face(&location, face, drop_stack);

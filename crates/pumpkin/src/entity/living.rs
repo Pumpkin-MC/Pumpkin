@@ -854,10 +854,10 @@ impl LivingEntity {
                 .find(|a| a.0.id == attribute.id)
                 .map_or_else(
                     || {
-                        tracing::warn!(
-                            "Entity type {:?} has no base value for attribute {:?}; falling back to default {}",
-                            self.entity.entity_type,
-                            attribute.id,
+                        tracing::debug!(
+                            "Entity type {} has no base value for attribute {}; falling back to default {}",
+                            self.entity.entity_type.resource_name,
+                            attribute.name,
                             attribute.default_value,
                         );
                         attribute.default_value
@@ -1301,10 +1301,8 @@ impl LivingEntity {
         let world = self.entity.world.load();
         let entity_id = self.entity_id();
 
-        let je_packet = pumpkin_protocol::java::client::play::CEntityAnimation::new(
-            entity_id.into(),
-            pumpkin_protocol::java::client::play::Animation::SwingMainArm,
-        );
+        let je_packet =
+            pumpkin_protocol::java::client::play::CSwingArm::new(entity_id.into(), false);
         let be_packet = pumpkin_protocol::bedrock::server::animate::SAnimate {
             action: pumpkin_protocol::bedrock::server::animate::AnimateAction::SwingArm,
             target_actor_runtime_id: pumpkin_protocol::codec::var_ulong::VarULong(entity_id as u64),
@@ -2275,11 +2273,12 @@ impl LivingEntity {
     fn drop_loot(&self, params: &LootContextParameters) {
         let resource_name = self.get_entity().entity_type.resource_name;
         let key = format!("minecraft:entities/{resource_name}");
-        if let Some(loot_table) = pumpkin_data::loot_table::get_loot_table(&key) {
+        let world = self.entity.world.load();
+        if let Some(loot_table) = world.get_loot_table(&key) {
             let seed: i64 = rand::random();
             let pos = self.entity.block_pos.load();
-            for stack in crate::world::loot::generate_loot_with_context(loot_table, seed, params) {
-                self.entity.world.load().drop_stack(&pos, stack);
+            for stack in crate::world::loot::generate_loot_from_handle(&loot_table, seed, params) {
+                world.drop_stack(&pos, stack);
             }
         }
     }
@@ -3386,14 +3385,6 @@ impl EntityBase for LivingEntity {
             self.entity.send_velocity();
         }
 
-        // TODO
-        let player = caller.get_player();
-        let is_player = player.is_some();
-
-        if !is_player {
-            self.entity.send_pos_rot();
-        }
-
         // Fetch supporting blocks for players or other entities
         let supporting_pos = caller.get_player().map_or_else(
             || self.entity.get_supporting_block_pos(),
@@ -4061,7 +4052,7 @@ mod tests {
         metadata
             .write(
                 &mut bytes,
-                &pumpkin_util::version::JavaMinecraftVersion::V_26_2,
+                &pumpkin_util::version::JavaMinecraftVersion::V_26_3,
             )
             .unwrap();
 

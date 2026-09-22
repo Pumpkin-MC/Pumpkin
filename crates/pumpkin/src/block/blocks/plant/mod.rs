@@ -32,6 +32,7 @@ pub mod sapling;
 pub mod sea_pickles;
 pub mod seagrass;
 pub mod segmented;
+pub mod shelf_mushroom;
 pub mod short_plant;
 pub mod small_dripleaf;
 pub mod spore_blossom;

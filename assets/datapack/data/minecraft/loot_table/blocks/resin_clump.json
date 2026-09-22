@@ -1,0 +1,97 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "modifier": [
+            {
+              "type": "minecraft:set_count",
+              "add": true,
+              "condition": {
+                "type": "minecraft:match_block",
+                "blocks": "minecraft:resin_clump",
+                "state": {
+                  "down": "true"
+                }
+              },
+              "count": 1
+            },
+            {
+              "type": "minecraft:set_count",
+              "add": true,
+              "condition": {
+                "type": "minecraft:match_block",
+                "blocks": "minecraft:resin_clump",
+                "state": {
+                  "up": "true"
+                }
+              },
+              "count": 1
+            },
+            {
+              "type": "minecraft:set_count",
+              "add": true,
+              "condition": {
+                "type": "minecraft:match_block",
+                "blocks": "minecraft:resin_clump",
+                "state": {
+                  "north": "true"
+                }
+              },
+              "count": 1
+            },
+            {
+              "type": "minecraft:set_count",
+              "add": true,
+              "condition": {
+                "type": "minecraft:match_block",
+                "blocks": "minecraft:resin_clump",
+                "state": {
+                  "south": "true"
+                }
+              },
+              "count": 1
+            },
+            {
+              "type": "minecraft:set_count",
+              "add": true,
+              "condition": {
+                "type": "minecraft:match_block",
+                "blocks": "minecraft:resin_clump",
+                "state": {
+                  "west": "true"
+                }
+              },
+              "count": 1
+            },
+            {
+              "type": "minecraft:set_count",
+              "add": true,
+              "condition": {
+                "type": "minecraft:match_block",
+                "blocks": "minecraft:resin_clump",
+                "state": {
+                  "east": "true"
+                }
+              },
+              "count": 1
+            },
+            {
+              "type": "minecraft:set_count",
+              "add": true,
+              "count": -1
+            },
+            {
+              "type": "minecraft:explosion_decay"
+            }
+          ],
+          "name": "minecraft:resin_clump"
+        }
+      ],
+      "rolls": 1
+    }
+  ],
+  "random_sequence": "minecraft:blocks/resin_clump"
+}
