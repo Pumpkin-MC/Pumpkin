@@ -258,7 +258,7 @@ impl ArmorStandEntity {
             .get(slot)
     }
 
-    fn set_item_slot(&self, slot: &EquipmentSlot, stack: ItemStack) {
+    fn set_item_slot(&self, slot: &EquipmentSlot, stack: &ItemStack) {
         let previous = self
             .living_entity
             .entity_equipment
@@ -308,7 +308,7 @@ impl ArmorStandEntity {
             return false;
         };
 
-        self.set_item_slot(slot, new_stand_stack);
+        self.set_item_slot(slot, &new_stand_stack);
         true
     }
 
