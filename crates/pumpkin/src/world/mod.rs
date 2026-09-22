@@ -257,6 +257,8 @@ pub struct World {
     /// A map of active entities within the world, keyed by their unique UUID.
     /// This does not include players.
     pub entities: ArcSwap<Vec<Arc<dyn EntityBase>>>,
+    /// Lookup-only entities (e.g. multipart-mob hitboxes): findable by id, never ticked or saved.
+    pub lookup_only_entities: ArcSwap<Vec<Arc<dyn EntityBase>>>,
     /// The world's scoreboard, used for tracking scores, objectives, and display information.
     pub scoreboard: std::sync::Mutex<Scoreboard>,
     /// The world's worldborder, defining the playable area and controlling its expansion or contraction.
@@ -392,6 +394,7 @@ impl World {
             level_info,
             players: ArcSwap::new(Arc::new(Vec::new())),
             entities: ArcSwap::new(Arc::new(Vec::new())),
+            lookup_only_entities: ArcSwap::new(Arc::new(Vec::new())),
             scoreboard: std::sync::Mutex::new(Scoreboard::default()),
             worldborder: std::sync::Mutex::new(Worldborder::new(
                 0.0,
@@ -4634,6 +4637,11 @@ impl World {
                 return Some(entity.clone());
             }
         }
+        for entity in self.lookup_only_entities.load().iter() {
+            if entity.get_entity().entity_id == id {
+                return Some(entity.clone());
+            }
+        }
         for player in self.players.load().iter() {
             if player.get_entity().entity_id == id {
                 return Some(player.clone() as Arc<dyn EntityBase>);
@@ -5084,6 +5092,9 @@ impl World {
             .iter()
             .any(|e| e.get_entity().entity_uuid == base_entity.entity_uuid);
         if already_exists {
+            for owned in entity.get_owned_entities() {
+                self.remove_lookup_only_entity(owned.as_ref());
+            }
             return;
         }
 
@@ -5096,6 +5107,27 @@ impl World {
         self.entities.rcu(|current_entities| {
             let mut new_entities = (**current_entities).clone();
             new_entities.push(entity.clone());
+            new_entities
+        });
+    }
+
+    /// Registers an entity for `get_entity_by_id` only: no tracking, ticking, or persistence.
+    #[expect(clippy::needless_pass_by_value)]
+    pub fn add_entity_lookup_only(&self, entity: Arc<dyn EntityBase>) {
+        self.lookup_only_entities.rcu(|current_entities| {
+            let mut new_entities = (**current_entities).clone();
+            new_entities.push(entity.clone());
+            new_entities
+        });
+    }
+
+    /// Undoes `add_entity_lookup_only`: no `SpawnState` or entity tracker involved, since those were never told about it either.
+    fn remove_lookup_only_entity(&self, entity: &dyn EntityBase) {
+        let base_entity = entity.get_entity();
+        base_entity.removed.store(true, Ordering::Release);
+        self.lookup_only_entities.rcu(|current_entities| {
+            let mut new_entities = (**current_entities).clone();
+            new_entities.retain(|e| e.get_entity().entity_uuid != base_entity.entity_uuid);
             new_entities
         });
     }
@@ -5118,6 +5150,15 @@ impl World {
             new_entities.retain(|e| e.get_entity().entity_uuid != base_entity.entity_uuid);
             new_entities
         });
+        self.lookup_only_entities.rcu(|current_entities| {
+            let mut new_entities = (**current_entities).clone();
+            new_entities.retain(|e| e.get_entity().entity_uuid != base_entity.entity_uuid);
+            new_entities
+        });
+
+        for owned in entity.get_owned_entities() {
+            self.remove_lookup_only_entity(owned.as_ref());
+        }
     }
 
     pub async fn remove_entities_in_chunks(
@@ -5152,6 +5193,9 @@ impl World {
         for entity in entities_to_remove {
             self.entity_tracker.remove_entity(entity.as_ref(), self);
             self.spawn_state.load().remove_entity(self, entity.as_ref());
+            for owned in entity.get_owned_entities() {
+                self.remove_lookup_only_entity(owned.as_ref());
+            }
         }
 
         for chunk_pos in &chunks_set {

@@ -239,7 +239,7 @@ impl EnderDragonEntity {
                 &EntityType::ENDER_DRAGON,
             );
             let part = Arc::new(EnderDragonPart::new(part_entity, dragon_uuid));
-            // TODO: world.add_entity_silent(part.clone() as Arc<dyn EntityBase>);
+            world.add_entity_lookup_only(part.clone() as Arc<dyn EntityBase>);
             parts.push(part);
         }
 
@@ -868,6 +868,13 @@ impl Mob for EnderDragonEntity {
 
     fn get_mob_gravity(&self) -> f64 {
         0.0
+    }
+
+    fn get_owned_entities(&self) -> Vec<Arc<dyn EntityBase>> {
+        self.parts
+            .iter()
+            .map(|part| part.clone() as Arc<dyn EntityBase>)
+            .collect()
     }
 }
 
