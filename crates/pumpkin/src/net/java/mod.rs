@@ -53,7 +53,6 @@ use tokio_util::task::TaskTracker;
 use tracing::{debug, error, warn};
 
 pub mod chunk_data;
-pub mod config;
 pub mod handshake;
 pub mod login;
 mod outgoing;
@@ -70,8 +69,8 @@ use pending::PendingConnection;
 
 use crate::entity::player::Player;
 use crate::net::{
-    ClientPlatform, GameProfile, MAX_PENDING_BYTES, PacketHandlerResult, PacketRateLimiter,
-    PlayerConfig, decrement_pending_bytes,
+    ClientPlatform, GameProfile, MAX_PENDING_BYTES, PacketRateLimiter, PlayerConfig,
+    decrement_pending_bytes,
 };
 use crate::plugin::api::events::world::chunk_send::ChunkSend;
 use crate::plugin::player::player_custom_payload::PlayerCustomPayloadEvent;
@@ -456,6 +455,9 @@ impl JavaClient {
         }
 
         // Reserve first, release again if it does not fit.
+        // TODO: `PacketSentEvent` hook (outbound choke point, shared by all three enqueue/send
+        // paths below): gate `has_handlers` + non-current version, split id VarInt,
+        // `fire_blocking`, re-frame id + payload, drop if cancelled.
         let packet_len = packet_data.len();
         let prev_bytes = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
         let new_bytes = prev_bytes.saturating_add(packet_len);
@@ -661,6 +663,7 @@ impl JavaClient {
         pumpkin_protocol::java::packet_encoder::write_packet(packet, &version, write)
     }
 
+    // TODO: translator active -> `CURRENT_MC_VERSION` (multiversion plugin parses 26.3).
     pub fn serialize_packet_for_version<P: ClientPacket>(
         packet: &P,
         version: JavaMinecraftVersion,

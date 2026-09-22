@@ -1765,7 +1765,7 @@ impl DataComponentCodec<Self> for UseRemainderImpl {
 
     fn deserialize(seq: &mut impl NetworkReadExt) -> Result<Self, ReadingError> {
         let _ = deserialize_item_stack_template(seq)?;
-        Ok(Self)
+        Ok(Self { remainder: None })
     }
 }
 
