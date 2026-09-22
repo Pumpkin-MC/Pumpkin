@@ -30,7 +30,7 @@ const fn floor_mod(target: i32, source: i32) -> i32 {
     }
 }
 
-/// The scoreboard operators, in the order vanilla lists them.
+/// Supported scoreboard operations.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ScoreboardOperation {
     Assign,
@@ -45,7 +45,6 @@ pub enum ScoreboardOperation {
 }
 
 impl ScoreboardOperation {
-    /// The supported operators and their exact spellings.
     const ALL: [(Self, &'static str); 9] = [
         (Self::Plus, "+="),
         (Self::Minus, "-="),
@@ -57,21 +56,6 @@ impl ScoreboardOperation {
         (Self::Min, "<"),
         (Self::Max, ">"),
     ];
-
-    #[must_use]
-    pub const fn symbol(self) -> &'static str {
-        match self {
-            Self::Assign => "=",
-            Self::Plus => "+=",
-            Self::Minus => "-=",
-            Self::Multiply => "*=",
-            Self::Divide => "/=",
-            Self::Modulo => "%=",
-            Self::Swap => "><",
-            Self::Min => "<",
-            Self::Max => ">",
-        }
-    }
 
     /// Applies the operator to the target value using the source value. [`Self::Swap`]
     /// changes both scores and is handled by the command instead.
@@ -174,13 +158,6 @@ mod tests {
         assert_eq!(ScoreboardOperation::Swap.apply(7, 3), Ok(3));
         assert_eq!(ScoreboardOperation::Min.apply(7, 3), Ok(3));
         assert_eq!(ScoreboardOperation::Max.apply(7, 3), Ok(7));
-    }
-
-    #[test]
-    fn symbols_match_the_operations() {
-        for (operation, symbol) in ScoreboardOperation::ALL {
-            assert_eq!(operation.symbol(), symbol);
-        }
     }
 
     #[test]

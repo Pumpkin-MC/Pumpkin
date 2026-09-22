@@ -15,6 +15,7 @@ use crate::command::{
 use crate::entity::EntityBase;
 use pumpkin_data::translation;
 use pumpkin_util::text::TextComponent;
+use rustc_hash::FxHashSet;
 use uuid::Uuid;
 
 const NO_WILDCARD_RESULTS: CommandErrorType<0> = CommandErrorType::new(
@@ -22,9 +23,9 @@ const NO_WILDCARD_RESULTS: CommandErrorType<0> = CommandErrorType::new(
     translation::java::ARGUMENT_SCOREHOLDER_EMPTY,
 );
 
-/// A scoreboard holder, which is either a fake entry name or an entity selector.
+/// A parsed score-holder name, entity selector, or wildcard.
 pub enum ScoreHolder {
-    Fake(String),
+    Name(String),
     Selector(Box<EntitySelector>),
     /// Every holder already tracked by the scoreboard, written as `*`.
     Wildcard,
@@ -165,7 +166,7 @@ impl ScoreHolderArgumentType {
         match name {
             "" => Err(NO_ENTITIES_ERROR_TYPE.create(reader)),
             "*" => Ok(ScoreHolder::Wildcard),
-            _ => Ok(ScoreHolder::Fake(name.to_string())),
+            _ => Ok(ScoreHolder::Name(name.to_string())),
         }
     }
 
@@ -175,8 +176,8 @@ impl ScoreHolderArgumentType {
         name: &str,
     ) -> Result<Vec<ResolvedScoreHolder>, CommandSyntaxError> {
         let holders = match context.get_argument::<ScoreHolder>(name)? {
-            ScoreHolder::Fake(fake) => {
-                ResolvedScoreHolder::resolve_name(context.source.as_ref(), fake)
+            ScoreHolder::Name(name) => {
+                ResolvedScoreHolder::resolve_name(context.source.as_ref(), name)
             }
             ScoreHolder::Selector(selector) => selector
                 .find_entities(context.source.as_ref())?
@@ -190,9 +191,10 @@ impl ScoreHolderArgumentType {
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
                 let mut names: Vec<String> = Vec::new();
+                let mut seen = FxHashSet::default();
                 for objective_scores in scoreboard.get_scores().values() {
                     for holder in objective_scores.keys() {
-                        if !names.contains(holder) {
+                        if seen.insert(holder) {
                             names.push(holder.clone());
                         }
                     }
@@ -209,7 +211,7 @@ impl ScoreHolderArgumentType {
         Ok(holders)
     }
 
-    /// Resolves a single holder without a wildcard supplier, as used by `players get`.
+    /// Resolves a single score holder; wildcards are not accepted.
     pub fn get_score_holder(
         context: &CommandContext,
         name: &str,
@@ -230,7 +232,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn fake_names_parse_as_fake_holders() {
+    fn literal_names_parse_as_names() {
         for name in [
             "detectGen",
             "#temp",
@@ -241,10 +243,10 @@ mod tests {
         ] {
             let input = format!("{name} objective");
             let mut reader = StringReader::new(&input);
-            let Ok(ScoreHolder::Fake(actual)) =
+            let Ok(ScoreHolder::Name(actual)) =
                 ScoreHolderArgumentType::Multiple.parse(&mut reader)
             else {
-                panic!("{name} must parse as a fake holder");
+                panic!("{name} must parse as a holder name");
             };
             assert_eq!(actual, name);
             assert_eq!(reader.remaining_part(), " objective");
@@ -295,7 +297,7 @@ mod tests {
     }
 
     #[test]
-    fn empty_input_is_not_a_fake_holder() {
+    fn empty_input_is_not_a_holder_name() {
         for input in ["", " objective"] {
             assert!(
                 ScoreHolderArgumentType::Multiple
