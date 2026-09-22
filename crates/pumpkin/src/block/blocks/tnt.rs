@@ -61,6 +61,7 @@ impl TNTBlock {
         if !world.level_info.load().game_rules.tnt_explodes {
             return None;
         }
+        // TODO: adventure mode may only prime when the item's `can_break` allows this block.
 
         let mut event = crate::plugin::api::events::block::tnt_prime::TNTPrimeEvent::new(
             *location,
@@ -119,6 +120,7 @@ impl BlockBehaviour for TNTBlock {
                     args.item_stack.decrement(1);
                 }
             }
+            // TODO: award `Stats.ITEM_USED` for the igniting item.
             BlockActionResult::Success
         } else if !args.world.level_info.load().game_rules.tnt_explodes {
             args.player.send_system_message_raw(
@@ -155,6 +157,7 @@ impl BlockBehaviour for TNTBlock {
         }
     }
 
+    // TODO: vanilla also requires `projectile.mayInteract` and passes the owner as source.
     fn on_projectile_hit(&self, args: OnProjectileHitArgs<'_>) {
         if args.projectile.get_entity().is_on_fire() {
             Self::prime(args.world, args.position);
@@ -167,6 +170,7 @@ impl BlockBehaviour for TNTBlock {
             return;
         }
         let fuse = TNTEntity::random_short_fuse(TNTEntity::DEFAULT_FUSE);
+        // TODO: owner is `explosion.getIndirectSourceEntity()`.
         let tnt = TNTEntity::primed(args.world, args.position, fuse);
         args.world.spawn_entity(tnt);
     }
