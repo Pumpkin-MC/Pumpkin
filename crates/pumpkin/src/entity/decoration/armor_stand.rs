@@ -1,13 +1,17 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI32, AtomicI64, AtomicU8, Ordering};
 
-use crate::entity::{Entity, EntityBase, living::LivingEntity, player::Player};
+use crate::entity::{
+    Entity, EntityBase, living::LivingEntity, mob::equipment::get_equipment_slot_for_item,
+    player::Player,
+};
 use crossbeam::atomic::AtomicCell;
 use pumpkin_data::item_stack::ItemStack;
 use pumpkin_data::{
     damage::DamageType,
     data_component_impl::{EquipmentSlot, EquipmentType, EquippableImpl},
     entity::EntityStatus,
+    game_event::GameEvent,
     item::Item,
     particle::Particle,
     sound::{Sound, SoundCategory},
@@ -197,10 +201,10 @@ impl ArmorStandEntity {
             take_non_empty_equipment(&mut equipment)
         };
         let world = entity.world.load();
-        let block_pos = entity.block_pos.load();
+        let drop_pos = entity.block_pos.load().above();
 
         for stack in stacks {
-            world.drop_stack(&block_pos, stack);
+            world.drop_stack(&drop_pos, stack);
         }
     }
 
@@ -255,13 +259,32 @@ impl ArmorStandEntity {
     }
 
     fn set_item_slot(&self, slot: &EquipmentSlot, stack: ItemStack) {
-        self.living_entity
+        let previous = self
+            .living_entity
             .entity_equipment
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .put(slot, stack.clone());
         self.living_entity
-            .send_equipment_changes(&[(slot.clone(), stack)]);
+            .send_equipment_changes(&[(slot.clone(), stack.clone())]);
+
+        let entity = self.get_entity();
+        let world = entity.world.load();
+        let position = entity.pos.load();
+
+        if !previous.is_empty() {
+            world.emit_game_event(GameEvent::Unequip.name(), position);
+        }
+        if !stack.is_empty() {
+            if let Some(equippable) = stack.get_data_component::<EquippableImpl>() {
+                world.play_sound_event(
+                    &equippable.equip_sound,
+                    SoundCategory::Neutral,
+                    &position,
+                );
+            }
+            world.emit_game_event(GameEvent::Equip.name(), position);
+        }
     }
 
     fn get_clicked_slot(&self, position: Vector3<f64>) -> EquipmentSlot {
@@ -303,7 +326,11 @@ impl ArmorStandEntity {
             return false;
         }
 
-        let item_slot = item_equipment_slot(item_stack);
+        let mut item_slot = get_equipment_slot_for_item(item_stack);
+        if !item_stack.is_empty() && !self.can_use_slot(&item_slot) {
+            item_slot = EquipmentSlot::MAIN_HAND;
+        }
+
         let clicked_slot = position.map_or(EquipmentSlot::MAIN_HAND, |position| {
             self.get_clicked_slot(position)
         });
@@ -349,14 +376,6 @@ fn take_non_empty_equipment(
         .drain()
         .filter_map(|(_, stack)| (!stack.is_empty()).then_some(stack))
         .collect()
-}
-
-fn item_equipment_slot(item_stack: &ItemStack) -> EquipmentSlot {
-    item_stack
-        .get_data_component::<EquippableImpl>()
-        .map_or(EquipmentSlot::MAIN_HAND, |equippable| {
-            (*equippable.slot).clone()
-        })
 }
 
 fn swap_item_stacks(
@@ -686,7 +705,7 @@ mod tests {
     #[test]
     fn equippable_items_select_their_vanilla_slot() {
         let helmet = ItemStack::new(1, &Item::DIAMOND_HELMET);
-        assert!(item_equipment_slot(&helmet) == EquipmentSlot::HEAD);
+        assert!(get_equipment_slot_for_item(&helmet) == EquipmentSlot::HEAD);
     }
 
     #[test]
