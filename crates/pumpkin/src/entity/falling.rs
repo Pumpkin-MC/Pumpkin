@@ -79,12 +79,9 @@ impl EntityBase for FallingEntity {
             if let Some(server) = world.server.upgrade() {
                 server.plugin_manager.fire_blocking(&server, &mut event);
             }
-            if event.cancelled {
-                self.entity.remove();
-                return;
+            if !event.cancelled {
+                world.set_block_state(&landing_pos, state_id, BlockFlags::NOTIFY_ALL);
             }
-
-            world.set_block_state(&landing_pos, state_id, BlockFlags::NOTIFY_ALL);
             self.entity.remove();
         }
 
