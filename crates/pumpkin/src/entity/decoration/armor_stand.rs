@@ -201,7 +201,7 @@ impl ArmorStandEntity {
             take_non_empty_equipment(&mut equipment)
         };
         let world = entity.world.load();
-        let drop_pos = entity.block_pos.load().above();
+        let drop_pos = entity.block_pos.load().up();
 
         for stack in stacks {
             world.drop_stack(&drop_pos, stack);
@@ -277,11 +277,7 @@ impl ArmorStandEntity {
         }
         if !stack.is_empty() {
             if let Some(equippable) = stack.get_data_component::<EquippableImpl>() {
-                world.play_sound_event(
-                    &equippable.equip_sound,
-                    SoundCategory::Neutral,
-                    &position,
-                );
+                world.play_sound_event(&equippable.equip_sound, SoundCategory::Neutral, &position);
             }
             world.emit_game_event(GameEvent::Equip.name(), position);
         }
