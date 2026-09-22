@@ -77,6 +77,13 @@ pub fn build() -> String {
         );
     }
 
+    // CLoginSuccess uses a version-dependent packet id and therefore cannot use the
+    // java_packet attribute, but it is still a clientbound packet exposed to plugins.
+    clientbound_variant.case(VariantCase::value(
+        "c-login-success",
+        WitType::named("c-login-success"),
+    ));
+
     // Add an 'unknown' fallback variant (no payload) — raw payload is carried on the event record
     serverbound_variant.case(VariantCase::empty("unknown"));
     clientbound_variant.case(VariantCase::empty("unknown"));
