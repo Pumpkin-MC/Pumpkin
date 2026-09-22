@@ -98,11 +98,7 @@ impl JavaClient {
                                     return;
                                 }
                             }
-                            let hand = interact
-                                .hand
-                                .and_then(|hand| Hand::from_packet_id(hand.0).ok())
-                                .unwrap_or(Hand::Right);
-                            let mut stack = player.inventory().get_stack_in_hand(hand);
+                            let mut stack = player.inventory().held_item();
 
                             let item_id = stack.item.id;
                             let before = stack.clone();
@@ -120,27 +116,27 @@ impl JavaClient {
                                 server
                                     .item_registry
                                     .use_on_entity(&mut stack, player, event.target);
-                            }
-                            if !stack.are_equal(&before) {
-                                player.increment_stat(StatisticCategory::Used, item_id as i32, 1);
-                                if before.is_damageable() && stack.is_empty() {
+                                if !stack.are_equal(&before) {
                                     player.increment_stat(
-                                        StatisticCategory::Broken,
+                                        StatisticCategory::Used,
                                         item_id as i32,
                                         1,
                                     );
-                                    player.world().send_entity_status(
-                                        player.get_entity(),
-                                        equipment_break_status(if hand == Hand::Right {
-                                            &EquipmentSlot::MAIN_HAND
-                                        } else {
-                                            &EquipmentSlot::OFF_HAND
-                                        }),
-                                        None,
-                                    );
+                                    if before.is_damageable() && stack.is_empty() {
+                                        player.increment_stat(
+                                            StatisticCategory::Broken,
+                                            item_id as i32,
+                                            1,
+                                        );
+                                        player.world().send_entity_status(
+                                            player.get_entity(),
+                                            equipment_break_status(&EquipmentSlot::MAIN_HAND),
+                                            None,
+                                        );
+                                    }
                                 }
                             }
-                            player.inventory().set_stack_in_hand(hand, stack);
+                            player.inventory().set_held_item(stack);
                         }
                     }
                 }
