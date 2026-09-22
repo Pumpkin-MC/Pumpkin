@@ -850,7 +850,7 @@ fn collect_advancements(
 /// the final Rust source code.
 pub(crate) fn build() -> TokenStream {
     let base_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../assets/datapacks/26_3/data/minecraft/advancement");
+        .join("../../assets/datapack/data/minecraft/advancement");
     let mut advancements: BTreeMap<String, AdvancementStruct> = BTreeMap::new();
     collect_advancements(&base_path, &base_path, &mut advancements);
 

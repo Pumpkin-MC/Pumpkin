@@ -1,8 +1,258 @@
-use crate::data_component_impl::{DataComponentImpl, get_i32_hash, get_str_hash};
+use crate::data_component_impl::combat::SwingAnimationImpl;
+use crate::data_component_impl::{DataComponentImpl, get_f32_hash, get_i32_hash, get_str_hash};
 use crc_fast::CrcAlgorithm::Crc32Iscsi;
 use crc_fast::Digest;
 use pumpkin_nbt::compound::NbtCompound;
 use pumpkin_nbt::tag::NbtTag;
+use std::borrow::Cow;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum IntProvider {
+    Id(Cow<'static, str>),
+    Inline(i32),
+}
+
+impl std::hash::Hash for IntProvider {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            Self::Id(s) => {
+                0u8.hash(state);
+                s.hash(state);
+            }
+            Self::Inline(v) => {
+                1u8.hash(state);
+                v.hash(state);
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum FloatProvider {
+    Id(Cow<'static, str>),
+    Inline(f32),
+}
+
+impl PartialEq for FloatProvider {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Id(a), Self::Id(b)) => a == b,
+            (Self::Inline(a), Self::Inline(b)) => a.to_bits() == b.to_bits(),
+            _ => false,
+        }
+    }
+}
+
+impl Eq for FloatProvider {}
+
+impl std::hash::Hash for FloatProvider {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            Self::Id(s) => {
+                0u8.hash(state);
+                s.hash(state);
+            }
+            Self::Inline(v) => {
+                1u8.hash(state);
+                v.to_bits().hash(state);
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct CookingFuelImpl {
+    pub burn_time: IntProvider,
+    pub speed_multiplier: FloatProvider,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CompostableImpl {
+    pub chance: f32,
+}
+
+impl CompostableImpl {
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        let layers = data.extract_compound()?.get_string("layers")?;
+        let chance = match layers.as_ref() {
+            "minecraft:compostable/low" => 0.3,
+            "minecraft:compostable/low_medium" => 0.5,
+            "minecraft:compostable/medium" => 0.65,
+            "minecraft:compostable/medium_high" => 0.85,
+            "minecraft:compostable/always_add_one" => 1.0,
+            _ => return None,
+        };
+        Some(Self { chance })
+    }
+}
+
+impl DataComponentImpl for CompostableImpl {
+    fn write_data(&self) -> NbtTag {
+        let layers = match self.chance {
+            0.3 => "minecraft:compostable/low",
+            0.5 => "minecraft:compostable/low_medium",
+            0.65 => "minecraft:compostable/medium",
+            0.85 => "minecraft:compostable/medium_high",
+            1.0 => "minecraft:compostable/always_add_one",
+            _ => return NbtTag::End,
+        };
+        let mut compound = NbtCompound::new();
+        compound.put_string("layers", layers.to_string());
+        NbtTag::Compound(compound)
+    }
+
+    default_impl!(Compostable);
+}
+
+impl std::hash::Hash for CompostableImpl {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        state.write_u32(self.chance.to_bits());
+    }
+}
+
+impl CookingFuelImpl {
+    #[must_use]
+    pub fn get_burn_ticks(&self, is_fast_cooking: bool) -> u16 {
+        let base_ticks: u32 = match &self.burn_time {
+            IntProvider::Inline(v) => (*v).max(0) as u32,
+            IntProvider::Id(id) => {
+                let name = id.strip_prefix("minecraft:").unwrap_or(id.as_ref());
+                match name {
+                    "cooking/time_lava_bucket" => 20000,
+                    "cooking/time_coal_block" => 16000,
+                    "cooking/time_dried_kelp_block" => 4001,
+                    "cooking/time_blaze_rod" => 2400,
+                    "cooking/time_coal" => 1600,
+                    "cooking/time_boats" => 1200,
+                    "cooking/time_hanging_signs" => 800,
+                    "cooking/time_roots"
+                    | "cooking/time_wood_blocks"
+                    | "cooking/time_wood_items_small" => 300,
+                    "cooking/time_wood_items_large" => 200,
+                    "cooking/time_wood_slabs" => 150,
+                    "cooking/time_dry_plants"
+                    | "cooking/time_wood_items_extra_small"
+                    | "cooking/time_wool" => 100,
+                    "cooking/time_wool_carpets" => 67,
+                    "cooking/time_bamboo" | "cooking/time_wool_slabs" => 50,
+                    _ => 0,
+                }
+            }
+        };
+
+        let factor = if is_fast_cooking { 2 } else { 1 };
+        (base_ticks / factor) as u16
+    }
+
+    #[must_use]
+    pub fn get_speed_multiplier(&self, is_fast_cooking: bool) -> f32 {
+        match &self.speed_multiplier {
+            FloatProvider::Inline(v) => *v,
+            FloatProvider::Id(id) => {
+                let name = id.strip_prefix("minecraft:").unwrap_or(id.as_ref());
+                match name {
+                    "cooking/fast_speed_multiplier" => 2.0,
+                    "cooking/normal_speed_multiplier" => 1.0,
+                    "cooking/speed_default" => {
+                        if is_fast_cooking {
+                            2.0
+                        } else {
+                            1.0
+                        }
+                    }
+                    _ => 1.0,
+                }
+            }
+        }
+    }
+
+    pub fn read_data(data: &NbtTag) -> Option<Self> {
+        match data {
+            NbtTag::Compound(compound) => {
+                let burn_time = if let Some(id) = compound.get_string("burn_time") {
+                    IntProvider::Id(Cow::Owned(id.to_string()))
+                } else if let Some(val) = compound.get("burn_time").and_then(NbtTag::extract_int) {
+                    IntProvider::Inline(val)
+                } else {
+                    return None;
+                };
+
+                let speed_multiplier = if let Some(id) = compound.get_string("speed_multiplier") {
+                    FloatProvider::Id(Cow::Owned(id.to_string()))
+                } else if let Some(val) = compound
+                    .get("speed_multiplier")
+                    .and_then(NbtTag::extract_float)
+                {
+                    FloatProvider::Inline(val)
+                } else {
+                    FloatProvider::Id(Cow::Borrowed("minecraft:cooking/speed_default"))
+                };
+
+                Some(Self {
+                    burn_time,
+                    speed_multiplier,
+                })
+            }
+            _ => None,
+        }
+    }
+}
+
+impl DataComponentImpl for CookingFuelImpl {
+    fn write_data(&self) -> NbtTag {
+        let mut compound = NbtCompound::new();
+        match &self.burn_time {
+            IntProvider::Id(id) => compound.put_string("burn_time", id.to_string()),
+            IntProvider::Inline(val) => compound.put_int("burn_time", *val),
+        }
+        match &self.speed_multiplier {
+            FloatProvider::Id(id) => compound.put_string("speed_multiplier", id.to_string()),
+            FloatProvider::Inline(val) => compound.put_float("speed_multiplier", *val),
+        }
+        NbtTag::Compound(compound)
+    }
+
+    fn get_hash(&self) -> i32 {
+        let mut digest = Digest::new(Crc32Iscsi);
+        match &self.burn_time {
+            IntProvider::Id(id) => {
+                digest.update(&[1u8]);
+                digest.update(&get_str_hash(id).to_le_bytes());
+            }
+            IntProvider::Inline(val) => {
+                digest.update(&[2u8]);
+                digest.update(&get_i32_hash(*val).to_le_bytes());
+            }
+        }
+        match &self.speed_multiplier {
+            FloatProvider::Id(id) => {
+                digest.update(&[3u8]);
+                digest.update(&get_str_hash(id).to_le_bytes());
+            }
+            FloatProvider::Inline(val) => {
+                digest.update(&[4u8]);
+                digest.update(&get_f32_hash(*val).to_le_bytes());
+            }
+        }
+        digest.finalize() as i32
+    }
+
+    default_impl!(CookingFuel);
+}
+
+/// 26.3 `minecraft:waxed` marker.
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct WaxedImpl;
+
+impl WaxedImpl {
+    pub const fn read_data(_data: &NbtTag) -> Option<Self> {
+        Some(Self)
+    }
+}
+
+impl DataComponentImpl for WaxedImpl {
+    default_impl!(Waxed);
+}
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct DyeImpl;

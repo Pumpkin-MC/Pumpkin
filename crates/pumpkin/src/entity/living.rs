@@ -854,10 +854,10 @@ impl LivingEntity {
                 .find(|a| a.0.id == attribute.id)
                 .map_or_else(
                     || {
-                        tracing::warn!(
-                            "Entity type {:?} has no base value for attribute {:?}; falling back to default {}",
-                            self.entity.entity_type,
-                            attribute.id,
+                        tracing::debug!(
+                            "Entity type {} has no base value for attribute {}; falling back to default {}",
+                            self.entity.entity_type.resource_name,
+                            attribute.name,
                             attribute.default_value,
                         );
                         attribute.default_value
@@ -2273,11 +2273,12 @@ impl LivingEntity {
     fn drop_loot(&self, params: &LootContextParameters) {
         let resource_name = self.get_entity().entity_type.resource_name;
         let key = format!("minecraft:entities/{resource_name}");
-        if let Some(loot_table) = pumpkin_data::loot_table::get_loot_table(&key) {
+        let world = self.entity.world.load();
+        if let Some(loot_table) = world.get_loot_table(&key) {
             let seed: i64 = rand::random();
             let pos = self.entity.block_pos.load();
-            for stack in crate::world::loot::generate_loot_with_context(loot_table, seed, params) {
-                self.entity.world.load().drop_stack(&pos, stack);
+            for stack in crate::world::loot::generate_loot_from_handle(&loot_table, seed, params) {
+                world.drop_stack(&pos, stack);
             }
         }
     }
@@ -3382,14 +3383,6 @@ impl EntityBase for LivingEntity {
         // Coalesce velocity sends to once per tick.
         if self.entity.velocity_dirty.swap(false, Ordering::SeqCst) {
             self.entity.send_velocity();
-        }
-
-        // TODO
-        let player = caller.get_player();
-        let is_player = player.is_some();
-
-        if !is_player {
-            self.entity.send_pos_rot();
         }
 
         // Fetch supporting blocks for players or other entities
