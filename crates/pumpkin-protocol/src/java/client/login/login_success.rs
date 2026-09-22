@@ -1,7 +1,7 @@
 use pumpkin_data::packet::clientbound::login::{GAME_PROFILE, LOGIN_FINISHED};
 use pumpkin_util::version::JavaMinecraftVersion;
 
-use crate::{ClientPacket, Property, packet::MultiVersionJavaPacket, ser::NetworkWriteExt};
+use crate::{ClientPacket, Property as ProfileProperty, packet::MultiVersionJavaPacket, ser::NetworkWriteExt};
 
 /// Sent by the server to signal a successful login and transition to the configuration phase
 ///
@@ -14,7 +14,7 @@ pub struct CLoginSuccess<'a> {
     pub username: &'a str,
     /// A list of properties for the player's profile, such as skin data and signatures.
     /// This is typically retrieved from the Mojang authentication servers.
-    pub properties: &'a [Property],
+    pub properties: &'a [ProfileProperty],
     /// (<1.21.2) Whether strict error handling should be enabled.
     pub strict_error_handling: bool,
     /// Added in 26.2
@@ -26,7 +26,7 @@ impl<'a> CLoginSuccess<'a> {
     pub const fn new(
         uuid: &'a uuid::Uuid,
         username: &'a str,
-        properties: &'a [Property],
+        properties: &'a [ProfileProperty],
         strict_error_handling: bool,
         session_id: uuid::Uuid,
     ) -> Self {
