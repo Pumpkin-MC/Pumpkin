@@ -18,7 +18,7 @@ use crate::block::{
     BlockBehaviour, BrokenArgs, CanPlaceAtArgs, NormalUseArgs, OnPlaceArgs, OnStateReplacedArgs,
     PathComputationType, PlacedArgs,
 };
-use crate::entity::{Entity, EntityBase, player::Player};
+use crate::entity::{Entity, EntityBase, passive::villager::VillagerEntity, player::Player};
 use crate::world::World;
 
 type BedProperties = pumpkin_data::block_properties::WhiteBedLikeProperties;
@@ -245,17 +245,33 @@ impl BedBlock {
             return BlockActionResult::SuccessServer;
         }
 
-        // Make sure the bed is not occupied
+        // Vanilla handles an occupied bed before distance, spawn-point, safety, and
+        // enter-bed checks. A sleeping villager is kicked out and the click ends.
         if bed_props.occupied {
-            // TODO: Wake up villager
+            let villager_woken = world.entities.load().iter().any(|entity| {
+                entity
+                    .cast_any()
+                    .downcast_ref::<VillagerEntity>()
+                    .is_some_and(|villager| villager.wake_up_if_sleeping_at(bed_head_pos))
+            });
 
-            player.send_system_message_raw(
-                &pumpkin_macros::translate_cross!(
-                    translation::java::BLOCK_MINECRAFT_BED_OCCUPIED,
-                    translation::bedrock::TILE_BED_OCCUPIED
-                ),
-                true,
-            );
+            if villager_woken {
+                Self::set_occupied(
+                    false,
+                    world,
+                    block,
+                    &bed_head_pos,
+                    world.get_block_state_id(&bed_head_pos),
+                );
+            } else {
+                player.send_system_message_raw(
+                    &pumpkin_macros::translate_cross!(
+                        translation::java::BLOCK_MINECRAFT_BED_OCCUPIED,
+                        translation::bedrock::TILE_BED_OCCUPIED
+                    ),
+                    true,
+                );
+            }
             return BlockActionResult::SuccessServer;
         }
 

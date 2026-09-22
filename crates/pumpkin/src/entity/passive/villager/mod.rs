@@ -359,6 +359,29 @@ pub struct VillagerEntity {
 }
 
 impl VillagerEntity {
+    pub(crate) fn is_sleeping_at(&self, bed_head_pos: BlockPos) -> bool {
+        self.get_entity().pose.load() == EntityPose::Sleeping
+            && self.mob_entity.living_entity.sleeping_pos.load() == Some(bed_head_pos)
+    }
+
+    pub(crate) fn wake_up_if_sleeping_at(&self, bed_head_pos: BlockPos) -> bool {
+        if !self.is_sleeping_at(bed_head_pos) {
+            return false;
+        }
+
+        self.get_entity().set_pose(EntityPose::Standing);
+        if self.get_entity().pose.load() == EntityPose::Sleeping {
+            return false;
+        }
+
+        self.mob_entity.living_entity.sleeping_pos.store(None);
+        self.get_entity().set_synced_data(
+            tracked_data::villager::SLEEPING_POS_ID,
+            None::<BlockPos>,
+        );
+        true
+    }
+
     fn bedrock_metadata(data: VillagerData, xp: i32) -> SyncedActorDataList {
         const PROFESSIONS: [i32; 15] = [0, 8, 11, 6, 7, 1, 2, 4, 12, 5, 13, 14, 3, 10, 9];
         const REGIONS: [i32; 7] = [1, 2, 0, 3, 4, 5, 6];
@@ -1658,6 +1681,7 @@ impl VillagerEntity {
                 if is_sleeping {
                     // Wake up if bed was broken
                     self.get_entity().set_pose(EntityPose::Standing);
+                    self.mob_entity.living_entity.sleeping_pos.store(None);
                     self.get_entity().set_synced_data(
                         pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
                         None::<BlockPos>,
@@ -1754,6 +1778,10 @@ impl VillagerEntity {
                                 BedBlock::set_occupied(true, &world, block, &home_pos, state.id);
 
                                 self.get_entity().set_pose(EntityPose::Sleeping);
+                                self.mob_entity
+                                    .living_entity
+                                    .sleeping_pos
+                                    .store(Some(home_pos));
                                 self.get_entity().set_synced_data(
                                     pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
                                     Some(home_pos),
@@ -1773,6 +1801,7 @@ impl VillagerEntity {
                 }
 
                 self.get_entity().set_pose(EntityPose::Standing);
+                self.mob_entity.living_entity.sleeping_pos.store(None);
                 self.get_entity().set_synced_data(
                     pumpkin_data::tracked_data::villager::SLEEPING_POS_ID,
                     None::<BlockPos>,
@@ -2006,6 +2035,11 @@ impl Mob for VillagerEntity {
         if let Some(xp) = nbt.get_int("Xp") {
             self.xp.store(xp, Ordering::Relaxed);
         }
+        let sleeping_pos = self.mob_entity.living_entity.sleeping_pos.load();
+        self.get_entity().set_synced_data(
+            tracked_data::villager::SLEEPING_POS_ID,
+            sleeping_pos,
+        );
         if let Some(restock) = nbt.get_long("LastRestock") {
             self.last_restock_time.store(restock, Ordering::Relaxed);
         }
