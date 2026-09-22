@@ -32,9 +32,14 @@ impl TNTBlock {
             return false;
         };
 
-        // Swap in air to claim the block: `set_block_state` locks the chunk section, so a task
-        // racing for the same spot gets a non-TNT old state back and drops out here. Nothing is
-        // restored, the plugin events already ran and cannot re-enter through `placed`.
+        // A plugin handler may have replaced the TNT while the events ran -> leave its block alone.
+        if world.get_block(location) != &Block::TNT {
+            return false;
+        }
+
+        // Swap in air to claim the block, a task that raced here gets a non-TNT old state
+        // back and drops out, so the TNT is only ignited once. Nothing is restored, since that
+        // could overwrite a later change.
         if world
             .set_block_state(location, BlockStateId::AIR, BlockFlags::NOTIFY_ALL)
             .to_block()
