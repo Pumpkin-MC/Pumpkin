@@ -605,7 +605,7 @@ pub fn derive_serialize(input: TokenStream) -> TokenStream {
             }
         })
     } else {
-        return syn::Error::new(name.span(), "Only structs are supported")
+        return syn::Error::new(name.span(), "Only structs and enums are supported")
             .to_compile_error()
             .into();
     };
@@ -669,7 +669,7 @@ pub fn derive_deserialize(input: TokenStream) -> TokenStream {
             }
         })
     } else {
-        return syn::Error::new(name.span(), "Only structs are supported")
+        return syn::Error::new(name.span(), "Only structs and enums are supported")
             .to_compile_error()
             .into();
     };
@@ -734,7 +734,7 @@ pub fn derive_deserialize_from_slice(input: TokenStream) -> TokenStream {
             }
         })
     } else {
-        return syn::Error::new(name.span(), "Only structs are supported")
+        return syn::Error::new(name.span(), "Only structs and enums are supported")
             .to_compile_error()
             .into();
     };
@@ -851,7 +851,6 @@ fn unit_enum_variants(data: &syn::DataEnum) -> Vec<&syn::Ident> {
         .collect()
 }
 
-/// Emits `TryFrom<repr>` and `PacketRead` for a field-less enum.
 fn derive_enum_read(input: &DeriveInput, data: &syn::DataEnum) -> proc_macro2::TokenStream {
     let name = &input.ident;
     let repr = parse_enum_repr(input);
@@ -860,10 +859,9 @@ fn derive_enum_read(input: &DeriveInput, data: &syn::DataEnum) -> proc_macro2::T
     let read = repr.read_expr(&quote! { reader });
 
     quote! {
-        impl TryFrom<#ty> for #name {
-            type Error = std::io::Error;
-
-            fn try_from(value: #ty) -> Result<Self, Self::Error> {
+        impl PacketRead for #name {
+            fn read<R: std::io::Read>(reader: &mut R) -> Result<Self, std::io::Error> {
+                let value = #read;
                 #(
                     if value == Self::#variants as #ty {
                         return Ok(Self::#variants);
@@ -875,27 +873,29 @@ fn derive_enum_read(input: &DeriveInput, data: &syn::DataEnum) -> proc_macro2::T
                 ))
             }
         }
-
-        impl PacketRead for #name {
-            fn read<R: std::io::Read>(reader: &mut R) -> Result<Self, std::io::Error> {
-                Self::try_from(#read)
-            }
-        }
     }
 }
 
-/// Emits `PacketReadSlice` for a field-less enum. Pair it with `PacketRead`,
-/// which provides the `TryFrom` conversion this relies on.
 fn derive_enum_read_slice(input: &DeriveInput, data: &syn::DataEnum) -> proc_macro2::TokenStream {
     let name = &input.ident;
     let repr = parse_enum_repr(input);
-    let _ = unit_enum_variants(data);
+    let ty = &repr.ty;
+    let variants = unit_enum_variants(data);
     let read = repr.read_slice_expr();
 
     quote! {
         impl<'a> PacketReadSlice<'a> for #name {
             fn read_slice(buf: &mut &'a [u8]) -> Result<Self, std::io::Error> {
-                Self::try_from(#read)
+                let value = #read;
+                #(
+                    if value == Self::#variants as #ty {
+                        return Ok(Self::#variants);
+                    }
+                )*
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!(concat!("Invalid ", stringify!(#name), ": {}"), value),
+                ))
             }
         }
     }

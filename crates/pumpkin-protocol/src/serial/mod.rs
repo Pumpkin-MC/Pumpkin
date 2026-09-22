@@ -21,6 +21,52 @@ pub trait PacketReadSlice<'a>: Sized {
     fn read_slice(buf: &mut &'a [u8]) -> Result<Self, Error>;
 }
 
+#[cfg(test)]
+mod enum_derive_tests {
+    use super::*;
+
+    #[repr(u8)]
+    #[derive(Debug, PartialEq, Eq, PacketReadSlice)]
+    enum SliceOnly {
+        Value = 1,
+    }
+
+    #[repr(u8)]
+    #[derive(Debug, PartialEq, Eq, PacketRead)]
+    enum ExistingTryFrom {
+        Value = 1,
+    }
+
+    impl TryFrom<u8> for ExistingTryFrom {
+        type Error = ();
+
+        fn try_from(value: u8) -> Result<Self, Self::Error> {
+            match value {
+                1 => Ok(Self::Value),
+                _ => Err(()),
+            }
+        }
+    }
+
+    #[test]
+    fn derives_read_slice_without_packet_read() {
+        let mut input = &[1][..];
+        assert_eq!(
+            SliceOnly::read_slice(&mut input).unwrap(),
+            SliceOnly::Value
+        );
+    }
+
+    #[test]
+    fn derives_read_with_existing_try_from() {
+        let mut input = &[1][..];
+        assert_eq!(
+            ExistingTryFrom::read(&mut input).unwrap(),
+            ExistingTryFrom::Value
+        );
+    }
+}
+
 pub(crate) fn read_str_slice<'a>(buf: &mut &'a [u8]) -> Result<&'a str, Error> {
     use crate::codec::var_uint::VarUInt;
     use std::io::ErrorKind;
