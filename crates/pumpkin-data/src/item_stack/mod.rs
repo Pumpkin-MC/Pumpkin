@@ -1,5 +1,4 @@
 use crate::data_component::DataComponent;
-use crate::data_component::DataComponent::Enchantments;
 use crate::data_component_impl::{
     BlocksAttacksImpl, ConsumableImpl, CustomDataImpl, DamageImpl, DataComponentImpl,
     EnchantmentsImpl, IDSet, MaxDamageImpl, MaxStackSizeImpl, Rarity, RarityImpl,
@@ -214,11 +213,9 @@ impl ItemStack {
             new_vec.push((enchantment, level as i32));
             enchantments.enchantment = Cow::Owned(new_vec);
         } else {
-            let enchantments = EnchantmentsImpl {
+            self.set_data_component(EnchantmentsImpl {
                 enchantment: Cow::Owned(vec![(enchantment, level as i32)]),
-            };
-            self.patch
-                .push((DataComponent::Enchantments, Some(Box::new(enchantments))));
+            });
         }
     }
 
@@ -693,15 +690,9 @@ impl ItemStack {
             }
             data.enchantment.to_mut().push((enchantment, level));
         } else {
-            self.patch.push((
-                Enchantments,
-                Some(
-                    EnchantmentsImpl {
-                        enchantment: Cow::Owned(vec![(enchantment, level)]),
-                    }
-                    .to_dyn(),
-                ),
-            ));
+            self.set_data_component(EnchantmentsImpl {
+                enchantment: Cow::Owned(vec![(enchantment, level)]),
+            });
         }
     }
 
@@ -1514,6 +1505,74 @@ mod tests {
             (300..=400).contains(&applied),
             "Unbreaking III armor: expected ~350 applications in 500 trials, got {applied}"
         );
+    }
+
+    // ── enchant ──────────────────────────────────────────────────────
+
+    fn enchantments_entry_count(stack: &ItemStack) -> usize {
+        stack
+            .patch
+            .iter()
+            .filter(|(id, _)| *id == DataComponent::Enchantments)
+            .count()
+    }
+
+    fn held_enchantments(stack: &ItemStack) -> Vec<(&'static str, i32)> {
+        stack
+            .get_data_component::<EnchantmentsImpl>()
+            .expect("the removed component must have been replaced")
+            .enchantment
+            .iter()
+            .map(|(enchantment, level)| (enchantment.registry_key, *level))
+            .collect()
+    }
+
+    #[test]
+    fn enchanting_over_a_removed_enchantments_component_replaces_it() {
+        let mut stack = iron_sword();
+        stack.enchant(&Enchantment::SHARPNESS, 1);
+        stack.remove_data_component(DataComponent::Enchantments);
+
+        stack.enchant(&Enchantment::SHARPNESS, 3);
+        stack.enchant(&Enchantment::UNBREAKING, 2);
+
+        assert_eq!(
+            enchantments_entry_count(&stack),
+            1,
+            "enchanting must not push a second entry"
+        );
+        assert_eq!(
+            held_enchantments(&stack),
+            vec![
+                (Enchantment::SHARPNESS.registry_key, 3),
+                (Enchantment::UNBREAKING.registry_key, 2)
+            ]
+        );
+        assert!(stack.has_enchantments());
+    }
+
+    #[test]
+    fn adding_an_enchantment_over_a_removed_component_replaces_it() {
+        let mut stack = iron_sword();
+        stack.add_enchantment(&Enchantment::SHARPNESS, 1);
+        stack.remove_data_component(DataComponent::Enchantments);
+
+        stack.add_enchantment(&Enchantment::SHARPNESS, 3);
+        stack.add_enchantment(&Enchantment::UNBREAKING, 2);
+
+        assert_eq!(
+            enchantments_entry_count(&stack),
+            1,
+            "adding an enchantment must not push a second entry"
+        );
+        assert_eq!(
+            held_enchantments(&stack),
+            vec![
+                (Enchantment::SHARPNESS.registry_key, 3),
+                (Enchantment::UNBREAKING.registry_key, 2)
+            ]
+        );
+        assert!(stack.has_enchantments());
     }
 
     // ── set_damage ───────────────────────────────────────────────────
