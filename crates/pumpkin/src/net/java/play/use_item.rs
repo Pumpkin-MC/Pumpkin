@@ -24,6 +24,14 @@ impl JavaClient {
 
         let mut item_in_hand = inventory.get_stack_in_hand(hand);
 
+        if self.version.load() >= JavaMinecraftVersion::V_1_21 && !item_in_hand.is_empty() {
+            let target_yaw = wrap_degrees(use_item.yaw);
+            let target_pitch = wrap_degrees(use_item.pitch);
+            if (target_yaw, target_pitch) != player.rotation() {
+                player.get_entity().set_rotation(target_yaw, target_pitch);
+            }
+        }
+
         let mut consume_event =
             crate::plugin::api::events::player::player_item_consume::PlayerItemConsumeEvent::new(
                 player.clone(),
