@@ -375,10 +375,8 @@ impl VillagerEntity {
         }
 
         self.mob_entity.living_entity.sleeping_pos.store(None);
-        self.get_entity().set_synced_data(
-            tracked_data::villager::SLEEPING_POS_ID,
-            None::<BlockPos>,
-        );
+        self.get_entity()
+            .set_synced_data(tracked_data::villager::SLEEPING_POS_ID, None::<BlockPos>);
         true
     }
 
@@ -2037,10 +2035,8 @@ impl Mob for VillagerEntity {
             self.xp.store(xp, Ordering::Relaxed);
         }
         let sleeping_pos = self.mob_entity.living_entity.sleeping_pos.load();
-        self.get_entity().set_synced_data(
-            tracked_data::villager::SLEEPING_POS_ID,
-            sleeping_pos,
-        );
+        self.get_entity()
+            .set_synced_data(tracked_data::villager::SLEEPING_POS_ID, sleeping_pos);
         if let Some(restock) = nbt.get_long("LastRestock") {
             self.last_restock_time.store(restock, Ordering::Relaxed);
         }
