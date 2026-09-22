@@ -36,6 +36,9 @@ const NO_BARRIER: u64 = u64::MAX;
 /// Memory bound: `MAX_PENDING_BYTES`.
 pub const OUTGOING_QUEUE_CAPACITY: usize = 65536;
 
+/// Max wait in `kick_explicit` for the disconnect flush, then close.
+pub const DISCONNECT_FLUSH_TIMEOUT: Duration = Duration::from_secs(5);
+
 /// Where `resumeFlushing` got the tick barrier.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum BarrierPlacement {
@@ -167,10 +170,18 @@ impl FlushRequest {
     }
 }
 
+pub enum Completion {
+    /// After `write_frame` into the `BufWriter`.
+    Framed(oneshot::Sender<()>),
+    /// After the TCP flush. Disconnect: `close()` follows, so the flush must be done.
+    /// Flushes also while suspended, else a kick awaited inside the tick waits on its own barrier.
+    Flushed(oneshot::Sender<()>),
+}
+
 pub enum OutgoingPacket {
     Data {
         data: Bytes,
-        completion: Option<oneshot::Sender<()>>,
+        completion: Option<Completion>,
     },
     /// End-of-tick barrier (`Connection.flushChannel`).
     Flush,
@@ -178,7 +189,7 @@ pub enum OutgoingPacket {
 
 struct FramePacket {
     data: Bytes,
-    completion: Option<oneshot::Sender<()>>,
+    completion: Option<Completion>,
 }
 
 impl OutgoingPacket {
@@ -192,7 +203,14 @@ impl OutgoingPacket {
     pub const fn high_priority(data: Bytes, completion: oneshot::Sender<()>) -> Self {
         Self::Data {
             data,
-            completion: Some(completion),
+            completion: Some(Completion::Framed(completion)),
+        }
+    }
+
+    pub const fn flushed(data: Bytes, completion: oneshot::Sender<()>) -> Self {
+        Self::Data {
+            data,
+            completion: Some(Completion::Flushed(completion)),
         }
     }
 
@@ -200,11 +218,11 @@ impl OutgoingPacket {
         match self {
             Self::Flush => *flush_request = flush_request.merge(FlushRequest::Always),
             Self::Data { data, completion } => {
-                *flush_request = flush_request.merge(if completion.is_some() {
-                    FlushRequest::IfNotSuspended
-                } else {
+                *flush_request = flush_request.merge(match completion {
+                    Some(Completion::Flushed(_)) => FlushRequest::Always,
+                    Some(Completion::Framed(_)) => FlushRequest::IfNotSuspended,
                     // TODO off-tick try_enqueue: IfNotSuspended so we flush when the hold is down.
-                    FlushRequest::None
+                    None => FlushRequest::None,
                 });
                 packets.push_back(FramePacket { data, completion });
             }
@@ -289,6 +307,8 @@ struct FlushState {
     /// Written to the `BufWriter`, not flushed yet.
     unflushed: bool,
     last_tcp_flush: Instant,
+    /// `Completion::Flushed` of written frames. Sent after the next successful flush.
+    on_flush: Vec<oneshot::Sender<()>>,
 }
 
 impl FlushState {
@@ -296,6 +316,7 @@ impl FlushState {
         Self {
             unflushed: false,
             last_tcp_flush: Instant::now(),
+            on_flush: Vec::new(),
         }
     }
 
@@ -324,6 +345,9 @@ impl FlushState {
                 None => return None,
             }
             self.unflushed = false;
+            for completion in self.on_flush.drain(..) {
+                let _ = completion.send(());
+            }
         }
         Some(did_flush)
     }
@@ -429,6 +453,7 @@ fn drain_until_barrier(
 async fn write_queued_frames<W: AsyncWrite + Unpin + Send + 'static>(
     mut writer: TCPNetworkEncoder<W>,
     mut packets_to_frame: VecDeque<FramePacket>,
+    on_flush: &mut Vec<oneshot::Sender<()>>,
     ctx: &WriterCtx,
 ) -> Option<TCPNetworkEncoder<W>> {
     let (close_token, id) = (&ctx.close_token, ctx.id);
@@ -463,10 +488,16 @@ async fn write_queued_frames<W: AsyncWrite + Unpin + Send + 'static>(
         let written_bytes: usize = returned_batch.iter().map(|packet| packet.data.len()).sum();
         decrement_pending_bytes(&ctx.pending_bytes, written_bytes);
 
-        // The frame is in the `BufWriter`, so release before the independent TCP flush.
+        // The frame is in the `BufWriter`
+        // `Framed` releases now
+        // `Flushed` waits for the TCP flush
         for packet in returned_batch {
-            if let Some(completion) = packet.completion {
-                let _ = completion.send(());
+            match packet.completion {
+                Some(Completion::Framed(completion)) => {
+                    let _ = completion.send(());
+                }
+                Some(Completion::Flushed(completion)) => on_flush.push(completion),
+                None => {}
             }
         }
     }
@@ -532,7 +563,9 @@ pub async fn run_outgoing_packet_writer<W: AsyncWrite + Unpin + Send + 'static>(
         received += packets_to_frame.len() as u64;
 
         if !packets_to_frame.is_empty() {
-            let Some(returned) = write_queued_frames(writer, packets_to_frame, &ctx).await else {
+            let Some(returned) =
+                write_queued_frames(writer, packets_to_frame, &mut state.on_flush, &ctx).await
+            else {
                 ctx.close_token.cancel();
                 return;
             };
@@ -860,6 +893,41 @@ mod tests {
             .await
             .expect("writer task must observe close_token while the TCP flush is stalled")
             .unwrap();
+    }
+
+    /// `kick_explicit` closes on completion: must not fire while the frame sits in the buffer.
+    #[tokio::test]
+    async fn disconnect_completes_only_after_the_tcp_flush() {
+        let (tx, rx) = tokio::sync::mpsc::channel(4096);
+        let flush_polls = Arc::new(AtomicUsize::new(0));
+        let close = CancellationToken::new();
+
+        let writer = tokio::spawn(run_outgoing_packet_writer(
+            rx,
+            TCPNetworkEncoder::new(StalledFlushWriter {
+                flush_polls: flush_polls.clone(),
+            }),
+            close.clone(),
+            Arc::new(AtomicBool::new(false)),
+            TickFlush::new(),
+            Arc::new(AtomicUsize::new(0)),
+            0,
+        ));
+
+        let (done_tx, mut done_rx) = oneshot::channel();
+        tx.try_send(OutgoingPacket::flushed(Bytes::from_static(&[1]), done_tx))
+            .unwrap();
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(flush_polls.load(Ordering::SeqCst), 1, "flush attempted");
+        assert!(
+            matches!(done_rx.try_recv(), Err(oneshot::error::TryRecvError::Empty)),
+            "disconnect completion must wait for the stalled TCP flush"
+        );
+
+        close.cancel();
+        writer.await.unwrap();
+        assert!(done_rx.await.is_err(), "failed flush drops the completion");
     }
 
     #[tokio::test]

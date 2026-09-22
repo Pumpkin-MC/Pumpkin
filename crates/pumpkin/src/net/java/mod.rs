@@ -63,7 +63,7 @@ pub mod status;
 
 pub use chunk_data::{CChunkData, ChunkLightExt};
 use outgoing::{
-    BarrierPlacement, OUTGOING_QUEUE_CAPACITY, OutgoingPacket, TickFlush,
+    BarrierPlacement, DISCONNECT_FLUSH_TIMEOUT, OUTGOING_QUEUE_CAPACITY, OutgoingPacket, TickFlush,
     run_outgoing_packet_writer,
 };
 
@@ -542,9 +542,11 @@ impl JavaClient {
         }
     }
 
-    pub fn try_kick(&self, reason: &TextComponent) {
-        let serialized = match self.connection_state.load() {
+    /// Disconnect packet for the current state. `None` in handshake/status.
+    fn serialize_disconnect(&self, reason: &TextComponent) -> Option<Bytes> {
+        match self.connection_state.load() {
             ConnectionState::Login => {
+                // TextComponent implements Serialize and writes in bytes instead of String, that's the reason we only use content
                 let packet = CLoginDisconnect::new(
                     serde_json::to_string(&reason.0).unwrap_or_else(|_| String::new()),
                 );
@@ -560,9 +562,11 @@ impl JavaClient {
                 self.serialize_packet(&packet).ok()
             }
             _ => None,
-        };
+        }
+    }
 
-        if let Some(data) = serialized {
+    pub fn try_kick(&self, reason: &TextComponent) {
+        if let Some(data) = self.serialize_disconnect(reason) {
             let packet_len = data.len();
             let _ = self.pending_bytes.fetch_add(packet_len, Ordering::AcqRel);
             match self.outgoing_packet_queue_send.try_reserve() {
@@ -597,22 +601,13 @@ impl JavaClient {
     }
 
     pub async fn kick_explicit(&self, reason: &TextComponent, send_packet: bool) {
-        if send_packet {
-            match self.connection_state.load() {
-                ConnectionState::Login => {
-                    // TextComponent implements Serialize and writes in bytes instead of String, that's the reason we only use content
-                    self.send_packet(&CLoginDisconnect::new(
-                        serde_json::to_string(&reason.0).unwrap_or_else(|_| String::new()),
-                    ))
-                    .await;
-                }
-                ConnectionState::Config => {
-                    self.send_packet(&CConfigDisconnect::new(&reason.clone().get_text()))
-                        .await;
-                }
-                ConnectionState::Play => self.send_packet(&CPlayDisconnect::new(reason)).await,
-                _ => {}
-            }
+        if send_packet && let Some(data) = self.serialize_disconnect(reason) {
+            // Stalled peer: never flushes -> Close anyway.
+            let _ = tokio::time::timeout(
+                DISCONNECT_FLUSH_TIMEOUT,
+                self.send_and_wait(data, OutgoingPacket::flushed),
+            )
+            .await;
         }
         let reason_text = reason.clone().get_text();
         warn!("Closing connection for {}: {reason_text}", self.id);
@@ -626,6 +621,16 @@ impl JavaClient {
     /// Enqueue on the per-connection FIFO and wait until the writer has
     /// `write_frame`d into the `BufWriter`. Never waits for a TCP flush.
     pub async fn send_packet_now_data(&self, packet: Bytes) {
+        self.send_and_wait(packet, OutgoingPacket::high_priority)
+            .await;
+    }
+
+    /// Enqueue and wait for the writer's completion, `Framed` or `Flushed` per `make`.
+    async fn send_and_wait(
+        &self,
+        packet: Bytes,
+        make: fn(Bytes, oneshot::Sender<()>) -> OutgoingPacket,
+    ) {
         let Some(packet_len) = self.reserve_pending_bytes(&packet) else {
             return;
         };
@@ -634,9 +639,7 @@ impl JavaClient {
 
         // Reserve first: capacity wait must not hold the admission lock.
         match self.outgoing_packet_queue_send.reserve().await {
-            Ok(permit) => self
-                .tick_flush
-                .admit(permit, OutgoingPacket::high_priority(packet, completion_tx)),
+            Ok(permit) => self.tick_flush.admit(permit, make(packet, completion_tx)),
             Err(err) => {
                 decrement_pending_bytes(&self.pending_bytes, packet_len);
                 // It is expected that the packet will fail if closed
