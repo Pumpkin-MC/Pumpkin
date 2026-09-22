@@ -1330,7 +1330,6 @@ impl JavaClient {
             id if id == SSpectateEntity::to_id(version) => {
                 self.handle_spectate_entity(
                     player,
-                    server,
                     &SSpectateEntity::read(&mut payload, &version)?,
                 );
             }
