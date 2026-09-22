@@ -1706,7 +1706,6 @@ interface java-packets {
     login-c-login-disconnect(login-c-login-disconnect),
     login-c-login-plugin-request(login-c-login-plugin-request),
     login-c-set-compression(login-c-set-compression),
-    c-login-success(c-login-success),
     c-acknowledge-block-change(c-acknowledge-block-change),
     c-action-bar(c-action-bar),
     c-add-resource-pack(c-add-resource-pack),
@@ -1847,6 +1846,7 @@ interface java-packets {
     c-world-event(c-world-event),
     status-c-ping-response(status-c-ping-response),
     status-c-status-response(status-c-status-response),
+    c-login-success(c-login-success),
     unknown,
   }
 }
