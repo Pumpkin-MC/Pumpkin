@@ -1483,9 +1483,9 @@ interface java-packets {
   }
   record c-update-attributes {
     entity-id: s32,
-    properties: list<property>,
+    properties: list<attribute-property>,
   }
-  record property {
+  record attribute-property {
     id: s32,
     value: f64,
     modifiers: list<attribute-modifier>,
@@ -1706,6 +1706,7 @@ interface java-packets {
     login-c-login-disconnect(login-c-login-disconnect),
     login-c-login-plugin-request(login-c-login-plugin-request),
     login-c-set-compression(login-c-set-compression),
+    c-login-success(c-login-success),
     c-acknowledge-block-change(c-acknowledge-block-change),
     c-action-bar(c-action-bar),
     c-add-resource-pack(c-add-resource-pack),
