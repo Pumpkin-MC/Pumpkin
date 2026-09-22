@@ -52,7 +52,8 @@ impl ItemBehaviour for EndCrystalItem {
                         location_vec.z + 1.0,
                     ),
                 ))
-                .is_empty()
+                .iter()
+                .any(|entity| !entity.is_spectator())
         {
             return BlockActionResult::Fail;
         }
